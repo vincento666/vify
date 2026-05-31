@@ -1,32 +1,99 @@
 <template>
-  <div class="workflow-canvas-page">
-    <WorkflowModuleTabs />
-
+  <div class="workflow-canvas-page" :class="{ 'chatflow-mode': isChatflowMode }">
     <div class="canvas-topbar">
       <div class="canvas-title-wrap">
-        <el-button text class="back-button" @click="router.push('/workflows')">
+        <el-button text class="back-button" @click="router.push(listPath)">
           <el-icon><ArrowLeft /></el-icon>
         </el-button>
         <div class="flow-icon"><Share /></div>
         <div>
           <div class="title-row">
-            <el-input v-model="form.name" class="title-input" maxlength="100" />
+            <el-input
+              v-model="form.name"
+              class="title-input"
+              maxlength="100"
+              :placeholder="isChatflowMode ? 'Chatflow 名称' : '工作流名称'"
+            />
             <span class="flow-info">i</span>
           </div>
           <div class="save-state">{{ saveState }}</div>
         </div>
       </div>
+      <div class="canvas-mode-tabs" role="tablist" aria-label="canvas lifecycle">
+        <button :class="{ active: canvasTab === 'compose' }" type="button" @click="canvasTab = 'compose'">编排</button>
+        <button :class="{ active: canvasTab === 'stats' }" type="button" @click="canvasTab = 'stats'">统计</button>
+        <button :class="{ active: canvasTab === 'open' }" type="button" @click="openOpsPanel('api')">开放</button>
+      </div>
       <div class="canvas-actions">
-        <el-button @click="openTestPanel">试运行</el-button>
+        <el-button @click="openTestPanel">{{ isChatflowMode ? '对话试运行' : '试运行' }}</el-button>
         <el-button @click="openOpsPanel('observe')">观测</el-button>
         <el-button @click="openOpsPanel('api')">Open API</el-button>
         <el-button type="primary" plain @click="openOpsPanel('publish')">发布</el-button>
         <el-button @click="quickConnect">快速连线</el-button>
-        <el-button :loading="saving" type="primary" @click="saveCanvas">保存画布</el-button>
+        <el-button :loading="saving" type="primary" @click="saveCanvas">保存</el-button>
       </div>
     </div>
 
     <section class="canvas-workbench" data-testid="workflow-canvas">
+      <aside class="canvas-resource-panel" data-testid="canvas-resource-panel">
+        <div class="resource-header">
+          <strong>{{ isChatflowMode ? '对话设置' : '节点库' }}</strong>
+          <span>{{ isChatflowMode ? 'Conversation runtime' : 'Node library' }}</span>
+        </div>
+
+        <template v-if="isChatflowMode">
+          <section class="resource-section">
+            <h4>开场白</h4>
+            <el-input v-model="openingText" type="textarea" :rows="3" placeholder="欢迎语" @input="markGraphDirty" />
+          </section>
+          <section class="resource-section">
+            <h4>引导问题</h4>
+            <div v-for="(_question, index) in guideQuestions" :key="index" class="question-row">
+              <input v-model="guideQuestions[index]" @input="markGraphDirty" />
+              <button type="button" @click="removeGuideQuestion(index)">×</button>
+            </div>
+            <button type="button" class="resource-action" @click="addGuideQuestion">新增问题</button>
+          </section>
+          <section class="resource-section" data-testid="chatflow-variable-panel">
+            <h4>变量</h4>
+            <div v-for="scope in chatflowVariableScopes" :key="scope.title" class="resource-group">
+              <button type="button" @click="scope.open = !scope.open">
+                <span>{{ scope.title }}</span>
+                <small>{{ scope.description }}</small>
+              </button>
+              <div v-if="scope.open" class="resource-items">
+                <button
+                  v-for="item in scope.items"
+                  :key="item.reference"
+                  type="button"
+                  @click="insertChatflowVariable(item.reference)"
+                >
+                  <span>{{ item.label }}</span>
+                  <code>{{ item.reference }}</code>
+                </button>
+              </div>
+            </div>
+          </section>
+        </template>
+
+        <section class="resource-section">
+          <h4>Basic</h4>
+          <button type="button" class="node-library-item fixed" disabled>开始节点</button>
+          <button type="button" class="node-library-item fixed" disabled>结束节点</button>
+        </section>
+        <section class="resource-section">
+          <h4>AI</h4>
+          <button type="button" class="node-library-item" @click="addNode('LLM')">大模型</button>
+          <button type="button" class="node-library-item" @click="addNode('KNOWLEDGE')">知识库</button>
+        </section>
+        <section class="resource-section">
+          <h4>Logic / Utilities</h4>
+          <button type="button" class="node-library-item" @click="addNode('CONDITION')">条件</button>
+          <button type="button" class="node-library-item" @click="addNode('API_CALL')">API 调用</button>
+        </section>
+      </aside>
+
+      <div class="canvas-stage-shell">
       <VueFlow
         v-model:nodes="flowNodes"
         v-model:edges="flowEdges"
@@ -69,8 +136,7 @@
             <div class="node-line">
               <span>输入</span>
               <template v-if="nodeProps.data.type === 'START'">
-                <em>str.USER_INPUT</em>
-                <em>str.CONVERSATION_NAME</em>
+                <em v-for="value in nodeProps.data.outputVariables" :key="value">str.{{ value }}</em>
               </template>
               <template v-else-if="nodeProps.data.type === 'END'">
                 <em class="orange">str.{{ nodeProps.data.outputVariable || 'output' }}</em>
@@ -192,7 +258,22 @@
 
         <section class="config-section">
           <div class="section-title"><span>⌄</span> 输入</div>
-          <el-input v-model="testInput" type="textarea" :rows="4" placeholder="输入 userMessage" />
+          <el-input
+            v-model="testInput"
+            type="textarea"
+            :rows="4"
+            :placeholder="isChatflowMode ? '输入用户消息' : '输入 userMessage'"
+          />
+          <div v-if="isChatflowMode" class="chatflow-profile-grid">
+            <el-input v-model="testProfile.conversationId" placeholder="conversation_id" />
+            <el-input v-model="testProfile.userId" placeholder="user_id" />
+            <el-select v-model="testProfile.channel" placeholder="channel">
+              <el-option label="web" value="web" />
+              <el-option label="api" value="api" />
+              <el-option label="feishu" value="feishu" />
+              <el-option label="dingtalk" value="dingtalk" />
+            </el-select>
+          </div>
         </section>
 
         <section v-if="validationErrors.length" class="config-section">
@@ -204,6 +285,10 @@
 
         <section v-if="testResult" class="config-section">
           <div class="section-title"><span>✓</span> 运行结果</div>
+          <div v-if="isChatflowMode" class="conversation-result">
+            <div class="message-bubble user">{{ testInput }}</div>
+            <div class="message-bubble assistant">{{ chatflowAssistantText }}</div>
+          </div>
           <pre class="run-result">{{ JSON.stringify(testResult, null, 2) }}</pre>
         </section>
 
@@ -331,6 +416,7 @@
       <button class="add-node-button" type="button" @click="paletteOpen = !paletteOpen">
         <span>+</span> 添加节点
       </button>
+      </div>
     </section>
   </div>
 </template>
@@ -344,11 +430,24 @@ import { Handle, MarkerType, Position, VueFlow, type Edge, type Node } from '@vu
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 
-import { createWorkflow, getWorkflow, runWorkflow, updateWorkflow, type WorkflowDetail } from '@/api/workflow'
-import WorkflowModuleTabs from './WorkflowModuleTabs.vue'
+import {
+  createChatflow,
+  createWorkflow,
+  getChatflow,
+  getWorkflow,
+  runChatflow,
+  runWorkflow,
+  updateChatflow,
+  updateWorkflow,
+  type WorkflowDetail,
+} from '@/api/workflow'
+import { buildChatflowRunInput } from './chatflowRunProfile'
+import { buildChatflowVariableScopes, insertChatflowVariableReference, type ChatflowVariableScope } from './chatflowVariables'
+import { buildChatflowOpenShell, evaluateChatflowPublishGate } from './chatflowPublish'
 import {
   addWorkflowNode,
   connectWorkflowNodes,
+  createDefaultChatflowGraph,
   createDefaultWorkflowGraph,
   deleteWorkflowNode,
   hydrateWorkflowGraph,
@@ -363,17 +462,23 @@ import { evaluateWorkflowPublishGate } from './workflowPublish'
 import { validateWorkflowGraph } from './workflowValidation'
 
 type OpsTab = 'publish' | 'api' | 'observe'
+type CanvasTab = 'compose' | 'stats' | 'open'
+type ChatflowScopeState = ChatflowVariableScope & { open: boolean }
 
 const route = useRoute()
 const router = useRouter()
-const workflowId = computed(() => Number(route.params.id || 0))
-const isEditing = computed(() => workflowId.value > 0)
+const isChatflowMode = computed(() => route.path.startsWith('/chatflows'))
+const flowId = computed(() => Number(route.params.id || 0))
+const workflowId = flowId
+const isEditing = computed(() => flowId.value > 0)
+const listPath = computed(() => isChatflowMode.value ? '/chatflows' : '/workflows')
 
-const graph = ref<WorkflowCanvasGraph>(createDefaultWorkflowGraph())
-const form = ref({ name: 'aaaa', description: '通过画布创建的工作流' })
+const graph = ref<WorkflowCanvasGraph>(createDefaultGraph())
+const form = ref(defaultForm())
 const saving = ref(false)
 const running = ref(false)
 const loading = ref(false)
+const canvasTab = ref<CanvasTab>('compose')
 const selectedNodeKey = ref('')
 const paletteOpen = ref(false)
 const activeVariableField = ref('')
@@ -391,6 +496,17 @@ const lastTestRunStatus = ref('')
 const lastTestRunId = ref(0)
 const lastRunOutput = ref<Record<string, any> | null>(null)
 const dirtySinceTestRun = ref(true)
+const openingText = ref('你好，我可以帮你处理订单、售后和产品咨询。')
+const guideQuestions = ref(['查订单进度', '申请退款', '咨询发票'])
+const testProfile = ref({
+  conversationId: 'conv-demo',
+  userId: 'user-demo',
+  channel: 'web',
+  round: 1,
+})
+const chatflowVariableScopes = ref<ChatflowScopeState[]>(
+  buildChatflowVariableScopes().map((scope, index) => ({ ...scope, open: index === 0 })),
+)
 
 const addableNodeTypes: Exclude<WorkflowCanvasNodeType, 'START' | 'END'>[] = ['LLM', 'CONDITION', 'KNOWLEDGE', 'API_CALL']
 
@@ -403,6 +519,16 @@ const icons = {
   END: markRaw(Finished),
 }
 
+function createDefaultGraph() {
+  return isChatflowMode.value ? createDefaultChatflowGraph() : createDefaultWorkflowGraph()
+}
+
+function defaultForm() {
+  return isChatflowMode.value
+    ? { name: '', description: '通过画布创建的 Chatflow' }
+    : { name: '', description: '通过画布创建的工作流' }
+}
+
 const saveState = computed(() => {
   if (loading.value) return '正在载入...'
   return lastSavedAt.value ? `已保存 ${lastSavedAt.value}` : '已自动保存草稿'
@@ -413,23 +539,38 @@ const selectedSchema = computed(() => selectedNode.value ? getNodeConfigSchema(s
 const variableGroups = computed(() => selectedNode.value ? buildVariableCatalog(graph.value, selectedNode.value.nodeKey) : [])
 const publishValidationErrors = computed(() => validateWorkflowGraph(graph.value).errors)
 const publishGate = computed(() =>
-  evaluateWorkflowPublishGate({
-    validationErrors: publishValidationErrors.value,
-    lastTestRunStatus: lastTestRunStatus.value,
-    dirtySinceTestRun: dirtySinceTestRun.value,
-  }),
+  isChatflowMode.value
+    ? evaluateChatflowPublishGate({
+      lastRunStatus: lastTestRunStatus.value,
+      dirtySinceTestRun: dirtySinceTestRun.value,
+    })
+    : evaluateWorkflowPublishGate({
+      validationErrors: publishValidationErrors.value,
+      lastTestRunStatus: lastTestRunStatus.value,
+      dirtySinceTestRun: dirtySinceTestRun.value,
+    }),
 )
-const openApiEndpoint = computed(() => `/api/v1/workflows/${workflowId.value || '{workflowId}'}/runs`)
+const openApiEndpoint = computed(() =>
+  isChatflowMode.value
+    ? buildChatflowOpenShell({ chatflowId: workflowId.value, channel: testProfile.value.channel }).endpoint
+    : `/api/v1/workflows/${workflowId.value || '{workflowId}'}/runs`,
+)
 const openApiSample = computed(() => JSON.stringify({
-  input: {
-    userMessage: testInput.value,
-    USER_INPUT: testInput.value,
-  },
+  input: isChatflowMode.value
+    ? buildChatflowRunInput({ message: testInput.value, ...testProfile.value })
+    : {
+      userMessage: testInput.value,
+      USER_INPUT: testInput.value,
+    },
 }, null, 2))
 const observeOutputKeys = computed(() => {
   if (!lastRunOutput.value) return '暂无'
   const keys = Object.keys(lastRunOutput.value)
   return keys.length ? keys.join(', ') : '无输出'
+})
+const chatflowAssistantText = computed(() => {
+  const output = testResult.value?.output || {}
+  return String(output.output ?? output.answer ?? JSON.stringify(output))
 })
 const filteredVariableGroups = computed(() => {
   const keyword = variableSearch.value.trim().toLowerCase()
@@ -455,6 +596,7 @@ const flowNodes = computed<Node[]>({
         type: node.type,
         name: node.name,
         outputVariable: node.config.outputVariable,
+        outputVariables: Array.isArray(node.config.outputVariables) ? node.config.outputVariables.map(String) : [],
       },
       draggable: node.type !== 'START' && node.type !== 'END',
     }))
@@ -567,7 +709,7 @@ function setFieldValue(key: string, value: string | number | null | undefined) {
 }
 
 function canUseVariable(key: string) {
-  return ['prompt', 'expression', 'endpoint'].includes(key)
+  return ['prompt', 'expression', 'endpoint', 'output'].includes(key)
 }
 
 function insertVariable(key: string, reference: string) {
@@ -576,6 +718,65 @@ function insertVariable(key: string, reference: string) {
   setFieldValue(key, nextValue)
   activeVariableField.value = ''
   variableSearch.value = ''
+}
+
+function insertChatflowVariable(reference: string) {
+  const endNode = graph.value.nodes.find((node) => node.nodeKey === 'end')
+  const currentValue = String(endNode?.config.output || '')
+  const nextValue = insertChatflowVariableReference(currentValue, reference)
+  graph.value = {
+    ...graph.value,
+    nodes: graph.value.nodes.map((node) =>
+      node.nodeKey === 'end'
+        ? { ...node, config: { ...node.config, outputVariable: 'output', output: nextValue } }
+        : node,
+    ),
+  }
+  selectedNodeKey.value = 'end'
+  markGraphDirty()
+}
+
+function addGuideQuestion() {
+  guideQuestions.value = [...guideQuestions.value, '']
+  markGraphDirty()
+}
+
+function removeGuideQuestion(index: number) {
+  guideQuestions.value = guideQuestions.value.filter((_item, itemIndex) => itemIndex !== index)
+  markGraphDirty()
+}
+
+function resetChatflowConversationSettings() {
+  openingText.value = '你好，我可以帮你处理订单、售后和产品咨询。'
+  guideQuestions.value = ['查订单进度', '申请退款', '咨询发票']
+}
+
+function syncChatflowSettingsFromGraph() {
+  if (!isChatflowMode.value) return
+  const startConfig = graph.value.nodes.find((node) => node.nodeKey === 'start')?.config || {}
+  openingText.value = String(startConfig.openingText || '你好，我可以帮你处理订单、售后和产品咨询。')
+  guideQuestions.value = Array.isArray(startConfig.guideQuestions)
+    ? startConfig.guideQuestions.map(String)
+    : ['查订单进度', '申请退款', '咨询发票']
+}
+
+function graphForPersistence() {
+  if (!isChatflowMode.value) return graph.value
+  return {
+    ...graph.value,
+    nodes: graph.value.nodes.map((node) =>
+      node.nodeKey === 'start'
+        ? {
+          ...node,
+          config: {
+            ...node.config,
+            openingText: openingText.value,
+            guideQuestions: guideQuestions.value.map((item) => item.trim()).filter(Boolean),
+          },
+        }
+        : node,
+    ),
+  }
 }
 
 function readonlyValues(key: string) {
@@ -597,13 +798,22 @@ function quickConnect() {
 }
 
 async function loadWorkflow() {
-  if (!isEditing.value) return
+  if (!isEditing.value) {
+    graph.value = createDefaultGraph()
+    form.value = defaultForm()
+    resetChatflowConversationSettings()
+    workflowStatus.value = 'DRAFT'
+    lastSavedAt.value = ''
+    dirtySinceTestRun.value = true
+    return
+  }
   loading.value = true
   try {
-    const detail = (await getWorkflow(workflowId.value)) as WorkflowDetail
+    const detail = (await (isChatflowMode.value ? getChatflow(workflowId.value) : getWorkflow(workflowId.value))) as WorkflowDetail
     form.value = { name: detail.name, description: detail.description || '' }
     workflowStatus.value = detail.status
     graph.value = hydrateWorkflowGraph(detail.nodes, detail.edges)
+    syncChatflowSettingsFromGraph()
     lastSavedAt.value = formatClock(new Date(detail.updatedAt))
     dirtySinceTestRun.value = true
   } finally {
@@ -613,14 +823,15 @@ async function loadWorkflow() {
 
 async function saveCanvas() {
   if (!form.value.name.trim()) {
-    ElMessage.warning('请输入工作流名称')
+    ElMessage.warning(isChatflowMode.value ? '请输入 Chatflow 名称' : '请输入工作流名称')
     return
   }
-  const payload = serializeWorkflowGraph(graph.value)
+  const payload = serializeWorkflowGraph(graphForPersistence())
   saving.value = true
   try {
     if (isEditing.value) {
-      await updateWorkflow(workflowId.value, {
+      const update = isChatflowMode.value ? updateChatflow : updateWorkflow
+      await update(workflowId.value, {
         name: form.value.name,
         description: form.value.description,
         nodes: payload.nodes,
@@ -630,14 +841,15 @@ async function saveCanvas() {
       lastSavedAt.value = formatClock(new Date())
       return workflowId.value
     } else {
-      const created = await createWorkflow({
+      const create = isChatflowMode.value ? createChatflow : createWorkflow
+      const created = await create({
         name: form.value.name,
         description: form.value.description,
         nodes: payload.nodes,
         edges: payload.edges,
       }) as WorkflowDetail
-      ElMessage.success('工作流创建成功')
-      await router.replace(`/workflows/${created.id}/canvas`)
+      ElMessage.success(isChatflowMode.value ? 'Chatflow 创建成功' : '工作流创建成功')
+      await router.replace(`${listPath.value}/${created.id}/canvas`)
       lastSavedAt.value = formatClock(new Date())
       return created.id
     }
@@ -658,6 +870,7 @@ function openTestPanel() {
 }
 
 function openOpsPanel(tab: OpsTab) {
+  canvasTab.value = tab === 'api' ? 'open' : tab === 'observe' ? 'stats' : 'compose'
   opsActiveTab.value = tab
   opsPanelOpen.value = true
   testPanelOpen.value = false
@@ -675,10 +888,12 @@ async function runCanvasTest() {
 
   running.value = true
   try {
-    const result = await runWorkflow(id, {
-      userMessage: testInput.value,
-      USER_INPUT: testInput.value,
-    }) as any
+    const result = await (isChatflowMode.value
+      ? runChatflow(id, buildChatflowRunInput({ message: testInput.value, ...testProfile.value }))
+      : runWorkflow(id, {
+        userMessage: testInput.value,
+        USER_INPUT: testInput.value,
+      })) as any
     testResult.value = result
     lastTestRunStatus.value = String(result?.status || '')
     lastTestRunId.value = Number(result?.runId || 0)
@@ -703,9 +918,10 @@ async function publishWorkflow() {
 
   publishing.value = true
   try {
-    await updateWorkflow(id, { status: 'PUBLISHED' })
+    const update = isChatflowMode.value ? updateChatflow : updateWorkflow
+    await update(id, { status: 'PUBLISHED' })
     workflowStatus.value = 'PUBLISHED'
-    ElMessage.success('工作流已发布')
+    ElMessage.success(isChatflowMode.value ? 'Chatflow 已发布' : '工作流已发布')
   } catch (e: any) {
     ElMessage.error(e?.message || '发布失败')
   } finally {
@@ -724,17 +940,18 @@ function formatClock(value: Date) {
   return `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}:${String(value.getSeconds()).padStart(2, '0')}`
 }
 
-watch(() => route.params.id, loadWorkflow)
+watch(() => [route.path, route.params.id], loadWorkflow)
 onMounted(loadWorkflow)
 </script>
 
 <style scoped>
 .workflow-canvas-page {
-  height: calc(100vh - 88px);
+  height: 100vh;
   min-height: 720px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: #f6f7fb;
 }
 
 .canvas-topbar {
@@ -744,10 +961,9 @@ onMounted(loadWorkflow)
   align-items: center;
   justify-content: space-between;
   padding: 0 22px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-bottom: 0;
-  border-radius: 8px 8px 0 0;
-  background: #fbfbff;
+  border-bottom: 1px solid #dfe3ee;
+  background: #fff;
+  box-shadow: 0 1px 0 rgba(34, 41, 63, 0.04);
 }
 
 .canvas-title-wrap {
@@ -824,6 +1040,34 @@ onMounted(loadWorkflow)
   color: #616a7f;
 }
 
+.canvas-mode-tabs {
+  height: 38px;
+  display: inline-grid;
+  grid-template-columns: repeat(3, minmax(74px, 1fr));
+  align-items: center;
+  padding: 3px;
+  border: 1px solid #e1e5ef;
+  border-radius: 9px;
+  background: #f6f7fb;
+}
+
+.canvas-mode-tabs button {
+  height: 30px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #6a7284;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.canvas-mode-tabs button.active {
+  background: #fff;
+  color: #3339d8;
+  box-shadow: 0 2px 8px rgba(44, 51, 84, 0.08);
+}
+
 .canvas-actions {
   display: flex;
   align-items: center;
@@ -831,13 +1075,149 @@ onMounted(loadWorkflow)
 }
 
 .canvas-workbench {
-  position: relative;
   flex: 1;
   min-height: 0;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 0 0 8px 8px;
+  display: grid;
+  grid-template-columns: 252px minmax(0, 1fr);
   overflow: hidden;
   background: #f8f9fc;
+}
+
+.canvas-resource-panel {
+  min-height: 0;
+  padding: 16px 12px;
+  border-right: 1px solid #dfe3ee;
+  overflow-y: auto;
+  background: #fff;
+}
+
+.resource-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 4px 12px;
+  border-bottom: 1px solid #edf0f6;
+}
+
+.resource-header strong {
+  color: #252b3d;
+  font-size: 15px;
+}
+
+.resource-header span {
+  color: #8b94a8;
+  font-size: 12px;
+}
+
+.resource-section {
+  padding: 14px 4px 0;
+}
+
+.resource-section h4 {
+  margin: 0 0 8px;
+  color: #70798d;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.question-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.question-row input {
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid #dfe3ee;
+  border-radius: 7px;
+  outline: none;
+  color: #30364a;
+}
+
+.question-row button,
+.resource-action {
+  border: 1px solid #dfe3ee;
+  border-radius: 7px;
+  background: #f7f8fc;
+  color: #5f687a;
+  cursor: pointer;
+}
+
+.resource-action {
+  width: 100%;
+  height: 32px;
+  font-weight: 700;
+}
+
+.resource-group {
+  margin-bottom: 8px;
+}
+
+.resource-group > button,
+.resource-items button,
+.node-library-item {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid #e1e5ef;
+  border-radius: 8px;
+  background: #fff;
+  color: #30364a;
+  cursor: pointer;
+}
+
+.resource-group > button {
+  flex-direction: column;
+}
+
+.resource-group small,
+.resource-items code {
+  color: #8b94a8;
+  font-size: 11px;
+}
+
+.resource-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.resource-items button {
+  flex-direction: column;
+}
+
+.node-library-item {
+  min-height: 38px;
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+
+.node-library-item:not(.fixed):hover,
+.resource-items button:hover,
+.resource-group > button:hover {
+  border-color: #cdd3f7;
+  background: #f5f6ff;
+}
+
+.node-library-item.fixed {
+  color: #8b94a8;
+  cursor: default;
+}
+
+.canvas-stage-shell {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .coze-flow {
@@ -1190,6 +1570,41 @@ onMounted(loadWorkflow)
   line-height: 1.6;
 }
 
+.chatflow-profile-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.conversation-result {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.message-bubble {
+  max-width: 88%;
+  padding: 9px 11px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.message-bubble.user {
+  align-self: flex-end;
+  background: #eef0ff;
+  color: #3438b8;
+}
+
+.message-bubble.assistant {
+  align-self: flex-start;
+  background: #f0f2f7;
+  color: #2f3548;
+}
+
 .test-run-actions {
   margin-top: auto;
   padding: 14px 16px;
@@ -1363,7 +1778,16 @@ onMounted(loadWorkflow)
     min-height: 640px;
   }
 
+  .canvas-mode-tabs,
   .canvas-actions {
+    display: none;
+  }
+
+  .canvas-workbench {
+    grid-template-columns: 1fr;
+  }
+
+  .canvas-resource-panel {
     display: none;
   }
 

@@ -9,9 +9,11 @@ function assert(condition, message) {
 
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+const name = `Workflow Publish ${Date.now()}`
 
 try {
   await page.goto(`${baseUrl}/workflows/create`, { waitUntil: 'networkidle' })
+  await page.getByPlaceholder('工作流名称').fill(name)
   await page.getByRole('button', { name: '发布' }).click()
 
   const opsPanel = page.locator('[data-testid="workflow-ops-panel"]')

@@ -18,15 +18,16 @@ const name = `Chatflow E2E ${Date.now()}`
 try {
   await page.goto(`${baseUrl}/chatflows/create`, { waitUntil: 'networkidle' })
   await page.getByPlaceholder('Chatflow 名称').fill(name)
-  await page.getByRole('button', { name: '保存 Chatflow' }).click()
+  await page.locator('.canvas-actions').getByRole('button', { name: '保存', exact: true }).click()
   await page.waitForURL('**/chatflows/*/canvas', { timeout: 10000 })
   await page.reload({ waitUntil: 'networkidle' })
 
   let text = await bodyText(page)
-  assert(text.includes(name), 'Expected reopened Chatflow canvas to show saved name')
+  const reopenedName = await page.getByPlaceholder('Chatflow 名称').inputValue()
+  assert(reopenedName === name, 'Expected reopened Chatflow canvas to show saved name')
   assert(text.includes('sys.query'), 'Expected default Chatflow START variables to persist')
   assert(text.includes('sys.conversation_id'), 'Expected conversation identity variable to persist')
-  assert(text.includes('CHATFLOW'), 'Expected Chatflow resource type marker')
+  assert(text.includes('对话设置'), 'Expected Chatflow canvas to show conversation settings panel')
 
   if (screenshotPath) {
     await page.screenshot({ path: screenshotPath, fullPage: true })

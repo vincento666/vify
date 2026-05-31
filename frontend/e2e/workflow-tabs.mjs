@@ -27,13 +27,14 @@ try {
   await page.getByRole('tab', { name: 'Chatflow' }).click()
   await page.waitForURL('**/chatflows')
   await assertBodyIncludes(page, '新建 Chatflow')
-  await assertBodyIncludes(page, 'Chatflow 资源入口已就绪')
+  await assertBodyIncludes(page, '管理面向对话场景的流程编排')
 
   await page.getByRole('tab', { name: 'Workflow' }).click()
   await page.waitForURL('**/workflows')
   await page.getByRole('button', { name: '新建工作流' }).click()
   await page.waitForURL('**/workflows/create')
-  await assertBodyIncludes(page, '画布 Builder 入口已就绪')
+  await assertBodyIncludes(page, '节点库')
+  await assertBodyIncludes(page, '编排')
 
   if (screenshotPath) {
     await page.screenshot({ path: screenshotPath, fullPage: true })

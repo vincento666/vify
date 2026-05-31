@@ -11,12 +11,14 @@ describe('workflow module routes', () => {
     const routes = router.getRoutes()
     const paths = routes.map((route) => route.path)
     const workflowRoute = routes.find((route) => route.path === '/workflows')
+    const workflowCreateRoute = routes.find((route) => route.path === '/workflows/create')
 
     expect(paths).toEqual(expect.arrayContaining(['/workflows', '/workflows/create', '/chatflows', '/chatflows/create']))
     expect(workflowRoute?.meta.workflowModuleTabs).toEqual([
       { label: 'Workflow', path: '/workflows', flowType: 'WORKFLOW' },
       { label: 'Chatflow', path: '/chatflows', flowType: 'CHATFLOW' },
     ])
+    expect(workflowCreateRoute?.meta.canvasWorkbench).toBe(true)
   })
 
   it('exposes a Chatflow detail canvas route under the Chatflow module', async () => {
@@ -25,6 +27,7 @@ describe('workflow module routes', () => {
     const chatflowDetailRoute = routes.find((route) => route.path === '/chatflows/:id/canvas')
 
     expect(chatflowDetailRoute).toBeTruthy()
+    expect(chatflowDetailRoute?.meta.canvasWorkbench).toBe(true)
     expect(chatflowDetailRoute?.meta.workflowModuleTabs).toEqual([
       { label: 'Workflow', path: '/workflows', flowType: 'WORKFLOW' },
       { label: 'Chatflow', path: '/chatflows', flowType: 'CHATFLOW' },

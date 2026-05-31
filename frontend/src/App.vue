@@ -1,5 +1,7 @@
 <template>
-  <div class="hify-layout">
+  <router-view v-if="isCanvasWorkbenchRoute" />
+
+  <div v-else class="hify-layout">
     <!-- 侧边栏 -->
     <aside class="sidebar" :class="{ collapsed }">
 
@@ -102,6 +104,8 @@ const currentLabel = computed(() => {
   const match = navItems.find(isNavActive)
   return match ? match.label : ''
 })
+
+const isCanvasWorkbenchRoute = computed(() => Boolean(route.meta.canvasWorkbench))
 </script>
 
 <style scoped>

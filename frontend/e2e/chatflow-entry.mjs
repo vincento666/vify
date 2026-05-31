@@ -20,17 +20,15 @@ try {
   await page.getByRole('tab', { name: 'Chatflow' }).click()
   await page.waitForURL('**/chatflows')
   await assertBodyIncludes(page, '新建 Chatflow')
-  await assertBodyIncludes(page, 'Chatflow 资源入口已就绪')
+  await assertBodyIncludes(page, '管理面向对话场景的流程编排')
 
   await page.getByRole('button', { name: '新建 Chatflow' }).click()
   await page.waitForURL('**/chatflows/create')
-  await assertBodyIncludes(page, '新建 Chatflow')
-  await assertBodyIncludes(page, 'START')
-  await assertBodyIncludes(page, 'END')
-
-  await page.goto(`${baseUrl}/chatflows/42/canvas`, { waitUntil: 'networkidle' })
-  await assertBodyIncludes(page, 'Chatflow #42')
-  await assertBodyIncludes(page, '对话流程画布入口')
+  await assertBodyIncludes(page, '对话设置')
+  await assertBodyIncludes(page, '编排')
+  await assertBodyIncludes(page, '开放')
+  await assertBodyIncludes(page, 'sys.query')
+  await assertBodyIncludes(page, '结束')
 
   if (screenshotPath) {
     await page.screenshot({ path: screenshotPath, fullPage: true })

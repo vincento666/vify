@@ -9,9 +9,11 @@ function assert(condition, message) {
 
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+const name = `Workflow Variable ${Date.now()}`
 
 try {
   await page.goto(`${baseUrl}/workflows/create`, { waitUntil: 'networkidle' })
+  await page.getByPlaceholder('工作流名称').fill(name)
   await page.getByRole('button', { name: '添加节点' }).click()
   await page.locator('.node-palette button', { hasText: '大模型' }).click()
   await page.getByRole('button', { name: '快速连线' }).click()
@@ -27,7 +29,7 @@ try {
   assert(promptValue.includes('{{start.USER_INPUT}}'), 'Expected variable selector to insert start variable reference')
 
   await panel.locator('input').nth(1).fill('answer')
-  await page.getByRole('button', { name: '保存画布' }).click()
+  await page.locator('.canvas-actions').getByRole('button', { name: '保存', exact: true }).click()
   await page.waitForURL('**/workflows/*/canvas', { timeout: 10000 })
   await page.reload({ waitUntil: 'networkidle' })
   await page.locator('.coze-node', { hasText: '大模型' }).click()

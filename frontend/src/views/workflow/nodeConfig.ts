@@ -103,7 +103,10 @@ const SCHEMAS: Record<WorkflowCanvasNodeType, NodeConfigSchema> = {
       BASE_SECTION,
       {
         title: '输出',
-        fields: [{ key: 'outputVariable', label: '返回变量', type: 'text', placeholder: 'output' }],
+        fields: [
+          { key: 'outputVariable', label: '返回变量', type: 'text', placeholder: 'output' },
+          { key: 'output', label: '响应内容', type: 'textarea', placeholder: '返回给调用方的文本，可使用变量引用' },
+        ],
       },
     ],
   },

@@ -24,7 +24,7 @@
     </el-table>
 
     <div v-else class="empty-state">
-      <el-empty description="Chatflow 资源入口已就绪，图形化画布将在后续 slice 接入">
+      <el-empty description="Chatflow 画布已就绪，可创建对话流程并完成试运行与发布">
         <el-button type="primary" @click="$router.push('/chatflows/create')">创建 Chatflow</el-button>
       </el-empty>
     </div>

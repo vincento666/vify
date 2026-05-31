@@ -14,9 +14,11 @@ async function assertText(page, text) {
 
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+const name = `Workflow Canvas ${Date.now()}`
 
 try {
   await page.goto(`${baseUrl}/workflows/create`, { waitUntil: 'networkidle' })
+  await page.getByPlaceholder('工作流名称').fill(name)
   await assertText(page, '添加节点')
   await assertText(page, '开始')
   await assertText(page, '结束')
@@ -36,11 +38,13 @@ try {
   await page.mouse.up()
 
   await page.getByRole('button', { name: '快速连线' }).click()
-  await page.getByRole('button', { name: '保存画布' }).click()
+  await page.locator('.canvas-actions').getByRole('button', { name: '保存', exact: true }).click()
   await page.waitForURL('**/workflows/*/canvas', { timeout: 10000 })
   const canvasUrl = page.url()
 
   await page.reload({ waitUntil: 'networkidle' })
+  const reopenedName = await page.getByPlaceholder('工作流名称').inputValue()
+  assert(reopenedName === name, 'Expected saved workflow name to reopen in the canvas title input')
   await assertText(page, '大模型')
   await assertText(page, 'str.output')
   await assertText(page, '已保存')

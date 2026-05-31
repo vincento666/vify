@@ -36,12 +36,12 @@ const router = createRouter({
     },
     {
       path: '/workflows/create',
-      meta: { workflowModuleTabs: WORKFLOW_MODULE_TABS },
+      meta: { workflowModuleTabs: WORKFLOW_MODULE_TABS, canvasWorkbench: true },
       component: () => import('@/views/workflow/WorkflowCreate.vue'),
     },
     {
       path: '/workflows/:id/canvas',
-      meta: { workflowModuleTabs: WORKFLOW_MODULE_TABS },
+      meta: { workflowModuleTabs: WORKFLOW_MODULE_TABS, canvasWorkbench: true },
       component: () => import('@/views/workflow/WorkflowCreate.vue'),
     },
     {
@@ -51,13 +51,13 @@ const router = createRouter({
     },
     {
       path: '/chatflows/create',
-      meta: { workflowModuleTabs: WORKFLOW_MODULE_TABS },
-      component: () => import('@/views/workflow/ChatflowCreate.vue'),
+      meta: { workflowModuleTabs: WORKFLOW_MODULE_TABS, canvasWorkbench: true },
+      component: () => import('@/views/workflow/WorkflowCreate.vue'),
     },
     {
       path: '/chatflows/:id/canvas',
-      meta: { workflowModuleTabs: WORKFLOW_MODULE_TABS },
-      component: () => import('@/views/workflow/ChatflowCreate.vue'),
+      meta: { workflowModuleTabs: WORKFLOW_MODULE_TABS, canvasWorkbench: true },
+      component: () => import('@/views/workflow/WorkflowCreate.vue'),
     },
     {
       path: '/evaluation',

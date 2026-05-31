@@ -22,16 +22,19 @@ try {
     assert(panelText.includes(scope), `Expected variable panel to include scope ${scope}`)
   }
 
-  await page.locator('.canvas-inspector').getByRole('button', { name: '变量' }).click()
-  await page.locator('.canvas-inspector .variable-scope button', { hasText: '{{sys.query}}' }).click()
-  const template = await page.locator('.canvas-inspector textarea').inputValue()
+  await variablePanel.locator('button', { hasText: '{{sys.query}}' }).click()
+  const configPanel = page.locator('[data-testid="node-config-panel"]')
+  await configPanel.waitFor({ state: 'visible', timeout: 5000 })
+  const template = await configPanel.getByPlaceholder('返回给调用方的文本，可使用变量引用').inputValue()
   assert(template.includes('{{sys.query}}'), 'Expected variable selector to insert sys.query')
 
-  await page.getByRole('button', { name: '保存 Chatflow' }).click()
+  await page.locator('.canvas-actions').getByRole('button', { name: '保存', exact: true }).click()
   await page.waitForURL('**/chatflows/*/canvas', { timeout: 10000 })
   await page.reload({ waitUntil: 'networkidle' })
 
-  const reopenedTemplate = await page.locator('.canvas-inspector textarea').inputValue()
+  await page.locator('.coze-node', { hasText: '结束' }).click()
+  await configPanel.waitFor({ state: 'visible', timeout: 5000 })
+  const reopenedTemplate = await configPanel.getByPlaceholder('返回给调用方的文本，可使用变量引用').inputValue()
   assert(reopenedTemplate.includes('{{sys.query}}'), 'Expected inserted variable to persist after reopen')
 
   if (screenshotPath) {

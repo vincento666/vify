@@ -9,9 +9,11 @@ function assert(condition, message) {
 
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+const name = `Workflow Config ${Date.now()}`
 
 try {
   await page.goto(`${baseUrl}/workflows/create`, { waitUntil: 'networkidle' })
+  await page.getByPlaceholder('工作流名称').fill(name)
   await page.getByRole('button', { name: '添加节点' }).click()
   await page.locator('.node-palette button', { hasText: '大模型' }).click()
   await page.locator('.coze-node', { hasText: '大模型' }).click()
@@ -22,7 +24,7 @@ try {
   await panel.locator('textarea').fill('请识别 {{start.USER_INPUT}} 的用户意图')
   await panel.locator('input').nth(1).fill('intent')
 
-  await page.getByRole('button', { name: '保存画布' }).click()
+  await page.locator('.canvas-actions').getByRole('button', { name: '保存', exact: true }).click()
   await page.waitForURL('**/workflows/*/canvas', { timeout: 10000 })
   await page.reload({ waitUntil: 'networkidle' })
 
