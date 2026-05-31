@@ -1,0 +1,8 @@
+> vitest run
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ ✓ src/utils/request.test.ts (3 tests) 19ms
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Start at  16:12:11
+   Duration  6.78s (transform 241ms, setup 0ms, collect 4.22s, tests 19ms, environment 0ms, prepare 445ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m

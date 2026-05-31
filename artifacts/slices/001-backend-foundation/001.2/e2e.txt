@@ -1,0 +1,2 @@
+200
+{"code": 200, "data": {"components": {"app": "UP"}, "status": "UP"}, "message": "success"}

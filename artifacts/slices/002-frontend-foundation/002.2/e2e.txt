@@ -1,0 +1,2 @@
+/api/v1/health 200 {'code': 200, 'message': 'success', 'data': {'status': 'UP', 'components': {'app': 'UP'}}}
+/api/v1/providers 404 {'code': 404, 'message': 'Not Found', 'data': None}

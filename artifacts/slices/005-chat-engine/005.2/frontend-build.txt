@@ -1,0 +1,42 @@
+> vue-tsc && vite build
+vite v5.4.21 building for production...
+transforming...
+✓ 1691 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                                                 0.45 kB │ gzip:   0.30 kB
+dist/assets/useConfirm-EVgPS0TG.css                                             0.16 kB │ gzip:   0.13 kB
+dist/assets/ProviderList-DXUzf8fc.css                                           1.08 kB │ gzip:   0.42 kB
+dist/assets/WorkflowCreate-DDBOtES1.css                                         1.15 kB │ gzip:   0.48 kB
+dist/assets/McpServerList-C0ld7tOT.css                                          1.31 kB │ gzip:   0.49 kB
+dist/assets/AgentList-DYwCzKfm.css                                              1.56 kB │ gzip:   0.54 kB
+dist/assets/WorkflowList-XpiLzQOO.css                                           1.73 kB │ gzip:   0.54 kB
+dist/assets/KnowledgeList-DuEoQQBq.css                                          1.78 kB │ gzip:   0.70 kB
+dist/assets/DocumentList-B-qRN_F-.css                                           1.83 kB │ gzip:   0.67 kB
+dist/assets/ChatView-BUSswsRL.css                                               4.91 kB │ gzip:   1.32 kB
+dist/assets/McpServerDebug-DcNGHsL6.css                                         5.08 kB │ gzip:   1.17 kB
+dist/assets/index-VaHICdIc.css                                                366.96 kB │ gzip:  50.42 kB
+dist/assets/workflow-CQd6PB3S.js                                                0.29 kB │ gzip:   0.18 kB
+dist/assets/provider-CMDAOqo1.js                                                0.37 kB │ gzip:   0.23 kB
+dist/assets/mcp-DIK5fGKO.js                                                     0.40 kB │ gzip:   0.21 kB
+dist/assets/knowledge-BTqug259.js                                               0.68 kB │ gzip:   0.35 kB
+dist/assets/agent-B6cPqN8-.js                                                   0.91 kB │ gzip:   0.48 kB
+dist/assets/HifyFormDialog.vue_vue_type_script_setup_true_lang-tasZtew4.js      1.44 kB │ gzip:   0.83 kB
+dist/assets/useConfirm-BCBlGJx6.js                                              2.25 kB │ gzip:   1.25 kB
+dist/assets/WorkflowList-BXZ1tiGF.js                                            4.29 kB │ gzip:   1.98 kB
+dist/assets/WorkflowCreate-Cgcznb-Z.js                                          4.34 kB │ gzip:   2.10 kB
+dist/assets/KnowledgeList-Ty-yC-Xi.js                                           4.83 kB │ gzip:   2.33 kB
+dist/assets/McpServerList-T-u0Kxb9.js                                           5.25 kB │ gzip:   2.37 kB
+dist/assets/ProviderList-C_NFtWvc.js                                            6.09 kB │ gzip:   2.74 kB
+dist/assets/DocumentList-BKGHu7xs.js                                            7.10 kB │ gzip:   3.28 kB
+dist/assets/McpServerDebug-C7arlig0.js                                          8.25 kB │ gzip:   3.29 kB
+dist/assets/AgentList-z7wT-ZDL.js                                              10.32 kB │ gzip:   3.80 kB
+dist/assets/request-Zl0S4xGn.js                                                38.17 kB │ gzip:  15.27 kB
+dist/assets/ChatView-C_9sP6uR.js                                               50.19 kB │ gzip:  16.28 kB
+dist/assets/index-B_G1KLrq.js                                               1,165.01 kB │ gzip: 373.95 kB
+✓ built in 2.17s
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.

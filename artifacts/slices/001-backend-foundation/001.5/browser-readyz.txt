@@ -1,0 +1,2 @@
+Navigating to http://127.0.0.1:8010/readyz
+Capturing screenshot into artifacts/slices/001-backend-foundation/001.5/screenshots/readyz.png

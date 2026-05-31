@@ -1,0 +1,1 @@
+E2E: N/A for parser-only adapter fixture contract. Equivalent executable evidence is `integration.txt`.

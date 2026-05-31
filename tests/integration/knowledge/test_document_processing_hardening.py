@@ -1,0 +1,92 @@
+from datetime import datetime
+import time
+import unittest
+
+import sqlalchemy as sa
+
+from app.core.database import Base, get_session_factory, initialise_database
+from app.core.schema import register_baseline_tables
+from app.modules.knowledge.domain.service import KnowledgeBaseService
+from app.modules.knowledge.infra.repository import KnowledgeBaseRepository
+
+
+class DocumentProcessingHardeningTest(unittest.TestCase):
+    def test_failed_reprocess_clears_chunks_embeddings_and_reports_outcome(self) -> None:
+        kb_id = _seed_knowledge_base()
+        content = b"Reset password\n\nContact support"
+
+        with get_session_factory()() as session:
+            service = KnowledgeBaseService(KnowledgeBaseRepository(session))
+            document = service.upload_document(kb_id, "hardening.txt", content)
+            service.process_document(document["id"], content)
+
+            failed = service.process_document(document["id"], b"   \r\n\t")
+            detail = service.get_document(document["id"])
+            chunks = service.list_chunks(document["id"])
+
+        self.assertIsNotNone(failed)
+        self.assertEqual("FAILED", failed.status)
+        self.assertEqual("Document is empty", failed.error_message)
+        self.assertEqual(0, failed.chunk_count)
+        self.assertEqual(0, failed.embedding_count)
+        self.assertEqual("FAILED", detail["status"])
+        self.assertEqual("Document is empty", detail["errorMessage"])
+        self.assertEqual([], chunks)
+        self.assertEqual(0, _embedding_count(document["id"]))
+
+    def test_successful_reprocess_replaces_old_chunks_and_embeddings(self) -> None:
+        kb_id = _seed_knowledge_base()
+
+        with get_session_factory()() as session:
+            service = KnowledgeBaseService(KnowledgeBaseRepository(session))
+            document = service.upload_document(kb_id, "reprocess.txt", b"Alpha\n\nBeta")
+            service.process_document(document["id"], b"Alpha\n\nBeta")
+
+            outcome = service.process_document(document["id"], b"Gamma only")
+            chunks = service.list_chunks(document["id"])
+
+        self.assertIsNotNone(outcome)
+        self.assertEqual("DONE", outcome.status)
+        self.assertEqual(1, outcome.chunk_count)
+        self.assertEqual(1, outcome.embedding_count)
+        self.assertEqual(["Gamma only"], [chunk["content"] for chunk in chunks])
+        self.assertEqual(1, _embedding_count(document["id"]))
+
+
+def _seed_knowledge_base() -> int:
+    initialise_database()
+    register_baseline_tables()
+    knowledge_base = Base.metadata.tables["knowledge_base"]
+    now = datetime.now()
+    with get_session_factory()() as session:
+        kb_id = session.execute(
+            knowledge_base.insert().values(
+                name=f"Hardening KB {time.time_ns()}",
+                description="",
+                enabled=True,
+                deleted=False,
+                created_at=now,
+                updated_at=now,
+            )
+        ).inserted_primary_key[0]
+        session.commit()
+    return int(kb_id)
+
+
+def _embedding_count(document_id: int) -> int:
+    register_baseline_tables()
+    document_chunk = Base.metadata.tables["document_chunk"]
+    document_embedding = Base.metadata.tables["document_embedding"]
+    with get_session_factory()() as session:
+        return int(
+            session.execute(
+                sa.select(sa.func.count())
+                .select_from(document_embedding)
+                .join(document_chunk, document_embedding.c.chunk_id == document_chunk.c.id)
+                .where(document_chunk.c.document_id == document_id)
+            ).scalar_one()
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,0 +1,2 @@
+Navigating to http://127.0.0.1:5173/api/v1/health
+Capturing screenshot into artifacts/slices/002-frontend-foundation/002.2/screenshots/proxy-health.png

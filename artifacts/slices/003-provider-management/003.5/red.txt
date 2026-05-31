@@ -1,0 +1,18 @@
+E
+======================================================================
+ERROR: test_llm_adapters (unittest.loader._FailedTest.test_llm_adapters)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_llm_adapters
+Traceback (most recent call last):
+  File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/unittest/loader.py", line 137, in loadTestsFromName
+    module = __import__(module_name)
+             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/vincento/work/develop/hify/tests/unit/provider/test_llm_adapters.py", line 3, in <module>
+    from app.modules.provider.infra.llm_adapters import (
+ModuleNotFoundError: No module named 'app.modules.provider.infra.llm_adapters'
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+FAILED (errors=1)

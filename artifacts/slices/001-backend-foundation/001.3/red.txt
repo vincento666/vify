@@ -1,0 +1,33 @@
+/Users/vincento/work/develop/hify/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+EE
+======================================================================
+ERROR: test_errors (unittest.loader._FailedTest.test_errors)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_errors
+Traceback (most recent call last):
+  File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/unittest/loader.py", line 137, in loadTestsFromName
+    module = __import__(module_name)
+             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/vincento/work/develop/hify/tests/unit/core/test_errors.py", line 3, in <module>
+    from app.core.errors import BizError, ErrorCode
+ModuleNotFoundError: No module named 'app.core.errors'
+
+
+======================================================================
+ERROR: test_error_envelope (unittest.loader._FailedTest.test_error_envelope)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_error_envelope
+Traceback (most recent call last):
+  File "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/unittest/loader.py", line 137, in loadTestsFromName
+    module = __import__(module_name)
+             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/vincento/work/develop/hify/tests/contract/test_error_envelope.py", line 6, in <module>
+    from app.core.errors import BizError, ErrorCode
+ModuleNotFoundError: No module named 'app.core.errors'
+
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.000s
+
+FAILED (errors=2)

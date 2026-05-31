@@ -1,0 +1,35 @@
+import unittest
+
+try:
+    from app.modules.workflow.domain.context import ExecutionContext
+except ModuleNotFoundError:
+    ExecutionContext = None  # type: ignore[assignment]
+
+
+class ExecutionContextTest(unittest.TestCase):
+    def test_resolves_node_variable_templates(self) -> None:
+        self.assertIsNotNone(ExecutionContext)
+        context = ExecutionContext()
+        context.set_output("start", {"userMessage": "reset password"})
+        context.set_output("llm", {"answer": "Open settings"})
+
+        rendered = context.render("Question: {{start.userMessage}}; Answer: {{llm.answer}}")
+
+        self.assertEqual(rendered, "Question: reset password; Answer: Open settings")
+
+    def test_converts_scalar_values_to_strings(self) -> None:
+        self.assertIsNotNone(ExecutionContext)
+        context = ExecutionContext()
+        context.set_output("api", {"status": 200, "ok": True})
+
+        self.assertEqual(context.render("status={{api.status}}, ok={{api.ok}}"), "status=200, ok=True")
+
+    def test_missing_variables_render_as_empty_strings(self) -> None:
+        self.assertIsNotNone(ExecutionContext)
+        context = ExecutionContext()
+
+        self.assertEqual(context.render("{{missing.value}} fallback"), " fallback")
+
+
+if __name__ == "__main__":
+    unittest.main()

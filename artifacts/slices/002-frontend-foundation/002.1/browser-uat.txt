@@ -1,0 +1,2 @@
+Navigating to http://127.0.0.1:5173/
+Capturing screenshot into artifacts/slices/002-frontend-foundation/002.1/screenshots/frontend-root.png

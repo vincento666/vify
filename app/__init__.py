@@ -1,0 +1,1 @@
+"""Hify FastAPI application package."""

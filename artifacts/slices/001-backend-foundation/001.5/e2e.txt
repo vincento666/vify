@@ -1,0 +1,4 @@
+/readyz 200 application/json
+{"code": 200, "data": {"components": {"app": "UP", "database": "CONFIGURED", "redis": "NOT_CONFIGURED"}, "status": "UP"}, "message": "success"}
+/metrics 200 text/plain; version=1.0.0; charset=utf-8
+# HELP hify_app_info Hify application info
