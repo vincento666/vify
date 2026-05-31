@@ -1,0 +1,17 @@
+/Users/vincento/work/develop/hify/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+2026-06-01 02:13:05,049 INFO [httpx] HTTP Request: POST http://testserver/api/v1/eval-sets "HTTP/1.1 200 OK"
+2026-06-01 02:13:05,049 INFO [httpx] HTTP Request: POST http://testserver/api/v1/eval-sets/23/cases/import-csv "HTTP/1.1 404 Not Found"
+F
+======================================================================
+FAIL: test_import_eval_cases_from_csv_and_export_run_results (tests.integration.evaluation.test_csv_import_export.EvaluationCsvImportExportTest.test_import_eval_cases_from_csv_and_export_run_results)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/vincento/work/develop/hify/tests/integration/evaluation/test_csv_import_export.py", line 27, in test_import_eval_cases_from_csv_and_export_run_results
+    self.assertEqual(import_response.status_code, 200)
+AssertionError: 404 != 200
+
+----------------------------------------------------------------------
+Ran 1 test in 0.019s
+
+FAILED (failures=1)

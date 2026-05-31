@@ -175,6 +175,8 @@ def _mock_provider_response(payload: dict[str, Any]) -> dict[str, Any]:
     messages = payload.get("messages", [])
     if isinstance(messages, list) and messages:
         last_message = messages[-1]
+        if isinstance(last_message, dict) and "LLM_JUDGE_EVALUATION" in str(last_message.get("content") or ""):
+            return _mock_judge_response(str(last_message.get("content") or ""))
         if isinstance(last_message, dict) and last_message.get("role") == "tool":
             return _assistant_response(f"Tool answer: {last_message.get('content') or ''}")
         if payload.get("tools") and isinstance(last_message, dict):
@@ -205,6 +207,27 @@ def _mock_provider_response(payload: dict[str, Any]) -> dict[str, Any]:
         if isinstance(last_message, dict):
             return _assistant_response(f"LLM mock: {last_message.get('content') or ''}")
     return _assistant_response("LLM mock: ok")
+
+
+def _mock_judge_response(content: str) -> dict[str, Any]:
+    expected = _extract_marker(content, "Expected output:", "Actual output:")
+    actual = _extract_marker(content, "Actual output:", "Rubric:")
+    passed = bool(expected) and expected.strip().lower() in actual.strip().lower()
+    result = {
+        "passed": passed,
+        "score": 1.0 if passed else 0.0,
+        "reason": "mock judge: expected answer is preserved" if passed else "mock judge: expected answer is missing",
+    }
+    return _assistant_response(json.dumps(result))
+
+
+def _extract_marker(content: str, start: str, end: str) -> str:
+    if start not in content:
+        return ""
+    after = content.split(start, 1)[1]
+    if end in after:
+        after = after.split(end, 1)[0]
+    return after.strip()
 
 
 def _assistant_response(content: str) -> dict[str, Any]:

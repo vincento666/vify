@@ -1,0 +1,5 @@
+
+> hify-web@0.0.1 test:e2e
+> node e2e/workflow-tabs.mjs
+
+PASS workflow/chatflow tab shell e2e

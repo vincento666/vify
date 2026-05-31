@@ -1,0 +1,32 @@
+
+> hify-web@0.0.1 test:unit
+> vitest run --run src/views/workflow/chatflowPublish.test.ts
+
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/views/workflow/chatflowPublish.test.ts [ src/views/workflow/chatflowPublish.test.ts ]
+Error: Cannot find module './chatflowPublish' imported from '/Users/vincento/work/develop/hify/frontend/src/views/workflow/chatflowPublish.test.ts'
+ ❯ src/views/workflow/chatflowPublish.test.ts:2:31
+      1| import { describe, expect, it } from 'vitest'
+      2| 
+      3| import { buildChatflowOpenShell, evaluateChatflowPublishGate } from '.…
+       |                              ^
+      4| 
+      5| describe('chatflow publish shell', () => {
+
+Caused by: Error: Failed to load url ./chatflowPublish (resolved id: ./chatflowPublish) in /Users/vincento/work/develop/hify/frontend/src/views/workflow/chatflowPublish.test.ts. Does the file exist?
+ ❯ loadAndTransform node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:51969:17
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  01:31:04
+   Duration  218ms (transform 19ms, setup 0ms, collect 0ms, tests 0ms, environment 0ms, prepare 50ms)
+

@@ -20,6 +20,12 @@ EXPECTED_TABLES = {
     "workflow_edge",
     "workflow_run",
     "workflow_node_run",
+    "eval_set",
+    "eval_case",
+    "evaluator",
+    "evaluation_experiment",
+    "evaluation_run",
+    "evaluation_case_result",
 }
 
 
@@ -36,6 +42,13 @@ class DatabaseMetadataTest(unittest.TestCase):
 
         self.assertIn("knowledge_base_id", agent_columns)
         self.assertIn("workflow_id", agent_columns)
+
+    def test_workflow_contains_flow_type(self) -> None:
+        register_baseline_tables()
+
+        workflow_columns = set(Base.metadata.tables["workflow"].columns.keys())
+
+        self.assertIn("flow_type", workflow_columns)
 
 
 if __name__ == "__main__":

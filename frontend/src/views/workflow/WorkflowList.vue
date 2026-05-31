@@ -1,5 +1,7 @@
 <template>
   <div class="workflow-list">
+    <WorkflowModuleTabs />
+
     <div class="page-header">
       <div>
         <h2 class="page-title">工作流</h2>
@@ -30,9 +32,10 @@
       <el-table-column label="创建时间" width="180">
         <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="160" fixed="right">
+      <el-table-column label="操作" width="230" fixed="right">
         <template #default="{ row }">
           <el-button size="small" @click="viewDetail(row)">查看</el-button>
+          <el-button size="small" type="primary" plain @click="$router.push(`/workflows/${row.id}/canvas`)">画布</el-button>
           <el-popconfirm title="确认删除这个工作流？" @confirm="handleDelete(row.id)">
             <template #reference>
               <el-button size="small" type="danger">删除</el-button>
@@ -91,6 +94,7 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, Share, Right } from '@element-plus/icons-vue'
 import { listWorkflows, getWorkflow, deleteWorkflow, type WorkflowListItem, type WorkflowDetail } from '@/api/workflow'
+import WorkflowModuleTabs from './WorkflowModuleTabs.vue'
 
 const loading = ref(false)
 const workflows = ref<WorkflowListItem[]>([])

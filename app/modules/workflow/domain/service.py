@@ -20,11 +20,12 @@ from app.modules.workflow.web.schemas import (
 
 
 class WorkflowService:
-    def __init__(self, repository: WorkflowRepository) -> None:
+    def __init__(self, repository: WorkflowRepository, flow_type: str = "WORKFLOW") -> None:
         self._repository = repository
+        self._flow_type = flow_type
 
     def list(self, page: int, page_size: int, status: str | None) -> dict[str, Any]:
-        rows, total = self._repository.list_page(page, page_size, status)
+        rows, total = self._repository.list_page(page, page_size, status, self._flow_type)
         response = WorkflowPageResponse(
             list=[self._response(row) for row in rows],
             total=total,
@@ -35,14 +36,14 @@ class WorkflowService:
 
     def create(self, request: WorkflowCreateRequest) -> dict[str, Any]:
         row = self._repository.create(
-            {"name": request.name, "description": request.description},
+            {"name": request.name, "description": request.description, "flow_type": self._flow_type},
             [node.model_dump() for node in request.nodes],
             [edge.model_dump() for edge in request.edges],
         )
         return self._detail_response(row).model_dump(by_alias=True)
 
     def get(self, workflow_id: int) -> dict[str, Any]:
-        row = self._repository.get(workflow_id)
+        row = self._repository.get(workflow_id, self._flow_type)
         if row is None:
             raise BizError(ErrorCode.NOT_FOUND, "Workflow not found")
         return self._detail_response(row).model_dump(by_alias=True)
@@ -60,16 +61,19 @@ class WorkflowService:
             values,
             [node.model_dump() for node in request.nodes] if request.nodes is not None else None,
             [edge.model_dump() for edge in request.edges] if request.edges is not None else None,
+            self._flow_type,
         )
         if row is None:
             raise BizError(ErrorCode.NOT_FOUND, "Workflow not found")
         return self._detail_response(row).model_dump(by_alias=True)
 
     def delete(self, workflow_id: int) -> None:
-        if not self._repository.delete(workflow_id):
+        if not self._repository.delete(workflow_id, self._flow_type):
             raise BizError(ErrorCode.NOT_FOUND, "Workflow not found")
 
     def execute(self, workflow_id: int, request: WorkflowRunRequest) -> dict[str, Any]:
+        if self._repository.get(workflow_id, self._flow_type) is None:
+            raise BizError(ErrorCode.NOT_FOUND, "Workflow not found")
         try:
             result = WorkflowExecutionEngine(self._repository).run(workflow_id, dict(request.input))
         except WorkflowExecutionError as exc:
@@ -86,6 +90,7 @@ class WorkflowService:
             id=int(row["id"]),
             name=row["name"],
             description=row["description"] or "",
+            flowType=row.get("flow_type") or "WORKFLOW",
             status=row["status"],
             createdAt=format_datetime(row["created_at"]),
             updatedAt=format_datetime(row["updated_at"]),

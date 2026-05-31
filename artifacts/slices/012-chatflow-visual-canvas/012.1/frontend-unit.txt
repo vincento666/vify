@@ -1,0 +1,21 @@
+
+> hify-web@0.0.1 test:unit
+> vitest run
+
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+
+ ✓ src/views/workflow/workflowPublish.test.ts (4 tests) 8ms
+ ✓ src/views/workflow/flowGraph.test.ts (2 tests) 10ms
+ ✓ src/views/workflow/nodeConfig.test.ts (2 tests) 13ms
+ ✓ src/views/workflow/variableCatalog.test.ts (2 tests) 11ms
+ ✓ src/views/workflow/workflowValidation.test.ts (3 tests) 8ms
+ ✓ src/router/workflow-routes.test.ts (2 tests) 220ms
+ ✓ src/utils/request.test.ts (3 tests) 5ms
+
+ Test Files  7 passed (7)
+      Tests  18 passed (18)
+   Start at  01:16:03
+   Duration  2.26s (transform 425ms, setup 0ms, collect 2.32s, tests 274ms, environment 1.06s, prepare 1.34s)
+

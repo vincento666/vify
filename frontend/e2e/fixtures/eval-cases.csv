@@ -1,0 +1,3 @@
+input,expectedOutput,tags
+refund policy,LLM mock: refund policy,refund|policy
+shipping status,LLM mock: shipping status,shipping

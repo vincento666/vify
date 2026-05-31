@@ -2,34 +2,34 @@
 
 ## 012.1 Chatflow resource entry
 
-- [ ] RED: Chatflow tab/list route test fails.
-- [ ] Implement Chatflow tab, list, create button, route shell.
-- [ ] Gates pass.
+- [x] RED: Chatflow tab/list route test fails.
+- [x] Implement Chatflow tab, list, create button, route shell.
+- [x] Gates pass.
 
 ## 012.2 Shared graph model
 
-- [ ] RED: Chatflow create/detail separation test fails.
-- [ ] Add flow type persistence and API separation.
-- [ ] Default Chatflow START/END graph uses chat system variables.
-- [ ] Gates pass.
+- [x] RED: Chatflow create/detail separation test fails.
+- [x] Add flow type persistence and API separation.
+- [x] Default Chatflow START/END graph uses chat system variables.
+- [x] Gates pass.
 
-## 012.3 Variable panel
+## 012.3 Variable panel and selector
 
-- [ ] RED: variable catalog UI test fails.
-- [ ] Implement System/Global/Conversation/User/Channel/External Input variable panels.
-- [ ] Implement variable reference insertion.
-- [ ] Gates pass.
+- [x] RED: variable catalog UI test fails.
+- [x] Implement System/Global/Conversation/User/Channel/External Input variable panels.
+- [x] Implement variable reference insertion.
+- [x] Gates pass.
 
 ## 012.4 Conversation test run
 
-- [ ] RED: Chatflow test run fails.
-- [ ] Implement system variable mapping and message-shaped test panel.
-- [ ] Map run output to conversation-style result.
-- [ ] Gates pass.
+- [x] RED: Chatflow test run fails.
+- [x] Implement system variable mapping and message-shaped test panel.
+- [x] Map run output to conversation-style result.
+- [x] Gates pass.
 
 ## 012.5 Chatflow publish/open shell
 
-- [ ] RED: publish/open guard fails.
-- [ ] Implement channel/API publish shell fields.
-- [ ] Keep real channel adapters out of scope.
-- [ ] Gates pass.
+- [x] RED: publish/open guard fails.
+- [x] Implement channel/API publish shell fields.
+- [x] Keep real channel adapters out of scope.
+- [x] Gates pass.

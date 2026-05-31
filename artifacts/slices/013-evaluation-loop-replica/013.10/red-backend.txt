@@ -1,0 +1,30 @@
+/Users/vincento/work/develop/hify/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+2026-06-01 02:33:13,175 INFO [httpx] HTTP Request: POST http://testserver/api/v1/workflows "HTTP/1.1 200 OK"
+2026-06-01 02:33:13,186 INFO [httpx] HTTP Request: POST http://testserver/api/v1/eval-sets "HTTP/1.1 200 OK"
+2026-06-01 02:33:13,197 INFO [httpx] HTTP Request: POST http://testserver/api/v1/eval-sets/72/cases "HTTP/1.1 200 OK"
+2026-06-01 02:33:13,202 INFO [httpx] HTTP Request: POST http://testserver/api/v1/eval-sets/72/cases "HTTP/1.1 200 OK"
+2026-06-01 02:33:13,205 INFO [httpx] HTTP Request: POST http://testserver/api/v1/eval-sets/72/cases "HTTP/1.1 200 OK"
+2026-06-01 02:33:13,209 INFO [httpx] HTTP Request: POST http://testserver/api/v1/eval-sets/72/cases "HTTP/1.1 200 OK"
+2026-06-01 02:33:13,211 INFO [httpx] HTTP Request: POST http://testserver/api/v1/evaluators "HTTP/1.1 200 OK"
+2026-06-01 02:33:13,216 INFO [httpx] HTTP Request: POST http://testserver/api/v1/evaluation-experiments "HTTP/1.1 200 OK"
+2026-06-01 02:33:13,244 INFO [httpx] HTTP Request: POST http://testserver/api/v1/evaluation-experiments/49/runs "HTTP/1.1 200 OK"
+2026-06-01 02:33:13,246 INFO [httpx] HTTP Request: PUT http://testserver/api/v1/eval-cases/78 "HTTP/1.1 200 OK"
+2026-06-01 02:33:13,249 INFO [httpx] HTTP Request: PUT http://testserver/api/v1/eval-cases/79 "HTTP/1.1 200 OK"
+2026-06-01 02:33:13,251 INFO [httpx] HTTP Request: PUT http://testserver/api/v1/eval-cases/80 "HTTP/1.1 200 OK"
+2026-06-01 02:33:13,254 INFO [httpx] HTTP Request: PUT http://testserver/api/v1/eval-cases/81 "HTTP/1.1 200 OK"
+2026-06-01 02:33:13,277 INFO [httpx] HTTP Request: POST http://testserver/api/v1/evaluation-experiments/49/runs "HTTP/1.1 200 OK"
+2026-06-01 02:33:13,281 INFO [httpx] HTTP Request: GET http://testserver/api/v1/evaluation-runs/compare?baseRunId=53&candidateRunId=54 "HTTP/1.1 422 Unprocessable Entity"
+F
+======================================================================
+FAIL: test_compares_two_runs_with_failed_recovered_and_unchanged_cases (tests.integration.evaluation.test_run_compare.EvaluationRunCompareTest.test_compares_two_runs_with_failed_recovered_and_unchanged_cases)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/vincento/work/develop/hify/tests/integration/evaluation/test_run_compare.py", line 52, in test_compares_two_runs_with_failed_recovered_and_unchanged_cases
+    self.assertEqual(compare_response.status_code, 200, compare_response.text)
+AssertionError: 422 != 200 : {"code":422,"message":"Validation Error","data":[{"type":"int_parsing","loc":["path","run_id"],"msg":"Input should be a valid integer, unable to parse string as an integer","input":"compare"}]}
+
+----------------------------------------------------------------------
+Ran 1 test in 0.133s
+
+FAILED (failures=1)

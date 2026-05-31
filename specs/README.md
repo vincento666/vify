@@ -21,6 +21,8 @@ each slice must pass the gates defined in
 | 010-real-tool-calling-and-mcp | Real OpenAI tool calling and MCP execution integration |
 | 011-workflow-visual-canvas | Visual draggable workflow canvas for current node/runtime boundary |
 | 012-chatflow-visual-canvas | Chatflow list/canvas/profile that reuses workflow graph/runtime |
+| 013-evaluation-loop-replica | Coze Loop-inspired Evaluation workbench; MVP is an Agent-only eval set, deterministic evaluator, experiment run, and report loop |
+| 014-agent-workbench-mvp | Product-level Agent Workbench MVP for configuration, capability binding, mode clarity, and in-page preview |
 
 ## Required Files Per Spec
 

@@ -14,6 +14,7 @@ def register_baseline_tables() -> None:
     metadata = Base.metadata
     if "provider" in metadata.tables:
         register_knowledge_vector_tables(metadata)
+        register_evaluation_tables(metadata)
         return
 
     sa.Table(
@@ -165,9 +166,11 @@ def register_baseline_tables() -> None:
         id_column(),
         sa.Column("name", sa.String(100), nullable=False),
         sa.Column("description", sa.String(500), server_default="", nullable=True),
+        sa.Column("flow_type", sa.String(20), nullable=False, server_default="WORKFLOW"),
         sa.Column("status", sa.String(20), nullable=False, server_default="DRAFT"),
         deleted_column(),
         *timestamps(),
+        sa.Index("idx_workflow_flow_type", "flow_type"),
     )
 
     sa.Table(
@@ -230,6 +233,7 @@ def register_baseline_tables() -> None:
         sa.Index("idx_workflow_node_run_workflow_run_id", "workflow_run_id"),
     )
     register_knowledge_vector_tables(metadata)
+    register_evaluation_tables(metadata)
 
 
 def ensure_pgvector_extension(bind: Engine | Connection) -> None:
@@ -264,6 +268,104 @@ def register_knowledge_vector_tables(metadata: sa.MetaData) -> None:
             ),
             sa.Index("idx_document_chunk_document_id", "document_id"),
             sa.Index("idx_document_chunk_content_hash", "content_hash"),
+        )
+
+
+def register_evaluation_tables(metadata: sa.MetaData) -> None:
+    if "eval_set" not in metadata.tables:
+        sa.Table(
+            "eval_set",
+            metadata,
+            id_column(),
+            sa.Column("name", sa.String(120), nullable=False),
+            sa.Column("description", sa.String(500), server_default="", nullable=True),
+            deleted_column(),
+            *timestamps(),
+            sa.Index("idx_eval_set_name", "name"),
+        )
+
+    if "eval_case" not in metadata.tables:
+        sa.Table(
+            "eval_case",
+            metadata,
+            id_column(),
+            sa.Column("eval_set_id", BIGINT, nullable=False),
+            sa.Column("input", sa.Text(), nullable=False),
+            sa.Column("expected_output", sa.Text(), nullable=False),
+            sa.Column("tags", sa.JSON(), nullable=True),
+            sa.Column("case_metadata", sa.JSON(), nullable=True),
+            deleted_column(),
+            *timestamps(),
+            sa.Index("idx_eval_case_eval_set_id", "eval_set_id"),
+        )
+
+    if "evaluator" not in metadata.tables:
+        sa.Table(
+            "evaluator",
+            metadata,
+            id_column(),
+            sa.Column("name", sa.String(120), nullable=False),
+            sa.Column("type", sa.String(40), nullable=False),
+            sa.Column("config", sa.JSON(), nullable=True),
+            enabled_column(),
+            deleted_column(),
+            *timestamps(),
+            sa.Index("idx_evaluator_type", "type"),
+        )
+
+    if "evaluation_experiment" not in metadata.tables:
+        sa.Table(
+            "evaluation_experiment",
+            metadata,
+            id_column(),
+            sa.Column("name", sa.String(160), nullable=False),
+            sa.Column("target_type", sa.String(40), nullable=False),
+            sa.Column("target_id", BIGINT, nullable=False),
+            sa.Column("eval_set_id", BIGINT, nullable=False),
+            sa.Column("evaluator_ids", sa.JSON(), nullable=False),
+            sa.Column("status", sa.String(30), nullable=False, server_default="READY"),
+            sa.Column("latest_run_id", BIGINT, nullable=True),
+            deleted_column(),
+            *timestamps(),
+            sa.Index("idx_evaluation_experiment_target", "target_type", "target_id"),
+        )
+
+    if "evaluation_run" not in metadata.tables:
+        sa.Table(
+            "evaluation_run",
+            metadata,
+            id_column(),
+            sa.Column("experiment_id", BIGINT, nullable=False),
+            sa.Column("status", sa.String(30), nullable=False, server_default="RUNNING"),
+            sa.Column("total_cases", sa.Integer(), nullable=False, server_default="0"),
+            sa.Column("passed_cases", sa.Integer(), nullable=False, server_default="0"),
+            sa.Column("failed_cases", sa.Integer(), nullable=False, server_default="0"),
+            sa.Column("aggregate_score", sa.Float(), nullable=False, server_default="0"),
+            sa.Column("pass_rate", sa.Float(), nullable=False, server_default="0"),
+            sa.Column("started_at", sa.DateTime(), nullable=True),
+            sa.Column("finished_at", sa.DateTime(), nullable=True),
+            deleted_column(),
+            *timestamps(),
+            sa.Index("idx_evaluation_run_experiment_id", "experiment_id"),
+        )
+
+    if "evaluation_case_result" not in metadata.tables:
+        sa.Table(
+            "evaluation_case_result",
+            metadata,
+            id_column(),
+            sa.Column("run_id", BIGINT, nullable=False),
+            sa.Column("eval_case_id", BIGINT, nullable=False),
+            sa.Column("input", sa.Text(), nullable=False),
+            sa.Column("expected_output", sa.Text(), nullable=False),
+            sa.Column("target_output", sa.Text(), nullable=False),
+            sa.Column("status", sa.String(30), nullable=False),
+            sa.Column("score", sa.Float(), nullable=False, server_default="0"),
+            sa.Column("evaluator_results", sa.JSON(), nullable=True),
+            sa.Column("reason", sa.Text(), nullable=True),
+            deleted_column(),
+            *timestamps(),
+            sa.Index("idx_evaluation_case_result_run_id", "run_id"),
         )
 
     if "document_embedding" not in metadata.tables:

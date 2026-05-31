@@ -1,0 +1,33 @@
+
+> hify-web@0.0.1 test:unit
+> vitest run src/views/evaluation/experimentRunViewModel.test.ts
+
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+
+ ❯ src/views/evaluation/experimentRunViewModel.test.ts (2 tests | 1 failed) 4ms
+   ✓ experiment run view model > summarizes run score, pass rate, and status tone 1ms
+   × experiment run view model > exposes selectable evaluation target types 2ms
+     → Cannot read properties of undefined (reading 'map')
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/views/evaluation/experimentRunViewModel.test.ts > experiment run view model > exposes selectable evaluation target types
+TypeError: Cannot read properties of undefined (reading 'map')
+ ❯ src/views/evaluation/experimentRunViewModel.test.ts:23:30
+     21| 
+     22|   it('exposes selectable evaluation target types', () => {
+     23|     expect(targetTypeOptions.map((item) => item.value)).toEqual(['AGEN…
+       |                              ^
+     24|     expect(formatTargetLabel({ targetType: 'WORKFLOW', targetId: 12 })…
+     25|     expect(formatTargetLabel({ targetType: 'CHATFLOW', targetId: 13 })…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  02:23:59
+   Duration  349ms (transform 19ms, setup 0ms, collect 17ms, tests 4ms, environment 147ms, prepare 32ms)
+

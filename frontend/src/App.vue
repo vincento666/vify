@@ -21,7 +21,7 @@
           :key="item.path"
           :to="item.path"
           class="nav-item"
-          :class="{ active: route.path === item.path }"
+          :class="{ active: isNavActive(item) }"
         >
           <el-icon :size="17"><component :is="item.icon" /></el-icon>
           <transition name="fade">
@@ -72,7 +72,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { Setting, User, ChatDotRound, Folder, Share, Connection, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
+import { Setting, User, ChatDotRound, Folder, Share, Connection, DataAnalysis, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const collapsed = ref(window.innerWidth < 1200)
@@ -87,13 +87,19 @@ const navItems = [
   { path: '/provider',   label: '模型管理',  icon: Setting },
   { path: '/agent',      label: 'Agent',    icon: User },
   { path: '/knowledge',  label: '知识库',   icon: Folder },
-  { path: '/workflows',  label: '工作流',   icon: Share },
+  { path: '/workflows',  label: '工作流',   icon: Share, matches: ['/workflows', '/chatflows'] },
+  { path: '/evaluation', label: '评测',     icon: DataAnalysis },
   { path: '/mcp',        label: 'MCP 工具', icon: Connection },
   { path: '/chat',       label: '对话',     icon: ChatDotRound },
 ]
 
+function isNavActive(item: { path: string; matches?: string[] }) {
+  const matches = item.matches || [item.path]
+  return matches.some((path) => route.path === path || route.path.startsWith(path + '/'))
+}
+
 const currentLabel = computed(() => {
-  const match = navItems.find(item => route.path === item.path || route.path.startsWith(item.path + '/'))
+  const match = navItems.find(isNavActive)
   return match ? match.label : ''
 })
 </script>

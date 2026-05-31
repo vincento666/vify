@@ -1,0 +1,15 @@
+/Users/vincento/work/develop/hify/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+2026-06-01 02:07:52,369 INFO [httpx] HTTP Request: POST http://testserver/api/v1/eval-sets "HTTP/1.1 200 OK"
+2026-06-01 02:07:52,372 INFO [httpx] HTTP Request: POST http://testserver/api/v1/eval-sets/16/cases "HTTP/1.1 200 OK"
+2026-06-01 02:07:52,374 INFO [httpx] HTTP Request: POST http://testserver/api/v1/evaluators "HTTP/1.1 200 OK"
+2026-06-01 02:07:52,376 INFO [httpx] HTTP Request: POST http://testserver/api/v1/evaluation-experiments "HTTP/1.1 200 OK"
+2026-06-01 02:07:52,389 INFO [httpx] HTTP Request: POST http://testserver/api/v1/evaluation-experiments/6/runs "HTTP/1.1 200 OK"
+2026-06-01 02:07:52,391 INFO [httpx] HTTP Request: GET http://testserver/api/v1/evaluation-runs/5?caseStatus=FAILED "HTTP/1.1 200 OK"
+2026-06-01 02:07:52,394 INFO [httpx] HTTP Request: GET http://testserver/api/v1/evaluation-runs?page=1&pageSize=20 "HTTP/1.1 200 OK"
+2026-06-01 02:07:52,395 INFO [httpx] HTTP Request: GET http://testserver/api/v1/evaluation-runs/999999999 "HTTP/1.1 404 Not Found"
+.
+----------------------------------------------------------------------
+Ran 1 test in 0.042s
+
+OK

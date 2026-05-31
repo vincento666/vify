@@ -1,0 +1,40 @@
+/Users/vincento/work/develop/hify/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+2026-06-01 02:23:47,729 INFO [httpx] HTTP Request: POST http://testserver/api/v1/eval-sets "HTTP/1.1 200 OK"
+2026-06-01 02:23:47,732 INFO [httpx] HTTP Request: POST http://testserver/api/v1/eval-sets/40/cases "HTTP/1.1 200 OK"
+2026-06-01 02:23:47,734 INFO [httpx] HTTP Request: POST http://testserver/api/v1/evaluators "HTTP/1.1 200 OK"
+2026-06-01 02:23:47,737 INFO [httpx] HTTP Request: POST http://testserver/api/v1/evaluation-experiments "HTTP/1.1 200 OK"
+2026-06-01 02:23:47,746 INFO [httpx] HTTP Request: POST http://testserver/api/v1/evaluation-experiments/21/runs "HTTP/1.1 200 OK"
+.2026-06-01 02:23:47,757 INFO [httpx] HTTP Request: POST http://testserver/api/v1/chatflows "HTTP/1.1 200 OK"
+2026-06-01 02:23:47,759 INFO [httpx] HTTP Request: POST http://testserver/api/v1/eval-sets "HTTP/1.1 200 OK"
+2026-06-01 02:23:47,761 INFO [httpx] HTTP Request: POST http://testserver/api/v1/eval-sets/41/cases "HTTP/1.1 200 OK"
+2026-06-01 02:23:47,762 INFO [httpx] HTTP Request: POST http://testserver/api/v1/evaluators "HTTP/1.1 200 OK"
+2026-06-01 02:23:47,763 INFO [httpx] HTTP Request: POST http://testserver/api/v1/evaluation-experiments "HTTP/1.1 422 Unprocessable Entity"
+F2026-06-01 02:23:47,768 INFO [httpx] HTTP Request: POST http://testserver/api/v1/workflows "HTTP/1.1 200 OK"
+2026-06-01 02:23:47,770 INFO [httpx] HTTP Request: POST http://testserver/api/v1/eval-sets "HTTP/1.1 200 OK"
+2026-06-01 02:23:47,772 INFO [httpx] HTTP Request: POST http://testserver/api/v1/eval-sets/42/cases "HTTP/1.1 200 OK"
+2026-06-01 02:23:47,774 INFO [httpx] HTTP Request: POST http://testserver/api/v1/evaluators "HTTP/1.1 200 OK"
+2026-06-01 02:23:47,774 INFO [httpx] HTTP Request: POST http://testserver/api/v1/evaluation-experiments "HTTP/1.1 422 Unprocessable Entity"
+F2026-06-01 02:23:47,777 INFO [httpx] HTTP Request: POST http://testserver/api/v1/evaluation-experiments "HTTP/1.1 422 Unprocessable Entity"
+2026-06-01 02:23:47,778 INFO [httpx] HTTP Request: POST http://testserver/api/v1/evaluation-experiments "HTTP/1.1 404 Not Found"
+.
+======================================================================
+FAIL: test_create_chatflow_experiment_and_run_cases_synchronously (tests.integration.evaluation.test_experiment_run.EvaluationExperimentRunTest.test_create_chatflow_experiment_and_run_cases_synchronously)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/vincento/work/develop/hify/tests/integration/evaluation/test_experiment_run.py", line 130, in test_create_chatflow_experiment_and_run_cases_synchronously
+    self.assertEqual(create_experiment.status_code, 200, create_experiment.text)
+AssertionError: 422 != 200 : {"code":422,"message":"Validation Error","data":[{"type":"literal_error","loc":["body","targetType"],"msg":"Input should be 'AGENT'","input":"CHATFLOW","ctx":{"expected":"'AGENT'"}}]}
+
+======================================================================
+FAIL: test_create_workflow_experiment_and_run_cases_synchronously (tests.integration.evaluation.test_experiment_run.EvaluationExperimentRunTest.test_create_workflow_experiment_and_run_cases_synchronously)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/vincento/work/develop/hify/tests/integration/evaluation/test_experiment_run.py", line 89, in test_create_workflow_experiment_and_run_cases_synchronously
+    self.assertEqual(create_experiment.status_code, 200, create_experiment.text)
+AssertionError: 422 != 200 : {"code":422,"message":"Validation Error","data":[{"type":"literal_error","loc":["body","targetType"],"msg":"Input should be 'AGENT'","input":"WORKFLOW","ctx":{"expected":"'AGENT'"}}]}
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.065s
+
+FAILED (failures=2)

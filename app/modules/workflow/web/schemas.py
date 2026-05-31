@@ -57,6 +57,7 @@ class WorkflowResponse(BaseModel):
     id: int
     name: str
     description: str
+    flow_type: str = Field(alias="flowType")
     status: str
     created_at: str = Field(alias="createdAt")
     updated_at: str = Field(alias="updatedAt")

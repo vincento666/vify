@@ -30,5 +30,17 @@ class ExecutionContext:
         node_key, variable_name = match.group(1), match.group(2)
         value = self._outputs.get(node_key, {}).get(variable_name)
         if value is None:
+            flat_key = f"{node_key}.{variable_name}"
+            for values in reversed(self._outputs.values()):
+                value = values.get(flat_key)
+                if value is not None:
+                    break
+        if value is None:
+            for values in reversed(self._outputs.values()):
+                nested = values.get(node_key)
+                if isinstance(nested, dict) and variable_name in nested:
+                    value = nested[variable_name]
+                    break
+        if value is None:
             return ""
         return str(value)

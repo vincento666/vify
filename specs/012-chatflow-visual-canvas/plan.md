@@ -3,10 +3,11 @@
 ## Architecture
 
 - Reuse Workflow canvas components from spec 011.
-- Add a first-class flow type to API/UI. Preferred backend shape:
-  - Add `kind` or `flow_type` to workflow resources with values `WORKFLOW` and `CHATFLOW`.
-  - Keep graph nodes/edges tables shared.
-  - Filter `/api/v1/workflows` to Workflow resources by default and add `/api/v1/chatflows` facade routes or `kind=CHATFLOW` routes for Chatflow list/create/detail.
+- Add first-class `flow_type` to API/UI/backend resources with values `WORKFLOW` and `CHATFLOW`.
+- Keep graph nodes/edges/run tables shared.
+- Filter `/api/v1/workflows` to `flow_type=WORKFLOW` resources by default.
+- Add `/api/v1/chatflows` facade routes for Chatflow list/create/detail/update/delete/run while reusing shared service internals.
+- Keep type-specific behavior behind runtime profile adapters instead of branching throughout the executor.
 - Add Chatflow system variable catalog and variable reference selector.
 - Map Chatflow test message to shared executor input:
   - `sys.query` and compatibility `userMessage`.
@@ -16,7 +17,7 @@
 ## Runtime Notes
 
 - Shared executor stays deterministic and synchronous in replica phase.
-- Chatflow profile is a wrapper around run input/output, not a new executor.
+- Chatflow profile is a wrapper around run input/output and variable/message behavior, not a new executor.
 - Conversation/message persistence can reuse current chat tables only for test evidence; channel adapters and long-lived scoped variables are later specs.
 
 ## UI Shape

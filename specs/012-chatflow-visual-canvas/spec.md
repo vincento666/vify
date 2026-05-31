@@ -7,9 +7,12 @@ Add Chatflow as a separate product resource entry with its own list and create b
 ## Product Boundary
 
 - Chatflow is not a filter label inside Workflow List; it has a sibling Chatflow List under the workflow module tabs.
-- Chatflow shares the FlowGraph language with Workflow.
+- Chatflow shares the FlowGraph language and persistence tables with Workflow, separated internally by `flow_type=CHATFLOW`.
 - Chatflow baseline includes variable scopes and conversation test profile only.
 - Dify-style multi-task dynamic switching, Task Stack, and cross-flow resume are explicitly out of scope and reserved for a later spec.
+- Chatflow canvas reuses the Coze-like node card, port, edge, and right-panel interaction model from Workflow canvas, adding only Chatflow-specific variable and conversation surfaces.
+- Chatflow node configuration uses the same minimal runtime-backed field boundary as Workflow canvas; Chatflow-specific UI appears in variable and conversation test panels, not in duplicated node forms.
+- Chatflow variable selector extends the Workflow selector with system/scoped variables such as `sys.query`, `sys.conversation_id`, `sys.user_id`, and `sys.channel`. Node-output selection still obeys the connected-upstream-only rule.
 
 ## User Value
 
@@ -20,8 +23,8 @@ Chatflow authors can build conversational service flows that read user input, co
 | Slice | Behavior | Acceptance Gates |
 |------|----------|------------------|
 | 012.1 Chatflow resource entry | Workflow module exposes Chatflow tab with its own list, create button, detail route, and empty/default states | RED: chatflow route/list test fails; Unit: route/type helpers; Integration: resource type persists; E2E: tab navigation; UAT: Chatflow list visible |
-| 012.2 Shared graph model | Chatflow graph persists through shared nodes/edges with flow type separation and default START/END chat variables | RED: create detail test fails; Unit: flow type schema; Integration: list separation; E2E: create chatflow; UAT: reopen graph |
-| 012.3 Variable panel | Chatflow canvas left panel supports System, Global, Conversation, User, Channel, and External Input variables | RED: variable panel test fails; Unit: variable catalog; Integration: config round-trip; E2E: add variable reference; UAT: variables visible |
+| 012.2 Shared graph model | Chatflow graph persists through shared nodes/edges with `flow_type=CHATFLOW` separation and default START/END chat variables | RED: create detail test fails; Unit: flow type schema; Integration: list separation; E2E: create chatflow; UAT: reopen graph |
+| 012.3 Variable panel and selector | Chatflow canvas left panel supports System, Global, Conversation, User, Channel, and External Input variables; node fields can insert these references through selector UI | RED: variable panel test fails; Unit: variable catalog; Integration: config round-trip; E2E: add variable reference; UAT: variables visible |
 | 012.4 Conversation test run | Chatflow test panel accepts message and conversation profile, injects system variables, runs shared executor, and writes visible message-style output | RED: chatflow run test fails; Unit: system variable mapping; Integration: run input contract; E2E: message test output; UAT: conversation result visible |
 | 012.5 Chatflow publish/open shell | Chatflow publish/open shells show channel/API fields and block publish until validation and test pass | RED: chatflow publish guard fails; Unit: guard; Integration: status compatible; E2E: guard path; UAT: channel fields visible |
 

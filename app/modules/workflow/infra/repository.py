@@ -26,8 +26,11 @@ class WorkflowRepository:
         page: int,
         page_size: int,
         status: str | None = None,
+        flow_type: str | None = "WORKFLOW",
     ) -> tuple[list[dict[str, Any]], int]:
         conditions: list[ColumnElement[bool]] = [self._workflow.c.deleted.is_(False)]
+        if flow_type:
+            conditions.append(self._workflow.c.flow_type == flow_type)
         if status:
             conditions.append(self._workflow.c.status == status)
         total = self._session.execute(
@@ -49,11 +52,15 @@ class WorkflowRepository:
         edges: list[dict[str, Any]],
     ) -> dict[str, Any]:
         now = datetime.now()
+        insert_values = dict(values)
+        flow_type = insert_values.pop("flow_type", "WORKFLOW")
+        status = insert_values.pop("status", "DRAFT")
         result = self._session.execute(
             self._workflow.insert()
             .values(
-                **values,
-                status=values.get("status", "DRAFT"),
+                **insert_values,
+                flow_type=flow_type,
+                status=status,
                 deleted=False,
                 created_at=now,
                 updated_at=now,
@@ -67,12 +74,15 @@ class WorkflowRepository:
         self._session.commit()
         return row
 
-    def get(self, workflow_id: int) -> dict[str, Any] | None:
+    def get(self, workflow_id: int, flow_type: str | None = None) -> dict[str, Any] | None:
+        conditions: list[ColumnElement[bool]] = [
+            self._workflow.c.id == workflow_id,
+            self._workflow.c.deleted.is_(False),
+        ]
+        if flow_type:
+            conditions.append(self._workflow.c.flow_type == flow_type)
         row = self._session.execute(
-            sa.select(self._workflow).where(
-                self._workflow.c.id == workflow_id,
-                self._workflow.c.deleted.is_(False),
-            )
+            sa.select(self._workflow).where(*conditions)
         ).mappings().one_or_none()
         return dict(row) if row else None
 
@@ -104,8 +114,9 @@ class WorkflowRepository:
         values: dict[str, Any],
         nodes: list[dict[str, Any]] | None,
         edges: list[dict[str, Any]] | None,
+        flow_type: str | None = None,
     ) -> dict[str, Any] | None:
-        if self.get(workflow_id) is None:
+        if self.get(workflow_id, flow_type) is None:
             return None
         now = datetime.now()
         if values:
@@ -135,13 +146,19 @@ class WorkflowRepository:
             )
             self._insert_edges(workflow_id, edges, now)
         self._session.commit()
-        return self.get(workflow_id)
+        return self.get(workflow_id, flow_type)
 
-    def delete(self, workflow_id: int) -> bool:
+    def delete(self, workflow_id: int, flow_type: str | None = None) -> bool:
         now = datetime.now()
+        conditions: list[ColumnElement[bool]] = [
+            self._workflow.c.id == workflow_id,
+            self._workflow.c.deleted.is_(False),
+        ]
+        if flow_type:
+            conditions.append(self._workflow.c.flow_type == flow_type)
         result = self._session.execute(
             self._workflow.update()
-            .where(self._workflow.c.id == workflow_id, self._workflow.c.deleted.is_(False))
+            .where(*conditions)
             .values(deleted=True, updated_at=now)
         )
         self._session.execute(

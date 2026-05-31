@@ -1,0 +1,1 @@
+PASS workflow canvas save and reopen e2e http://127.0.0.1:15182/workflows/1/canvas

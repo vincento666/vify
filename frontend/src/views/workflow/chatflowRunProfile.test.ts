@@ -1,0 +1,26 @@
+import { describe, expect, it } from 'vitest'
+
+import { buildChatflowRunInput } from './chatflowRunProfile'
+
+describe('buildChatflowRunInput', () => {
+  it('maps a conversation test profile to sys variables and compatibility fields', () => {
+    const input = buildChatflowRunInput({
+      message: '我要查订单',
+      conversationId: 'conv-1',
+      userId: 'user-1',
+      channel: 'web',
+      round: 3,
+    })
+
+    expect(input).toMatchObject({
+      userMessage: '我要查订单',
+      USER_INPUT: '我要查订单',
+      'sys.query': '我要查订单',
+      'sys.conversation_id': 'conv-1',
+      'sys.user_id': 'user-1',
+      'sys.channel': 'web',
+      'sys.round': 3,
+    })
+    expect(input['sys.message_id']).toMatch(/^msg-/)
+  })
+})

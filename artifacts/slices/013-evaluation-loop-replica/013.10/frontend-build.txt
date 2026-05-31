@@ -1,0 +1,55 @@
+
+> hify-web@0.0.1 build
+> vue-tsc && vite build
+
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+vite v5.4.21 building for production...
+transforming...
+✓ 1738 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                                                 0.45 kB │ gzip:   0.30 kB
+dist/assets/useConfirm-EVgPS0TG.css                                             0.16 kB │ gzip:   0.13 kB
+dist/assets/WorkflowModuleTabs-CxcBX4k4.css                                     0.35 kB │ gzip:   0.19 kB
+dist/assets/ChatflowList-tEnansJA.css                                           0.56 kB │ gzip:   0.30 kB
+dist/assets/ProviderList-DXUzf8fc.css                                           1.08 kB │ gzip:   0.42 kB
+dist/assets/McpServerList-C0ld7tOT.css                                          1.31 kB │ gzip:   0.49 kB
+dist/assets/AgentList-DYwCzKfm.css                                              1.56 kB │ gzip:   0.54 kB
+dist/assets/WorkflowList-Ntu1JOa2.css                                           1.73 kB │ gzip:   0.54 kB
+dist/assets/KnowledgeList-DuEoQQBq.css                                          1.78 kB │ gzip:   0.70 kB
+dist/assets/DocumentList-B-qRN_F-.css                                           1.83 kB │ gzip:   0.67 kB
+dist/assets/ChatflowCreate-BwC5qo9r.css                                         4.71 kB │ gzip:   1.35 kB
+dist/assets/ChatView-BUSswsRL.css                                               4.91 kB │ gzip:   1.32 kB
+dist/assets/McpServerDebug-DcNGHsL6.css                                         5.08 kB │ gzip:   1.17 kB
+dist/assets/EvaluationWorkbench-7bfwHj9k.css                                   10.09 kB │ gzip:   1.73 kB
+dist/assets/WorkflowCreate-DyE_5X2w.css                                        15.71 kB │ gzip:   3.43 kB
+dist/assets/index-DvSKjPBn.css                                                366.96 kB │ gzip:  50.42 kB
+dist/assets/provider-B3gq4s8a.js                                                0.37 kB │ gzip:   0.23 kB
+dist/assets/mcp-DsenjVB1.js                                                     0.40 kB │ gzip:   0.21 kB
+dist/assets/WorkflowModuleTabs-DSCga20O.js                                      0.64 kB │ gzip:   0.45 kB
+dist/assets/knowledge-CxTrU7T2.js                                               0.68 kB │ gzip:   0.35 kB
+dist/assets/workflow-FRNGQF7O.js                                                0.72 kB │ gzip:   0.28 kB
+dist/assets/agent-CeGuRv1G.js                                                   0.92 kB │ gzip:   0.48 kB
+dist/assets/HifyFormDialog.vue_vue_type_script_setup_true_lang-NzM8wHPf.js      1.44 kB │ gzip:   0.83 kB
+dist/assets/ChatflowList-DWENQaIY.js                                            1.65 kB │ gzip:   1.00 kB
+dist/assets/useConfirm-CyLKeDTa.js                                              2.25 kB │ gzip:   1.26 kB
+dist/assets/flowGraph-WPhE03qi.js                                               2.49 kB │ gzip:   1.04 kB
+dist/assets/WorkflowList-CmNxiGNr.js                                            4.51 kB │ gzip:   2.06 kB
+dist/assets/KnowledgeList-DUeAg4zK.js                                           4.83 kB │ gzip:   2.33 kB
+dist/assets/McpServerList-Wn5DjJhm.js                                           5.25 kB │ gzip:   2.37 kB
+dist/assets/ProviderList-DCs1n7Y8.js                                            6.09 kB │ gzip:   2.74 kB
+dist/assets/DocumentList-CoVMEpwy.js                                            7.10 kB │ gzip:   3.28 kB
+dist/assets/McpServerDebug-D7tIOE7c.js                                          8.25 kB │ gzip:   3.29 kB
+dist/assets/AgentList-zGM4fZkN.js                                              10.32 kB │ gzip:   3.80 kB
+dist/assets/ChatflowCreate-DNZp7B7F.js                                         10.42 kB │ gzip:   4.19 kB
+dist/assets/EvaluationWorkbench-D_0wMBLz.js                                    32.27 kB │ gzip:  10.28 kB
+dist/assets/request-CdA-AFa0.js                                                38.17 kB │ gzip:  15.27 kB
+dist/assets/ChatView-CGOibHWR.js                                               50.19 kB │ gzip:  16.28 kB
+dist/assets/WorkflowCreate-C6hj32wN.js                                        177.28 kB │ gzip:  57.57 kB
+dist/assets/index-z5NHbb6o.js                                               1,168.18 kB │ gzip: 374.94 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 2.63s

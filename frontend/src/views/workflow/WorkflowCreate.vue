@@ -1,197 +1,1374 @@
 <template>
-  <div class="workflow-create">
-    <div class="page-header">
-      <div>
-        <h2 class="page-title">新建工作流</h2>
-        <p class="page-desc">通过 JSON 配置定义节点和连线</p>
-      </div>
-      <el-button @click="$router.push('/workflows')">返回列表</el-button>
-    </div>
+  <div class="workflow-canvas-page">
+    <WorkflowModuleTabs />
 
-    <el-form :model="form" label-width="100px" class="create-form">
-      <el-form-item label="工作流名称" required>
-        <el-input v-model="form.name" placeholder="如：智能客服分类工作流" maxlength="100" show-word-limit />
-      </el-form-item>
-      <el-form-item label="描述">
-        <el-input v-model="form.description" placeholder="可选" maxlength="500" />
-      </el-form-item>
-      <el-form-item label="工作流配置" required>
-        <div style="width: 100%">
-          <div class="json-toolbar">
-            <span class="json-label">JSON 格式 — 包含 nodes 和 edges 数组</span>
-            <el-button size="small" @click="formatJson">格式化</el-button>
-            <el-button size="small" @click="resetExample">还原示例</el-button>
+    <div class="canvas-topbar">
+      <div class="canvas-title-wrap">
+        <el-button text class="back-button" @click="router.push('/workflows')">
+          <el-icon><ArrowLeft /></el-icon>
+        </el-button>
+        <div class="flow-icon"><Share /></div>
+        <div>
+          <div class="title-row">
+            <el-input v-model="form.name" class="title-input" maxlength="100" />
+            <span class="flow-info">i</span>
           </div>
-          <el-input
-            v-model="jsonStr"
-            type="textarea"
-            :rows="24"
-            placeholder="输入工作流配置 JSON..."
-            class="json-editor"
-            :class="{ 'json-error': jsonError }"
-            spellcheck="false"
-          />
-          <div v-if="jsonError" class="json-error-msg">JSON 格式错误：{{ jsonError }}</div>
+          <div class="save-state">{{ saveState }}</div>
         </div>
-      </el-form-item>
-    </el-form>
-
-    <div class="form-actions">
-      <el-button @click="$router.push('/workflows')">取消</el-button>
-      <el-button type="primary" :loading="submitting" @click="handleSubmit">创建工作流</el-button>
+      </div>
+      <div class="canvas-actions">
+        <el-button @click="openTestPanel">试运行</el-button>
+        <el-button @click="openOpsPanel('observe')">观测</el-button>
+        <el-button @click="openOpsPanel('api')">Open API</el-button>
+        <el-button type="primary" plain @click="openOpsPanel('publish')">发布</el-button>
+        <el-button @click="quickConnect">快速连线</el-button>
+        <el-button :loading="saving" type="primary" @click="saveCanvas">保存画布</el-button>
+      </div>
     </div>
+
+    <section class="canvas-workbench" data-testid="workflow-canvas">
+      <VueFlow
+        v-model:nodes="flowNodes"
+        v-model:edges="flowEdges"
+        class="coze-flow"
+        :default-viewport="{ x: 0, y: 0, zoom: 1 }"
+        :min-zoom="0.3"
+        :max-zoom="1.6"
+        fit-view-on-init
+        @connect="handleConnect"
+        @node-drag-stop="handleNodeDragStop"
+        @node-click="handleNodeClick"
+        @pane-click="selectedNodeKey = ''"
+      >
+        <template #node-coze="nodeProps">
+          <div
+            class="coze-node"
+            :class="[`node-${nodeProps.data.type.toLowerCase()}`, { selected: selectedNodeKey === nodeProps.data.nodeKey }]"
+          >
+            <Handle
+              v-if="nodeProps.data.type !== 'START'"
+              type="target"
+              :position="Position.Left"
+              class="node-port target-port"
+            />
+            <div class="node-header">
+              <div class="node-type-icon" :class="`icon-${nodeProps.data.type.toLowerCase()}`">
+                <component :is="nodeIcon(nodeProps.data.type)" />
+              </div>
+              <div class="node-title">{{ nodeProps.data.name }}</div>
+              <button
+                v-if="nodeProps.data.type !== 'START' && nodeProps.data.type !== 'END'"
+                type="button"
+                class="node-menu"
+                aria-label="删除节点"
+                @click.stop="removeNode(nodeProps.data.nodeKey)"
+              >
+                ×
+              </button>
+            </div>
+            <div class="node-line">
+              <span>输入</span>
+              <template v-if="nodeProps.data.type === 'START'">
+                <em>str.USER_INPUT</em>
+                <em>str.CONVERSATION_NAME</em>
+              </template>
+              <template v-else-if="nodeProps.data.type === 'END'">
+                <em class="orange">str.{{ nodeProps.data.outputVariable || 'output' }}</em>
+              </template>
+              <template v-else>
+                <strong>未配置输入</strong>
+              </template>
+            </div>
+            <div v-if="nodeProps.data.type !== 'START'" class="node-line">
+              <span>输出</span>
+              <em>{{ outputBadge(nodeProps.data.type, nodeProps.data.outputVariable) }}</em>
+            </div>
+            <Handle
+              v-if="nodeProps.data.type !== 'END'"
+              type="source"
+              :position="Position.Right"
+              class="node-port source-port"
+            />
+          </div>
+        </template>
+      </VueFlow>
+
+      <aside v-if="selectedNode && selectedSchema" class="node-config-panel" data-testid="node-config-panel">
+        <div class="config-header">
+          <div class="node-type-icon" :class="`icon-${selectedNode.type.toLowerCase()}`">
+            <component :is="nodeIcon(selectedNode.type)" />
+          </div>
+          <div>
+            <h3>{{ selectedSchema.title }}</h3>
+            <span>{{ selectedNode.nodeKey }}</span>
+          </div>
+          <button type="button" aria-label="关闭配置" @click="selectedNodeKey = ''">×</button>
+        </div>
+
+        <section v-for="section in selectedSchema.sections" :key="section.title" class="config-section">
+          <div class="section-title">
+            <span>⌄</span>
+            {{ section.title }}
+          </div>
+          <div v-for="field in section.fields" :key="field.key" class="config-field">
+            <div class="field-label-row">
+              <label>{{ field.label }}</label>
+              <button
+                v-if="canUseVariable(field.key)"
+                type="button"
+                class="variable-trigger"
+                @click="activeVariableField = activeVariableField === field.key ? '' : field.key"
+              >
+                变量
+              </button>
+            </div>
+            <div v-if="field.type === 'readonly'" class="readonly-values">
+              <el-tag
+                v-for="value in readonlyValues(field.key)"
+                :key="value"
+                size="small"
+                effect="plain"
+              >
+                {{ value }}
+              </el-tag>
+            </div>
+            <el-input
+              v-else-if="field.type === 'textarea'"
+              :model-value="fieldValue(field.key)"
+              :placeholder="field.placeholder"
+              type="textarea"
+              :rows="5"
+              @update:model-value="setFieldValue(field.key, $event)"
+            />
+            <el-input-number
+              v-else-if="field.type === 'number'"
+              :model-value="Number(fieldValue(field.key) || 0)"
+              :min="1"
+              :max="20"
+              controls-position="right"
+              @update:model-value="setFieldValue(field.key, $event)"
+            />
+            <el-select
+              v-else-if="field.type === 'select'"
+              :model-value="fieldValue(field.key) || field.options?.[0]"
+              @update:model-value="setFieldValue(field.key, $event)"
+            >
+              <el-option v-for="option in field.options || []" :key="option" :label="option" :value="option" />
+            </el-select>
+            <el-input
+              v-else
+              :model-value="fieldValue(field.key)"
+              :placeholder="field.placeholder"
+              @update:model-value="setFieldValue(field.key, $event)"
+            />
+            <div v-if="activeVariableField === field.key" class="variable-popover">
+              <el-input v-model="variableSearch" size="small" placeholder="搜索变量" />
+              <div v-for="group in filteredVariableGroups" :key="group.title" class="variable-group">
+                <div class="variable-group-title">{{ group.title }}</div>
+                <button
+                  v-for="item in group.items"
+                  :key="item.reference"
+                  type="button"
+                  @click="insertVariable(field.key, item.reference)"
+                >
+                  <span>{{ item.label }}</span>
+                  <code>{{ item.reference }}</code>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </aside>
+
+      <aside v-if="testPanelOpen" class="test-run-panel" data-testid="test-run-panel">
+        <div class="config-header">
+          <div class="node-type-icon icon-start"><Finished /></div>
+          <div>
+            <h3>试运行</h3>
+            <span>从 START 节点执行当前画布</span>
+          </div>
+          <button type="button" aria-label="关闭试运行" @click="testPanelOpen = false">×</button>
+        </div>
+
+        <section class="config-section">
+          <div class="section-title"><span>⌄</span> 输入</div>
+          <el-input v-model="testInput" type="textarea" :rows="4" placeholder="输入 userMessage" />
+        </section>
+
+        <section v-if="validationErrors.length" class="config-section">
+          <div class="section-title validation-title"><span>!</span> 校验失败</div>
+          <ul class="validation-list">
+            <li v-for="error in validationErrors" :key="error">{{ error }}</li>
+          </ul>
+        </section>
+
+        <section v-if="testResult" class="config-section">
+          <div class="section-title"><span>✓</span> 运行结果</div>
+          <pre class="run-result">{{ JSON.stringify(testResult, null, 2) }}</pre>
+        </section>
+
+        <div class="test-run-actions">
+          <el-button :loading="running" type="primary" @click="runCanvasTest">运行</el-button>
+        </div>
+      </aside>
+
+      <aside v-if="opsPanelOpen" class="ops-panel" data-testid="workflow-ops-panel">
+        <div class="config-header">
+          <div class="node-type-icon icon-start"><Share /></div>
+          <div>
+            <h3>发布与运维</h3>
+            <span>发布、Open API 与运行观测</span>
+          </div>
+          <button type="button" aria-label="关闭运维面板" @click="opsPanelOpen = false">×</button>
+        </div>
+
+        <div class="ops-tabs" role="tablist" aria-label="workflow operations">
+          <button
+            type="button"
+            :class="{ active: opsActiveTab === 'publish' }"
+            @click="opsActiveTab = 'publish'"
+          >
+            发布
+          </button>
+          <button
+            type="button"
+            :class="{ active: opsActiveTab === 'api' }"
+            @click="opsActiveTab = 'api'"
+          >
+            Open API
+          </button>
+          <button
+            type="button"
+            :class="{ active: opsActiveTab === 'observe' }"
+            @click="opsActiveTab = 'observe'"
+          >
+            运行观测
+          </button>
+        </div>
+
+        <section v-if="opsActiveTab === 'publish'" class="config-section">
+          <div class="section-title"><span>⌄</span> 发布检查</div>
+          <dl class="ops-field-list">
+            <div>
+              <dt>画布校验</dt>
+              <dd>{{ publishValidationErrors.length ? '未通过' : '已通过' }}</dd>
+            </div>
+            <div>
+              <dt>最近试运行</dt>
+              <dd>{{ lastTestRunStatus || '未运行' }}</dd>
+            </div>
+            <div>
+              <dt>当前状态</dt>
+              <dd>{{ workflowStatus }}</dd>
+            </div>
+          </dl>
+          <ul v-if="publishGate.reasons.length" class="validation-list publish-reasons">
+            <li v-for="reason in publishGate.reasons" :key="reason">{{ reason }}</li>
+          </ul>
+          <div class="publish-actions">
+            <el-button
+              :disabled="!publishGate.allowed"
+              :loading="publishing"
+              type="primary"
+              @click="publishWorkflow"
+            >
+              确认发布
+            </el-button>
+          </div>
+        </section>
+
+        <section v-else-if="opsActiveTab === 'api'" class="config-section">
+          <div class="section-title"><span>⌄</span> Open API</div>
+          <dl class="ops-field-list">
+            <div>
+              <dt>Method</dt>
+              <dd>POST</dd>
+            </div>
+            <div>
+              <dt>Endpoint</dt>
+              <dd><code>{{ openApiEndpoint }}</code></dd>
+            </div>
+          </dl>
+          <pre class="ops-code">{{ openApiSample }}</pre>
+        </section>
+
+        <section v-else class="config-section">
+          <div class="section-title"><span>⌄</span> 运行观测</div>
+          <dl class="ops-field-list">
+            <div>
+              <dt>最近 Run ID</dt>
+              <dd>{{ lastTestRunId || '暂无' }}</dd>
+            </div>
+            <div>
+              <dt>最近状态</dt>
+              <dd>{{ lastTestRunStatus || '暂无' }}</dd>
+            </div>
+            <div>
+              <dt>输出字段</dt>
+              <dd>{{ observeOutputKeys }}</dd>
+            </div>
+          </dl>
+          <pre v-if="lastRunOutput" class="ops-code">{{ JSON.stringify(lastRunOutput, null, 2) }}</pre>
+        </section>
+      </aside>
+
+      <div v-if="paletteOpen" class="node-palette">
+        <button v-for="type in addableNodeTypes" :key="type" type="button" @click="addNode(type)">
+          <span class="palette-icon" :class="`icon-${type.toLowerCase()}`">
+            <component :is="nodeIcon(type)" />
+          </span>
+          <span>{{ nodeTypeLabel(type) }}</span>
+        </button>
+      </div>
+
+      <div class="canvas-toolbar">
+        <button type="button" aria-label="缩小">−</button>
+        <span>100%</span>
+        <button type="button" aria-label="适应画布">□</button>
+        <button type="button" aria-label="布局">⌘</button>
+      </div>
+
+      <button class="add-node-button" type="button" @click="paletteOpen = !paletteOpen">
+        <span>+</span> 添加节点
+      </button>
+    </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, markRaw, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { createWorkflow } from '@/api/workflow'
+import { ArrowLeft, Connection, Cpu, DataAnalysis, Finished, Operation, Share } from '@element-plus/icons-vue'
+import { Handle, MarkerType, Position, VueFlow, type Edge, type Node } from '@vue-flow/core'
+import '@vue-flow/core/dist/style.css'
+import '@vue-flow/core/dist/theme-default.css'
 
+import { createWorkflow, getWorkflow, runWorkflow, updateWorkflow, type WorkflowDetail } from '@/api/workflow'
+import WorkflowModuleTabs from './WorkflowModuleTabs.vue'
+import {
+  addWorkflowNode,
+  connectWorkflowNodes,
+  createDefaultWorkflowGraph,
+  deleteWorkflowNode,
+  hydrateWorkflowGraph,
+  moveWorkflowNode,
+  serializeWorkflowGraph,
+  type WorkflowCanvasGraph,
+  type WorkflowCanvasNodeType,
+} from './flowGraph'
+import { applyNodeConfigPatch, getNodeConfigSchema } from './nodeConfig'
+import { buildVariableCatalog } from './variableCatalog'
+import { evaluateWorkflowPublishGate } from './workflowPublish'
+import { validateWorkflowGraph } from './workflowValidation'
+
+type OpsTab = 'publish' | 'api' | 'observe'
+
+const route = useRoute()
 const router = useRouter()
-const submitting = ref(false)
-const jsonError = ref('')
+const workflowId = computed(() => Number(route.params.id || 0))
+const isEditing = computed(() => workflowId.value > 0)
 
-const EXAMPLE = {
-  nodes: [
-    { nodeKey: 'start', type: 'START', name: '开始', config: {} },
-    {
-      nodeKey: 'classify', type: 'LLM', name: '问题分类',
-      config: {
-        prompt: '你是意图分类器，用户消息：{{start.userMessage}}，仅回复：售前、售后 或 技术支持',
-        outputVariable: 'intent'
-      }
-    },
-    {
-      nodeKey: 'router', type: 'CONDITION', name: '路由分发',
-      config: { expression: '{{classify.intent}}', outputVariable: 'route' }
-    },
-    {
-      nodeKey: 'presale', type: 'LLM', name: '售前咨询',
-      config: { prompt: '你是售前顾问，解答产品功能和优势。用户问题：{{start.userMessage}}', outputVariable: 'answer' }
-    },
-    {
-      nodeKey: 'aftersale', type: 'LLM', name: '售后服务',
-      config: { prompt: '你是售后客服，解答退换货和保修问题。用户问题：{{start.userMessage}}', outputVariable: 'answer' }
-    },
-    {
-      nodeKey: 'techsupport', type: 'LLM', name: '技术支持',
-      config: { prompt: '你是技术工程师，帮用户排查使用问题。用户问题：{{start.userMessage}}', outputVariable: 'answer' }
-    },
-    { nodeKey: 'end', type: 'END', name: '结束', config: { outputVariable: 'answer' } }
-  ],
-  edges: [
-    { sourceNodeKey: 'start', targetNodeKey: 'classify', condition: null },
-    { sourceNodeKey: 'classify', targetNodeKey: 'router', condition: null },
-    { sourceNodeKey: 'router', targetNodeKey: 'presale', condition: '售前' },
-    { sourceNodeKey: 'router', targetNodeKey: 'aftersale', condition: '售后' },
-    { sourceNodeKey: 'router', targetNodeKey: 'techsupport', condition: '技术支持' },
-    { sourceNodeKey: 'presale', targetNodeKey: 'end', condition: null },
-    { sourceNodeKey: 'aftersale', targetNodeKey: 'end', condition: null },
-    { sourceNodeKey: 'techsupport', targetNodeKey: 'end', condition: null }
-  ]
+const graph = ref<WorkflowCanvasGraph>(createDefaultWorkflowGraph())
+const form = ref({ name: 'aaaa', description: '通过画布创建的工作流' })
+const saving = ref(false)
+const running = ref(false)
+const loading = ref(false)
+const selectedNodeKey = ref('')
+const paletteOpen = ref(false)
+const activeVariableField = ref('')
+const variableSearch = ref('')
+const lastSavedAt = ref('')
+const testPanelOpen = ref(false)
+const testInput = ref('hello')
+const testResult = ref<Record<string, any> | null>(null)
+const validationErrors = ref<string[]>([])
+const opsPanelOpen = ref(false)
+const opsActiveTab = ref<OpsTab>('publish')
+const publishing = ref(false)
+const workflowStatus = ref('DRAFT')
+const lastTestRunStatus = ref('')
+const lastTestRunId = ref(0)
+const lastRunOutput = ref<Record<string, any> | null>(null)
+const dirtySinceTestRun = ref(true)
+
+const addableNodeTypes: Exclude<WorkflowCanvasNodeType, 'START' | 'END'>[] = ['LLM', 'CONDITION', 'KNOWLEDGE', 'API_CALL']
+
+const icons = {
+  START: markRaw(Connection),
+  LLM: markRaw(Cpu),
+  CONDITION: markRaw(Operation),
+  KNOWLEDGE: markRaw(DataAnalysis),
+  API_CALL: markRaw(Share),
+  END: markRaw(Finished),
 }
 
-const form = ref({ name: '智能客服分类工作流', description: '根据用户意图分发到售前/售后/技术支持路径' })
-const jsonStr = ref(JSON.stringify(EXAMPLE, null, 2))
+const saveState = computed(() => {
+  if (loading.value) return '正在载入...'
+  return lastSavedAt.value ? `已保存 ${lastSavedAt.value}` : '已自动保存草稿'
+})
 
-function formatJson() {
+const selectedNode = computed(() => graph.value.nodes.find((node) => node.nodeKey === selectedNodeKey.value))
+const selectedSchema = computed(() => selectedNode.value ? getNodeConfigSchema(selectedNode.value.type) : null)
+const variableGroups = computed(() => selectedNode.value ? buildVariableCatalog(graph.value, selectedNode.value.nodeKey) : [])
+const publishValidationErrors = computed(() => validateWorkflowGraph(graph.value).errors)
+const publishGate = computed(() =>
+  evaluateWorkflowPublishGate({
+    validationErrors: publishValidationErrors.value,
+    lastTestRunStatus: lastTestRunStatus.value,
+    dirtySinceTestRun: dirtySinceTestRun.value,
+  }),
+)
+const openApiEndpoint = computed(() => `/api/v1/workflows/${workflowId.value || '{workflowId}'}/runs`)
+const openApiSample = computed(() => JSON.stringify({
+  input: {
+    userMessage: testInput.value,
+    USER_INPUT: testInput.value,
+  },
+}, null, 2))
+const observeOutputKeys = computed(() => {
+  if (!lastRunOutput.value) return '暂无'
+  const keys = Object.keys(lastRunOutput.value)
+  return keys.length ? keys.join(', ') : '无输出'
+})
+const filteredVariableGroups = computed(() => {
+  const keyword = variableSearch.value.trim().toLowerCase()
+  if (!keyword) return variableGroups.value
+  return variableGroups.value
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) =>
+        `${item.label} ${item.reference}`.toLowerCase().includes(keyword),
+      ),
+    }))
+    .filter((group) => group.items.length > 0)
+})
+
+const flowNodes = computed<Node[]>({
+  get() {
+    return graph.value.nodes.map((node) => ({
+      id: node.nodeKey,
+      type: 'coze',
+      position: node.position,
+      data: {
+        nodeKey: node.nodeKey,
+        type: node.type,
+        name: node.name,
+        outputVariable: node.config.outputVariable,
+      },
+      draggable: node.type !== 'START' && node.type !== 'END',
+    }))
+  },
+  set(nextNodes) {
+    const nodePositions = new Map(nextNodes.map((node) => [node.id, node.position]))
+    graph.value = {
+      ...graph.value,
+      nodes: graph.value.nodes.map((node) => {
+        const position = nodePositions.get(node.nodeKey)
+        return position ? { ...node, position } : node
+      }),
+    }
+    markGraphDirty()
+  },
+})
+
+const flowEdges = computed<Edge[]>({
+  get() {
+    return graph.value.edges.map((edge) => ({
+      id: edge.id,
+      source: edge.sourceNodeKey,
+      target: edge.targetNodeKey,
+      markerEnd: MarkerType.ArrowClosed,
+      style: { stroke: '#5a5cf6', strokeWidth: 2 },
+    }))
+  },
+  set(nextEdges) {
+    graph.value = {
+      ...graph.value,
+      edges: nextEdges.map((edge) => ({
+        id: edge.id,
+        sourceNodeKey: edge.source,
+        targetNodeKey: edge.target,
+        condition: null,
+      })),
+    }
+    markGraphDirty()
+  },
+})
+
+function nodeIcon(type: WorkflowCanvasNodeType) {
+  return icons[type]
+}
+
+function nodeTypeLabel(type: WorkflowCanvasNodeType) {
+  return { START: '开始', LLM: '大模型', CONDITION: '条件', KNOWLEDGE: '知识库', API_CALL: 'API 调用', END: '结束' }[type]
+}
+
+function outputBadge(type: WorkflowCanvasNodeType, configured?: string) {
+  if (configured) return `str.${configured}`
+  if (type === 'CONDITION') return 'str.route'
+  return 'str.output'
+}
+
+function addNode(type: Exclude<WorkflowCanvasNodeType, 'START' | 'END'>) {
+  const offset = graph.value.nodes.length * 32
+  graph.value = addWorkflowNode(graph.value, type, { x: 360 + offset, y: 260 + offset })
+  paletteOpen.value = false
+  markGraphDirty()
+}
+
+function removeNode(nodeKey: string) {
+  graph.value = deleteWorkflowNode(graph.value, nodeKey)
+  if (selectedNodeKey.value === nodeKey) selectedNodeKey.value = ''
+  markGraphDirty()
+}
+
+function handleConnect(connection: any) {
+  graph.value = connectWorkflowNodes(graph.value, connection.source, connection.target)
+  markGraphDirty()
+}
+
+function handleNodeDragStop(event: any) {
+  if (!event?.node?.id || !event.node.position) return
+  graph.value = moveWorkflowNode(graph.value, event.node.id, event.node.position)
+  markGraphDirty()
+}
+
+function handleNodeClick(event: any) {
+  selectedNodeKey.value = event?.node?.id || ''
+  activeVariableField.value = ''
+  variableSearch.value = ''
+}
+
+function updateSelectedNode(patch: { name?: string; config?: Record<string, any> }) {
+  if (!selectedNode.value) return
+  graph.value = {
+    ...graph.value,
+    nodes: graph.value.nodes.map((node) =>
+      node.nodeKey === selectedNode.value?.nodeKey ? applyNodeConfigPatch(node, patch) : node,
+    ),
+  }
+  markGraphDirty()
+}
+
+function fieldValue(key: string) {
+  if (!selectedNode.value) return ''
+  if (key === 'name') return selectedNode.value.name
+  return selectedNode.value.config[key] as any
+}
+
+function setFieldValue(key: string, value: string | number | null | undefined) {
+  if (!selectedNode.value) return
+  if (key === 'name') {
+    updateSelectedNode({ name: String(value || '') })
+    return
+  }
+  updateSelectedNode({ config: { [key]: value ?? '' } })
+}
+
+function canUseVariable(key: string) {
+  return ['prompt', 'expression', 'endpoint'].includes(key)
+}
+
+function insertVariable(key: string, reference: string) {
+  const currentValue = String(fieldValue(key) || '')
+  const nextValue = currentValue ? `${currentValue} ${reference}` : reference
+  setFieldValue(key, nextValue)
+  activeVariableField.value = ''
+  variableSearch.value = ''
+}
+
+function readonlyValues(key: string) {
+  if (!selectedNode.value) return []
+  const value = selectedNode.value.config[key]
+  if (Array.isArray(value)) return value.map(String)
+  return value ? [String(value)] : []
+}
+
+function quickConnect() {
+  const middleNode = graph.value.nodes.find((node) => node.type !== 'START' && node.type !== 'END')
+  if (!middleNode) {
+    graph.value = connectWorkflowNodes(graph.value, 'start', 'end')
+    markGraphDirty()
+    return
+  }
+  graph.value = connectWorkflowNodes(connectWorkflowNodes(graph.value, 'start', middleNode.nodeKey), middleNode.nodeKey, 'end')
+  markGraphDirty()
+}
+
+async function loadWorkflow() {
+  if (!isEditing.value) return
+  loading.value = true
   try {
-    const parsed = JSON.parse(jsonStr.value)
-    jsonStr.value = JSON.stringify(parsed, null, 2)
-    jsonError.value = ''
-  } catch (e: any) {
-    jsonError.value = e.message
+    const detail = (await getWorkflow(workflowId.value)) as WorkflowDetail
+    form.value = { name: detail.name, description: detail.description || '' }
+    workflowStatus.value = detail.status
+    graph.value = hydrateWorkflowGraph(detail.nodes, detail.edges)
+    lastSavedAt.value = formatClock(new Date(detail.updatedAt))
+    dirtySinceTestRun.value = true
+  } finally {
+    loading.value = false
   }
 }
 
-function resetExample() {
-  jsonStr.value = JSON.stringify(EXAMPLE, null, 2)
-  jsonError.value = ''
-}
-
-function validateJson(): any | null {
-  try {
-    const parsed = JSON.parse(jsonStr.value)
-    jsonError.value = ''
-    return parsed
-  } catch (e: any) {
-    jsonError.value = e.message
-    return null
-  }
-}
-
-async function handleSubmit() {
+async function saveCanvas() {
   if (!form.value.name.trim()) {
     ElMessage.warning('请输入工作流名称')
     return
   }
-  const parsed = validateJson()
-  if (!parsed) {
-    ElMessage.error('JSON 格式错误，请修正后再提交')
-    return
+  const payload = serializeWorkflowGraph(graph.value)
+  saving.value = true
+  try {
+    if (isEditing.value) {
+      await updateWorkflow(workflowId.value, {
+        name: form.value.name,
+        description: form.value.description,
+        nodes: payload.nodes,
+        edges: payload.edges,
+      })
+      ElMessage.success('画布已保存')
+      lastSavedAt.value = formatClock(new Date())
+      return workflowId.value
+    } else {
+      const created = await createWorkflow({
+        name: form.value.name,
+        description: form.value.description,
+        nodes: payload.nodes,
+        edges: payload.edges,
+      }) as WorkflowDetail
+      ElMessage.success('工作流创建成功')
+      await router.replace(`/workflows/${created.id}/canvas`)
+      lastSavedAt.value = formatClock(new Date())
+      return created.id
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.message || '保存失败')
+    return 0
+  } finally {
+    saving.value = false
   }
-  if (!parsed.nodes || !Array.isArray(parsed.nodes)) {
-    ElMessage.error('JSON 中缺少 nodes 数组')
+}
+
+function openTestPanel() {
+  testPanelOpen.value = true
+  opsPanelOpen.value = false
+  selectedNodeKey.value = ''
+  testResult.value = null
+  validationErrors.value = validateWorkflowGraph(graph.value).errors
+}
+
+function openOpsPanel(tab: OpsTab) {
+  opsActiveTab.value = tab
+  opsPanelOpen.value = true
+  testPanelOpen.value = false
+  selectedNodeKey.value = ''
+}
+
+async function runCanvasTest() {
+  const validation = validateWorkflowGraph(graph.value)
+  validationErrors.value = validation.errors
+  testResult.value = null
+  if (!validation.valid) return
+
+  const id = isEditing.value ? await saveCanvas() : await saveCanvas()
+  if (!id) return
+
+  running.value = true
+  try {
+    const result = await runWorkflow(id, {
+      userMessage: testInput.value,
+      USER_INPUT: testInput.value,
+    }) as any
+    testResult.value = result
+    lastTestRunStatus.value = String(result?.status || '')
+    lastTestRunId.value = Number(result?.runId || 0)
+    lastRunOutput.value = result?.output || null
+    dirtySinceTestRun.value = false
+  } catch (e: any) {
+    lastTestRunStatus.value = 'FAILED'
+    validationErrors.value = [e?.message || '运行失败']
+  } finally {
+    running.value = false
+  }
+}
+
+async function publishWorkflow() {
+  if (!publishGate.value.allowed) {
+    ElMessage.warning(publishGate.value.reasons[0] || '发布检查未通过')
     return
   }
 
-  submitting.value = true
+  const id = await saveCanvas()
+  if (!id) return
+
+  publishing.value = true
   try {
-    await createWorkflow({
-      name: form.value.name,
-      description: form.value.description,
-      nodes: parsed.nodes,
-      edges: parsed.edges || []
-    })
-    ElMessage.success('工作流创建成功')
-    router.push('/workflows')
+    await updateWorkflow(id, { status: 'PUBLISHED' })
+    workflowStatus.value = 'PUBLISHED'
+    ElMessage.success('工作流已发布')
   } catch (e: any) {
-    ElMessage.error(e?.message || '创建失败')
+    ElMessage.error(e?.message || '发布失败')
   } finally {
-    submitting.value = false
+    publishing.value = false
   }
 }
+
+function markGraphDirty() {
+  dirtySinceTestRun.value = true
+  lastTestRunStatus.value = ''
+  lastTestRunId.value = 0
+  lastRunOutput.value = null
+}
+
+function formatClock(value: Date) {
+  return `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}:${String(value.getSeconds()).padStart(2, '0')}`
+}
+
+watch(() => route.params.id, loadWorkflow)
+onMounted(loadWorkflow)
 </script>
 
 <style scoped>
-.workflow-create { padding: 0; max-width: 900px; }
-
-.page-header {
+.workflow-canvas-page {
+  height: calc(100vh - 88px);
+  min-height: 720px;
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 24px;
+  flex-direction: column;
+  overflow: hidden;
 }
-.page-title { margin: 0 0 4px; font-size: 18px; font-weight: 600; color: var(--el-text-color-primary); }
-.page-desc { margin: 0; font-size: 13px; color: var(--el-text-color-secondary); }
 
-.create-form { background: var(--el-bg-color); padding: 24px; border-radius: 8px; border: 1px solid var(--el-border-color-light); }
+.canvas-topbar {
+  height: 74px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 22px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: #fbfbff;
+}
 
-.json-toolbar {
+.canvas-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.back-button {
+  width: 28px;
+  padding: 0;
+  color: #445067;
+}
+
+.flow-icon,
+.node-type-icon,
+.palette-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+
+.flow-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: #06b6b6;
+}
+
+.title-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
 }
-.json-label { font-size: 12px; color: var(--el-text-color-secondary); flex: 1; }
 
-.json-editor :deep(textarea) {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 13px;
-  line-height: 1.6;
-  background: #1a1b26;
-  color: #a9b1d6;
-  border-color: var(--el-border-color);
+.title-input {
+  width: 220px;
 }
-.json-editor.json-error :deep(textarea) { border-color: var(--el-color-danger); }
-.json-error-msg { margin-top: 4px; font-size: 12px; color: var(--el-color-danger); }
 
-.form-actions {
+.title-input :deep(.el-input__wrapper) {
+  box-shadow: none;
+  padding: 0;
+  background: transparent;
+}
+
+.title-input :deep(.el-input__inner) {
+  height: 30px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #22273a;
+}
+
+.flow-info {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #9aa3b5;
+  border-radius: 50%;
+  font-size: 12px;
+  color: #596273;
+}
+
+.save-state {
+  width: fit-content;
+  margin-top: 2px;
+  padding: 2px 8px;
+  border-radius: 5px;
+  background: #eef0f8;
+  font-size: 12px;
+  color: #616a7f;
+}
+
+.canvas-actions {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+}
+
+.canvas-workbench {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 0 0 8px 8px;
+  overflow: hidden;
+  background: #f8f9fc;
+}
+
+.coze-flow {
+  width: 100%;
+  height: 100%;
+  background-color: #f8f9fc;
+  background-image: radial-gradient(#bac0ce 1.2px, transparent 1.2px);
+  background-size: 24px 24px;
+}
+
+.coze-flow :deep(.vue-flow__node) {
+  width: auto;
+}
+
+.coze-flow :deep(.vue-flow__edge-path) {
+  stroke: #5a5cf6;
+  stroke-width: 2;
+}
+
+.coze-node {
+  position: relative;
+  width: 420px;
+  min-height: 104px;
+  padding: 18px;
+  border: 1px solid #d9deec;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #fff, #fbfcff);
+  box-shadow: 0 10px 28px rgba(36, 45, 67, 0.08);
+  color: #30364a;
+}
+
+.coze-node.selected {
+  border-color: #6667f6;
+  box-shadow: 0 0 0 2px rgba(102, 103, 246, 0.18), 0 10px 28px rgba(36, 45, 67, 0.08);
+}
+
+.node-header {
+  display: flex;
+  align-items: center;
   gap: 12px;
-  margin-top: 20px;
+  margin-bottom: 18px;
+}
+
+.node-type-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+}
+
+.icon-start,
+.icon-end,
+.icon-llm {
+  background: #5d5ff6;
+}
+
+.icon-condition {
+  background: #ff9d1b;
+}
+
+.icon-knowledge {
+  background: #e95085;
+}
+
+.icon-api_call {
+  background: #12b5b0;
+}
+
+.node-title {
+  flex: 1;
+  overflow: hidden;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 32px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node-menu {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: #eef1f8;
+  color: #677084;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.node-line {
+  display: flex;
+  align-items: center;
+  min-height: 30px;
+  gap: 8px;
+  color: #9aa2b4;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.node-line em {
+  max-width: 170px;
+  overflow: hidden;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #eef1f7;
+  color: #3e4558;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node-line em.orange {
+  background: #fff0e4;
+  color: #f57b16;
+}
+
+.node-line strong {
+  color: #b4bac8;
+  font-weight: 500;
+}
+
+.node-port {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #fff;
+  background: #6b6ff7;
+}
+
+.source-port {
+  right: -7px;
+}
+
+.target-port {
+  left: -7px;
+}
+
+.node-palette {
+  position: absolute;
+  right: 18px;
+  bottom: 86px;
+  z-index: 10;
+  width: 220px;
+  padding: 10px;
+  border: 1px solid #dfe3ee;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 16px 40px rgba(34, 41, 63, 0.16);
+}
+
+.node-config-panel {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  bottom: 76px;
+  z-index: 8;
+  width: 360px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #dfe3ee;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 16px 44px rgba(34, 41, 63, 0.16);
+  overflow: hidden;
+}
+
+.test-run-panel,
+.ops-panel {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  bottom: 76px;
+  z-index: 9;
+  width: 360px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #dfe3ee;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 16px 44px rgba(34, 41, 63, 0.16);
+  overflow: hidden;
+}
+
+.config-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid #edf0f6;
+}
+
+.config-header h3 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.3;
+  color: #252b3d;
+}
+
+.config-header span {
+  font-size: 12px;
+  color: #8b94a8;
+}
+
+.config-header button {
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
+  border: 0;
+  border-radius: 7px;
+  background: #f1f3f8;
+  color: #687287;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.config-section {
+  padding: 14px 16px;
+  border-bottom: 1px solid #edf0f6;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #31384c;
+}
+
+.section-title span {
+  color: #6f778a;
+}
+
+.config-field {
+  margin-bottom: 12px;
+}
+
+.config-field:last-child {
+  margin-bottom: 0;
+}
+
+.field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.config-field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #828b9f;
+}
+
+.variable-trigger {
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid #dfe3ee;
+  border-radius: 6px;
+  background: #f7f8fc;
+  color: #5b5ef6;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.variable-popover {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid #dfe3ee;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(34, 41, 63, 0.12);
+}
+
+.variable-group {
+  margin-top: 10px;
+}
+
+.variable-group-title {
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #7b8498;
+}
+
+.variable-group button {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #30364a;
+  cursor: pointer;
+}
+
+.variable-group button:hover {
+  background: #f4f6fb;
+}
+
+.variable-group code {
+  color: #5b5ef6;
+  font-size: 12px;
+}
+
+.readonly-values {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid #dfe3ee;
+  border-radius: 8px;
+  background: #f7f8fc;
+}
+
+.node-config-panel :deep(.el-input__wrapper),
+.node-config-panel :deep(.el-textarea__inner),
+.node-config-panel :deep(.el-select__wrapper),
+.test-run-panel :deep(.el-textarea__inner) {
+  border-radius: 8px;
+}
+
+.validation-title {
+  color: #d94848;
+}
+
+.validation-list {
+  margin: 0;
+  padding-left: 18px;
+  color: #c23b3b;
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.run-result {
+  max-height: 220px;
+  margin: 0;
+  padding: 10px;
+  border-radius: 8px;
+  overflow: auto;
+  background: #171a24;
+  color: #d8def0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.test-run-actions {
+  margin-top: auto;
+  padding: 14px 16px;
+  border-top: 1px solid #edf0f6;
+  text-align: right;
+}
+
+.ops-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #edf0f6;
+  background: #fafbff;
+}
+
+.ops-tabs button {
+  height: 32px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #6b7487;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ops-tabs button.active {
+  background: #eef0ff;
+  color: #5d5ff6;
+}
+
+.ops-field-list {
+  margin: 0;
+}
+
+.ops-field-list div {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 0;
+  border-bottom: 1px solid #f0f2f7;
+}
+
+.ops-field-list dt {
+  color: #858ea2;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ops-field-list dd {
+  margin: 0;
+  max-width: 220px;
+  overflow-wrap: anywhere;
+  color: #2f3548;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.ops-field-list code {
+  color: #5d5ff6;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
+.ops-code {
+  max-height: 260px;
+  margin: 12px 0 0;
+  padding: 10px;
+  border-radius: 8px;
+  overflow: auto;
+  background: #171a24;
+  color: #d8def0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.publish-reasons {
+  margin-top: 12px;
+}
+
+.publish-actions {
+  margin-top: 16px;
+  text-align: right;
+}
+
+.node-palette button {
+  width: 100%;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #2d3447;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.node-palette button:hover {
+  background: #f3f5fb;
+}
+
+.palette-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+}
+
+.canvas-toolbar {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  z-index: 5;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid #dfe3ee;
+  border-radius: 12px;
+  background: #fff;
+  color: #2d3447;
+  box-shadow: 0 10px 30px rgba(34, 41, 63, 0.12);
+  transform: translateX(-50%);
+}
+
+.canvas-toolbar button {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #445067;
+  cursor: pointer;
+}
+
+.canvas-toolbar span {
+  padding: 0 8px;
+  font-weight: 600;
+}
+
+.add-node-button {
+  position: absolute;
+  right: 18px;
+  bottom: 16px;
+  z-index: 5;
+  height: 44px;
+  min-width: 144px;
+  border: 0;
+  border-radius: 12px;
+  background: #6366f1;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 10px 30px rgba(99, 102, 241, 0.24);
+}
+
+.add-node-button span {
+  margin-right: 6px;
+  font-size: 20px;
+  line-height: 0;
+}
+
+@media (max-width: 980px) {
+  .workflow-canvas-page {
+    min-height: 640px;
+  }
+
+  .canvas-actions {
+    display: none;
+  }
+
+  .coze-node {
+    width: 340px;
+  }
 }
 </style>

@@ -1,5 +1,6 @@
 from collections.abc import Generator
 
+import sqlalchemy as sa
 from sqlalchemy import MetaData, create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
@@ -43,6 +44,23 @@ def initialise_database() -> None:
     engine = get_engine()
     ensure_pgvector_extension(engine)
     Base.metadata.create_all(bind=engine)
+    _ensure_compatible_schema(engine)
+
+
+def _ensure_compatible_schema(engine: Engine) -> None:
+    inspector = sa.inspect(engine)
+    if "workflow" not in inspector.get_table_names():
+        return
+
+    workflow_columns = {column["name"] for column in inspector.get_columns("workflow")}
+    if "flow_type" in workflow_columns:
+        return
+
+    with engine.begin() as connection:
+        connection.execute(
+            sa.text("ALTER TABLE workflow ADD COLUMN flow_type VARCHAR(20) NOT NULL DEFAULT 'WORKFLOW'")
+        )
+        connection.execute(sa.text("CREATE INDEX IF NOT EXISTS idx_workflow_flow_type ON workflow (flow_type)"))
 
 
 def get_session() -> Generator[Session]:
