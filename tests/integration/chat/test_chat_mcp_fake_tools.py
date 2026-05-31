@@ -10,7 +10,7 @@ from app.main import app
 
 
 class ChatMcpFakeToolsTest(unittest.TestCase):
-    def test_tool_bound_agent_mentions_fake_mcp_tool_names_in_mock_result(self) -> None:
+    def test_tool_bound_agent_uses_llm_when_no_tool_call_is_requested(self) -> None:
         agent_id = _seed_tool_bound_agent(endpoint="mock://tools")
 
         with TestClient(app) as client:
@@ -20,10 +20,7 @@ class ChatMcpFakeToolsTest(unittest.TestCase):
                 json={"content": "please use tool", "stream": False},
             ).json()["data"]
 
-        self.assertEqual(
-            turn["assistantMessage"]["content"],
-            "Tool mock (lookup_order, refund_order): please use tool",
-        )
+        self.assertEqual(turn["assistantMessage"]["content"], "LLM mock: please use tool")
 
 
 def _seed_tool_bound_agent(endpoint: str) -> int:

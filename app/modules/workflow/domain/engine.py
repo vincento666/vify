@@ -27,6 +27,11 @@ class NodeExecutor(Protocol):
         ...
 
 
+class WorkflowLlmCompleter(Protocol):
+    def complete_prompt(self, prompt: str) -> str:
+        ...
+
+
 class StartNodeExecutor:
     def __init__(self, input_data: dict[str, Any]) -> None:
         self._input_data = input_data
@@ -36,10 +41,15 @@ class StartNodeExecutor:
 
 
 class LlmNodeExecutor:
+    def __init__(self, completer: WorkflowLlmCompleter | None = None) -> None:
+        self._completer = completer
+
     def execute(self, node: dict[str, Any], context: ExecutionContext) -> dict[str, Any]:
         config = _config(node)
         output_variable = str(config.get("outputVariable") or "answer")
         prompt = context.render(str(config.get("prompt") or ""))
+        if self._completer is not None:
+            return {output_variable: self._completer.complete_prompt(prompt)}
         return {output_variable: f"LLM mock: {prompt}"}
 
 
@@ -107,9 +117,11 @@ class WorkflowExecutionEngine:
         self,
         repository: WorkflowRepository,
         knowledge_facade: KnowledgeFacade | None = None,
+        llm_completer: WorkflowLlmCompleter | None = None,
     ) -> None:
         self._repository = repository
         self._knowledge_facade = knowledge_facade
+        self._llm_completer = llm_completer
 
     def run(self, workflow_id: int, input_data: dict[str, Any]) -> WorkflowExecutionResult:
         workflow = self._repository.get(workflow_id)
@@ -172,7 +184,7 @@ class WorkflowExecutionEngine:
         if node_type == "START":
             return StartNodeExecutor(input_data).execute(node, context)
         if node_type == "LLM":
-            return LlmNodeExecutor().execute(node, context)
+            return LlmNodeExecutor(self._llm_completer).execute(node, context)
         if node_type == "API_CALL":
             return ApiCallNodeExecutor().execute(node, context)
         if node_type == "KNOWLEDGE":

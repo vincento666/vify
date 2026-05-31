@@ -25,11 +25,11 @@ class ChatSyncMessageTest(unittest.TestCase):
             data = response.json()["data"]
             self.assertEqual(data["userMessage"]["content"], "hello sync")
             self.assertEqual(data["assistantMessage"]["role"], "assistant")
-            self.assertEqual(data["assistantMessage"]["content"], "Echo: hello sync")
+            self.assertEqual(data["assistantMessage"]["content"], "LLM mock: hello sync")
 
             messages = client.get(f"/api/v1/chat/sessions/{session_id}/messages").json()["data"]["list"]
             self.assertEqual([message["role"] for message in messages], ["user", "assistant"])
-            self.assertEqual(messages[1]["content"], "Echo: hello sync")
+            self.assertEqual(messages[1]["content"], "LLM mock: hello sync")
 
 
 def _seed_agent(system_prompt: str = "") -> int:

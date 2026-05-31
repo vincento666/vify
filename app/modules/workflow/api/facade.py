@@ -5,19 +5,30 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.modules.knowledge.api.facade import KnowledgeFacade
-from app.modules.workflow.domain.engine import WorkflowExecutionEngine
+from app.modules.workflow.domain.engine import WorkflowExecutionEngine, WorkflowLlmCompleter
 from app.modules.workflow.infra.repository import WorkflowRepository
 
 
 class WorkflowFacade:
     def __init__(self, session: Session) -> None:
         self._repository = WorkflowRepository(session)
-        self._engine = WorkflowExecutionEngine(self._repository, KnowledgeFacade(session))
+        self._knowledge_facade = KnowledgeFacade(session)
+        self._engine = WorkflowExecutionEngine(self._repository, self._knowledge_facade)
 
-    def execute_for_chat(self, workflow_id: int, user_message: str) -> str | None:
+    def execute_for_chat(
+        self,
+        workflow_id: int,
+        user_message: str,
+        llm_completer: WorkflowLlmCompleter | None = None,
+    ) -> str | None:
         if not self._repository.list_nodes(workflow_id):
             return None
-        result = self._engine.run(workflow_id, {"userMessage": user_message})
+        engine = (
+            self._engine
+            if llm_completer is None
+            else WorkflowExecutionEngine(self._repository, self._knowledge_facade, llm_completer)
+        )
+        result = engine.run(workflow_id, {"userMessage": user_message})
         return _string_output(result.output)
 
 

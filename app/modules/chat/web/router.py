@@ -13,6 +13,7 @@ from app.modules.chat.infra.repository import ChatRepository
 from app.modules.chat.web.schemas import ChatMessageCreateRequest, ChatSessionCreateRequest
 from app.modules.knowledge.api.facade import KnowledgeFacade
 from app.modules.mcp.api.facade import McpFacade
+from app.modules.provider.api.facade import ProviderModelFacade
 from app.modules.workflow.api.facade import WorkflowFacade
 
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
@@ -24,6 +25,7 @@ def get_chat_service(session: Session = Depends(get_session)) -> ChatService:
         knowledge_facade=KnowledgeFacade(session),
         workflow_facade=WorkflowFacade(session),
         mcp_facade=McpFacade(session),
+        model_facade=ProviderModelFacade(session),
     )
 
 
@@ -75,6 +77,7 @@ def send_message(
             knowledge_facade=KnowledgeFacade(session),
             workflow_facade=WorkflowFacade(session),
             mcp_facade=McpFacade(session),
+            model_facade=ProviderModelFacade(session),
         )
         if not request.stream:
             return success(service.send_message(session_id, request))

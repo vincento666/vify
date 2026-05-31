@@ -27,13 +27,13 @@ class ChatStreamingTest(unittest.TestCase):
 
             events = _parse_sse_events(body)
             self.assertEqual(events[0]["type"], "delta")
-            self.assertEqual("".join(event.get("content", "") for event in events), "Echo: hello stream")
+            self.assertEqual("".join(event.get("content", "") for event in events), "LLM mock: hello stream")
             self.assertEqual(events[-1]["type"], "done")
             self.assertEqual(events[-1]["finishReason"], "stop")
 
             messages = client.get(f"/api/v1/chat/sessions/{session_id}/messages").json()["data"]["list"]
             self.assertEqual([message["role"] for message in messages], ["user", "assistant"])
-            self.assertEqual(messages[1]["content"], "Echo: hello stream")
+            self.assertEqual(messages[1]["content"], "LLM mock: hello stream")
 
 
 def _parse_sse_events(body: str) -> list[dict[str, object]]:

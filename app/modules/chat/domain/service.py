@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from app.core.errors import BizError, ErrorCode
 from app.modules.chat.domain.context import ConversationContextStore, MessageContext
-from app.modules.chat.domain.llm_request import ChatRequestMessage
+from app.modules.chat.domain.llm_request import (
+    ChatRequestMessage,
+    OpenAIChatRequestBuilder,
+    ProviderBackedOpenAIChatClient,
+    ProviderChatConfig,
+)
 from app.modules.chat.domain.mode import ChatModeRouter
 from app.modules.chat.domain.orchestrator import ChatOrchestrator
 from app.modules.chat.domain.prompt import PromptBuilder
@@ -22,10 +28,14 @@ from app.modules.chat.web.schemas import (
 )
 from app.modules.knowledge.api.facade import KnowledgeFacade, KnowledgeSearchResult
 from app.modules.mcp.api.facade import McpFacade
+from app.modules.provider.api.facade import ProviderModelFacade
+from app.modules.provider.api.schemas import ModelConfigDto
+from app.modules.provider.infra.llm_adapters import OpenAIAdapterParser
 from app.modules.workflow.api.facade import WorkflowFacade
 from app.modules.workflow.domain.engine import WorkflowExecutionError
 
 _CONTEXT_CACHE: dict[str, list[MessageContext]] = {}
+LlmClientFactory = Callable[[ProviderChatConfig], Any]
 
 
 class ChatService:
@@ -40,7 +50,11 @@ class ChatService:
         knowledge_facade: KnowledgeFacade | None = None,
         workflow_facade: WorkflowFacade | None = None,
         mcp_facade: McpFacade | None = None,
+        model_facade: ProviderModelFacade | None = None,
         tool_orchestrator: ChatOrchestrator | None = None,
+        request_builder: OpenAIChatRequestBuilder | None = None,
+        parser: OpenAIAdapterParser | None = None,
+        llm_client_factory: LlmClientFactory | None = None,
     ) -> None:
         self._repository = repository
         self._prompt_builder = prompt_builder or PromptBuilder()
@@ -51,7 +65,11 @@ class ChatService:
         self._knowledge_facade = knowledge_facade
         self._workflow_facade = workflow_facade
         self._mcp_facade = mcp_facade
+        self._model_facade = model_facade
         self._tool_orchestrator = tool_orchestrator or ChatOrchestrator()
+        self._request_builder = request_builder or OpenAIChatRequestBuilder()
+        self._parser = parser or OpenAIAdapterParser()
+        self._llm_client_factory = llm_client_factory or ProviderBackedOpenAIChatClient
 
     def create_session(self, request: ChatSessionCreateRequest) -> dict[str, Any]:
         if not self._repository.agent_exists(request.agent_id):
@@ -124,12 +142,6 @@ class ChatService:
 
         max_messages = max(1, int(agent["max_context_turns"]) * 2)
         history = self._context_store.load(session_id, max_messages=max_messages)
-        self._prompt_builder.build(
-            system_prompt=agent["system_prompt"] or "",
-            history=history,
-            user_message=content,
-        )
-
         user_row = self._repository.insert_message(
             session_id=session_id,
             role="user",
@@ -137,7 +149,7 @@ class ChatService:
             tokens=self._count_tokens(content),
         )
         tool_ids = self._repository.list_agent_tool_ids(int(agent["id"]))
-        assistant_content = self._assistant_content(agent, tool_ids, content)
+        assistant_content = self._assistant_content(agent, tool_ids, content, history)
         assistant_row = self._repository.insert_message(
             session_id=session_id,
             role="assistant",
@@ -193,65 +205,170 @@ class ChatService:
             chunks.append(f"{part}{suffix}")
         return chunks
 
-    def _assistant_content(self, agent: dict[str, Any], tool_ids: list[int], content: str) -> str:
-        mode = self._mode_router.resolve(agent)
-        if mode == "workflow":
-            return self._workflow_content(agent, content)
-        if mode == "rag":
-            return self._rag_content(agent, content)
-        tool_content = self._real_tool_content(agent, tool_ids, content)
-        if tool_content is not None:
-            return tool_content
-        tool_names = self._mcp_facade.tool_names_for_servers(tool_ids) if self._mcp_facade else []
-        tool_result = self._tool_runner.run(tool_ids, content, tool_names=tool_names)
-        if tool_result is not None:
-            return tool_result
-        return f"Echo: {content}"
-
-    def _real_tool_content(
+    def _assistant_content(
         self,
         agent: dict[str, Any],
         tool_ids: list[int],
         content: str,
+        history: list[MessageContext],
+    ) -> str:
+        model_config = self._model_config(agent)
+        mode = self._mode_router.resolve(agent)
+        if mode == "workflow":
+            return self._workflow_content(agent, model_config, content, history)
+        if mode == "rag":
+            return self._rag_content(agent, model_config, content, history)
+        tool_content = self._real_tool_content(agent, model_config, tool_ids, content, history)
+        if tool_content is not None:
+            return tool_content
+        return self._llm_content(agent, model_config, self._base_messages(agent, history, content))
+
+    def _real_tool_content(
+        self,
+        agent: dict[str, Any],
+        model_config: ModelConfigDto,
+        tool_ids: list[int],
+        content: str,
+        history: list[MessageContext],
     ) -> str | None:
-        if not tool_ids or self._mcp_facade is None or not self._should_use_real_tool_call(content):
+        if not tool_ids or self._mcp_facade is None:
             return None
         tools = self._mcp_facade.tool_definitions_for_servers(tool_ids)
         if not tools:
             return None
+        client = self._llm_client(model_config)
         result = self._tool_orchestrator.run(
-            model=f"model-config-{agent['model_config_id']}",
-            messages=[ChatRequestMessage(role="user", content=content)],
+            model=model_config.model_id,
+            messages=self._base_messages(agent, history, content),
             tools=tools,
             tool_ids=tool_ids,
             mcp_facade=self._mcp_facade,
+            llm_client=client,
+            temperature=self._temperature(agent),
+            max_tokens=self._max_tokens(agent),
+            extra_params=model_config.extra_params,
         )
         return result.final_content or None
 
-    def _should_use_real_tool_call(self, content: str) -> bool:
-        normalized = content.lower()
-        return "order" in normalized and any(character.isdigit() for character in normalized)
-
-    def _rag_content(self, agent: dict[str, Any], content: str) -> str:
-        base_content = f"RAG mock: {content}"
+    def _rag_content(
+        self,
+        agent: dict[str, Any],
+        model_config: ModelConfigDto,
+        content: str,
+        history: list[MessageContext],
+    ) -> str:
         knowledge_base_id = agent.get("knowledge_base_id")
         if self._knowledge_facade is None or knowledge_base_id is None:
-            return base_content
+            return self._llm_content(agent, model_config, self._base_messages(agent, history, content))
         references = self._knowledge_facade.search_chunks(int(knowledge_base_id), content, top_k=3)
         if not references:
-            return base_content
-        return f"{base_content}\nReferences:\n{self._format_references(references)}"
+            return self._llm_content(agent, model_config, self._base_messages(agent, history, content))
+        rag_prompt = (
+            "Answer the user using the retrieved knowledge context.\n\n"
+            f"Knowledge context:\n{self._format_references(references)}\n\n"
+            f"User question: {content}"
+        )
+        answer = self._llm_content(agent, model_config, self._base_messages(agent, history, rag_prompt))
+        return f"{answer}\nReferences:\n{self._format_references(references)}"
 
     def _format_references(self, references: list[KnowledgeSearchResult]) -> str:
         return "\n".join(f"- [{index + 1}] {reference.content}" for index, reference in enumerate(references))
 
-    def _workflow_content(self, agent: dict[str, Any], content: str) -> str:
+    def _workflow_content(
+        self,
+        agent: dict[str, Any],
+        model_config: ModelConfigDto,
+        content: str,
+        history: list[MessageContext],
+    ) -> str:
         workflow_id = agent.get("workflow_id")
+        workflow_output: str | None = None
         if self._workflow_facade is not None and workflow_id is not None:
             try:
-                output = self._workflow_facade.execute_for_chat(int(workflow_id), content)
+                workflow_output = self._workflow_facade.execute_for_chat(
+                    int(workflow_id),
+                    content,
+                    llm_completer=_ChatWorkflowLlmCompleter(
+                        lambda prompt: self._llm_content(
+                            agent,
+                            model_config,
+                            self._base_messages(agent, history, prompt),
+                        )
+                    ),
+                )
             except WorkflowExecutionError as exc:
                 return f"Workflow error: {exc}"
-            if output:
-                return f"Workflow mock: {output}"
-        return f"Workflow mock: {content}"
+        prompt = content
+        if workflow_output:
+            prompt = (
+                "Use this workflow execution result to answer the user.\n\n"
+                f"Workflow result:\n{workflow_output}\n\n"
+                f"User message: {content}"
+            )
+        return self._llm_content(agent, model_config, self._base_messages(agent, history, prompt))
+
+    def _model_config(self, agent: dict[str, Any]) -> ModelConfigDto:
+        if self._model_facade is None:
+            raise BizError(ErrorCode.BAD_REQUEST, "Chat model provider is not configured")
+        return self._model_facade.get_enabled_model_config(int(agent["model_config_id"]))
+
+    def _llm_content(
+        self,
+        agent: dict[str, Any],
+        model_config: ModelConfigDto,
+        messages: list[ChatRequestMessage],
+    ) -> str:
+        payload = self._request_builder.build(
+            model=model_config.model_id,
+            messages=messages,
+            temperature=self._temperature(agent),
+            max_tokens=self._max_tokens(agent),
+            extra_params=model_config.extra_params,
+        )
+        result = self._parser.parse_chat_response(self._llm_client(model_config).complete(payload))
+        return result.content
+
+    def _base_messages(
+        self,
+        agent: dict[str, Any],
+        history: list[MessageContext],
+        content: str,
+    ) -> list[ChatRequestMessage]:
+        self._prompt_builder.build(
+            system_prompt=agent["system_prompt"] or "",
+            history=history,
+            user_message=content,
+        )
+        messages: list[ChatRequestMessage] = []
+        if agent["system_prompt"]:
+            messages.append(ChatRequestMessage(role="system", content=str(agent["system_prompt"])))
+        messages.extend(
+            ChatRequestMessage(role=message["role"], content=message["content"])
+            for message in history
+            if message["role"] in {"user", "assistant", "system"}
+        )
+        messages.append(ChatRequestMessage(role="user", content=content))
+        return messages
+
+    def _llm_client(self, model_config: ModelConfigDto) -> Any:
+        return self._llm_client_factory(
+            ProviderChatConfig(
+                provider_type=model_config.provider_type,
+                base_url=model_config.provider_base_url,
+                auth_config=model_config.provider_auth_config,
+            )
+        )
+
+    def _temperature(self, agent: dict[str, Any]) -> float:
+        return float(agent["temperature"])
+
+    def _max_tokens(self, agent: dict[str, Any]) -> int:
+        return int(agent["max_tokens"])
+
+
+class _ChatWorkflowLlmCompleter:
+    def __init__(self, complete_prompt: Callable[[str], str]) -> None:
+        self._complete_prompt = complete_prompt
+
+    def complete_prompt(self, prompt: str) -> str:
+        return self._complete_prompt(prompt)

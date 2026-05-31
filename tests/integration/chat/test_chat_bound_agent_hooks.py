@@ -10,7 +10,7 @@ from app.main import app
 
 
 class ChatBoundAgentHooksTest(unittest.TestCase):
-    def test_knowledge_bound_agent_uses_mock_rag_path(self) -> None:
+    def test_knowledge_bound_agent_uses_llm_rag_path(self) -> None:
         agent_id = _seed_agent(knowledge_base_id=_seed_knowledge_base(), workflow_id=None)
 
         with TestClient(app) as client:
@@ -20,12 +20,9 @@ class ChatBoundAgentHooksTest(unittest.TestCase):
                 json={"content": "where is the policy?", "stream": False},
             ).json()["data"]
 
-        self.assertEqual(
-            turn["assistantMessage"]["content"],
-            "RAG mock: where is the policy?",
-        )
+        self.assertEqual(turn["assistantMessage"]["content"], "LLM mock: where is the policy?")
 
-    def test_workflow_bound_agent_uses_mock_workflow_path(self) -> None:
+    def test_workflow_bound_agent_uses_llm_workflow_path(self) -> None:
         agent_id = _seed_agent(knowledge_base_id=_seed_knowledge_base(), workflow_id=_seed_workflow())
 
         with TestClient(app) as client:
@@ -35,10 +32,7 @@ class ChatBoundAgentHooksTest(unittest.TestCase):
                 json={"content": "run onboarding", "stream": False},
             ).json()["data"]
 
-        self.assertEqual(
-            turn["assistantMessage"]["content"],
-            "Workflow mock: run onboarding",
-        )
+        self.assertEqual(turn["assistantMessage"]["content"], "LLM mock: run onboarding")
 
 
 def _seed_agent(knowledge_base_id: int | None, workflow_id: int | None) -> int:

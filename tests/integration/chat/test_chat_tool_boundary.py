@@ -10,7 +10,7 @@ from app.main import app
 
 
 class ChatToolBoundaryTest(unittest.TestCase):
-    def test_tool_bound_agent_uses_mock_tool_fallback(self) -> None:
+    def test_tool_bound_agent_uses_llm_when_no_tool_call_is_returned(self) -> None:
         agent_id = _seed_tool_bound_agent()
 
         with TestClient(app) as client:
@@ -20,7 +20,7 @@ class ChatToolBoundaryTest(unittest.TestCase):
                 json={"content": "please use tool", "stream": False},
             ).json()["data"]
 
-        self.assertEqual(turn["assistantMessage"]["content"], "Tool mock: please use tool")
+        self.assertEqual(turn["assistantMessage"]["content"], "LLM mock: please use tool")
 
 
 def _seed_tool_bound_agent() -> int:

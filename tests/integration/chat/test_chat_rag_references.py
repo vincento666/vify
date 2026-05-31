@@ -12,7 +12,7 @@ from app.modules.knowledge.infra.repository import KnowledgeBaseRepository
 
 
 class ChatRagReferencesTest(unittest.TestCase):
-    def test_knowledge_bound_agent_answer_includes_mock_references_when_chunks_exist(self) -> None:
+    def test_knowledge_bound_agent_answer_uses_llm_and_includes_references(self) -> None:
         kb_id = _seed_knowledge_base_with_document()
         agent_id = _seed_agent(knowledge_base_id=kb_id)
 
@@ -24,9 +24,10 @@ class ChatRagReferencesTest(unittest.TestCase):
             ).json()["data"]
 
         content = turn["assistantMessage"]["content"]
-        self.assertIn("RAG mock: reset password", content)
+        self.assertIn("LLM mock:", content)
         self.assertIn("References:", content)
         self.assertIn("How to reset password", content)
+        self.assertNotIn("RAG mock:", content)
 
 
 def _seed_knowledge_base_with_document() -> int:

@@ -10,7 +10,7 @@ from app.main import app
 
 
 class ChatWorkflowExecutionTest(unittest.TestCase):
-    def test_workflow_bound_agent_uses_linear_workflow_output_when_graph_exists(self) -> None:
+    def test_workflow_bound_agent_uses_llm_to_finalize_linear_workflow_output(self) -> None:
         with TestClient(app) as client:
             workflow = _create_linear_workflow(client)
             agent_id = _seed_agent(workflow_id=int(workflow["id"]))
@@ -21,10 +21,11 @@ class ChatWorkflowExecutionTest(unittest.TestCase):
                 json={"content": "reset password", "stream": False},
             ).json()["data"]
 
-        self.assertEqual(
-            turn["assistantMessage"]["content"],
-            "Workflow mock: LLM mock: User: reset password",
-        )
+        content = turn["assistantMessage"]["content"]
+        self.assertIn("LLM mock:", content)
+        self.assertIn("Workflow result:", content)
+        self.assertIn("User: reset password", content)
+        self.assertNotIn("Workflow mock:", content)
 
 
 def _create_linear_workflow(client: TestClient) -> dict[str, object]:
