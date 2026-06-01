@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   addWorkflowNode,
+  autoLayoutWorkflowGraph,
   connectWorkflowNodes,
   createDefaultChatflowGraph,
   createDefaultWorkflowGraph,
@@ -70,5 +71,50 @@ describe('workflow canvas graph model', () => {
       'sys.channel',
       'sys.round',
     ])
+  })
+
+  it('auto-layouts nodes into deterministic columns while preserving configs and conditional edges', () => {
+    let graph = createDefaultWorkflowGraph()
+    graph = addWorkflowNode(graph, 'CONDITION', { x: 10, y: 10 })
+    graph = addWorkflowNode(graph, 'LLM', { x: 20, y: 20 })
+
+    graph = {
+      ...graph,
+      nodes: graph.nodes.map((node) =>
+        node.nodeKey === 'llm_1'
+          ? {
+            ...node,
+            config: {
+              ...node.config,
+              prompt: 'keep this prompt',
+              outputVariable: 'answer',
+            },
+          }
+          : node,
+      ),
+    }
+    graph = connectWorkflowNodes(graph, 'start', 'condition_1')
+    graph = connectWorkflowNodes(graph, 'condition_1', 'llm_1', 'yes')
+    graph = connectWorkflowNodes(graph, 'condition_1', 'end')
+    graph = connectWorkflowNodes(graph, 'llm_1', 'end')
+
+    const laidOut = autoLayoutWorkflowGraph(graph)
+    const byKey = new Map(laidOut.nodes.map((node) => [node.nodeKey, node]))
+
+    expect(byKey.get('start')?.position).toEqual({ x: 120, y: 96 })
+    expect(byKey.get('condition_1')?.position.x).toBeGreaterThan(byKey.get('start')!.position.x)
+    expect(byKey.get('llm_1')?.position.x).toBeGreaterThan(byKey.get('condition_1')!.position.x)
+    expect(byKey.get('end')?.position.x).toBeGreaterThan(byKey.get('llm_1')!.position.x)
+    expect(byKey.get('llm_1')?.config.prompt).toBe('keep this prompt')
+    expect(byKey.get('llm_1')?.config.ui.position).toEqual(byKey.get('llm_1')?.position)
+    expect(laidOut.edges).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceNodeKey: 'condition_1',
+          targetNodeKey: 'llm_1',
+          condition: 'yes',
+        }),
+      ]),
+    )
   })
 })

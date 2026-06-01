@@ -27,15 +27,29 @@
       <div class="canvas-actions">
         <el-button @click="openTestPanel">{{ isChatflowMode ? '对话试运行' : '试运行' }}</el-button>
         <el-button @click="openOpsPanel('observe')">观测</el-button>
-        <el-button @click="openOpsPanel('api')">Open API</el-button>
         <el-button type="primary" plain @click="openOpsPanel('publish')">发布</el-button>
-        <el-button @click="quickConnect">快速连线</el-button>
         <el-button :loading="saving" type="primary" @click="saveCanvas">保存</el-button>
       </div>
     </div>
 
-    <section class="canvas-workbench" data-testid="workflow-canvas">
-      <aside class="canvas-resource-panel" data-testid="canvas-resource-panel">
+    <section
+      class="canvas-workbench"
+      :class="{ 'resource-collapsed': resourcePanelCollapsed }"
+      data-testid="workflow-canvas"
+    >
+      <button
+        class="resource-panel-toggle"
+        type="button"
+        :aria-label="resourcePanelCollapsed ? '展开侧栏' : '折叠侧栏'"
+        @click="resourcePanelCollapsed = !resourcePanelCollapsed"
+      >
+        <el-icon>
+          <ArrowRight v-if="resourcePanelCollapsed" />
+          <ArrowLeft v-else />
+        </el-icon>
+      </button>
+
+      <aside v-if="!resourcePanelCollapsed" class="canvas-resource-panel" data-testid="canvas-resource-panel">
         <div class="resource-header">
           <strong>{{ isChatflowMode ? '对话设置' : '画布概览' }}</strong>
           <span>{{ isChatflowMode ? 'Conversation runtime' : 'Canvas overview' }}</span>
@@ -282,6 +296,30 @@
               <el-option label="dingtalk" value="dingtalk" />
             </el-select>
           </div>
+          <div
+            v-if="isChatflowMode && !testResult && (chatflowOpeningText || activeGuideQuestions.length)"
+            class="chatflow-runtime-preview"
+            data-testid="chatflow-runtime-preview"
+          >
+            <div
+              v-if="chatflowOpeningText"
+              class="message-bubble assistant opening"
+              data-testid="chatflow-opening-message"
+            >
+              {{ chatflowOpeningText }}
+            </div>
+            <div v-if="activeGuideQuestions.length" class="chatflow-guide-list">
+              <button
+                v-for="question in activeGuideQuestions"
+                :key="question"
+                type="button"
+                data-testid="chatflow-guide-question"
+                @click="applyGuideQuestion(question)"
+              >
+                {{ question }}
+              </button>
+            </div>
+          </div>
         </section>
 
         <section v-if="validationErrors.length" class="config-section">
@@ -298,8 +336,15 @@
             <span v-if="testResult.runId">Run #{{ testResult.runId }}</span>
           </div>
           <div v-if="isChatflowMode" class="conversation-result">
-            <div class="message-bubble user">{{ testInput }}</div>
-            <div class="message-bubble assistant">{{ chatflowAssistantText }}</div>
+            <div
+              v-if="chatflowOpeningText"
+              class="message-bubble assistant opening"
+              data-testid="chatflow-opening-message"
+            >
+              {{ chatflowOpeningText }}
+            </div>
+            <div class="message-bubble user" data-testid="chatflow-user-message">{{ testInput }}</div>
+            <div class="message-bubble assistant" data-testid="chatflow-assistant-message">{{ chatflowAssistantText }}</div>
           </div>
           <div v-else class="workflow-result-card" data-testid="workflow-run-output">
             <div v-for="row in runOutputRows" :key="row.key" class="workflow-result-row">
@@ -432,7 +477,7 @@
         <button type="button" aria-label="适应画布">
           <el-icon><FullScreen /></el-icon>
         </button>
-        <button type="button" aria-label="布局">
+        <button type="button" aria-label="自动布局" title="自动布局" @click="autoLayoutCanvas">
           <el-icon><Rank /></el-icon>
         </button>
         <button class="toolbar-add-node" type="button" aria-label="添加节点" @click="paletteOpen = !paletteOpen">
@@ -451,6 +496,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
   ArrowLeft,
+  ArrowRight,
   Connection,
   Cpu,
   DataAnalysis,
@@ -482,6 +528,7 @@ import { buildChatflowVariableScopes, insertChatflowVariableReference, type Chat
 import { buildChatflowOpenShell, evaluateChatflowPublishGate } from './chatflowPublish'
 import {
   addWorkflowNode,
+  autoLayoutWorkflowGraph,
   connectWorkflowNodes,
   createDefaultChatflowGraph,
   createDefaultWorkflowGraph,
@@ -518,6 +565,7 @@ const canvasTab = ref<CanvasTab>('compose')
 const canvasStageRef = ref<HTMLElement | null>(null)
 const selectedNodeKey = ref('')
 const paletteOpen = ref(false)
+const resourcePanelCollapsed = ref(false)
 const activeVariableField = ref('')
 const variableSearch = ref('')
 const lastSavedAt = ref('')
@@ -609,6 +657,8 @@ const chatflowAssistantText = computed(() => {
   const output = testResult.value?.output || {}
   return String(output.output ?? output.answer ?? JSON.stringify(output))
 })
+const chatflowOpeningText = computed(() => isChatflowMode.value ? openingText.value.trim() : '')
+const activeGuideQuestions = computed(() => guideQuestions.value.map((item) => item.trim()).filter(Boolean))
 const runOutputRows = computed(() => {
   const output = testResult.value?.output || {}
   return Object.entries(output).map(([key, value]) => ({
@@ -818,6 +868,10 @@ function removeGuideQuestion(index: number) {
   markGraphDirty()
 }
 
+function applyGuideQuestion(question: string) {
+  testInput.value = question
+}
+
 function resetChatflowConversationSettings() {
   openingText.value = '你好，我可以帮你处理订单、售后和产品咨询。'
   guideQuestions.value = ['查订单进度', '申请退款', '咨询发票']
@@ -858,20 +912,8 @@ function readonlyValues(key: string) {
   return value ? [String(value)] : []
 }
 
-function quickConnect() {
-  const middleNode = graph.value.nodes.find((node) => node.type !== 'START' && node.type !== 'END')
-  if (!middleNode) {
-    graph.value = connectWorkflowNodes(graph.value, 'start', 'end')
-    markGraphDirty()
-    return
-  }
-  graph.value = {
-    ...graph.value,
-    edges: graph.value.edges.filter((edge) =>
-      edge.sourceNodeKey !== 'start' && edge.sourceNodeKey !== middleNode.nodeKey,
-    ),
-  }
-  graph.value = connectWorkflowNodes(connectWorkflowNodes(graph.value, 'start', middleNode.nodeKey), middleNode.nodeKey, 'end')
+function autoLayoutCanvas() {
+  graph.value = autoLayoutWorkflowGraph(graph.value)
   markGraphDirty()
 }
 
@@ -1153,12 +1195,49 @@ onMounted(loadWorkflow)
 }
 
 .canvas-workbench {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: grid;
   grid-template-columns: 252px minmax(0, 1fr);
   overflow: hidden;
   background: #f8f9fc;
+  transition: grid-template-columns 0.18s ease;
+}
+
+.canvas-workbench.resource-collapsed {
+  grid-template-columns: 0 minmax(0, 1fr);
+}
+
+.resource-panel-toggle {
+  position: absolute;
+  top: 18px;
+  left: 252px;
+  z-index: 12;
+  width: 28px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #dfe3ee;
+  border-left: 0;
+  border-radius: 0 9px 9px 0;
+  background: #fff;
+  color: #596273;
+  box-shadow: 6px 8px 20px rgba(34, 41, 63, 0.1);
+  cursor: pointer;
+  opacity: 0.52;
+  transition: opacity 0.16s ease, left 0.18s ease, background 0.16s ease;
+}
+
+.resource-panel-toggle:hover,
+.resource-panel-toggle:focus-visible {
+  background: #f7f8fc;
+  opacity: 1;
+}
+
+.canvas-workbench.resource-collapsed .resource-panel-toggle {
+  left: 0;
 }
 
 .canvas-resource-panel {
@@ -1746,6 +1825,15 @@ onMounted(loadWorkflow)
   margin-top: 10px;
 }
 
+.chatflow-runtime-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #edf0f6;
+}
+
 .conversation-result {
   display: flex;
   flex-direction: column;
@@ -1772,6 +1860,35 @@ onMounted(loadWorkflow)
   align-self: flex-start;
   background: #f0f2f7;
   color: #2f3548;
+}
+
+.message-bubble.opening {
+  background: #eefaf8;
+  color: #0b6862;
+}
+
+.chatflow-guide-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chatflow-guide-list button {
+  max-width: 100%;
+  min-height: 28px;
+  padding: 4px 9px;
+  border: 1px solid #cdd3f7;
+  border-radius: 999px;
+  background: #f6f7ff;
+  color: #4b50c8;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.chatflow-guide-list button:hover {
+  background: #eef0ff;
 }
 
 .test-run-actions {
@@ -1953,6 +2070,10 @@ onMounted(loadWorkflow)
   }
 
   .canvas-resource-panel {
+    display: none;
+  }
+
+  .resource-panel-toggle {
     display: none;
   }
 

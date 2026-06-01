@@ -7,6 +7,13 @@ function assert(condition, message) {
   if (!condition) throw new Error(message)
 }
 
+async function unwrap(response, label) {
+  assert(response.ok(), `${label} HTTP ${response.status()}`)
+  const payload = await response.json()
+  assert(payload.code === 200, `${label} API ${payload.message}`)
+  return payload.data
+}
+
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 const name = `Workflow Test Run ${Date.now()}`
@@ -25,7 +32,37 @@ try {
     'Expected disconnected graph to fail validation before a test run',
   )
 
-  await page.getByRole('button', { name: '快速连线' }).click()
+  await page.locator('.canvas-actions').getByRole('button', { name: '保存', exact: true }).click()
+  await page.waitForURL('**/workflows/*/canvas', { timeout: 10000 })
+  const workflowId = Number(page.url().match(/\/workflows\/(\d+)\/canvas/)?.[1])
+  assert(Number.isFinite(workflowId), 'Expected workflow id after saving disconnected graph')
+  await unwrap(
+    await page.request.put(`${baseUrl}/api/v1/workflows/${workflowId}`, {
+      data: {
+        name,
+        description: 'connected by e2e setup',
+        nodes: [
+          {
+            nodeKey: 'start',
+            type: 'START',
+            name: '开始',
+            config: { outputVariables: ['USER_INPUT'], ui: { position: { x: 120, y: 96 } } },
+          },
+          {
+            nodeKey: 'end',
+            type: 'END',
+            name: '结束',
+            config: { outputVariable: 'output', output: '{{start.USER_INPUT}}', ui: { position: { x: 780, y: 96 } } },
+          },
+        ],
+        edges: [{ sourceNodeKey: 'start', targetNodeKey: 'end', condition: null }],
+      },
+    }),
+    'connect workflow graph',
+  )
+  await page.reload({ waitUntil: 'networkidle' })
+  await page.getByRole('button', { name: '试运行' }).click()
+  await panel.waitFor({ state: 'visible', timeout: 5000 })
   await panel.getByPlaceholder('输入 userMessage').fill('hello from e2e')
   await panel.getByRole('button', { name: '运行', exact: true }).click()
   await page.waitForURL('**/workflows/*/canvas', { timeout: 10000 })

@@ -36,6 +36,12 @@ const NODE_LABELS: Record<WorkflowCanvasNodeType, string> = {
 }
 
 const FIXED_NODE_KEYS = new Set(['start', 'end'])
+const AUTO_LAYOUT = {
+  x: 120,
+  y: 96,
+  columnGap: 520,
+  rowGap: 180,
+}
 
 function cloneConfig(config: Record<string, any> = {}) {
   return JSON.parse(JSON.stringify(config)) as Record<string, any>
@@ -192,6 +198,78 @@ export function moveWorkflowNode(
         : node,
     ),
     edges: graph.edges,
+  }
+}
+
+export function autoLayoutWorkflowGraph(graph: WorkflowCanvasGraph): WorkflowCanvasGraph {
+  const originalOrder = new Map(graph.nodes.map((node, index) => [node.nodeKey, index]))
+  const layerByKey = new Map<string, number>()
+  const startNode = graph.nodes.find((node) => node.nodeKey === 'start' || node.type === 'START')
+  if (startNode) layerByKey.set(startNode.nodeKey, 0)
+
+  const orderedEdges = [...graph.edges].sort((left, right) => {
+    const leftSource = originalOrder.get(left.sourceNodeKey) ?? Number.MAX_SAFE_INTEGER
+    const rightSource = originalOrder.get(right.sourceNodeKey) ?? Number.MAX_SAFE_INTEGER
+    if (leftSource !== rightSource) return leftSource - rightSource
+    return (originalOrder.get(left.targetNodeKey) ?? 0) - (originalOrder.get(right.targetNodeKey) ?? 0)
+  })
+
+  for (let iteration = 0; iteration < graph.nodes.length; iteration += 1) {
+    let changed = false
+    for (const edge of orderedEdges) {
+      const sourceLayer = layerByKey.get(edge.sourceNodeKey)
+      if (sourceLayer === undefined) continue
+      const nextLayer = sourceLayer + 1
+      if ((layerByKey.get(edge.targetNodeKey) ?? -1) < nextLayer) {
+        layerByKey.set(edge.targetNodeKey, nextLayer)
+        changed = true
+      }
+    }
+    if (!changed) break
+  }
+
+  for (const node of graph.nodes) {
+    if (layerByKey.has(node.nodeKey)) continue
+    const currentMaxLayer = Math.max(0, ...layerByKey.values())
+    layerByKey.set(node.nodeKey, node.type === 'END' ? currentMaxLayer + 1 : Math.max(1, currentMaxLayer))
+  }
+
+  const nodesByLayer = new Map<number, WorkflowCanvasNode[]>()
+  for (const node of graph.nodes) {
+    const layer = layerByKey.get(node.nodeKey) ?? 0
+    nodesByLayer.set(layer, [...(nodesByLayer.get(layer) || []), node])
+  }
+
+  const orderedLayers = [...nodesByLayer.keys()].sort((left, right) => left - right)
+  const positions = new Map<string, CanvasPosition>()
+  for (const layer of orderedLayers) {
+    const layerNodes = [...(nodesByLayer.get(layer) || [])].sort(
+      (left, right) => (originalOrder.get(left.nodeKey) ?? 0) - (originalOrder.get(right.nodeKey) ?? 0),
+    )
+    layerNodes.forEach((node, index) => {
+      positions.set(node.nodeKey, {
+        x: AUTO_LAYOUT.x + layer * AUTO_LAYOUT.columnGap,
+        y: AUTO_LAYOUT.y + index * AUTO_LAYOUT.rowGap,
+      })
+    })
+  }
+
+  return {
+    nodes: graph.nodes.map((node) => {
+      const position = positions.get(node.nodeKey) || node.position
+      return {
+        ...node,
+        position,
+        config: {
+          ...cloneConfig(node.config),
+          ui: {
+            ...(node.config.ui || {}),
+            position,
+          },
+        },
+      }
+    }),
+    edges: graph.edges.map((edge) => ({ ...edge })),
   }
 }
 

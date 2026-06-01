@@ -140,7 +140,7 @@ async function runChatflowPanel(page, input, expected) {
   const textarea = page.getByPlaceholder('输入用户消息')
   await textarea.fill(input)
   await page.getByRole('button', { name: '运行', exact: true }).click()
-  const assistant = page.locator('.message-bubble.assistant')
+  const assistant = page.locator('[data-testid="chatflow-assistant-message"]')
   await assistant.waitFor({ state: 'visible', timeout: 20000 })
   const text = await assistant.innerText()
   assert(text.includes(expected), `Expected chatflow output ${expected}, got: ${text}`)

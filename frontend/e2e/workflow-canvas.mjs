@@ -37,7 +37,7 @@ try {
   await page.mouse.move(box.x + 120, box.y + 82, { steps: 8 })
   await page.mouse.up()
 
-  await page.getByRole('button', { name: '快速连线' }).click()
+  await page.getByRole('button', { name: '自动布局' }).click()
   await page.locator('.canvas-actions').getByRole('button', { name: '保存', exact: true }).click()
   await page.waitForURL('**/workflows/*/canvas', { timeout: 10000 })
   const canvasUrl = page.url()

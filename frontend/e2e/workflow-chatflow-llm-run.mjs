@@ -9,35 +9,74 @@ function assert(condition, message) {
   if (!condition) throw new Error(message)
 }
 
-async function addAndConfigureLlm(page, prompt) {
-  await page.getByRole('button', { name: '添加节点' }).click()
-  await page.locator('.node-palette button', { hasText: '大模型' }).click()
-  await page.locator('.vue-flow__node[data-id="llm_1"]').waitFor({ state: 'visible', timeout: 5000 })
-  await page.locator('.vue-flow__node[data-id="llm_1"]').click()
+async function unwrap(response, label) {
+  assert(response.ok(), `${label} HTTP ${response.status()}`)
+  const payload = await response.json()
+  assert(payload.code === 200, `${label} API ${payload.message}`)
+  return payload.data
+}
 
-  const panel = page.locator('[data-testid="node-config-panel"]')
-  await panel.waitFor({ state: 'visible', timeout: 5000 })
-  await panel.locator('textarea').fill(prompt)
-  await panel.getByLabel('关闭配置').click()
+function llmGraph({ name, marker, startVariable, isChatflow }) {
+  return {
+    name,
+    description: 'live LLM browser e2e',
+    nodes: [
+      {
+        nodeKey: 'start',
+        type: 'START',
+        name: '开始',
+        config: {
+          outputVariables: isChatflow
+            ? ['sys.query', 'sys.conversation_id', 'sys.user_id', 'sys.channel', 'sys.round']
+            : ['USER_INPUT'],
+          ui: { position: { x: 120, y: 96 } },
+        },
+      },
+      {
+        nodeKey: 'llm_1',
+        type: 'LLM',
+        name: '大模型',
+        config: {
+          prompt: `Return exactly this token and nothing else: ${marker}. User input: {{start.${startVariable}}}`,
+          outputVariable: 'answer',
+          ui: { position: { x: 640, y: 96 } },
+        },
+      },
+      {
+        nodeKey: 'end',
+        type: 'END',
+        name: '结束',
+        config: { outputVariable: 'output', output: '{{llm_1.answer}}', ui: { position: { x: 1160, y: 96 } } },
+      },
+    ],
+    edges: [
+      { sourceNodeKey: 'start', targetNodeKey: 'llm_1', condition: null },
+      { sourceNodeKey: 'llm_1', targetNodeKey: 'end', condition: null },
+    ],
+  }
+}
 
-  await page.locator('.vue-flow__node[data-id="end"]').click()
-  await panel.waitFor({ state: 'visible', timeout: 5000 })
-  await panel.getByPlaceholder('返回给调用方的文本，可使用变量引用').fill('{{llm_1.output}}')
-  await page.getByRole('button', { name: '快速连线' }).click()
+async function createFlow(page, path, payload) {
+  return unwrap(
+    await page.request.post(`${baseUrl}/api/v1/${path}`, { data: payload }),
+    `create ${path}`,
+  )
 }
 
 async function runWorkflowUat(page) {
   const marker = `WORKFLOW_LIVE_${Date.now()}`
-  await page.goto(`${baseUrl}/workflows/create`, { waitUntil: 'networkidle' })
-  await page.getByPlaceholder('工作流名称').fill(`Workflow LLM UAT ${marker}`)
-  await addAndConfigureLlm(page, `Return exactly this token and nothing else: ${marker}. User input: {{start.USER_INPUT}}`)
+  const workflow = await createFlow(
+    page,
+    'workflows',
+    llmGraph({ name: `Workflow LLM UAT ${marker}`, marker, startVariable: 'USER_INPUT', isChatflow: false }),
+  )
 
+  await page.goto(`${baseUrl}/workflows/${workflow.id}/canvas`, { waitUntil: 'networkidle' })
   await page.getByRole('button', { name: '试运行' }).click()
   const panel = page.locator('[data-testid="test-run-panel"]')
   await panel.waitFor({ state: 'visible', timeout: 5000 })
   await panel.getByPlaceholder('输入 userMessage').fill(marker)
   await panel.getByRole('button', { name: '运行', exact: true }).click()
-  await page.waitForURL('**/workflows/*/canvas', { timeout: 10000 })
 
   const output = page.locator('[data-testid="workflow-run-output"]')
   await output.waitFor({ state: 'visible', timeout: 60000 })
@@ -54,18 +93,20 @@ async function runWorkflowUat(page) {
 
 async function runChatflowUat(page) {
   const marker = `CHATFLOW_LIVE_${Date.now()}`
-  await page.goto(`${baseUrl}/chatflows/create`, { waitUntil: 'networkidle' })
-  await page.getByPlaceholder('Chatflow 名称').fill(`Chatflow LLM UAT ${marker}`)
-  await addAndConfigureLlm(page, `Return exactly this token and nothing else: ${marker}. User input: {{sys.query}}`)
+  const chatflow = await createFlow(
+    page,
+    'chatflows',
+    llmGraph({ name: `Chatflow LLM UAT ${marker}`, marker, startVariable: 'sys.query', isChatflow: true }),
+  )
 
+  await page.goto(`${baseUrl}/chatflows/${chatflow.id}/canvas`, { waitUntil: 'networkidle' })
   await page.getByRole('button', { name: '对话试运行' }).click()
   const panel = page.locator('[data-testid="test-run-panel"]')
   await panel.waitFor({ state: 'visible', timeout: 5000 })
   await panel.getByPlaceholder('输入用户消息').fill(marker)
   await panel.getByRole('button', { name: '运行', exact: true }).click()
-  await page.waitForURL('**/chatflows/*/canvas', { timeout: 10000 })
 
-  const assistant = page.locator('.message-bubble.assistant')
+  const assistant = page.locator('[data-testid="chatflow-assistant-message"]')
   await assistant.waitFor({ state: 'visible', timeout: 60000 })
   const assistantText = await assistant.innerText()
   const panelText = await panel.innerText()

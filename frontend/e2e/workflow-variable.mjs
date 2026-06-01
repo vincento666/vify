@@ -16,7 +16,6 @@ try {
   await page.getByPlaceholder('工作流名称').fill(name)
   await page.getByRole('button', { name: '添加节点' }).click()
   await page.locator('.node-palette button', { hasText: '大模型' }).click()
-  await page.getByRole('button', { name: '快速连线' }).click()
   await page.locator('.coze-node', { hasText: '大模型' }).click()
 
   const panel = page.locator('[data-testid="node-config-panel"]')
