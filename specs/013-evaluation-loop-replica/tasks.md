@@ -2,11 +2,13 @@
 
 ## 013.0 Product discovery baseline
 
-- [x] Deploy or attempt to deploy local Coze Loop.
-- [x] Capture browser screenshots for Evaluation entry, Eval Set, Evaluator, Experiment, Run Report, failed-case drilldown, and empty/error states.
+- [x] Attempt to deploy local Coze Loop and record the blocker.
+- [ ] Successfully deploy local Coze Loop to a browser-accessible URL.
+- [ ] Capture browser screenshots for Evaluation entry, Eval Set, Evaluator, Experiment, Run Report, failed-case drilldown, and empty/error states from the locally deployed Coze Loop frontend.
 - [x] Save artifacts under `artifacts/slices/013-evaluation-loop-replica/discovery/`.
-- [x] Write `product-reverse.md` with users, tasks, objects, actions, feedback, page states, and Hify adaptation decisions.
+- [x] Write provisional `product-reverse.md` with users, tasks, objects, actions, feedback, page states, and Hify adaptation decisions based on official docs and source inspection.
 - [x] Record fallback evidence if local Coze Loop cannot run.
+- [ ] Replace or supplement fallback evidence with local browser UAT evidence before using Coze Loop for pixel-level UI/UX replication.
 
 ## 013.1 Evaluation workbench shell
 
@@ -62,5 +64,6 @@
 - [x] 013.6 CSV import and run export.
 - [x] 013.7 LLM judge evaluators.
 - [x] 013.8 Workflow and Chatflow target adapters.
+- [ ] Verify 013.8 target adapters expose Workflow/Chatflow type labels and deep links to the 011/012 full-page canvas/run evidence instead of embedding canvas UI inside Evaluation.
 - [x] 013.9 Selected-case rerun.
 - [x] 013.10 Compare analysis with score delta, pass-rate delta, newly failed cases, recovered cases, and unchanged failures.

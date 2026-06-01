@@ -1,13 +1,14 @@
-# Plan 014: Agent Workbench MVP
+# Plan 014: Agent Workbench
 
 ## Architecture
 
 Implement the workbench as a frontend-first product upgrade over the existing
-Agent, chat, provider, knowledge, workflow, and MCP APIs.
+Agent, chat, provider, knowledge, workflow, MCP, and evaluation APIs.
 
-The MVP should avoid backend schema churn. New backend work should be limited to
-small compatibility helpers only when existing APIs make the UX unnecessarily
-fragile. The canonical Agent persistence remains:
+The first milestone should avoid backend schema churn. New backend work should
+be limited to small compatibility helpers only when existing APIs make the UX
+unnecessarily fragile. The canonical Agent persistence for the first milestone
+remains:
 
 - `agent.name`
 - `agent.description`
@@ -20,6 +21,11 @@ fragile. The canonical Agent persistence remains:
 - `agent.workflow_id`
 - `agent_tool`
 
+Later milestones may add additive tables for Agent versions, publish records,
+starter prompts, variables, memory, tool policy, retrieval settings, release
+gates, access control, and telemetry. They must not break existing Agent CRUD or
+chat contracts.
+
 ## Frontend Structure
 
 Add a workbench feature area under `frontend/src/views/agent/`:
@@ -27,9 +33,15 @@ Add a workbench feature area under `frontend/src/views/agent/`:
 - `AgentWorkbench.vue`: route page and layout.
 - `AgentWorkbenchShell.vue`: header, section navigation, responsive preview slot.
 - `AgentCoreEditor.vue`: identity, model, instructions, generation settings.
-- `AgentCapabilityPanel.vue`: capability cards and selectors.
+- `AgentCapabilityPanel.vue`: capability cards, selectors, and deep links to linked Workflow/Chatflow canvas routes.
 - `AgentRuntimeSummary.vue`: mirrors backend mode precedence.
 - `AgentPreviewPanel.vue`: saved-Agent chat preview using existing chat APIs.
+- `AgentStarterPanel.vue`: opening message and suggested questions.
+- `AgentReleasePanel.vue`: versions, release state, publish targets, gates.
+- `AgentMemoryVariablesPanel.vue`: single-Agent variables and memory scopes.
+- `AgentToolPolicyPanel.vue`: per-tool policy once metadata is durable.
+- `AgentKnowledgeSettingsPanel.vue`: retrieval settings and multi-KB selection.
+- `AgentAnalyticsPanel.vue`: access, sharing, catalog, and metrics shell.
 - `agentWorkbench.ts`: form defaults, API adapters, mode summary helpers.
 - Focused tests next to the workbench helpers/components.
 
@@ -76,7 +88,10 @@ Use existing chat APIs:
 4. Send preview messages through the existing SSE stream endpoint.
 5. Reset deletes or abandons the local preview session and starts a fresh one.
 
-Do not add a separate unsaved draft execution endpoint in the MVP.
+Do not add a separate unsaved draft execution endpoint in the first milestone.
+
+After versioning lands, preview can target draft, latest saved, or released
+Agent versions. Until then, preview targets the saved draft Agent.
 
 ## Backend Strategy
 
@@ -96,6 +111,21 @@ Potential helper, only if needed:
 Prefer not to add it in the first pass unless tests show option loading is too
 slow or error-prone.
 
+Later backend additions should be additive and module-local:
+
+- Agent starter content: opening message and suggested questions.
+- Agent version snapshots: immutable config copies for preview, evaluation, and
+  publishing.
+- Agent publish records: API/channel shell state and publish history.
+- Agent memory and variables: scoped values used by single-Agent chat runtime.
+- Agent tool policy: policy attached to durable MCP tool identifiers.
+- Agent retrieval settings: multi-KB and retrieval behavior config.
+- Agent release gates: links to Evaluation experiments/runs.
+- Agent access/analytics: owner/access rows and usage/quality metrics.
+
+Multi-Agent runtime tables, Agent-to-Agent links, and cross-Agent routing remain
+out of scope.
+
 ## Testing Notes
 
 - Unit tests cover form defaults, request mapping, dirty state, mode summary, and
@@ -106,8 +136,13 @@ slow or error-prone.
 - Browser UAT must capture desktop and mobile screenshots.
 - Preserve all existing spec 004 Agent tests before deleting or bypassing the old
   dialog behavior.
+- Advanced slices must include migration/alembic tests when adding tables.
+- Advanced runtime slices must include chat integration tests proving the new
+  configuration is honored.
 
 ## Rollout Order
+
+### Milestone 1: Authoring Loop
 
 1. Build the route shell without changing the list modal behavior.
 2. Implement core form load/save using existing endpoints.
@@ -117,10 +152,33 @@ slow or error-prone.
 6. Add embedded preview.
 7. Remove or retire the old modal only after equivalent UAT evidence exists.
 
-## Out-of-Scope Implementation Notes
+### Milestone 2: Releaseable Agent
+
+1. Add opening message and suggested questions.
+2. Add Agent version snapshots and release state.
+3. Add publish channel shells.
+4. Add evaluation release gates.
+
+### Milestone 3: Smarter Single-Agent Runtime
+
+1. Add memory and variables.
+2. Add prompt optimization with explicit approval.
+3. Add fine-grained tool policy.
+4. Add knowledge retrieval settings.
+5. Add deep-linked or full-screen/split Workflow and Chatflow authoring after
+   011/012 are stable.
+
+### Milestone 4: Operations
+
+1. Add owner/access and sharing controls.
+2. Add catalog/marketplace shell for approved Agents.
+3. Add usage, quality, and release telemetry.
+
+## Sequencing And Non-Scope Notes
 
 - Do not implement multi-Agent routing inside chat service for this spec.
-- Do not add publish/channel routes.
-- Do not add prompt optimization calls.
-- Do not add new persistent memory or variable scopes.
-- Do not embed Workflow/Chatflow canvas until 011/012 are production-ready.
+- Do not add Agent-to-Agent handoff, group chat, planner/worker teams, or
+  cross-Agent routing.
+- Sequence Workflow/Chatflow authoring links after 011/012 are production-ready. Prefer same-app deep links or full-screen/split authoring; do not place the canvas inside a small capability card or modal.
+- Sequence external channel adapters after the publish shell and release/version
+  contracts are stable.

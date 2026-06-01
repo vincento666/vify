@@ -1,4 +1,4 @@
-# Tasks 014: Agent Workbench MVP
+# Tasks 014: Agent Workbench
 
 ## 014.1 Workbench shell
 
@@ -54,4 +54,93 @@
 - [ ] Add guided empty states for missing models, MCP servers, knowledge bases, and workflows.
 - [ ] Verify desktop and mobile responsive layouts with browser screenshots.
 - [ ] Update `uat.md` with create/edit/capability/preview evidence.
+- [ ] Gates pass.
+
+## 014.7 Chat entry polish
+
+- [ ] RED: opening message and suggested-question UI tests fail.
+- [ ] Add persisted opening message and suggested question fields.
+- [ ] Show opening message in workbench preview and chat welcome state.
+- [ ] Allow clicking a suggested question to send it as the next preview/chat message.
+- [ ] Gates pass.
+
+## 014.8 Version and release snapshots
+
+- [ ] RED: Agent version snapshot contract test fails.
+- [ ] Add additive Agent version storage and migrations.
+- [ ] Snapshot all runtime-relevant Agent config into immutable versions.
+- [ ] Add draft/latest/released selector in preview.
+- [ ] Add release action with version diff summary.
+- [ ] Gates pass.
+
+## 014.9 Publish channels
+
+- [ ] RED: publish shell API/UI tests fail.
+- [ ] Add publish records and release-only publish guard.
+- [ ] Add API/channel publish shells with status, endpoint/channel placeholder, and unpublish.
+- [ ] Preserve real external channel adapters for later adapter-specific specs.
+- [ ] Gates pass.
+
+## 014.10 Memory and variables
+
+- [ ] RED: variable and memory runtime tests fail.
+- [ ] Add workbench-managed Agent variables with defaults and validation.
+- [ ] Add durable single-Agent memory scopes.
+- [ ] Inject variables and memory into chat prompt/runtime deterministically.
+- [ ] Show preview controls for overriding variable values.
+- [ ] Gates pass.
+
+## 014.11 Prompt optimization
+
+- [ ] RED: prompt optimizer UI/service tests fail.
+- [ ] Add model-backed instruction draft/improve action.
+- [ ] Show proposed diff and require explicit apply.
+- [ ] Record prompt optimization audit metadata.
+- [ ] Add cost/error/loading states.
+- [ ] Gates pass.
+
+## 014.12 Tool policy
+
+- [ ] RED: tool policy contract and chat behavior tests fail.
+- [ ] Persist durable per-tool policy after MCP tool metadata is available.
+- [ ] Configure visibility, call mode, argument presets, approval, timeout, and failure behavior.
+- [ ] Make chat tool runner honor policy.
+- [ ] Show policy conflicts and unsupported tool metadata states in the workbench.
+- [ ] Gates pass.
+
+## 014.13 Knowledge retrieval settings
+
+- [ ] RED: retrieval settings and RAG behavior tests fail.
+- [ ] Add multi-knowledge-base selection.
+- [ ] Add topK, score threshold, rerank option, and citation style settings.
+- [ ] Make RAG search honor Agent retrieval settings.
+- [ ] Show retrieval summary in preview responses.
+- [ ] Gates pass.
+
+## 014.14 Flow authoring link
+
+- [ ] RED: linked Workflow/Chatflow authoring route tests fail.
+- [ ] Add `打开画布` deep-link from Workflow/Chatflow capability cards to mature 011/012 full-page canvas routes.
+- [ ] If an embedded mode is added, use full-screen/split authoring and preserve centered bottom toolbar, right config panel, ports, and bottom debug dock.
+- [ ] Do not embed the canvas inside a small card or modal preview.
+- [ ] Preserve workflow graph save/runtime contracts.
+- [ ] Verify Agent workbench preview and capability cards still work after returning from the canvas.
+- [ ] Gates pass.
+
+## 014.15 Evaluation release gate
+
+- [ ] RED: release gate blocks publish when selected evaluation fails.
+- [ ] Link Agent versions to selected 013 experiments.
+- [ ] Show latest run status, score, and failed-case count in release panel.
+- [ ] Block release/publish when required gates fail.
+- [ ] Allow rerun/open report actions through Evaluation routes.
+- [ ] Gates pass.
+
+## 014.16 Access, sharing, catalog, analytics
+
+- [ ] RED: access/sharing/analytics shell tests fail.
+- [ ] Add owner/access records and workbench access summary.
+- [ ] Add share controls and catalog/marketplace visibility shell.
+- [ ] Add usage, latency, error, evaluation, and release telemetry summaries.
+- [ ] Add browser UAT evidence for admin shell and read-only states.
 - [ ] Gates pass.

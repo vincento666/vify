@@ -146,7 +146,7 @@ MVP shows a clear empty or unavailable state. Later slices compare two runs or t
 |------|----------|-------|
 | 013.6 CSV import and run export | Import eval cases from CSV and export run results | Adds file handling and column mapping after core loop is stable |
 | 013.7 LLM judge evaluators | Add model-backed evaluators with criteria, threshold, score, and reason | Depends on provider/model reliability and cost controls |
-| 013.8 Workflow and Chatflow targets | Add target adapters for Workflow and Chatflow | Reuses the same Experiment and Run model |
+| 013.8 Workflow and Chatflow targets | Add target adapters for Workflow and Chatflow | Reuses the same Experiment and Run model; adapters call the 011/012 run contracts and deep-link to the full-page canvas rather than embedding or cloning canvas UI |
 | 013.9 Selected-case rerun | Rerun selected failed cases | Requires careful status and report update behavior |
 | 013.10 Compare analysis | Compare two runs or target versions and identify regressions and improvements | Uses run data after enough experiments exist |
 
@@ -160,8 +160,19 @@ MVP shows a clear empty or unavailable state. Later slices compare two runs or t
 - No production-grade queue, distributed workers, or observability pipeline unless a later spec or later 013 slice adds them.
 - No automatic trace-to-eval ingestion in the MVP.
 
+## Workflow/Chatflow Target Adapter UI Boundary
+
+The 2026-06-01 Coze canvas live audit affects 013 only at the target-link boundary:
+
+- Evaluation target selection may list Workflow and Chatflow targets after 013.8, but it must not clone the canvas inside Evaluation.
+- Target rows should show resource type, name, latest run status if available, and a link that opens the 011/012 full-page canvas route.
+- Workflow cases map eval input to START/input variables.
+- Chatflow cases map eval input to `USER_INPUT` or `sys.query` plus conversation profile variables from 012.
+- Result reports link back to the target canvas/run evidence when debugging is needed.
+
 ## Evidence
 
 - Coze Loop public reference: Evaluation is organized around eval sets, evaluators, and experiments.
 - Coze Loop local discovery evidence: `artifacts/slices/013-evaluation-loop-replica/discovery/`.
+- Workflow/Chatflow canvas live audit used for adapter boundary: `artifacts/research/coze-workflow/spec-011-015-live-audit-20260601.md`.
 - Slice evidence: `artifacts/slices/013-evaluation-loop-replica/{slice-id}/`.

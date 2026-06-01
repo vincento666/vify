@@ -12,8 +12,8 @@
 - Keep API envelope compatibility with `{code, message, data}`.
 - Keep target execution behind adapters:
   - MVP implements only the Agent target adapter, calling the existing chat/agent path with one eval case input.
-  - Later Workflow target adapter calls the existing workflow run path.
-  - Later Chatflow target adapter maps eval case input into conversation-shaped system variables.
+  - Later Workflow target adapter calls the existing workflow run path and links report rows back to the 011 full-page canvas/run evidence.
+  - Later Chatflow target adapter maps eval case input into conversation-shaped system variables and links report rows back to the 012 full-page canvas/run evidence.
 - Keep first implementation synchronous or locally staged, but persist `Run` and `RunCaseResult` status so a later worker or queue can replace execution without changing product concepts.
 
 ## MVP Complexity Budget
