@@ -9,6 +9,8 @@ Date: 2026-06-01
 - START node right-side source endpoint remains visible.
 - Chatflow `猜你想问` choices are vertically stacked and remain separate from the opening message.
 - Workflow/chatflow trial inputs name the real runtime variables they populate.
+- START variable hover uses only the native browser `title`; Element Plus duplicate tooltip is removed.
+- Browser UAT examples cover multi-node flows, including conditional branches and live LLM nodes.
 
 ## Browser UAT
 
@@ -24,6 +26,16 @@ Date: 2026-06-01
   - guide question: `引导问题_UX_1780311508665`
   - trial input labels: `用户消息（sys.query）`, `会话 ID（sys.conversation_id）`, `用户 ID（sys.user_id）`, `渠道（sys.channel）`
   - source endpoint: visible
+- Workflow complex UAT: `http://127.0.0.1:15182/workflows/467/canvas`
+  - nodes: `start`, `router`, `refund_llm`, `invoice`, `fallback`, `end`
+  - refund branch output: `WORKFLOW_COMPLEX_UX_1780317506159`
+  - LLM mock marker: absent
+- Chatflow complex UAT: `http://127.0.0.1:15182/chatflows/465/canvas`
+  - nodes: `start`, `router`, `llm_1`, `fallback`, `end`
+  - guide layout: `flex-direction: column`, `align-items: flex-start`
+  - first guide bubble width: `154.1171875` against list width `326`
+  - guide text align: `left`
+  - live LLM output: `CHATFLOW_COMPLEX_UX_1780317319769`
 
 Screenshots:
 
@@ -32,10 +44,17 @@ Screenshots:
 - `screenshots/in-app-chatflow-guides-labels.png`
 - `workflow-start-port-ellipsis.png`
 - `chatflow-vertical-guides-input-labels.png`
+- `screenshots/in-app-workflow-complex-native-tooltip.png`
+- `screenshots/in-app-workflow-start-hover-native-only.png`
+- `screenshots/in-app-workflow-multi-condition-llm-result.png`
+- `screenshots/in-app-chatflow-complex-guides-left-auto.png`
+- `screenshots/in-app-chatflow-complex-llm-result.png`
+- `workflow-start-port-native-tooltip.png`
+- `chatflow-complex-guides-llm.png`
 
 ## Gate Evidence
 
-- RED/e2e regression: `workflow-canvas-ux-lifecycle.mjs` now fails if START collapses too early, loses the source endpoint, chatflow guide questions are not vertical, or trial inputs omit runtime variable names.
+- RED/e2e regression: `red-latest.txt` captures the expected failure before the fix: START variable hover still created an Element Plus tooltip. `workflow-canvas-ux-lifecycle.mjs` now also fails if START collapses before the next variable would overflow, loses the source endpoint, chatflow guide questions are not vertical/left-aligned/content-width, trial inputs omit runtime variable names, or the complex chatflow LLM branch falls back to mock output.
 - Unit: `npm --prefix frontend run test:unit`
 - Frontend build: `npm --prefix frontend run build`
 - Backend unit/integration: `uv run pytest tests/unit/workflow tests/integration/workflow/test_chatflow_conversation_run.py tests/integration/workflow/test_workflow_condition_run.py -q`
@@ -49,6 +68,6 @@ Screenshots:
 
 ## Variable Effectiveness
 
-- Workflow `USER_INPUT` is validated by the multi-condition workflow run path: `refund`, `invoice`, and fallback inputs route to distinct outputs.
+- Workflow `USER_INPUT` is validated by the multi-condition workflow run path: `refund` routes through a live LLM node, while `invoice` and fallback inputs route to distinct deterministic outputs.
 - Chatflow `sys.query`, `sys.conversation_id`, `sys.user_id`, and `sys.channel` are validated by `chatflowRunProfile` unit coverage, chatflow conversation e2e, and chatflow variable e2e.
 - Global variable references are validated by `chatflow-variables.mjs`; real LLM and knowledge/condition paths are covered by the live e2e scripts listed above.

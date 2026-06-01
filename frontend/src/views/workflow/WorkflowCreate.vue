@@ -158,33 +158,26 @@
             <div class="node-line">
               <span>输入</span>
               <template v-if="nodeProps.data.type === 'START'">
-                <el-tooltip
-                  :content="startVariableTooltip(nodeProps.data.outputVariables)"
-                  placement="top"
-                  effect="light"
+                <div
+                  class="node-variable-list"
+                  data-testid="start-variable-list"
+                  :title="startVariableTooltip(nodeProps.data.outputVariables)"
                 >
-                  <div
-                    class="node-variable-list"
-                    data-testid="start-variable-list"
-                    :title="startVariableTooltip(nodeProps.data.outputVariables)"
+                  <em
+                    v-for="value in startVisibleVariables(nodeProps.data.outputVariables)"
+                    :key="value"
+                    class="node-variable-badge"
                   >
-                    <em
-                      v-for="value in startVisibleVariables(nodeProps.data.outputVariables)"
-                      :key="value"
-                      class="node-variable-badge"
-                      :title="`str.${value}`"
-                    >
-                      str.{{ value }}
-                    </em>
-                    <span
-                      v-if="startHasHiddenVariables(nodeProps.data.outputVariables)"
-                      class="node-variable-more"
-                      data-testid="start-variable-more"
-                    >
-                      ...
-                    </span>
-                  </div>
-                </el-tooltip>
+                    str.{{ value }}
+                  </em>
+                  <span
+                    v-if="startHasHiddenVariables(nodeProps.data.outputVariables)"
+                    class="node-variable-more"
+                    data-testid="start-variable-more"
+                  >
+                    ...
+                  </span>
+                </div>
               </template>
               <template v-else-if="nodeProps.data.type === 'END'">
                 <em class="orange">str.{{ nodeProps.data.outputVariable || 'output' }}</em>
@@ -610,7 +603,7 @@ import { validateWorkflowGraph } from './workflowValidation'
 type OpsTab = 'publish' | 'api' | 'observe'
 type CanvasTab = 'compose' | 'stats' | 'open'
 type ChatflowScopeState = ChatflowVariableScope & { open: boolean }
-const START_VARIABLE_LINE_BUDGET = 300
+const START_VARIABLE_LINE_BUDGET = 350
 const START_VARIABLE_BADGE_BASE_WIDTH = 24
 const START_VARIABLE_CHAR_WIDTH = 7.2
 const START_VARIABLE_GAP = 8
@@ -2032,10 +2025,12 @@ onMounted(loadWorkflow)
 .chatflow-guide-list {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 6px;
 }
 
 .chatflow-guide-list button {
+  width: fit-content;
   max-width: 100%;
   min-height: 28px;
   padding: 4px 9px;
@@ -2045,6 +2040,7 @@ onMounted(loadWorkflow)
   color: #4b50c8;
   font-size: 12px;
   font-weight: 700;
+  text-align: left;
   cursor: pointer;
   overflow-wrap: anywhere;
 }

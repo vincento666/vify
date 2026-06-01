@@ -31,12 +31,11 @@ async function getFlow(page, path, id) {
 
 async function runWorkflowUx(page, marker) {
   const startVariables = [
-    'USER_INPUT',
-    'sys.query',
-    'sys.channel',
-    'sys.user_id',
+    'route',
+    'intent',
+    'locale',
+    'channel',
     'sys.conversation_id',
-    'external.ticket.context_payload',
   ]
   const workflow = await createFlow(page, 'workflows', {
     name: `Workflow Canvas UX ${marker}`,
@@ -83,28 +82,56 @@ async function runWorkflowUx(page, marker) {
   const variableList = startNode.locator('[data-testid="start-variable-list"]')
   await variableList.waitFor({ state: 'visible', timeout: 5000 })
   const variableTitle = await variableList.getAttribute('title')
-  assert(variableTitle?.includes('str.external.ticket.context_payload'), 'Expected START variable tooltip to expose full variable names')
+  assert(variableTitle?.includes('str.sys.conversation_id'), 'Expected START variable title to expose full variable names')
   await variableList.hover()
-  await page.locator('.el-popper', { hasText: 'str.external.ticket.context_payload' }).waitFor({ state: 'visible', timeout: 5000 })
+  await page.waitForTimeout(300)
+  assert(
+    await page.locator('.el-popper', { hasText: 'str.sys.conversation_id' }).count() === 0,
+    'Expected START variable hover to use only the native title tooltip, not an Element Plus tooltip',
+  )
   const startBox = await startNode.boundingBox()
   assert(startBox && startBox.height <= 150, `Expected START node to keep a fixed height, got ${startBox?.height}`)
-  const variableOverflow = await variableList.evaluate((element) => {
+  const variableOverflow = await variableList.evaluate((element, allVariables) => {
     const style = window.getComputedStyle(element)
     const node = element.closest('.coze-node')
     const sourcePort = node?.querySelector('.source-port')
     const nodeStyle = node ? window.getComputedStyle(node) : null
+    const rect = element.getBoundingClientRect()
+    const badges = Array.from(element.querySelectorAll('.node-variable-badge'))
+    const more = element.querySelector('[data-testid="start-variable-more"]')
+    const gap = Number.parseFloat(style.columnGap || style.gap || '0') || 0
+    const nextValue = allVariables[badges.length]
+    let nextWidth = 0
+    if (nextValue) {
+      const probe = document.createElement('em')
+      probe.className = 'node-variable-badge'
+      probe.textContent = `str.${nextValue}`
+      probe.style.position = 'absolute'
+      probe.style.visibility = 'hidden'
+      element.appendChild(probe)
+      nextWidth = probe.getBoundingClientRect().width
+      probe.remove()
+    }
+    const occupiedWidth = badges.reduce((total, badge, index) => (
+      total + badge.getBoundingClientRect().width + (index > 0 ? gap : 0)
+    ), 0) + (more ? gap + more.getBoundingClientRect().width : 0)
     return {
       overflowX: style.overflowX,
-      visibleBadgeCount: element.querySelectorAll('.node-variable-badge').length,
+      listWidth: rect.width,
+      visibleBadgeCount: badges.length,
       moreText: element.querySelector('[data-testid="start-variable-more"]')?.textContent?.trim() || '',
       nodeOverflow: nodeStyle?.overflow || '',
       hasSourcePort: Boolean(sourcePort),
+      occupiedWidth,
+      nextWidth,
+      wouldOverflowWithNext: nextWidth > 0 && occupiedWidth + gap + nextWidth > rect.width,
     }
-  })
+  }, startVariables)
   assert(variableOverflow.overflowX === 'hidden', `Expected START variables to be clipped, got ${variableOverflow.overflowX}`)
-  assert(variableOverflow.visibleBadgeCount > 1, `Expected START to show every variable that fits before ellipsis, got ${variableOverflow.visibleBadgeCount}`)
+  assert(variableOverflow.visibleBadgeCount === 3, `Expected START to show variables until the next one would exceed width, got ${variableOverflow.visibleBadgeCount}`)
   assert(variableOverflow.visibleBadgeCount < startVariables.length, 'Expected START to show a fixed number of variables only')
   assert(variableOverflow.moreText === '...', `Expected overflowed START variables to collapse into a trailing ..., got ${variableOverflow.moreText}`)
+  assert(variableOverflow.wouldOverflowWithNext, `Expected next START variable to overflow before collapsing, got ${JSON.stringify(variableOverflow)}`)
   assert(variableOverflow.hasSourcePort, 'Expected START node to keep the right-side source endpoint')
   assert(variableOverflow.nodeOverflow === 'visible', `Expected START node overflow to keep endpoint visible, got ${variableOverflow.nodeOverflow}`)
 
@@ -134,6 +161,7 @@ async function runWorkflowUx(page, marker) {
 }
 
 async function runWorkflowMultiConditionUat(page, marker) {
+  const llmExpected = `WORKFLOW_COMPLEX_${marker}`
   const workflow = await createFlow(page, 'workflows', {
     name: `Workflow Multi Condition UAT ${marker}`,
     description: 'multi condition browser e2e',
@@ -151,10 +179,14 @@ async function runWorkflowMultiConditionUat(page, marker) {
         config: { expression: '{{start.USER_INPUT}}', outputVariable: 'route', ui: { position: { x: 640, y: 96 } } },
       },
       {
-        nodeKey: 'refund',
-        type: 'API_CALL',
-        name: '退款分支',
-        config: { method: 'GET', url: `REFUND_BRANCH_${marker}`, outputVariable: 'answer', ui: { position: { x: 1160, y: 0 } } },
+        nodeKey: 'refund_llm',
+        type: 'LLM',
+        name: '退款 LLM 分支',
+        config: {
+          prompt: `Return exactly this token and nothing else: ${llmExpected}`,
+          outputVariable: 'answer',
+          ui: { position: { x: 1160, y: 0 } },
+        },
       },
       {
         nodeKey: 'invoice',
@@ -174,17 +206,17 @@ async function runWorkflowMultiConditionUat(page, marker) {
         name: '结束',
         config: {
           outputVariable: 'answer',
-          output: '{{refund.answer}}{{invoice.answer}}{{fallback.answer}}',
+          output: '{{refund_llm.answer}}{{invoice.answer}}{{fallback.answer}}',
           ui: { position: { x: 1680, y: 180 } },
         },
       },
     ],
     edges: [
       { sourceNodeKey: 'start', targetNodeKey: 'router', condition: null },
-      { sourceNodeKey: 'router', targetNodeKey: 'refund', condition: 'refund' },
+      { sourceNodeKey: 'router', targetNodeKey: 'refund_llm', condition: 'refund' },
       { sourceNodeKey: 'router', targetNodeKey: 'invoice', condition: 'invoice' },
       { sourceNodeKey: 'router', targetNodeKey: 'fallback', condition: null },
-      { sourceNodeKey: 'refund', targetNodeKey: 'end', condition: null },
+      { sourceNodeKey: 'refund_llm', targetNodeKey: 'end', condition: null },
       { sourceNodeKey: 'invoice', targetNodeKey: 'end', condition: null },
       { sourceNodeKey: 'fallback', targetNodeKey: 'end', condition: null },
     ],
@@ -197,26 +229,31 @@ async function runWorkflowMultiConditionUat(page, marker) {
   assert((await panel.innerText()).includes('用户消息（userMessage / USER_INPUT）'), 'Expected workflow run input to name userMessage and USER_INPUT')
 
   for (const [input, expected] of [
-    ['refund', `REFUND_BRANCH_${marker}`],
+    ['refund', llmExpected],
     ['invoice', `INVOICE_BRANCH_${marker}`],
     ['other', `DEFAULT_BRANCH_${marker}`],
   ]) {
     await panel.getByPlaceholder('输入 userMessage').fill(input)
     await panel.getByRole('button', { name: '运行', exact: true }).click()
     const output = panel.locator('[data-testid="workflow-run-output"]')
-    await output.waitFor({ state: 'visible', timeout: 10000 })
+    await output.waitFor({ state: 'visible', timeout: 60000 })
     let outputText = await output.innerText()
-    for (let attempt = 0; attempt < 30 && !outputText.includes(expected); attempt += 1) {
-      await page.waitForTimeout(300)
+    for (let attempt = 0; attempt < 80 && !outputText.includes(expected); attempt += 1) {
+      await page.waitForTimeout(750)
       outputText = await output.innerText()
     }
     assert(outputText.includes(expected), `Expected ${input} to route to ${expected}, got: ${outputText}`)
+    if (input === 'refund') {
+      assert(!outputText.includes('LLM mock:'), `Expected workflow refund branch to use live LLM output, got: ${outputText}`)
+    }
   }
 }
 
 async function runChatflowUx(page, marker) {
   const openingText = `开场白_${marker}`
-  const guideQuestion = `引导问题_${marker}`
+  const guideQuestion = `llm_${marker}`
+  const fallbackQuestion = `fallback_${marker}`
+  const answerToken = `CHATFLOW_COMPLEX_${marker}`
   const chatflow = await createFlow(page, 'chatflows', {
     name: `Chatflow Runtime UX ${marker}`,
     description: 'browser e2e',
@@ -228,21 +265,61 @@ async function runChatflowUx(page, marker) {
         config: {
           outputVariables: ['sys.query', 'sys.conversation_id', 'sys.user_id', 'sys.channel', 'sys.round'],
           openingText,
-          guideQuestions: [guideQuestion],
+          guideQuestions: [guideQuestion, fallbackQuestion],
           ui: { position: { x: 120, y: 96 } },
+        },
+      },
+      {
+        nodeKey: 'router',
+        type: 'CONDITION',
+        name: '条件',
+        config: {
+          expression: '{{start.sys.query}}',
+          outputVariable: 'route',
+          ui: { position: { x: 480, y: 96 } },
+        },
+      },
+      {
+        nodeKey: 'llm_1',
+        type: 'LLM',
+        name: '大模型',
+        config: {
+          prompt: `Return exactly this token and nothing else: ${answerToken}`,
+          outputVariable: 'answer',
+          ui: { position: { x: 840, y: 24 } },
+        },
+      },
+      {
+        nodeKey: 'fallback',
+        type: 'API_CALL',
+        name: '默认回复',
+        config: {
+          method: 'GET',
+          url: `CHATFLOW_FALLBACK_${marker}`,
+          outputVariable: 'answer',
+          ui: { position: { x: 840, y: 240 } },
         },
       },
       {
         nodeKey: 'end',
         type: 'END',
         name: '结束',
-        config: { outputVariable: 'output', output: '{{start.sys.query}}', ui: { position: { x: 780, y: 96 } } },
+        config: { outputVariable: 'output', output: '{{llm_1.answer}}{{fallback.answer}}', ui: { position: { x: 1200, y: 120 } } },
       },
     ],
-    edges: [{ sourceNodeKey: 'start', targetNodeKey: 'end', condition: null }],
+    edges: [
+      { sourceNodeKey: 'start', targetNodeKey: 'router', condition: null },
+      { sourceNodeKey: 'router', targetNodeKey: 'llm_1', condition: guideQuestion },
+      { sourceNodeKey: 'router', targetNodeKey: 'fallback', condition: null },
+      { sourceNodeKey: 'llm_1', targetNodeKey: 'end', condition: null },
+      { sourceNodeKey: 'fallback', targetNodeKey: 'end', condition: null },
+    ],
   })
 
   await page.goto(`${baseUrl}/chatflows/${chatflow.id}/canvas`, { waitUntil: 'networkidle' })
+  for (const nodeKey of ['start', 'router', 'llm_1', 'fallback', 'end']) {
+    await page.locator(`.vue-flow__node[data-id="${nodeKey}"]`).waitFor({ state: 'visible', timeout: 5000 })
+  }
   await page.getByRole('button', { name: '对话试运行' }).click()
   const panel = page.locator('[data-testid="test-run-panel"]')
   await panel.waitFor({ state: 'visible', timeout: 5000 })
@@ -258,10 +335,17 @@ async function runChatflowUx(page, marker) {
   assert(!(await suggested.innerText()).includes(openingText), 'Expected guide questions to stay separate from the opening text')
   const guideLayout = await suggested.locator('.chatflow-guide-list').evaluate((element) => ({
     direction: window.getComputedStyle(element).flexDirection,
+    alignItems: window.getComputedStyle(element).alignItems,
+    listWidth: element.getBoundingClientRect().width,
+    buttonWidth: element.querySelector('button')?.getBoundingClientRect().width || 0,
+    buttonTextAlign: element.querySelector('button') ? window.getComputedStyle(element.querySelector('button')).textAlign : '',
   }))
   assert(guideLayout.direction === 'column', `Expected suggested questions to be vertical, got ${guideLayout.direction}`)
+  assert(guideLayout.alignItems === 'flex-start', `Expected suggested question bubbles to be left aligned, got ${guideLayout.alignItems}`)
+  assert(guideLayout.buttonTextAlign === 'left', `Expected suggested question text to be left aligned, got ${guideLayout.buttonTextAlign}`)
+  assert(guideLayout.buttonWidth < guideLayout.listWidth * 0.8, `Expected suggested question bubble width to fit content, got ${JSON.stringify(guideLayout)}`)
 
-  await panel.getByTestId('chatflow-guide-question').click()
+  await panel.getByRole('button', { name: guideQuestion, exact: true }).click()
   assert(await panel.getByPlaceholder('输入用户消息').inputValue() === guideQuestion, 'Expected guide question to fill the chat input')
   assert(await suggested.isVisible(), 'Expected guide question choices to remain visible after the user picks one')
   assert((await suggested.innerText()).includes(guideQuestion), 'Expected selected guide question to remain available after click')
@@ -273,7 +357,9 @@ async function runChatflowUx(page, marker) {
   assert(panelText.includes('SUCCEEDED'), 'Expected chatflow run to succeed')
   assert(panelText.includes(openingText), 'Expected opening text to remain in the conversation result')
   assert(panelText.includes('猜你想问'), 'Expected suggested questions to remain visually distinct in the conversation result')
-  assert((await assistant.innerText()).includes(guideQuestion), 'Expected chatflow output to use the guide-question input')
+  const assistantText = await assistant.innerText()
+  assert(assistantText.includes(answerToken), `Expected chatflow complex LLM branch to return ${answerToken}, got ${assistantText}`)
+  assert(!assistantText.includes('LLM mock:'), `Expected chatflow complex branch to use live LLM output, got ${assistantText}`)
   assert(await panel.locator('.run-result').count() === 0, 'Expected chatflow trial panel to avoid raw JSON code block')
 
   if (chatflowScreenshotPath) await page.screenshot({ path: chatflowScreenshotPath, fullPage: true })
