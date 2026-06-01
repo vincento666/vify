@@ -27,10 +27,10 @@ async function addAndConfigureLlm(page, prompt) {
 }
 
 async function runWorkflowUat(page) {
-  const marker = `workflow-llm-${Date.now()}`
+  const marker = `WORKFLOW_LIVE_${Date.now()}`
   await page.goto(`${baseUrl}/workflows/create`, { waitUntil: 'networkidle' })
   await page.getByPlaceholder('工作流名称').fill(`Workflow LLM UAT ${marker}`)
-  await addAndConfigureLlm(page, `Workflow LLM UAT {{start.USER_INPUT}}`)
+  await addAndConfigureLlm(page, `Return exactly this token and nothing else: ${marker}. User input: {{start.USER_INPUT}}`)
 
   await page.getByRole('button', { name: '试运行' }).click()
   const panel = page.locator('[data-testid="test-run-panel"]')
@@ -40,11 +40,12 @@ async function runWorkflowUat(page) {
   await page.waitForURL('**/workflows/*/canvas', { timeout: 10000 })
 
   const output = page.locator('[data-testid="workflow-run-output"]')
-  await output.waitFor({ state: 'visible', timeout: 10000 })
+  await output.waitFor({ state: 'visible', timeout: 60000 })
   const outputText = await output.innerText()
   const panelText = await panel.innerText()
   assert(panelText.includes('SUCCEEDED'), 'Expected workflow LLM test run to succeed')
-  assert(outputText.includes(`LLM mock: Workflow LLM UAT ${marker}`), `Expected workflow LLM output, got: ${outputText}`)
+  assert(outputText.includes(marker), `Expected live workflow LLM token, got: ${outputText}`)
+  assert(!outputText.includes('LLM mock:'), `Expected workflow to avoid mock output, got: ${outputText}`)
   assert(await panel.locator('.run-result').count() === 0, 'Expected workflow run panel to omit raw JSON code block')
   if (workflowScreenshotPath) {
     await page.screenshot({ path: workflowScreenshotPath, fullPage: true })
@@ -52,10 +53,10 @@ async function runWorkflowUat(page) {
 }
 
 async function runChatflowUat(page) {
-  const marker = `chatflow-llm-${Date.now()}`
+  const marker = `CHATFLOW_LIVE_${Date.now()}`
   await page.goto(`${baseUrl}/chatflows/create`, { waitUntil: 'networkidle' })
   await page.getByPlaceholder('Chatflow 名称').fill(`Chatflow LLM UAT ${marker}`)
-  await addAndConfigureLlm(page, 'Chatflow LLM UAT {{sys.query}} via {{sys.channel}}')
+  await addAndConfigureLlm(page, `Return exactly this token and nothing else: ${marker}. User input: {{sys.query}}`)
 
   await page.getByRole('button', { name: '对话试运行' }).click()
   const panel = page.locator('[data-testid="test-run-panel"]')
@@ -65,11 +66,12 @@ async function runChatflowUat(page) {
   await page.waitForURL('**/chatflows/*/canvas', { timeout: 10000 })
 
   const assistant = page.locator('.message-bubble.assistant')
-  await assistant.waitFor({ state: 'visible', timeout: 10000 })
+  await assistant.waitFor({ state: 'visible', timeout: 60000 })
   const assistantText = await assistant.innerText()
   const panelText = await panel.innerText()
   assert(panelText.includes('SUCCEEDED'), 'Expected chatflow LLM test run to succeed')
-  assert(assistantText.includes(`LLM mock: Chatflow LLM UAT ${marker} via web`), `Expected chatflow LLM output, got: ${assistantText}`)
+  assert(assistantText.includes(marker), `Expected live chatflow LLM token, got: ${assistantText}`)
+  assert(!assistantText.includes('LLM mock:'), `Expected chatflow to avoid mock output, got: ${assistantText}`)
   assert(await panel.locator('.run-result').count() === 0, 'Expected chatflow run panel to omit raw JSON code block')
   if (chatflowScreenshotPath) {
     await page.screenshot({ path: chatflowScreenshotPath, fullPage: true })

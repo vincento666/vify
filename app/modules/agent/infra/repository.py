@@ -42,6 +42,30 @@ class AgentRepository:
         ).mappings().one_or_none()
         return dict(row) if row else None
 
+    def find_default_live_llm_agent(self) -> dict[str, Any] | None:
+        model_config = Base.metadata.tables["model_config"]
+        provider = Base.metadata.tables["provider"]
+        row = self._session.execute(
+            sa.select(self._agent)
+            .select_from(
+                self._agent.join(
+                    model_config,
+                    model_config.c.id == self._agent.c.model_config_id,
+                ).join(provider, provider.c.id == model_config.c.provider_id)
+            )
+            .where(
+                self._agent.c.enabled.is_(True),
+                self._agent.c.deleted.is_(False),
+                model_config.c.enabled.is_(True),
+                model_config.c.deleted.is_(False),
+                provider.c.enabled.is_(True),
+                provider.c.deleted.is_(False),
+                provider.c.base_url.not_like("mock://%"),
+            )
+            .order_by(self._agent.c.updated_at.desc(), self._agent.c.id.desc())
+        ).mappings().first()
+        return dict(row) if row else None
+
     def list_page(
         self,
         page: int,
