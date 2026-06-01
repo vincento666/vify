@@ -37,8 +37,8 @@
     <section class="canvas-workbench" data-testid="workflow-canvas">
       <aside class="canvas-resource-panel" data-testid="canvas-resource-panel">
         <div class="resource-header">
-          <strong>{{ isChatflowMode ? '对话设置' : '节点库' }}</strong>
-          <span>{{ isChatflowMode ? 'Conversation runtime' : 'Node library' }}</span>
+          <strong>{{ isChatflowMode ? '对话设置' : '画布概览' }}</strong>
+          <span>{{ isChatflowMode ? 'Conversation runtime' : 'Canvas overview' }}</span>
         </div>
 
         <template v-if="isChatflowMode">
@@ -76,24 +76,40 @@
           </section>
         </template>
 
-        <section class="resource-section">
-          <h4>Basic</h4>
-          <button type="button" class="node-library-item fixed" disabled>开始节点</button>
-          <button type="button" class="node-library-item fixed" disabled>结束节点</button>
-        </section>
-        <section class="resource-section">
-          <h4>AI</h4>
-          <button type="button" class="node-library-item" @click="addNode('LLM')">大模型</button>
-          <button type="button" class="node-library-item" @click="addNode('KNOWLEDGE')">知识库</button>
-        </section>
-        <section class="resource-section">
-          <h4>Logic / Utilities</h4>
-          <button type="button" class="node-library-item" @click="addNode('CONDITION')">条件</button>
-          <button type="button" class="node-library-item" @click="addNode('API_CALL')">API 调用</button>
-        </section>
+        <template v-else>
+          <section class="resource-section" data-testid="workflow-overview-panel">
+            <h4>画布</h4>
+            <dl class="resource-stats">
+              <div>
+                <dt>节点</dt>
+                <dd>{{ graph.nodes.length }}</dd>
+              </div>
+              <div>
+                <dt>连线</dt>
+                <dd>{{ graph.edges.length }}</dd>
+              </div>
+              <div>
+                <dt>状态</dt>
+                <dd>{{ workflowStatus }}</dd>
+              </div>
+            </dl>
+          </section>
+          <section class="resource-section">
+            <h4>选中节点</h4>
+            <div class="selected-node-summary">
+              <strong>{{ selectedNode?.name || '未选择' }}</strong>
+              <span>{{ selectedNode?.nodeKey || '-' }}</span>
+            </div>
+          </section>
+        </template>
       </aside>
 
-      <div class="canvas-stage-shell">
+      <div
+        ref="canvasStageRef"
+        class="canvas-stage-shell"
+        tabindex="0"
+        @keydown="handleCanvasKeydown"
+      >
       <VueFlow
         v-model:nodes="flowNodes"
         v-model:edges="flowEdges"
@@ -101,6 +117,7 @@
         :default-viewport="{ x: 0, y: 0, zoom: 1 }"
         :min-zoom="0.3"
         :max-zoom="1.6"
+        :nodes-draggable="true"
         fit-view-on-init
         @connect="handleConnect"
         @node-drag-stop="handleNodeDragStop"
@@ -123,15 +140,6 @@
                 <component :is="nodeIcon(nodeProps.data.type)" />
               </div>
               <div class="node-title">{{ nodeProps.data.name }}</div>
-              <button
-                v-if="nodeProps.data.type !== 'START' && nodeProps.data.type !== 'END'"
-                type="button"
-                class="node-menu"
-                aria-label="删除节点"
-                @click.stop="removeNode(nodeProps.data.nodeKey)"
-              >
-                ×
-              </button>
             </div>
             <div class="node-line">
               <span>输入</span>
@@ -407,25 +415,43 @@
       </div>
 
       <div class="canvas-toolbar">
-        <button type="button" aria-label="缩小">−</button>
+        <button type="button" aria-label="缩小">
+          <el-icon><Minus /></el-icon>
+        </button>
         <span>100%</span>
-        <button type="button" aria-label="适应画布">□</button>
-        <button type="button" aria-label="布局">⌘</button>
+        <button type="button" aria-label="适应画布">
+          <el-icon><FullScreen /></el-icon>
+        </button>
+        <button type="button" aria-label="布局">
+          <el-icon><Rank /></el-icon>
+        </button>
+        <button class="toolbar-add-node" type="button" aria-label="添加节点" @click="paletteOpen = !paletteOpen">
+          <el-icon><Plus /></el-icon>
+          <span>添加节点</span>
+        </button>
       </div>
-
-      <button class="add-node-button" type="button" @click="paletteOpen = !paletteOpen">
-        <span>+</span> 添加节点
-      </button>
       </div>
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, markRaw, onMounted, ref, watch } from 'vue'
+import { computed, markRaw, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Connection, Cpu, DataAnalysis, Finished, Operation, Share } from '@element-plus/icons-vue'
+import {
+  ArrowLeft,
+  Connection,
+  Cpu,
+  DataAnalysis,
+  Finished,
+  FullScreen,
+  Minus,
+  Operation,
+  Plus,
+  Rank,
+  Share,
+} from '@element-plus/icons-vue'
 import { Handle, MarkerType, Position, VueFlow, type Edge, type Node } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
@@ -479,6 +505,7 @@ const saving = ref(false)
 const running = ref(false)
 const loading = ref(false)
 const canvasTab = ref<CanvasTab>('compose')
+const canvasStageRef = ref<HTMLElement | null>(null)
 const selectedNodeKey = ref('')
 const paletteOpen = ref(false)
 const activeVariableField = ref('')
@@ -598,7 +625,7 @@ const flowNodes = computed<Node[]>({
         outputVariable: node.config.outputVariable,
         outputVariables: Array.isArray(node.config.outputVariables) ? node.config.outputVariables.map(String) : [],
       },
-      draggable: node.type !== 'START' && node.type !== 'END',
+      draggable: true,
     }))
   },
   set(nextNodes) {
@@ -665,6 +692,23 @@ function removeNode(nodeKey: string) {
   markGraphDirty()
 }
 
+function canKeyboardDeleteNode() {
+  return Boolean(selectedNode.value && selectedNode.value.type !== 'START' && selectedNode.value.type !== 'END')
+}
+
+function isEditableTarget(target: EventTarget | null) {
+  const element = target instanceof HTMLElement ? target : null
+  if (!element) return false
+  return Boolean(element.closest('input, textarea, select, [contenteditable="true"], .el-input, .el-textarea'))
+}
+
+function handleCanvasKeydown(event: KeyboardEvent) {
+  if (!['Backspace', 'Delete', 'Enter'].includes(event.key)) return
+  if (isEditableTarget(event.target) || !canKeyboardDeleteNode()) return
+  event.preventDefault()
+  removeNode(selectedNode.value!.nodeKey)
+}
+
 function handleConnect(connection: any) {
   graph.value = connectWorkflowNodes(graph.value, connection.source, connection.target)
   markGraphDirty()
@@ -680,6 +724,7 @@ function handleNodeClick(event: any) {
   selectedNodeKey.value = event?.node?.id || ''
   activeVariableField.value = ''
   variableSearch.value = ''
+  void nextTick(() => canvasStageRef.value?.focus())
 }
 
 function updateSelectedNode(patch: { name?: string; config?: Record<string, any> }) {
@@ -1159,8 +1204,7 @@ onMounted(loadWorkflow)
 }
 
 .resource-group > button,
-.resource-items button,
-.node-library-item {
+.resource-items button {
   width: 100%;
   display: flex;
   align-items: flex-start;
@@ -1195,22 +1239,62 @@ onMounted(loadWorkflow)
   flex-direction: column;
 }
 
-.node-library-item {
-  min-height: 38px;
-  margin-bottom: 8px;
-  font-weight: 700;
-}
-
-.node-library-item:not(.fixed):hover,
 .resource-items button:hover,
 .resource-group > button:hover {
   border-color: #cdd3f7;
   background: #f5f6ff;
 }
 
-.node-library-item.fixed {
+.resource-stats {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin: 0;
+}
+
+.resource-stats div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid #e1e5ef;
+  border-radius: 8px;
+  background: #f8f9fc;
+}
+
+.resource-stats dt {
+  color: #70798d;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.resource-stats dd {
+  margin: 0;
+  color: #30364a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.selected-node-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid #e1e5ef;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.selected-node-summary strong {
+  color: #30364a;
+  font-size: 13px;
+}
+
+.selected-node-summary span {
   color: #8b94a8;
-  cursor: default;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
 }
 
 .canvas-stage-shell {
@@ -1218,6 +1302,10 @@ onMounted(loadWorkflow)
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+}
+
+.canvas-stage-shell:focus {
+  outline: none;
 }
 
 .coze-flow {
@@ -1247,6 +1335,12 @@ onMounted(loadWorkflow)
   background: linear-gradient(180deg, #fff, #fbfcff);
   box-shadow: 0 10px 28px rgba(36, 45, 67, 0.08);
   color: #30364a;
+  cursor: grab;
+  user-select: none;
+}
+
+.coze-node:active {
+  cursor: grabbing;
 }
 
 .coze-node.selected {
@@ -1293,17 +1387,6 @@ onMounted(loadWorkflow)
   line-height: 32px;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.node-menu {
-  width: 28px;
-  height: 28px;
-  border: 0;
-  border-radius: 6px;
-  background: #eef1f8;
-  color: #677084;
-  font-size: 20px;
-  cursor: pointer;
 }
 
 .node-line {
@@ -1355,8 +1438,8 @@ onMounted(loadWorkflow)
 
 .node-palette {
   position: absolute;
-  right: 18px;
-  bottom: 86px;
+  left: 50%;
+  bottom: 72px;
   z-index: 10;
   width: 220px;
   padding: 10px;
@@ -1364,6 +1447,7 @@ onMounted(loadWorkflow)
   border-radius: 12px;
   background: #fff;
   box-shadow: 0 16px 40px rgba(34, 41, 63, 0.16);
+  transform: translateX(-50%);
 }
 
 .node-config-panel {
@@ -1738,6 +1822,9 @@ onMounted(loadWorkflow)
 .canvas-toolbar button {
   width: 28px;
   height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -1750,27 +1837,20 @@ onMounted(loadWorkflow)
   font-weight: 600;
 }
 
-.add-node-button {
-  position: absolute;
-  right: 18px;
-  bottom: 16px;
-  z-index: 5;
-  height: 44px;
-  min-width: 144px;
-  border: 0;
-  border-radius: 12px;
+.canvas-toolbar .toolbar-add-node {
+  width: auto;
+  min-width: 104px;
+  gap: 6px;
+  padding: 0 12px;
+  border-radius: 8px;
   background: #6366f1;
   color: #fff;
-  font-size: 15px;
-  font-weight: 700;
-  cursor: pointer;
-  box-shadow: 0 10px 30px rgba(99, 102, 241, 0.24);
 }
 
-.add-node-button span {
-  margin-right: 6px;
-  font-size: 20px;
-  line-height: 0;
+.canvas-toolbar .toolbar-add-node span {
+  padding: 0;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 @media (max-width: 980px) {

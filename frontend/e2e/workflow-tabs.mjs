@@ -33,7 +33,7 @@ try {
   await page.waitForURL('**/workflows')
   await page.getByRole('button', { name: '新建工作流' }).click()
   await page.waitForURL('**/workflows/create')
-  await assertBodyIncludes(page, '节点库')
+  await assertBodyIncludes(page, '画布概览')
   await assertBodyIncludes(page, '编排')
 
   if (screenshotPath) {
