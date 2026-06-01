@@ -1,0 +1,6 @@
+PASS workflow/chatflow canvas UX lifecycle e2e
+PASS chatflow conversation run e2e
+PASS chatflow variable selector e2e
+PASS workflow node drag and keyboard delete e2e
+PASS workflow/chatflow LLM canvas run e2e
+PASS workflow/chatflow knowledge condition canvas run e2e

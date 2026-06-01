@@ -306,21 +306,33 @@
 
         <section class="config-section">
           <div class="section-title"><span>⌄</span> 输入</div>
-          <el-input
-            v-model="testInput"
-            type="textarea"
-            :rows="4"
-            :placeholder="isChatflowMode ? '输入用户消息' : '输入 userMessage'"
-          />
+          <div class="run-input-field">
+            <label>{{ isChatflowMode ? '用户消息（sys.query）' : '用户消息（userMessage / USER_INPUT）' }}</label>
+            <el-input
+              v-model="testInput"
+              type="textarea"
+              :rows="4"
+              :placeholder="isChatflowMode ? '输入用户消息' : '输入 userMessage'"
+            />
+          </div>
           <div v-if="isChatflowMode" class="chatflow-profile-grid">
-            <el-input v-model="testProfile.conversationId" placeholder="conversation_id" />
-            <el-input v-model="testProfile.userId" placeholder="user_id" />
-            <el-select v-model="testProfile.channel" placeholder="channel">
-              <el-option label="web" value="web" />
-              <el-option label="api" value="api" />
-              <el-option label="feishu" value="feishu" />
-              <el-option label="dingtalk" value="dingtalk" />
-            </el-select>
+            <div class="run-input-field compact">
+              <label>会话 ID（sys.conversation_id）</label>
+              <el-input v-model="testProfile.conversationId" placeholder="conversation_id" />
+            </div>
+            <div class="run-input-field compact">
+              <label>用户 ID（sys.user_id）</label>
+              <el-input v-model="testProfile.userId" placeholder="user_id" />
+            </div>
+            <div class="run-input-field compact">
+              <label>渠道（sys.channel）</label>
+              <el-select v-model="testProfile.channel" placeholder="channel">
+                <el-option label="web" value="web" />
+                <el-option label="api" value="api" />
+                <el-option label="feishu" value="feishu" />
+                <el-option label="dingtalk" value="dingtalk" />
+              </el-select>
+            </div>
           </div>
           <div
             v-if="isChatflowMode && !testResult && (chatflowOpeningText || activeGuideQuestions.length)"
@@ -598,7 +610,11 @@ import { validateWorkflowGraph } from './workflowValidation'
 type OpsTab = 'publish' | 'api' | 'observe'
 type CanvasTab = 'compose' | 'stats' | 'open'
 type ChatflowScopeState = ChatflowVariableScope & { open: boolean }
-const START_VISIBLE_VARIABLE_LIMIT = 1
+const START_VARIABLE_LINE_BUDGET = 300
+const START_VARIABLE_BADGE_BASE_WIDTH = 24
+const START_VARIABLE_CHAR_WIDTH = 7.2
+const START_VARIABLE_GAP = 8
+const START_VARIABLE_MORE_WIDTH = 38
 
 const route = useRoute()
 const router = useRouter()
@@ -806,10 +822,25 @@ function startVariableTooltip(values: string[]) {
   return values.map((value) => `str.${value}`).join(' · ')
 }
 
+function estimateStartVariableBadgeWidth(value: string) {
+  return Math.min(170, Math.ceil(`str.${value}`.length * START_VARIABLE_CHAR_WIDTH + START_VARIABLE_BADGE_BASE_WIDTH))
+}
+
 function startVisibleVariables(values: string[]) {
-  return values.length > START_VISIBLE_VARIABLE_LIMIT + 1
-    ? values.slice(0, START_VISIBLE_VARIABLE_LIMIT)
-    : values
+  const visible: string[] = []
+  let usedWidth = 0
+  for (let index = 0; index < values.length; index += 1) {
+    const width = estimateStartVariableBadgeWidth(values[index])
+    const nextWidth = usedWidth + (visible.length ? START_VARIABLE_GAP : 0) + width
+    const hiddenAfterThis = values.length - index - 1
+    const reserveMoreWidth = hiddenAfterThis > 0
+      ? START_VARIABLE_GAP + START_VARIABLE_MORE_WIDTH
+      : 0
+    if (visible.length > 0 && nextWidth + reserveMoreWidth > START_VARIABLE_LINE_BUDGET) break
+    visible.push(values[index])
+    usedWidth = nextWidth
+  }
+  return visible
 }
 
 function startHasHiddenVariables(values: string[]) {
@@ -1520,7 +1551,7 @@ onMounted(loadWorkflow)
 
 .coze-node.node-start {
   height: 120px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .coze-node:active {
@@ -1925,6 +1956,22 @@ onMounted(loadWorkflow)
   margin-top: 10px;
 }
 
+.run-input-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.run-input-field label {
+  color: #6f778a;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.run-input-field.compact label {
+  font-size: 11px;
+}
+
 .chatflow-runtime-preview {
   display: flex;
   flex-direction: column;
@@ -1984,7 +2031,7 @@ onMounted(loadWorkflow)
 
 .chatflow-guide-list {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 6px;
 }
 

@@ -32,12 +32,11 @@ async function getFlow(page, path, id) {
 async function runWorkflowUx(page, marker) {
   const startVariables = [
     'USER_INPUT',
-    'customer.profile.long_named_membership_level',
-    'conversation.recent_message_summary',
-    'external.ticket.context_payload',
+    'sys.query',
     'sys.channel',
     'sys.user_id',
     'sys.conversation_id',
+    'external.ticket.context_payload',
   ]
   const workflow = await createFlow(page, 'workflows', {
     name: `Workflow Canvas UX ${marker}`,
@@ -91,15 +90,23 @@ async function runWorkflowUx(page, marker) {
   assert(startBox && startBox.height <= 150, `Expected START node to keep a fixed height, got ${startBox?.height}`)
   const variableOverflow = await variableList.evaluate((element) => {
     const style = window.getComputedStyle(element)
+    const node = element.closest('.coze-node')
+    const sourcePort = node?.querySelector('.source-port')
+    const nodeStyle = node ? window.getComputedStyle(node) : null
     return {
       overflowX: style.overflowX,
       visibleBadgeCount: element.querySelectorAll('.node-variable-badge').length,
       moreText: element.querySelector('[data-testid="start-variable-more"]')?.textContent?.trim() || '',
+      nodeOverflow: nodeStyle?.overflow || '',
+      hasSourcePort: Boolean(sourcePort),
     }
   })
   assert(variableOverflow.overflowX === 'hidden', `Expected START variables to be clipped, got ${variableOverflow.overflowX}`)
+  assert(variableOverflow.visibleBadgeCount > 1, `Expected START to show every variable that fits before ellipsis, got ${variableOverflow.visibleBadgeCount}`)
   assert(variableOverflow.visibleBadgeCount < startVariables.length, 'Expected START to show a fixed number of variables only')
   assert(variableOverflow.moreText === '...', `Expected overflowed START variables to collapse into a trailing ..., got ${variableOverflow.moreText}`)
+  assert(variableOverflow.hasSourcePort, 'Expected START node to keep the right-side source endpoint')
+  assert(variableOverflow.nodeOverflow === 'visible', `Expected START node overflow to keep endpoint visible, got ${variableOverflow.nodeOverflow}`)
 
   await page.getByLabel('折叠侧栏').click()
   assert(await page.locator('[data-testid="canvas-resource-panel"]').count() === 0, 'Expected canvas side panel to collapse')
@@ -187,6 +194,7 @@ async function runWorkflowMultiConditionUat(page, marker) {
   await page.getByRole('button', { name: '试运行' }).click()
   const panel = page.locator('[data-testid="test-run-panel"]')
   await panel.waitFor({ state: 'visible', timeout: 5000 })
+  assert((await panel.innerText()).includes('用户消息（userMessage / USER_INPUT）'), 'Expected workflow run input to name userMessage and USER_INPUT')
 
   for (const [input, expected] of [
     ['refund', `REFUND_BRANCH_${marker}`],
@@ -238,12 +246,20 @@ async function runChatflowUx(page, marker) {
   await page.getByRole('button', { name: '对话试运行' }).click()
   const panel = page.locator('[data-testid="test-run-panel"]')
   await panel.waitFor({ state: 'visible', timeout: 5000 })
+  const inputPanelText = await panel.innerText()
+  for (const label of ['用户消息（sys.query）', '会话 ID（sys.conversation_id）', '用户 ID（sys.user_id）', '渠道（sys.channel）']) {
+    assert(inputPanelText.includes(label), `Expected chatflow run input label ${label}`)
+  }
   await panel.getByTestId('chatflow-opening-message').waitFor({ state: 'visible', timeout: 5000 })
   assert((await panel.getByTestId('chatflow-opening-message').innerText()).includes(openingText), 'Expected opening text to appear before a user run')
   const suggested = panel.getByTestId('chatflow-suggested-questions')
   await suggested.waitFor({ state: 'visible', timeout: 5000 })
   assert((await suggested.innerText()).includes('猜你想问'), 'Expected guide questions to appear as separate 猜你想问 choices')
   assert(!(await suggested.innerText()).includes(openingText), 'Expected guide questions to stay separate from the opening text')
+  const guideLayout = await suggested.locator('.chatflow-guide-list').evaluate((element) => ({
+    direction: window.getComputedStyle(element).flexDirection,
+  }))
+  assert(guideLayout.direction === 'column', `Expected suggested questions to be vertical, got ${guideLayout.direction}`)
 
   await panel.getByTestId('chatflow-guide-question').click()
   assert(await panel.getByPlaceholder('输入用户消息').inputValue() === guideQuestion, 'Expected guide question to fill the chat input')
