@@ -4,7 +4,7 @@ import re
 from typing import Any
 
 
-_TEMPLATE_PATTERN = re.compile(r"\{\{\s*([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)\s*\}\}")
+_TEMPLATE_PATTERN = re.compile(r"\{\{\s*([A-Za-z0-9_-]+)\.([A-Za-z0-9_.-]+)\s*\}\}")
 
 
 class ExecutionContext:

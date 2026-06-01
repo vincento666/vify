@@ -669,13 +669,16 @@ const flowEdges = computed<Edge[]>({
     }))
   },
   set(nextEdges) {
+    const currentConditions = new Map(
+      graph.value.edges.map((edge) => [edge.id, edge.condition]),
+    )
     graph.value = {
       ...graph.value,
       edges: nextEdges.map((edge) => ({
         id: edge.id,
         sourceNodeKey: edge.source,
         targetNodeKey: edge.target,
-        condition: null,
+        condition: currentConditions.has(edge.id) ? currentConditions.get(edge.id) ?? null : null,
       })),
     }
     markGraphDirty()

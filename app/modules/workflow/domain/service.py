@@ -11,6 +11,7 @@ from app.modules.chat.domain.llm_request import (
     ProviderBackedOpenAIChatClient,
     ProviderChatConfig,
 )
+from app.modules.knowledge.api.facade import KnowledgeFacade
 from app.modules.provider.api.facade import ProviderModelFacade
 from app.modules.provider.api.schemas import ModelConfigDto
 from app.modules.provider.infra.llm_adapters import OpenAIAdapterParser
@@ -39,6 +40,7 @@ class WorkflowService:
         flow_type: str = "WORKFLOW",
         agent_repository: AgentRepository | None = None,
         model_facade: ProviderModelFacade | None = None,
+        knowledge_facade: KnowledgeFacade | None = None,
         request_builder: OpenAIChatRequestBuilder | None = None,
         parser: OpenAIAdapterParser | None = None,
         llm_client_factory: LlmClientFactory | None = None,
@@ -47,6 +49,7 @@ class WorkflowService:
         self._flow_type = flow_type
         self._agent_repository = agent_repository
         self._model_facade = model_facade
+        self._knowledge_facade = knowledge_facade
         self._request_builder = request_builder or OpenAIChatRequestBuilder()
         self._parser = parser or OpenAIAdapterParser()
         self._llm_client_factory = llm_client_factory or ProviderBackedOpenAIChatClient
@@ -104,6 +107,7 @@ class WorkflowService:
         try:
             result = WorkflowExecutionEngine(
                 self._repository,
+                knowledge_facade=self._knowledge_facade_for(workflow_id),
                 llm_completer=self._llm_completer(workflow_id),
             ).run(workflow_id, dict(request.input))
         except WorkflowExecutionError as exc:
@@ -114,6 +118,14 @@ class WorkflowService:
             output=result.output,
         )
         return response.model_dump(by_alias=True)
+
+    def _knowledge_facade_for(self, workflow_id: int) -> KnowledgeFacade | None:
+        nodes = self._repository.list_nodes(workflow_id)
+        if not any(node["type"] == "KNOWLEDGE" for node in nodes):
+            return None
+        if self._knowledge_facade is None:
+            raise BizError(ErrorCode.BAD_REQUEST, "Workflow knowledge facade is not configured")
+        return self._knowledge_facade
 
     def _llm_completer(self, workflow_id: int) -> _AgentBackedWorkflowLlmCompleter | None:
         nodes = self._repository.list_nodes(workflow_id)

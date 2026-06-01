@@ -30,6 +30,13 @@ class ExecutionContextTest(unittest.TestCase):
 
         self.assertEqual(context.render("{{missing.value}} fallback"), " fallback")
 
+    def test_resolves_flat_variables_that_contain_dots(self) -> None:
+        self.assertIsNotNone(ExecutionContext)
+        context = ExecutionContext()
+        context.set_output("start", {"sys.query": "refund"})
+
+        self.assertEqual(context.render("query={{start.sys.query}}"), "query=refund")
+
 
 if __name__ == "__main__":
     unittest.main()

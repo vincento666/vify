@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_session
 from app.core.responses import success
 from app.modules.agent.infra.repository import AgentRepository
+from app.modules.knowledge.api.facade import KnowledgeFacade
 from app.modules.provider.api.facade import ProviderModelFacade
 from app.modules.workflow.domain.service import WorkflowService
 from app.modules.workflow.infra.repository import WorkflowRepository
@@ -21,6 +22,7 @@ def get_workflow_service(session: Session = Depends(get_session)) -> WorkflowSer
         flow_type="WORKFLOW",
         agent_repository=AgentRepository(session),
         model_facade=ProviderModelFacade(session),
+        knowledge_facade=KnowledgeFacade(session),
     )
 
 
@@ -30,6 +32,7 @@ def get_chatflow_service(session: Session = Depends(get_session)) -> WorkflowSer
         flow_type="CHATFLOW",
         agent_repository=AgentRepository(session),
         model_facade=ProviderModelFacade(session),
+        knowledge_facade=KnowledgeFacade(session),
     )
 
 
