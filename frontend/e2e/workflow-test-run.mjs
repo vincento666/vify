@@ -30,11 +30,12 @@ try {
   await panel.getByRole('button', { name: '运行', exact: true }).click()
   await page.waitForURL('**/workflows/*/canvas', { timeout: 10000 })
 
-  const result = panel.locator('.run-result')
+  const result = panel.locator('[data-testid="workflow-run-output"]')
   await result.waitFor({ state: 'visible', timeout: 10000 })
   const resultText = await result.innerText()
-  assert(resultText.includes('"status": "SUCCEEDED"'), 'Expected successful workflow test run status')
-  assert(resultText.includes('"output"'), 'Expected workflow test run output payload')
+  const panelText = await panel.innerText()
+  assert(panelText.includes('SUCCEEDED'), 'Expected successful workflow test run status')
+  assert(resultText.includes('output'), 'Expected workflow test run output field')
 
   if (screenshotPath) {
     await page.screenshot({ path: screenshotPath, fullPage: true })

@@ -31,7 +31,7 @@ try {
   await testPanel.getByPlaceholder('输入 userMessage').fill('hello publish gate')
   await testPanel.getByRole('button', { name: '运行', exact: true }).click()
   await page.waitForURL('**/workflows/*/canvas', { timeout: 10000 })
-  await testPanel.locator('.run-result').waitFor({ state: 'visible', timeout: 10000 })
+  await testPanel.locator('[data-testid="workflow-run-output"]').waitFor({ state: 'visible', timeout: 10000 })
 
   await page.getByRole('button', { name: '发布' }).click()
   await opsPanel.waitFor({ state: 'visible', timeout: 5000 })

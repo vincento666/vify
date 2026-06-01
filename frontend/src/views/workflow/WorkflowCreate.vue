@@ -293,11 +293,21 @@
 
         <section v-if="testResult" class="config-section">
           <div class="section-title"><span>✓</span> 运行结果</div>
+          <div class="run-summary">
+            <span class="run-status" :class="{ success: testResult.status === 'SUCCEEDED' }">{{ testResult.status }}</span>
+            <span v-if="testResult.runId">Run #{{ testResult.runId }}</span>
+          </div>
           <div v-if="isChatflowMode" class="conversation-result">
             <div class="message-bubble user">{{ testInput }}</div>
             <div class="message-bubble assistant">{{ chatflowAssistantText }}</div>
           </div>
-          <pre class="run-result">{{ JSON.stringify(testResult, null, 2) }}</pre>
+          <div v-else class="workflow-result-card" data-testid="workflow-run-output">
+            <div v-for="row in runOutputRows" :key="row.key" class="workflow-result-row">
+              <span>{{ row.key }}</span>
+              <strong>{{ row.value }}</strong>
+            </div>
+            <div v-if="runOutputRows.length === 0" class="workflow-result-empty">暂无输出</div>
+          </div>
         </section>
 
         <div class="test-run-actions">
@@ -599,6 +609,13 @@ const chatflowAssistantText = computed(() => {
   const output = testResult.value?.output || {}
   return String(output.output ?? output.answer ?? JSON.stringify(output))
 })
+const runOutputRows = computed(() => {
+  const output = testResult.value?.output || {}
+  return Object.entries(output).map(([key, value]) => ({
+    key,
+    value: formatRunOutputValue(value),
+  }))
+})
 const filteredVariableGroups = computed(() => {
   const keyword = variableSearch.value.trim().toLowerCase()
   if (!keyword) return variableGroups.value
@@ -677,6 +694,13 @@ function outputBadge(type: WorkflowCanvasNodeType, configured?: string) {
   if (configured) return `str.${configured}`
   if (type === 'CONDITION') return 'str.route'
   return 'str.output'
+}
+
+function formatRunOutputValue(value: unknown) {
+  if (value === null || value === undefined) return '空'
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return JSON.stringify(value)
 }
 
 function addNode(type: Exclude<WorkflowCanvasNodeType, 'START' | 'END'>) {
@@ -837,6 +861,12 @@ function quickConnect() {
     graph.value = connectWorkflowNodes(graph.value, 'start', 'end')
     markGraphDirty()
     return
+  }
+  graph.value = {
+    ...graph.value,
+    edges: graph.value.edges.filter((edge) =>
+      edge.sourceNodeKey !== 'start' && edge.sourceNodeKey !== middleNode.nodeKey,
+    ),
   }
   graph.value = connectWorkflowNodes(connectWorkflowNodes(graph.value, 'start', middleNode.nodeKey), middleNode.nodeKey, 'end')
   markGraphDirty()
@@ -1642,16 +1672,68 @@ onMounted(loadWorkflow)
   line-height: 1.8;
 }
 
-.run-result {
-  max-height: 220px;
-  margin: 0;
-  padding: 10px;
-  border-radius: 8px;
-  overflow: auto;
-  background: #171a24;
-  color: #d8def0;
+.run-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: #6b7487;
   font-size: 12px;
-  line-height: 1.6;
+  font-weight: 700;
+}
+
+.run-status {
+  min-width: 78px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #fee2e2;
+  color: #b42318;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.3;
+  text-align: center;
+}
+
+.run-status.success {
+  background: #dcfce7;
+  color: #167a3a;
+}
+
+.workflow-result-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.workflow-result-row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #e1e5ef;
+  border-radius: 9px;
+  background: #f8f9fc;
+}
+
+.workflow-result-row span {
+  color: #7c8598;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.workflow-result-row strong {
+  color: #252b3d;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.workflow-result-empty {
+  padding: 10px;
+  border-radius: 9px;
+  background: #f8f9fc;
+  color: #8b94a8;
+  font-size: 13px;
 }
 
 .chatflow-profile-grid {
