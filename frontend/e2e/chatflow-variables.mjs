@@ -23,10 +23,13 @@ try {
   }
 
   await variablePanel.locator('button', { hasText: '{{sys.query}}' }).click()
+  await variablePanel.locator('.resource-group > button', { hasText: 'Global' }).click()
+  await variablePanel.locator('button', { hasText: '{{global.brand}}' }).click()
   const configPanel = page.locator('[data-testid="node-config-panel"]')
   await configPanel.waitFor({ state: 'visible', timeout: 5000 })
   const template = await configPanel.getByPlaceholder('返回给调用方的文本，可使用变量引用').inputValue()
   assert(template.includes('{{sys.query}}'), 'Expected variable selector to insert sys.query')
+  assert(template.includes('{{global.brand}}'), 'Expected variable selector to insert global.brand')
 
   await page.locator('.canvas-actions').getByRole('button', { name: '保存', exact: true }).click()
   await page.waitForURL('**/chatflows/*/canvas', { timeout: 10000 })
@@ -36,6 +39,7 @@ try {
   await configPanel.waitFor({ state: 'visible', timeout: 5000 })
   const reopenedTemplate = await configPanel.getByPlaceholder('返回给调用方的文本，可使用变量引用').inputValue()
   assert(reopenedTemplate.includes('{{sys.query}}'), 'Expected inserted variable to persist after reopen')
+  assert(reopenedTemplate.includes('{{global.brand}}'), 'Expected inserted global variable to persist after reopen')
 
   if (screenshotPath) {
     await page.screenshot({ path: screenshotPath, fullPage: true })

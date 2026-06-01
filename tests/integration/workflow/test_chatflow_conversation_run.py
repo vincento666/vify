@@ -25,7 +25,10 @@ class ChatflowConversationRunTest(unittest.TestCase):
                             "nodeKey": "end",
                             "type": "END",
                             "name": "End",
-                            "config": {"outputVariable": "output", "output": "收到 {{sys.query}} via {{sys.channel}}"},
+                            "config": {
+                                "outputVariable": "output",
+                                "output": "收到 {{sys.query}} via {{sys.channel}} for {{global.brand}}/{{global.locale}}",
+                            },
                         },
                     ],
                     "edges": [{"sourceNodeKey": "start", "targetNodeKey": "end", "condition": None}],
@@ -34,14 +37,22 @@ class ChatflowConversationRunTest(unittest.TestCase):
             chatflow = create_response.json()["data"]
             run_response = client.post(
                 f"/api/v1/chatflows/{chatflow['id']}/runs",
-                json={"input": {"userMessage": "查订单", "sys.query": "查订单", "sys.channel": "web"}},
+                json={
+                    "input": {
+                        "userMessage": "查订单",
+                        "sys.query": "查订单",
+                        "sys.channel": "web",
+                        "global.brand": "Hify",
+                        "global.locale": "zh-CN",
+                    }
+                },
             )
 
         self.assertEqual(create_response.status_code, 200)
         self.assertEqual(run_response.status_code, 200)
         data = run_response.json()["data"]
         self.assertEqual(data["status"], "SUCCEEDED")
-        self.assertEqual(data["output"]["output"], "收到 查订单 via web")
+        self.assertEqual(data["output"]["output"], "收到 查订单 via web for Hify/zh-CN")
 
 
 if __name__ == "__main__":

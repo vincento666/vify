@@ -20,7 +20,10 @@ describe('buildChatflowRunInput', () => {
       'sys.user_id': 'user-1',
       'sys.channel': 'web',
       'sys.round': 3,
+      'global.brand': 'Hify',
+      'global.locale': 'zh-CN',
     })
+    expect(input.global).toEqual({ brand: 'Hify', locale: 'zh-CN' })
     expect(input['sys.message_id']).toMatch(/^msg-/)
   })
 })

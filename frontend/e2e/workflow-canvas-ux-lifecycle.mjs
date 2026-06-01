@@ -91,16 +91,15 @@ async function runWorkflowUx(page, marker) {
   assert(startBox && startBox.height <= 150, `Expected START node to keep a fixed height, got ${startBox?.height}`)
   const variableOverflow = await variableList.evaluate((element) => {
     const style = window.getComputedStyle(element)
-    const truncatedBadge = Array.from(element.querySelectorAll('.node-variable-badge')).some((badge) =>
-      badge.scrollWidth > badge.clientWidth,
-    )
     return {
       overflowX: style.overflowX,
-      truncatedBadge,
+      visibleBadgeCount: element.querySelectorAll('.node-variable-badge').length,
+      moreText: element.querySelector('[data-testid="start-variable-more"]')?.textContent?.trim() || '',
     }
   })
   assert(variableOverflow.overflowX === 'hidden', `Expected START variables to be clipped, got ${variableOverflow.overflowX}`)
-  assert(variableOverflow.truncatedBadge, 'Expected at least one START variable chip to truncate with ellipsis')
+  assert(variableOverflow.visibleBadgeCount < startVariables.length, 'Expected START to show a fixed number of variables only')
+  assert(variableOverflow.moreText === '...', `Expected overflowed START variables to collapse into a trailing ..., got ${variableOverflow.moreText}`)
 
   await page.getByLabel('折叠侧栏').click()
   assert(await page.locator('[data-testid="canvas-resource-panel"]').count() === 0, 'Expected canvas side panel to collapse')
@@ -248,6 +247,8 @@ async function runChatflowUx(page, marker) {
 
   await panel.getByTestId('chatflow-guide-question').click()
   assert(await panel.getByPlaceholder('输入用户消息').inputValue() === guideQuestion, 'Expected guide question to fill the chat input')
+  assert(await suggested.isVisible(), 'Expected guide question choices to remain visible after the user picks one')
+  assert((await suggested.innerText()).includes(guideQuestion), 'Expected selected guide question to remain available after click')
 
   await panel.getByRole('button', { name: '运行', exact: true }).click()
   const assistant = panel.getByTestId('chatflow-assistant-message')

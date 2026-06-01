@@ -17,7 +17,9 @@ try {
   await page.locator('.coze-node', { hasText: '结束' }).click()
   const configPanel = page.locator('[data-testid="node-config-panel"]')
   await configPanel.waitFor({ state: 'visible', timeout: 5000 })
-  await configPanel.getByPlaceholder('返回给调用方的文本，可使用变量引用').fill('机器人收到 {{sys.query}} via {{sys.channel}}')
+  await configPanel
+    .getByPlaceholder('返回给调用方的文本，可使用变量引用')
+    .fill('机器人收到 {{sys.query}} via {{sys.channel}} for {{global.brand}}/{{global.locale}}')
 
   await page.getByRole('button', { name: '对话试运行' }).click()
   const testPanel = page.locator('[data-testid="test-run-panel"]')
@@ -31,7 +33,7 @@ try {
 
   const assistantText = await testPanel.getByTestId('chatflow-assistant-message').innerText()
   assert(
-    assistantText.includes('机器人收到 查订单 via web'),
+    assistantText.includes('机器人收到 查订单 via web for Hify/zh-CN'),
     `Expected assistant-style output to render sys variables, got: ${assistantText}`,
   )
 

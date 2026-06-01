@@ -169,13 +169,20 @@
                     :title="startVariableTooltip(nodeProps.data.outputVariables)"
                   >
                     <em
-                      v-for="value in nodeProps.data.outputVariables"
+                      v-for="value in startVisibleVariables(nodeProps.data.outputVariables)"
                       :key="value"
                       class="node-variable-badge"
                       :title="`str.${value}`"
                     >
                       str.{{ value }}
                     </em>
+                    <span
+                      v-if="startHasHiddenVariables(nodeProps.data.outputVariables)"
+                      class="node-variable-more"
+                      data-testid="start-variable-more"
+                    >
+                      ...
+                    </span>
                   </div>
                 </el-tooltip>
               </template>
@@ -591,6 +598,7 @@ import { validateWorkflowGraph } from './workflowValidation'
 type OpsTab = 'publish' | 'api' | 'observe'
 type CanvasTab = 'compose' | 'stats' | 'open'
 type ChatflowScopeState = ChatflowVariableScope & { open: boolean }
+const START_VISIBLE_VARIABLE_LIMIT = 1
 
 const route = useRoute()
 const router = useRouter()
@@ -796,6 +804,16 @@ function outputBadge(type: WorkflowCanvasNodeType, configured?: string) {
 function startVariableTooltip(values: string[]) {
   if (!values.length) return '无输出变量'
   return values.map((value) => `str.${value}`).join(' · ')
+}
+
+function startVisibleVariables(values: string[]) {
+  return values.length > START_VISIBLE_VARIABLE_LIMIT + 1
+    ? values.slice(0, START_VISIBLE_VARIABLE_LIMIT)
+    : values
+}
+
+function startHasHiddenVariables(values: string[]) {
+  return startVisibleVariables(values).length < values.length
 }
 
 function formatRunOutputValue(value: unknown) {
@@ -1592,6 +1610,17 @@ onMounted(loadWorkflow)
 
 .node-variable-badge {
   flex: 0 1 auto;
+}
+
+.node-variable-more {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #eef1f7;
+  color: #3e4558;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
 .node-line em.orange {
