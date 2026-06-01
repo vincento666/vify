@@ -3,6 +3,7 @@ import { chromium } from 'playwright'
 const baseUrl = process.env.HIFY_E2E_BASE_URL || 'http://127.0.0.1:5173'
 const workflowScreenshotPath = process.env.HIFY_E2E_WORKFLOW_SCREENSHOT
 const chatflowScreenshotPath = process.env.HIFY_E2E_CHATFLOW_SCREENSHOT
+const startPopoverScreenshotPath = process.env.HIFY_E2E_START_POPOVER_SCREENSHOT
 
 function assert(condition, message) {
   if (!condition) throw new Error(message)
@@ -45,7 +46,7 @@ async function runWorkflowUx(page, marker) {
         nodeKey: 'start',
         type: 'START',
         name: '开始',
-        config: { outputVariables: startVariables, ui: { position: { x: 500, y: 500 } } },
+        config: { outputVariables: startVariables, ui: { position: { x: 500, y: 180 } } },
       },
       {
         nodeKey: 'condition_1',
@@ -82,13 +83,47 @@ async function runWorkflowUx(page, marker) {
   const variableList = startNode.locator('[data-testid="start-variable-list"]')
   await variableList.waitFor({ state: 'visible', timeout: 5000 })
   const variableTitle = await variableList.getAttribute('title')
-  assert(variableTitle?.includes('str.sys.conversation_id'), 'Expected START variable title to expose full variable names')
+  assert(variableTitle === null, 'Expected START variable list to avoid the native title tooltip when using the custom summary popover')
   await variableList.hover()
   await page.waitForTimeout(300)
   assert(
     await page.locator('.el-popper', { hasText: 'str.sys.conversation_id' }).count() === 0,
     'Expected START variable hover to use only the native title tooltip, not an Element Plus tooltip',
   )
+  const variablePopover = startNode.locator('[data-testid="start-variable-popover"]')
+  await variablePopover.waitFor({ state: 'visible', timeout: 5000 })
+  const popoverState = await variablePopover.evaluate((element) => {
+    const style = window.getComputedStyle(element)
+    const rect = element.getBoundingClientRect()
+    const tagElements = Array.from(element.querySelectorAll('.node-variable-popover-badge'))
+    const tags = tagElements.map((tag) => tag.textContent?.trim() || '')
+    const clippedTags = tagElements
+      .filter((tag) => tag.scrollWidth > tag.clientWidth + 1)
+      .map((tag) => tag.textContent?.trim() || '')
+    const centerX = rect.left + rect.width / 2
+    const centerY = rect.top + rect.height / 2
+    const topElement = document.elementFromPoint(centerX, centerY)
+    return {
+      backgroundColor: style.backgroundColor,
+      display: style.display,
+      flexWrap: style.flexWrap,
+      visibility: style.visibility,
+      width: rect.width,
+      isTopLayer: Boolean(topElement && element.contains(topElement)),
+      clippedTags,
+      tags,
+    }
+  })
+  assert(popoverState.visibility === 'visible', `Expected START variable popover to be visible, got ${JSON.stringify(popoverState)}`)
+  assert(popoverState.backgroundColor === 'rgb(255, 255, 255)', `Expected START variable popover to use a white surface, got ${popoverState.backgroundColor}`)
+  assert(popoverState.flexWrap === 'wrap', `Expected START variable popover badges to wrap, got ${popoverState.flexWrap}`)
+  assert(popoverState.width > 220 && popoverState.width < 520, `Expected START variable popover to fit content, got ${popoverState.width}`)
+  assert(popoverState.isTopLayer, `Expected START variable popover to render above neighboring nodes, got ${JSON.stringify(popoverState)}`)
+  assert(popoverState.clippedTags.length === 0, `Expected START variable popover to show full variable names, clipped ${popoverState.clippedTags.join(', ')}`)
+  for (const value of startVariables) {
+    assert(popoverState.tags.includes(`str.${value}`), `Expected START variable popover to include str.${value}, got ${popoverState.tags.join(', ')}`)
+  }
+  if (startPopoverScreenshotPath) await page.screenshot({ path: startPopoverScreenshotPath, fullPage: true })
   const startBox = await startNode.boundingBox()
   assert(startBox && startBox.height <= 150, `Expected START node to keep a fixed height, got ${startBox?.height}`)
   const variableOverflow = await variableList.evaluate((element, allVariables) => {

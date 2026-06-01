@@ -155,28 +155,45 @@
               </div>
               <div class="node-title">{{ nodeProps.data.name }}</div>
             </div>
-            <div class="node-line">
+            <div class="node-line" :class="{ 'start-input-line': nodeProps.data.type === 'START' }">
               <span>输入</span>
               <template v-if="nodeProps.data.type === 'START'">
-                <div
-                  class="node-variable-list"
-                  data-testid="start-variable-list"
-                  :title="startVariableTooltip(nodeProps.data.outputVariables)"
-                >
-                  <em
-                    v-for="value in startVisibleVariables(nodeProps.data.outputVariables)"
-                    :key="value"
-                    class="node-variable-badge"
+                <div class="node-variable-shell">
+                  <div
+                    class="node-variable-list"
+                    data-testid="start-variable-list"
+                    :aria-label="startVariableTooltip(nodeProps.data.outputVariables)"
+                    tabindex="0"
                   >
-                    str.{{ value }}
-                  </em>
-                  <span
+                    <em
+                      v-for="value in startVisibleVariables(nodeProps.data.outputVariables)"
+                      :key="value"
+                      class="node-variable-badge"
+                    >
+                      <span>str.</span>{{ value }}
+                    </em>
+                    <span
+                      v-if="startHasHiddenVariables(nodeProps.data.outputVariables)"
+                      class="node-variable-more"
+                      data-testid="start-variable-more"
+                    >
+                      ...
+                    </span>
+                  </div>
+                  <div
                     v-if="startHasHiddenVariables(nodeProps.data.outputVariables)"
-                    class="node-variable-more"
-                    data-testid="start-variable-more"
+                    class="node-variable-popover"
+                    data-testid="start-variable-popover"
+                    role="tooltip"
                   >
-                    ...
-                  </span>
+                    <em
+                      v-for="value in nodeProps.data.outputVariables"
+                      :key="`popover-${value}`"
+                      class="node-variable-popover-badge"
+                    >
+                      <span>str.</span>{{ value }}
+                    </em>
+                  </div>
                 </div>
               </template>
               <template v-else-if="nodeProps.data.type === 'END'">
@@ -1523,6 +1540,11 @@ onMounted(loadWorkflow)
   width: auto;
 }
 
+.coze-flow :deep(.vue-flow__node:hover),
+.coze-flow :deep(.vue-flow__node:focus-within) {
+  z-index: 50 !important;
+}
+
 .coze-flow :deep(.vue-flow__edge-path) {
   stroke: #5a5cf6;
   stroke-width: 2;
@@ -1609,14 +1631,28 @@ onMounted(loadWorkflow)
   font-weight: 600;
 }
 
-.node-variable-list {
+.node-line.start-input-line {
+  overflow: visible;
+}
+
+.node-variable-shell {
+  position: relative;
   flex: 1;
+  min-width: 0;
+}
+
+.node-variable-list {
+  width: 100%;
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 8px;
   overflow: hidden;
   white-space: nowrap;
+}
+
+.node-variable-list:focus {
+  outline: none;
 }
 
 .node-line em,
@@ -1632,6 +1668,11 @@ onMounted(loadWorkflow)
   white-space: nowrap;
 }
 
+.node-variable-badge span,
+.node-variable-popover-badge span {
+  color: #a9afbd;
+}
+
 .node-variable-badge {
   flex: 0 1 auto;
 }
@@ -1645,6 +1686,55 @@ onMounted(loadWorkflow)
   font-size: 15px;
   font-weight: 700;
   line-height: 1.4;
+}
+
+.node-variable-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: -10px;
+  z-index: 80;
+  width: max-content;
+  max-width: min(460px, calc(100vw - 48px));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  visibility: hidden;
+  opacity: 0;
+  padding: 12px;
+  border: 1px solid #e0e4ef;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 14px 34px rgba(35, 43, 60, 0.16);
+  pointer-events: none;
+  transition: opacity 0.12s ease, visibility 0.12s ease;
+}
+
+.node-variable-popover::before {
+  position: absolute;
+  top: -10px;
+  left: 0;
+  width: 100%;
+  height: 10px;
+  content: "";
+}
+
+.node-variable-shell:hover .node-variable-popover,
+.node-variable-shell:focus-within .node-variable-popover {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.node-variable-popover .node-variable-popover-badge {
+  max-width: none;
+  overflow: visible;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #eef1f7;
+  color: #3e4558;
+  font-style: normal;
+  text-overflow: clip;
+  white-space: nowrap;
 }
 
 .node-line em.orange {

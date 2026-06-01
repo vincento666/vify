@@ -11,6 +11,7 @@ Date: 2026-06-01
 - Workflow/chatflow trial inputs name the real runtime variables they populate.
 - START variable hover uses only the native browser `title`; Element Plus duplicate tooltip is removed.
 - Browser UAT examples cover multi-node flows, including conditional branches and live LLM nodes.
+- START variable summary now follows the Coze-style hover popover: visible badges remain on the node, the trailing `...` indicates hidden variables, and a white wrapped popover shows every variable without truncation.
 
 ## Browser UAT
 
@@ -51,10 +52,12 @@ Screenshots:
 - `screenshots/in-app-chatflow-complex-llm-result.png`
 - `workflow-start-port-native-tooltip.png`
 - `chatflow-complex-guides-llm.png`
+- `start-variable-popover-hover.png`
+- `screenshots/in-app-start-variable-popover.png`
 
 ## Gate Evidence
 
-- RED/e2e regression: `red-latest.txt` captures the expected failure before the fix: START variable hover still created an Element Plus tooltip. `workflow-canvas-ux-lifecycle.mjs` now also fails if START collapses before the next variable would overflow, loses the source endpoint, chatflow guide questions are not vertical/left-aligned/content-width, trial inputs omit runtime variable names, or the complex chatflow LLM branch falls back to mock output.
+- RED/e2e regression: `red-latest.txt` captures the expected failure before the earlier tooltip fix. `red-variable-popover.txt` captures the expected failure before the custom Coze-style variable summary popover existed, and `red-variable-popover-clip.txt` captures the expected failure when long variables were visually clipped. `workflow-canvas-ux-lifecycle.mjs` now also fails if START collapses before the next variable would overflow, loses the source endpoint, the variable popover is missing/occluded/clipped, chatflow guide questions are not vertical/left-aligned/content-width, trial inputs omit runtime variable names, or the complex chatflow LLM branch falls back to mock output.
 - Unit: `npm --prefix frontend run test:unit`
 - Frontend build: `npm --prefix frontend run build`
 - Backend unit/integration: `uv run pytest tests/unit/workflow tests/integration/workflow/test_chatflow_conversation_run.py tests/integration/workflow/test_workflow_condition_run.py -q`
