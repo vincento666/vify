@@ -14,15 +14,21 @@ class WorkflowConditionRunTest(unittest.TestCase):
                 f"/api/v1/workflows/{workflow['id']}/runs",
                 json={"input": {"userMessage": "hello", "intent": "vip"}},
             )
+            billing_response = client.post(
+                f"/api/v1/workflows/{workflow['id']}/runs",
+                json={"input": {"userMessage": "invoice", "intent": "billing"}},
+            )
             default_response = client.post(
                 f"/api/v1/workflows/{workflow['id']}/runs",
                 json={"input": {"userMessage": "hello", "intent": "unknown"}},
             )
 
         self.assertEqual(vip_response.status_code, 200)
+        self.assertEqual(billing_response.status_code, 200)
         self.assertEqual(default_response.status_code, 200)
-        self.assertEqual(vip_response.json()["data"]["output"]["answer"], "LLM mock: VIP hello")
-        self.assertEqual(default_response.json()["data"]["output"]["answer"], "LLM mock: Default hello")
+        self.assertEqual(vip_response.json()["data"]["output"]["answer"], "API mock: GET VIP hello")
+        self.assertEqual(billing_response.json()["data"]["output"]["answer"], "API mock: GET Billing invoice")
+        self.assertEqual(default_response.json()["data"]["output"]["answer"], "API mock: GET Default hello")
 
 
 def _create_condition_workflow(client: TestClient) -> dict[str, object]:
@@ -41,15 +47,21 @@ def _create_condition_workflow(client: TestClient) -> dict[str, object]:
                 },
                 {
                     "nodeKey": "vip",
-                    "type": "LLM",
+                    "type": "API_CALL",
                     "name": "VIP",
-                    "config": {"prompt": "VIP {{start.userMessage}}", "outputVariable": "answer"},
+                    "config": {"method": "GET", "url": "VIP {{start.userMessage}}", "outputVariable": "answer"},
                 },
                 {
                     "nodeKey": "default",
-                    "type": "LLM",
+                    "type": "API_CALL",
                     "name": "Default",
-                    "config": {"prompt": "Default {{start.userMessage}}", "outputVariable": "answer"},
+                    "config": {"method": "GET", "url": "Default {{start.userMessage}}", "outputVariable": "answer"},
+                },
+                {
+                    "nodeKey": "billing",
+                    "type": "API_CALL",
+                    "name": "Billing",
+                    "config": {"method": "GET", "url": "Billing {{start.userMessage}}", "outputVariable": "answer"},
                 },
                 {"nodeKey": "end", "type": "END", "name": "End", "config": {"outputVariable": "answer"}},
             ],
@@ -57,7 +69,9 @@ def _create_condition_workflow(client: TestClient) -> dict[str, object]:
                 {"sourceNodeKey": "start", "targetNodeKey": "router", "condition": None},
                 {"sourceNodeKey": "router", "targetNodeKey": "default", "condition": None},
                 {"sourceNodeKey": "router", "targetNodeKey": "vip", "condition": "vip"},
+                {"sourceNodeKey": "router", "targetNodeKey": "billing", "condition": "billing"},
                 {"sourceNodeKey": "vip", "targetNodeKey": "end", "condition": None},
+                {"sourceNodeKey": "billing", "targetNodeKey": "end", "condition": None},
                 {"sourceNodeKey": "default", "targetNodeKey": "end", "condition": None},
             ],
         },

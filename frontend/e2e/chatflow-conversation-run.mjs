@@ -27,9 +27,9 @@ try {
   await testPanel.getByPlaceholder('user_id').fill('user-e2e')
   await testPanel.getByRole('button', { name: '运行', exact: true }).click()
   await page.waitForURL('**/chatflows/*/canvas', { timeout: 10000 })
-  await page.locator('.message-bubble.assistant').waitFor({ state: 'visible', timeout: 10000 })
+  await testPanel.getByTestId('chatflow-assistant-message').waitFor({ state: 'visible', timeout: 10000 })
 
-  const assistantText = await page.locator('.message-bubble.assistant').innerText()
+  const assistantText = await testPanel.getByTestId('chatflow-assistant-message').innerText()
   assert(
     assistantText.includes('机器人收到 查订单 via web'),
     `Expected assistant-style output to render sys variables, got: ${assistantText}`,

@@ -158,7 +158,26 @@
             <div class="node-line">
               <span>输入</span>
               <template v-if="nodeProps.data.type === 'START'">
-                <em v-for="value in nodeProps.data.outputVariables" :key="value">str.{{ value }}</em>
+                <el-tooltip
+                  :content="startVariableTooltip(nodeProps.data.outputVariables)"
+                  placement="top"
+                  effect="light"
+                >
+                  <div
+                    class="node-variable-list"
+                    data-testid="start-variable-list"
+                    :title="startVariableTooltip(nodeProps.data.outputVariables)"
+                  >
+                    <em
+                      v-for="value in nodeProps.data.outputVariables"
+                      :key="value"
+                      class="node-variable-badge"
+                      :title="`str.${value}`"
+                    >
+                      str.{{ value }}
+                    </em>
+                  </div>
+                </el-tooltip>
               </template>
               <template v-else-if="nodeProps.data.type === 'END'">
                 <em class="orange">str.{{ nodeProps.data.outputVariable || 'output' }}</em>
@@ -308,16 +327,23 @@
             >
               {{ chatflowOpeningText }}
             </div>
-            <div v-if="activeGuideQuestions.length" class="chatflow-guide-list">
-              <button
-                v-for="question in activeGuideQuestions"
-                :key="question"
-                type="button"
-                data-testid="chatflow-guide-question"
-                @click="applyGuideQuestion(question)"
-              >
-                {{ question }}
-              </button>
+            <div
+              v-if="activeGuideQuestions.length"
+              class="chatflow-suggested-questions"
+              data-testid="chatflow-suggested-questions"
+            >
+              <div class="chatflow-suggested-title">猜你想问</div>
+              <div class="chatflow-guide-list">
+                <button
+                  v-for="question in activeGuideQuestions"
+                  :key="question"
+                  type="button"
+                  data-testid="chatflow-guide-question"
+                  @click="applyGuideQuestion(question)"
+                >
+                  {{ question }}
+                </button>
+              </div>
             </div>
           </div>
         </section>
@@ -342,6 +368,24 @@
               data-testid="chatflow-opening-message"
             >
               {{ chatflowOpeningText }}
+            </div>
+            <div
+              v-if="activeGuideQuestions.length"
+              class="chatflow-suggested-questions"
+              data-testid="chatflow-suggested-questions"
+            >
+              <div class="chatflow-suggested-title">猜你想问</div>
+              <div class="chatflow-guide-list">
+                <button
+                  v-for="question in activeGuideQuestions"
+                  :key="question"
+                  type="button"
+                  data-testid="chatflow-guide-question"
+                  @click="applyGuideQuestion(question)"
+                >
+                  {{ question }}
+                </button>
+              </div>
             </div>
             <div class="message-bubble user" data-testid="chatflow-user-message">{{ testInput }}</div>
             <div class="message-bubble assistant" data-testid="chatflow-assistant-message">{{ chatflowAssistantText }}</div>
@@ -747,6 +791,11 @@ function outputBadge(type: WorkflowCanvasNodeType, configured?: string) {
   if (configured) return `str.${configured}`
   if (type === 'CONDITION') return 'str.route'
   return 'str.output'
+}
+
+function startVariableTooltip(values: string[]) {
+  if (!values.length) return '无输出变量'
+  return values.map((value) => `str.${value}`).join(' · ')
 }
 
 function formatRunOutputValue(value: unknown) {
@@ -1451,6 +1500,11 @@ onMounted(loadWorkflow)
   user-select: none;
 }
 
+.coze-node.node-start {
+  height: 120px;
+  overflow: hidden;
+}
+
 .coze-node:active {
   cursor: grabbing;
 }
@@ -1504,14 +1558,27 @@ onMounted(loadWorkflow)
 .node-line {
   display: flex;
   align-items: center;
+  min-width: 0;
   min-height: 30px;
   gap: 8px;
+  overflow: hidden;
   color: #9aa2b4;
   font-size: 15px;
   font-weight: 600;
 }
 
-.node-line em {
+.node-variable-list {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.node-line em,
+.node-variable-badge {
   max-width: 170px;
   overflow: hidden;
   padding: 4px 8px;
@@ -1521,6 +1588,10 @@ onMounted(loadWorkflow)
   font-style: normal;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.node-variable-badge {
+  flex: 0 1 auto;
 }
 
 .node-line em.orange {
@@ -1865,6 +1936,21 @@ onMounted(loadWorkflow)
 .message-bubble.opening {
   background: #eefaf8;
   color: #0b6862;
+}
+
+.chatflow-suggested-questions {
+  align-self: flex-start;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0 2px;
+}
+
+.chatflow-suggested-title {
+  color: #7c8598;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .chatflow-guide-list {
