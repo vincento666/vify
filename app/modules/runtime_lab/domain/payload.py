@@ -62,6 +62,17 @@ def format_route_decision(decision: RouteDecision) -> dict[str, Any]:
         "targetSopId": decision.target_sop_id,
         "activeTaskId": decision.active_task_id,
         "matchedKeyword": decision.matched_keyword,
+        "candidates": decision.candidates or [],
+        "candidateSources": decision.candidate_sources or [],
+        "policyGate": decision.policy_gate,
+        "classifierRequest": decision.classifier_request,
+        "classifierResult": decision.classifier_result,
+        "finalDecision": decision.final_decision
+        or {
+            "action": decision.action,
+            "targetSopId": decision.target_sop_id,
+            "activeTaskId": decision.active_task_id,
+        },
     }
 
 

@@ -1,10 +1,11 @@
 import hashlib
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
 from app.core.errors import BizError, ErrorCode
 from app.modules.runtime_lab.domain.candidates import RouteCandidate, select_top_candidates
-from app.modules.runtime_lab.domain.classifier import ClassifierInput, FakeConstrainedIntentClassifier
+from app.modules.runtime_lab.domain.classifier import ClassifierInput, ClassifierResult, FakeConstrainedIntentClassifier
 from app.modules.runtime_lab.domain.explicit_signals import ExplicitSignalDetector
 from app.modules.runtime_lab.domain.payload import format_turn
 from app.modules.runtime_lab.domain.policy import PolicyGate
@@ -148,10 +149,11 @@ class RuntimeLabService:
     ) -> RouteDecision:
         candidates = self._route_candidates(message, active_task, suspended_tasks)
         if not candidates:
-            return self._router.decide(message, active_task=active_task, suspended_tasks=suspended_tasks)
+            decision = self._router.decide(message, active_task=active_task, suspended_tasks=suspended_tasks)
+            return _with_evidence(decision, (), "fallback")
         pre_decision = self._policy_gate.pre_classifier_decision(candidates, active_task, len(suspended_tasks))
         if pre_decision is not None:
-            return pre_decision
+            return _with_evidence(pre_decision, candidates, "pre_classifier")
         classifier_input = ClassifierInput(
             message=message,
             session_state={"activeTask": active_task is not None, "suspendedTaskCount": len(suspended_tasks)},
@@ -167,7 +169,8 @@ class RuntimeLabService:
             thresholds={"classifierMinConfidence": 0.6},
         )
         classifier_result = self._classifier.classify(classifier_input)
-        return self._policy_gate.classifier_decision(classifier_result, candidates, active_task, len(suspended_tasks))
+        decision = self._policy_gate.classifier_decision(classifier_result, candidates, active_task, len(suspended_tasks))
+        return _with_evidence(decision, candidates, "post_classifier", classifier_input, classifier_result)
 
     def _route_candidates(
         self,
@@ -351,8 +354,42 @@ def _decision_payload(decision: RouteDecision) -> dict[str, Any]:
         "targetSopId": decision.target_sop_id,
         "activeTaskId": decision.active_task_id,
         "matchedKeyword": decision.matched_keyword,
+        "candidates": decision.candidates or [],
+        "candidateSources": decision.candidate_sources or [],
+        "policyGate": decision.policy_gate,
+        "classifierRequest": decision.classifier_request,
+        "classifierResult": decision.classifier_result,
+        "finalDecision": decision.final_decision,
     }
 
 
 def _request_hash(message: str) -> str:
     return hashlib.sha256(message.encode("utf-8")).hexdigest()
+
+
+def _with_evidence(
+    decision: RouteDecision,
+    candidates: Sequence[RouteCandidate],
+    stage: str,
+    classifier_input: ClassifierInput | None = None,
+    classifier_result: ClassifierResult | None = None,
+) -> RouteDecision:
+    candidate_payloads = [candidate.to_dict() for candidate in candidates]
+    candidate_sources = sorted({str(candidate.source) for candidate in candidates})
+    return RouteDecision(
+        action=decision.action,
+        reason=decision.reason,
+        target_sop_id=decision.target_sop_id,
+        active_task_id=decision.active_task_id,
+        matched_keyword=decision.matched_keyword,
+        candidates=candidate_payloads,
+        candidate_sources=candidate_sources,
+        policy_gate={"stage": stage, "decisionAction": decision.action},
+        classifier_request=classifier_input.to_dict() if classifier_input else None,
+        classifier_result=classifier_result.to_dict() if classifier_result else None,
+        final_decision={
+            "action": decision.action,
+            "targetSopId": decision.target_sop_id,
+            "activeTaskId": decision.active_task_id,
+        },
+    )

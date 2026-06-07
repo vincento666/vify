@@ -58,7 +58,7 @@ class MockSemanticCandidateRecall:
             terms = tuple(term for term in (summary, sop_id, "退票", "改签", "发票") if term and term in message)
             if not terms:
                 continue
-            score = 0.72
+            score = 0.92 if "继续" in message or "resume" in message.lower() else 0.72
             task_id = str(task["id"])
             candidates.append(
                 RouteCandidate(

@@ -24,10 +24,19 @@ class PolicyGate:
         ordered = select_top_candidates(list(candidates), top_k=len(candidates))
         top = ordered[0]
         distinct_targets = {(str(candidate.candidate_type), candidate.target_id) for candidate in ordered}
-        if active_task is None and _candidate_type(top) == CandidateType.SUSPENDED_TASK_RESUME and top.score >= STRONG_ACCEPT_THRESHOLD:
+        resume_candidate = next(
+            (
+                candidate
+                for candidate in ordered
+                if _candidate_type(candidate) == CandidateType.SUSPENDED_TASK_RESUME
+                and candidate.score >= STRONG_ACCEPT_THRESHOLD
+            ),
+            None,
+        )
+        if active_task is None and resume_candidate is not None:
             return RouteDecision(
                 action="RESUME_TASK",
-                active_task_id=int(top.target_id),
+                active_task_id=int(resume_candidate.target_id),
                 reason="Explicit resume accepted before classifier",
             )
         if (

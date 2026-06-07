@@ -12,6 +12,12 @@ class RouteDecision:
     target_sop_id: str | None = None
     active_task_id: int | None = None
     matched_keyword: str | None = None
+    candidates: list[dict[str, Any]] | None = None
+    candidate_sources: list[str] | None = None
+    policy_gate: dict[str, Any] | None = None
+    classifier_request: dict[str, Any] | None = None
+    classifier_result: dict[str, Any] | None = None
+    final_decision: dict[str, Any] | None = None
 
 
 class RuntimeLabRouter:

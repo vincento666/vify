@@ -83,22 +83,22 @@
 
 ## 030.6 API evidence and E2E
 
-- [ ] RED: contract/E2E tests fail for candidate evidence fields and semantic
+- [x] RED: contract/E2E tests fail for candidate evidence fields and semantic
   route scenarios.
-- [ ] Expose candidates, policy gate result, classifier request, and classifier
+- [x] Expose candidates, policy gate result, classifier request, and classifier
   result in runtime-lab debug responses.
-- [ ] Add API E2E for:
+- [x] Add API E2E for:
   - no-active alias start;
   - no-active ambiguous candidates with one classifier call;
   - active interruptible semantic switch;
   - active non-interruptible rejected switch;
   - suspended task resume selected from finite candidates.
-- [ ] Run targeted runtime-lab tests.
-- [ ] Run full backend pytest or document unrelated failures.
-- [ ] Save evidence under
+- [x] Run targeted runtime-lab tests.
+- [x] Run full backend pytest or document unrelated failures.
+- [x] Save evidence under
   `artifacts/slices/030-runtime-semantic-routing-arbitration/030.6/`.
-- [ ] Gates pass.
-- [ ] Commit 030.6 only.
+- [x] Gates pass.
+- [x] Commit 030.6 only.
 
 ## Future specs, not 030 tasks
 
