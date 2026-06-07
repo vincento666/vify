@@ -1,0 +1,80 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/vincento/work/develop/hify
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 5 items
+
+tests/integration/runtime_lab/test_runtime_lab_semantic_policy.py FFFFF  [100%]
+
+=================================== FAILURES ===================================
+_ RuntimeLabSemanticPolicyTest.test_active_conflict_uses_classifier_before_sop_mutation _
+
+self = <test_runtime_lab_semantic_policy.RuntimeLabSemanticPolicyTest testMethod=test_active_conflict_uses_classifier_before_sop_mutation>
+
+    def test_active_conflict_uses_classifier_before_sop_mutation(self) -> None:
+        with _session() as session:
+            classifier = _RecordingClassifier(selected_target_id="invoice_apply")
+            repository = RuntimeLabRepository(session)
+>           service = RuntimeLabService(repository, classifier=classifier)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           TypeError: RuntimeLabService.__init__() got an unexpected keyword argument 'classifier'
+
+tests/integration/runtime_lab/test_runtime_lab_semantic_policy.py:44: TypeError
+_ RuntimeLabSemanticPolicyTest.test_active_non_interruptible_classifier_switch_is_rejected _
+
+self = <test_runtime_lab_semantic_policy.RuntimeLabSemanticPolicyTest testMethod=test_active_non_interruptible_classifier_switch_is_rejected>
+
+    def test_active_non_interruptible_classifier_switch_is_rejected(self) -> None:
+        with _session() as session:
+            classifier = _RecordingClassifier(selected_target_id="invoice_apply")
+            repository = RuntimeLabRepository(session)
+>           service = RuntimeLabService(repository, classifier=classifier)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           TypeError: RuntimeLabService.__init__() got an unexpected keyword argument 'classifier'
+
+tests/integration/runtime_lab/test_runtime_lab_semantic_policy.py:61: TypeError
+_ RuntimeLabSemanticPolicyTest.test_no_active_conflict_calls_classifier_once_and_starts_selected_sop _
+
+self = <test_runtime_lab_semantic_policy.RuntimeLabSemanticPolicyTest testMethod=test_no_active_conflict_calls_classifier_once_and_starts_selected_sop>
+
+    def test_no_active_conflict_calls_classifier_once_and_starts_selected_sop(self) -> None:
+        with _session() as session:
+            classifier = _RecordingClassifier(selected_target_id="invoice_apply")
+>           service = RuntimeLabService(RuntimeLabRepository(session), classifier=classifier)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           TypeError: RuntimeLabService.__init__() got an unexpected keyword argument 'classifier'
+
+tests/integration/runtime_lab/test_runtime_lab_semantic_policy.py:31: TypeError
+_ RuntimeLabSemanticPolicyTest.test_no_active_strong_start_exits_before_classifier _
+
+self = <test_runtime_lab_semantic_policy.RuntimeLabSemanticPolicyTest testMethod=test_no_active_strong_start_exits_before_classifier>
+
+    def test_no_active_strong_start_exits_before_classifier(self) -> None:
+        with _session() as session:
+            classifier = _RecordingClassifier()
+>           service = RuntimeLabService(RuntimeLabRepository(session), classifier=classifier)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           TypeError: RuntimeLabService.__init__() got an unexpected keyword argument 'classifier'
+
+tests/integration/runtime_lab/test_runtime_lab_semantic_policy.py:19: TypeError
+_ RuntimeLabSemanticPolicyTest.test_suspended_task_semantic_candidate_can_resume _
+
+self = <test_runtime_lab_semantic_policy.RuntimeLabSemanticPolicyTest testMethod=test_suspended_task_semantic_candidate_can_resume>
+
+    def test_suspended_task_semantic_candidate_can_resume(self) -> None:
+        with _session() as session:
+            classifier = _RecordingClassifier(select_candidate_type="SUSPENDED_TASK_RESUME")
+>           service = RuntimeLabService(RuntimeLabRepository(session), classifier=classifier)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           TypeError: RuntimeLabService.__init__() got an unexpected keyword argument 'classifier'
+
+tests/integration/runtime_lab/test_runtime_lab_semantic_policy.py:76: TypeError
+=========================== short test summary info ============================
+FAILED tests/integration/runtime_lab/test_runtime_lab_semantic_policy.py::RuntimeLabSemanticPolicyTest::test_active_conflict_uses_classifier_before_sop_mutation
+FAILED tests/integration/runtime_lab/test_runtime_lab_semantic_policy.py::RuntimeLabSemanticPolicyTest::test_active_non_interruptible_classifier_switch_is_rejected
+FAILED tests/integration/runtime_lab/test_runtime_lab_semantic_policy.py::RuntimeLabSemanticPolicyTest::test_no_active_conflict_calls_classifier_once_and_starts_selected_sop
+FAILED tests/integration/runtime_lab/test_runtime_lab_semantic_policy.py::RuntimeLabSemanticPolicyTest::test_no_active_strong_start_exits_before_classifier
+FAILED tests/integration/runtime_lab/test_runtime_lab_semantic_policy.py::RuntimeLabSemanticPolicyTest::test_suspended_task_semantic_candidate_can_resume
+============================== 5 failed in 0.28s ===============================

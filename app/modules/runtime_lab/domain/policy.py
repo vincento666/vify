@@ -1,0 +1,148 @@
+from collections.abc import Mapping, Sequence
+from typing import Any
+
+from app.modules.runtime_lab.domain.candidates import CandidateType, RouteCandidate, select_top_candidates
+from app.modules.runtime_lab.domain.classifier import ClassifierResult
+from app.modules.runtime_lab.domain.router import RouteDecision
+from app.modules.runtime_lab.domain.sop import MockSopAdapter
+
+STRONG_ACCEPT_THRESHOLD = 0.9
+
+
+class PolicyGate:
+    def __init__(self, adapter: MockSopAdapter) -> None:
+        self._adapter = adapter
+
+    def pre_classifier_decision(
+        self,
+        candidates: Sequence[RouteCandidate],
+        active_task: Mapping[str, Any] | None,
+        suspended_count: int,
+    ) -> RouteDecision | None:
+        if not candidates:
+            return None
+        ordered = select_top_candidates(list(candidates), top_k=len(candidates))
+        top = ordered[0]
+        distinct_targets = {(str(candidate.candidate_type), candidate.target_id) for candidate in ordered}
+        if active_task is None and _candidate_type(top) == CandidateType.SUSPENDED_TASK_RESUME and top.score >= STRONG_ACCEPT_THRESHOLD:
+            return RouteDecision(
+                action="RESUME_TASK",
+                active_task_id=int(top.target_id),
+                reason="Explicit resume accepted before classifier",
+            )
+        if (
+            active_task is None
+            and _candidate_type(top) == CandidateType.SOP_INTENT
+            and top.score >= STRONG_ACCEPT_THRESHOLD
+            and len(distinct_targets) == 1
+        ):
+            return RouteDecision(
+                action="START_SOP",
+                target_sop_id=top.target_id,
+                matched_keyword=_matched_term(top),
+                reason="Unambiguous strong SOP candidate accepted before classifier",
+            )
+        if active_task is not None and len(distinct_targets) == 1 and _candidate_type(top) == CandidateType.ACTIVE_TASK_CONTINUE:
+            return RouteDecision(
+                action="CONTINUE_ACTIVE_SOP",
+                active_task_id=int(top.target_id),
+                reason="Only active continuation candidate recalled",
+            )
+        return None
+
+    def classifier_decision(
+        self,
+        result: ClassifierResult,
+        candidates: Sequence[RouteCandidate],
+        active_task: Mapping[str, Any] | None,
+        suspended_count: int,
+    ) -> RouteDecision:
+        if result.selected_action == "CLARIFY":
+            return RouteDecision(action="CLARIFY", reason=result.rationale)
+        candidate = _candidate_by_id(candidates, result.selected_candidate_id)
+        candidate_type = _candidate_type(candidate)
+        if candidate_type == CandidateType.ACTIVE_TASK_CONTINUE:
+            return RouteDecision(
+                action="CONTINUE_ACTIVE_SOP",
+                active_task_id=int(candidate.target_id),
+                reason=result.rationale,
+            )
+        if candidate_type == CandidateType.SUSPENDED_TASK_RESUME:
+            return RouteDecision(
+                action="RESUME_TASK",
+                active_task_id=int(candidate.target_id),
+                reason=result.rationale,
+            )
+        if candidate_type == CandidateType.SOP_INTENT:
+            if active_task is None:
+                return RouteDecision(
+                    action="START_SOP",
+                    target_sop_id=candidate.target_id,
+                    matched_keyword=_matched_term(candidate),
+                    reason=result.rationale,
+                )
+            return self._switch_decision(candidate.target_id, active_task, suspended_count)
+        if candidate_type == CandidateType.REJECT_SWITCH_CONTINUE_ACTIVE:
+            return RouteDecision(
+                action="REJECT_SWITCH_CONTINUE_ACTIVE",
+                active_task_id=_active_task_id(active_task),
+                reason=result.rationale,
+            )
+        return RouteDecision(action="CLARIFY", reason=result.rationale)
+
+    def _switch_decision(
+        self,
+        target_sop_id: str,
+        active_task: Mapping[str, Any],
+        suspended_count: int,
+    ) -> RouteDecision:
+        active_sop_id = str(active_task.get("sop_id") or "")
+        active_task_id = _active_task_id(active_task)
+        if target_sop_id == active_sop_id:
+            return RouteDecision(
+                action="CONTINUE_ACTIVE_SOP",
+                active_task_id=active_task_id,
+                reason="Classifier selected active SOP",
+            )
+        if suspended_count >= 1:
+            return RouteDecision(
+                action="REJECT_SWITCH_SUSPENDED_LIMIT",
+                target_sop_id=target_sop_id,
+                active_task_id=active_task_id,
+                reason="030 policy preserves max one suspended task",
+            )
+        if not self._adapter.is_interruptible(active_sop_id, str(active_task.get("current_step") or "")):
+            return RouteDecision(
+                action="REJECT_SWITCH_CONTINUE_ACTIVE",
+                target_sop_id=target_sop_id,
+                active_task_id=active_task_id,
+                reason="Classifier selected switch from non-interruptible active step",
+            )
+        return RouteDecision(
+            action="SUSPEND_AND_START",
+            target_sop_id=target_sop_id,
+            active_task_id=active_task_id,
+            reason="Classifier selected different SOP at interruptible active step",
+        )
+
+
+def _candidate_by_id(candidates: Sequence[RouteCandidate], candidate_id: str | None) -> RouteCandidate:
+    for candidate in candidates:
+        if candidate.candidate_id == candidate_id:
+            return candidate
+    raise ValueError("Policy selected candidate outside finite candidate set")
+
+
+def _candidate_type(candidate: RouteCandidate) -> CandidateType:
+    return CandidateType(str(candidate.candidate_type))
+
+
+def _matched_term(candidate: RouteCandidate) -> str | None:
+    return candidate.matched_terms[0] if candidate.matched_terms else None
+
+
+def _active_task_id(active_task: Mapping[str, Any] | None) -> int | None:
+    if active_task is None:
+        return None
+    raw = active_task.get("id")
+    return int(raw) if raw is not None else None

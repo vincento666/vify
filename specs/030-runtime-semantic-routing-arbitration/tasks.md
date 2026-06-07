@@ -68,18 +68,18 @@
 
 ## 030.5 Policy gate and runtime integration
 
-- [ ] RED: integration tests fail for no-active early start, no-active conflict,
+- [x] RED: integration tests fail for no-active early start, no-active conflict,
   active conflict, active non-interruptible switch rejection, and suspended task
   resume.
-- [ ] Add pre-classifier policy gate.
-- [ ] Add post-classifier policy gate.
-- [ ] Integrate candidate recall and classifier into `RuntimeService` without
+- [x] Add pre-classifier policy gate.
+- [x] Add post-classifier policy gate.
+- [x] Integrate candidate recall and classifier into `RuntimeService` without
   moving transaction ownership out of the service.
-- [ ] Preserve 029 command idempotency and event sequence behavior.
-- [ ] Save evidence under
+- [x] Preserve 029 command idempotency and event sequence behavior.
+- [x] Save evidence under
   `artifacts/slices/030-runtime-semantic-routing-arbitration/030.5/`.
-- [ ] Gates pass.
-- [ ] Commit 030.5 only.
+- [x] Gates pass.
+- [x] Commit 030.5 only.
 
 ## 030.6 API evidence and E2E
 

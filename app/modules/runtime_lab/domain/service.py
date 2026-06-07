@@ -3,9 +3,14 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.core.errors import BizError, ErrorCode
+from app.modules.runtime_lab.domain.candidates import RouteCandidate, select_top_candidates
+from app.modules.runtime_lab.domain.classifier import ClassifierInput, FakeConstrainedIntentClassifier
+from app.modules.runtime_lab.domain.explicit_signals import ExplicitSignalDetector
 from app.modules.runtime_lab.domain.payload import format_turn
+from app.modules.runtime_lab.domain.policy import PolicyGate
+from app.modules.runtime_lab.domain.recall import MockSemanticCandidateRecall
 from app.modules.runtime_lab.domain.router import RouteDecision, RuntimeLabRouter
-from app.modules.runtime_lab.domain.sop import MockSopAdapter, SopTurnResult
+from app.modules.runtime_lab.domain.sop import MockSopAdapter, SopTurnResult, mock_sop_manifests
 from app.modules.runtime_lab.infra.repository import RuntimeLabRepository
 
 
@@ -31,10 +36,16 @@ class RuntimeLabService:
         repository: RuntimeLabRepository,
         router: RuntimeLabRouter | None = None,
         adapter: MockSopAdapter | None = None,
+        classifier: Any | None = None,
     ) -> None:
         self._repository = repository
+        self._manifests = mock_sop_manifests()
         self._adapter = adapter or MockSopAdapter()
         self._router = router or RuntimeLabRouter(self._adapter)
+        self._explicit_signals = ExplicitSignalDetector(self._manifests)
+        self._semantic_recall = MockSemanticCandidateRecall(self._manifests)
+        self._classifier = classifier or FakeConstrainedIntentClassifier()
+        self._policy_gate = PolicyGate(self._adapter)
 
     def create_session(self) -> dict[str, Any]:
         runtime_session = self._repository.create_session()
@@ -46,7 +57,7 @@ class RuntimeLabService:
         self._repository.append_event(session_id, "USER_MESSAGE", {"message": message})
         active_task = self._repository.get_active_task(session_id)
         suspended_tasks = self._repository.list_tasks(session_id, statuses={"SUSPENDED"})
-        decision = self._router.decide(message, active_task=active_task, suspended_tasks=suspended_tasks)
+        decision = self._semantic_decision(message, active_task, suspended_tasks)
         self._repository.append_event(session_id, "ROUTE_DECISION", _decision_payload(decision))
 
         if decision.action == "START_SOP" and decision.target_sop_id is not None:
@@ -83,6 +94,9 @@ class RuntimeLabService:
 
         if decision.action == "RESUME_TASK":
             return self._resume_task(session_id, decision)
+
+        if decision.action == "CLARIFY":
+            return self._turn(session_id, "请问您想办理退票、改签还是发票？", decision)
 
         if decision.action == "CONTINUE_ACTIVE_SOP" and active_task is not None:
             return self._continue_active_task(session_id, active_task, message, decision)
@@ -125,6 +139,47 @@ class RuntimeLabService:
         response_payload: dict[str, Any],
     ) -> None:
         self._repository.store_command_response(session_id, idempotency_key, request_hash, response_payload)
+
+    def _semantic_decision(
+        self,
+        message: str,
+        active_task: dict[str, Any] | None,
+        suspended_tasks: list[dict[str, Any]],
+    ) -> RouteDecision:
+        candidates = self._route_candidates(message, active_task, suspended_tasks)
+        if not candidates:
+            return self._router.decide(message, active_task=active_task, suspended_tasks=suspended_tasks)
+        pre_decision = self._policy_gate.pre_classifier_decision(candidates, active_task, len(suspended_tasks))
+        if pre_decision is not None:
+            return pre_decision
+        classifier_input = ClassifierInput(
+            message=message,
+            session_state={"activeTask": active_task is not None, "suspendedTaskCount": len(suspended_tasks)},
+            candidates=tuple(candidates),
+            allowed_actions=(
+                "CONTINUE_ACTIVE_SOP",
+                "START_SOP",
+                "SUSPEND_AND_START",
+                "RESUME_TASK",
+                "CLARIFY",
+                "REJECT_SWITCH_CONTINUE_ACTIVE",
+            ),
+            thresholds={"classifierMinConfidence": 0.6},
+        )
+        classifier_result = self._classifier.classify(classifier_input)
+        return self._policy_gate.classifier_decision(classifier_result, candidates, active_task, len(suspended_tasks))
+
+    def _route_candidates(
+        self,
+        message: str,
+        active_task: dict[str, Any] | None,
+        suspended_tasks: list[dict[str, Any]],
+    ) -> list[RouteCandidate]:
+        candidates = [
+            *self._explicit_signals.detect(message, active_task=active_task, suspended_tasks=suspended_tasks),
+            *self._semantic_recall.recall(message, active_task=active_task, suspended_tasks=suspended_tasks),
+        ]
+        return select_top_candidates(candidates, top_k=5)
 
     def _start_task(self, session_id: int, result: SopTurnResult) -> dict[str, Any]:
         task = self._repository.create_task(
