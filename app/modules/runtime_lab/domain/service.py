@@ -79,6 +79,12 @@ class RuntimeLabService:
 
         return self._turn(session_id, "暂未匹配到可执行的航空业务流程。", decision)
 
+    def list_tasks(self, session_id: int) -> list[dict[str, Any]]:
+        return self._repository.list_tasks(session_id)
+
+    def list_events(self, session_id: int) -> list[dict[str, Any]]:
+        return self._repository.list_events(session_id)
+
     def _start_task(self, session_id: int, result: SopTurnResult) -> dict[str, Any]:
         task = self._repository.create_task(
             session_id,

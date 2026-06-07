@@ -86,19 +86,19 @@
 
 ## 029.6 Runtime-lab API contract
 
-- [ ] RED: API contract tests fail for create session, post message, list
+- [x] RED: API contract tests fail for create session, post message, list
   tasks, and list events.
-- [ ] Add `POST /api/v1/runtime-lab/sessions`.
-- [ ] Add `POST /api/v1/runtime-lab/sessions/{session_id}/messages`.
-- [ ] Add `GET /api/v1/runtime-lab/sessions/{session_id}/tasks`.
-- [ ] Add `GET /api/v1/runtime-lab/sessions/{session_id}/events`.
-- [ ] Return debug evidence: `reply`, `routeDecision`, `activeTask`,
+- [x] Add `POST /api/v1/runtime-lab/sessions`.
+- [x] Add `POST /api/v1/runtime-lab/sessions/{session_id}/messages`.
+- [x] Add `GET /api/v1/runtime-lab/sessions/{session_id}/tasks`.
+- [x] Add `GET /api/v1/runtime-lab/sessions/{session_id}/events`.
+- [x] Return debug evidence: `reply`, `routeDecision`, `activeTask`,
   `suspendedTasks`, `resumeOffer`, and `events`.
-- [ ] Keep the existing `/api/v1` success envelope.
-- [ ] Save evidence under
+- [x] Keep the existing `/api/v1` success envelope.
+- [x] Save evidence under
   `artifacts/slices/029-isolated-runtime-router-lab/029.6/`.
-- [ ] Gates pass.
-- [ ] Commit 029.6 only.
+- [x] Gates pass.
+- [x] Commit 029.6 only.
 
 ## 029.7 Reliability gates and API E2E
 

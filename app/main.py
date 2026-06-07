@@ -19,6 +19,7 @@ from app.modules.evaluation.web.router import router as evaluation_router
 from app.modules.knowledge.web.router import document_router, router as knowledge_router
 from app.modules.mcp.web.router import router as mcp_router
 from app.modules.provider.web.router import router as provider_router
+from app.modules.runtime_lab.web.router import router as runtime_lab_router
 from app.modules.workflow.web.router import chatflow_router, router as workflow_router
 
 settings = get_settings()
@@ -48,3 +49,4 @@ app.include_router(evaluator_router)
 app.include_router(experiment_router)
 app.include_router(evaluation_run_router)
 app.include_router(chat_router)
+app.include_router(runtime_lab_router)
