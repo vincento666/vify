@@ -1,0 +1,12 @@
+file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-inline-variable-option-layout.mjs:7
+  if (!condition) throw new Error(message)
+                        ^
+
+Error: Inline variable names should not use ellipsis styling: {"optionWidth":302.75,"nameText":"output","nameWidth":39.4375,"nameClientWidth":39,"nameScrollWidth":39,"nameTextOverflow":"ellipsis","nameOverflow":"hidden","badgeText":"String","badgeWidth":39.65625,"badgeLeft":1125.671875,"nameRight":1118.421875}
+    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-inline-variable-option-layout.mjs:7:25)
+    at file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-inline-variable-option-layout.mjs:58:3
+    at runNextTicks (node:internal/process/task_queues:65:5)
+    at process.processImmediate (node:internal/timers:473:9)
+    at process.callbackTrampoline (node:internal/async_hooks:130:17)
+
+Node.js v23.11.0

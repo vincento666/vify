@@ -1,0 +1,10 @@
+> vitest run src/api/runtimeLab.test.ts src/views/chat/unifiedRoutingChatLab.test.ts src/router/unified-routing-chat-lab-routes.test.ts
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ ✓ src/api/runtimeLab.test.ts (2 tests) 9ms
+ ✓ src/views/chat/unifiedRoutingChatLab.test.ts (2 tests) 2ms
+ ✓ src/router/unified-routing-chat-lab-routes.test.ts (1 test) 63ms
+ Test Files  3 passed (3)
+      Tests  5 passed (5)
+   Start at  00:08:32
+   Duration  644ms (transform 82ms, setup 0ms, collect 68ms, tests 74ms, environment 344ms, prepare 178ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m

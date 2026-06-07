@@ -9192,13 +9192,20 @@ onUnmounted(() => {
 }
 
 .inline-variable-option .variable-option-main {
-  min-width: 0;
-  flex: 0 1 auto;
-  max-width: calc(100% - 5.5rem);
+  width: auto;
+  min-width: max-content;
+  max-width: none;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
 }
 
 .inline-variable-option .variable-option-main strong {
-  max-width: 14rem;
+  max-width: none;
+  display: inline-block;
+  overflow: visible;
+  white-space: nowrap;
+  text-overflow: clip;
   font-size: 0.875rem;
 }
 
@@ -9206,6 +9213,8 @@ onUnmounted(() => {
   width: auto;
   min-width: 0;
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
 }
 
 .variable-source-list,
