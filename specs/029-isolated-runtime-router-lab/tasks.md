@@ -72,17 +72,17 @@
 
 ## 029.5 Resume task
 
-- [ ] RED: resume tests fail for `继续`, `继续刚才`, and `继续第一个`.
-- [ ] Resolve minimum resume phrases against the current `ResumeOffer`.
-- [ ] Implement `RESUME_TASK` by restoring the suspended task checkpoint.
-- [ ] Mark the resumed task `RUNNING`.
-- [ ] Clear or complete the consumed resume offer according to the service
+- [x] RED: resume tests fail for `继续`, `继续刚才`, and `继续第一个`.
+- [x] Resolve minimum resume phrases against the current `ResumeOffer`.
+- [x] Implement `RESUME_TASK` by restoring the suspended task checkpoint.
+- [x] Mark the resumed task `RUNNING`.
+- [x] Clear or complete the consumed resume offer according to the service
   contract.
-- [ ] Emit `TASK_RESUMED` and route-decision events.
-- [ ] Save evidence under
+- [x] Emit `TASK_RESUMED` and route-decision events.
+- [x] Save evidence under
   `artifacts/slices/029-isolated-runtime-router-lab/029.5/`.
-- [ ] Gates pass.
-- [ ] Commit 029.5 only.
+- [x] Gates pass.
+- [x] Commit 029.5 only.
 
 ## 029.6 Runtime-lab API contract
 

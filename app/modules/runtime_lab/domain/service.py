@@ -71,6 +71,9 @@ class RuntimeLabService:
                 return self._turn(session_id, "当前已有一个暂停流程，请先完成或恢复后再切换。", decision)
             return self._turn(session_id, "当前步骤不能中断，请先完成确认后再切换。", decision)
 
+        if decision.action == "RESUME_TASK":
+            return self._resume_task(session_id, decision)
+
         if decision.action == "CONTINUE_ACTIVE_SOP" and active_task is not None:
             return self._continue_active_task(session_id, active_task, message, decision)
 
@@ -181,6 +184,30 @@ class RuntimeLabService:
             {"taskId": task["id"], "sopId": task["sop_id"], "currentStep": task["current_step"]},
         )
         return self._turn(session_id, result.reply, decision)
+
+    def _resume_task(self, session_id: int, decision: RouteDecision) -> RuntimeLabTurn:
+        suspended_tasks = self._repository.list_tasks(session_id, statuses={"SUSPENDED"})
+        if not suspended_tasks:
+            return self._turn(session_id, "没有可恢复的暂停流程。", RouteDecision(action="NO_MATCH", reason="No suspended task"))
+        task = suspended_tasks[0]
+        checkpoint = self._repository.get_latest_checkpoint(int(task["id"]))
+        collected = dict(checkpoint["collected"]) if checkpoint else dict(task.get("business_refs") or {})
+        current_step = str(checkpoint["current_step"]) if checkpoint else str(task["current_step"])
+        checkpoint_id = int(checkpoint["id"]) if checkpoint else int(task["checkpoint_id"] or 0)
+        resumed = self._repository.update_task_state(
+            int(task["id"]),
+            status="RUNNING",
+            current_step=current_step,
+            checkpoint_id=checkpoint_id,
+            business_refs=collected,
+        )
+        self._repository.append_event(
+            session_id,
+            "TASK_RESUMED",
+            {"taskId": resumed["id"], "sopId": resumed["sop_id"], "currentStep": resumed["current_step"]},
+        )
+        prompt = str(checkpoint["pending_prompt"]) if checkpoint else "请继续提供信息。"
+        return self._turn(session_id, f"已恢复刚才的流程。{prompt}", decision)
 
     def _build_resume_offer(self, session_id: int) -> dict[str, Any] | None:
         suspended_tasks = self._repository.list_tasks(session_id, statuses={"SUSPENDED"})

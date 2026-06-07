@@ -25,7 +25,14 @@ class RuntimeLabRouter:
         active_task: Mapping[str, Any] | None = None,
         suspended_tasks: Sequence[Mapping[str, Any]] | None = None,
     ) -> RouteDecision:
-        suspended_count = len(suspended_tasks or ())
+        suspended = suspended_tasks or ()
+        suspended_count = len(suspended)
+        if active_task is None and suspended_count == 1 and _is_resume_phrase(message):
+            return RouteDecision(
+                action="RESUME_TASK",
+                active_task_id=_task_id(suspended[0]),
+                reason="Resume phrase resolved to single suspended task",
+            )
         matched = self._match_strong_keyword(message)
         active_task_id = _task_id(active_task)
         if active_task is None and matched is not None:
@@ -97,3 +104,7 @@ def _task_id(active_task: Mapping[str, Any] | None) -> int | None:
     if raw is None:
         return None
     return int(raw)
+
+
+def _is_resume_phrase(message: str) -> bool:
+    return message.strip().lower() in {"continue", "继续", "继续刚才", "继续第一个"}

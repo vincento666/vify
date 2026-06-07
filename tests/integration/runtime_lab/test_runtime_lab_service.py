@@ -76,6 +76,26 @@ class RuntimeLabServiceTest(unittest.TestCase):
             self.assertEqual(rejected_by_limit.active_task["sop_id"], "invoice_apply")
             self.assertEqual([task["sop_id"] for task in rejected_by_limit.suspended_tasks], ["refund_ticket"])
 
+    def test_resume_offer_phrases_restore_suspended_task_checkpoint(self) -> None:
+        for phrase in ("继续", "继续刚才", "继续第一个"):
+            with self.subTest(phrase=phrase):
+                with _session() as session:
+                    service = RuntimeLabService(RuntimeLabRepository(session))
+                    runtime_session = service.create_session()
+
+                    service.handle_message(int(runtime_session["id"]), "我要退票")
+                    service.handle_message(int(runtime_session["id"]), "我要开发票")
+                    service.handle_message(int(runtime_session["id"]), "INV-200")
+                    service.handle_message(int(runtime_session["id"]), "确认")
+                    resumed = service.handle_message(int(runtime_session["id"]), phrase)
+
+                    self.assertEqual(resumed.route_decision.action, "RESUME_TASK")
+                    self.assertEqual(resumed.active_task["sop_id"], "refund_ticket")
+                    self.assertEqual(resumed.active_task["current_step"], "collect_order_no")
+                    self.assertEqual(resumed.suspended_tasks, [])
+                    self.assertIsNone(resumed.resume_offer)
+                    self.assertEqual(resumed.events[-1]["event_type"], "TASK_RESUMED")
+
 
 def _session() -> Session:
     tmp_dir = tempfile.TemporaryDirectory()
