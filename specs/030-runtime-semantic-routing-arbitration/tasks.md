@@ -40,17 +40,17 @@
 
 ## 030.3 Mock semantic recall
 
-- [ ] RED: unit tests fail for deterministic mock semantic recall against mock
+- [x] RED: unit tests fail for deterministic mock semantic recall against mock
   SOP manifests and suspended task summaries.
-- [ ] Add mock semantic scoring fixtures for SOP intents.
-- [ ] Add suspended task summary recall.
-- [ ] Add active task continuation candidate recall.
-- [ ] Prove conflicting candidates preserve score evidence and require later
+- [x] Add mock semantic scoring fixtures for SOP intents.
+- [x] Add suspended task summary recall.
+- [x] Add active task continuation candidate recall.
+- [x] Prove conflicting candidates preserve score evidence and require later
   arbitration.
-- [ ] Save evidence under
+- [x] Save evidence under
   `artifacts/slices/030-runtime-semantic-routing-arbitration/030.3/`.
-- [ ] Gates pass.
-- [ ] Commit 030.3 only.
+- [x] Gates pass.
+- [x] Commit 030.3 only.
 
 ## 030.4 Constrained classifier interface
 
