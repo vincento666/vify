@@ -1,0 +1,131 @@
+# Spec 034: Unified Routing Chat Lab
+
+## Goal
+
+Add an experimental frontend conversation surface for validating the unified
+runtime router with real user journeys.
+
+034 moves the runtime-lab multi-intent SOP work from backend-only acceptance
+into a browser-testable product surface. The page must let a tester open core
+airline SOP scenarios, send free-form messages, observe route decisions, inspect
+active/suspended task state, and compare this experimental route with the
+existing ordinary Chat entry.
+
+## Scope
+
+In scope:
+
+- a top-level composer menu entry for the experimental unified routing chat;
+- a dedicated Vue route and page isolated from the existing `/chat` page;
+- runtime-lab API client functions for session creation, message posting, task
+  listing, and event listing;
+- five airline SOP scenario presets matching the 032.5 backend business gate:
+  `refund_ticket`, `change_flight`, `invoice_apply`, `baggage_service`, and
+  `seat_checkin`;
+- a simple SOP switch panel with a selected SOP and an open/start button;
+- transcript rendering with route action, active task, suspended task, resume
+  offer, and recent event visibility;
+- frontend unit tests, REM governance tests, backend business gate reuse, and
+  browser UAT evidence.
+
+Out of scope:
+
+- changing the production `/chat` API to `/query` or any final semantic API
+  name;
+- replacing the existing Chat page;
+- adding frontend authoring for runtime routing rules;
+- implementing FAQ/RAG/Agent/handoff policy beyond showing current runtime-lab
+  decisions;
+- making Chatflow import or depend on runtime-lab;
+- proving live provider-backed LLM output unless live opt-in credentials are
+  supplied.
+
+## Integration Rules
+
+- The lab page calls runtime-lab through HTTP only.
+- The lab page may link to the ordinary Chat page, but it must not mutate Chat
+  sessions or Agent configuration.
+- Existing Chatflow remains the SOP execution substrate behind the 032 adapter.
+- Runtime-lab remains the route control plane and task ledger owner.
+- Frontend additions must follow REM scale governance.
+- No backend route or schema change is required unless tests prove the current
+  runtime-lab contract is insufficient.
+
+## User Scenarios
+
+The page must support these manual validation paths:
+
+- start one SOP from the switch panel and continue it through normal messages;
+- interrupt an active SOP with another SOP request;
+- complete the second SOP and observe the resume offer for the suspended SOP;
+- resume the suspended SOP using natural language;
+- attempt a switch at a non-interruptible confirm step and observe rejection.
+
+## Acceptance Criteria
+
+- The composer menu exposes the experimental route.
+- Browser navigation reaches the lab page without breaking existing `/chat`.
+- A runtime-lab session can be created from the page.
+- The selected SOP open button posts the correct start message.
+- Free-form messages append user and assistant transcript rows.
+- Runtime route action, active task, suspended task, and resume offer are
+  visible after each turn.
+- The page includes a way to open the ordinary Chat surface for comparison.
+- Unit and route tests pass.
+- REM governance gate passes for changed frontend files.
+- Backend 032.5 airline business gate still passes.
+- Browser UAT exercises at least one multi-SOP jump/resume journey and saves
+  evidence.
+
+## Completion Gate
+
+034 is complete only when:
+
+- `spec.md`, `plan.md`, and `tasks.md` are present;
+- RED test evidence is saved;
+- implementation passes targeted frontend tests;
+- frontend REM gate passes;
+- targeted backend runtime-lab airline business gate passes;
+- browser UAT evidence is saved under
+  `artifacts/slices/034-unified-routing-chat-lab/`;
+- one git commit contains the 034 frontend lab and evidence changes.
+
+## 034.0 Spec Sign-off
+
+Status: ready for 034.1 TDD.
+
+034.0 establishes the experimental frontend boundary only. It does not change
+runtime-lab routing behavior, Chatflow execution, the existing Chat page, or API
+schema. Implementation must start with RED tests for the route, menu entry,
+scenario model, and runtime-lab API client.
+
+## 034 Completion Sign-off
+
+Status: complete.
+
+034 has delivered the isolated unified routing chat lab frontend:
+
+- top-level composer menu entry at `/runtime-lab/chat`;
+- runtime-lab API client for sessions, messages, tasks, and events;
+- five airline SOP presets aligned with the 032.5 business gate;
+- browser-visible transcript, route decision, task ledger, resume offer, and
+  recent events;
+- ordinary `/chat` comparison entry without coupling Agent chat into
+  runtime-lab.
+
+Final evidence:
+
+- RED frontend evidence:
+  `artifacts/slices/034-unified-routing-chat-lab/034.1/red.txt`;
+- targeted frontend green:
+  `artifacts/slices/034-unified-routing-chat-lab/034.1/green-targeted.txt`;
+- REM gate:
+  `artifacts/slices/034-unified-routing-chat-lab/034.2/rem.txt`;
+- full frontend unit:
+  `artifacts/slices/034-unified-routing-chat-lab/034.2/frontend-unit-full.txt`;
+- frontend build:
+  `artifacts/slices/034-unified-routing-chat-lab/034.2/frontend-build.txt`;
+- backend airline gate:
+  `artifacts/slices/034-unified-routing-chat-lab/034.2/backend-airline-gate.txt`;
+- browser UAT:
+  `artifacts/slices/034-unified-routing-chat-lab/034.2/browser-uat.md`.

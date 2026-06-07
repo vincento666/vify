@@ -74,7 +74,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { Setting, User, ChatDotRound, Folder, Share, Connection, DataAnalysis, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
+import { composerNavItems } from './appNavigation'
 
 const route = useRoute()
 const collapsed = ref(window.innerWidth < 1200)
@@ -85,15 +86,7 @@ const onResize = () => {
 onMounted(() => window.addEventListener('resize', onResize))
 onUnmounted(() => window.removeEventListener('resize', onResize))
 
-const navItems = [
-  { path: '/provider',   label: '模型管理',  icon: Setting },
-  { path: '/agent',      label: 'Agent',    icon: User },
-  { path: '/knowledge',  label: '知识库',   icon: Folder },
-  { path: '/workflows',  label: '工作流',   icon: Share, matches: ['/workflows', '/chatflows'] },
-  { path: '/evaluation', label: '评测',     icon: DataAnalysis },
-  { path: '/mcp',        label: 'MCP 工具', icon: Connection },
-  { path: '/chat',       label: '对话',     icon: ChatDotRound },
-]
+const navItems = composerNavItems
 
 function isNavActive(item: { path: string; matches?: string[] }) {
   const matches = item.matches || [item.path]

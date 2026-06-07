@@ -22,6 +22,11 @@ const router = createRouter({
       component: () => import('@/views/chat/ChatView.vue'),
     },
     {
+      path: '/runtime-lab/chat',
+      meta: { runtimeLabChat: true },
+      component: () => import('@/views/chat/UnifiedRoutingChatLab.vue'),
+    },
+    {
       path: '/knowledge',
       component: () => import('@/views/knowledge/KnowledgeList.vue'),
     },
