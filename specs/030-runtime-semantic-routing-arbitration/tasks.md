@@ -6,6 +6,11 @@
 - [x] Record dependency on 029.8 runtime kernel hardening.
 - [x] Keep real Chatflow, FAQ, RAG, Agent, and handoff out of scope.
 - [x] Commit 030-033 spec skeleton documents only.
+- [x] Add 030.0 spec sign-off.
+- [x] Save documentation-only evidence under
+  `artifacts/slices/030-runtime-semantic-routing-arbitration/030.0/`.
+- [x] Confirm no application code, tests, API behavior, or schema changes are
+  included in 030.0.
 
 ## 030.1 Candidate model and score evidence
 

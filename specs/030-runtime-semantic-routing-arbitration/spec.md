@@ -288,3 +288,29 @@ The API remains temporary and debug-oriented.
   `artifacts/slices/030-runtime-semantic-routing-arbitration/`;
 - no real Chatflow, Agent, FAQ, RAG, or handoff module is called;
 - one git commit contains only 030 spec and implementation changes.
+
+## 030.0 Spec Sign-off
+
+Status: ready for implementation planning and 030.1 RED tests.
+
+Spec 030.0 is a documentation-only gate. It establishes the executable scope for
+semantic routing arbitration and does not introduce application code, tests, API
+behavior, database schema, or runtime behavior.
+
+Implementation must begin at 030.1 with RED tests for candidate model and score
+evidence. No 030 implementation slice may skip the evidence directory,
+targeted gates, or single-slice commit rule.
+
+Signed-off boundaries:
+
+- 030 remains isolated in `runtime_lab`.
+- 030 uses mock semantic recall and deterministic fake classifier behavior.
+- 030 does not call real Chatflow, FAQ, RAG, Agent, or handoff modules.
+- 030 does not rename `/api/v1/runtime-lab/...`.
+- FAQ and RAG evidence can be represented only as future extension seams and
+  must not be passed into the constrained SOP classifier.
+- Active-SOP routing remains conservative and must arbitrate conflicts before
+  mutating SOP state.
+
+Evidence for this documentation gate is stored under
+`artifacts/slices/030-runtime-semantic-routing-arbitration/030.0/`.
