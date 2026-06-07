@@ -19,12 +19,12 @@ class RuntimeLabRepository:
     def __init__(self, session: Session) -> None:
         register_runtime_lab_tables()
         self._session = session
-        self._ensure_tables()
         self._session_table = Base.metadata.tables["runtime_lab_session"]
         self._task_table = Base.metadata.tables["runtime_lab_task"]
         self._checkpoint_table = Base.metadata.tables["runtime_lab_checkpoint"]
         self._event_table = Base.metadata.tables["runtime_lab_event"]
         self._command_table = Base.metadata.tables["runtime_lab_command"]
+        self._ensure_tables()
 
     @property
     def session(self) -> Session:
@@ -187,6 +187,7 @@ class RuntimeLabRepository:
         current_step: str,
         pending_prompt: str,
         collected: dict[str, Any] | None = None,
+        scoped_variables: dict[str, Any] | None = None,
         status: str = "ACTIVE",
     ) -> dict[str, Any]:
         if status == "ACTIVE":
@@ -209,6 +210,7 @@ class RuntimeLabRepository:
                 current_step=current_step,
                 pending_prompt=pending_prompt,
                 collected=collected or {},
+                scoped_variables=scoped_variables or {},
                 status=status,
                 deleted=False,
                 created_at=now,
@@ -308,6 +310,23 @@ class RuntimeLabRepository:
         if bind is None:
             return
         Base.metadata.create_all(bind=bind, tables=runtime_lab_tables())
+        self._ensure_checkpoint_scoped_variables_column()
+
+    def _ensure_checkpoint_scoped_variables_column(self) -> None:
+        bind = self._session.get_bind()
+        if bind is None:
+            return
+        inspector = sa.inspect(bind)
+        if "runtime_lab_checkpoint" not in inspector.get_table_names():
+            return
+        column_names = {column["name"] for column in inspector.get_columns("runtime_lab_checkpoint")}
+        if "scoped_variables" in column_names:
+            return
+        column_type = self._checkpoint_table.c.scoped_variables.type.compile(dialect=bind.dialect)
+        self._session.execute(
+            sa.text(f"ALTER TABLE runtime_lab_checkpoint ADD COLUMN scoped_variables {column_type}")  # noqa: S608
+        )
+        self._session.commit()
 
     def _next_event_sequence(self, session_id: int) -> int:
         value = self._session.execute(

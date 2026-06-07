@@ -1,0 +1,28 @@
+Command:
+
+rtk env PYTHONPATH=. uv run pytest tests/e2e/test_runtime_lab_chatflow_sop_api_e2e.py
+
+Expected RED:
+
+The runtime-lab API E2E should fail before the runtime checkpoint persistence
+and real Chatflow adapter wiring are complete.
+
+Observed failure:
+
+tests/e2e/test_runtime_lab_chatflow_sop_api_e2e.py F
+
+Failure summary:
+
+RuntimeLabRepository initialized its table references after `_ensure_tables()`,
+but the new scoped checkpoint metadata migration check needed
+`self._checkpoint_table` during `_ensure_tables()`.
+
+Key line:
+
+AttributeError: 'RuntimeLabRepository' object has no attribute '_checkpoint_table'
+
+Fix direction:
+
+- initialize runtime-lab table references before `_ensure_tables()`;
+- persist adapter `scoped_variables` in `runtime_lab_checkpoint`;
+- reconstruct `SopCheckpoint.scoped_variables` from the persisted checkpoint row.

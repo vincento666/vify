@@ -158,3 +158,57 @@ not completed by this documentation gate:
 
 No 032.2, 032.3, or 032.4 implementation task is complete until its RED,
 implementation, gates, evidence, and slice commit are produced.
+
+## 032 Completion Sign-off
+
+Status: complete.
+
+032 has implemented the first real Chatflow-backed SOP integration behind the
+031 adapter port.
+
+Delivered scope:
+
+- `ChatflowSopRuntimeAdapter` maps runtime SOP start/continue/suspend/resume
+  operations to existing Chatflow `WorkflowService` run/resume/session-state
+  APIs.
+- Runtime checkpoints now persist adapter `scoped_variables`, including the
+  Chatflow `runId`, `eventId`, `checkpointId`, `sessionId`, and resume mode
+  required for persisted resume.
+- One runtime-lab API E2E proves that a real Chatflow-backed `refund_ticket`
+  SOP can start, be suspended by switching to a mock SOP, be offered for
+  resume, resume from persisted checkpoint, continue, and complete.
+- Mock SOP fallback remains available for non-real SOP paths during isolated
+  runtime-lab validation.
+- Chatflow/Workflow modules still do not import `runtime_lab`.
+
+Evidence:
+
+- 032.2 RED evidence:
+  `artifacts/slices/032-chatflow-sop-integration/032.2/red.txt`
+- 032.3 adapter integration:
+  `artifacts/slices/032-chatflow-sop-integration/032.3/integration.txt`
+- 032.4 API E2E:
+  `artifacts/slices/032-chatflow-sop-integration/032.4/red.txt`
+  and
+  `artifacts/slices/032-chatflow-sop-integration/032.4/e2e.txt`
+- 032.4 targeted regression:
+  `artifacts/slices/032-chatflow-sop-integration/032.4/regression.txt`
+- 032.4 static gates:
+  `artifacts/slices/032-chatflow-sop-integration/032.4/ruff.txt`
+  and `artifacts/slices/032-chatflow-sop-integration/032.4/mypy.txt`
+- 032.4 full backend pytest:
+  `artifacts/slices/032-chatflow-sop-integration/032.4/full-backend-pytest.txt`
+
+Final gates:
+
+- targeted runtime-lab and Chatflow regression: 59 passed;
+- full backend pytest: 361 passed, 4 skipped;
+- Ruff: passed;
+- mypy: passed.
+
+Remaining out of scope for later specs:
+
+- multiple production Chatflow SOP bindings;
+- FAQ/RAG/Agent/handoff policy;
+- frontend surfaces;
+- final `/chat` or `/query` API naming.

@@ -33,6 +33,7 @@ class RuntimeLabRepositoryTest(unittest.TestCase):
                 current_step="collect_order_no",
                 pending_prompt="请提供订单号",
                 collected={"order_no": "TK-100"},
+                scoped_variables={"__chatflow": {"runId": 123}, "conversation.order_no": "TK-100"},
             )
             task = repository.update_task_state(
                 int(task["id"]),
@@ -62,6 +63,10 @@ class RuntimeLabRepositoryTest(unittest.TestCase):
             self.assertEqual(second_event["sequence"], 2)
             self.assertEqual(task["status"], "SUSPENDED")
             self.assertEqual(task["checkpoint_id"], checkpoint["id"])
+            self.assertEqual(
+                repository.get_latest_checkpoint(int(task["id"]))["scoped_variables"]["__chatflow"]["runId"],
+                123,
+            )
             self.assertEqual(repository.list_tasks(int(runtime_session["id"]))[0]["business_refs"], {})
             self.assertEqual(repository.list_events(int(runtime_session["id"]))[-1]["event_type"], "TASK_SUSPENDED")
             self.assertFalse(replayed)

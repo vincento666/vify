@@ -214,6 +214,7 @@ class RuntimeLabService:
             current_step=result.current_step,
             pending_prompt=result.pending_prompt,
             collected=result.collected,
+            scoped_variables=result.checkpoint.scoped_variables,
             status=_checkpoint_status(result),
         )
         return self._repository.update_task_state(
@@ -242,6 +243,7 @@ class RuntimeLabService:
             current_step=adapter_checkpoint.current_step,
             pending_prompt=adapter_checkpoint.pending_prompt,
             collected=adapter_checkpoint.collected,
+            scoped_variables=adapter_checkpoint.scoped_variables,
         )
         summary = f"{task['sop_id']} paused at {task['current_step']}"
         return self._repository.update_task_state(
@@ -279,6 +281,7 @@ class RuntimeLabService:
             current_step=result.current_step,
             pending_prompt=result.pending_prompt,
             collected=result.collected,
+            scoped_variables=result.checkpoint.scoped_variables,
             status=_checkpoint_status(result),
         )
         if result.status == SopExecutionStatus.COMPLETED:
@@ -335,13 +338,22 @@ class RuntimeLabService:
         )
         if result.status == SopExecutionStatus.FAILED:
             return self._adapter_failure_turn(session_id, result, decision)
-        current_step = result.current_step or (str(checkpoint["current_step"]) if checkpoint else str(task["current_step"]))
-        checkpoint_id = int(checkpoint["id"]) if checkpoint else int(task["checkpoint_id"] or 0)
+        saved_checkpoint = self._repository.create_checkpoint(
+            session_id,
+            int(task["id"]),
+            sop_id=str(task["sop_id"]),
+            current_step=result.current_step or (str(checkpoint["current_step"]) if checkpoint else str(task["current_step"])),
+            pending_prompt=result.pending_prompt,
+            collected=result.collected,
+            scoped_variables=result.checkpoint.scoped_variables,
+            status=_checkpoint_status(result),
+        )
+        current_step = str(saved_checkpoint["current_step"])
         resumed = self._repository.update_task_state(
             int(task["id"]),
             status="RUNNING",
             current_step=current_step,
-            checkpoint_id=checkpoint_id,
+            checkpoint_id=int(saved_checkpoint["id"]),
             business_refs=result.collected,
         )
         self._repository.append_event(
@@ -456,6 +468,7 @@ def _sop_checkpoint_from_row(
     if checkpoint is None:
         return None
     collected = dict(checkpoint.get("collected") or {})
+    scoped_variables = checkpoint.get("scoped_variables")
     task_id = int(task["id"]) if task is not None else int(checkpoint["task_id"])
     checkpoint_id = int(checkpoint["id"])
     current_step = str(checkpoint["current_step"])
@@ -465,7 +478,7 @@ def _sop_checkpoint_from_row(
         current_step=current_step,
         pending_prompt=str(checkpoint.get("pending_prompt") or ""),
         collected=collected,
-        scoped_variables=_scoped_variables(collected),
+        scoped_variables=dict(scoped_variables) if isinstance(scoped_variables, dict) else _scoped_variables(collected),
         version=1,
     )
 

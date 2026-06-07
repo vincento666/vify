@@ -51,6 +51,7 @@ def register_runtime_lab_tables(metadata: sa.MetaData | None = None) -> None:
             sa.Column("current_step", sa.String(80), nullable=False),
             sa.Column("pending_prompt", sa.Text(), nullable=False, server_default=""),
             sa.Column("collected", sa.JSON(), nullable=True),
+            sa.Column("scoped_variables", sa.JSON(), nullable=True),
             sa.Column("status", sa.String(30), nullable=False, server_default="ACTIVE"),
             deleted_column(),
             *timestamps(),

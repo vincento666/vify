@@ -26,41 +26,41 @@
 
 - [x] Document pre-implementation RED-test sign-off under
   `artifacts/slices/032-chatflow-sop-integration/032.2/`.
-- [ ] RED: real adapter tests fail for start, continue, suspend checkpoint,
+- [x] RED: real adapter tests fail for start, continue, suspend checkpoint,
   resume, and complete.
-- [ ] Add one test-only Chatflow SOP fixture if no suitable fixture exists.
-- [ ] Save RED evidence under
+- [x] Add one test-only Chatflow SOP fixture if no suitable fixture exists.
+- [x] Save RED evidence under
   `artifacts/slices/032-chatflow-sop-integration/032.2/`.
-- [ ] Commit 032.2 red tests only if repository convention allows, otherwise
+- [x] Commit 032.2 red tests only if repository convention allows, otherwise
   continue to 032.3 before commit.
 
 ## 032.3 Real adapter implementation
 
 - [x] Document pre-implementation adapter mapping sign-off under
   `artifacts/slices/032-chatflow-sop-integration/032.3/`.
-- [ ] Implement `ChatflowSopRuntimeAdapter`.
-- [ ] Map runtime request DTOs to Chatflow service inputs.
-- [ ] Map Chatflow outputs to runtime result DTOs.
-- [ ] Preserve checkpoint serialization.
-- [ ] Save evidence under
+- [x] Implement `ChatflowSopRuntimeAdapter`.
+- [x] Map runtime request DTOs to Chatflow service inputs.
+- [x] Map Chatflow outputs to runtime result DTOs.
+- [x] Preserve checkpoint serialization.
+- [x] Save evidence under
   `artifacts/slices/032-chatflow-sop-integration/032.3/`.
-- [ ] Gates pass.
-- [ ] Commit 032.3 only.
+- [x] Gates pass.
+- [x] Commit 032.3 only.
 
 ## 032.4 Runtime E2E with real Chatflow SOP
 
 - [x] Document pre-implementation E2E gate sign-off under
   `artifacts/slices/032-chatflow-sop-integration/032.4/`.
-- [ ] RED: API E2E fails for real Chatflow-backed SOP start, suspend, resume,
+- [x] RED: API E2E fails for real Chatflow-backed SOP start, suspend, resume,
   and complete.
-- [ ] Add runtime-lab API E2E for the real adapter path.
-- [ ] Prove mock SOP path still works.
-- [ ] Run targeted Chatflow tests.
-- [ ] Run full backend pytest or document unrelated failures.
-- [ ] Save evidence under
+- [x] Add runtime-lab API E2E for the real adapter path.
+- [x] Prove mock SOP path still works.
+- [x] Run targeted Chatflow tests.
+- [x] Run full backend pytest or document unrelated failures.
+- [x] Save evidence under
   `artifacts/slices/032-chatflow-sop-integration/032.4/`.
-- [ ] Gates pass.
-- [ ] Commit 032.4 only.
+- [x] Gates pass.
+- [x] Commit 032.4 only.
 
 ## Future specs, not 032 tasks
 
