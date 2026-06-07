@@ -9,22 +9,22 @@
 
 ## 029.1 Schema and repository
 
-- [ ] RED: repository tests fail for session/task/checkpoint/event/command
+- [x] RED: repository tests fail for session/task/checkpoint/event/command
   persistence.
-- [ ] Add `runtime_lab_session`.
-- [ ] Add `runtime_lab_task`.
-- [ ] Add `runtime_lab_checkpoint`.
-- [ ] Add `runtime_lab_event`.
-- [ ] Add `runtime_lab_command`.
-- [ ] Implement repository methods for create session, append event, create
+- [x] Add `runtime_lab_session`.
+- [x] Add `runtime_lab_task`.
+- [x] Add `runtime_lab_checkpoint`.
+- [x] Add `runtime_lab_event`.
+- [x] Add `runtime_lab_command`.
+- [x] Implement repository methods for create session, append event, create
   task, update task state, create checkpoint, list tasks, list events, and
   store/replay idempotent command response.
-- [ ] Enforce one active task per session through service logic and transaction
+- [x] Enforce one active task per session through service logic and transaction
   tests.
-- [ ] Save evidence under
+- [x] Save evidence under
   `artifacts/slices/029-isolated-runtime-router-lab/029.1/`.
-- [ ] Gates pass.
-- [ ] Commit 029.1 only.
+- [x] Gates pass.
+- [x] Commit 029.1 only.
 
 ## 029.2 Mock SOP adapter
 
