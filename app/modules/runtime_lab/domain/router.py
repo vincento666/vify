@@ -25,7 +25,7 @@ class RuntimeLabRouter:
         active_task: Mapping[str, Any] | None = None,
         suspended_tasks: Sequence[Mapping[str, Any]] | None = None,
     ) -> RouteDecision:
-        del suspended_tasks
+        suspended_count = len(suspended_tasks or ())
         matched = self._match_strong_keyword(message)
         active_task_id = _task_id(active_task)
         if active_task is None and matched is not None:
@@ -38,6 +38,14 @@ class RuntimeLabRouter:
         if active_task is not None and matched is not None:
             active_sop_id = str(active_task.get("sop_id") or "")
             if matched.sop_id != active_sop_id:
+                if suspended_count >= 1:
+                    return RouteDecision(
+                        action="REJECT_SWITCH_SUSPENDED_LIMIT",
+                        target_sop_id=matched.sop_id,
+                        active_task_id=active_task_id,
+                        matched_keyword=matched.keyword,
+                        reason="029 policy allows at most one suspended task",
+                    )
                 current_step = str(active_task.get("current_step") or "")
                 if self._adapter.is_interruptible(active_sop_id, current_step):
                     return RouteDecision(
@@ -47,6 +55,13 @@ class RuntimeLabRouter:
                         matched_keyword=matched.keyword,
                         reason=f"Strong keyword switch at interruptible step: {matched.keyword}",
                     )
+                return RouteDecision(
+                    action="REJECT_SWITCH_CONTINUE_ACTIVE",
+                    target_sop_id=matched.sop_id,
+                    active_task_id=active_task_id,
+                    matched_keyword=matched.keyword,
+                    reason="Active task current step is not interruptible",
+                )
             return RouteDecision(
                 action="CONTINUE_ACTIVE_SOP",
                 active_task_id=active_task_id,

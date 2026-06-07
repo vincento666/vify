@@ -229,6 +229,18 @@ class RuntimeLabRepository:
         ).mappings().one_or_none()
         return dict(row) if row else None
 
+    def get_latest_checkpoint(self, task_id: int) -> dict[str, Any] | None:
+        row = self._session.execute(
+            sa.select(self._checkpoint_table)
+            .where(
+                self._checkpoint_table.c.task_id == task_id,
+                self._checkpoint_table.c.deleted.is_(False),
+            )
+            .order_by(self._checkpoint_table.c.id.desc())
+            .limit(1)
+        ).mappings().one_or_none()
+        return dict(row) if row else None
+
     def list_tasks(self, session_id: int, statuses: set[str] | None = None) -> list[dict[str, Any]]:
         conditions: list[ColumnElement[bool]] = [
             self._task_table.c.session_id == session_id,

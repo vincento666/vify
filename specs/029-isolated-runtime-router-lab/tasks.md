@@ -55,20 +55,20 @@
 
 ## 029.4 Suspend/start and resume offer
 
-- [ ] RED: integration tests fail for A -> B suspend/start and automatic resume
+- [x] RED: integration tests fail for A -> B suspend/start and automatic resume
   offer after B completes.
-- [ ] Implement `SUSPEND_AND_START` for interruptible active task step.
-- [ ] Implement `REJECT_SWITCH_CONTINUE_ACTIVE` for non-interruptible active
+- [x] Implement `SUSPEND_AND_START` for interruptible active task step.
+- [x] Implement `REJECT_SWITCH_CONTINUE_ACTIVE` for non-interruptible active
   task step.
-- [ ] Enforce `max_suspended_tasks=1` with
+- [x] Enforce `max_suspended_tasks=1` with
   `REJECT_SWITCH_SUSPENDED_LIMIT`.
-- [ ] Generate `ResumeOffer` after task completion when suspended task exists.
-- [ ] Emit `TASK_SUSPENDED`, `TASK_STARTED`, `TASK_COMPLETED`, and
+- [x] Generate `ResumeOffer` after task completion when suspended task exists.
+- [x] Emit `TASK_SUSPENDED`, `TASK_STARTED`, `TASK_COMPLETED`, and
   `RESUME_OFFERED` events.
-- [ ] Save evidence under
+- [x] Save evidence under
   `artifacts/slices/029-isolated-runtime-router-lab/029.4/`.
-- [ ] Gates pass.
-- [ ] Commit 029.4 only.
+- [x] Gates pass.
+- [x] Commit 029.4 only.
 
 ## 029.5 Resume task
 
