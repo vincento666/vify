@@ -33,15 +33,15 @@
 
 ## 031.3 Dependency-direction gate
 
-- [ ] RED: architecture test fails if Workflow/Chatflow imports
+- [x] RED: architecture test fails if Workflow/Chatflow imports
   `runtime_lab`.
-- [ ] Add or update architecture import scan.
-- [ ] Prove one-way dependency.
-- [ ] Run targeted runtime-lab tests.
-- [ ] Save evidence under
+- [x] Add or update architecture import scan.
+- [x] Prove one-way dependency.
+- [x] Run targeted runtime-lab tests.
+- [x] Save evidence under
   `artifacts/slices/031-chatflow-sop-adapter-contract/031.3/`.
-- [ ] Gates pass.
-- [ ] Commit 031.3 only.
+- [x] Gates pass.
+- [x] Commit 031.3 only.
 
 ## Future specs, not 031 tasks
 
