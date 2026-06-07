@@ -27,16 +27,16 @@
 
 ## 030.2 Explicit cheap signal detector
 
-- [ ] RED: unit tests fail for strong SOP keywords, aliases, resume phrases,
+- [x] RED: unit tests fail for strong SOP keywords, aliases, resume phrases,
   ordinal resume references, and no-op/refusal phrases.
-- [ ] Implement explicit signal detection as candidate generation.
-- [ ] Ensure no business slot filling happens in the detector.
-- [ ] Ensure no-active unambiguous strong SOP candidate can be accepted before
+- [x] Implement explicit signal detection as candidate generation.
+- [x] Ensure no business slot filling happens in the detector.
+- [x] Ensure no-active unambiguous strong SOP candidate can be accepted before
   classifier.
-- [ ] Save evidence under
+- [x] Save evidence under
   `artifacts/slices/030-runtime-semantic-routing-arbitration/030.2/`.
-- [ ] Gates pass.
-- [ ] Commit 030.2 only.
+- [x] Gates pass.
+- [x] Commit 030.2 only.
 
 ## 030.3 Mock semantic recall
 
