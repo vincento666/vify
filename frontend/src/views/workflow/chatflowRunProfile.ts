@@ -4,6 +4,7 @@ export interface ChatflowRunProfile {
   conversationName?: string
   userId: string
   channel: string
+  channelId?: string
   round: number
   files?: unknown[]
 }
@@ -12,6 +13,7 @@ export function buildChatflowRunInput(profile: ChatflowRunProfile): Record<strin
   const now = new Date().toISOString()
   const messageId = `msg-${Date.now()}`
   const conversationName = profile.conversationName || profile.conversationId
+  const channelId = profile.channelId || `${profile.channel}-preview`
   const files = profile.files || []
   const global = {
     brand: 'Hify',
@@ -27,6 +29,7 @@ export function buildChatflowRunInput(profile: ChatflowRunProfile): Record<strin
   }
   const channel = {
     name: profile.channel,
+    id: channelId,
     source: profile.channel,
   }
   const input = {
@@ -42,6 +45,7 @@ export function buildChatflowRunInput(profile: ChatflowRunProfile): Record<strin
     'sys.conversation_name': conversationName,
     'sys.user_id': profile.userId,
     'sys.channel': profile.channel,
+    'sys.channel_id': channelId,
     'sys.now': now,
     'sys.message_id': messageId,
     'sys.round': profile.round,
@@ -62,6 +66,7 @@ export function buildChatflowRunInput(profile: ChatflowRunProfile): Record<strin
       conversation_name: conversationName,
       user_id: profile.userId,
       channel: profile.channel,
+      channel_id: channelId,
       now,
       message_id: messageId,
       round: profile.round,

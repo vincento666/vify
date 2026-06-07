@@ -13,7 +13,7 @@
     </div>
 
     <el-table :data="workflows" v-loading="loading" class="workflow-table" stripe>
-      <el-table-column prop="name" label="工作流名称" min-width="200">
+      <el-table-column prop="name" label="工作流名称" min-width="12.5rem">
         <template #default="{ row }">
           <div class="wf-name">
             <el-icon class="wf-icon"><Share /></el-icon>
@@ -21,18 +21,18 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column prop="description" label="描述" min-width="250" show-overflow-tooltip />
-      <el-table-column prop="status" label="状态" width="110">
+      <el-table-column prop="description" label="描述" min-width="15.625rem" show-overflow-tooltip />
+      <el-table-column prop="status" label="状态" width="6.875rem">
         <template #default="{ row }">
           <el-tag :type="row.status === 'PUBLISHED' ? 'success' : row.status === 'DISABLED' ? 'danger' : 'info'" size="small">
             {{ statusLabel(row.status) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="创建时间" width="180">
-        <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
+      <el-table-column label="更新时间" width="11.25rem">
+        <template #default="{ row }">{{ formatTime(row.updatedAt || row.createdAt) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="230" fixed="right">
+      <el-table-column label="操作" width="14.375rem" fixed="right">
         <template #default="{ row }">
           <el-button size="small" @click="viewDetail(row)">查看</el-button>
           <el-button size="small" type="primary" plain @click="$router.push(`/workflows/${row.id}/canvas`)">画布</el-button>
@@ -46,7 +46,7 @@
     </el-table>
 
     <!-- 详情抽屉 -->
-    <el-drawer v-model="drawerVisible" title="工作流详情" size="600px" direction="rtl">
+    <el-drawer v-model="drawerVisible" title="工作流详情" size="37.5rem" direction="rtl">
       <div v-if="detail" class="detail-panel">
         <div class="detail-meta">
           <el-descriptions :column="2" border>
@@ -150,49 +150,49 @@ onMounted(fetchList)
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 20px;
+  margin-bottom: var(--space-5);
 }
-.page-title { margin: 0 0 4px; font-size: 18px; font-weight: 600; color: var(--el-text-color-primary); }
-.page-desc { margin: 0; font-size: 13px; color: var(--el-text-color-secondary); }
+.page-title { margin: 0 0 var(--space-1); font-size: var(--text-lg); font-weight: 600; color: var(--el-text-color-primary); }
+.page-desc { margin: 0; font-size: var(--text-sm); color: var(--el-text-color-secondary); }
 
 .workflow-table { width: 100%; }
 
-.wf-name { display: flex; align-items: center; gap: 8px; }
+.wf-name { display: flex; align-items: center; gap: var(--space-2); }
 .wf-icon { color: var(--el-color-primary); }
 
-.detail-section { margin-top: 20px; }
-.detail-section h4 { margin: 0 0 12px; font-size: 14px; font-weight: 600; color: var(--el-text-color-primary); }
+.detail-section { margin-top: var(--space-5); }
+.detail-section h4 { margin: 0 0 var(--space-3); font-size: var(--text-sm); font-weight: 600; color: var(--el-text-color-primary); }
 
 .node-card {
   border: 1px solid var(--el-border-color-light);
-  border-radius: 6px;
-  padding: 10px 12px;
-  margin-bottom: 8px;
+  border-radius: var(--radius-sm);
+  padding: 0.625rem 0.75rem;
+  margin-bottom: var(--space-2);
   background: var(--el-fill-color-extra-light);
 }
-.node-header { display: flex; align-items: center; gap: 8px; }
-.node-key { font-family: monospace; font-size: 12px; color: var(--el-text-color-secondary); }
-.node-name { font-size: 13px; color: var(--el-text-color-primary); }
+.node-header { display: flex; align-items: center; gap: var(--space-2); }
+.node-key { font-family: monospace; font-size: var(--text-xs); color: var(--el-text-color-secondary); }
+.node-name { font-size: var(--text-sm); color: var(--el-text-color-primary); }
 .node-config {
-  margin-top: 8px;
-  padding: 8px;
+  margin-top: var(--space-2);
+  padding: var(--space-2);
   background: var(--el-fill-color);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   overflow: auto;
-  max-height: 120px;
+  max-height: 7.5rem;
 }
-.node-config pre { margin: 0; font-size: 11px; line-height: 1.5; color: var(--el-text-color-regular); }
+.node-config pre { margin: 0; font-size: 0.6875rem; line-height: 1.5; color: var(--el-text-color-regular); }
 
 .edge-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 0;
+  gap: var(--space-2);
+  padding: 0.375rem 0;
   border-bottom: 1px solid var(--el-border-color-extra-light);
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 .edge-source { font-family: monospace; color: var(--el-color-primary); }
 .edge-target { font-family: monospace; color: var(--el-color-success); }
 
-.detail-meta { margin-bottom: 16px; }
+.detail-meta { margin-bottom: var(--space-4); }
 </style>

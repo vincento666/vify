@@ -9,6 +9,7 @@ describe('buildChatflowRunInput', () => {
       conversationId: 'conv-1',
       userId: 'user-1',
       channel: 'web',
+      channelId: 'web-preview',
       round: 3,
     })
 
@@ -19,11 +20,13 @@ describe('buildChatflowRunInput', () => {
       'sys.conversation_id': 'conv-1',
       'sys.user_id': 'user-1',
       'sys.channel': 'web',
+      'sys.channel_id': 'web-preview',
       'sys.round': 3,
       'global.brand': 'Hify',
       'global.locale': 'zh-CN',
     })
     expect(input.global).toEqual({ brand: 'Hify', locale: 'zh-CN' })
+    expect(input.sys).toMatchObject({ channel_id: 'web-preview' })
     expect(input['sys.message_id']).toMatch(/^msg-/)
   })
 })

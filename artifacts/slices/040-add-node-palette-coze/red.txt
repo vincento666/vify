@@ -1,0 +1,13 @@
+file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-add-node-palette-coze.mjs:7
+  if (!condition) throw new Error(message)
+                        ^
+
+Error: bottom palette group order mismatch: {"groups":[{"title":"常用节点","labels":["大模型","选择器","知识库检索","API 调用","工具调用","工作流","智能体","转人工","代码","文本处理","JSON 解析","变量聚合","变量赋值","意图识别","消息","问题","人工输入","信息收集"],"gridColumns":1},{"title":"输入输出","labels":["知识库检索","输出到 API","工具调用","工作流","智能体","转人工"],"gridColumns":1}],"duplicateLabels":["知识库检索","工具调用","工作流","智能体","转人工"],"smallCount":24}
+    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-add-node-palette-coze.mjs:7:25)
+    at assertCozePalette (file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-add-node-palette-coze.mjs:31:3)
+    at file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-add-node-palette-coze.mjs:54:3
+    at runNextTicks (node:internal/process/task_queues:65:5)
+    at process.processImmediate (node:internal/timers:473:9)
+    at process.callbackTrampoline (node:internal/async_hooks:130:17)
+
+Node.js v23.11.0

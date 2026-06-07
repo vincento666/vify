@@ -1,40 +1,87 @@
 import type { WorkflowCanvasGraph, WorkflowCanvasNode } from './flowGraph'
+import { normalizeInputConfig, normalizeOutputConfig, normalizeStartVariables, type OutputParameterType } from './nodeConfig'
+
+export type VariableCatalogScope = 'user' | 'global' | 'system' | 'conversation' | 'upstream' | 'local'
+export type VariableCatalogType = OutputParameterType | 'file'
 
 export interface VariableCatalogItem {
   nodeKey: string
   variable: string
   label: string
   reference: string
+  type: VariableCatalogType
 }
 
 export interface VariableCatalogGroup {
   title: string
+  scope: VariableCatalogScope
+  sourceKey: string
+  sourceLabel: string
+  sourceNodeKey?: string
   items: VariableCatalogItem[]
+}
+
+export interface VariableDefinition {
+  name: string
+  type: VariableCatalogType
+}
+
+interface BuildVariableCatalogOptions {
+  flowType?: 'WORKFLOW' | 'CHATFLOW'
+  globalVariables?: Partial<Record<'user' | 'app' | 'system', VariableDefinition[]>>
 }
 
 export function formatVariableReference(nodeKey: string, variable: string) {
   return `{{${nodeKey}.${variable}}}`
 }
 
-function outputVariables(node: WorkflowCanvasNode): string[] {
+export function formatLocalVariableReference(variable: string) {
+  return `{{${variable}}}`
+}
+
+function outputVariables(node: WorkflowCanvasNode): VariableDefinition[] {
   if (node.type === 'START') {
-    const values = node.config.outputVariables
-    return Array.isArray(values) ? values.map(String) : ['USER_INPUT']
+    return normalizeStartVariables(node.config).map((variable) => ({ name: variable.name, type: variable.type }))
   }
 
   const outputVariable = node.config.outputVariable
+  const normalizedOutputParameters = normalizeOutputConfig(node.config).parameters
+  if (normalizedOutputParameters.length > 0) {
+    return normalizedOutputParameters.map((item) => ({ name: item.name, type: item.type }))
+  }
   if (typeof outputVariable === 'string' && outputVariable.trim()) {
-    return [outputVariable.trim()]
+    return [{ name: outputVariable.trim(), type: 'string' }]
   }
   return []
 }
 
-function catalogItem(node: WorkflowCanvasNode, variable: string): VariableCatalogItem {
+function catalogItem(node: WorkflowCanvasNode, variable: VariableDefinition): VariableCatalogItem {
   return {
     nodeKey: node.nodeKey,
-    variable,
-    label: `${node.name}.${variable}`,
-    reference: formatVariableReference(node.nodeKey, variable),
+    variable: variable.name,
+    label: variable.name,
+    reference: formatVariableReference(node.nodeKey, variable.name),
+    type: variable.type,
+  }
+}
+
+function staticCatalogItem(scopeKey: string, variable: VariableDefinition): VariableCatalogItem {
+  return {
+    nodeKey: scopeKey,
+    variable: variable.name,
+    label: variable.name,
+    reference: formatVariableReference(scopeKey, variable.name),
+    type: variable.type,
+  }
+}
+
+function localCatalogItem(node: WorkflowCanvasNode, variable: VariableDefinition): VariableCatalogItem {
+  return {
+    nodeKey: node.nodeKey,
+    variable: variable.name,
+    label: variable.name,
+    reference: formatLocalVariableReference(variable.name),
+    type: variable.type,
   }
 }
 
@@ -56,19 +103,80 @@ function upstreamNodeKeys(graph: WorkflowCanvasGraph, selectedNodeKey: string) {
   return result.reverse()
 }
 
-export function buildVariableCatalog(graph: WorkflowCanvasGraph, selectedNodeKey: string): VariableCatalogGroup[] {
-  const nodesByKey = new Map(graph.nodes.map((node) => [node.nodeKey, node]))
-  const start = nodesByKey.get('start')
-  const startItems = start ? outputVariables(start).map((variable) => catalogItem(start, variable)) : []
+function configuredGlobalScopeGroups(options: BuildVariableCatalogOptions): VariableCatalogGroup[] {
+  const definitions = options.globalVariables ?? {}
+  const groups: Array<{
+    key: 'user' | 'global' | 'sys'
+    title: string
+    scope: VariableCatalogScope
+    variables?: VariableDefinition[]
+  }> = [
+    { key: 'user', title: '用户变量', scope: 'user', variables: definitions.user },
+    { key: 'global', title: '应用变量', scope: 'global', variables: definitions.app },
+    { key: 'sys', title: '系统变量', scope: 'system', variables: definitions.system },
+  ]
 
-  const upstreamItems = upstreamNodeKeys(graph, selectedNodeKey)
-    .filter((nodeKey) => nodeKey !== 'start')
+  return groups
+    .map((group) => ({
+      title: group.title,
+      scope: group.scope,
+      sourceKey: group.key,
+      sourceLabel: group.title,
+      items: (group.variables ?? [])
+        .filter((variable) => String(variable.name || '').trim().length > 0)
+        .map((variable) => staticCatalogItem(group.key, variable)),
+    }))
+    .filter((group) => group.items.length > 0)
+}
+
+export function buildVariableCatalog(
+  graph: WorkflowCanvasGraph,
+  selectedNodeKey: string,
+  options: BuildVariableCatalogOptions = {},
+): VariableCatalogGroup[] {
+  const nodesByKey = new Map(graph.nodes.map((node) => [node.nodeKey, node]))
+  const upstreamGroups = upstreamNodeKeys(graph, selectedNodeKey)
     .map((nodeKey) => nodesByKey.get(nodeKey))
     .filter((node): node is WorkflowCanvasNode => Boolean(node))
-    .flatMap((node) => outputVariables(node).map((variable) => catalogItem(node, variable)))
+    .map((node) => ({
+      title: node.name,
+      scope: 'upstream' as const,
+      sourceKey: node.nodeKey,
+      sourceLabel: node.name,
+      sourceNodeKey: node.nodeKey,
+      items: outputVariables(node).map((variable) => catalogItem(node, variable)),
+    }))
+    .filter((group) => group.items.length > 0)
+  return [...configuredGlobalScopeGroups(options), ...upstreamGroups]
+}
 
-  return [
-    { title: '开始节点', items: startItems },
-    { title: '上游节点', items: upstreamItems },
-  ].filter((group) => group.items.length > 0)
+export function buildLocalVariableCatalog(graph: WorkflowCanvasGraph, selectedNodeKey: string): VariableCatalogGroup[] {
+  const node = graph.nodes.find((item) => item.nodeKey === selectedNodeKey)
+  if (!node) return []
+
+  if (node.type === 'END') {
+    const outputItems = normalizeOutputConfig(node.config, { respectExplicitEmpty: true }).parameters.map((variable) => localCatalogItem(node, variable))
+    return outputItems.length > 0
+      ? [{
+        title: '输出',
+        scope: 'local',
+        sourceKey: node.nodeKey,
+        sourceLabel: node.name,
+        sourceNodeKey: node.nodeKey,
+        items: outputItems,
+      }]
+      : []
+  }
+
+  const inputItems = normalizeInputConfig(node.config).parameters.map((variable) => localCatalogItem(node, variable))
+  return inputItems.length > 0
+    ? [{
+      title: '输入',
+      scope: 'local',
+      sourceKey: node.nodeKey,
+      sourceLabel: node.name,
+      sourceNodeKey: node.nodeKey,
+      items: inputItems,
+    }]
+    : []
 }

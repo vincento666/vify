@@ -13,10 +13,10 @@ describe('workflow module routes', () => {
     const workflowRoute = routes.find((route) => route.path === '/workflows')
     const workflowCreateRoute = routes.find((route) => route.path === '/workflows/create')
 
-    expect(paths).toEqual(expect.arrayContaining(['/workflows', '/workflows/create', '/chatflows', '/chatflows/create']))
+    expect(paths).toEqual(expect.arrayContaining(['/workflows', '/workflows/create', '/workflow/api-resources', '/chatflows', '/chatflows/create']))
     expect(workflowRoute?.meta.workflowModuleTabs).toEqual([
-      { label: 'Workflow', path: '/workflows', flowType: 'WORKFLOW' },
-      { label: 'Chatflow', path: '/chatflows', flowType: 'CHATFLOW' },
+      { label: '工作流', path: '/workflows', flowType: 'WORKFLOW' },
+      { label: '对话流', path: '/chatflows', flowType: 'CHATFLOW' },
     ])
     expect(workflowCreateRoute?.meta.canvasWorkbench).toBe(true)
   })
@@ -29,8 +29,8 @@ describe('workflow module routes', () => {
     expect(chatflowDetailRoute).toBeTruthy()
     expect(chatflowDetailRoute?.meta.canvasWorkbench).toBe(true)
     expect(chatflowDetailRoute?.meta.workflowModuleTabs).toEqual([
-      { label: 'Workflow', path: '/workflows', flowType: 'WORKFLOW' },
-      { label: 'Chatflow', path: '/chatflows', flowType: 'CHATFLOW' },
+      { label: '工作流', path: '/workflows', flowType: 'WORKFLOW' },
+      { label: '对话流', path: '/chatflows', flowType: 'CHATFLOW' },
     ])
   })
 })

@@ -354,41 +354,41 @@ onMounted(loadChatflow)
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 18px;
+  margin-bottom: 1.125rem;
 }
 
 .header-actions {
   display: flex;
-  gap: 10px;
+  gap: 0.625rem;
 }
 
 .page-title {
-  margin: 0 0 4px;
-  font-size: 18px;
+  margin: 0 0 0.25rem;
+  font-size: 1.125rem;
   font-weight: 600;
   color: var(--el-text-color-primary);
 }
 
 .page-desc {
   margin: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--el-text-color-secondary);
 }
 
 .canvas-shell {
-  height: calc(100vh - 176px);
-  min-height: 520px;
+  height: calc(100vh - 11rem);
+  min-height: 32.5rem;
   display: grid;
-  grid-template-columns: 220px minmax(420px, 1fr) 280px;
+  grid-template-columns: 13.75rem minmax(26.25rem, 1fr) 17.5rem;
   border: 1px solid var(--el-border-color-lighter);
-  border-radius: 8px;
+  border-radius: 0.5rem;
   overflow: hidden;
   background: #f7f8fb;
 }
 
 .canvas-sidebar,
 .canvas-inspector {
-  padding: 16px;
+  padding: 1rem;
   background: #fff;
 }
 
@@ -398,50 +398,50 @@ onMounted(loadChatflow)
 
 .canvas-inspector {
   border-left: 1px solid var(--el-border-color-lighter);
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.7;
   color: var(--el-text-color-secondary);
 }
 
 .canvas-inspector label {
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: 0.5rem;
   color: var(--el-text-color-primary);
   font-weight: 700;
 }
 
 .panel-title {
-  margin-bottom: 12px;
-  font-size: 13px;
+  margin-bottom: 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 700;
   color: var(--el-text-color-primary);
 }
 
 .node-row {
   width: 100%;
-  height: 36px;
-  margin-bottom: 8px;
+  height: 2.25rem;
+  margin-bottom: 0.5rem;
   border: 1px solid var(--el-border-color);
-  border-radius: 6px;
+  border-radius: 0.375rem;
   background: #fff;
   color: var(--el-text-color-primary);
   text-align: left;
-  padding: 0 12px;
+  padding: 0 0.75rem;
   cursor: pointer;
 }
 
 .variable-panel {
-  margin-top: 18px;
+  margin-top: 1.125rem;
 }
 
 .variable-scope {
-  margin-bottom: 12px;
+  margin-bottom: 0.75rem;
 }
 
 .scope-title {
-  margin-bottom: 6px;
+  margin-bottom: 0.375rem;
   color: #7b8498;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 
@@ -450,11 +450,11 @@ onMounted(loadChatflow)
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
-  margin-bottom: 5px;
-  padding: 7px 8px;
+  gap: 0.125rem;
+  margin-bottom: 0.3125rem;
+  padding: 0.4375rem 0.5rem;
   border: 0;
-  border-radius: 7px;
+  border-radius: 0.4375rem;
   background: #f6f7fb;
   color: #30364a;
   cursor: pointer;
@@ -466,14 +466,14 @@ onMounted(loadChatflow)
 
 .variable-scope code {
   color: #5d5ff6;
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 .field-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin: 16px 0 8px;
+  margin: 1rem 0 0.5rem;
 }
 
 .field-row label {
@@ -481,87 +481,87 @@ onMounted(loadChatflow)
 }
 
 .variable-popover {
-  max-height: 260px;
-  margin-top: 8px;
-  padding: 10px;
+  max-height: 16.25rem;
+  margin-top: 0.5rem;
+  padding: 0.625rem;
   border: 1px solid #dfe3ee;
-  border-radius: 10px;
+  border-radius: 0.625rem;
   overflow: auto;
   background: #fff;
-  box-shadow: 0 10px 28px rgba(34, 41, 63, 0.12);
+  box-shadow: 0 0.625rem 1.75rem rgba(34, 41, 63, 0.12);
 }
 
 .conversation-test-panel {
-  margin-top: 18px;
-  padding-top: 14px;
+  margin-top: 1.125rem;
+  padding-top: 0.875rem;
   border-top: 1px solid #edf0f6;
 }
 
 .publish-shell {
-  margin-top: 18px;
-  padding-top: 14px;
+  margin-top: 1.125rem;
+  padding-top: 0.875rem;
   border-top: 1px solid #edf0f6;
 }
 
 .shell-fields {
-  margin: 0 0 12px;
+  margin: 0 0 0.75rem;
 }
 
 .shell-fields div {
   display: flex;
   justify-content: space-between;
-  gap: 10px;
-  padding: 7px 0;
+  gap: 0.625rem;
+  padding: 0.4375rem 0;
   border-bottom: 1px solid #f0f2f7;
 }
 
 .shell-fields dt {
   color: #858ea2;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 
 .shell-fields dd {
   margin: 0;
-  max-width: 170px;
+  max-width: 10.625rem;
   overflow-wrap: anywhere;
   color: #2f3548;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   text-align: right;
 }
 
 .shell-fields code {
   color: #5d5ff6;
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 .publish-reasons {
-  margin: 0 0 12px;
-  padding-left: 18px;
+  margin: 0 0 0.75rem;
+  padding-left: 1.125rem;
   color: #c23b3b;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.7;
 }
 
 .profile-grid {
   display: grid;
-  gap: 8px;
-  margin: 10px 0;
+  gap: 0.5rem;
+  margin: 0.625rem 0;
 }
 
 .conversation-result {
-  margin-top: 12px;
+  margin-top: 0.75rem;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0.5rem;
 }
 
 .message-bubble {
   max-width: 100%;
-  padding: 9px 10px;
-  border-radius: 10px;
-  font-size: 13px;
+  padding: 0.5625rem 0.625rem;
+  border-radius: 0.625rem;
+  font-size: 0.8125rem;
   line-height: 1.5;
 }
 
@@ -582,43 +582,43 @@ onMounted(loadChatflow)
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 42px;
+  gap: 2.625rem;
   background-image:
     linear-gradient(#e6e9f0 1px, transparent 1px),
     linear-gradient(90deg, #e6e9f0 1px, transparent 1px);
-  background-size: 24px 24px;
+  background-size: 1.5rem 1.5rem;
 }
 
 .stage-node {
-  width: 180px;
-  min-height: 72px;
-  padding: 12px;
+  width: 11.25rem;
+  min-height: 4.5rem;
+  padding: 0.75rem;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  border-radius: 8px;
+  gap: 0.375rem;
+  border-radius: 0.5rem;
   border: 1px solid #d9dde8;
   background: #fff;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   color: #27324a;
-  box-shadow: 0 8px 22px rgba(39, 50, 74, 0.08);
+  box-shadow: 0 0.5rem 1.375rem rgba(39, 50, 74, 0.08);
 }
 
 .stage-node strong {
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .stage-node span {
-  max-width: 150px;
+  max-width: 9.375rem;
   overflow: hidden;
-  padding: 3px 7px;
-  border-radius: 5px;
+  padding: 0.1875rem 0.4375rem;
+  border-radius: 0.3125rem;
   background: #eef1f7;
   color: #525c73;
-  font-size: 11px;
+  font-size: 0.6875rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -632,8 +632,8 @@ onMounted(loadChatflow)
 }
 
 .stage-line {
-  width: 72px;
-  height: 2px;
+  width: 4.5rem;
+  height: 0.125rem;
   background: #8792a8;
 }
 
@@ -649,7 +649,7 @@ onMounted(loadChatflow)
   }
 
   .canvas-stage {
-    min-height: 320px;
+    min-height: 20rem;
   }
 }
 </style>

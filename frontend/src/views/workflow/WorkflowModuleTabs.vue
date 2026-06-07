@@ -31,7 +31,7 @@ function handleTabChange(path: string | number) {
 
 <style scoped>
 .workflow-module-tabs {
-  margin-bottom: 18px;
+  margin-bottom: 1.125rem;
 }
 
 .workflow-module-tabs :deep(.el-tabs__header) {
@@ -39,14 +39,14 @@ function handleTabChange(path: string | number) {
 }
 
 .workflow-module-tabs :deep(.el-tabs__nav-wrap::after) {
-  height: 1px;
+  height: 0.0625rem;
   background: var(--el-border-color-lighter);
 }
 
 .workflow-module-tabs :deep(.el-tabs__item) {
-  height: 36px;
-  padding: 0 18px;
-  font-size: 13px;
+  height: 2.25rem;
+  padding: 0 1.125rem;
+  font-size: 0.8125rem;
   font-weight: 600;
 }
 </style>

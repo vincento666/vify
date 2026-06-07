@@ -7,8 +7,8 @@ export interface WorkflowModuleTab {
 }
 
 export const WORKFLOW_MODULE_TABS: WorkflowModuleTab[] = [
-  { label: 'Workflow', path: '/workflows', flowType: 'WORKFLOW' },
-  { label: 'Chatflow', path: '/chatflows', flowType: 'CHATFLOW' },
+  { label: '工作流', path: '/workflows', flowType: 'WORKFLOW' },
+  { label: '对话流', path: '/chatflows', flowType: 'CHATFLOW' },
 ]
 
 export function getActiveWorkflowModulePath(path: string) {
