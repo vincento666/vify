@@ -123,6 +123,24 @@
 - [x] Gates pass.
 - [x] Commit 029.7 only.
 
+## 029.8 Runtime kernel hardening
+
+- [x] RED: kernel command tests fail for session existence, domain-level
+  idempotency replay, request-hash mismatch, and one-active-task invariant.
+- [x] Move idempotent command replay from the HTTP router into the runtime
+  service/kernel boundary so future non-HTTP integrations can reuse it.
+- [x] Add a domain payload serializer for turn/task/event/decision snapshots
+  used by both API responses and command replay storage.
+- [x] Reject messages for missing sessions before appending events.
+- [x] Reject reused idempotency keys with a different request hash.
+- [x] Preserve contiguous event sequence and one active task after duplicate
+  command replay.
+- [x] Keep `/api/v1/runtime-lab/...` response shape unchanged.
+- [x] Save evidence under
+  `artifacts/slices/029-isolated-runtime-router-lab/029.8/`.
+- [x] Gates pass.
+- [x] Commit 029.8 only.
+
 ## Future specs, not 029 tasks
 
 - [ ] Semantic recall and constrained NLP/LLM arbitration.

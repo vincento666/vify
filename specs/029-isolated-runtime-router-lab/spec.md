@@ -353,6 +353,8 @@ Later specs may add:
 - API E2E scripts for the full A -> B -> resume A flow;
 - UAT markdown records with request/response summaries;
 - git commit after spec creation and after each completed slice.
+- 029.8 runtime kernel hardening so non-HTTP integrations can reuse session
+  validation, command idempotency, replay snapshots, and invariant checks.
 
 No frontend rem or browser UAT gate is required in 029 because no frontend files
 are in scope.

@@ -1,4 +1,3 @@
-import hashlib
 from typing import Any
 
 from fastapi import APIRouter, Depends
@@ -6,15 +5,10 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_session
 from app.core.responses import success
+from app.modules.runtime_lab.domain.payload import format_event, format_session, format_task
 from app.modules.runtime_lab.domain.service import RuntimeLabService
 from app.modules.runtime_lab.infra.repository import RuntimeLabRepository
-from app.modules.runtime_lab.web.schemas import (
-    RuntimeLabMessageRequest,
-    format_event,
-    format_session,
-    format_task,
-    format_turn,
-)
+from app.modules.runtime_lab.web.schemas import RuntimeLabMessageRequest
 
 router = APIRouter(prefix="/api/v1/runtime-lab", tags=["runtime-lab"])
 
@@ -34,15 +28,8 @@ def post_message(
     request: RuntimeLabMessageRequest,
     service: RuntimeLabService = Depends(get_runtime_lab_service),
 ) -> dict[str, Any]:
-    request_hash = _request_hash(request.message)
-    if request.idempotency_key:
-        existing = service.get_command_response(session_id, request.idempotency_key)
-        if existing is not None:
-            return success(existing["response_payload"])
-    payload = format_turn(service.handle_message(session_id, request.message))
-    if request.idempotency_key:
-        service.store_command_response(session_id, request.idempotency_key, request_hash, payload)
-    return success(payload)
+    result = service.handle_command(session_id, request.message, request.idempotency_key)
+    return success(result.payload)
 
 
 @router.get("/sessions/{session_id}/tasks")
@@ -61,7 +48,3 @@ def list_events(
 ) -> dict[str, Any]:
     events = service.list_events(session_id)
     return success({"list": [format_event(event) for event in events], "total": len(events)})
-
-
-def _request_hash(message: str) -> str:
-    return hashlib.sha256(message.encode("utf-8")).hexdigest()

@@ -156,7 +156,22 @@ No frontend tests are required because 029 does not touch frontend files.
 
 ## Slice Order
 
-029.1 -> 029.2 -> 029.3 -> 029.4 -> 029.5 -> 029.6 -> 029.7
+029.1 -> 029.2 -> 029.3 -> 029.4 -> 029.5 -> 029.6 -> 029.7 -> 029.8
+
+## 029.8 Kernel Hardening Notes
+
+The post-029.7 API is enough for lab happy-path validation, but future
+integration specs need a reusable runtime kernel boundary that does not depend
+on FastAPI routing code.
+
+029.8 moves command-level concerns into the runtime service:
+
+- session existence validation before side effects;
+- idempotent message replay by `(session_id, idempotency_key)`;
+- request-hash mismatch rejection for reused idempotency keys;
+- shared domain payload formatting for API responses and replay storage;
+- invariant tests proving duplicate command replay does not mutate tasks or
+  events.
 
 ## Git Notes
 

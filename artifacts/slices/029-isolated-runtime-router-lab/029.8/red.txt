@@ -1,0 +1,45 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/vincento/work/develop/hify
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 2 items
+
+tests/integration/runtime_lab/test_runtime_lab_kernel.py FF              [100%]
+
+=================================== FAILURES ===================================
+_ RuntimeLabKernelTest.test_command_replay_is_domain_level_and_preserves_invariants _
+
+self = <test_runtime_lab_kernel.RuntimeLabKernelTest testMethod=test_command_replay_is_domain_level_and_preserves_invariants>
+
+    def test_command_replay_is_domain_level_and_preserves_invariants(self) -> None:
+        with _session() as session:
+            repository = RuntimeLabRepository(session)
+            service = RuntimeLabService(repository)
+            runtime_session = service.create_session()
+    
+>           first = service.handle_command(int(runtime_session["id"]), "我要退票", idempotency_key="kernel-start")
+                    ^^^^^^^^^^^^^^^^^^^^^^
+E           AttributeError: 'RuntimeLabService' object has no attribute 'handle_command'
+
+tests/integration/runtime_lab/test_runtime_lab_kernel.py:22: AttributeError
+___ RuntimeLabKernelTest.test_missing_session_command_rejected_before_events ___
+
+self = <test_runtime_lab_kernel.RuntimeLabKernelTest testMethod=test_missing_session_command_rejected_before_events>
+
+    def test_missing_session_command_rejected_before_events(self) -> None:
+        with _session() as session:
+            repository = RuntimeLabRepository(session)
+            service = RuntimeLabService(repository)
+    
+            with self.assertRaises(BizError) as missing:
+>               service.handle_command(404_404, "我要退票", idempotency_key="missing")
+                ^^^^^^^^^^^^^^^^^^^^^^
+E               AttributeError: 'RuntimeLabService' object has no attribute 'handle_command'
+
+tests/integration/runtime_lab/test_runtime_lab_kernel.py:49: AttributeError
+=========================== short test summary info ============================
+FAILED tests/integration/runtime_lab/test_runtime_lab_kernel.py::RuntimeLabKernelTest::test_command_replay_is_domain_level_and_preserves_invariants
+FAILED tests/integration/runtime_lab/test_runtime_lab_kernel.py::RuntimeLabKernelTest::test_missing_session_command_rejected_before_events
+============================== 2 failed in 0.27s ===============================

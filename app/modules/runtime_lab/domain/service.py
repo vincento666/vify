@@ -1,6 +1,9 @@
+import hashlib
 from dataclasses import dataclass
 from typing import Any
 
+from app.core.errors import BizError, ErrorCode
+from app.modules.runtime_lab.domain.payload import format_turn
 from app.modules.runtime_lab.domain.router import RouteDecision, RuntimeLabRouter
 from app.modules.runtime_lab.domain.sop import MockSopAdapter, SopTurnResult
 from app.modules.runtime_lab.infra.repository import RuntimeLabRepository
@@ -14,6 +17,12 @@ class RuntimeLabTurn:
     suspended_tasks: list[dict[str, Any]]
     resume_offer: dict[str, Any] | None
     events: list[dict[str, Any]]
+
+
+@dataclass(frozen=True)
+class RuntimeLabCommandResult:
+    payload: dict[str, Any]
+    replayed: bool
 
 
 class RuntimeLabService:
@@ -33,6 +42,7 @@ class RuntimeLabService:
         return runtime_session
 
     def handle_message(self, session_id: int, message: str) -> RuntimeLabTurn:
+        self._ensure_session_exists(session_id)
         self._repository.append_event(session_id, "USER_MESSAGE", {"message": message})
         active_task = self._repository.get_active_task(session_id)
         suspended_tasks = self._repository.list_tasks(session_id, statuses={"SUSPENDED"})
@@ -78,6 +88,25 @@ class RuntimeLabService:
             return self._continue_active_task(session_id, active_task, message, decision)
 
         return self._turn(session_id, "暂未匹配到可执行的航空业务流程。", decision)
+
+    def handle_command(
+        self,
+        session_id: int,
+        message: str,
+        idempotency_key: str | None = None,
+    ) -> RuntimeLabCommandResult:
+        self._ensure_session_exists(session_id)
+        request_hash = _request_hash(message)
+        if idempotency_key:
+            existing = self._repository.get_command_response(session_id, idempotency_key)
+            if existing is not None:
+                if existing["request_hash"] != request_hash:
+                    raise BizError(ErrorCode.BAD_REQUEST, "Idempotency key reused with different request")
+                return RuntimeLabCommandResult(dict(existing["response_payload"]), replayed=True)
+        payload = format_turn(self.handle_message(session_id, message))
+        if idempotency_key:
+            self._repository.store_command_response(session_id, idempotency_key, request_hash, payload)
+        return RuntimeLabCommandResult(payload, replayed=False)
 
     def list_tasks(self, session_id: int) -> list[dict[str, Any]]:
         return self._repository.list_tasks(session_id)
@@ -255,6 +284,10 @@ class RuntimeLabService:
             events=self._repository.list_events(session_id),
         )
 
+    def _ensure_session_exists(self, session_id: int) -> None:
+        if self._repository.get_session(session_id) is None:
+            raise BizError(ErrorCode.NOT_FOUND, "Runtime lab session not found")
+
 
 def _decision_payload(decision: RouteDecision) -> dict[str, Any]:
     return {
@@ -264,3 +297,7 @@ def _decision_payload(decision: RouteDecision) -> dict[str, Any]:
         "activeTaskId": decision.active_task_id,
         "matchedKeyword": decision.matched_keyword,
     }
+
+
+def _request_hash(message: str) -> str:
+    return hashlib.sha256(message.encode("utf-8")).hexdigest()
