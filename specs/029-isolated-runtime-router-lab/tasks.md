@@ -42,16 +42,16 @@
 
 ## 029.3 Router core
 
-- [ ] RED: route decision tests fail for no-active start, active default
+- [x] RED: route decision tests fail for no-active start, active default
   continue, strong switch trigger, and no-match.
-- [ ] Implement strong keyword routing from mock SOP manifests.
-- [ ] Implement active-task default `CONTINUE_ACTIVE_SOP`.
-- [ ] Implement `START_SOP`.
-- [ ] Implement route decision evidence with reason and matched keyword.
-- [ ] Save evidence under
+- [x] Implement strong keyword routing from mock SOP manifests.
+- [x] Implement active-task default `CONTINUE_ACTIVE_SOP`.
+- [x] Implement `START_SOP`.
+- [x] Implement route decision evidence with reason and matched keyword.
+- [x] Save evidence under
   `artifacts/slices/029-isolated-runtime-router-lab/029.3/`.
-- [ ] Gates pass.
-- [ ] Commit 029.3 only.
+- [x] Gates pass.
+- [x] Commit 029.3 only.
 
 ## 029.4 Suspend/start and resume offer
 

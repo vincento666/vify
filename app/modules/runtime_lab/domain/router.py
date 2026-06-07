@@ -1,0 +1,84 @@
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from typing import Any
+
+from app.modules.runtime_lab.domain.sop import MockSopAdapter, SopManifest, mock_sop_manifests
+
+
+@dataclass(frozen=True)
+class RouteDecision:
+    action: str
+    reason: str
+    target_sop_id: str | None = None
+    active_task_id: int | None = None
+    matched_keyword: str | None = None
+
+
+class RuntimeLabRouter:
+    def __init__(self, adapter: MockSopAdapter | None = None, manifests: dict[str, SopManifest] | None = None) -> None:
+        self._manifests = manifests or mock_sop_manifests()
+        self._adapter = adapter or MockSopAdapter(self._manifests)
+
+    def decide(
+        self,
+        message: str,
+        active_task: Mapping[str, Any] | None = None,
+        suspended_tasks: Sequence[Mapping[str, Any]] | None = None,
+    ) -> RouteDecision:
+        del suspended_tasks
+        matched = self._match_strong_keyword(message)
+        active_task_id = _task_id(active_task)
+        if active_task is None and matched is not None:
+            return RouteDecision(
+                action="START_SOP",
+                target_sop_id=matched.sop_id,
+                matched_keyword=matched.keyword,
+                reason=f"Matched strong keyword: {matched.keyword}",
+            )
+        if active_task is not None and matched is not None:
+            active_sop_id = str(active_task.get("sop_id") or "")
+            if matched.sop_id != active_sop_id:
+                current_step = str(active_task.get("current_step") or "")
+                if self._adapter.is_interruptible(active_sop_id, current_step):
+                    return RouteDecision(
+                        action="SUSPEND_AND_START",
+                        target_sop_id=matched.sop_id,
+                        active_task_id=active_task_id,
+                        matched_keyword=matched.keyword,
+                        reason=f"Strong keyword switch at interruptible step: {matched.keyword}",
+                    )
+            return RouteDecision(
+                action="CONTINUE_ACTIVE_SOP",
+                active_task_id=active_task_id,
+                matched_keyword=matched.keyword,
+                reason="Matched active SOP keyword or non-switch context",
+            )
+        if active_task is not None:
+            return RouteDecision(
+                action="CONTINUE_ACTIVE_SOP",
+                active_task_id=active_task_id,
+                reason="Active task exists and no strong switch matched",
+            )
+        return RouteDecision(action="NO_MATCH", reason="No strong SOP keyword matched")
+
+    def _match_strong_keyword(self, message: str) -> "_StrongMatch | None":
+        for manifest in self._manifests.values():
+            for keyword in manifest.strong_trigger_keywords:
+                if keyword and keyword in message:
+                    return _StrongMatch(manifest.sop_id, keyword)
+        return None
+
+
+@dataclass(frozen=True)
+class _StrongMatch:
+    sop_id: str
+    keyword: str
+
+
+def _task_id(active_task: Mapping[str, Any] | None) -> int | None:
+    if active_task is None:
+        return None
+    raw = active_task.get("id")
+    if raw is None:
+        return None
+    return int(raw)
