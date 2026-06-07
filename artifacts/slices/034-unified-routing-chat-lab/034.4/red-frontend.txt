@@ -1,0 +1,50 @@
+
+> hify-web@0.0.1 test:unit
+> vitest run src/views/chat/unifiedRoutingChatLab.test.ts
+
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+
+ ❯ src/views/chat/unifiedRoutingChatLab.test.ts (2 tests | 1 failed) 4ms
+   × unified routing chat lab model > offers the ten airline SOP scenarios used by the runtime business gate 4ms
+     → expected [ 'refund_ticket', …(4) ] to deeply equal [ 'refund_ticket', …(9) ]
+   ✓ unified routing chat lab model > summarizes backend route turns without deciding routing in the frontend 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/views/chat/unifiedRoutingChatLab.test.ts > unified routing chat lab model > offers the ten airline SOP scenarios used by the runtime business gate
+AssertionError: expected [ 'refund_ticket', …(4) ] to deeply equal [ 'refund_ticket', …(9) ]
+
+- Expected
++ Received
+
+@@ -2,11 +2,6 @@
+    "refund_ticket",
+    "change_flight",
+    "invoice_apply",
+    "baggage_service",
+    "seat_checkin",
+-   "flight_status",
+-   "special_assistance",
+-   "pet_cabin",
+-   "irregular_flight",
+-   "membership_service",
+  ]
+
+ ❯ src/views/chat/unifiedRoutingChatLab.test.ts:11:66
+      9| describe('unified routing chat lab model', () => {
+     10|   it('offers the ten airline SOP scenarios used by the runtime busines…
+     11|     expect(AIRLINE_SOP_SCENARIOS.map((scenario) => scenario.id)).toEqu…
+       |                                                                  ^
+     12|       'refund_ticket',
+     13|       'change_flight',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  00:34:08
+   Duration  195ms (transform 20ms, setup 0ms, collect 15ms, tests 4ms, environment 0ms, prepare 36ms)
+

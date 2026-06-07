@@ -113,7 +113,7 @@ class RuntimeLabService:
             return self._resume_task(session_id, decision)
 
         if decision.action == "CLARIFY":
-            return self._turn(session_id, "请问您想办理退票、改签、发票、行李服务还是值机选座？", decision)
+            return self._turn(session_id, "请问您想办理退票、改签、发票、行李、值机、航班动态、特殊协助、宠物乘机、异常航班还是会员里程？", decision)
 
         if decision.action == "CONTINUE_ACTIVE_SOP" and active_task is not None:
             return self._continue_active_task(session_id, active_task, message, decision)

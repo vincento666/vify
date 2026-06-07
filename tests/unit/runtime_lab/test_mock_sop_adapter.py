@@ -10,7 +10,18 @@ class MockSopAdapterTest(unittest.TestCase):
 
         self.assertEqual(
             set(manifests),
-            {"refund_ticket", "change_flight", "invoice_apply", "baggage_service", "seat_checkin"},
+            {
+                "refund_ticket",
+                "change_flight",
+                "invoice_apply",
+                "baggage_service",
+                "seat_checkin",
+                "flight_status",
+                "special_assistance",
+                "pet_cabin",
+                "irregular_flight",
+                "membership_service",
+            },
         )
 
         started = adapter.start("refund_ticket")

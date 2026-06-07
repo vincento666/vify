@@ -7,16 +7,23 @@ import {
 } from './unifiedRoutingChatLab'
 
 describe('unified routing chat lab model', () => {
-  it('offers the five airline SOP scenarios used by the runtime business gate', () => {
+  it('offers the ten airline SOP scenarios used by the runtime business gate', () => {
     expect(AIRLINE_SOP_SCENARIOS.map((scenario) => scenario.id)).toEqual([
       'refund_ticket',
       'change_flight',
       'invoice_apply',
       'baggage_service',
       'seat_checkin',
+      'flight_status',
+      'special_assistance',
+      'pet_cabin',
+      'irregular_flight',
+      'membership_service',
     ])
     expect(getAirlineSopScenario('refund_ticket')?.startMessage).toContain('退票')
     expect(getAirlineSopScenario('seat_checkin')?.startMessage).toContain('选座')
+    expect(getAirlineSopScenario('flight_status')?.startMessage).toContain('航班动态')
+    expect(getAirlineSopScenario('membership_service')?.startMessage).toContain('会员')
   })
 
   it('summarizes backend route turns without deciding routing in the frontend', () => {

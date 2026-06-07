@@ -23,7 +23,7 @@ class ChatflowSopRuntimeAdapterIntegrationTest(unittest.TestCase):
             started = adapter.start_sop(_request(message="我要退票", stamp=stamp))
             suspended = adapter.suspend_sop(_request(checkpoint=started.checkpoint, stamp=stamp))
             collected = adapter.continue_sop(
-                _request(message="手机号 13800138000", checkpoint=suspended, stamp=stamp)
+                _request(message="订单号：TK-100，手机号 13800138000", checkpoint=suspended, stamp=stamp)
             )
             completed = adapter.resume_sop(
                 _request(message="确认", checkpoint=collected.checkpoint, stamp=stamp)
@@ -35,9 +35,11 @@ class ChatflowSopRuntimeAdapterIntegrationTest(unittest.TestCase):
         self.assertEqual(suspended.current_step, "info_order")
         self.assertEqual(collected.status, SopExecutionStatus.WAITING)
         self.assertEqual(collected.current_step, "confirm_1")
+        self.assertEqual(collected.collected["order_no"], "TK-100")
         self.assertEqual(collected.collected["phone"], "13800138000")
         self.assertEqual(completed.status, SopExecutionStatus.COMPLETED)
         self.assertEqual(completed.current_step, "completed")
+        self.assertEqual(completed.collected["order_no"], "TK-100")
         self.assertEqual(completed.collected["phone"], "13800138000")
 
     def test_unknown_sop_returns_normalized_failure(self) -> None:
@@ -104,6 +106,12 @@ def _create_chatflow_sop_fixture(client: TestClient, stamp: int) -> dict[str, ob
                         "collectionKey": "contact",
                         "fields": [
                             {
+                                "name": "order_no",
+                                "type": "string",
+                                "required": True,
+                                "description": "订单号",
+                            },
+                            {
                                 "name": "phone",
                                 "type": "string",
                                 "required": True,
@@ -130,7 +138,7 @@ def _create_chatflow_sop_fixture(client: TestClient, stamp: int) -> dict[str, ob
                     "name": "End",
                     "config": {
                         "outputVariable": "final",
-                        "output": "phone={{info_order.phone}} confirm={{confirm_1.answer}}",
+                        "output": "order={{info_order.order_no}} phone={{info_order.phone}} confirm={{confirm_1.answer}}",
                     },
                 },
             ],

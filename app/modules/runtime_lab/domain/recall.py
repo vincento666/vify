@@ -5,11 +5,16 @@ from app.modules.runtime_lab.domain.candidates import CandidateType, RouteCandid
 from app.modules.runtime_lab.domain.sop import SopManifest
 
 SEMANTIC_FIXTURES: dict[str, tuple[str, ...]] = {
-    "refund_ticket": ("退费", "票款", "取消行程", "退掉航班"),
+    "refund_ticket": ("退费", "票款", "取消行程", "退掉航班", "不飞了", "扣费"),
     "change_flight": ("换个航班", "改时间", "调整航班", "改日期"),
     "invoice_apply": ("报销", "凭证", "电子票据", "开票资料", "发票"),
     "baggage_service": ("托运", "行李额", "超重", "随身行李", "运动器材"),
     "seat_checkin": ("登机牌", "座位", "靠窗", "过道", "线上值机"),
+    "flight_status": ("航班动态", "航班状态", "起飞时间", "到达时间", "登机口", "接人", "是不是延误"),
+    "special_assistance": ("轮椅", "无障碍", "行动不便", "特殊协助", "优先登机"),
+    "pet_cabin": ("宠物", "航空箱", "疫苗证明", "猫咪", "小型犬"),
+    "irregular_flight": ("异常航班", "不正常航班", "备降", "保障方案", "签转", "非自愿", "延误四小时"),
+    "membership_service": ("里程", "积分", "常旅客", "补登", "升舱券"),
 }
 
 

@@ -155,3 +155,49 @@ Evidence must be saved under
   `artifacts/slices/034-unified-routing-chat-lab/034.3/browser-uat.md`;
 - expanded browser UAT screenshot:
   `artifacts/slices/034-unified-routing-chat-lab/034.3/browser-uat-unified-routing-chat-lab.png`.
+
+## 034.4 Airline Scale Gate
+
+Status: complete.
+
+034.4 expands the lab from five demo SOPs to ten airline customer-service SOPs.
+Each SOP design must expose at least five runtime nodes/steps and the catalog as
+a whole must exercise LLM-style policy copy, branching/intent routing, variable
+aggregation, question/confirmation, API/mock business lookup, and variable
+parsing. Backend acceptance must include at least 100 realistic utterance cases,
+five switch/resume journeys, and a real Chatflow-bound SOP path through
+`ChatflowSopRuntimeAdapter`.
+
+Browser UAT must use the `/runtime-lab/chat` page, not direct API only, and save
+report/screenshot under
+`artifacts/slices/034-unified-routing-chat-lab/034.4/`.
+
+034.4 final coverage:
+
+- 10 airline SOPs: refund, change, invoice, baggage, seat/check-in, flight
+  status, special assistance, pet travel, irregular flight, and membership
+  mileage.
+- Each SOP exposes at least five designed steps, with catalog-level coverage for
+  LLM, branch/condition, intent recognition, variable aggregation, question,
+  API/mock lookup, and variable parsing nodes.
+- Backend scale gate covers 100 realistic start utterances, collection,
+  confirmation, five switch/resume journeys, and one real Chatflow-bound SOP.
+- Browser UAT drives the real `/runtime-lab/chat` page against a running backend
+  with `refund_ticket` bound to Chatflow and the other SOPs using fallback SOP
+  runtime.
+
+034.4 evidence:
+
+- RED backend: `artifacts/slices/034-unified-routing-chat-lab/034.4/red-backend.txt`;
+- RED frontend: `artifacts/slices/034-unified-routing-chat-lab/034.4/red-frontend.txt`;
+- backend scale: `artifacts/slices/034-unified-routing-chat-lab/034.4/backend-scale.txt`;
+- runtime-lab regression:
+  `artifacts/slices/034-unified-routing-chat-lab/034.4/backend-runtime-lab-regression.txt`;
+- workflow/chatflow regression:
+  `artifacts/slices/034-unified-routing-chat-lab/034.4/backend-workflow-chatflow-regression.txt`;
+- frontend full unit:
+  `artifacts/slices/034-unified-routing-chat-lab/034.4/frontend-unit-full.txt`;
+- browser UAT:
+  `artifacts/slices/034-unified-routing-chat-lab/034.4/browser-uat.md`;
+- badcases:
+  `artifacts/slices/034-unified-routing-chat-lab/034.4/badcases.md`.

@@ -104,7 +104,7 @@ async function runInterruptResumeJourney(page, journey) {
 
   await sendTurn(page, '继续')
   await waitForRouteAction(page, 'RESUME_TASK')
-  await page.getByText('已恢复流程。请提供订单号。').last().waitFor({ timeout: 15_000 })
+  await page.getByText('已恢复流程。请提供订单号、手机号和乘机人信息。').last().waitFor({ timeout: 15_000 })
   await expectTaskStatus(page, journey.primaryTask, 'RUNNING')
 }
 

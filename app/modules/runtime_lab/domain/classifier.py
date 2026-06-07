@@ -108,7 +108,7 @@ def _clarify_result(rationale: str) -> ClassifierResult:
         confidence=0.0,
         rationale=rationale,
         needs_clarification=True,
-        clarification_question="请问您想办理退票、改签、发票、行李服务还是值机选座？",
+        clarification_question="请问您想办理退票、改签、发票、行李、值机、航班动态、特殊协助、宠物乘机、异常航班还是会员里程？",
     )
 
 

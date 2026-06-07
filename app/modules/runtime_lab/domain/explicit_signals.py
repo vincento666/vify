@@ -5,7 +5,7 @@ from app.modules.runtime_lab.domain.candidates import CandidateType, RouteCandid
 from app.modules.runtime_lab.domain.sop import SopManifest
 
 RESUME_PHRASES = {"continue", "resume", "继续", "继续刚才", "继续第一个"}
-REFUSAL_PHRASES = {"不用了", "不用", "不了", "先这样", "取消"}
+REFUSAL_PHRASES = {"不用了", "不用", "不了", "先这样"}
 
 
 class ExplicitSignalDetector:

@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./hify.db"
     redis_url: str | None = None
     log_level: str = "INFO"
+    runtime_lab_sop_chatflow_ids: str | None = None
 
     model_config = SettingsConfigDict(env_prefix="HIFY_", env_file=".env", extra="ignore")
 

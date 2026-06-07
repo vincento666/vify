@@ -41,6 +41,20 @@
 - [x] Run expanded browser UAT.
 - [x] Commit 034.3 changes.
 
+## 034.4 Airline scale gate
+
+- [x] RED: backend scale gate fails before 10 deep SOP manifests exist.
+- [x] RED: frontend scenario model fails before 10 SOP presets exist.
+- [x] Implement 10 airline SOP manifests with depth >= 5 and common node-type coverage.
+- [x] Add realistic 100+ backend routing/collection/completion cases.
+- [x] Keep real Chatflow-bound SOP path covered through runtime-lab adapter.
+- [x] Run targeted frontend model test.
+- [x] Run backend scale gate and existing runtime-lab E2E gates.
+- [x] Run browser UAT through `/runtime-lab/chat` with 10 SOP surface.
+- [x] Save badcase/fix notes and evidence under
+  `artifacts/slices/034-unified-routing-chat-lab/034.4/`.
+- [x] Commit 034.4 changes.
+
 ## Future specs, not 034 tasks
 
 - [ ] Rename or consolidate final user-facing API to `/chat` or `/query`.

@@ -17,8 +17,9 @@ class SopAdapterContractTest(unittest.TestCase):
         self.assertEqual(result.status, SopExecutionStatus.WAITING)
         self.assertEqual(result.current_step, "collect_order_no")
         self.assertIn("订单号", result.reply)
+        self.assertIn("手机号", result.reply)
         self.assertEqual(result.checkpoint.current_step, "collect_order_no")
-        self.assertEqual(result.checkpoint.pending_prompt, "请提供订单号。")
+        self.assertEqual(result.checkpoint.pending_prompt, "请提供订单号、手机号和乘机人信息。")
         self.assertEqual(result.to_dict()["checkpoint"]["currentStep"], "collect_order_no")
 
     def test_continue_updates_collected_values_and_completion_status(self) -> None:
@@ -28,7 +29,7 @@ class SopAdapterContractTest(unittest.TestCase):
         collected = adapter.continue_sop(
             _request(
                 sop_id="refund_ticket",
-                message="TK-100",
+                message="订单号 TK-100，手机号 13800130000，乘机人张测试",
                 checkpoint=started.checkpoint,
                 collected=started.collected,
             )
@@ -45,6 +46,8 @@ class SopAdapterContractTest(unittest.TestCase):
         self.assertEqual(collected.status, SopExecutionStatus.WAITING)
         self.assertEqual(collected.current_step, "confirm")
         self.assertEqual(collected.collected["order_no"], "TK-100")
+        self.assertEqual(collected.collected["phone"], "13800130000")
+        self.assertEqual(collected.collected["passenger_name"], "张测试")
         self.assertEqual(completed.status, SopExecutionStatus.COMPLETED)
         self.assertEqual(completed.current_step, "completed")
 

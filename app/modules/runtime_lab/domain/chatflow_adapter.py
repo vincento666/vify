@@ -1,3 +1,4 @@
+import re
 from collections.abc import Mapping
 from typing import Any, cast
 
@@ -223,9 +224,18 @@ def _collected(
     session_variables: Mapping[str, Any],
 ) -> dict[str, Any]:
     collected = dict(request.checkpoint.collected) if request.checkpoint is not None else dict(request.collected)
+    collected.update(_business_values_from_message(request.message))
     conversation_variables = session_variables.get("conversation")
     if isinstance(conversation_variables, Mapping):
         collected.update(dict(conversation_variables))
+    node_outputs = session_variables.get("node_outputs")
+    if isinstance(node_outputs, Mapping):
+        for node_output in node_outputs.values():
+            if not isinstance(node_output, Mapping):
+                continue
+            node_collected = node_output.get("collected")
+            if isinstance(node_collected, Mapping):
+                collected.update(dict(node_collected))
     raw_collected = output.get("collected")
     if isinstance(raw_collected, Mapping):
         collected.update(dict(raw_collected))
@@ -237,6 +247,20 @@ def _collected(
             if part.startswith("phone=") and "phone" not in collected:
                 collected["phone"] = part.split("=", 1)[1]
     return collected
+
+
+def _business_values_from_message(text: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    order_match = re.search(r"(?:订单号|order_no|order)\s*[:：]?\s*([A-Za-z]{1,4}[-_]?\d{3,12})", text, re.IGNORECASE)
+    if order_match:
+        values["order_no"] = order_match.group(1)
+    phone_match = re.search(r"(?<!\d)(1[3-9]\d{9})(?!\d)", text)
+    if phone_match:
+        values["phone"] = phone_match.group(1)
+    passenger_match = re.search(r"乘机人\s*[:：]?\s*([A-Za-z\u4e00-\u9fff][A-Za-z0-9_\-\u4e00-\u9fff]{0,20})", text)
+    if passenger_match:
+        values["passenger_name"] = passenger_match.group(1)
+    return values
 
 
 def _checkpoint(
