@@ -129,3 +129,29 @@ Final evidence:
   `artifacts/slices/034-unified-routing-chat-lab/034.2/backend-airline-gate.txt`;
 - browser UAT:
   `artifacts/slices/034-unified-routing-chat-lab/034.2/browser-uat.md`.
+
+## 034.3 Browser Acceptance Expansion Sign-off
+
+Status: complete.
+
+034.3 extends browser UAT only. It must not change production runtime behavior.
+It expands coverage from one jump/resume journey to:
+
+- `refund_ticket -> invoice_apply -> resume refund_ticket`;
+- `change_flight -> baggage_service -> resume change_flight`;
+- `seat_checkin -> refund_ticket -> resume seat_checkin`;
+- confirm-step switch rejection with `REJECT_SWITCH_CONTINUE_ACTIVE`.
+
+Evidence must be saved under
+`artifacts/slices/034-unified-routing-chat-lab/034.3/`.
+
+034.3 final evidence:
+
+- targeted frontend route/model/API tests:
+  `artifacts/slices/034-unified-routing-chat-lab/034.3/frontend-targeted.txt`;
+- expanded browser UAT output:
+  `artifacts/slices/034-unified-routing-chat-lab/034.3/browser-uat-output.txt`;
+- expanded browser UAT report:
+  `artifacts/slices/034-unified-routing-chat-lab/034.3/browser-uat.md`;
+- expanded browser UAT screenshot:
+  `artifacts/slices/034-unified-routing-chat-lab/034.3/browser-uat-unified-routing-chat-lab.png`.

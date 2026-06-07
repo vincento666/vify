@@ -31,6 +31,16 @@
   `artifacts/slices/034-unified-routing-chat-lab/034.2/`.
 - [x] Commit 034 changes.
 
+## 034.3 Browser acceptance expansion
+
+- [x] Extend browser UAT to three multi-SOP jump/resume journeys.
+- [x] Add confirm-step non-interruptible rejection browser coverage.
+- [x] Save UAT notes and screenshot under
+  `artifacts/slices/034-unified-routing-chat-lab/034.3/`.
+- [x] Run targeted frontend route/model/API tests.
+- [x] Run expanded browser UAT.
+- [x] Commit 034.3 changes.
+
 ## Future specs, not 034 tasks
 
 - [ ] Rename or consolidate final user-facing API to `/chat` or `/query`.

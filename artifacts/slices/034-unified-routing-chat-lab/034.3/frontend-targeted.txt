@@ -1,0 +1,16 @@
+
+> hify-web@0.0.1 test:unit
+> vitest run src/router/unified-routing-chat-lab-routes.test.ts src/views/chat/unifiedRoutingChatLab.test.ts src/api/runtimeLab.test.ts
+
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+
+ ✓ src/api/runtimeLab.test.ts (2 tests) 13ms
+ ✓ src/views/chat/unifiedRoutingChatLab.test.ts (2 tests) 4ms
+ ✓ src/router/unified-routing-chat-lab-routes.test.ts (1 test) 54ms
+
+ Test Files  3 passed (3)
+      Tests  5 passed (5)
+   Start at  00:22:19
+   Duration  659ms (transform 106ms, setup 0ms, collect 85ms, tests 70ms, environment 356ms, prepare 164ms)
