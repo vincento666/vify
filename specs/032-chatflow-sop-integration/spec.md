@@ -238,7 +238,9 @@ Delivered scope:
   change flight -> baggage -> resume change flight with non-interruptible
   switch rejection, and seat check-in -> refund -> resume seat check-in;
 - expected-vs-actual route/output comparisons are written to
-  `artifacts/slices/032-chatflow-sop-integration/032.5/airline-business-gate.md`;
+  `artifacts/slices/032-chatflow-sop-integration/032.5/airline-business-start-gate.md`
+  and
+  `artifacts/slices/032-chatflow-sop-integration/032.5/airline-business-journey-gate.md`;
 - `tests/acceptance/test_runtime_lab_live_chatflow_llm_sop.py` adds an opt-in
   live gate proving routed Chatflow SOPs execute real provider-backed `LLM`
   nodes and return per-SOP live markers.
@@ -261,8 +263,10 @@ availability and cost. Skipped-by-default behavior is itself verified by
 
 - business gate:
   `artifacts/slices/032-chatflow-sop-integration/032.5/business-gate.txt`
-- expected-vs-actual route/output artifact:
-  `artifacts/slices/032-chatflow-sop-integration/032.5/airline-business-gate.md`
+- expected-vs-actual route/output artifacts:
+  `artifacts/slices/032-chatflow-sop-integration/032.5/airline-business-start-gate.md`
+  and
+  `artifacts/slices/032-chatflow-sop-integration/032.5/airline-business-journey-gate.md`
 - live acceptance default skip:
   `artifacts/slices/032-chatflow-sop-integration/032.5/live-acceptance-skip.txt`
 - static gates:

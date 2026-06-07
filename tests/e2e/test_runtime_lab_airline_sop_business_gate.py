@@ -19,7 +19,8 @@ from app.modules.workflow.domain.service import WorkflowService
 from app.modules.workflow.infra.chatflow_state_repository import ChatflowStateRepository
 from app.modules.workflow.infra.repository import WorkflowRepository
 
-ARTIFACT_PATH = Path("artifacts/slices/032-chatflow-sop-integration/032.5/airline-business-gate.md")
+ARTIFACT_START_PATH = Path("artifacts/slices/032-chatflow-sop-integration/032.5/airline-business-start-gate.md")
+ARTIFACT_JOURNEY_PATH = Path("artifacts/slices/032-chatflow-sop-integration/032.5/airline-business-journey-gate.md")
 
 
 @dataclass(frozen=True)
@@ -51,15 +52,20 @@ class RuntimeLabAirlineSopBusinessGateTest(unittest.TestCase):
                 for case in AIRLINE_SOPS:
                     session_id = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
                     actual = _message(client, session_id, case.start_message)
-                    expected = {"action": "START_SOP", "sopId": case.sop_id, "step": "info_order"}
+                    expected = {
+                        "action": "START_SOP",
+                        "sopId": case.sop_id,
+                        "step": "info_order",
+                        "replyContains": _followup(case),
+                    }
                     comparisons.append(_comparison(f"start:{case.sop_id}", expected, actual))
                     self.assertEqual(actual["routeDecision"]["action"], expected["action"])
                     self.assertEqual(actual["activeTask"]["sopId"], expected["sopId"])
                     self.assertEqual(actual["activeTask"]["currentStep"], expected["step"])
-                    self.assertIn("phone", actual["reply"])
+                    _assert_reply_contains(actual, _followup(case))
             finally:
                 app.dependency_overrides.pop(get_runtime_lab_service, None)
-        _write_artifact("Five SOP start coverage", comparisons)
+        _write_artifact(ARTIFACT_START_PATH, "Five SOP start coverage", comparisons)
 
     def test_three_high_probability_cross_sop_journeys_match_expected_route_outputs(self) -> None:
         stamp = time.time_ns()
@@ -95,7 +101,7 @@ class RuntimeLabAirlineSopBusinessGateTest(unittest.TestCase):
                 )
             finally:
                 app.dependency_overrides.pop(get_runtime_lab_service, None)
-        _write_artifact("Cross-SOP journey coverage", comparisons)
+        _write_artifact(ARTIFACT_JOURNEY_PATH, "Cross-SOP journey coverage", comparisons)
 
 
 def _run_switch_complete_resume_journey(
@@ -110,14 +116,26 @@ def _run_switch_complete_resume_journey(
     comparisons: list[dict[str, Any]] = []
 
     started = _message(client, session_id, primary.start_message)
-    comparisons.append(_comparison(f"{scenario}:start_primary", {"action": "START_SOP", "sopId": primary.sop_id}, started))
+    comparisons.append(
+        _comparison(
+            f"{scenario}:start_primary",
+            {"action": "START_SOP", "sopId": primary.sop_id, "replyContains": _followup(primary)},
+            started,
+        )
+    )
     _assert_turn(started, "START_SOP", primary.sop_id, "info_order")
+    _assert_reply_contains(started, _followup(primary))
 
     switched = _message(client, session_id, secondary.start_message)
     comparisons.append(
-        _comparison(f"{scenario}:switch_secondary", {"action": "SUSPEND_AND_START", "sopId": secondary.sop_id}, switched)
+        _comparison(
+            f"{scenario}:switch_secondary",
+            {"action": "SUSPEND_AND_START", "sopId": secondary.sop_id, "replyContains": _followup(secondary)},
+            switched,
+        )
     )
     _assert_turn(switched, "SUSPEND_AND_START", secondary.sop_id, "info_order")
+    _assert_reply_contains(switched, _followup(secondary))
     self_check = switched["suspendedTasks"][0]
     assert self_check["sopId"] == primary.sop_id
 
@@ -125,48 +143,88 @@ def _run_switch_complete_resume_journey(
     comparisons.append(
         _comparison(
             f"{scenario}:secondary_collect",
-            {"action": "CONTINUE_ACTIVE_SOP", "sopId": secondary.sop_id, "step": "confirm_1"},
+            {
+                "action": "CONTINUE_ACTIVE_SOP",
+                "sopId": secondary.sop_id,
+                "step": "confirm_1",
+                "replyContains": _confirm_prompt(secondary),
+            },
             secondary_collected,
         )
     )
     _assert_turn(secondary_collected, "CONTINUE_ACTIVE_SOP", secondary.sop_id, "confirm_1")
+    _assert_reply_contains(secondary_collected, _confirm_prompt(secondary))
 
     secondary_completed = _message(client, session_id, "确认")
     comparisons.append(
-        _comparison(f"{scenario}:secondary_complete", {"action": "COMPLETE_TASK", "resumeSopId": primary.sop_id}, secondary_completed)
+        _comparison(
+            f"{scenario}:secondary_complete",
+            {
+                "action": "COMPLETE_TASK",
+                "resumeSopId": primary.sop_id,
+                "replyContains": _completion_text(secondary),
+            },
+            secondary_completed,
+        )
     )
     assert secondary_completed["routeDecision"]["action"] == "COMPLETE_TASK"
     assert secondary_completed["resumeOffer"]["sopId"] == primary.sop_id
+    _assert_reply_contains(secondary_completed, _completion_text(secondary))
 
     resumed = _message(client, session_id, primary.resume_message)
-    comparisons.append(_comparison(f"{scenario}:resume_primary", {"action": "RESUME_TASK", "sopId": primary.sop_id}, resumed))
+    comparisons.append(
+        _comparison(
+            f"{scenario}:resume_primary",
+            {"action": "RESUME_TASK", "sopId": primary.sop_id, "replyContains": _followup(primary)},
+            resumed,
+        )
+    )
     _assert_turn(resumed, "RESUME_TASK", primary.sop_id, "info_order")
+    _assert_reply_contains(resumed, _followup(primary))
 
     primary_collected = _message(client, session_id, f"手机号 {primary.phone}")
     comparisons.append(
         _comparison(
             f"{scenario}:primary_collect",
-            {"action": "CONTINUE_ACTIVE_SOP", "sopId": primary.sop_id, "step": "confirm_1"},
+            {
+                "action": "CONTINUE_ACTIVE_SOP",
+                "sopId": primary.sop_id,
+                "step": "confirm_1",
+                "replyContains": _confirm_prompt(primary),
+            },
             primary_collected,
         )
     )
     _assert_turn(primary_collected, "CONTINUE_ACTIVE_SOP", primary.sop_id, "confirm_1")
+    _assert_reply_contains(primary_collected, _confirm_prompt(primary))
 
     if rejected_switch is not None:
         rejected = _message(client, session_id, rejected_switch.start_message)
         comparisons.append(
             _comparison(
                 f"{scenario}:reject_non_interruptible_switch",
-                {"action": "REJECT_SWITCH_CONTINUE_ACTIVE", "sopId": primary.sop_id},
+                {
+                    "action": "REJECT_SWITCH_CONTINUE_ACTIVE",
+                    "sopId": primary.sop_id,
+                    "replyContains": "当前步骤不能中断",
+                },
                 rejected,
             )
         )
         _assert_turn(rejected, "REJECT_SWITCH_CONTINUE_ACTIVE", primary.sop_id, "confirm_1")
+        _assert_reply_contains(rejected, "当前步骤不能中断")
 
     primary_completed = _message(client, session_id, "确认")
-    comparisons.append(_comparison(f"{scenario}:primary_complete", {"action": "COMPLETE_TASK"}, primary_completed))
+    comparisons.append(
+        _comparison(
+            f"{scenario}:primary_complete",
+            {"action": "COMPLETE_TASK", "replyContains": _completion_text(primary)},
+            primary_completed,
+        )
+    )
     assert primary_completed["routeDecision"]["action"] == "COMPLETE_TASK"
     assert primary_completed["activeTask"] is None
+    _assert_reply_contains(primary_completed, _completion_text(primary))
     return comparisons
 
 
@@ -215,9 +273,10 @@ def _base_chatflow_nodes(case: SopCase, *, with_llm: bool) -> list[dict[str, Any
             "name": f"{case.display_name}信息收集",
             "config": {
                 "inputSource": "{{start.sys.query}}",
-                "outputVariable": "contact",
-                "collectionKey": "contact",
-                "fields": [
+                        "outputVariable": "contact",
+                        "collectionKey": "contact",
+                        "followupTemplate": _followup(case),
+                        "fields": [
                     {
                         "name": "phone",
                         "type": "string",
@@ -312,6 +371,22 @@ def _assert_turn(actual: dict[str, Any], action: str, sop_id: str, step: str) ->
     assert actual["activeTask"]["currentStep"] == step
 
 
+def _assert_reply_contains(actual: dict[str, Any], expected: str) -> None:
+    assert expected in str(actual.get("reply") or "")
+
+
+def _followup(case: SopCase) -> str:
+    return f"请提供{case.display_name}办理手机号。"
+
+
+def _confirm_prompt(case: SopCase) -> str:
+    return f"请确认是否继续办理{case.display_name}。"
+
+
+def _completion_text(case: SopCase) -> str:
+    return f"{case.display_name}完成 phone={case.phone} confirm=确认"
+
+
 def _case(sop_id: str) -> SopCase:
     for item in AIRLINE_SOPS:
         if item.sop_id == sop_id:
@@ -339,8 +414,8 @@ def _dict_or_empty(value: Any) -> dict[str, Any]:
     return cast(dict[str, Any], value) if isinstance(value, dict) else {}
 
 
-def _write_artifact(title: str, comparisons: list[dict[str, Any]]) -> None:
-    ARTIFACT_PATH.parent.mkdir(parents=True, exist_ok=True)
+def _write_artifact(path: Path, title: str, comparisons: list[dict[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     lines = [f"# {title}", "", "| Case | Expected | Actual |", "| --- | --- | --- |"]
     for item in comparisons:
         lines.append(
@@ -350,4 +425,4 @@ def _write_artifact(title: str, comparisons: list[dict[str, Any]]) -> None:
                 actual=item["actual"],
             )
         )
-    ARTIFACT_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")

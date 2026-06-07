@@ -196,6 +196,7 @@ def _live_chatflow_nodes(case: LiveSopCase) -> list[dict[str, Any]]:
                 "inputSource": "{{start.sys.query}}",
                 "outputVariable": "contact",
                 "collectionKey": "contact",
+                "followupTemplate": _followup(case),
                 "fields": [
                     {
                         "name": "phone",
@@ -311,6 +312,10 @@ def _assert_active(actual: dict[str, Any], action: str, sop_id: str, step: str) 
     assert actual["routeDecision"]["action"] == action
     assert actual["activeTask"]["sopId"] == sop_id
     assert actual["activeTask"]["currentStep"] == step
+
+
+def _followup(case: LiveSopCase) -> str:
+    return f"请提供{case.display_name}办理手机号。"
 
 
 def _case(sop_id: str) -> LiveSopCase:
