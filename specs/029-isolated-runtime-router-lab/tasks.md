@@ -28,17 +28,17 @@
 
 ## 029.2 Mock SOP adapter
 
-- [ ] RED: mock SOP adapter tests fail for start, continue, confirm, complete,
+- [x] RED: mock SOP adapter tests fail for start, continue, confirm, complete,
   and checkpoint generation.
-- [ ] Add mock SOP manifests for `refund_ticket`, `change_flight`, and
+- [x] Add mock SOP manifests for `refund_ticket`, `change_flight`, and
   `invoice_apply`.
-- [ ] Implement `collect_order_no -> confirm -> completed`.
-- [ ] Mark `collect_order_no` interruptible and `confirm` non-interruptible.
-- [ ] Persist collected `order_no` into task/checkpoint state.
-- [ ] Save evidence under
+- [x] Implement `collect_order_no -> confirm -> completed`.
+- [x] Mark `collect_order_no` interruptible and `confirm` non-interruptible.
+- [x] Persist collected `order_no` into task/checkpoint state.
+- [x] Save evidence under
   `artifacts/slices/029-isolated-runtime-router-lab/029.2/`.
-- [ ] Gates pass.
-- [ ] Commit 029.2 only.
+- [x] Gates pass.
+- [x] Commit 029.2 only.
 
 ## 029.3 Router core
 
