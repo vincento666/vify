@@ -8,6 +8,8 @@ SEMANTIC_FIXTURES: dict[str, tuple[str, ...]] = {
     "refund_ticket": ("退费", "票款", "取消行程", "退掉航班"),
     "change_flight": ("换个航班", "改时间", "调整航班", "改日期"),
     "invoice_apply": ("报销", "凭证", "电子票据", "开票资料", "发票"),
+    "baggage_service": ("托运", "行李额", "超重", "随身行李", "运动器材"),
+    "seat_checkin": ("登机牌", "座位", "靠窗", "过道", "线上值机"),
 }
 
 
@@ -55,7 +57,13 @@ class MockSemanticCandidateRecall:
         for task in suspended_tasks:
             summary = str(task.get("resume_summary") or "")
             sop_id = str(task.get("sop_id") or "")
-            terms = tuple(term for term in (summary, sop_id, "退票", "改签", "发票") if term and term in message)
+            manifest = self._manifests.get(sop_id)
+            manifest_terms = (
+                (manifest.display_name, *manifest.trigger_keywords)
+                if manifest is not None
+                else ()
+            )
+            terms = tuple(term for term in (summary, sop_id, *manifest_terms) if term and term in message)
             if not terms:
                 continue
             score = 0.92 if "继续" in message or "resume" in message.lower() else 0.72

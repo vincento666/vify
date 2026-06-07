@@ -8,7 +8,10 @@ class MockSopAdapterTest(unittest.TestCase):
         manifests = mock_sop_manifests()
         adapter = MockSopAdapter(manifests)
 
-        self.assertEqual(set(manifests), {"refund_ticket", "change_flight", "invoice_apply"})
+        self.assertEqual(
+            set(manifests),
+            {"refund_ticket", "change_flight", "invoice_apply", "baggage_service", "seat_checkin"},
+        )
 
         started = adapter.start("refund_ticket")
         self.assertEqual(started.current_step, "collect_order_no")

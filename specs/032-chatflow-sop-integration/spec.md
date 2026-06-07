@@ -212,3 +212,70 @@ Remaining out of scope for later specs:
 - FAQ/RAG/Agent/handoff policy;
 - frontend surfaces;
 - final `/chat` or `/query` API naming.
+
+## 032.5 Airline Business Gate Sign-off
+
+Status: complete.
+
+032.5 extends the routing MVP acceptance from one real Chatflow-backed SOP to
+five core airline service SOP intents:
+
+- `refund_ticket`: refund / ticket cancellation;
+- `change_flight`: flight change;
+- `invoice_apply`: invoice / itinerary receipt;
+- `baggage_service`: baggage service / extra baggage allowance;
+- `seat_checkin`: check-in / seat selection.
+
+Delivered scope:
+
+- runtime-lab manifests and semantic recall fixtures cover all five SOPs;
+- `tests/e2e/test_runtime_lab_airline_sop_business_gate.py` creates five real
+  Chatflow fixtures and binds all five SOPs through `ChatflowSopRuntimeAdapter`;
+- all business E2E traffic enters through
+  `/api/v1/runtime-lab/sessions/{id}/messages`;
+- three high-probability cross-SOP journeys are covered:
+  refund -> invoice -> resume refund,
+  change flight -> baggage -> resume change flight with non-interruptible
+  switch rejection, and seat check-in -> refund -> resume seat check-in;
+- expected-vs-actual route/output comparisons are written to
+  `artifacts/slices/032-chatflow-sop-integration/032.5/airline-business-gate.md`;
+- `tests/acceptance/test_runtime_lab_live_chatflow_llm_sop.py` adds an opt-in
+  live gate proving routed Chatflow SOPs execute real provider-backed `LLM`
+  nodes and return per-SOP live markers.
+
+Live acceptance command:
+
+```bash
+HIFY_RUN_LIVE_RUNTIME_CHATFLOW=1 \
+OPENROUTER_API_KEY=... \
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1 \
+OPENROUTER_MODEL=xiaomi/mimo-v2-flash \
+rtk env PYTHONPATH=. uv run pytest tests/acceptance/test_runtime_lab_live_chatflow_llm_sop.py -q
+```
+
+The live gate is skipped by default to avoid CI dependence on external model
+availability and cost. Skipped-by-default behavior is itself verified by
+`artifacts/slices/032-chatflow-sop-integration/032.5/live-acceptance-skip.txt`.
+
+032.5 evidence:
+
+- business gate:
+  `artifacts/slices/032-chatflow-sop-integration/032.5/business-gate.txt`
+- expected-vs-actual route/output artifact:
+  `artifacts/slices/032-chatflow-sop-integration/032.5/airline-business-gate.md`
+- live acceptance default skip:
+  `artifacts/slices/032-chatflow-sop-integration/032.5/live-acceptance-skip.txt`
+- static gates:
+  `artifacts/slices/032-chatflow-sop-integration/032.5/ruff.txt`
+  and `artifacts/slices/032-chatflow-sop-integration/032.5/mypy.txt`
+- full backend pytest:
+  `artifacts/slices/032-chatflow-sop-integration/032.5/full-backend-pytest.txt`
+
+032.5 final gates:
+
+- targeted runtime-lab business gate: 48 passed;
+- live acceptance default behavior: 1 skipped unless live credentials are
+  explicitly enabled;
+- full backend pytest: 363 passed, 5 skipped;
+- Ruff: passed;
+- mypy: passed.

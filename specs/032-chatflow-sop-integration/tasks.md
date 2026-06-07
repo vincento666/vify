@@ -62,6 +62,26 @@
 - [x] Gates pass.
 - [x] Commit 032.4 only.
 
+## 032.5 Airline business acceptance gate
+
+- [x] Add five core airline SOP manifests for routing MVP coverage:
+  `refund_ticket`, `change_flight`, `invoice_apply`, `baggage_service`,
+  and `seat_checkin`.
+- [x] Add non-frontend business E2E gate with five real Chatflow-backed SOP
+  fixtures through the unified runtime-lab message API.
+- [x] Cover three high-probability cross-SOP journeys with expected-vs-actual
+  route/output artifacts.
+- [x] Add opt-in live acceptance proving runtime-lab routed Chatflow SOPs
+  execute real provider-backed Chatflow `LLM` nodes.
+- [x] Keep live acceptance skipped by default unless
+  `HIFY_RUN_LIVE_RUNTIME_CHATFLOW=1` and live provider credentials are present.
+- [x] Save evidence under
+  `artifacts/slices/032-chatflow-sop-integration/032.5/`.
+- [x] Run targeted runtime-lab business gate.
+- [x] Run static gates.
+- [x] Run full backend pytest.
+- [x] Commit 032.5 only.
+
 ## Future specs, not 032 tasks
 
 - [ ] FAQ/RAG answer routing.
