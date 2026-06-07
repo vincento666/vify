@@ -9,15 +9,15 @@
 
 ## 031.1 Adapter port and DTOs
 
-- [ ] Blocked until 030 completion gate passes.
-- [ ] RED: adapter contract tests fail for start, continue, suspend, resume,
+- [x] Blocked until 030 completion gate passes.
+- [x] RED: adapter contract tests fail for start, continue, suspend, resume,
   failure normalization, and checkpoint serialization.
-- [ ] Define adapter request, result, status, and checkpoint DTOs.
-- [ ] Add fake adapter implementation.
-- [ ] Save evidence under
+- [x] Define adapter request, result, status, and checkpoint DTOs.
+- [x] Add fake adapter implementation.
+- [x] Save evidence under
   `artifacts/slices/031-chatflow-sop-adapter-contract/031.1/`.
-- [ ] Gates pass.
-- [ ] Commit 031.1 only.
+- [x] Gates pass.
+- [x] Commit 031.1 only.
 
 ## 031.2 Runtime service adapter boundary
 
