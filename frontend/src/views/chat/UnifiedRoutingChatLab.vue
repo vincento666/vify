@@ -27,7 +27,7 @@
       <section class="lab-panel">
         <div class="panel-heading">
           <ChatLineRound class="panel-heading-icon" />
-          <span>SOP</span>
+          <span>意图样例</span>
         </div>
         <div class="sop-list">
           <button
@@ -42,21 +42,26 @@
             <span class="sop-label">{{ scenario.label }}</span>
           </button>
         </div>
-        <el-button
-          class="open-sop-button"
-          type="primary"
-          :icon="Promotion"
-          :disabled="sending || !selectedScenario"
-          :loading="sending"
-          data-testid="open-sop-button"
-          @click="openSelectedSop"
-        >
-          打开
-        </el-button>
       </section>
 
       <section class="lab-panel">
-        <div class="panel-heading">样例</div>
+        <div class="panel-heading">触发样例</div>
+        <div class="sample-stack">
+          <button
+            v-for="sample in selectedScenario?.triggerUtterances ?? []"
+            :key="sample"
+            type="button"
+            class="sample-chip"
+            :disabled="sending"
+            @click="sendMessage(sample)"
+          >
+            {{ sample }}
+          </button>
+        </div>
+      </section>
+
+      <section class="lab-panel">
+        <div class="panel-heading">流程回复</div>
         <div class="sample-stack">
           <button
             v-for="sample in selectedScenario?.sampleReplies ?? []"
@@ -76,7 +81,7 @@
       <header class="lab-chat-header">
         <div>
           <h1>统一路由对话</h1>
-          <p>{{ selectedScenario?.label ?? '选择 SOP' }} · {{ lastRouteAction }}</p>
+          <p>自由对话 · {{ selectedScenario?.label ?? '意图样例' }} · {{ lastRouteAction }}</p>
         </div>
         <el-tag size="small" :type="sessionId ? 'success' : 'info'" effect="light">
           {{ sessionId ? 'Runtime Ready' : 'Waiting' }}
@@ -86,7 +91,7 @@
       <div ref="messagesEl" class="lab-messages">
         <div v-if="transcript.length === 0" class="empty-state">
           <ChatDotRound class="empty-icon" />
-          <span>选择 SOP 后点击打开</span>
+          <span>等待自由对话</span>
         </div>
         <div
           v-for="message in transcript"
@@ -188,7 +193,6 @@ import {
   ChatDotRound,
   ChatLineRound,
   Connection,
-  Promotion,
   Refresh,
 } from '@element-plus/icons-vue'
 import {
@@ -243,11 +247,6 @@ async function createFreshSession() {
   } finally {
     creatingSession.value = false
   }
-}
-
-async function openSelectedSop() {
-  if (!selectedScenario.value) return
-  await sendMessage(selectedScenario.value.startMessage)
 }
 
 async function sendInput() {
@@ -451,7 +450,6 @@ function uid(prefix: string) {
   font-weight: 700;
 }
 
-.open-sop-button,
 .send-button {
   width: 100%;
 }

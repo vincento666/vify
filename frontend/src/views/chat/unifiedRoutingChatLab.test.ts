@@ -20,10 +20,16 @@ describe('unified routing chat lab model', () => {
       'irregular_flight',
       'membership_service',
     ])
-    expect(getAirlineSopScenario('refund_ticket')?.startMessage).toContain('退票')
-    expect(getAirlineSopScenario('seat_checkin')?.startMessage).toContain('选座')
-    expect(getAirlineSopScenario('flight_status')?.startMessage).toContain('航班动态')
-    expect(getAirlineSopScenario('membership_service')?.startMessage).toContain('会员')
+    expect(getAirlineSopScenario('refund_ticket')?.triggerUtterances).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('退掉'),
+        expect.stringContaining('票款'),
+      ]),
+    )
+    for (const scenario of AIRLINE_SOP_SCENARIOS) {
+      expect(scenario.triggerUtterances.length).toBeGreaterThanOrEqual(3)
+      expect('startMessage' in scenario).toBe(false)
+    }
   })
 
   it('summarizes backend route turns without deciding routing in the frontend', () => {

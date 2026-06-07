@@ -55,6 +55,15 @@
   `artifacts/slices/034-unified-routing-chat-lab/034.4/`.
 - [x] Commit 034.4 changes.
 
+## 034.5 Free-dialogue trigger correction
+
+- [x] RED: frontend scenario model fails until scenarios expose multiple free-form trigger utterances.
+- [x] Remove the fixed `打开 SOP` action from the browser lab.
+- [x] Keep scenario selection as trigger-sample filtering only.
+- [x] Make trigger samples send realistic free-form user utterances through runtime-lab routing.
+- [x] Run targeted frontend and REM gates.
+- [x] Run browser UAT through `/runtime-lab/chat` with free-form trigger starts.
+
 ## Future specs, not 034 tasks
 
 - [ ] Rename or consolidate final user-facing API to `/chat` or `/query`.

@@ -13,24 +13,30 @@ const interruptJourneys = [
     name: 'refund-to-invoice-resume',
     primaryLabel: '退票办理',
     primaryTask: 'refund_ticket',
+    primaryStart: '您好，我临时出差取消了，想把今晚这张机票退掉',
     switchLabel: '发票申请',
     switchTask: 'invoice_apply',
+    switchStart: '公司报销要凭证，帮我开一下电子发票',
     completeText: '发票申请已完成。',
   },
   {
     name: 'change-to-baggage-resume',
     primaryLabel: '改签办理',
     primaryTask: 'change_flight',
+    primaryStart: '我明天会议提前，想把航班改签到更早一班',
     switchLabel: '行李服务',
     switchTask: 'baggage_service',
+    switchStart: '我带了两个箱子，想加购托运行李额',
     completeText: '行李服务已完成。',
   },
   {
     name: 'seat-to-refund-resume',
     primaryLabel: '值机选座',
     primaryTask: 'seat_checkin',
+    primaryStart: '我想线上值机，最好选靠窗座位',
     switchLabel: '退票办理',
     switchTask: 'refund_ticket',
+    switchStart: '我不飞了，票款能不能退回来？',
     completeText: '退票已完成。',
   },
 ]
@@ -83,12 +89,12 @@ try {
 async function runInterruptResumeJourney(page, journey) {
   await createFreshSession(page)
   await selectSop(page, journey.primaryLabel)
-  await page.getByTestId('open-sop-button').click()
+  await sendTurn(page, journey.primaryStart)
   await waitForRouteAction(page, 'START_SOP')
   await expectTaskStatus(page, journey.primaryTask, 'RUNNING')
 
   await selectSop(page, journey.switchLabel)
-  await page.getByTestId('open-sop-button').click()
+  await sendTurn(page, journey.switchStart)
   await waitForRouteAction(page, 'SUSPEND_AND_START')
   await expectTaskStatus(page, journey.primaryTask, 'SUSPENDED')
   await expectTaskStatus(page, journey.switchTask, 'RUNNING')
@@ -111,14 +117,14 @@ async function runInterruptResumeJourney(page, journey) {
 async function runNonInterruptibleRejection(page) {
   await createFreshSession(page)
   await selectSop(page, '退票办理')
-  await page.getByTestId('open-sop-button').click()
+  await sendTurn(page, '我要退票，但想先知道扣费')
   await waitForRouteAction(page, 'START_SOP')
 
   await sendTurn(page, '订单号 TK999')
   await waitForRouteAction(page, 'CONTINUE_ACTIVE_SOP')
 
   await selectSop(page, '发票申请')
-  await page.getByTestId('open-sop-button').click()
+  await sendTurn(page, '我要开发票')
   await waitForRouteAction(page, 'REJECT_SWITCH_CONTINUE_ACTIVE')
   await page.getByText('当前步骤不能中断，请先完成确认后再切换。').last().waitFor({ timeout: 15_000 })
   await expectTaskStatus(page, 'refund_ticket', 'RUNNING')

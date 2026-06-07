@@ -201,3 +201,29 @@ report/screenshot under
   `artifacts/slices/034-unified-routing-chat-lab/034.4/browser-uat.md`;
 - badcases:
   `artifacts/slices/034-unified-routing-chat-lab/034.4/badcases.md`.
+
+## 034.5 Free-Dialogue Trigger Correction
+
+Status: complete.
+
+The lab must model real customer entry behavior: users type arbitrary airline
+service utterances, and runtime-lab routing decides whether to start or switch
+SOPs. The frontend must not require a fixed `open SOP` action. Scenario
+selection remains useful only as a way to filter multi-trigger sample utterances
+and follow-up reply samples.
+
+034.5 final behavior:
+
+- no fixed `打开 SOP` button;
+- each airline scenario exposes at least three realistic trigger utterances;
+- clicking a trigger sample sends the same free-form message as manual typing;
+- browser UAT starts and switches SOPs through free-form text only.
+
+034.5 evidence:
+
+- RED model gate:
+  `artifacts/slices/034-unified-routing-chat-lab/034.5/red-free-dialogue.txt`;
+- frontend related/rem gate:
+  `artifacts/slices/034-unified-routing-chat-lab/034.5/frontend-related.txt`;
+- browser UAT:
+  `artifacts/slices/034-unified-routing-chat-lab/034.5/browser-uat.md`.
