@@ -1,0 +1,9 @@
+file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-edge-insert-button-visibility.mjs:7
+  if (!condition) throw new Error(message)
+                        ^
+
+Error: Expected edge insert button to hide after leaving both edge and button without selecting the edge
+    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-edge-insert-button-visibility.mjs:7:25)
+    at file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-edge-insert-button-visibility.mjs:54:3
+
+Node.js v23.11.0

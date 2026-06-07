@@ -242,6 +242,7 @@
               :style="edgeInsertButtonStyle(cozeEdgePath(edgeProps))"
               @click.stop="openEdgeInsertPalette(edgeProps.id)"
               @mouseenter="hoveredEdgeId = edgeProps.id"
+              @mouseleave="clearEdgeHover(edgeProps.id)"
             >
               <LucidePlus aria-hidden="true" />
             </button>
@@ -252,6 +253,7 @@
               :style="edgeInsertPaletteStyle(cozeEdgePath(edgeProps))"
               @click.stop
               @mouseenter="hoveredEdgeId = edgeProps.id"
+              @mouseleave="clearEdgeHover(edgeProps.id)"
             >
               <el-input v-model="nodePaletteSearch" size="large" placeholder="搜索节点、插件、工作流" />
               <div v-for="group in filteredNodePaletteGroups" :key="`edge-${group.title}`" class="edge-insert-palette-group">
@@ -4620,10 +4622,15 @@ function handleEdgeMouseEnter(event: any) {
   hoveredEdgeId.value = event?.edge?.id || ''
 }
 
-function handleEdgeMouseLeave(event: any) {
-  const edgeId = event?.edge?.id || ''
+function clearEdgeHover(edgeId: string) {
+  if (!edgeId) return
   if (edgeInsertPaletteId.value === edgeId || selectedEdgeId.value === edgeId) return
   if (hoveredEdgeId.value === edgeId) hoveredEdgeId.value = ''
+}
+
+function handleEdgeMouseLeave(event: any) {
+  const edgeId = event?.edge?.id || ''
+  clearEdgeHover(edgeId)
 }
 
 function handleNodeDragStop(event: any) {
