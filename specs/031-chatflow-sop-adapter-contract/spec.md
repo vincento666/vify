@@ -129,3 +129,50 @@ real Chatflow adapter in 032.
 - evidence is saved under
   `artifacts/slices/031-chatflow-sop-adapter-contract/`;
 - one git commit contains only 031 changes.
+
+## 031.0 Spec Sign-off
+
+Status: ready for adapter-contract implementation, now completed by 031.1
+through 031.3.
+
+Spec 031.0 is a documentation-only gate. It establishes the adapter-contract
+scope between the isolated runtime control plane and future Chatflow SOP
+integration. It does not introduce application code, tests, API behavior,
+database schema, or runtime behavior.
+
+Signed-off 031.0 boundaries:
+
+- 031 defines the SOP adapter contract only.
+- 031 proves the contract with a fake adapter.
+- 031 keeps real Chatflow execution out of scope.
+- 031 preserves one-way dependency: runtime-lab may define/call the adapter
+  port, but Workflow/Chatflow must not import `runtime_lab`.
+- 031 leaves real Chatflow SOP integration to 032.
+
+031.0 evidence is stored under
+`artifacts/slices/031-chatflow-sop-adapter-contract/031.0/`.
+
+## 031 Completion Sign-off
+
+Status: complete and ready for 032 boundary discovery.
+
+Completed slices:
+
+- 031.1 adapter port and DTOs;
+- 031.2 runtime service adapter boundary;
+- 031.3 dependency-direction gate.
+
+Final signed-off boundaries:
+
+- `SopRuntimeAdapter` is the adapter port for start, continue, suspend, and
+  resume.
+- `RuntimeLabService` routes selected SOP actions through the adapter port.
+- Runtime task ledger remains the source of truth for task status, route
+  events, idempotency, and resume policy.
+- Adapter failures are normalized into runtime-safe `ERROR` events and safe
+  user replies.
+- Existing Workflow/Chatflow modules do not import `runtime_lab`.
+- No real Chatflow execution is wired in 031.
+
+Final evidence is stored under
+`artifacts/slices/031-chatflow-sop-adapter-contract/031.3/`.

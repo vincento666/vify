@@ -6,6 +6,11 @@
 - [x] Record dependency on 030 gates.
 - [x] Keep real Chatflow execution out of scope.
 - [x] Commit 030-033 spec skeleton documents only.
+- [x] Add 031.0 spec sign-off.
+- [x] Save documentation-only evidence under
+  `artifacts/slices/031-chatflow-sop-adapter-contract/031.0/`.
+- [x] Confirm no application code, tests, API behavior, or schema changes are
+  included in 031.0.
 
 ## 031.1 Adapter port and DTOs
 
@@ -40,6 +45,7 @@
 - [x] Run targeted runtime-lab tests.
 - [x] Save evidence under
   `artifacts/slices/031-chatflow-sop-adapter-contract/031.3/`.
+- [x] Add 031 completion sign-off evidence.
 - [x] Gates pass.
 - [x] Commit 031.3 only.
 
