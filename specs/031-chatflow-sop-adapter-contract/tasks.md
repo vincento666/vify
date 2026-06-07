@@ -21,15 +21,15 @@
 
 ## 031.2 Runtime service adapter boundary
 
-- [ ] RED: integration tests fail when runtime service is configured with the
+- [x] RED: integration tests fail when runtime service is configured with the
   fake adapter port.
-- [ ] Route selected SOP actions through the adapter port.
-- [ ] Keep runtime task ledger as source of truth.
-- [ ] Normalize adapter failures into runtime events and safe responses.
-- [ ] Save evidence under
+- [x] Route selected SOP actions through the adapter port.
+- [x] Keep runtime task ledger as source of truth.
+- [x] Normalize adapter failures into runtime events and safe responses.
+- [x] Save evidence under
   `artifacts/slices/031-chatflow-sop-adapter-contract/031.2/`.
-- [ ] Gates pass.
-- [ ] Commit 031.2 only.
+- [x] Gates pass.
+- [x] Commit 031.2 only.
 
 ## 031.3 Dependency-direction gate
 

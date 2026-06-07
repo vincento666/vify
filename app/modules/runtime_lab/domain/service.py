@@ -11,7 +11,15 @@ from app.modules.runtime_lab.domain.payload import format_turn
 from app.modules.runtime_lab.domain.policy import PolicyGate
 from app.modules.runtime_lab.domain.recall import MockSemanticCandidateRecall
 from app.modules.runtime_lab.domain.router import RouteDecision, RuntimeLabRouter
-from app.modules.runtime_lab.domain.sop import MockSopAdapter, SopTurnResult, mock_sop_manifests
+from app.modules.runtime_lab.domain.sop import mock_sop_manifests
+from app.modules.runtime_lab.domain.sop_adapter import (
+    FakeSopRuntimeAdapter,
+    SopCheckpoint,
+    SopExecutionRequest,
+    SopExecutionResult,
+    SopExecutionStatus,
+    SopRuntimeAdapter,
+)
 from app.modules.runtime_lab.infra.repository import RuntimeLabRepository
 
 
@@ -36,12 +44,12 @@ class RuntimeLabService:
         self,
         repository: RuntimeLabRepository,
         router: RuntimeLabRouter | None = None,
-        adapter: MockSopAdapter | None = None,
+        adapter: SopRuntimeAdapter | None = None,
         classifier: Any | None = None,
     ) -> None:
         self._repository = repository
         self._manifests = mock_sop_manifests()
-        self._adapter = adapter or MockSopAdapter()
+        self._adapter = adapter or FakeSopRuntimeAdapter()
         self._router = router or RuntimeLabRouter(self._adapter)
         self._explicit_signals = ExplicitSignalDetector(self._manifests)
         self._semantic_recall = MockSemanticCandidateRecall(self._manifests)
@@ -62,8 +70,12 @@ class RuntimeLabService:
         self._repository.append_event(session_id, "ROUTE_DECISION", _decision_payload(decision))
 
         if decision.action == "START_SOP" and decision.target_sop_id is not None:
-            result = self._adapter.start(decision.target_sop_id)
-            task = self._start_task(session_id, result)
+            result = self._adapter.start_sop(
+                self._adapter_request(session_id, decision.target_sop_id, message=message)
+            )
+            if result.status == SopExecutionStatus.FAILED:
+                return self._adapter_failure_turn(session_id, result, decision)
+            task = self._start_task(session_id, decision.target_sop_id, result)
             self._repository.append_event(
                 session_id,
                 "TASK_STARTED",
@@ -78,8 +90,12 @@ class RuntimeLabService:
                 "TASK_SUSPENDED",
                 {"taskId": suspended["id"], "sopId": suspended["sop_id"]},
             )
-            result = self._adapter.start(decision.target_sop_id)
-            task = self._start_task(session_id, result)
+            result = self._adapter.start_sop(
+                self._adapter_request(session_id, decision.target_sop_id, message=message)
+            )
+            if result.status == SopExecutionStatus.FAILED:
+                return self._adapter_failure_turn(session_id, result, decision)
+            task = self._start_task(session_id, decision.target_sop_id, result)
             self._repository.append_event(
                 session_id,
                 "TASK_STARTED",
@@ -184,21 +200,21 @@ class RuntimeLabService:
         ]
         return select_top_candidates(candidates, top_k=5)
 
-    def _start_task(self, session_id: int, result: SopTurnResult) -> dict[str, Any]:
+    def _start_task(self, session_id: int, sop_id: str, result: SopExecutionResult) -> dict[str, Any]:
         task = self._repository.create_task(
             session_id,
-            sop_id=result.sop_id,
+            sop_id=sop_id,
             current_step=result.current_step,
             business_refs=result.collected,
         )
         checkpoint = self._repository.create_checkpoint(
             session_id,
             int(task["id"]),
-            sop_id=result.sop_id,
+            sop_id=sop_id,
             current_step=result.current_step,
             pending_prompt=result.pending_prompt,
             collected=result.collected,
-            status=result.checkpoint["status"],
+            status=_checkpoint_status(result),
         )
         return self._repository.update_task_state(
             int(task["id"]),
@@ -209,16 +225,23 @@ class RuntimeLabService:
         )
 
     def _suspend_task(self, session_id: int, task: dict[str, Any]) -> dict[str, Any]:
-        checkpoint = self._repository.get_latest_checkpoint(int(task["id"]))
-        collected = dict(checkpoint["collected"]) if checkpoint else dict(task.get("business_refs") or {})
-        pending_prompt = str(checkpoint["pending_prompt"]) if checkpoint else ""
+        checkpoint_row = self._repository.get_latest_checkpoint(int(task["id"]))
+        adapter_checkpoint = self._adapter.suspend_sop(
+            self._adapter_request(
+                session_id,
+                str(task["sop_id"]),
+                task=task,
+                checkpoint_row=checkpoint_row,
+                collected=dict(task.get("business_refs") or {}),
+            )
+        )
         checkpoint = self._repository.create_checkpoint(
             session_id,
             int(task["id"]),
             sop_id=str(task["sop_id"]),
-            current_step=str(task["current_step"]),
-            pending_prompt=pending_prompt,
-            collected=collected,
+            current_step=adapter_checkpoint.current_step,
+            pending_prompt=adapter_checkpoint.pending_prompt,
+            collected=adapter_checkpoint.collected,
         )
         summary = f"{task['sop_id']} paused at {task['current_step']}"
         return self._repository.update_task_state(
@@ -226,7 +249,7 @@ class RuntimeLabService:
             status="SUSPENDED",
             checkpoint_id=int(checkpoint["id"]),
             resume_summary=summary,
-            business_refs=collected,
+            business_refs=adapter_checkpoint.collected,
         )
 
     def _continue_active_task(
@@ -237,23 +260,28 @@ class RuntimeLabService:
         decision: RouteDecision,
     ) -> RuntimeLabTurn:
         checkpoint = self._repository.get_latest_checkpoint(int(active_task["id"]))
-        collected = dict(checkpoint["collected"]) if checkpoint else dict(active_task.get("business_refs") or {})
-        result = self._adapter.continue_task(
-            sop_id=str(active_task["sop_id"]),
-            current_step=str(active_task["current_step"]),
-            message=message,
-            collected=collected,
+        result = self._adapter.continue_sop(
+            self._adapter_request(
+                session_id,
+                str(active_task["sop_id"]),
+                message=message,
+                task=active_task,
+                checkpoint_row=checkpoint,
+                collected=dict(active_task.get("business_refs") or {}),
+            )
         )
+        if result.status == SopExecutionStatus.FAILED:
+            return self._adapter_failure_turn(session_id, result, decision)
         saved_checkpoint = self._repository.create_checkpoint(
             session_id,
             int(active_task["id"]),
-            sop_id=result.sop_id,
+            sop_id=str(active_task["sop_id"]),
             current_step=result.current_step,
             pending_prompt=result.pending_prompt,
             collected=result.collected,
-            status=result.checkpoint["status"],
+            status=_checkpoint_status(result),
         )
-        if result.completed:
+        if result.status == SopExecutionStatus.COMPLETED:
             completed = self._repository.update_task_state(
                 int(active_task["id"]),
                 status="COMPLETED",
@@ -296,23 +324,32 @@ class RuntimeLabService:
             return self._turn(session_id, "没有可恢复的暂停流程。", RouteDecision(action="NO_MATCH", reason="No suspended task"))
         task = suspended_tasks[0]
         checkpoint = self._repository.get_latest_checkpoint(int(task["id"]))
-        collected = dict(checkpoint["collected"]) if checkpoint else dict(task.get("business_refs") or {})
-        current_step = str(checkpoint["current_step"]) if checkpoint else str(task["current_step"])
+        result = self._adapter.resume_sop(
+            self._adapter_request(
+                session_id,
+                str(task["sop_id"]),
+                task=task,
+                checkpoint_row=checkpoint,
+                collected=dict(task.get("business_refs") or {}),
+            )
+        )
+        if result.status == SopExecutionStatus.FAILED:
+            return self._adapter_failure_turn(session_id, result, decision)
+        current_step = result.current_step or (str(checkpoint["current_step"]) if checkpoint else str(task["current_step"]))
         checkpoint_id = int(checkpoint["id"]) if checkpoint else int(task["checkpoint_id"] or 0)
         resumed = self._repository.update_task_state(
             int(task["id"]),
             status="RUNNING",
             current_step=current_step,
             checkpoint_id=checkpoint_id,
-            business_refs=collected,
+            business_refs=result.collected,
         )
         self._repository.append_event(
             session_id,
             "TASK_RESUMED",
             {"taskId": resumed["id"], "sopId": resumed["sop_id"], "currentStep": resumed["current_step"]},
         )
-        prompt = str(checkpoint["pending_prompt"]) if checkpoint else "请继续提供信息。"
-        return self._turn(session_id, f"已恢复刚才的流程。{prompt}", decision)
+        return self._turn(session_id, result.reply or "已恢复刚才的流程。请继续提供信息。", decision)
 
     def _build_resume_offer(self, session_id: int) -> dict[str, Any] | None:
         suspended_tasks = self._repository.list_tasks(session_id, statuses={"SUSPENDED"})
@@ -342,6 +379,47 @@ class RuntimeLabService:
             events=self._repository.list_events(session_id),
         )
 
+    def _adapter_request(
+        self,
+        session_id: int,
+        sop_id: str,
+        message: str = "",
+        task: dict[str, Any] | None = None,
+        checkpoint_row: dict[str, Any] | None = None,
+        collected: dict[str, Any] | None = None,
+    ) -> SopExecutionRequest:
+        checkpoint = _sop_checkpoint_from_row(task, checkpoint_row)
+        saved = dict(collected or {})
+        if checkpoint is not None:
+            saved = dict(checkpoint.collected)
+        return SopExecutionRequest(
+            runtime_session_id=session_id,
+            runtime_task_id=int(task["id"]) if task is not None else None,
+            sop_id=sop_id,
+            message=message,
+            checkpoint=checkpoint,
+            collected=saved,
+            business_refs=dict(task.get("business_refs") or {}) if task is not None else {},
+            metadata={"runtime": "runtime_lab"},
+        )
+
+    def _adapter_failure_turn(
+        self,
+        session_id: int,
+        result: SopExecutionResult,
+        decision: RouteDecision,
+    ) -> RuntimeLabTurn:
+        self._repository.append_event(
+            session_id,
+            "ERROR",
+            {
+                "source": "SOP_ADAPTER",
+                "error": result.error or {"code": "SOP_FAILED", "message": "SOP execution failed"},
+                "events": result.events,
+            },
+        )
+        return self._turn(session_id, "SOP执行失败，请稍后重试或转人工。", decision)
+
     def _ensure_session_exists(self, session_id: int) -> None:
         if self._repository.get_session(session_id) is None:
             raise BizError(ErrorCode.NOT_FOUND, "Runtime lab session not found")
@@ -365,6 +443,35 @@ def _decision_payload(decision: RouteDecision) -> dict[str, Any]:
 
 def _request_hash(message: str) -> str:
     return hashlib.sha256(message.encode("utf-8")).hexdigest()
+
+
+def _checkpoint_status(result: SopExecutionResult) -> str:
+    return "COMPLETED" if result.status == SopExecutionStatus.COMPLETED else "ACTIVE"
+
+
+def _sop_checkpoint_from_row(
+    task: dict[str, Any] | None,
+    checkpoint: dict[str, Any] | None,
+) -> SopCheckpoint | None:
+    if checkpoint is None:
+        return None
+    collected = dict(checkpoint.get("collected") or {})
+    task_id = int(task["id"]) if task is not None else int(checkpoint["task_id"])
+    checkpoint_id = int(checkpoint["id"])
+    current_step = str(checkpoint["current_step"])
+    return SopCheckpoint(
+        sop_runtime_id=f"runtime-lab:{task_id}:{checkpoint_id}",
+        current_node_id=current_step,
+        current_step=current_step,
+        pending_prompt=str(checkpoint.get("pending_prompt") or ""),
+        collected=collected,
+        scoped_variables=_scoped_variables(collected),
+        version=1,
+    )
+
+
+def _scoped_variables(collected: dict[str, Any]) -> dict[str, Any]:
+    return {f"conversation.{key}": value for key, value in collected.items()}
 
 
 def _with_evidence(

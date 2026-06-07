@@ -1,16 +1,21 @@
 from collections.abc import Mapping, Sequence
+from typing import Protocol
 from typing import Any
 
 from app.modules.runtime_lab.domain.candidates import CandidateType, RouteCandidate, select_top_candidates
 from app.modules.runtime_lab.domain.classifier import ClassifierResult
 from app.modules.runtime_lab.domain.router import RouteDecision
-from app.modules.runtime_lab.domain.sop import MockSopAdapter
+
+
+class InterruptibilityPolicy(Protocol):
+    def is_interruptible(self, sop_id: str, step_id: str) -> bool:
+        ...
 
 STRONG_ACCEPT_THRESHOLD = 0.9
 
 
 class PolicyGate:
-    def __init__(self, adapter: MockSopAdapter) -> None:
+    def __init__(self, adapter: InterruptibilityPolicy) -> None:
         self._adapter = adapter
 
     def pre_classifier_decision(

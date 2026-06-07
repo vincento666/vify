@@ -1,8 +1,13 @@
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 
 from app.modules.runtime_lab.domain.sop import MockSopAdapter, SopManifest, mock_sop_manifests
+
+
+class InterruptibilityPolicy(Protocol):
+    def is_interruptible(self, sop_id: str, step_id: str) -> bool:
+        ...
 
 
 @dataclass(frozen=True)
@@ -21,7 +26,11 @@ class RouteDecision:
 
 
 class RuntimeLabRouter:
-    def __init__(self, adapter: MockSopAdapter | None = None, manifests: dict[str, SopManifest] | None = None) -> None:
+    def __init__(
+        self,
+        adapter: InterruptibilityPolicy | None = None,
+        manifests: dict[str, SopManifest] | None = None,
+    ) -> None:
         self._manifests = manifests or mock_sop_manifests()
         self._adapter = adapter or MockSopAdapter(self._manifests)
 

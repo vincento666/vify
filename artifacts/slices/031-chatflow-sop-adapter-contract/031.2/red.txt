@@ -1,0 +1,84 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/vincento/work/develop/hify
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 2 items
+
+tests/integration/runtime_lab/test_runtime_lab_sop_adapter_contract.py F [ 50%]
+F                                                                        [100%]
+
+=================================== FAILURES ===================================
+_ RuntimeLabSopAdapterContractIntegrationTest.test_adapter_failure_is_normalized_without_creating_active_task _
+
+self = <test_runtime_lab_sop_adapter_contract.RuntimeLabSopAdapterContractIntegrationTest testMethod=test_adapter_failure_is_normalized_without_creating_active_task>
+
+    def test_adapter_failure_is_normalized_without_creating_active_task(self) -> None:
+        with _session() as session:
+            repository = RuntimeLabRepository(session)
+            service = RuntimeLabService(repository, adapter=_FailingStartAdapter())
+            runtime_session = service.create_session()
+            session_id = int(runtime_session["id"])
+    
+>           turn = service.handle_message(session_id, "我要退票")
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/integration/runtime_lab/test_runtime_lab_sop_adapter_contract.py:50: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.modules.runtime_lab.domain.service.RuntimeLabService object at 0x1045a3a70>
+session_id = 1, message = '我要退票'
+
+    def handle_message(self, session_id: int, message: str) -> RuntimeLabTurn:
+        self._ensure_session_exists(session_id)
+        self._repository.append_event(session_id, "USER_MESSAGE", {"message": message})
+        active_task = self._repository.get_active_task(session_id)
+        suspended_tasks = self._repository.list_tasks(session_id, statuses={"SUSPENDED"})
+        decision = self._semantic_decision(message, active_task, suspended_tasks)
+        self._repository.append_event(session_id, "ROUTE_DECISION", _decision_payload(decision))
+    
+        if decision.action == "START_SOP" and decision.target_sop_id is not None:
+>           result = self._adapter.start(decision.target_sop_id)
+                     ^^^^^^^^^^^^^^^^^^^
+E           AttributeError: '_FailingStartAdapter' object has no attribute 'start'
+
+app/modules/runtime_lab/domain/service.py:65: AttributeError
+_ RuntimeLabSopAdapterContractIntegrationTest.test_service_routes_start_continue_suspend_and_resume_through_adapter_port _
+
+self = <test_runtime_lab_sop_adapter_contract.RuntimeLabSopAdapterContractIntegrationTest testMethod=test_service_routes_start_continue_suspend_and_resume_through_adapter_port>
+
+    def test_service_routes_start_continue_suspend_and_resume_through_adapter_port(self) -> None:
+        with _session() as session:
+            adapter = _RecordingSopRuntimeAdapter()
+            repository = RuntimeLabRepository(session)
+            service = RuntimeLabService(repository, adapter=adapter)
+            runtime_session = service.create_session()
+            session_id = int(runtime_session["id"])
+    
+>           service.handle_message(session_id, "我要退票")
+
+tests/integration/runtime_lab/test_runtime_lab_sop_adapter_contract.py:30: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.modules.runtime_lab.domain.service.RuntimeLabService object at 0x10460da00>
+session_id = 1, message = '我要退票'
+
+    def handle_message(self, session_id: int, message: str) -> RuntimeLabTurn:
+        self._ensure_session_exists(session_id)
+        self._repository.append_event(session_id, "USER_MESSAGE", {"message": message})
+        active_task = self._repository.get_active_task(session_id)
+        suspended_tasks = self._repository.list_tasks(session_id, statuses={"SUSPENDED"})
+        decision = self._semantic_decision(message, active_task, suspended_tasks)
+        self._repository.append_event(session_id, "ROUTE_DECISION", _decision_payload(decision))
+    
+        if decision.action == "START_SOP" and decision.target_sop_id is not None:
+>           result = self._adapter.start(decision.target_sop_id)
+                     ^^^^^^^^^^^^^^^^^^^
+E           AttributeError: '_RecordingSopRuntimeAdapter' object has no attribute 'start'
+
+app/modules/runtime_lab/domain/service.py:65: AttributeError
+=========================== short test summary info ============================
+FAILED tests/integration/runtime_lab/test_runtime_lab_sop_adapter_contract.py::RuntimeLabSopAdapterContractIntegrationTest::test_adapter_failure_is_normalized_without_creating_active_task
+FAILED tests/integration/runtime_lab/test_runtime_lab_sop_adapter_contract.py::RuntimeLabSopAdapterContractIntegrationTest::test_service_routes_start_continue_suspend_and_resume_through_adapter_port
+============================== 2 failed in 0.33s ===============================
