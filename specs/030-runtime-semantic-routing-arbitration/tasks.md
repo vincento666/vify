@@ -14,16 +14,16 @@
 
 ## 030.1 Candidate model and score evidence
 
-- [ ] RED: unit tests fail for route candidate serialization, score breakdown,
+- [x] RED: unit tests fail for route candidate serialization, score breakdown,
   candidate type validation, and top-k ordering.
-- [ ] Add candidate domain models for active task, suspended task, SOP intent,
+- [x] Add candidate domain models for active task, suspended task, SOP intent,
   clarify, and reject-switch candidates.
-- [ ] Add score breakdown fields for keyword, alias, and mock semantic signals.
-- [ ] Add top-k candidate merge behavior with stable ordering.
-- [ ] Save evidence under
+- [x] Add score breakdown fields for keyword, alias, and mock semantic signals.
+- [x] Add top-k candidate merge behavior with stable ordering.
+- [x] Save evidence under
   `artifacts/slices/030-runtime-semantic-routing-arbitration/030.1/`.
-- [ ] Gates pass.
-- [ ] Commit 030.1 only.
+- [x] Gates pass.
+- [x] Commit 030.1 only.
 
 ## 030.2 Explicit cheap signal detector
 
