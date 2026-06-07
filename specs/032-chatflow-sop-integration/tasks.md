@@ -6,19 +6,26 @@
 - [x] Record dependency on 031 gates.
 - [x] Limit integration to one real Chatflow-backed SOP path.
 - [x] Commit 030-033 spec skeleton documents only.
+- [x] Add 032.0 spec sign-off.
+- [x] Save documentation-only evidence under
+  `artifacts/slices/032-chatflow-sop-integration/032.0/`.
+- [x] Confirm no application code, tests, API behavior, or schema changes are
+  included in 032.0.
 
 ## 032.1 Chatflow boundary discovery
 
-- [ ] Blocked until 031 completion gate passes.
-- [ ] Inspect current Chatflow run/resume/session-state APIs.
-- [ ] Document the chosen adapter call path.
-- [ ] Document any 031 contract gaps before implementation.
-- [ ] Save evidence under
+- [x] Blocked until 031 completion gate passes.
+- [x] Inspect current Chatflow run/resume/session-state APIs.
+- [x] Document the chosen adapter call path.
+- [x] Document any 031 contract gaps before implementation.
+- [x] Save evidence under
   `artifacts/slices/032-chatflow-sop-integration/032.1/`.
-- [ ] Commit 032.1 only.
+- [x] Commit 032 documentation sign-off only.
 
 ## 032.2 Real adapter RED tests
 
+- [x] Document pre-implementation RED-test sign-off under
+  `artifacts/slices/032-chatflow-sop-integration/032.2/`.
 - [ ] RED: real adapter tests fail for start, continue, suspend checkpoint,
   resume, and complete.
 - [ ] Add one test-only Chatflow SOP fixture if no suitable fixture exists.
@@ -29,6 +36,8 @@
 
 ## 032.3 Real adapter implementation
 
+- [x] Document pre-implementation adapter mapping sign-off under
+  `artifacts/slices/032-chatflow-sop-integration/032.3/`.
 - [ ] Implement `ChatflowSopRuntimeAdapter`.
 - [ ] Map runtime request DTOs to Chatflow service inputs.
 - [ ] Map Chatflow outputs to runtime result DTOs.
@@ -40,6 +49,8 @@
 
 ## 032.4 Runtime E2E with real Chatflow SOP
 
+- [x] Document pre-implementation E2E gate sign-off under
+  `artifacts/slices/032-chatflow-sop-integration/032.4/`.
 - [ ] RED: API E2E fails for real Chatflow-backed SOP start, suspend, resume,
   and complete.
 - [ ] Add runtime-lab API E2E for the real adapter path.

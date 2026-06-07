@@ -26,6 +26,18 @@ Before implementation, inspect:
 If the existing Chatflow boundary cannot support one-way adapter calls, update
 031 first instead of forcing integration here.
 
+Discovery result:
+
+- current Chatflow run/resume/session-state APIs are sufficient for one narrow
+  real SOP adapter path;
+- 032 should use `WorkflowService` directly rather than calling HTTP endpoints;
+- `suspend_sop` should preserve an existing waiting checkpoint rather than
+  inventing an arbitrary pause capability;
+- if the adapter cannot find a waiting checkpoint for suspend/resume, it should
+  return a normalized failure result;
+- the first fixture should use an interruptible Chatflow shape such as
+  `START -> INFORMATION_COLLECTION(order_no) -> QUESTION(confirm) -> END`.
+
 ## Test Strategy
 
 RED tests first:
@@ -41,6 +53,16 @@ Regression tests:
 
 - existing runtime-lab mock path;
 - existing Chatflow run/resume tests.
+
+Implementation sequence:
+
+```text
+032.2 RED adapter tests
+  -> 032.3 ChatflowSopRuntimeAdapter
+  -> 032.4 runtime-lab API E2E
+```
+
+Do not start 032.3 until the 032.2 RED output has been captured.
 
 ## Evidence
 
