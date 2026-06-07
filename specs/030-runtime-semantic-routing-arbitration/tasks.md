@@ -54,17 +54,17 @@
 
 ## 030.4 Constrained classifier interface
 
-- [ ] RED: classifier tests fail for JSON-like output, candidate membership,
+- [x] RED: classifier tests fail for JSON-like output, candidate membership,
   allowed action validation, and low-confidence clarification.
-- [ ] Add classifier input and result models.
-- [ ] Add deterministic fake classifier.
-- [ ] Reject classifier results that select a candidate outside the provided
+- [x] Add classifier input and result models.
+- [x] Add deterministic fake classifier.
+- [x] Reject classifier results that select a candidate outside the provided
   finite candidate set.
-- [ ] Ensure FAQ/RAG document snippets are not classifier inputs.
-- [ ] Save evidence under
+- [x] Ensure FAQ/RAG document snippets are not classifier inputs.
+- [x] Save evidence under
   `artifacts/slices/030-runtime-semantic-routing-arbitration/030.4/`.
-- [ ] Gates pass.
-- [ ] Commit 030.4 only.
+- [x] Gates pass.
+- [x] Commit 030.4 only.
 
 ## 030.5 Policy gate and runtime integration
 

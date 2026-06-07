@@ -1,0 +1,16 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/vincento/work/develop/hify
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 20 items
+
+tests/unit/runtime_lab/test_candidates.py ...                            [ 15%]
+tests/unit/runtime_lab/test_constrained_classifier.py ....               [ 35%]
+tests/unit/runtime_lab/test_explicit_signals.py ....                     [ 55%]
+tests/unit/runtime_lab/test_mock_semantic_recall.py ....                 [ 75%]
+tests/unit/runtime_lab/test_mock_sop_adapter.py .                        [ 80%]
+tests/unit/runtime_lab/test_router.py ....                               [100%]
+
+============================== 20 passed in 0.05s ==============================
