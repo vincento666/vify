@@ -85,6 +85,18 @@ class RuntimeLabService:
     def list_events(self, session_id: int) -> list[dict[str, Any]]:
         return self._repository.list_events(session_id)
 
+    def get_command_response(self, session_id: int, idempotency_key: str) -> dict[str, Any] | None:
+        return self._repository.get_command_response(session_id, idempotency_key)
+
+    def store_command_response(
+        self,
+        session_id: int,
+        idempotency_key: str,
+        request_hash: str,
+        response_payload: dict[str, Any],
+    ) -> None:
+        self._repository.store_command_response(session_id, idempotency_key, request_hash, response_payload)
+
     def _start_task(self, session_id: int, result: SopTurnResult) -> dict[str, Any]:
         task = self._repository.create_task(
             session_id,

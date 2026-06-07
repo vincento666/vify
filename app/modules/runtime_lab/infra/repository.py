@@ -294,6 +294,15 @@ class RuntimeLabRepository:
         self._session.commit()
         return row, False
 
+    def get_command_response(self, session_id: int, idempotency_key: str) -> dict[str, Any] | None:
+        row = self._session.execute(
+            sa.select(self._command_table).where(
+                self._command_table.c.session_id == session_id,
+                self._command_table.c.idempotency_key == idempotency_key,
+            )
+        ).mappings().one_or_none()
+        return dict(row) if row else None
+
     def _ensure_tables(self) -> None:
         bind = self._session.get_bind()
         if bind is None:

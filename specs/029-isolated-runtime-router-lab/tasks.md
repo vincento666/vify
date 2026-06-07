@@ -102,13 +102,13 @@
 
 ## 029.7 Reliability gates and API E2E
 
-- [ ] RED: reliability tests fail for duplicate idempotency key, event ordering,
+- [x] RED: reliability tests fail for duplicate idempotency key, event ordering,
   and concurrent active task conflict.
-- [ ] Implement idempotent message replay by `(session_id, idempotency_key)`.
-- [ ] Ensure duplicate idempotency key does not create duplicate task/event
+- [x] Implement idempotent message replay by `(session_id, idempotency_key)`.
+- [x] Ensure duplicate idempotency key does not create duplicate task/event
   records.
-- [ ] Ensure route transitions preserve one active task per session.
-- [ ] Add API E2E:
+- [x] Ensure route transitions preserve one active task per session.
+- [x] Add API E2E:
   - start refund;
   - switch to invoice at interruptible step;
   - complete invoice;
@@ -116,12 +116,12 @@
   - resume refund;
   - reach confirm;
   - reject switch from non-interruptible confirm step.
-- [ ] Save UAT request/response summaries under
+- [x] Save UAT request/response summaries under
   `artifacts/slices/029-isolated-runtime-router-lab/029.7/uat.md`.
-- [ ] Save evidence under
+- [x] Save evidence under
   `artifacts/slices/029-isolated-runtime-router-lab/029.7/`.
-- [ ] Gates pass.
-- [ ] Commit 029.7 only.
+- [x] Gates pass.
+- [x] Commit 029.7 only.
 
 ## Future specs, not 029 tasks
 
