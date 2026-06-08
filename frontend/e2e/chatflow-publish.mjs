@@ -40,7 +40,7 @@ try {
   await testPanel.getByPlaceholder('输入消息').fill('hello publish')
   await testPanel.getByRole('button', { name: '发送消息', exact: true }).click()
   await page.waitForURL('**/chatflows/*/canvas', { timeout: 10000 })
-  await page.locator('.message-bubble.assistant').waitFor({ state: 'visible', timeout: 10000 })
+  await testPanel.locator('.chatflow-run-meta .run-status', { hasText: 'SUCCEEDED' }).waitFor({ state: 'visible', timeout: 10000 })
   await page.getByRole('button', { name: '发布', exact: true }).first().click()
   await publishDialog.waitFor({ state: 'visible', timeout: 5000 })
   panelText = await publishDialog.innerText()
