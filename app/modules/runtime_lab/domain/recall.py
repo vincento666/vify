@@ -1,4 +1,4 @@
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping, Sequence, Set as AbstractSet
 from typing import Any
 
 from app.modules.runtime_lab.domain.candidates import CandidateType, RouteCandidate, ScoreBreakdown, select_top_candidates
@@ -27,13 +27,14 @@ class MockSemanticCandidateRecall:
         message: str,
         active_task: Mapping[str, Any] | None,
         suspended_tasks: Sequence[Mapping[str, Any]],
+        enabled_sop_ids: AbstractSet[str] | None = None,
         top_k: int = 5,
     ) -> list[RouteCandidate]:
         candidates: list[RouteCandidate] = []
         if active_task is not None:
             candidates.append(self._active_candidate(active_task))
         candidates.extend(self._suspended_candidates(message, suspended_tasks))
-        candidates.extend(self._sop_candidates(message))
+        candidates.extend(self._sop_candidates(message, enabled_sop_ids))
         return select_top_candidates(candidates, top_k)
 
     def _active_candidate(self, active_task: Mapping[str, Any]) -> RouteCandidate:
@@ -90,9 +91,15 @@ class MockSemanticCandidateRecall:
             )
         return candidates
 
-    def _sop_candidates(self, message: str) -> list[RouteCandidate]:
+    def _sop_candidates(
+        self,
+        message: str,
+        enabled_sop_ids: AbstractSet[str] | None,
+    ) -> list[RouteCandidate]:
         candidates: list[RouteCandidate] = []
         for sop_id, manifest in self._manifests.items():
+            if enabled_sop_ids is not None and sop_id not in enabled_sop_ids:
+                continue
             matched = tuple(term for term in SEMANTIC_FIXTURES.get(sop_id, ()) if term in message)
             if not matched:
                 continue

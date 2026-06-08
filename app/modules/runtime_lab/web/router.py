@@ -58,7 +58,12 @@ def post_message(
     request: RuntimeLabMessageRequest,
     service: RuntimeLabService = Depends(get_runtime_lab_service),
 ) -> dict[str, Any]:
-    result = service.handle_command(session_id, request.message, request.idempotency_key)
+    result = service.handle_command(
+        session_id,
+        request.message,
+        request.idempotency_key,
+        enabled_sop_ids=request.enabled_sop_ids,
+    )
     return success(result.payload)
 
 

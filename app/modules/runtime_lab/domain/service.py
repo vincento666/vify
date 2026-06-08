@@ -61,12 +61,18 @@ class RuntimeLabService:
         self._repository.append_event(int(runtime_session["id"]), "SESSION_CREATED", {})
         return runtime_session
 
-    def handle_message(self, session_id: int, message: str) -> RuntimeLabTurn:
+    def handle_message(
+        self,
+        session_id: int,
+        message: str,
+        enabled_sop_ids: Sequence[str] | None = None,
+    ) -> RuntimeLabTurn:
         self._ensure_session_exists(session_id)
         self._repository.append_event(session_id, "USER_MESSAGE", {"message": message})
         active_task = self._repository.get_active_task(session_id)
         suspended_tasks = self._repository.list_tasks(session_id, statuses={"SUSPENDED"})
-        decision = self._semantic_decision(message, active_task, suspended_tasks)
+        enabled_scope = self._normalize_enabled_sop_ids(enabled_sop_ids)
+        decision = self._semantic_decision(message, active_task, suspended_tasks, enabled_scope)
         self._repository.append_event(session_id, "ROUTE_DECISION", _decision_payload(decision))
 
         if decision.action == "START_SOP" and decision.target_sop_id is not None:
@@ -125,16 +131,17 @@ class RuntimeLabService:
         session_id: int,
         message: str,
         idempotency_key: str | None = None,
+        enabled_sop_ids: Sequence[str] | None = None,
     ) -> RuntimeLabCommandResult:
         self._ensure_session_exists(session_id)
-        request_hash = _request_hash(message)
+        request_hash = _request_hash(message, enabled_sop_ids)
         if idempotency_key:
             existing = self._repository.get_command_response(session_id, idempotency_key)
             if existing is not None:
                 if existing["request_hash"] != request_hash:
                     raise BizError(ErrorCode.BAD_REQUEST, "Idempotency key reused with different request")
                 return RuntimeLabCommandResult(dict(existing["response_payload"]), replayed=True)
-        payload = format_turn(self.handle_message(session_id, message))
+        payload = format_turn(self.handle_message(session_id, message, enabled_sop_ids=enabled_sop_ids))
         if idempotency_key:
             self._repository.store_command_response(session_id, idempotency_key, request_hash, payload)
         return RuntimeLabCommandResult(payload, replayed=False)
@@ -162,9 +169,16 @@ class RuntimeLabService:
         message: str,
         active_task: dict[str, Any] | None,
         suspended_tasks: list[dict[str, Any]],
+        enabled_sop_ids: frozenset[str] | None,
     ) -> RouteDecision:
-        candidates = self._route_candidates(message, active_task, suspended_tasks)
+        candidates = self._route_candidates(message, active_task, suspended_tasks, enabled_sop_ids)
         if not candidates:
+            if enabled_sop_ids is not None:
+                return _with_evidence(
+                    RouteDecision(action="NO_MATCH", reason="No enabled SOP candidate matched"),
+                    (),
+                    "enabled_scope",
+                )
             decision = self._router.decide(message, active_task=active_task, suspended_tasks=suspended_tasks)
             return _with_evidence(decision, (), "fallback")
         pre_decision = self._policy_gate.pre_classifier_decision(candidates, active_task, len(suspended_tasks))
@@ -172,7 +186,11 @@ class RuntimeLabService:
             return _with_evidence(pre_decision, candidates, "pre_classifier")
         classifier_input = ClassifierInput(
             message=message,
-            session_state={"activeTask": active_task is not None, "suspendedTaskCount": len(suspended_tasks)},
+            session_state={
+                "activeTask": active_task is not None,
+                "suspendedTaskCount": len(suspended_tasks),
+                "enabledSopIds": sorted(enabled_sop_ids) if enabled_sop_ids is not None else None,
+            },
             candidates=tuple(candidates),
             allowed_actions=(
                 "CONTINUE_ACTIVE_SOP",
@@ -193,12 +211,28 @@ class RuntimeLabService:
         message: str,
         active_task: dict[str, Any] | None,
         suspended_tasks: list[dict[str, Any]],
+        enabled_sop_ids: frozenset[str] | None,
     ) -> list[RouteCandidate]:
         candidates = [
-            *self._explicit_signals.detect(message, active_task=active_task, suspended_tasks=suspended_tasks),
-            *self._semantic_recall.recall(message, active_task=active_task, suspended_tasks=suspended_tasks),
+            *self._explicit_signals.detect(
+                message,
+                active_task=active_task,
+                suspended_tasks=suspended_tasks,
+                enabled_sop_ids=enabled_sop_ids,
+            ),
+            *self._semantic_recall.recall(
+                message,
+                active_task=active_task,
+                suspended_tasks=suspended_tasks,
+                enabled_sop_ids=enabled_sop_ids,
+            ),
         ]
         return select_top_candidates(candidates, top_k=5)
+
+    def _normalize_enabled_sop_ids(self, enabled_sop_ids: Sequence[str] | None) -> frozenset[str] | None:
+        if enabled_sop_ids is None:
+            return None
+        return frozenset(sop_id for sop_id in enabled_sop_ids if sop_id in self._manifests)
 
     def _start_task(self, session_id: int, sop_id: str, result: SopExecutionResult) -> dict[str, Any]:
         task = self._repository.create_task(
@@ -453,8 +487,9 @@ def _decision_payload(decision: RouteDecision) -> dict[str, Any]:
     }
 
 
-def _request_hash(message: str) -> str:
-    return hashlib.sha256(message.encode("utf-8")).hexdigest()
+def _request_hash(message: str, enabled_sop_ids: Sequence[str] | None = None) -> str:
+    scope = "<all>" if enabled_sop_ids is None else ",".join(sorted(set(enabled_sop_ids)))
+    return hashlib.sha256(f"{message}\0{scope}".encode("utf-8")).hexdigest()
 
 
 def _checkpoint_status(result: SopExecutionResult) -> str:

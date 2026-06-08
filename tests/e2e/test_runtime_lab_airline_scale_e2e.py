@@ -326,6 +326,25 @@ class RuntimeLabAirlineScaleE2ETest(unittest.TestCase):
                 self.assertEqual(resumed["activeTask"]["sopId"], primary)
                 self.assertLessEqual(len([task for task in tasks if task["status"] == "SUSPENDED"]), 1)
 
+    def test_enabled_sop_ids_scope_new_intent_routing_without_breaking_active_continuation(self) -> None:
+        with TestClient(app) as client:
+            session_id = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
+            enabled = ("flight_booking", "invoice_apply")
+
+            disabled_refund = _message(client, session_id, "我要退票", enabled_sop_ids=enabled)
+            booking_started = _message(client, session_id, "我想买一张明天去上海的机票", enabled_sop_ids=enabled)
+            invoice_started = _message(client, session_id, "公司报销要凭证，帮我开一下电子发票", enabled_sop_ids=enabled)
+            disabled_refund_during_invoice = _message(client, session_id, "我要退票", enabled_sop_ids=enabled)
+
+        self.assertEqual(disabled_refund["routeDecision"]["action"], "NO_MATCH")
+        self.assertIsNone(disabled_refund["activeTask"])
+        self.assertEqual(booking_started["routeDecision"]["action"], "START_SOP")
+        self.assertEqual(booking_started["activeTask"]["sopId"], "flight_booking")
+        self.assertEqual(invoice_started["routeDecision"]["action"], "SUSPEND_AND_START")
+        self.assertEqual(invoice_started["activeTask"]["sopId"], "invoice_apply")
+        self.assertEqual(disabled_refund_during_invoice["routeDecision"]["action"], "CONTINUE_ACTIVE_SOP")
+        self.assertEqual(disabled_refund_during_invoice["activeTask"]["sopId"], "invoice_apply")
+
     def test_real_chatflow_bound_sop_still_routes_through_runtime_lab_control_plane(self) -> None:
         stamp = time.time_ns()
         with TestClient(app) as client:
@@ -372,10 +391,18 @@ def _runtime_service_override(chatflow_id: int) -> Callable[[Session], RuntimeLa
     return override
 
 
-def _message(client: TestClient, session_id: int, message: str) -> dict[str, Any]:
+def _message(
+    client: TestClient,
+    session_id: int,
+    message: str,
+    enabled_sop_ids: tuple[str, ...] | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {"message": message}
+    if enabled_sop_ids is not None:
+        payload["enabledSopIds"] = list(enabled_sop_ids)
     response = client.post(
         f"/api/v1/runtime-lab/sessions/{session_id}/messages",
-        json={"message": message},
+        json=payload,
     )
     assert response.status_code == 200, response.text
     data = response.json()["data"]

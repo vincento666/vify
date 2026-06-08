@@ -41,33 +41,48 @@
             data-testid="intent-samples-toggle"
           />
         </div>
+        <div v-if="showIntentSamples" class="scope-summary">
+          <span>已接通 {{ enabledScenarioIds.length }}/{{ AIRLINE_SOP_SCENARIOS.length }}</span>
+          <span class="scope-actions">
+            <button type="button" class="scope-action" @click="selectAllScenarios">全选</button>
+            <button type="button" class="scope-action" @click="clearScenarios">清空</button>
+          </span>
+        </div>
         <div v-if="showIntentSamples" class="sop-list">
-          <button
+          <label
             v-for="scenario in AIRLINE_SOP_SCENARIOS"
             :key="scenario.id"
-            type="button"
             class="sop-option"
-            :class="{ active: selectedScenarioId === scenario.id }"
-            @click="selectedScenarioId = scenario.id"
+            :class="{ active: isScenarioEnabled(scenario.id) }"
+            :data-testid="`sop-option-${scenario.id}`"
           >
+            <input
+              type="checkbox"
+              class="sop-checkbox"
+              :checked="isScenarioEnabled(scenario.id)"
+              :data-testid="`sop-toggle-${scenario.id}`"
+              @change="setScenarioEnabledFromEvent(scenario.id, $event)"
+            />
             <span class="sop-short">{{ scenario.shortLabel }}</span>
             <span class="sop-label">{{ scenario.label }}</span>
-          </button>
+          </label>
         </div>
       </section>
 
       <section v-if="showIntentSamples" class="lab-panel">
         <div class="panel-heading">触发样例</div>
         <div class="sample-stack">
+          <div v-if="triggerSamples.length === 0" class="muted-line">未接通意图</div>
           <button
-            v-for="sample in selectedScenario?.triggerUtterances ?? []"
-            :key="sample"
+            v-for="sample in triggerSamples"
+            :key="sample.key"
             type="button"
             class="sample-chip"
             :disabled="sending"
-            @click="sendMessage(sample)"
+            @click="sendMessage(sample.text)"
           >
-            {{ sample }}
+            <span class="sample-chip-tag">{{ sample.shortLabel }}</span>
+            <span>{{ sample.text }}</span>
           </button>
         </div>
       </section>
@@ -75,15 +90,17 @@
       <section v-if="showIntentSamples" class="lab-panel">
         <div class="panel-heading">流程回复</div>
         <div class="sample-stack">
+          <div v-if="replySamples.length === 0" class="muted-line">未接通意图</div>
           <button
-            v-for="sample in selectedScenario?.sampleReplies ?? []"
-            :key="sample"
+            v-for="sample in replySamples"
+            :key="sample.key"
             type="button"
             class="sample-chip"
             :disabled="sending"
-            @click="sendMessage(sample)"
+            @click="sendMessage(sample.text)"
           >
-            {{ sample }}
+            <span class="sample-chip-tag">{{ sample.shortLabel }}</span>
+            <span>{{ sample.text }}</span>
           </button>
         </div>
       </section>
@@ -93,7 +110,7 @@
       <header class="lab-chat-header">
         <div>
           <h1>统一路由对话</h1>
-          <p>自由对话 · {{ selectedScenario?.label ?? '意图样例' }} · {{ lastRouteAction }}</p>
+          <p>自由对话 · {{ routeScopeLabel }} · {{ lastRouteAction }}</p>
         </div>
         <el-tag size="small" :type="sessionId ? 'success' : 'info'" effect="light">
           {{ sessionId ? 'Runtime Ready' : 'Waiting' }}
@@ -218,13 +235,12 @@ import {
   AIRLINE_SOP_SCENARIOS,
   buildRuntimeLabTranscriptRow,
   buildUserTranscriptRow,
-  getAirlineSopScenario,
 } from './unifiedRoutingChatLab'
 import type { RuntimeLabTranscriptRow } from './unifiedRoutingChatLab'
 
 const router = useRouter()
-const selectedScenarioId = ref(AIRLINE_SOP_SCENARIOS[0]?.id ?? '')
 const showIntentSamples = ref(true)
+const enabledScenarioIds = ref(AIRLINE_SOP_SCENARIOS.map((scenario) => scenario.id))
 const inputText = ref('')
 const sending = ref(false)
 const creatingSession = ref(false)
@@ -235,7 +251,29 @@ const events = ref<RuntimeLabEvent[]>([])
 const latestTurn = ref<RuntimeLabTurn | null>(null)
 const messagesEl = ref<HTMLElement>()
 
-const selectedScenario = computed(() => getAirlineSopScenario(selectedScenarioId.value))
+const enabledScenarioSet = computed(() => new Set(enabledScenarioIds.value))
+const enabledScenarios = computed(() =>
+  AIRLINE_SOP_SCENARIOS.filter((scenario) => enabledScenarioSet.value.has(scenario.id)),
+)
+const triggerSamples = computed(() =>
+  enabledScenarios.value.flatMap((scenario) =>
+    scenario.triggerUtterances.map((text, index) => ({
+      key: `${scenario.id}:trigger:${index}`,
+      shortLabel: scenario.shortLabel,
+      text,
+    })),
+  ),
+)
+const replySamples = computed(() =>
+  enabledScenarios.value.flatMap((scenario) =>
+    scenario.sampleReplies.map((text, index) => ({
+      key: `${scenario.id}:reply:${index}`,
+      shortLabel: scenario.shortLabel,
+      text,
+    })),
+  ),
+)
+const routeScopeLabel = computed(() => `已接通 ${enabledScenarioIds.value.length}/${AIRLINE_SOP_SCENARIOS.length} 个意图`)
 const lastRouteAction = computed(() => latestTurn.value?.routeDecision.action ?? '待开始')
 
 onMounted(() => {
@@ -244,6 +282,34 @@ onMounted(() => {
 
 function openOrdinaryChat() {
   router.push('/chat')
+}
+
+function isScenarioEnabled(scenarioId: string) {
+  return enabledScenarioSet.value.has(scenarioId)
+}
+
+function setScenarioEnabledFromEvent(scenarioId: string, event: Event) {
+  setScenarioEnabled(scenarioId, Boolean((event.target as HTMLInputElement).checked))
+}
+
+function setScenarioEnabled(scenarioId: string, enabled: boolean) {
+  const next = new Set(enabledScenarioIds.value)
+  if (enabled) {
+    next.add(scenarioId)
+  } else {
+    next.delete(scenarioId)
+  }
+  enabledScenarioIds.value = AIRLINE_SOP_SCENARIOS.filter((scenario) => next.has(scenario.id)).map(
+    (scenario) => scenario.id,
+  )
+}
+
+function selectAllScenarios() {
+  enabledScenarioIds.value = AIRLINE_SOP_SCENARIOS.map((scenario) => scenario.id)
+}
+
+function clearScenarios() {
+  enabledScenarioIds.value = []
 }
 
 async function createFreshSession() {
@@ -282,6 +348,7 @@ async function sendMessage(content: string) {
     const turn = await postRuntimeLabMessage(currentSessionId, {
       message: content,
       idempotencyKey: uid('front-turn'),
+      enabledSopIds: [...enabledScenarioIds.value],
     })
     latestTurn.value = turn
     transcript.value.push(buildRuntimeLabTranscriptRow(turn))
@@ -458,12 +525,45 @@ function uid(prefix: string) {
   color: var(--color-text-tertiary);
 }
 
+.scope-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.scope-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.scope-action {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-primary);
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
 .sop-option {
   display: grid;
-  grid-template-columns: 2.25rem 1fr;
+  grid-template-columns: 1rem 2.25rem 1fr;
   align-items: center;
   gap: 0.625rem;
   padding: 0.625rem;
+}
+
+.sop-checkbox {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: var(--color-primary);
+  cursor: pointer;
 }
 
 .sop-short {
@@ -483,13 +583,24 @@ function uid(prefix: string) {
 }
 
 .sample-chip {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
   padding: 0.5rem 0.625rem;
   font-size: 0.75rem;
+  line-height: 1.5;
 }
 
 .sample-chip:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+.sample-chip-tag {
+  flex-shrink: 0;
+  min-width: 2rem;
+  color: var(--color-primary);
+  font-weight: 700;
 }
 
 .lab-chat {

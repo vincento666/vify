@@ -74,7 +74,7 @@ export const createRuntimeLabSession = () =>
 
 export const postRuntimeLabMessage = (
   sessionId: number,
-  payload: { message: string; idempotencyKey?: string },
+  payload: { message: string; idempotencyKey?: string; enabledSopIds?: string[] },
 ) => post<RuntimeLabTurn>(`/v1/runtime-lab/sessions/${sessionId}/messages`, payload)
 
 export const listRuntimeLabTasks = (sessionId: number) =>

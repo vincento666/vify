@@ -1,4 +1,4 @@
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping, Sequence, Set as AbstractSet
 from typing import Any
 
 from app.modules.runtime_lab.domain.candidates import CandidateType, RouteCandidate, ScoreBreakdown, select_top_candidates
@@ -17,6 +17,7 @@ class ExplicitSignalDetector:
         message: str,
         active_task: Mapping[str, Any] | None,
         suspended_tasks: Sequence[Mapping[str, Any]],
+        enabled_sop_ids: AbstractSet[str] | None = None,
         top_k: int = 5,
     ) -> list[RouteCandidate]:
         text = message.strip()
@@ -25,7 +26,7 @@ class ExplicitSignalDetector:
         if refusal is not None:
             candidates.append(refusal)
         candidates.extend(self._resume_candidates(text, suspended_tasks))
-        candidates.extend(self._sop_candidates(text, active_task))
+        candidates.extend(self._sop_candidates(text, active_task, enabled_sop_ids))
         return select_top_candidates(candidates, top_k)
 
     def _refusal_candidate(self, text: str) -> RouteCandidate | None:
@@ -79,9 +80,12 @@ class ExplicitSignalDetector:
         self,
         text: str,
         active_task: Mapping[str, Any] | None,
+        enabled_sop_ids: AbstractSet[str] | None,
     ) -> list[RouteCandidate]:
         candidates: list[RouteCandidate] = []
         for manifest in self._manifests.values():
+            if enabled_sop_ids is not None and manifest.sop_id not in enabled_sop_ids:
+                continue
             strong = match_strong_trigger_template(text, manifest)
             if strong is not None:
                 candidates.append(

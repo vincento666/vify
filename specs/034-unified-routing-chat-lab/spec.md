@@ -72,6 +72,9 @@ The page must support these manual validation paths:
   visible after each turn.
 - Intent samples, trigger samples, and flow reply samples can be hidden behind a
   default-on switch without disabling free-form routing.
+- Testers can enable a subset of SOP intents from the sample catalog; free-form
+  messages only start or switch into enabled SOPs while active continuation and
+  suspended resume behavior remain available.
 - The page includes a way to open the ordinary Chat surface for comparison.
 - Unit and route tests pass.
 - REM governance gate passes for changed frontend files.
@@ -308,3 +311,49 @@ working.
   `artifacts/slices/034-unified-routing-chat-lab/034.7/browser-uat.md`;
 - browser 15-SOP scale regression:
   `artifacts/slices/034-unified-routing-chat-lab/034.7-scale/browser-uat.md`.
+
+## 034.8 Multi-Select Enabled Intent Scope
+
+Status: complete.
+
+The intent sample catalog now acts as a runtime scope selector, not just a
+visual sample list. Each SOP row has a checkbox. The frontend sends the selected
+SOP ids as `enabledSopIds` on every runtime-lab message. Backend routing uses
+that set to filter new SOP intent candidates from explicit strong triggers and
+mock semantic recall, and scoped mode no longer falls back to the full SOP
+catalog when no enabled intent matches. Active SOP continuation and suspended
+task resume still work because they are task-state actions, not new intent
+starts.
+
+034.8 final behavior:
+
+- default state keeps all 15 SOPs connected for broad regression testing;
+- testers can deselect down to any subset, such as only A/B/C intents;
+- disabled SOP utterances return `NO_MATCH` instead of starting or switching to
+  a disabled SOP;
+- enabled SOP utterances can still start and switch normally.
+
+034.8 evidence:
+
+- RED backend:
+  `artifacts/slices/034-unified-routing-chat-lab/034.8/red-backend-enabled-sop-ids.txt`;
+- RED browser:
+  `artifacts/slices/034-unified-routing-chat-lab/034.8/red-browser-enabled-intents.txt`;
+- backend scoped runtime-lab gate:
+  `artifacts/slices/034-unified-routing-chat-lab/034.8/backend-runtime-lab.txt`;
+- full backend pytest:
+  `artifacts/slices/034-unified-routing-chat-lab/034.8/backend-full-pytest.txt`;
+- targeted frontend/rem gate:
+  `artifacts/slices/034-unified-routing-chat-lab/034.8/frontend-targeted-unit.txt`;
+- full frontend unit:
+  `artifacts/slices/034-unified-routing-chat-lab/034.8/frontend-unit.txt`;
+- frontend build:
+  `artifacts/slices/034-unified-routing-chat-lab/034.8/frontend-build.txt`;
+- ruff:
+  `artifacts/slices/034-unified-routing-chat-lab/034.8/ruff.txt`;
+- browser enabled-intent UAT:
+  `artifacts/slices/034-unified-routing-chat-lab/034.8/browser-uat-enabled-intents.md`;
+- browser hide-sample regression:
+  `artifacts/slices/034-unified-routing-chat-lab/034.8/browser-uat.md`;
+- browser 15-SOP scale regression:
+  `artifacts/slices/034-unified-routing-chat-lab/034.8-scale/browser-uat.md`.

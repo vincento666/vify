@@ -92,6 +92,21 @@
 - [x] Save evidence under `artifacts/slices/034-unified-routing-chat-lab/034.7/`
   and `artifacts/slices/034-unified-routing-chat-lab/034.7-scale/`.
 
+## 034.8 Multi-select enabled intent scope
+
+- [x] RED: backend gate fails until `enabledSopIds` scopes new SOP intent routing.
+- [x] RED: browser UAT fails until each SOP sample exposes a selectable toggle.
+- [x] Add `enabledSopIds` to runtime-lab message requests.
+- [x] Filter explicit strong triggers and semantic recall to the enabled SOP set.
+- [x] Prevent scoped routing from falling back to the full SOP catalog when no enabled candidate matches.
+- [x] Keep active-task continuation and suspended-task resume available while new intents are scoped.
+- [x] Replace frontend single selection with per-SOP checkbox multi-select.
+- [x] Send the selected enabled SOP ids with every free-form message and sample click.
+- [x] Run targeted backend, full backend pytest, frontend/rem, full frontend unit, build, ruff, and browser UAT.
+- [x] Run the existing hide-sample and 15-SOP/5-switch browser UAT regressions.
+- [x] Save evidence under `artifacts/slices/034-unified-routing-chat-lab/034.8/`
+  and `artifacts/slices/034-unified-routing-chat-lab/034.8-scale/`.
+
 ## Future specs, not 034 tasks
 
 - [ ] Rename or consolidate final user-facing API to `/chat` or `/query`.
