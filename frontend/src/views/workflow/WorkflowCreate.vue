@@ -7900,7 +7900,7 @@ watch(() => [route.query.runId, route.query.executeId, route.query.debug], () =>
   void applyChatflowRunDebugRoute()
 })
 watch(
-  () => [resourcePanelCollapsed.value, rightSidePanelOpen.value, nodeTestDrawerOpen.value, canvasTab.value],
+  () => [resourcePanelCollapsed.value, canvasTab.value],
   requestCanvasLayoutRefit,
 )
 onMounted(() => {
@@ -9131,14 +9131,6 @@ onUnmounted(() => {
   line-height: 2rem;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.workflow-canvas-page.has-right-panel .coze-flow {
-  width: calc(100% - var(--workflow-right-panel-reserve));
-}
-
-.workflow-canvas-page.has-node-test-drawer .coze-flow {
-  width: calc(100% - var(--workflow-node-test-reserve));
 }
 
 .node-run-status {

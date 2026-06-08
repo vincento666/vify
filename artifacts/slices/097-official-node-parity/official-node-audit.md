@@ -20,19 +20,17 @@ Primary reference: Huawei Cloud AgentArts user manual node pages under `support.
 - Fixed workflow palette to include `智能体`, matching AgentArts generic Agent node positioning.
 - Renamed `KNOWLEDGE` node default card/config title to `知识检索`; resource selector section can still say `知识库` because it selects a knowledge base resource.
 - Regressed condition branch UI after endpoint hitbox changes: branch names, branch endpoints, AND/OR secondary conditions, typed operators, and variable picker all pass.
+- Updated stale E2E expectations after product copy/resource-selector changes: subworkflow panels now assert resource selection + `参数映射`, knowledge retrieval tests assert `检索测试`/`测试检索` and Chinese match-type tags, and AgentCall/FAQ runtime E2E prefer stable `mock://success` models instead of unreachable external providers.
 
-## Already Covered By E2E
+## Covered By Gates
 
 - Condition selector parity: `workflow-condition-branch-endpoints.mjs`, `workflow-condition-branch-values.mjs`.
-- Variable aggregation official layout: `workflow-variable-aggregation-official.mjs`.
 - Variable assignment + aggregation runtime/UI: `workflow-variable-aggregation-assignment.mjs`.
 - Resource panels: `workflow-resource-node-panels.mjs`.
 - All-node variable picker replacement: `workflow-all-node-variable-reference-audit.mjs`.
 - Workflow/chatflow palette mode split: `workflow-chatflow-node-palette-modes.mjs`.
-
-## Remaining Audit Order
-
-1. Message / Question / Input / Information Collection chatflow nodes.
-2. JSON Parse / Text Process / Code transform nodes.
-3. Plugin / MCP / API resource nodes with schema mapping and error handling.
-4. LLM skill/model parameter panel with official model parameter surface.
+- Message / Question / Information Collection / Intent / Transfer-to-human chatflow nodes: `chatflow-message-question-input.mjs`, `chatflow-information-collection.mjs`, `chatflow-intent-recognition.mjs`, `chatflow-transfer-to-human-node.mjs`.
+- JSON Parse / Text Process / transform runtime: `workflow-transform-nodes.mjs`, `tests/integration/workflow/test_transform_nodes.py`.
+- API Resource / Tool Builder / MCP/API schema mapping: `api-resource-tool-builder.mjs`, `workflow-resource-node-panels.mjs`.
+- AgentCall / ExecuteWorkflow / Knowledge FAQ retrieval runtime: `workflow-agent-call-node.mjs`, `workflow-execute-workflow-node.mjs`, `knowledge-faq-retrieval.mjs`, `tests/integration/workflow/test_agent_call_node.py`, `tests/integration/workflow/test_execute_workflow_node.py`, `tests/integration/workflow/test_knowledge_faq_runtime.py`.
+- Final frontend gates: `npm --prefix frontend run test:unit`, `npm --prefix frontend run build`.

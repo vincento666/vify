@@ -14,13 +14,13 @@ async function unwrap(response, label) {
   return payload.data
 }
 
-async function canvasMetrics(page) {
-  return page.evaluate(() => {
+async function canvasMetrics(page, nodeSelector) {
+  return page.evaluate((selector) => {
     const flow = document.querySelector('.coze-flow')
     const viewport = document.querySelector('.vue-flow__viewport')
-    const node = document.querySelector('.coze-node.node-llm')
+    const node = document.querySelector(selector)
     if (!flow || !viewport || !node) {
-      throw new Error('Expected workflow canvas, viewport, and LLM node to be visible')
+      throw new Error('Expected workflow canvas, viewport, and target node to be visible')
     }
     const flowRect = flow.getBoundingClientRect()
     const nodeRect = node.getBoundingClientRect()
@@ -31,7 +31,7 @@ async function canvasMetrics(page) {
       nodeWidth: nodeRect.width,
       viewportScale: match ? Number(match[1]) : 1,
     }
-  })
+  }, nodeSelector)
 }
 
 function assertStableMetrics(before, after, label) {
@@ -61,6 +61,26 @@ try {
         nodes: [
           { nodeKey: 'start', type: 'START', name: '开始', config: { outputVariables: ['input'], ui: { position: { x: 160, y: 180 } } } },
           { nodeKey: 'llm_1', type: 'LLM', name: '大模型', config: { inputParameters: [{ name: 'input', value: '{{start.input}}' }], outputVariable: 'answer', ui: { position: { x: 520, y: 180 } } } },
+          {
+            nodeKey: 'variable_aggregation_1',
+            type: 'VARIABLE_AGGREGATION',
+            name: '变量聚合',
+            config: {
+              strategy: 'first_non_empty',
+              groups: [
+                {
+                  name: 'selected',
+                  type: 'string',
+                  variables: [
+                    { value: '{{start.input}}', type: 'string' },
+                    { value: '{{llm_1.answer}}', type: 'string' },
+                  ],
+                },
+              ],
+              outputParameters: [{ name: 'selected', type: 'string' }],
+              ui: { position: { x: 520, y: 420 } },
+            },
+          },
           { nodeKey: 'end', type: 'END', name: '结束', config: { output: '{{llm_1.answer}}', ui: { position: { x: 920, y: 180 } } } },
         ],
         edges: [
@@ -73,21 +93,26 @@ try {
   )
 
   await page.goto(`${baseUrl}/workflows/${workflow.id}/canvas`, { waitUntil: 'networkidle' })
-  await page.locator('.coze-node.node-llm').waitFor({ state: 'visible', timeout: 10000 })
-  const beforeOpen = await canvasMetrics(page)
+  async function assertNodeStable(nodeSelector, label) {
+    await page.locator(nodeSelector).waitFor({ state: 'visible', timeout: 10000 })
+    const beforeOpen = await canvasMetrics(page, nodeSelector)
 
-  await page.locator('.coze-node.node-llm').click()
-  const panel = page.locator('[data-testid="node-config-panel"]')
-  await panel.waitFor({ state: 'visible', timeout: 5000 })
-  await page.waitForTimeout(260)
-  const afterOpen = await canvasMetrics(page)
-  assertStableMetrics(beforeOpen, afterOpen, 'opening config panel')
+    await page.locator(nodeSelector).click()
+    const panel = page.locator('[data-testid="node-config-panel"]')
+    await panel.waitFor({ state: 'visible', timeout: 5000 })
+    await page.waitForTimeout(260)
+    const afterOpen = await canvasMetrics(page, nodeSelector)
+    assertStableMetrics(beforeOpen, afterOpen, `opening ${label} config panel`)
 
-  await panel.getByRole('button', { name: '关闭配置' }).click()
-  await panel.waitFor({ state: 'hidden', timeout: 5000 })
-  await page.waitForTimeout(260)
-  const afterClose = await canvasMetrics(page)
-  assertStableMetrics(beforeOpen, afterClose, 'closing config panel')
+    await panel.getByRole('button', { name: '关闭配置' }).click()
+    await panel.waitFor({ state: 'hidden', timeout: 5000 })
+    await page.waitForTimeout(260)
+    const afterClose = await canvasMetrics(page, nodeSelector)
+    assertStableMetrics(beforeOpen, afterClose, `closing ${label} config panel`)
+  }
+
+  await assertNodeStable('.coze-node.node-llm', 'LLM')
+  await assertNodeStable('.coze-node.node-variable_aggregation', 'variable aggregation')
 
   if (screenshotPath) {
     await page.screenshot({ path: screenshotPath, fullPage: true })
