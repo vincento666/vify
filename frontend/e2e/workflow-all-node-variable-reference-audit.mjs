@@ -91,18 +91,88 @@ async function assertOfficialStartPicker(picker, sourceTestId, optionTestId, nod
   await picker.locator(`[data-testid="${optionTestId}"]`, { hasText: 'USER_INPUT' }).click()
 }
 
-async function selectCanvasNode(page, nodeKey) {
+async function assertAggregationStartPicker(panel) {
+  const groupSection = panel.getByTestId('config-section-变量分组')
+  await groupSection.waitFor({ state: 'visible', timeout: 5000 })
+  const rows = groupSection.getByTestId('aggregation-group-variable-row')
+  const rowCount = await rows.count()
+  assert(rowCount > 0, 'Variable aggregation must expose grouped variable rows')
+  const row = rows.nth(rowCount - 1)
+  await row.getByRole('button', { name: '选择聚合变量', exact: true }).click()
+  const picker = row.getByTestId('structured-variable-picker')
+  await assertOfficialStartPicker(picker, 'structured-variable-source-item', 'structured-variable-option', '变量聚合')
+  const chipText = await row.getByTestId('aggregation-variable-chip').innerText()
+  assert(chipText.includes('USER_INPUT'), `Variable aggregation chip should show USER_INPUT, got ${chipText}`)
+}
+
+async function assertAssignmentStartPicker(panel) {
+  const inputSection = panel.getByTestId('config-section-输入')
+  await inputSection.waitFor({ state: 'visible', timeout: 5000 })
+  const editor = inputSection.getByTestId('variable-assignment-editor')
+  await editor.waitFor({ state: 'visible', timeout: 5000 })
+  assert(
+    await editor.getByLabel('赋值来源类型', { exact: true }).count() === 0,
+    'Variable assignment must not expose the old source type selector',
+  )
+  if ((await editor.getByRole('button', { name: '清除赋值内容变量引用', exact: true }).count()) > 0) {
+    await editor.getByRole('button', { name: '清除赋值内容变量引用', exact: true }).click()
+  }
+  await editor.getByRole('button', { name: '选择赋值内容变量', exact: true }).click()
+  const picker = editor.getByTestId('structured-variable-picker')
+  await assertOfficialStartPicker(picker, 'structured-variable-source-item', 'structured-variable-option', '变量赋值')
+  const chipText = await editor.getByTestId('assignment-variable-chip').innerText()
+  assert(chipText.includes('USER_INPUT'), `Variable assignment chip should show USER_INPUT, got ${chipText}`)
+}
+
+async function closeConfigPanelIfOpen(page) {
+  const panel = page.getByTestId('node-config-panel')
+  if ((await panel.count()) === 0) return
+  if (!(await panel.isVisible().catch(() => false))) return
+  const closeButton = panel.getByRole('button', { name: '关闭配置', exact: true })
+  if ((await closeButton.count()) > 0) {
+    await closeButton.click()
+    await panel.waitFor({ state: 'detached', timeout: 5000 }).catch(async () => {
+      await panel.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {})
+    })
+  }
+}
+
+async function selectedPanelTitle(page) {
+  const panel = page.getByTestId('node-config-panel')
+  if ((await panel.count()) === 0) return ''
+  return panel.locator('.config-header h3').innerText().catch(() => '')
+}
+
+async function selectCanvasNode(page, nodeKey, expectedTitle) {
+  await closeConfigPanelIfOpen(page)
   const node = page.locator(`.vue-flow__node[data-id="${nodeKey}"]`)
   await node.waitFor({ state: 'attached', timeout: 5000 })
-  try {
-    await node.click({ force: true, timeout: 5000 })
-    return
-  } catch {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      await node.click({ force: true, timeout: 5000 })
+    } catch {
+      await page.evaluate((key) => {
+        const element = document.querySelector(`.vue-flow__node[data-id="${key}"]`)
+        element?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }))
+      }, nodeKey)
+    }
+    const panel = page.getByTestId('node-config-panel')
+    await panel.waitFor({ state: 'visible', timeout: 5000 })
+    const title = (await selectedPanelTitle(page)).trim()
+    if (!expectedTitle || title === expectedTitle) return
+    await closeConfigPanelIfOpen(page)
+  }
+  const title = (await selectedPanelTitle(page)).trim()
+  if (title !== expectedTitle) {
     await page.evaluate((key) => {
       const element = document.querySelector(`.vue-flow__node[data-id="${key}"]`)
       element?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }))
     }, nodeKey)
   }
+  const panel = page.getByTestId('node-config-panel')
+  await panel.waitFor({ state: 'visible', timeout: 5000 })
+  const finalTitle = (await selectedPanelTitle(page)).trim()
+  assert(finalTitle === expectedTitle, `Expected selected node ${nodeKey} to open ${expectedTitle} panel, got ${finalTitle}`)
 }
 
 const browser = await chromium.launch()
@@ -137,7 +207,7 @@ try {
   await page.goto(`${baseUrl}/chatflows/${chatflow.id}/canvas`, { waitUntil: 'networkidle' })
 
   for (const [nodeKey,, label] of auditedNodes) {
-    await selectCanvasNode(page, nodeKey)
+    await selectCanvasNode(page, nodeKey, label)
     const panel = page.getByTestId('node-config-panel')
     await panel.waitFor({ state: 'visible', timeout: 5000 })
     if (nodeKey === 'condition_1') {
@@ -148,10 +218,31 @@ try {
       )
       continue
     }
+    if (nodeKey === 'aggregation_1') {
+      await assertAggregationStartPicker(panel)
+      continue
+    }
+    if (nodeKey === 'assign_1') {
+      await assertAssignmentStartPicker(panel)
+      continue
+    }
     const inputSection = panel.getByTestId('config-section-输入')
+    if ((await inputSection.count()) === 0) {
+      const sections = await panel.locator('.config-section').evaluateAll((elements) =>
+        elements.map((element) => ({
+          testid: element.getAttribute('data-testid'),
+          title: element.querySelector('.config-section-toggle strong')?.textContent?.trim() || '',
+        })),
+      )
+      throw new Error(`${label}(${nodeKey}) must expose an 输入 section for variable reference audit, got ${JSON.stringify(sections)}`)
+    }
     await inputSection.waitFor({ state: 'visible', timeout: 5000 })
     await ensureInputSectionOpen(inputSection)
-    await inputSection.getByRole('button', { name: '添加输入变量', exact: true }).click()
+    const addInputButton = inputSection.getByRole('button', { name: '添加输入变量', exact: true })
+    if ((await addInputButton.count()) === 0) {
+      throw new Error(`${label}(${nodeKey}) 输入 section must expose 添加输入变量, got ${await inputSection.innerText()}`)
+    }
+    await addInputButton.click()
     const rows = inputSection.getByTestId('input-parameter-row')
     const row = rows.nth((await rows.count()) - 1)
     await row.getByPlaceholder('变量名').fill(`audit_${nodeKey}`)
@@ -163,7 +254,7 @@ try {
     assert(!chipText.includes('{{'), `${label} selected chip should not expose raw template text, got ${chipText}`)
   }
 
-  await selectCanvasNode(page, 'end')
+  await selectCanvasNode(page, 'end', '结束')
   const panel = page.getByTestId('node-config-panel')
   await panel.waitFor({ state: 'visible', timeout: 5000 })
   const outputEditor = panel.getByTestId('output-parameter-editor')

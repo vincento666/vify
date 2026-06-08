@@ -1,0 +1,22 @@
+RED: frontend/e2e/workflow-all-node-variable-reference-audit.mjs
+
+Observed failures before the audit hardening:
+
+1. Node selection could remain on the previous condition panel.
+   The test clicked `knowledge_1`, but the panel still showed `config-section-条件分支`.
+
+2. Variable aggregation was incorrectly required to expose a generic `输入` section:
+
+   Error: 变量聚合(aggregation_1) must expose an 输入 section for variable reference audit,
+   got [{"testid":"config-section-聚合策略"},{"testid":"config-section-变量分组"},{"testid":"config-section-输出"}]
+
+3. Variable assignment was incorrectly required to expose a generic `添加输入变量` button:
+
+   Error: 变量赋值(assign_1) 输入 section must expose 添加输入变量
+
+Expected behavior:
+
+- Generic nodes use `config-section-输入` and `input-variable-picker`.
+- Condition nodes are selector-only and do not expose a generic input section.
+- Variable aggregation uses `config-section-变量分组` and `structured-variable-picker`.
+- Variable assignment uses `variable-assignment-editor` and `structured-variable-picker`.
