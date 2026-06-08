@@ -1,0 +1,8 @@
+Command:
+rtk npm --prefix frontend run build
+
+Result:
+PASS
+
+Notes:
+Existing Vite CJS deprecation and large chunk warnings remain.

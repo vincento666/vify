@@ -55,42 +55,48 @@
             <ChatLineRound class="panel-heading-icon" />
             <span>意图样例</span>
           </span>
-          <el-switch
-            v-model="showIntentSamples"
-            class="samples-toggle"
-            size="small"
-            inline-prompt
-            active-text="开"
-            inactive-text="关"
-            aria-label="显示意图样例"
-            data-testid="intent-samples-toggle"
-          />
+          <span class="scope-toolbar">
+            <el-button
+              size="small"
+              :icon="Setting"
+              data-testid="scope-config-open"
+              @click="scopeDialogVisible = true"
+            >
+              接入
+            </el-button>
+            <el-switch
+              v-model="showIntentSamples"
+              class="samples-toggle"
+              size="small"
+              inline-prompt
+              active-text="开"
+              inactive-text="关"
+              aria-label="显示意图样例"
+              data-testid="intent-samples-toggle"
+            />
+          </span>
         </div>
         <div v-if="showIntentSamples" class="scope-summary">
-          <span>已接通 {{ enabledScenarioIds.length }}/{{ AIRLINE_SOP_SCENARIOS.length }}</span>
+          <span>已接通 {{ enabledScenarioIds.length }}/{{ boundScenarios.length }}</span>
           <span class="scope-actions">
             <button type="button" class="scope-action" @click="selectAllScenarios">全选</button>
             <button type="button" class="scope-action" @click="clearScenarios">清空</button>
           </span>
         </div>
-        <div v-if="showIntentSamples" class="sop-list">
-          <label
-            v-for="scenario in AIRLINE_SOP_SCENARIOS"
+        <div v-if="showIntentSamples" class="enabled-scope-list">
+          <div v-if="runtimeConfigLoading" class="muted-line">正在加载 Chatflow 绑定</div>
+          <div v-else-if="boundScenarios.length === 0" class="muted-line">暂无可接入 Chatflow SOP</div>
+          <button
+            v-for="scenario in enabledScenarios"
             :key="scenario.id"
-            class="sop-option"
-            :class="{ active: isScenarioEnabled(scenario.id) }"
-            :data-testid="`sop-option-${scenario.id}`"
+            type="button"
+            class="enabled-scope-chip"
+            :disabled="!scenario.exists"
+            @click="openChatflowCanvas(scenario.canvasPath)"
           >
-            <input
-              type="checkbox"
-              class="sop-checkbox"
-              :checked="isScenarioEnabled(scenario.id)"
-              :data-testid="`sop-toggle-${scenario.id}`"
-              @change="setScenarioEnabledFromEvent(scenario.id, $event)"
-            />
             <span class="sop-short">{{ scenario.shortLabel }}</span>
             <span class="sop-label">{{ scenario.label }}</span>
-          </label>
+          </button>
         </div>
       </section>
 
@@ -166,7 +172,12 @@
         >
           <div class="message-avatar">{{ message.role === 'user' ? '我' : 'AI' }}</div>
           <div class="message-body">
-            <div class="message-content">{{ message.content }}</div>
+            <div v-if="message.pending" class="typing-indicator" data-testid="runtime-lab-typing">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            <div v-else class="message-content">{{ message.content }}</div>
             <div v-if="message.routeAction" class="message-meta">
               <el-tag size="small" effect="plain">{{ message.routeAction }}</el-tag>
               <span v-if="message.targetSopId">{{ message.targetSopId }}</span>
@@ -234,6 +245,61 @@
         </dl>
       </section>
 
+      <section class="lab-panel" data-testid="chatflow-trace-panel">
+        <div class="panel-heading panel-heading-between">
+          <span>Chatflow 轨迹</span>
+          <span v-if="traceLoading" class="trace-loading">
+            <span class="mini-spinner"></span>
+            运行中
+          </span>
+        </div>
+        <div v-if="chatflowTraceCards.length === 0" class="muted-line">暂无 Chatflow 运行</div>
+        <div v-for="card in chatflowTraceCards" :key="card.taskId" class="trace-card">
+          <div class="trace-card-head">
+            <div>
+              <strong>{{ card.chatflowName || card.sopId }}</strong>
+              <span>{{ card.status }} · {{ card.completedCountLabel }}</span>
+            </div>
+            <el-button
+              v-if="card.debugPath"
+              size="small"
+              plain
+              @click="openChatflowDebug(card.debugPath)"
+            >
+              调试
+            </el-button>
+          </div>
+          <div class="trace-current">
+            当前节点：<span>{{ card.currentNodeLabel }}</span>
+          </div>
+          <div class="trace-node-list">
+            <div
+              v-for="node in card.nodes"
+              :key="node.nodeKey"
+              class="trace-node"
+              :class="[`trace-node-${node.status.toLowerCase()}`, { current: node.current }]"
+            >
+              <span class="trace-node-icon" aria-hidden="true">
+                <span v-if="node.current && ['RUNNING', 'WAITING', 'INTERRUPTED'].includes(node.status)" class="mini-spinner"></span>
+                <span v-else-if="['SUCCEEDED', 'COMPLETED', 'DONE'].includes(node.status)">✓</span>
+                <span v-else></span>
+              </span>
+              <span class="trace-node-main">
+                <span>{{ node.nodeKey }} · {{ node.name }}</span>
+                <small>{{ node.nodeType }} · {{ node.status }} · {{ node.elapsedMs }}ms</small>
+              </span>
+            </div>
+          </div>
+          <div class="slot-list">
+            <div v-if="card.slotRows.length === 0" class="muted-line">暂无槽值</div>
+            <div v-for="slot in card.slotRows" :key="slot.key" class="slot-row">
+              <span>{{ slot.key }}</span>
+              <strong>{{ slot.value }}</strong>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section class="lab-panel">
         <div class="panel-heading">任务</div>
         <div class="task-stack">
@@ -259,6 +325,55 @@
         </div>
       </section>
     </aside>
+
+    <el-dialog
+      v-model="scopeDialogVisible"
+      title="选择接入的 Chatflow SOP"
+      width="42rem"
+      align-center
+      class="scope-dialog"
+    >
+      <div class="scope-dialog-body" data-testid="scope-dialog">
+        <div class="scope-summary dialog-summary">
+          <span>当前接入 {{ enabledScenarioIds.length }}/{{ boundScenarios.length }}</span>
+          <span class="scope-actions">
+            <button type="button" class="scope-action" @click="selectAllScenarios">全选</button>
+            <button type="button" class="scope-action" @click="clearScenarios">清空</button>
+          </span>
+        </div>
+        <div class="sop-list">
+          <div v-if="boundScenarios.length === 0" class="muted-line">后台配置里暂无 Chatflow 绑定</div>
+          <div
+            v-for="scenario in boundScenarios"
+            :key="scenario.id"
+            class="sop-option sop-dialog-option"
+            :class="{ active: isScenarioEnabled(scenario.id), missing: !scenario.exists }"
+            :data-testid="`sop-option-${scenario.id}`"
+          >
+            <input
+              type="checkbox"
+              class="sop-checkbox"
+              :checked="isScenarioEnabled(scenario.id)"
+              :data-testid="`sop-toggle-${scenario.id}`"
+              @change="setScenarioEnabledFromEvent(scenario.id, $event)"
+            />
+            <span class="sop-short">{{ scenario.shortLabel }}</span>
+            <span class="sop-dialog-main">
+              <span class="sop-label">{{ scenario.label }}</span>
+              <small>#{{ scenario.chatflowId }} · {{ scenario.chatflowName || '未找到 Chatflow' }}</small>
+            </span>
+            <el-button
+              size="small"
+              plain
+              :disabled="!scenario.exists"
+              @click.stop="openChatflowCanvas(scenario.canvasPath)"
+            >
+              画布
+            </el-button>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -271,6 +386,7 @@ import {
   ChatLineRound,
   Connection,
   Refresh,
+  Setting,
 } from '@element-plus/icons-vue'
 import {
   createRuntimeLabSession,
@@ -292,6 +408,7 @@ import {
   buildRuntimeLabBoundScenarios,
   buildRuntimeLabConfigSummary,
   buildRuntimeLabFunnelSummary,
+  buildRuntimeLabTraceCards,
   buildRuntimeLabTranscriptRow,
   buildUserTranscriptRow,
 } from './unifiedRoutingChatLab'
@@ -300,6 +417,7 @@ import type { RuntimeLabTranscriptRow } from './unifiedRoutingChatLab'
 const router = useRouter()
 const showIntentSamples = ref(true)
 const enabledScenarioIds = ref(AIRLINE_SOP_SCENARIOS.map((scenario) => scenario.id))
+const scopeDialogVisible = ref(false)
 const inputText = ref('')
 const sending = ref(false)
 const creatingSession = ref(false)
@@ -342,6 +460,7 @@ const routeScopeLabel = computed(() => `已接通 ${enabledScenarioIds.value.len
 const lastRouteAction = computed(() => latestTurn.value?.routeDecision.action ?? '待开始')
 const configSummary = computed(() => buildRuntimeLabConfigSummary(runtimeConfig.value))
 const funnelSummary = computed(() => buildRuntimeLabFunnelSummary(latestTurn.value?.routeDecision))
+const chatflowTraceCards = computed(() => buildRuntimeLabTraceCards(chatflowTrace.value))
 
 onMounted(() => {
   void createFreshSession()
@@ -499,6 +618,17 @@ function replacePendingAssistant(pendingId: string, row: RuntimeLabTranscriptRow
   }
 }
 
+function openChatflowCanvas(path: string) {
+  if (!path) return
+  scopeDialogVisible.value = false
+  router.push(path)
+}
+
+function openChatflowDebug(path: string) {
+  if (!path) return
+  router.push(path)
+}
+
 async function scrollToBottom() {
   await nextTick()
   if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight
@@ -577,8 +707,16 @@ function uid(prefix: string) {
   flex-shrink: 0;
 }
 
+.scope-toolbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
 .system-stack,
 .sop-list,
+.enabled-scope-list,
 .sample-stack,
 .task-stack,
 .event-list {
@@ -589,7 +727,8 @@ function uid(prefix: string) {
 
 .system-option,
 .sop-option,
-.sample-chip {
+.sample-chip,
+.enabled-scope-chip {
   border: 0.0625rem solid var(--color-border-default);
   border-radius: 0.5rem;
   background: var(--color-bg-page);
@@ -607,7 +746,8 @@ function uid(prefix: string) {
 }
 
 .system-option.active,
-.sop-option.active {
+.sop-option.active,
+.enabled-scope-chip {
   border-color: var(--color-primary);
   background: rgba(99, 102, 241, 0.08);
 }
@@ -707,6 +847,20 @@ function uid(prefix: string) {
   font-weight: 600;
 }
 
+.enabled-scope-chip {
+  display: grid;
+  grid-template-columns: 2.25rem 1fr;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.625rem;
+}
+
+.enabled-scope-chip:disabled {
+  border-color: var(--color-border-default);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .sop-option {
   display: grid;
   grid-template-columns: 1rem 2.25rem 1fr;
@@ -733,6 +887,39 @@ function uid(prefix: string) {
   color: var(--color-primary);
   font-size: 0.75rem;
   font-weight: 700;
+}
+
+.scope-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.dialog-summary {
+  padding-bottom: 0.625rem;
+  border-bottom: 0.0625rem solid var(--color-border-default);
+}
+
+.sop-dialog-option {
+  grid-template-columns: 1rem 2.25rem minmax(0, 1fr) auto;
+}
+
+.sop-dialog-option.missing {
+  opacity: 0.6;
+}
+
+.sop-dialog-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.1875rem;
+}
+
+.sop-dialog-main small {
+  overflow-wrap: anywhere;
+  color: var(--color-text-tertiary);
+  font-size: 0.75rem;
+  line-height: 1.4;
 }
 
 .send-button {
@@ -867,6 +1054,30 @@ function uid(prefix: string) {
   line-height: 1.6;
 }
 
+.typing-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 2.5rem;
+  min-height: 1.4rem;
+}
+
+.typing-indicator span {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 50%;
+  background: var(--color-primary);
+  animation: runtimeTyping 0.8s infinite ease-in-out;
+}
+
+.typing-indicator span:nth-child(2) {
+  animation-delay: 0.12s;
+}
+
+.typing-indicator span:nth-child(3) {
+  animation-delay: 0.24s;
+}
+
 .message-meta {
   display: flex;
   flex-wrap: wrap;
@@ -936,6 +1147,162 @@ function uid(prefix: string) {
 
 .event-seq {
   color: var(--color-text-tertiary);
+}
+
+.trace-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--color-primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.mini-spinner {
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 0.125rem solid rgba(99, 102, 241, 0.2);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: runtimeSpin 0.8s linear infinite;
+}
+
+.trace-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  padding: 0.625rem;
+  border: 0.0625rem solid var(--color-border-default);
+  border-radius: 0.5rem;
+  background: var(--color-bg-page);
+}
+
+.trace-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.625rem;
+}
+
+.trace-card-head div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.1875rem;
+}
+
+.trace-card-head strong {
+  overflow-wrap: anywhere;
+  font-size: 0.8125rem;
+}
+
+.trace-card-head span,
+.trace-current {
+  color: var(--color-text-tertiary);
+  font-size: 0.75rem;
+}
+
+.trace-current span {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.trace-node-list,
+.slot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.trace-node {
+  display: grid;
+  grid-template-columns: 1rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  border: 0.0625rem solid transparent;
+  border-radius: 0.375rem;
+  background: #fff;
+}
+
+.trace-node.current {
+  border-color: var(--color-primary);
+}
+
+.trace-node-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: #e5e7eb;
+  color: #047857;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.trace-node-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.trace-node-main span,
+.trace-node-main small {
+  overflow-wrap: anywhere;
+}
+
+.trace-node-main span {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.trace-node-main small {
+  color: var(--color-text-tertiary);
+  font-size: 0.6875rem;
+}
+
+.slot-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.625rem;
+  padding-top: 0.375rem;
+  border-top: 0.0625rem solid var(--color-border-default);
+  font-size: 0.75rem;
+}
+
+.slot-row span {
+  color: var(--color-text-tertiary);
+}
+
+.slot-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+  font-weight: 600;
+}
+
+@keyframes runtimeTyping {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+
+  40% {
+    transform: translateY(-0.25rem);
+    opacity: 1;
+  }
+}
+
+@keyframes runtimeSpin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 70rem) {
