@@ -1,0 +1,21 @@
+{
+  "chipCount": 1,
+  "chipTexts": [
+    "USER_INPUTstr."
+  ],
+  "clearLabels": [
+    "删除条件"
+  ],
+  "panelText": "选择器连接多个下游分支，若设定的条件成立则仅运行对应的分支，若均不成立则只运行“否则”分支›条件分支⋮⋮如果优先级 1matchedUSER_INPUTstr.等于添加条件否则默认分支",
+  "pickerCount": 0,
+  "rowRect": {
+    "height": 32,
+    "width": 317,
+    "x": 512,
+    "y": 271
+  },
+  "rowText": "USER_INPUTstr.等于",
+  "variableActionLabels": [
+    "更换左侧变量"
+  ]
+}

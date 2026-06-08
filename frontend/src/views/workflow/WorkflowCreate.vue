@@ -1086,32 +1086,45 @@
                       或
                     </button>
                   </div>
-                  <div class="condition-value-cell">
-                    <div
-                      v-if="condition.left.valueMode === 'reference' && inputReferenceSelection(condition.left.value)"
-                      class="input-reference-control"
-                    >
+                  <div class="condition-value-cell condition-left-cell">
+                    <div class="variable-value-combo condition-operand-control" data-testid="condition-operand-control">
+                      <div class="variable-value-main">
+                        <div
+                          v-if="condition.left.valueMode === 'reference' && inputReferenceSelection(condition.left.value)"
+                          class="input-variable-chip condition-variable-chip"
+                          data-testid="condition-variable-chip"
+                        >
+                          <input class="reference-value-proxy" aria-label="条件左值" :value="condition.left.value" readonly tabindex="-1" />
+                          <span class="input-variable-chip-main">
+                            <strong>{{ inputReferenceSelection(condition.left.value)!.item.variable }}</strong>
+                          </span>
+                          <span class="variable-type-badge">{{ variableTypeLabel(inputReferenceSelection(condition.left.value)!.item.type) }}</span>
+                          <button
+                            type="button"
+                            class="input-variable-clear"
+                            aria-label="清除左值变量引用"
+                            @click.stop="clearConditionOperandReference(branchIndex, conditionIndex, 'left')"
+                          >
+                            <span aria-hidden="true">×</span>
+                          </button>
+                        </div>
+                        <el-input
+                          v-else
+                          :model-value="condition.left.value"
+                          aria-label="条件左值"
+                          placeholder="输入或引用参数值"
+                          @update:model-value="handleConditionOperandInput(branchIndex, conditionIndex, 'left', $event)"
+                        />
+                      </div>
                       <button
                         type="button"
-                        class="input-variable-chip condition-variable-chip"
-                        aria-label="更换左侧变量"
-                        data-testid="condition-variable-chip"
+                        class="variable-picker-trigger"
+                        aria-label="选择左值变量"
                         @click="openConditionVariablePicker(branchIndex, conditionIndex, 'left', $event)"
                       >
-                        <span class="input-variable-chip-main">
-                          <strong>{{ inputReferenceSelection(condition.left.value)!.item.variable }}</strong>
-                        </span>
-                        <span class="variable-type-badge">{{ variableTypeLabel(inputReferenceSelection(condition.left.value)!.item.type) }}</span>
+                        <Connection aria-hidden="true" />
                       </button>
-                      <input class="reference-value-proxy" aria-label="条件左值" :value="condition.left.value" readonly tabindex="-1" />
                     </div>
-                    <el-input
-                      v-else
-                      :model-value="condition.left.value"
-                      aria-label="条件左值"
-                      placeholder="输入或键入 { 引用变量"
-                      @update:model-value="handleConditionOperandInput(branchIndex, conditionIndex, 'left', $event)"
-                    />
                     <div
                       v-if="isConditionVariablePickerOpen(branchIndex, conditionIndex, 'left')"
                       class="variable-popover coze-variable-source-popover input-variable-popover condition-variable-popover"
@@ -1161,6 +1174,7 @@
                     </div>
                   </div>
                   <el-select
+                    class="condition-operator-select"
                     :model-value="condition.operator"
                     aria-label="条件操作符"
                     @update:model-value="setConditionRowValue(branchIndex, conditionIndex, 'operator', $event)"
@@ -1172,32 +1186,45 @@
                       :value="option.value"
                     />
                   </el-select>
-                  <div class="condition-value-cell">
-                    <div
-                      v-if="condition.right.valueMode === 'reference' && inputReferenceSelection(condition.right.value)"
-                      class="input-reference-control"
-                    >
+                  <div class="condition-value-cell condition-right-cell">
+                    <div class="variable-value-combo condition-operand-control" data-testid="condition-operand-control">
+                      <div class="variable-value-main">
+                        <div
+                          v-if="condition.right.valueMode === 'reference' && inputReferenceSelection(condition.right.value)"
+                          class="input-variable-chip condition-variable-chip"
+                          data-testid="condition-variable-chip"
+                        >
+                          <input class="reference-value-proxy" aria-label="条件右值" :value="condition.right.value" readonly tabindex="-1" />
+                          <span class="input-variable-chip-main">
+                            <strong>{{ inputReferenceSelection(condition.right.value)!.item.variable }}</strong>
+                          </span>
+                          <span class="variable-type-badge">{{ variableTypeLabel(inputReferenceSelection(condition.right.value)!.item.type) }}</span>
+                          <button
+                            type="button"
+                            class="input-variable-clear"
+                            aria-label="清除右值变量引用"
+                            @click.stop="clearConditionOperandReference(branchIndex, conditionIndex, 'right')"
+                          >
+                            <span aria-hidden="true">×</span>
+                          </button>
+                        </div>
+                        <el-input
+                          v-else
+                          :model-value="condition.right.value"
+                          aria-label="条件右值"
+                          placeholder="输入或引用参数值"
+                          @update:model-value="handleConditionOperandInput(branchIndex, conditionIndex, 'right', $event)"
+                        />
+                      </div>
                       <button
                         type="button"
-                        class="input-variable-chip condition-variable-chip"
-                        aria-label="更换右侧变量"
-                        data-testid="condition-variable-chip"
+                        class="variable-picker-trigger"
+                        aria-label="选择右值变量"
                         @click="openConditionVariablePicker(branchIndex, conditionIndex, 'right', $event)"
                       >
-                        <span class="input-variable-chip-main">
-                          <strong>{{ inputReferenceSelection(condition.right.value)!.item.variable }}</strong>
-                        </span>
-                        <span class="variable-type-badge">{{ variableTypeLabel(inputReferenceSelection(condition.right.value)!.item.type) }}</span>
+                        <Connection aria-hidden="true" />
                       </button>
-                      <input class="reference-value-proxy" aria-label="条件右值" :value="condition.right.value" readonly tabindex="-1" />
                     </div>
-                    <el-input
-                      v-else
-                      :model-value="condition.right.value"
-                      aria-label="条件右值"
-                      placeholder="输入或键入 { 引用变量"
-                      @update:model-value="handleConditionOperandInput(branchIndex, conditionIndex, 'right', $event)"
-                    />
                     <div
                       v-if="isConditionVariablePickerOpen(branchIndex, conditionIndex, 'right')"
                       class="variable-popover coze-variable-source-popover input-variable-popover condition-variable-popover"
@@ -1246,7 +1273,7 @@
                       </div>
                     </div>
                   </div>
-                  <button type="button" class="output-row-icon" aria-label="删除条件" @click="removeConditionRow(branchIndex, conditionIndex)">
+                  <button type="button" class="output-row-icon condition-delete-button" aria-label="删除条件" @click="removeConditionRow(branchIndex, conditionIndex)">
                     <XIcon aria-hidden="true" />
                   </button>
                 </div>
@@ -5956,6 +5983,14 @@ function handleConditionOperandInput(
   setConditionOperandValue(branchIndex, conditionIndex, side, trigger.value)
 }
 
+function clearConditionOperandReference(
+  branchIndex: number,
+  conditionIndex: number,
+  side: 'left' | 'right',
+) {
+  setConditionOperandValue(branchIndex, conditionIndex, side, '')
+}
+
 function insertConditionVariableReference(reference: string) {
   const target = parseConditionVariableTarget(activeConditionVariableTarget.value)
   if (!target) return
@@ -7114,7 +7149,7 @@ onUnmounted(() => {
 .workflow-canvas-page {
   --debug-dock-gap: 0.625rem;
   --debug-dock-height: min(23rem, calc(100vh - 8.25rem));
-  --workflow-side-panel-width: 27rem;
+  --workflow-side-panel-width: 34rem;
   --workflow-side-panel-gap: 1.125rem;
   --workflow-resource-panel-width: 15.75rem;
   --workflow-node-test-panel-width: 23.75rem;
@@ -10393,9 +10428,9 @@ onUnmounted(() => {
 
 .condition-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 7.25rem minmax(0, 1fr) 2rem;
+  grid-template-columns: minmax(0, 1fr) 7.25rem 2rem;
   gap: 0.5rem;
-  align-items: center;
+  align-items: start;
   margin-bottom: 0.5rem;
 }
 
@@ -10427,14 +10462,45 @@ onUnmounted(() => {
   box-shadow: 0 0.125rem 0.375rem rgba(33, 40, 60, 0.08);
 }
 
+.condition-left-cell {
+  grid-column: 1 / 2;
+}
+
+.condition-operator-select {
+  grid-column: 2 / 3;
+}
+
+.condition-right-cell {
+  grid-column: 1 / 3;
+}
+
+.condition-delete-button {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+}
+
 .condition-value-cell {
   min-width: 0;
   position: relative;
 }
 
-.condition-value-cell :deep(.el-input__wrapper),
 .condition-row :deep(.el-select__wrapper) {
   min-height: 2.25rem;
+}
+
+.condition-operand-control :deep(.el-input__wrapper) {
+  height: 100%;
+  min-height: 0;
+  padding: 0 0.625rem;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.condition-operand-control :deep(.el-input__inner) {
+  color: #30364a;
+  font-size: 0.8125rem;
+  font-weight: 700;
 }
 
 .condition-variable-chip {
@@ -10442,8 +10508,7 @@ onUnmounted(() => {
 }
 
 .condition-variable-popover {
-  top: 2.5rem;
-  right: 0;
+  margin-top: 0;
 }
 
 .condition-add-button {

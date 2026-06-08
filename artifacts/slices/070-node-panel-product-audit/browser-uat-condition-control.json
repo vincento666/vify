@@ -1,0 +1,20 @@
+{
+  "controlCount": 2,
+  "hasLeftClear": true,
+  "hasLeftPicker": true,
+  "hasRightPicker": true,
+  "panelWidth": 476,
+  "rects": [
+    {
+      "height": 32,
+      "text": "USER_INPUTstr.×",
+      "width": 271
+    },
+    {
+      "height": 32,
+      "text": "",
+      "width": 380
+    }
+  ],
+  "rowText": "USER_INPUTstr.×等于"
+}

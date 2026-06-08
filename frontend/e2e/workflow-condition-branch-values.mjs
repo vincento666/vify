@@ -87,6 +87,23 @@ try {
   const rowText = await row.innerText()
   assert(!rowText.includes('引用') && !rowText.includes('字面量'), `Condition row must not expose mode copy, got ${rowText}`)
 
+  const operandControls = row.getByTestId('condition-operand-control')
+  assert(await operandControls.count() === 2, 'Condition row must render left and right split operand controls')
+  const leftOperand = operandControls.nth(0)
+  const rightOperand = operandControls.nth(1)
+  assert(
+    await leftOperand.getByRole('button', { name: '选择左值变量', exact: true }).count() === 1,
+    'Condition left operand must keep a persistent variable picker button',
+  )
+  assert(
+    await leftOperand.getByRole('button', { name: '清除左值变量引用', exact: true }).count() === 1,
+    'Condition referenced left operand must expose a clear action',
+  )
+  assert(
+    await rightOperand.getByRole('button', { name: '选择右值变量', exact: true }).count() === 1,
+    'Condition right operand must keep a persistent variable picker button before a value is selected',
+  )
+
   const rightValue = row.getByLabel('条件右值')
   await rightValue.fill('{')
   assert(await rightValue.inputValue() === '{{}}', 'Typing { in condition value should auto-complete to {{}}')
@@ -103,8 +120,13 @@ try {
 
   const selectedValue = await row.getByLabel('条件右值').inputValue()
   assert(selectedValue === '{{start.intent}}', `Expected selected condition variable reference, got ${selectedValue}`)
-  await row.getByRole('button', { name: '更换右侧变量', exact: true }).waitFor({ state: 'visible', timeout: 5000 })
   assert(await row.getByTestId('condition-variable-chip').count() >= 2, 'Expected condition variables to render as chips')
+  assert(
+    await rightOperand.getByRole('button', { name: '清除右值变量引用', exact: true }).count() === 1,
+    'Condition referenced right operand must expose a clear action',
+  )
+  await rightOperand.getByRole('button', { name: '清除右值变量引用', exact: true }).click()
+  assert(await rightValue.inputValue() === '', 'Clearing a condition variable chip must restore literal input mode')
 
   const addCondition = branch.getByRole('button', { name: '添加条件', exact: true })
   const conditionSection = page.getByTestId('config-section-条件分支')
