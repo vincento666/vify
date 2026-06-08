@@ -296,12 +296,10 @@ class RuntimeLabService:
                     {"decision": _decision_payload(rag_decision)},
                 )
             )
-            if not (
-                candidates
-                and rag_decision.action == "CLARIFY"
-                and (rag_decision.rag_answer or {}).get("reasonCode") == "RAG_LOW_CONFIDENCE"
-                and _looks_like_sop_request(message)
-            ):
+            low_confidence_rag = _is_low_confidence_rag(rag_decision)
+            defer_low_rag_to_sop = candidates and low_confidence_rag and _looks_like_sop_request(message)
+            defer_low_rag_to_agent = low_confidence_rag and self._fallback_agent is not None
+            if not (defer_low_rag_to_sop or defer_low_rag_to_agent):
                 return _with_evidence(
                     rag_decision,
                     candidates,
@@ -1050,6 +1048,9 @@ def _final_decision_payload(decision: RouteDecision) -> dict[str, Any]:
         "targetSopId": decision.target_sop_id,
         "activeTaskId": decision.active_task_id,
     }
+    if decision.action in _SOP_ARBITRATION_ACTIONS:
+        payload["sourceLayer"] = "sop_arbitration"
+        payload["reasonCode"] = decision.action
     if decision.handoff:
         payload["sourceLayer"] = decision.handoff.get("sourceLayer")
         payload["reasonCode"] = decision.handoff.get("reasonCode")
@@ -1063,6 +1064,24 @@ def _final_decision_payload(decision: RouteDecision) -> dict[str, Any]:
         payload["sourceLayer"] = decision.agent_answer.get("sourceLayer")
         payload["reasonCode"] = decision.agent_answer.get("reasonCode")
     return payload
+
+
+def _is_low_confidence_rag(decision: RouteDecision) -> bool:
+    return (
+        decision.action == "CLARIFY"
+        and (decision.rag_answer or {}).get("reasonCode") == "RAG_LOW_CONFIDENCE"
+    )
+
+
+_SOP_ARBITRATION_ACTIONS = {
+    "CONTINUE_ACTIVE_SOP",
+    "START_SOP",
+    "SUSPEND_AND_START",
+    "RESUME_TASK",
+    "REJECT_SWITCH_CONTINUE_ACTIVE",
+    "REJECT_SWITCH_SUSPENDED_LIMIT",
+    "COMPLETE_TASK",
+}
 
 
 def _classifier_failure_result(exc: Exception, classifier: Any) -> ClassifierResult:

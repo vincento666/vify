@@ -11,6 +11,7 @@ from app.modules.runtime_lab.domain.agent_fallback import (
     FallbackAgentOutput,
     FallbackAgentRequest,
 )
+from app.modules.runtime_lab.domain.rag_gate import FakeRagAnswerGenerator, RagAnswerGate
 from app.modules.runtime_lab.domain.service import RuntimeLabService
 from app.modules.runtime_lab.infra.repository import RuntimeLabRepository
 from app.modules.runtime_lab.infra.schema import register_runtime_lab_tables
@@ -46,6 +47,39 @@ class RuntimeLabAgentFallbackPolicyTest(unittest.TestCase):
             self.assertIsNone(turn.active_task)
             self.assertEqual(turn.suspended_tasks, [])
             self.assertNotIn("TASK_STARTED", [event["event_type"] for event in turn.events])
+
+    def test_low_confidence_rag_defers_to_agent_fallback_when_available(self) -> None:
+        with _session() as session:
+            agent = _ScriptedFallbackAgent(
+                [
+                    FallbackAgentOutput(
+                        response_type="answer",
+                        answer="我先按通用咨询处理，建议再核对机场官方公告。",
+                        confidence=0.68,
+                    )
+                ]
+            )
+            service = RuntimeLabService(
+                RuntimeLabRepository(session),
+                rag_answer_gate=RagAnswerGate(
+                    _LowConfidenceKnowledgeFacade(),
+                    knowledge_base_ids=[33],
+                    generator=FakeRagAnswerGenerator(),
+                    rerank=True,
+                ),
+                fallback_agent=agent,
+                agent_output_policy=AgentOutputPolicy(),
+            )
+            runtime_session = service.create_session()
+
+            turn = service.handle_message(int(runtime_session["id"]), "机场大巴末班车几点")
+
+            self.assertEqual(turn.route_decision.action, "AGENT_FALLBACK")
+            self.assertEqual(turn.route_decision.agent_answer["sourceLayer"], "agent_policy")
+            self.assertEqual(turn.route_decision.agent_answer["reasonCode"], "AGENT_ANSWER")
+            self.assertFalse(turn.route_decision.agent_answer["mutatesSopState"])
+            self.assertEqual(len(agent.requests), 1)
+            self.assertIn("RAG_LOW_CONFIDENCE", str(turn.route_decision.policy_gate))
 
     def test_agent_side_effect_proposal_is_rejected_without_task_mutation(self) -> None:
         with _session() as session:
@@ -182,3 +216,51 @@ class _ScriptedFallbackAgent:
             answer=f"已收到：{request.message}",
             confidence=0.6,
         )
+
+
+class _LowConfidenceKnowledgeFacade:
+    def search_context(
+        self,
+        knowledge_base_id: int,
+        query: str,
+        top_k: int = 3,
+        retrieval_mode: str | None = None,
+        score_threshold: float | None = None,
+        rerank: bool | None = None,
+    ) -> list["_KnowledgeHit"]:
+        del knowledge_base_id, query, top_k, retrieval_mode, score_threshold, rerank
+        return [
+            _KnowledgeHit(
+                source_type="DOCUMENT_CHUNK",
+                match_type="VECTOR",
+                score=0.02,
+                title="航班延误险条款",
+                content="航班延误超过 4 小时，可提交保险理赔申请。",
+                document_id=7,
+                chunk_id=70,
+                chunk_index=0,
+            )
+        ]
+
+
+class _KnowledgeHit:
+    def __init__(
+        self,
+        *,
+        source_type: str,
+        match_type: str,
+        score: float,
+        title: str,
+        content: str,
+        document_id: int,
+        chunk_id: int,
+        chunk_index: int,
+    ) -> None:
+        self.source_type = source_type
+        self.match_type = match_type
+        self.score = score
+        self.title = title
+        self.content = content
+        self.document_id = document_id
+        self.chunk_id = chunk_id
+        self.chunk_index = chunk_index

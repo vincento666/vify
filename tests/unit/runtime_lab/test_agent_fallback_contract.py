@@ -44,3 +44,18 @@ class AgentFallbackContractTest(unittest.TestCase):
         self.assertEqual(result.response_type, "answer")
         self.assertIn("机场大巴末班车几点", result.answer)
         self.assertFalse(result.proposed_actions)
+
+    def test_fake_fallback_agent_can_recommend_handoff_for_complex_disputes(self) -> None:
+        from app.modules.runtime_lab.domain.agent_fallback import FallbackAgentRequest, FakeFallbackAgent
+
+        result = FakeFallbackAgent().run(
+            FallbackAgentRequest(
+                message="航司系统异常需要进一步判断",
+                active_task=None,
+                suspended_tasks=[],
+                recent_events=[],
+            )
+        )
+
+        self.assertEqual(result.response_type, "handoff_recommendation")
+        self.assertIn("进一步判断", result.handoff_reason)

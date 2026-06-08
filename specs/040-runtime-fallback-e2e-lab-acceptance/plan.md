@@ -33,7 +33,8 @@ GREEN:
 
 ## Browser UAT
 
-Use the 034 lab page and extend it only if needed to display:
+Use the 034 lab page or live runtime-lab API docs and extend UI only if needed
+to display:
 
 - route action;
 - source layer;
@@ -49,6 +50,12 @@ Representative browser conversations:
 - no-active semantic FAQ;
 - no-active RAG long-tail answer;
 - unresolved request -> Agent clarification -> repeated failure -> handoff.
+
+Actual 2026-06-09 UAT used the live FastAPI docs page plus controlled API
+requests against `http://127.0.0.1:18088/api/v1/runtime-lab`. No frontend/rem
+changes were needed. Browser policy blocked `data:` and `file:` report pages,
+so the full transcript is stored as JSON/HTML artifacts and the live docs page
+is captured as the browser screenshot.
 
 ## Evidence
 
@@ -71,6 +78,14 @@ Each acceptance slice must update `spec.md`, `plan.md`, `tasks.md`, and the
 corresponding artifact directory. 040 is complete only when the full scenario
 matrix has expected-vs-actual evidence, active/suspended task preservation is
 audited, and any frontend evidence changes pass the required rem/frontend gates.
+
+Completion note 2026-06-09: acceptance exposed two runtime hardening gaps, both
+within existing MVP policy scope:
+
+- low-confidence RAG retrieval now defers to controlled Agent fallback when an
+  Agent is configured;
+- default Fake Agent can recommend handoff for complex/ambiguous dispute cases,
+  with PolicyGate retaining final authority.
 
 ## Non-Goals
 

@@ -75,9 +75,35 @@ After 040, the system is a complete controlled customer-service routing runtime:
 - clarification and escalation;
 - browser-visible evidence for manual business acceptance.
 
+## Completion Evidence
+
+Status: completed on 2026-06-09.
+
+Evidence:
+
+- RED: `artifacts/slices/040-runtime-fallback-e2e-lab-acceptance/040.1/red.txt`
+- E2E matrix: `artifacts/slices/040-runtime-fallback-e2e-lab-acceptance/040.1/e2e.txt`
+- Targeted backend gate: `artifacts/slices/040-runtime-fallback-e2e-lab-acceptance/040.1/final-targeted.txt`
+- Low RAG -> Agent hardening:
+  `artifacts/slices/040-runtime-fallback-e2e-lab-acceptance/040.2/red-low-rag-agent.txt`
+- Fake Agent handoff hardening:
+  `artifacts/slices/040-runtime-fallback-e2e-lab-acceptance/040.2/red-fake-agent-handoff.txt`
+- Browser UAT:
+  `artifacts/slices/040-runtime-fallback-e2e-lab-acceptance/040.3/browser-uat-result.json`
+- Browser screenshot:
+  `artifacts/slices/040-runtime-fallback-e2e-lab-acceptance/040.3/screenshots/runtime-040-browser-docs.png`
+- Full backend scan:
+  `artifacts/slices/040-runtime-fallback-e2e-lab-acceptance/040.3/full-backend.txt`
+
+Final targeted result: `50 passed, 1 warning`.
+
+Full backend scan result: `477 passed, 8 skipped, 13 failed, 1 warning`. The
+remaining failures are documented baseline failures outside the 033/036-040
+targeted runtime fallback stack.
+
 ## Specification Sign-off
 
-Status: ready for implementation.
+Status: completed.
 
 Numbering was rechecked on 2026-06-09. 040 is the final acceptance spec for
 033 and 036-039, with 035 as the knowledge retrieval dependency. It must not

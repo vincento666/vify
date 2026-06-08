@@ -1,0 +1,126 @@
+{
+  "allPassed": true,
+  "endpoint": "http://127.0.0.1:18088/api/v1/runtime-lab",
+  "rows": [
+    {
+      "name": "1 no-active explicit handoff",
+      "ok": true,
+      "action": "HANDOFF_TO_HUMAN",
+      "sourceLayer": "explicit_signal",
+      "reasonCode": "USER_REQUEST",
+      "activeTaskId": null,
+      "suspendedCount": 0,
+      "note": ""
+    },
+    {
+      "name": "2 active explicit handoff preserves task",
+      "ok": true,
+      "action": "HANDOFF_TO_HUMAN",
+      "sourceLayer": "explicit_signal",
+      "reasonCode": "UNSUPPORTED",
+      "activeTaskId": 8,
+      "suspendedCount": 0,
+      "note": ""
+    },
+    {
+      "name": "3 FAQ exact answers early",
+      "ok": true,
+      "action": "ANSWER_FAQ",
+      "sourceLayer": "faq_exact",
+      "reasonCode": "EXACT_MATCH",
+      "activeTaskId": null,
+      "suspendedCount": 0,
+      "note": ""
+    },
+    {
+      "name": "4 active FAQ does not consume slot",
+      "ok": true,
+      "action": "ANSWER_FAQ",
+      "sourceLayer": "faq_exact",
+      "reasonCode": "EXACT_MATCH",
+      "activeTaskId": 9,
+      "suspendedCount": 0,
+      "note": ""
+    },
+    {
+      "name": "5 semantic FAQ has evidence",
+      "ok": true,
+      "action": "ANSWER_FAQ",
+      "sourceLayer": "faq_semantic",
+      "reasonCode": "SEMANTIC_HIGH_CONFIDENCE",
+      "activeTaskId": null,
+      "suspendedCount": 0,
+      "note": ""
+    },
+    {
+      "name": "6 long-tail RAG cites chunk",
+      "ok": true,
+      "action": "ANSWER_RAG",
+      "sourceLayer": "rag_policy",
+      "reasonCode": "RAG_HIGH_CONFIDENCE",
+      "activeTaskId": null,
+      "suspendedCount": 0,
+      "note": ""
+    },
+    {
+      "name": "7 active ambiguous clarifies",
+      "ok": true,
+      "action": "CLARIFY",
+      "sourceLayer": "agent_policy",
+      "reasonCode": "AGENT_CLARIFICATION",
+      "activeTaskId": 10,
+      "suspendedCount": 0,
+      "note": ""
+    },
+    {
+      "name": "8 repeated clarify escalates",
+      "ok": true,
+      "action": "HANDOFF_TO_HUMAN",
+      "sourceLayer": "agent_policy",
+      "reasonCode": "CLARIFICATION_FAILED",
+      "activeTaskId": 11,
+      "suspendedCount": 0,
+      "note": ""
+    },
+    {
+      "name": "9 unresolved query uses agent fallback",
+      "ok": true,
+      "action": "AGENT_FALLBACK",
+      "sourceLayer": "agent_policy",
+      "reasonCode": "AGENT_ANSWER",
+      "activeTaskId": null,
+      "suspendedCount": 0,
+      "note": ""
+    },
+    {
+      "name": "10 agent handoff recommendation policy-gated",
+      "ok": true,
+      "action": "HANDOFF_TO_HUMAN",
+      "sourceLayer": "agent_policy",
+      "reasonCode": "AGENT_RECOMMENDED_HANDOFF",
+      "activeTaskId": null,
+      "suspendedCount": 0,
+      "note": ""
+    },
+    {
+      "name": "11 SOP start switch resume complete",
+      "ok": true,
+      "action": "RESUME_TASK",
+      "sourceLayer": "sop_arbitration",
+      "reasonCode": "RESUME_TASK",
+      "activeTaskId": 12,
+      "suspendedCount": 0,
+      "note": ""
+    },
+    {
+      "name": "12 non-interruptible switch rejected",
+      "ok": true,
+      "action": "REJECT_SWITCH_CONTINUE_ACTIVE",
+      "sourceLayer": "sop_arbitration",
+      "reasonCode": "REJECT_SWITCH_CONTINUE_ACTIVE",
+      "activeTaskId": 14,
+      "suspendedCount": 0,
+      "note": ""
+    }
+  ]
+}

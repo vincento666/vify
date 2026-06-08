@@ -49,6 +49,13 @@ class FakeFallbackAgent:
                 clarification_question="请补充您要咨询的问题背景，或说明希望办理的业务。",
                 confidence=0.5,
             )
+        if _looks_like_complex_handoff(message):
+            return FallbackAgentOutput(
+                response_type="handoff_recommendation",
+                answer="该问题需要人工客服进一步判断。",
+                handoff_reason=f"Fallback Agent judged this request needs further human review: {message}",
+                confidence=0.78,
+            )
         return FallbackAgentOutput(
             response_type="answer",
             answer=f"我先帮您整理诉求：{message}。该问题未匹配到标准办理流程，建议以机场或航司官方信息为准。",
@@ -168,3 +175,7 @@ def _agent_handoff_decision(output: FallbackAgentOutput, reason_code: str, reaso
 def _looks_unclear(message: str) -> bool:
     normalized = message.strip()
     return normalized in {"", "?", "？", "那现在怎么办", "不知道", "还是那个", "随便"} or len(normalized) <= 3
+
+
+def _looks_like_complex_handoff(message: str) -> bool:
+    return any(term in message for term in ("争议", "复杂", "进一步判断", "系统异常", "无法处理"))

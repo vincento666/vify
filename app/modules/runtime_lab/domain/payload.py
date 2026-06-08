@@ -89,6 +89,9 @@ def _final_decision(decision: RouteDecision) -> dict[str, Any]:
         "targetSopId": decision.target_sop_id,
         "activeTaskId": decision.active_task_id,
     }
+    if decision.action in _SOP_ARBITRATION_ACTIONS:
+        payload["sourceLayer"] = "sop_arbitration"
+        payload["reasonCode"] = decision.action
     if decision.handoff:
         payload["sourceLayer"] = decision.handoff.get("sourceLayer")
         payload["reasonCode"] = decision.handoff.get("reasonCode")
@@ -102,3 +105,14 @@ def _final_decision(decision: RouteDecision) -> dict[str, Any]:
         payload["sourceLayer"] = decision.agent_answer.get("sourceLayer")
         payload["reasonCode"] = decision.agent_answer.get("reasonCode")
     return payload
+
+
+_SOP_ARBITRATION_ACTIONS = {
+    "CONTINUE_ACTIVE_SOP",
+    "START_SOP",
+    "SUSPEND_AND_START",
+    "RESUME_TASK",
+    "REJECT_SWITCH_CONTINUE_ACTIVE",
+    "REJECT_SWITCH_SUSPENDED_LIMIT",
+    "COMPLETE_TASK",
+}
