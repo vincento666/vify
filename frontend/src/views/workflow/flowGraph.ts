@@ -327,11 +327,9 @@ function defaultNodeConfig(type: Exclude<WorkflowCanvasNodeType, 'START' | 'END'
   if (type === 'VARIABLE_AGGREGATION') {
     return {
       ...base,
-      outputVariable: 'aggregate',
       strategy: 'first_non_empty',
-      sources: [{ name: 'source_1', value: '{{start.USER_INPUT}}' }],
-      defaultValue: '',
-      outputParameters: [{ name: 'aggregate', type: 'string' }],
+      groups: [{ name: 'Group1', type: 'string', variables: [{ value: '{{start.USER_INPUT}}' }] }],
+      outputParameters: [{ name: 'Group1', type: 'string' }],
     }
   }
   if (type === 'VARIABLE_ASSIGN') {

@@ -121,22 +121,25 @@ try {
   const panel = page.locator('[data-testid="node-config-panel"]')
   await panel.waitFor({ state: 'visible', timeout: 5000 })
   let panelText = await panel.innerText()
-  assert(await panel.locator('[data-testid="aggregation-source-editor"]').count() === 1, 'Expected structured aggregation source editor')
+  assert(await panel.locator('[data-testid="aggregation-group-editor"]').count() === 1, 'Expected grouped aggregation editor')
   assert(!panelText.includes('聚合来源值模式'), 'Aggregation editor must not expose reference/literal mode selector')
-  assert(await panel.locator('[data-testid="aggregation-source-row"]').count() === 2, 'Expected aggregation source rows')
+  assert(panelText.includes('返回每个分组中第一个非空的值'), 'Aggregation editor must expose the official first non-empty group strategy')
+  assert(await panel.locator('[data-testid="aggregation-group-card"]').count() === 1, 'Legacy flat sources should fold into one aggregation group')
+  assert(await panel.locator('[data-testid="aggregation-group-variable-row"]').count() === 3, 'Expected aggregation variable rows plus the automatic candidate row')
+  assert(!panelText.includes('新增变量'), 'Aggregation groups should not expose a manual add-variable button')
   assert(await panel.locator('[data-testid="aggregation-variable-chip"]').count() >= 2, 'Expected aggregation references to render as variable chips')
-  const aggregationRow = panel.locator('[data-testid="aggregation-source-row"]').first()
+  const aggregationRow = panel.locator('[data-testid="aggregation-group-variable-row"]').first()
   assert(
     await aggregationRow.getByTestId('structured-value-control').count() === 1,
-    'Aggregation source value must use the shared split variable/literal control',
+    'Aggregation variable value must use the shared split variable/literal control',
   )
   assert(
-    await aggregationRow.getByRole('button', { name: '选择聚合来源变量', exact: true }).count() === 1,
-    'Aggregation source must keep a persistent variable picker button',
+    await aggregationRow.getByRole('button', { name: '选择聚合变量', exact: true }).count() === 1,
+    'Aggregation variable must keep a persistent variable picker button',
   )
   assert(
-    await aggregationRow.getByRole('button', { name: '清除聚合来源变量引用', exact: true }).count() === 1,
-    'Aggregation referenced source must expose a clear action',
+    await aggregationRow.getByRole('button', { name: '清除聚合变量引用', exact: true }).count() === 1,
+    'Aggregation referenced variable must expose a clear action',
   )
   await panel.getByRole('button', { name: '关闭配置' }).click()
   await panel.waitFor({ state: 'hidden', timeout: 5000 })

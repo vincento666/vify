@@ -4,6 +4,7 @@ export type NodeConfigFieldType = 'text' | 'textarea' | 'number' | 'select' | 'r
   | 'switch'
   | 'resource-select'
   | 'output-parameters'
+  | 'aggregation-output-summary'
   | 'input-parameters'
   | 'condition-branches'
   | 'start-variables'
@@ -17,6 +18,7 @@ export type NodeConfigFieldType = 'text' | 'textarea' | 'number' | 'select' | 'r
   | 'legacy-resource-debug'
   | 'json-field-mappings'
   | 'aggregation-sources'
+  | 'aggregation-groups'
   | 'variable-assignment'
   | 'human-input-schema'
 
@@ -78,6 +80,17 @@ export interface AggregationSource {
   name: string
   valueMode: InputValueMode
   value: string | number | boolean
+}
+
+export interface AggregationGroupVariable {
+  valueMode: InputValueMode
+  value: string | number | boolean
+}
+
+export interface AggregationGroup {
+  name: string
+  type: OutputParameterType
+  variables: AggregationGroupVariable[]
 }
 
 export interface HumanInputSchemaField {
@@ -180,7 +193,10 @@ const SCHEMAS: Record<WorkflowCanvasNodeType, NodeConfigSchema> = {
         title: '用户提示词',
         fields: [{ key: 'prompt', label: '用户提示词', type: 'textarea', placeholder: '输入用户提示词，可使用 {{variable}} 引用参数' }],
       },
-      OUTPUT_SECTION,
+      {
+        title: '输出',
+        fields: [{ key: 'outputParameters', label: '输出参数', type: 'output-parameters' }],
+      },
       {
         title: '技能调用',
         fields: [
@@ -418,20 +434,25 @@ const SCHEMAS: Record<WorkflowCanvasNodeType, NodeConfigSchema> = {
     type: 'VARIABLE_AGGREGATION',
     title: '变量聚合',
     sections: [
-      INPUT_SECTION,
       {
-        title: '聚合规则',
+        title: '聚合策略',
         fields: [
-          { key: 'aggregationSources', label: '来源列表', type: 'aggregation-sources' },
-          { key: 'strategy', label: '聚合策略', type: 'select', options: ['first_non_empty', 'last_non_empty', 'concatenate', 'array', 'object_merge'] },
-          { key: 'separator', label: '拼接分隔符', type: 'text', placeholder: ',' },
-          { key: 'defaultValue', label: '默认值', type: 'text', placeholder: '没有命中时使用' },
+          { key: 'strategy', label: '聚合策略', type: 'select', options: ['first_non_empty'] },
         ],
       },
-      OUTPUT_SECTION,
+      {
+        title: '变量分组',
+        fields: [
+          { key: 'aggregationGroups', label: '变量分组', type: 'aggregation-groups' },
+        ],
+      },
+      {
+        title: '输出',
+        fields: [{ key: 'aggregationOutputs', label: '输出', type: 'aggregation-output-summary' }],
+      },
       {
         title: '高级/兼容配置',
-        fields: [{ key: 'sources', label: '来源列表 JSON', type: 'textarea', placeholder: '[{\"name\":\"route_a\",\"value\":\"{{condition_a.result}}\"}]' }],
+        fields: [{ key: 'sources', label: '旧版 sources JSON', type: 'textarea', placeholder: '[{\"name\":\"route_a\",\"value\":\"{{condition_a.result}}\"}]' }],
       },
     ],
   },
@@ -732,6 +753,56 @@ export function normalizeAggregationSources(config: Record<string, any> = {}): A
       }
     })
     .filter((item) => item.name.length > 0)
+}
+
+export function normalizeAggregationGroups(config: Record<string, any> = {}): AggregationGroup[] {
+  const nestedGroups = (config as any)?.inputs?.mergeGroups
+  const rawGroups = parseArrayValue(config.groups ?? config.mergeGroups ?? nestedGroups)
+  const groups = rawGroups
+    .map((group, groupIndex) => {
+      const name = String((group as any)?.name ?? (group as any)?.groupName ?? `Group${groupIndex + 1}`).trim()
+      const type = normalizeOutputType((group as any)?.type ?? (group as any)?.variableType)
+      const variables = parseArrayValue((group as any)?.variables ?? (group as any)?.values)
+        .map((item) => {
+          const value = typeof item === 'string' ? item : (item as any)?.value ?? ''
+          const valueMode = inferInputValueMode(value, typeof item === 'string' ? undefined : (item as any)?.valueMode)
+          return {
+            valueMode,
+            value: normalizeInputValue(value, type, valueMode),
+          }
+        })
+      return {
+        name,
+        type,
+        variables: withTrailingAggregationCandidate(variables.length > 0 ? variables : []),
+      }
+    })
+    .filter((group) => group.name.length > 0)
+  if (groups.length > 0) return groups
+
+  const legacySources = normalizeAggregationSources(config)
+  const output = normalizeOutputConfig(config).parameters[0]
+  return [
+    {
+      name: output?.name || String(config.outputVariable || 'Group1'),
+      type: output?.type || 'string',
+      variables: withTrailingAggregationCandidate(legacySources.length > 0
+        ? legacySources.map((source) => ({ valueMode: source.valueMode, value: source.value }))
+        : []),
+    },
+  ]
+}
+
+function withTrailingAggregationCandidate(variables: AggregationGroupVariable[]): AggregationGroupVariable[] {
+  const nonTrailingEmpty = variables.filter((item, index) => {
+    const isEmptyLiteral = item.valueMode !== 'reference' && String(item.value ?? '').trim() === ''
+    return !isEmptyLiteral || index < variables.length - 1
+  })
+  const last = nonTrailingEmpty[nonTrailingEmpty.length - 1]
+  if (!last || last.valueMode === 'reference' || String(last.value ?? '').trim() !== '') {
+    return [...nonTrailingEmpty, { valueMode: 'literal', value: '' }]
+  }
+  return nonTrailingEmpty
 }
 
 export function normalizeHumanInputSchema(config: Record<string, any> = {}): HumanInputSchemaField[] {

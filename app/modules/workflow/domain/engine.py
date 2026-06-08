@@ -218,6 +218,27 @@ class JsonParseNodeExecutor:
 class VariableAggregationNodeExecutor:
     def execute(self, node: dict[str, Any], context: ExecutionContext) -> dict[str, Any]:
         config = _config(node)
+        groups = _aggregation_groups(config, context)
+        if groups:
+            output: dict[str, Any] = {}
+            source_status: list[dict[str, Any]] = []
+            for group in groups:
+                name = group["name"]
+                variables = group["variables"]
+                output[name] = next((item["value"] for item in variables if _not_empty(item["value"])), None)
+                source_status.append(
+                    {
+                        "name": name,
+                        "empty": not _not_empty(output[name]),
+                        "variables": [
+                            {"empty": not _not_empty(item["value"])}
+                            for item in variables
+                        ],
+                    },
+                )
+            output["sourceStatus"] = source_status
+            return output
+
         output_variable = _first_output_name(config, str(config.get("outputVariable") or "aggregate"))
         sources = _aggregation_sources(config, context)
         strategy = str(config.get("strategy") or config.get("mergeStrategy") or "first_non_empty").lower()
@@ -452,6 +473,36 @@ def _aggregation_sources(config: dict[str, Any], context: ExecutionContext) -> l
         if isinstance(value, str):
             value = context.render(value)
         result.append({"name": name, "value": value})
+    return result
+
+
+
+def _aggregation_groups(config: dict[str, Any], context: ExecutionContext) -> list[dict[str, Any]]:
+    raw = config.get("groups") or config.get("mergeGroups")
+    inputs = config.get("inputs")
+    if raw is None and isinstance(inputs, Mapping):
+        raw = inputs.get("mergeGroups")
+    if not isinstance(raw, list):
+        return []
+    result: list[dict[str, Any]] = []
+    for group_index, group in enumerate(raw):
+        if not isinstance(group, Mapping):
+            continue
+        name = str(group.get("name") or group.get("groupName") or f"Group{group_index + 1}").strip()
+        if not name:
+            continue
+        raw_variables = group.get("variables") or group.get("values") or []
+        if not isinstance(raw_variables, list):
+            raw_variables = []
+        variables: list[dict[str, Any]] = []
+        for item in raw_variables:
+            value = item
+            if isinstance(item, Mapping):
+                value = item.get("value")
+            if isinstance(value, str):
+                value = context.render(value)
+            variables.append({"value": value})
+        result.append({"name": name, "variables": variables})
     return result
 
 

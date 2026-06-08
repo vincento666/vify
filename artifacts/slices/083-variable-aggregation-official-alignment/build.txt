@@ -1,0 +1,11 @@
+Frontend build gate passed.
+
+Command:
+rtk npm --prefix frontend run build
+
+Result:
+- vue-tsc passed.
+- vite production build passed.
+
+Known output:
+- Existing Vite chunk-size warning remains informational.

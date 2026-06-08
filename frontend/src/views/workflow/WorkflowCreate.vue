@@ -347,7 +347,7 @@
                 <strong>{{ branch.label }}</strong>
               </div>
             </div>
-            <div v-else class="node-line" :class="{ 'start-input-line': nodeProps.data.type === 'START' }">
+            <div v-else-if="nodeProps.data.type !== 'VARIABLE_AGGREGATION'" class="node-line" :class="{ 'start-input-line': nodeProps.data.type === 'START' }">
               <span>{{ nodeProps.data.type === 'START' ? '输出' : '输入' }}</span>
               <template v-if="nodeProps.data.type === 'START'">
                 <div class="node-variable-shell">
@@ -700,7 +700,7 @@
                   :model-value="fieldValue(field.key) || field.options?.[0]"
                   @update:model-value="setFieldValue(field.key, $event)"
                 >
-                  <el-option v-for="option in field.options || []" :key="option" :label="option" :value="option" />
+                  <el-option v-for="option in field.options || []" :key="option" :label="selectOptionLabel(field.key, option)" :value="option" />
                 </el-select>
                 <el-input
                   v-else
@@ -1873,6 +1873,21 @@
               </ul>
             </div>
             <div
+              v-else-if="field.type === 'aggregation-output-summary'"
+              class="aggregation-output-summary"
+              data-testid="aggregation-output-summary"
+            >
+              <div
+                v-for="row in aggregationOutputSummaryRows()"
+                :key="row.name"
+                class="aggregation-output-row"
+                data-testid="aggregation-output-row"
+              >
+                <strong>{{ row.name }}</strong>
+                <span class="variable-type-badge">{{ variableListTypeLabel(row.type) }}</span>
+              </div>
+            </div>
+            <div
               v-else-if="field.type === 'end-answer-content'"
               class="end-answer-content-editor"
               data-testid="end-answer-content-editor"
@@ -2183,6 +2198,163 @@
               <p v-if="jsonFieldMappingRows().length === 0" class="secondary-empty">
                 添加字段后，将从 JSON 来源中按路径提取输出变量。
               </p>
+            </div>
+            <div
+              v-else-if="field.type === 'aggregation-groups'"
+              class="aggregation-group-editor"
+              data-testid="aggregation-group-editor"
+            >
+              <article
+                v-for="(group, groupIndex) in aggregationGroupRows()"
+                :key="groupIndex"
+                class="aggregation-group-card"
+                data-testid="aggregation-group-card"
+              >
+                <header class="aggregation-group-header">
+                  <span class="aggregation-group-title">
+                    <input
+                      v-if="editingAggregationGroupNameIndex === groupIndex"
+                      class="aggregation-group-name-input"
+                      data-testid="aggregation-group-name-editor"
+                      :value="aggregationGroupNameDraft"
+                      aria-label="聚合分组名"
+                      placeholder="Group1"
+                      @input="aggregationGroupNameDraft = ($event.target as HTMLInputElement).value"
+                      @keydown.enter.prevent="commitAggregationGroupNameEdit(groupIndex)"
+                      @keydown.escape.prevent="cancelAggregationGroupNameEdit"
+                      @blur="commitAggregationGroupNameEdit(groupIndex)"
+                    />
+                    <button
+                      v-else
+                      type="button"
+                      class="aggregation-group-name-display"
+                      data-testid="aggregation-group-name-display"
+                      :aria-label="`编辑聚合分组名 ${group.name}`"
+                      @click="beginAggregationGroupNameEdit(groupIndex, group.name)"
+                    >
+                      {{ group.name }}
+                    </button>
+                    <span class="variable-type-badge aggregation-group-type">{{ variableListTypeLabel(group.type) }}</span>
+                    <span v-if="group.variables.some((item) => item.valueMode === 'reference' || String(item.value || '').trim())" class="aggregation-group-info" aria-label="变量聚合分组说明">i</span>
+                  </span>
+                  <button
+                    type="button"
+                    class="output-row-icon"
+                    aria-label="删除聚合分组"
+                    :disabled="aggregationGroupRows().length <= 1"
+                    @click="removeAggregationGroup(groupIndex)"
+                  >
+                    <XIcon aria-hidden="true" />
+                  </button>
+                </header>
+                <div class="aggregation-group-variable-list">
+                  <div
+                    v-for="(variable, variableIndex) in group.variables"
+                    :key="`${groupIndex}-${variableIndex}-${variable.valueMode}`"
+                    class="aggregation-group-variable-row"
+                    data-testid="aggregation-group-variable-row"
+                  >
+                    <span class="aggregation-row-handle" aria-hidden="true">⋮⋮</span>
+                    <div class="input-value-cell">
+                      <div class="variable-value-combo structured-value-control" data-testid="structured-value-control">
+                        <div class="variable-value-main">
+                          <div
+                            v-if="variable.valueMode === 'reference' && inputReferenceSelection(String(variable.value || ''))"
+                            class="input-variable-chip"
+                            data-testid="aggregation-variable-chip"
+                          >
+                            <input class="reference-value-proxy" aria-label="聚合引用变量" :value="String(variable.value || '')" readonly tabindex="-1" />
+                            <span class="input-variable-chip-main">
+                              <strong>{{ inputReferenceSelection(String(variable.value || ''))!.item.variable }}</strong>
+                            </span>
+                            <span class="variable-type-badge">{{ variableListTypeLabel(inputReferenceSelection(String(variable.value || ''))!.item.type) }}</span>
+                            <button
+                              type="button"
+                              class="input-variable-clear"
+                              aria-label="清除聚合变量引用"
+                              @click.stop="clearAggregationGroupVariableReference(groupIndex, variableIndex)"
+                            >
+                              <span aria-hidden="true">×</span>
+                            </button>
+                          </div>
+                          <input
+                            v-else
+                            class="variable-literal-input"
+                            data-testid="aggregation-variable-literal-input"
+                            type="text"
+                            aria-label="聚合变量值"
+                            :value="String(variable.value ?? '')"
+                            placeholder="输入或引用变量"
+                            @input="setAggregationGroupVariableValue(groupIndex, variableIndex, ($event.target as HTMLInputElement).value)"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          class="variable-picker-trigger"
+                          aria-label="选择聚合变量"
+                          @click="openStructuredVariablePicker(`aggregation:${groupIndex}:${variableIndex}`, $event)"
+                        >
+                          <Connection aria-hidden="true" />
+                        </button>
+                      </div>
+                      <div
+                        v-if="activeStructuredVariableTarget === `aggregation:${groupIndex}:${variableIndex}`"
+                        class="variable-popover coze-variable-source-popover input-variable-popover"
+                        data-testid="structured-variable-picker"
+                      >
+                        <el-input v-model="structuredVariableSearch" size="small" placeholder="搜索变量" />
+                        <div class="variable-source-list coze-variable-source-list" data-testid="structured-variable-source-list">
+                          <button
+                            v-for="sourceGroup in filteredStructuredVariableGroups"
+                            :key="variableGroupKey(sourceGroup)"
+                            type="button"
+                            class="variable-source-item coze-variable-source-item"
+                            :class="{ active: activeStructuredVariableGroupKey === variableGroupKey(sourceGroup) }"
+                            data-testid="structured-variable-source-item"
+                            @mouseenter="activateStructuredVariableGroup(sourceGroup, $event)"
+                            @click="activateStructuredVariableGroup(sourceGroup, $event)"
+                          >
+                            <span class="variable-source-copy">
+                              <strong>{{ sourceGroup.title }}</strong>
+                            </span>
+                            <span v-if="sourceGroup.items.length > 0" class="variable-source-arrow" data-testid="variable-source-arrow" aria-hidden="true">›</span>
+                          </button>
+                        </div>
+                        <div
+                          v-if="activeStructuredVariableGroup"
+                          class="variable-flyout"
+                          :data-placement="variableFlyoutPlacement"
+                          data-testid="structured-variable-flyout"
+                        >
+                          <div class="variable-item-list" data-testid="structured-variable-item-list">
+                            <button
+                              v-for="item in activeStructuredVariableGroup.items"
+                              :key="item.reference"
+                              type="button"
+                              class="variable-option"
+                              data-testid="structured-variable-option"
+                              @click="insertStructuredVariableReference(`aggregation:${groupIndex}:${variableIndex}`, item.reference)"
+                            >
+                              <span class="variable-option-main">
+                                <strong>{{ item.variable }}</strong>
+                              </span>
+                              <span class="variable-type-badge">{{ variableListTypeLabel(item.type) }}</span>
+                            </button>
+                            <p v-if="activeStructuredVariableGroup.items.length === 0" class="variable-empty">暂无可引用变量</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <button type="button" class="output-row-icon" aria-label="删除聚合变量" @click="removeAggregationGroupVariable(groupIndex, variableIndex)">
+                      <XIcon aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+              </article>
+              <button type="button" class="aggregation-add-group" aria-label="新增分组" @click="addAggregationGroup">
+                <LucidePlus aria-hidden="true" />
+                新增分组
+              </button>
             </div>
             <div
               v-else-if="field.type === 'aggregation-sources'"
@@ -2539,7 +2711,7 @@
               :model-value="fieldValue(field.key) || field.options?.[0]"
               @update:model-value="setFieldValue(field.key, $event)"
             >
-              <el-option v-for="option in field.options || []" :key="option" :label="option" :value="option" />
+              <el-option v-for="option in field.options || []" :key="option" :label="selectOptionLabel(field.key, option)" :value="option" />
             </el-select>
             <el-input
               v-else
@@ -3481,6 +3653,7 @@ import {
   applyNodeConfigPatch,
   compactVariableTypeLabel,
   getNodeConfigSchema,
+  normalizeAggregationGroups,
   normalizeAggregationSources,
   normalizeCollectionFields,
   normalizeHumanInputSchema,
@@ -3493,6 +3666,8 @@ import {
   validateInputParameters,
   validateOutputParameters,
   type AggregationSource,
+  type AggregationGroup,
+  type AggregationGroupVariable,
   type CollectionField,
   type HumanInputSchemaField,
   type IntentRow,
@@ -3666,6 +3841,8 @@ const connectionPreviewPortKey = ref('')
 const connectionPreviewStart = ref<{ nodeId: string; handleType: 'source' | 'target' } | null>(null)
 const editingConditionBranchNameIndex = ref<number | null>(null)
 const editingConditionDefaultName = ref(false)
+const editingAggregationGroupNameIndex = ref<number | null>(null)
+const aggregationGroupNameDraft = ref('')
 const paletteOpen = ref(false)
 const nodePaletteSearch = ref('')
 const resourcePanelCollapsed = ref(false)
@@ -3961,6 +4138,7 @@ const filteredLlmSkillResources = computed(() => {
 
 const labelHiddenConfigFieldTypes = new Set([
   'output-parameters',
+  'aggregation-output-summary',
   'input-parameters',
   'condition-branches',
   'switch',
@@ -3973,6 +4151,7 @@ const labelHiddenConfigFieldTypes = new Set([
   'schema-input-mappings',
   'legacy-resource-debug',
   'json-field-mappings',
+  'aggregation-groups',
   'aggregation-sources',
   'variable-assignment',
   'human-input-schema',
@@ -5771,6 +5950,109 @@ function aggregationSourceRows(): AggregationSource[] {
   return selectedNode.value ? normalizeAggregationSources(selectedNode.value.config) : []
 }
 
+function aggregationGroupRows(): AggregationGroup[] {
+  return selectedNode.value ? normalizeAggregationGroups(selectedNode.value.config) : []
+}
+
+function aggregationOutputParameters(groups: AggregationGroup[]) {
+  return groups.map((group) => ({
+    name: group.name || 'Group1',
+    type: group.type || 'string',
+  }))
+}
+
+function aggregationOutputSummaryRows() {
+  return aggregationOutputParameters(aggregationGroupRows())
+}
+
+function persistAggregationGroups(groups: AggregationGroup[]) {
+  updateSelectedNode({
+    config: {
+      strategy: 'first_non_empty',
+      groups,
+      outputParameters: aggregationOutputParameters(groups),
+    },
+  })
+}
+
+function addAggregationGroup() {
+  const groups = aggregationGroupRows()
+  persistAggregationGroups([
+    ...groups,
+    { name: `Group${groups.length + 1}`, type: 'string', variables: [{ valueMode: 'literal', value: '' }] },
+  ])
+}
+
+function updateAggregationGroup(groupIndex: number, patch: Partial<AggregationGroup>) {
+  const groups = aggregationGroupRows()
+  if (!groups[groupIndex]) return
+  persistAggregationGroups(groups.map((group, index) => index === groupIndex ? { ...group, ...patch } : group))
+}
+
+function setAggregationGroupName(groupIndex: number, value: string | number) {
+  const fallback = `Group${groupIndex + 1}`
+  updateAggregationGroup(groupIndex, { name: String(value || fallback).trim() || fallback })
+}
+
+function beginAggregationGroupNameEdit(groupIndex: number, name: string) {
+  editingAggregationGroupNameIndex.value = groupIndex
+  aggregationGroupNameDraft.value = name
+}
+
+function commitAggregationGroupNameEdit(groupIndex: number) {
+  if (editingAggregationGroupNameIndex.value !== groupIndex) return
+  setAggregationGroupName(groupIndex, aggregationGroupNameDraft.value)
+  editingAggregationGroupNameIndex.value = null
+  aggregationGroupNameDraft.value = ''
+}
+
+function cancelAggregationGroupNameEdit() {
+  editingAggregationGroupNameIndex.value = null
+  aggregationGroupNameDraft.value = ''
+}
+
+function removeAggregationGroup(groupIndex: number) {
+  const groups = aggregationGroupRows()
+  if (groups.length <= 1) return
+  persistAggregationGroups(groups.filter((_, index) => index !== groupIndex))
+  if (activeStructuredVariableTarget.value.startsWith(`aggregation:${groupIndex}:`)) {
+    activeStructuredVariableTarget.value = ''
+    activeStructuredVariableGroupKey.value = ''
+    structuredVariableSearch.value = ''
+  }
+}
+
+function updateAggregationGroupVariable(groupIndex: number, variableIndex: number, patch: Partial<AggregationGroupVariable>) {
+  const groups = aggregationGroupRows()
+  const group = groups[groupIndex]
+  if (!group || !group.variables[variableIndex]) return
+  const variables = group.variables.map((variable, index) => index === variableIndex ? { ...variable, ...patch } : variable)
+  persistAggregationGroups(groups.map((item, index) => index === groupIndex ? { ...item, variables } : item))
+}
+
+function setAggregationGroupVariableValue(groupIndex: number, variableIndex: number, value: string | number | boolean | null | undefined) {
+  updateAggregationGroupVariable(groupIndex, variableIndex, { valueMode: 'literal', value: value ?? '' })
+}
+
+function clearAggregationGroupVariableReference(groupIndex: number, variableIndex: number) {
+  updateAggregationGroupVariable(groupIndex, variableIndex, { valueMode: 'literal', value: '' })
+}
+
+function removeAggregationGroupVariable(groupIndex: number, variableIndex: number) {
+  const groups = aggregationGroupRows()
+  const group = groups[groupIndex]
+  if (!group) return
+  const nextVariables = group.variables.filter((_, index) => index !== variableIndex)
+  persistAggregationGroups(groups.map((item, index) => index === groupIndex
+    ? { ...item, variables: nextVariables.length > 0 ? nextVariables : [{ valueMode: 'literal', value: '' }] }
+    : item))
+  if (activeStructuredVariableTarget.value === `aggregation:${groupIndex}:${variableIndex}`) {
+    activeStructuredVariableTarget.value = ''
+    activeStructuredVariableGroupKey.value = ''
+    structuredVariableSearch.value = ''
+  }
+}
+
 function persistAggregationSources(rows: AggregationSource[]) {
   updateSelectedNode({ config: { sources: rows } })
 }
@@ -6652,6 +6934,11 @@ function variableTypeLabel(type: VariableCatalogType) {
   return compactVariableTypeLabel(type)
 }
 
+function selectOptionLabel(key: string, option: string) {
+  if (key === 'strategy' && option === 'first_non_empty') return '返回每个分组中第一个非空的值'
+  return option
+}
+
 function variableListTypeLabel(type: VariableCatalogType) {
   const labels: Record<VariableCatalogType, string> = {
     string: 'String',
@@ -6722,8 +7009,14 @@ function insertStructuredVariableReference(target: string, reference: string) {
   if (target === 'assignment') {
     updateSelectedNode({ config: { sourceValueMode: 'reference', source: reference } })
   } else if (target.startsWith('aggregation:')) {
-    const index = Number(target.split(':')[1])
-    if (Number.isInteger(index)) updateAggregationSource(index, { valueMode: 'reference', value: reference })
+    const [, groupIndexText, variableIndexText] = target.split(':')
+    const groupIndex = Number(groupIndexText)
+    const variableIndex = Number(variableIndexText)
+    if (Number.isInteger(groupIndex) && Number.isInteger(variableIndex)) {
+      updateAggregationGroupVariable(groupIndex, variableIndex, { valueMode: 'reference', value: reference })
+    } else if (Number.isInteger(groupIndex)) {
+      updateAggregationSource(groupIndex, { valueMode: 'reference', value: reference })
+    }
   }
   activeStructuredVariableTarget.value = ''
   activeStructuredVariableGroupKey.value = ''
@@ -11074,6 +11367,150 @@ onUnmounted(() => {
   grid-template-columns: minmax(5rem, 0.75fr) minmax(0, 1.5fr) 2rem;
   gap: 0.5rem;
   align-items: center;
+}
+
+.aggregation-group-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.aggregation-group-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  padding: 0.75rem;
+  border: 0.0625rem solid #dfe3ee;
+  border-radius: 0.625rem;
+  background: #fff;
+}
+
+.aggregation-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 2rem;
+}
+
+.aggregation-group-title {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex: 1;
+}
+
+.aggregation-group-name-display {
+  max-width: 11rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #30364a;
+  font-size: 0.9375rem;
+  font-weight: 900;
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: text;
+}
+
+.aggregation-group-name-input {
+  width: min(11rem, 100%);
+  height: 1.875rem;
+  padding: 0 0.5rem;
+  border: 0.0625rem solid #cfd6e6;
+  border-radius: 0.375rem;
+  color: #30364a;
+  font-size: 0.9375rem;
+  font-weight: 900;
+  outline: 0;
+}
+
+.aggregation-group-name-input:focus {
+  border-color: #5158ff;
+  box-shadow: 0 0 0 0.125rem rgba(81, 88, 255, 0.12);
+}
+
+.aggregation-group-type {
+  flex: 0 0 auto;
+}
+
+.aggregation-group-info {
+  width: 1rem;
+  height: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0.0625rem solid #8991a5;
+  border-radius: 999rem;
+  color: #8991a5;
+  font-size: 0.6875rem;
+  font-weight: 900;
+}
+
+.aggregation-group-variable-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.aggregation-group-variable-row {
+  display: grid;
+  grid-template-columns: 1.25rem minmax(0, 1fr) 2rem;
+  gap: 0.375rem;
+  align-items: center;
+}
+
+.aggregation-row-handle {
+  color: #9aa3b8;
+  font-size: 0.9375rem;
+  line-height: 1;
+  text-align: center;
+}
+
+.aggregation-add-group {
+  min-height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: #e9ebff;
+  color: #5158ff;
+  font-size: 0.875rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.aggregation-add-group svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.aggregation-output-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.aggregation-output-row {
+  min-height: 2.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0 0.75rem;
+  border: 0.0625rem solid #dfe3ee;
+  border-radius: 0.5rem;
+  background: #fff;
+}
+
+.aggregation-output-row strong {
+  color: #30364a;
+  font-size: 0.875rem;
+  font-weight: 800;
 }
 
 .human-input-schema-header,

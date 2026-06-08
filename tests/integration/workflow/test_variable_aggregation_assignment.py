@@ -7,6 +7,17 @@ from app.main import app
 
 
 class WorkflowVariableAggregationAssignmentTest(unittest.TestCase):
+    def test_variable_aggregation_groups_emit_each_group_first_non_empty_value(self) -> None:
+        with TestClient(app) as client:
+            workflow = _create_grouped_variable_aggregation_workflow(client)
+            response = client.post(
+                f"/api/v1/workflows/{workflow['id']}/runs",
+                json={"input": {"primary": "", "fallback": "vip refund", "region": "CN"}},
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["data"]["output"], {"final": "Group1=vip refund;Group2=CN"})
+
     def test_workflow_aggregates_branch_like_values_and_assigns_flow_variable(self) -> None:
         with TestClient(app) as client:
             workflow = _create_variable_workflow(client)
@@ -85,6 +96,61 @@ def _create_variable_workflow(client: TestClient) -> dict[str, object]:
                 {"sourceNodeKey": "start", "targetNodeKey": "variable_aggregation_1", "condition": None},
                 {"sourceNodeKey": "variable_aggregation_1", "targetNodeKey": "variable_assign_1", "condition": None},
                 {"sourceNodeKey": "variable_assign_1", "targetNodeKey": "end", "condition": None},
+            ],
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["data"]
+
+
+def _create_grouped_variable_aggregation_workflow(client: TestClient) -> dict[str, object]:
+    response = client.post(
+        "/api/v1/workflows",
+        json={
+            "name": f"Grouped Variable Aggregation Workflow {datetime.now().timestamp()}",
+            "description": "",
+            "nodes": [
+                {"nodeKey": "start", "type": "START", "name": "Start", "config": {}},
+                {
+                    "nodeKey": "variable_aggregation_1",
+                    "type": "VARIABLE_AGGREGATION",
+                    "name": "变量聚合",
+                    "config": {
+                        "strategy": "first_non_empty",
+                        "groups": [
+                            {
+                                "name": "Group1",
+                                "type": "string",
+                                "variables": [
+                                    {"value": "{{start.primary}}"},
+                                    {"value": "{{start.fallback}}"},
+                                ],
+                            },
+                            {
+                                "name": "Group2",
+                                "type": "string",
+                                "variables": [{"value": "{{start.region}}"}],
+                            },
+                        ],
+                        "outputParameters": [
+                            {"name": "Group1", "type": "string"},
+                            {"name": "Group2", "type": "string"},
+                        ],
+                    },
+                },
+                {
+                    "nodeKey": "end",
+                    "type": "END",
+                    "name": "End",
+                    "config": {
+                        "outputVariable": "final",
+                        "output": "Group1={{variable_aggregation_1.Group1}};Group2={{variable_aggregation_1.Group2}}",
+                    },
+                },
+            ],
+            "edges": [
+                {"sourceNodeKey": "start", "targetNodeKey": "variable_aggregation_1", "condition": None},
+                {"sourceNodeKey": "variable_aggregation_1", "targetNodeKey": "end", "condition": None},
             ],
         },
     )

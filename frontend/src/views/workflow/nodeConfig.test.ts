@@ -9,6 +9,7 @@ import {
   normalizeStartVariables,
   validateInputParameters,
   normalizeCollectionFields,
+  normalizeAggregationGroups,
   normalizeAggregationSources,
   normalizeHumanInputSchema,
   normalizeIntentRows,
@@ -96,8 +97,17 @@ describe('workflow node config schema', () => {
     expect(getNodeConfigSchema('JSON_PARSE').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual(
       expect.arrayContaining(['source', 'fieldMap', 'outputParameters']),
     )
+    expect(getNodeConfigSchema('VARIABLE_AGGREGATION').sections.map((section) => section.title)).toEqual([
+      '聚合策略',
+      '变量分组',
+      '输出',
+      '高级/兼容配置',
+    ])
     expect(getNodeConfigSchema('VARIABLE_AGGREGATION').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual(
-      expect.arrayContaining(['sources', 'strategy', 'defaultValue', 'outputParameters']),
+      expect.arrayContaining(['strategy', 'aggregationGroups', 'aggregationOutputs']),
+    )
+    expect(getNodeConfigSchema('VARIABLE_AGGREGATION').sections.flatMap((section) => section.fields.map((field) => field.key))).not.toEqual(
+      expect.arrayContaining(['inputParameters', 'sources', 'defaultValue', 'separator']),
     )
     expect(getNodeConfigSchema('VARIABLE_ASSIGN').sections.map((section) => section.title)).toEqual(['输入', '输出'])
     expect(getNodeConfigSchema('VARIABLE_ASSIGN').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual(
@@ -306,7 +316,7 @@ describe('workflow node config schema', () => {
   it('uses structured editors for data and structured nodes instead of raw JSON in basic panels', () => {
     const expectations = [
       { type: 'JSON_PARSE', structuredType: 'json-field-mappings', rawKeys: ['fieldMap'], advancedRawKeys: ['fieldMap'] },
-      { type: 'VARIABLE_AGGREGATION', structuredType: 'aggregation-sources', rawKeys: ['sources'], advancedRawKeys: ['sources'] },
+      { type: 'VARIABLE_AGGREGATION', structuredType: 'aggregation-groups', rawKeys: ['groups', 'sources'], advancedRawKeys: ['sources'] },
       { type: 'VARIABLE_ASSIGN', structuredType: 'variable-assignment', rawKeys: ['targetScope', 'targetVariable', 'source', 'writeMode'], advancedRawKeys: [] },
       { type: 'HUMAN_INPUT', structuredType: 'human-input-schema', rawKeys: ['inputSchema'], advancedRawKeys: ['inputSchema'] },
     ] as const
@@ -347,6 +357,42 @@ describe('workflow node config schema', () => {
       { name: 'fallback', valueMode: 'literal', value: 'vip' },
     ])
 
+    expect(normalizeAggregationGroups({
+      groups: [
+        {
+          name: 'Group1',
+          type: 'string',
+          variables: [{ value: '{{start.primary}}' }, { value: 'vip' }],
+        },
+      ],
+    })).toEqual([
+      {
+        name: 'Group1',
+        type: 'string',
+        variables: [
+          { valueMode: 'reference', value: '{{start.primary}}' },
+          { valueMode: 'literal', value: 'vip' },
+          { valueMode: 'literal', value: '' },
+        ],
+      },
+    ])
+
+    expect(normalizeAggregationGroups({
+      outputVariable: 'selected',
+      sources: [
+        { name: 'primary', value: '{{start.primary}}' },
+        { name: 'fallback', value: 'vip' },
+      ],
+    })[0]).toEqual({
+      name: 'selected',
+      type: 'string',
+      variables: [
+        { valueMode: 'reference', value: '{{start.primary}}' },
+        { valueMode: 'literal', value: 'vip' },
+        { valueMode: 'literal', value: '' },
+      ],
+    })
+
     expect(normalizeHumanInputSchema({
       inputSchema: '[{"name":"approved","type":"boolean","required":true,"description":"是否通过"}]',
     })).toEqual([
@@ -373,11 +419,14 @@ describe('workflow node config schema', () => {
   })
 
   it('adds a shared input parameter editor field to runnable middle node schemas', () => {
-    for (const type of ['LLM', 'KNOWLEDGE', 'API_CALL', 'CODE', 'TEXT_PROCESS', 'JSON_PARSE', 'VARIABLE_AGGREGATION', 'INTENT_RECOGNITION', 'MESSAGE', 'QUESTION', 'HUMAN_INPUT', 'INFORMATION_COLLECTION', 'TOOL_CALL', 'EXECUTE_WORKFLOW', 'AGENT_CALL', 'TRANSFER_TO_HUMAN'] as const) {
+    for (const type of ['LLM', 'KNOWLEDGE', 'API_CALL', 'CODE', 'TEXT_PROCESS', 'JSON_PARSE', 'INTENT_RECOGNITION', 'MESSAGE', 'QUESTION', 'HUMAN_INPUT', 'INFORMATION_COLLECTION', 'TOOL_CALL', 'EXECUTE_WORKFLOW', 'AGENT_CALL', 'TRANSFER_TO_HUMAN'] as const) {
       expect(getNodeConfigSchema(type).sections.flatMap((section) => section.fields.map((field) => field.key))).toContain(
         'inputParameters',
       )
     }
+    expect(getNodeConfigSchema('VARIABLE_AGGREGATION').sections.flatMap((section) => section.fields.map((field) => field.key))).not.toContain(
+      'inputParameters',
+    )
     expect(getNodeConfigSchema('VARIABLE_ASSIGN').sections.flatMap((section) => section.fields.map((field) => field.key))).not.toContain(
       'inputParameters',
     )
