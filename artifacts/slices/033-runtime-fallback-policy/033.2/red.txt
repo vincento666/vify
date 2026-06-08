@@ -1,0 +1,135 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/vincento/work/develop/hify
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 3 items
+
+tests/unit/runtime_lab/test_explicit_handoff_signals.py .F           [ 66%]
+tests/integration/runtime_lab/test_runtime_lab_handoff_policy.py F       [100%]
+
+=================================== FAILURES ===================================
+_ ExplicitHandoffSignalTest.test_complaint_compliance_safety_and_unsupported_phrases_recall_handoff (message='我要投诉你们') _
+
+self = <test_explicit_handoff_signals.ExplicitHandoffSignalTest testMethod=test_complaint_compliance_safety_and_unsupported_phrases_recall_handoff>
+
+    def test_complaint_compliance_safety_and_unsupported_phrases_recall_handoff(self) -> None:
+        examples = (
+            ("我要投诉你们", "COMPLAINT", "投诉"),
+            ("我要找民航局监管", "COMPLIANCE", "民航局"),
+            ("我要报警处理这个安全事故", "SAFETY", "报警"),
+            ("这个机器人处理不了", "UNSUPPORTED", "这个机器人处理不了"),
+        )
+    
+        for message, reason_code, matched_term in examples:
+            with self.subTest(message=message):
+                candidates = _detect(message)
+    
+>               self.assertEqual(candidates[0].candidate_type, CandidateType.HANDOFF_TO_HUMAN)
+                                 ^^^^^^^^^^^^^
+E               IndexError: list index out of range
+
+tests/unit/runtime_lab/test_explicit_handoff_signals.py:29: IndexError
+_ ExplicitHandoffSignalTest.test_complaint_compliance_safety_and_unsupported_phrases_recall_handoff (message='我要找民航局监管') _
+
+self = <test_explicit_handoff_signals.ExplicitHandoffSignalTest testMethod=test_complaint_compliance_safety_and_unsupported_phrases_recall_handoff>
+
+    def test_complaint_compliance_safety_and_unsupported_phrases_recall_handoff(self) -> None:
+        examples = (
+            ("我要投诉你们", "COMPLAINT", "投诉"),
+            ("我要找民航局监管", "COMPLIANCE", "民航局"),
+            ("我要报警处理这个安全事故", "SAFETY", "报警"),
+            ("这个机器人处理不了", "UNSUPPORTED", "这个机器人处理不了"),
+        )
+    
+        for message, reason_code, matched_term in examples:
+            with self.subTest(message=message):
+                candidates = _detect(message)
+    
+>               self.assertEqual(candidates[0].candidate_type, CandidateType.HANDOFF_TO_HUMAN)
+                                 ^^^^^^^^^^^^^
+E               IndexError: list index out of range
+
+tests/unit/runtime_lab/test_explicit_handoff_signals.py:29: IndexError
+_ ExplicitHandoffSignalTest.test_complaint_compliance_safety_and_unsupported_phrases_recall_handoff (message='我要报警处理这个安全事故') _
+
+self = <test_explicit_handoff_signals.ExplicitHandoffSignalTest testMethod=test_complaint_compliance_safety_and_unsupported_phrases_recall_handoff>
+
+    def test_complaint_compliance_safety_and_unsupported_phrases_recall_handoff(self) -> None:
+        examples = (
+            ("我要投诉你们", "COMPLAINT", "投诉"),
+            ("我要找民航局监管", "COMPLIANCE", "民航局"),
+            ("我要报警处理这个安全事故", "SAFETY", "报警"),
+            ("这个机器人处理不了", "UNSUPPORTED", "这个机器人处理不了"),
+        )
+    
+        for message, reason_code, matched_term in examples:
+            with self.subTest(message=message):
+                candidates = _detect(message)
+    
+>               self.assertEqual(candidates[0].candidate_type, CandidateType.HANDOFF_TO_HUMAN)
+                                 ^^^^^^^^^^^^^
+E               IndexError: list index out of range
+
+tests/unit/runtime_lab/test_explicit_handoff_signals.py:29: IndexError
+_ ExplicitHandoffSignalTest.test_complaint_compliance_safety_and_unsupported_phrases_recall_handoff (message='这个机器人处理不了') _
+
+self = <test_explicit_handoff_signals.ExplicitHandoffSignalTest testMethod=test_complaint_compliance_safety_and_unsupported_phrases_recall_handoff>
+
+    def test_complaint_compliance_safety_and_unsupported_phrases_recall_handoff(self) -> None:
+        examples = (
+            ("我要投诉你们", "COMPLAINT", "投诉"),
+            ("我要找民航局监管", "COMPLIANCE", "民航局"),
+            ("我要报警处理这个安全事故", "SAFETY", "报警"),
+            ("这个机器人处理不了", "UNSUPPORTED", "这个机器人处理不了"),
+        )
+    
+        for message, reason_code, matched_term in examples:
+            with self.subTest(message=message):
+                candidates = _detect(message)
+    
+>               self.assertEqual(candidates[0].candidate_type, CandidateType.HANDOFF_TO_HUMAN)
+E               AssertionError: <CandidateType.CLARIFY: 'CLARIFY'> != <CandidateType.HANDOFF_TO_HUMAN: 'HANDOFF_TO_HUMAN'>
+
+tests/unit/runtime_lab/test_explicit_handoff_signals.py:29: AssertionError
+_ ExplicitHandoffSignalTest.test_human_support_phrase_recalls_handoff_candidate _
+
+self = <test_explicit_handoff_signals.ExplicitHandoffSignalTest testMethod=test_human_support_phrase_recalls_handoff_candidate>
+
+    def test_human_support_phrase_recalls_handoff_candidate(self) -> None:
+        candidates = _detect("我要人工客服")
+    
+>       self.assertEqual(candidates[0].candidate_type, CandidateType.HANDOFF_TO_HUMAN)
+                         ^^^^^^^^^^^^^
+E       IndexError: list index out of range
+
+tests/unit/runtime_lab/test_explicit_handoff_signals.py:12: IndexError
+_ RuntimeLabHandoffPolicyTest.test_active_sop_explicit_handoff_is_hard_stop_and_preserves_task_state _
+
+self = <test_runtime_lab_handoff_policy.RuntimeLabHandoffPolicyTest testMethod=test_active_sop_explicit_handoff_is_hard_stop_and_preserves_task_state>
+
+    def test_active_sop_explicit_handoff_is_hard_stop_and_preserves_task_state(self) -> None:
+        with _session() as session:
+            service = RuntimeLabService(RuntimeLabRepository(session))
+            runtime_session = service.create_session()
+            session_id = int(runtime_session["id"])
+    
+            started = service.handle_message(session_id, "我要退票")
+            handoff = service.handle_message(session_id, "我要人工客服")
+    
+            self.assertEqual(started.route_decision.action, "START_SOP")
+>           self.assertEqual(handoff.route_decision.action, "HANDOFF_TO_HUMAN")
+E           AssertionError: 'CONTINUE_ACTIVE_SOP' != 'HANDOFF_TO_HUMAN'
+E           - CONTINUE_ACTIVE_SOP
+E           + HANDOFF_TO_HUMAN
+
+tests/integration/runtime_lab/test_runtime_lab_handoff_policy.py:25: AssertionError
+=========================== short test summary info ============================
+SUBFAILED(message='我要投诉你们') tests/unit/runtime_lab/test_explicit_handoff_signals.py::ExplicitHandoffSignalTest::test_complaint_compliance_safety_and_unsupported_phrases_recall_handoff
+SUBFAILED(message='我要找民航局监管') tests/unit/runtime_lab/test_explicit_handoff_signals.py::ExplicitHandoffSignalTest::test_complaint_compliance_safety_and_unsupported_phrases_recall_handoff
+SUBFAILED(message='我要报警处理这个安全事故') tests/unit/runtime_lab/test_explicit_handoff_signals.py::ExplicitHandoffSignalTest::test_complaint_compliance_safety_and_unsupported_phrases_recall_handoff
+SUBFAILED(message='这个机器人处理不了') tests/unit/runtime_lab/test_explicit_handoff_signals.py::ExplicitHandoffSignalTest::test_complaint_compliance_safety_and_unsupported_phrases_recall_handoff
+FAILED tests/unit/runtime_lab/test_explicit_handoff_signals.py::ExplicitHandoffSignalTest::test_human_support_phrase_recalls_handoff_candidate
+FAILED tests/integration/runtime_lab/test_runtime_lab_handoff_policy.py::RuntimeLabHandoffPolicyTest::test_active_sop_explicit_handoff_is_hard_stop_and_preserves_task_state
+========================= 6 failed, 1 passed in 0.45s ==========================

@@ -166,7 +166,29 @@ handoff through this action instead of creating independent side effects.
 
 ## Specification Sign-off
 
-Status: ready for implementation.
+Status: complete.
 
-This spec is scoped and numbered. It may be implemented before `036` and must
-not absorb any FAQ, RAG, or Agent fallback work reserved for `036-039`.
+Completion evidence:
+
+- `033.1/red.txt`, `033.1/unit.txt`, and `033.1/regression.txt`
+  cover the first-class handoff action contract.
+- `033.2/red.txt`, `033.2/unit-integration.txt`, and
+  `033.2/regression.txt` cover explicit hard-stop trigger templates and active
+  task state preservation.
+- `033.3/red.txt`, `033.3/integration.txt`, and `033.3/regression.txt`
+  cover runtime events, context snapshots, optional handoff service integration,
+  and user-facing handoff replies.
+- `033.4/red.txt`, `033.4/contract.txt`, and `033.4/final-targeted.txt`
+  cover the real API contract and runtime-lab/SOP regression gate.
+- `033.4/e2e.txt` covers the API e2e regression gate, including explicit
+  handoff and existing SOP start/switch/resume/complete behavior.
+- `033.4/browser-uat-result.json`, `033.4/uat.md`, and
+  `033.4/screenshots/browser-uat-handoff.png` cover the Codex in-app Browser
+  Swagger UI UAT. The recorded UAT result has `passed=true`, verifies
+  `HANDOFF_TO_HUMAN`, `explicit_signal`, `USER_REQUEST`, `HANDOFF_DECIDED`,
+  `HANDOFF_REQUESTED`, and preserved active task state.
+
+Full backend pytest was attempted and documented in
+`033.4/full-backend-note.md`; the run reached live provider acceptance tests and
+was stopped as an external/live gate. No FAQ, RAG, or Agent fallback behavior is
+implemented in 033.

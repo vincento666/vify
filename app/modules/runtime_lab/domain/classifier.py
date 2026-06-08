@@ -5,6 +5,7 @@ from typing import Any
 from app.modules.runtime_lab.domain.candidates import CandidateType, RouteCandidate, select_top_candidates
 
 ALLOWED_ACTIONS = {
+    "HANDOFF_TO_HUMAN",
     "CONTINUE_ACTIVE_SOP",
     "START_SOP",
     "SUSPEND_AND_START",
@@ -154,6 +155,8 @@ def _action_for_candidate(candidate: RouteCandidate) -> str:
         return "RESUME_TASK"
     if candidate_type == CandidateType.SOP_INTENT:
         return "START_SOP"
+    if candidate_type == CandidateType.HANDOFF_TO_HUMAN:
+        return "HANDOFF_TO_HUMAN"
     if candidate_type == CandidateType.REJECT_SWITCH_CONTINUE_ACTIVE:
         return "REJECT_SWITCH_CONTINUE_ACTIVE"
     return "CLARIFY"

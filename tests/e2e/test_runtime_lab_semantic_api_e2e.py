@@ -1,34 +1,44 @@
 import unittest
 
+from fastapi import Depends
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
+from app.core.database import get_session
 from app.main import app
+from app.modules.runtime_lab.domain.service import RuntimeLabService
+from app.modules.runtime_lab.infra.repository import RuntimeLabRepository
+from app.modules.runtime_lab.web.router import get_runtime_lab_service
 
 
 class RuntimeLabSemanticApiE2ETest(unittest.TestCase):
     def test_semantic_route_scenarios_return_candidate_evidence(self) -> None:
-        with TestClient(app) as client:
-            alias_session = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
-            alias_start = _message(client, alias_session, "我想退机票")
+        app.dependency_overrides[get_runtime_lab_service] = _fake_runtime_service
+        try:
+            with TestClient(app) as client:
+                alias_session = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
+                alias_start = _message(client, alias_session, "我想退机票")
 
-            conflict_session = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
-            ambiguous = _message(client, conflict_session, "我想退费并开发票")
+                conflict_session = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
+                ambiguous = _message(client, conflict_session, "我想退费并开发票")
 
-            active_session = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
-            _message(client, active_session, "我要退票")
-            active_switch = _message(client, active_session, "我需要报销凭证")
+                active_session = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
+                _message(client, active_session, "我要退票")
+                active_switch = _message(client, active_session, "我需要报销凭证")
 
-            reject_session = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
-            _message(client, reject_session, "我要退票")
-            _message(client, reject_session, "TK-100")
-            rejected = _message(client, reject_session, "我需要报销凭证")
+                reject_session = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
+                _message(client, reject_session, "我要退票")
+                _message(client, reject_session, "TK-100")
+                rejected = _message(client, reject_session, "我需要报销凭证")
 
-            resume_session = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
-            _message(client, resume_session, "我要退票")
-            _message(client, resume_session, "我要开发票")
-            _message(client, resume_session, "INV-200")
-            _message(client, resume_session, "确认")
-            resumed = _message(client, resume_session, "继续处理退票")
+                resume_session = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
+                _message(client, resume_session, "我要退票")
+                _message(client, resume_session, "我要开发票")
+                _message(client, resume_session, "INV-200")
+                _message(client, resume_session, "确认")
+                resumed = _message(client, resume_session, "继续处理退票")
+        finally:
+            app.dependency_overrides.pop(get_runtime_lab_service, None)
 
         self.assertEqual(alias_start["routeDecision"]["action"], "START_SOP")
         self.assertEqual(alias_start["activeTask"]["sopId"], "refund_ticket")
@@ -48,3 +58,7 @@ def _message(client: TestClient, session_id: int, message: str) -> dict:
     )
     assert response.status_code == 200
     return response.json()["data"]
+
+
+def _fake_runtime_service(session: Session = Depends(get_session)) -> RuntimeLabService:
+    return RuntimeLabService(RuntimeLabRepository(session))

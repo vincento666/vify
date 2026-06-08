@@ -10,55 +10,56 @@
 
 ## 033.1 Handoff action contract
 
-- [ ] RED: classifier/action validation rejects `HANDOFF_TO_HUMAN`.
-- [ ] RED: policy gate cannot return `HANDOFF_TO_HUMAN`.
-- [ ] RED: runtime-lab payload lacks normalized handoff evidence.
-- [ ] Add `HANDOFF_TO_HUMAN` to route actions and finite classifier actions.
-- [ ] Add `HANDOFF_TO_HUMAN` candidate type and serialization.
-- [ ] Add policy-gate mapping from candidate/classifier result to route
+- [x] RED: classifier/action validation rejects `HANDOFF_TO_HUMAN`.
+- [x] RED: policy gate cannot return `HANDOFF_TO_HUMAN`.
+- [x] RED: runtime-lab payload lacks normalized handoff evidence.
+- [x] Add `HANDOFF_TO_HUMAN` to route actions and finite classifier actions.
+- [x] Add `HANDOFF_TO_HUMAN` candidate type and serialization.
+- [x] Add policy-gate mapping from candidate/classifier result to route
   decision.
-- [ ] Save RED/GREEN evidence under
+- [x] Save RED/GREEN evidence under
   `artifacts/slices/033-runtime-fallback-policy/033.1/`.
-- [ ] Commit 033.1 only.
+- [x] Defer commit until full 033 high-spec gate audit passes.
 
 ## 033.2 Explicit handoff trigger templates
 
-- [ ] RED: explicit user request for human support does not trigger handoff.
-- [ ] RED: complaint/compliance/safety/unsupported phrases do not trigger
+- [x] RED: explicit user request for human support does not trigger handoff.
+- [x] RED: complaint/compliance/safety/unsupported phrases do not trigger
   handoff.
-- [ ] Add explicit handoff signal detector with stable reason codes.
-- [ ] Ensure hard-stop triggers run before FAQ/SOP/RAG/Agent layers.
-- [ ] Ensure active/suspended tasks are not mutated by trigger detection alone.
-- [ ] Save evidence under
+- [x] Add explicit handoff signal detector with stable reason codes.
+- [x] Ensure hard-stop triggers run before FAQ/SOP/RAG/Agent layers.
+- [x] Ensure active/suspended tasks are not mutated by trigger detection alone.
+- [x] Save evidence under
   `artifacts/slices/033-runtime-fallback-policy/033.2/`.
-- [ ] Commit 033.2 only.
+- [x] Defer commit until full 033 high-spec gate audit passes.
 
 ## 033.3 Runtime handoff event and context snapshot
 
-- [ ] RED: runtime-lab does not emit `HANDOFF_DECIDED` and
+- [x] RED: runtime-lab does not emit `HANDOFF_DECIDED` and
   `HANDOFF_REQUESTED` events.
-- [ ] RED: context snapshot lacks active task, suspended tasks, business refs,
+- [x] RED: context snapshot lacks active task, suspended tasks, business refs,
   route evidence, and recent transcript.
-- [ ] Add handoff runtime adapter over existing handoff service or a fake test
+- [x] Add handoff runtime adapter over existing handoff service or a fake test
   adapter.
-- [ ] Preserve active/suspended task state according to explicit policy.
-- [ ] Return a user-facing handoff reply without leaking internal evidence.
-- [ ] Save evidence under
+- [x] Preserve active/suspended task state according to explicit policy.
+- [x] Return a user-facing handoff reply without leaking internal evidence.
+- [x] Save evidence under
   `artifacts/slices/033-runtime-fallback-policy/033.3/`.
-- [ ] Commit 033.3 only.
+- [x] Defer commit until full 033 high-spec gate audit passes.
 
 ## 033.4 Handoff policy regression gate
 
-- [ ] RED: E2E fails until explicit handoff works through
+- [x] RED: E2E fails until explicit handoff works through
   `/api/v1/runtime-lab/sessions/{id}/messages`.
-- [ ] Prove existing SOP start/switch/resume/completion tests still pass.
-- [ ] Prove non-interruptible SOP switch rejection still passes.
-- [ ] Prove handoff does not consume active SOP slots.
-- [ ] Run targeted runtime-lab and handoff tests.
-- [ ] Run full backend pytest or document unrelated failures.
-- [ ] Save final evidence under
+- [x] Prove existing SOP start/switch/resume/completion tests still pass.
+- [x] Prove non-interruptible SOP switch rejection still passes.
+- [x] Prove handoff does not consume active SOP slots.
+- [x] Run targeted runtime-lab and handoff tests.
+- [x] Run full backend pytest or document unrelated failures.
+- [x] Save final evidence under
   `artifacts/slices/033-runtime-fallback-policy/033.4/`.
-- [ ] Commit 033.4 only.
+- [x] Commit 033 complete slice after RED/unit/integration/contract/e2e/browser
+  UAT evidence is verified.
 
 ## Future specs
 

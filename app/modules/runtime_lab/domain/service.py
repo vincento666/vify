@@ -1,7 +1,7 @@
 import hashlib
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 
 from app.core.errors import BizError, ErrorCode
 from app.modules.runtime_lab.domain.candidates import RouteCandidate, select_top_candidates
@@ -39,6 +39,11 @@ class RuntimeLabCommandResult:
     replayed: bool
 
 
+class HandoffRuntimeService(Protocol):
+    def create_ticket(self, data: dict[str, Any]) -> dict[str, Any]:
+        ...
+
+
 class RuntimeLabService:
     def __init__(
         self,
@@ -46,6 +51,7 @@ class RuntimeLabService:
         router: RuntimeLabRouter | None = None,
         adapter: SopRuntimeAdapter | None = None,
         classifier: Any | None = None,
+        handoff_service: HandoffRuntimeService | None = None,
     ) -> None:
         self._repository = repository
         self._manifests = mock_sop_manifests()
@@ -55,6 +61,7 @@ class RuntimeLabService:
         self._semantic_recall = MockSemanticCandidateRecall(self._manifests)
         self._classifier = classifier or FakeConstrainedIntentClassifier()
         self._policy_gate = PolicyGate(self._adapter)
+        self._handoff_service = handoff_service
 
     def create_session(self) -> dict[str, Any]:
         runtime_session = self._repository.create_session()
@@ -74,6 +81,9 @@ class RuntimeLabService:
         enabled_scope = self._normalize_enabled_sop_ids(enabled_sop_ids)
         decision = self._semantic_decision(message, active_task, suspended_tasks, enabled_scope)
         self._repository.append_event(session_id, "ROUTE_DECISION", _decision_payload(decision))
+
+        if decision.action == "HANDOFF_TO_HUMAN":
+            return self._handoff_turn(session_id, message, decision)
 
         if decision.action == "START_SOP" and decision.target_sop_id is not None:
             result = self._adapter.start_sop(
@@ -193,6 +203,7 @@ class RuntimeLabService:
             },
             candidates=tuple(candidates),
             allowed_actions=(
+                "HANDOFF_TO_HUMAN",
                 "CONTINUE_ACTIVE_SOP",
                 "START_SOP",
                 "SUSPEND_AND_START",
@@ -409,6 +420,20 @@ class RuntimeLabService:
             "prompt": "是否继续刚才中断的流程？",
         }
 
+    def _session_business_context(self, session_id: int) -> dict[str, Any]:
+        context: dict[str, Any] = {}
+        for task in self._repository.list_tasks(session_id):
+            task_refs = task.get("business_refs")
+            if isinstance(task_refs, dict):
+                context.update(task_refs)
+            checkpoint = self._repository.get_latest_checkpoint(int(task["id"]))
+            if checkpoint is None:
+                continue
+            collected = checkpoint.get("collected")
+            if isinstance(collected, dict):
+                context.update(collected)
+        return context
+
     def _turn(
         self,
         session_id: int,
@@ -424,6 +449,54 @@ class RuntimeLabService:
             resume_offer=resume_offer,
             events=self._repository.list_events(session_id),
         )
+
+    def _handoff_turn(self, session_id: int, message: str, decision: RouteDecision) -> RuntimeLabTurn:
+        self._repository.append_event(session_id, "HANDOFF_DECIDED", _decision_payload(decision))
+        snapshot = self._handoff_context_snapshot(session_id, message, decision)
+        ticket_id: int | None = None
+        if self._handoff_service is not None:
+            ticket = self._handoff_service.create_ticket(
+                {
+                    "session_id": str(session_id),
+                    "conversation_id": f"runtime-lab:{session_id}",
+                    "user_id": "",
+                    "channel": "runtime_lab",
+                    "queue": "general",
+                    "reason": snapshot["reasonCode"],
+                    "priority": "high",
+                    "sla_minutes": 30,
+                    "transcript_snapshot": snapshot["recentTranscript"],
+                    "context_snapshot": snapshot,
+                }
+            )
+            raw_ticket_id = ticket.get("id")
+            ticket_id = int(raw_ticket_id) if raw_ticket_id is not None else None
+        self._repository.append_event(
+            session_id,
+            "HANDOFF_REQUESTED",
+            {"ticketId": ticket_id, "contextSnapshot": snapshot},
+        )
+        return self._turn(session_id, "已为您转接人工客服，请稍候。", decision)
+
+    def _handoff_context_snapshot(
+        self,
+        session_id: int,
+        message: str,
+        decision: RouteDecision,
+    ) -> dict[str, Any]:
+        handoff = decision.handoff or {}
+        active_task = self._repository.get_active_task(session_id)
+        suspended_tasks = self._repository.list_tasks(session_id, statuses={"SUSPENDED"})
+        return {
+            "sourceLayer": handoff.get("sourceLayer") or "system_policy",
+            "reasonCode": handoff.get("reasonCode") or "UNSPECIFIED",
+            "userMessage": message,
+            "activeTaskSummary": _task_summary(active_task),
+            "suspendedTaskSummaries": [_task_summary(task) for task in suspended_tasks],
+            "routeEvidence": _decision_payload(decision),
+            "recentTranscript": self._session_user_history(session_id),
+            "businessRefs": self._session_business_context(session_id),
+        }
 
     def _adapter_request(
         self,
@@ -448,6 +521,27 @@ class RuntimeLabService:
             business_refs=dict(task.get("business_refs") or {}) if task is not None else {},
             metadata={"runtime": "runtime_lab"},
         )
+
+    def _session_user_history(
+        self,
+        session_id: int,
+        *,
+        current_message: str = "",
+        limit: int = 10,
+    ) -> list[dict[str, str]]:
+        history: list[dict[str, str]] = []
+        for event in self._repository.list_events(session_id):
+            if str(event.get("event_type") or "") != "USER_MESSAGE":
+                continue
+            payload = event.get("payload")
+            if not isinstance(payload, dict):
+                continue
+            content = str(payload.get("message") or "").strip()
+            if content:
+                history.append({"role": "user", "content": content})
+        if current_message and history and history[-1]["content"] == current_message:
+            history = history[:-1]
+        return history[-limit:]
 
     def _adapter_failure_turn(
         self,
@@ -483,8 +577,34 @@ def _decision_payload(decision: RouteDecision) -> dict[str, Any]:
         "policyGate": decision.policy_gate,
         "classifierRequest": decision.classifier_request,
         "classifierResult": decision.classifier_result,
-        "finalDecision": decision.final_decision,
+        "finalDecision": decision.final_decision or _final_decision_payload(decision),
+        "handoff": decision.handoff,
     }
+
+
+def _task_summary(task: dict[str, Any] | None) -> dict[str, Any] | None:
+    if task is None:
+        return None
+    return {
+        "taskId": task["id"],
+        "sopId": task["sop_id"],
+        "status": task["status"],
+        "currentStep": task["current_step"],
+        "resumeSummary": task["resume_summary"],
+        "businessRefs": task.get("business_refs") or {},
+    }
+
+
+def _final_decision_payload(decision: RouteDecision) -> dict[str, Any]:
+    payload = {
+        "action": decision.action,
+        "targetSopId": decision.target_sop_id,
+        "activeTaskId": decision.active_task_id,
+    }
+    if decision.handoff:
+        payload["sourceLayer"] = decision.handoff.get("sourceLayer")
+        payload["reasonCode"] = decision.handoff.get("reasonCode")
+    return payload
 
 
 def _request_hash(message: str, enabled_sop_ids: Sequence[str] | None = None) -> str:
@@ -542,9 +662,6 @@ def _with_evidence(
         policy_gate={"stage": stage, "decisionAction": decision.action},
         classifier_request=classifier_input.to_dict() if classifier_input else None,
         classifier_result=classifier_result.to_dict() if classifier_result else None,
-        final_decision={
-            "action": decision.action,
-            "targetSopId": decision.target_sop_id,
-            "activeTaskId": decision.active_task_id,
-        },
+        handoff=decision.handoff,
+        final_decision=_final_decision_payload(decision),
     )

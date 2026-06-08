@@ -99,3 +99,30 @@ Do not start FAQ/RAG/Agent specs until 033 action/event/context contracts pass.
 - no human-agent console;
 - no frontend routing page changes;
 - no autonomous state mutation outside runtime-lab policy.
+
+## Completion Notes
+
+Implemented:
+
+- `HANDOFF_TO_HUMAN` candidate/action support in the finite routing contract.
+- Explicit handoff trigger groups for human support, complaint, compliance,
+  safety, and unsupported-process wording.
+- Runtime handoff branch that emits `HANDOFF_DECIDED` and
+  `HANDOFF_REQUESTED`, builds a context snapshot, optionally calls a one-way
+  handoff service port, and preserves active/suspended task state.
+- API contract evidence that `/api/v1/runtime-lab/sessions/{id}/messages`
+  returns handoff route evidence and does not advance the active SOP.
+
+Evidence is saved under
+`artifacts/slices/033-runtime-fallback-policy/033.1/` through `033.4/`.
+
+Final 033 gates:
+
+- targeted runtime-lab unit/integration/contract: `033.4/final-targeted.txt`
+  (`54 passed`);
+- e2e runtime-lab API regression: `033.4/e2e.txt` (`4 passed`);
+- browser-control UAT: `033.4/uat.md`,
+  `033.4/browser-uat-result.json`, and
+  `033.4/screenshots/browser-uat-handoff.png` (`passed=true`);
+- full backend run: attempted and stopped at external live provider acceptance,
+  documented in `033.4/full-backend-note.md`.

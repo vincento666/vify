@@ -6,6 +6,13 @@ from app.modules.runtime_lab.domain.sop import SopManifest, match_strong_trigger
 
 RESUME_PHRASES = {"continue", "resume", "继续", "继续刚才", "继续第一个"}
 REFUSAL_PHRASES = {"不用了", "不用", "不了", "先这样"}
+HANDOFF_TRIGGER_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("USER_REQUEST", ("转人工", "人工客服", "找人工", "人工处理")),
+    ("COMPLAINT", ("投诉", "主管", "升级处理", "不满意")),
+    ("COMPLIANCE", ("监管", "民航局")),
+    ("SAFETY", ("报警", "安全事故")),
+    ("UNSUPPORTED", ("这个机器人处理不了", "无法办理", "不要机器人")),
+)
 
 
 class ExplicitSignalDetector:
@@ -22,12 +29,35 @@ class ExplicitSignalDetector:
     ) -> list[RouteCandidate]:
         text = message.strip()
         candidates: list[RouteCandidate] = []
+        handoff = self._handoff_candidate(text)
+        if handoff is not None:
+            candidates.append(handoff)
         refusal = self._refusal_candidate(text)
         if refusal is not None:
             candidates.append(refusal)
         candidates.extend(self._resume_candidates(text, suspended_tasks))
         candidates.extend(self._sop_candidates(text, active_task, enabled_sop_ids))
         return select_top_candidates(candidates, top_k)
+
+    def _handoff_candidate(self, text: str) -> RouteCandidate | None:
+        for reason_code, terms in HANDOFF_TRIGGER_GROUPS:
+            matched_terms = tuple(term for term in terms if term in text)
+            if not matched_terms:
+                continue
+            return RouteCandidate(
+                candidate_id=f"handoff:{reason_code}",
+                candidate_type=CandidateType.HANDOFF_TO_HUMAN,
+                target_id=reason_code,
+                display_name="Human handoff",
+                source="explicit_signal",
+                score=1.0,
+                score_breakdown=ScoreBreakdown(keyword=1.0, alias=0.0, semantic=0.0),
+                matched_terms=matched_terms,
+                risk_level="HIGH",
+                requires_classifier=False,
+                reason=f"Explicit handoff trigger: {reason_code}",
+            )
+        return None
 
     def _refusal_candidate(self, text: str) -> RouteCandidate | None:
         matched = next((phrase for phrase in REFUSAL_PHRASES if phrase in text), None)

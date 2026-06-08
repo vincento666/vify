@@ -67,12 +67,8 @@ def format_route_decision(decision: RouteDecision) -> dict[str, Any]:
         "policyGate": decision.policy_gate,
         "classifierRequest": decision.classifier_request,
         "classifierResult": decision.classifier_result,
-        "finalDecision": decision.final_decision
-        or {
-            "action": decision.action,
-            "targetSopId": decision.target_sop_id,
-            "activeTaskId": decision.active_task_id,
-        },
+        "handoff": decision.handoff,
+        "finalDecision": decision.final_decision or _final_decision(decision),
     }
 
 
@@ -82,3 +78,15 @@ def _format_datetime(value: Any) -> str | None:
     if isinstance(value, datetime):
         return value.isoformat()
     return str(value)
+
+
+def _final_decision(decision: RouteDecision) -> dict[str, Any]:
+    payload = {
+        "action": decision.action,
+        "targetSopId": decision.target_sop_id,
+        "activeTaskId": decision.active_task_id,
+    }
+    if decision.handoff:
+        payload["sourceLayer"] = decision.handoff.get("sourceLayer")
+        payload["reasonCode"] = decision.handoff.get("reasonCode")
+    return payload

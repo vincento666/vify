@@ -28,6 +28,8 @@ class PolicyGate:
             return None
         ordered = select_top_candidates(list(candidates), top_k=len(candidates))
         top = ordered[0]
+        if _candidate_type(top) == CandidateType.HANDOFF_TO_HUMAN and top.score >= STRONG_ACCEPT_THRESHOLD:
+            return _handoff_decision(top, "Explicit handoff candidate accepted before classifier")
         distinct_targets = {(str(candidate.candidate_type), candidate.target_id) for candidate in ordered}
         resume_candidate = next(
             (
@@ -75,6 +77,8 @@ class PolicyGate:
             return RouteDecision(action="CLARIFY", reason=result.rationale)
         candidate = _candidate_by_id(candidates, result.selected_candidate_id)
         candidate_type = _candidate_type(candidate)
+        if candidate_type == CandidateType.HANDOFF_TO_HUMAN:
+            return _handoff_decision(candidate, result.rationale)
         if candidate_type == CandidateType.ACTIVE_TASK_CONTINUE:
             return RouteDecision(
                 action="CONTINUE_ACTIVE_SOP",
@@ -160,3 +164,22 @@ def _active_task_id(active_task: Mapping[str, Any] | None) -> int | None:
         return None
     raw = active_task.get("id")
     return int(raw) if raw is not None else None
+
+
+def _handoff_decision(candidate: RouteCandidate, reason: str) -> RouteDecision:
+    return RouteDecision(
+        action="HANDOFF_TO_HUMAN",
+        reason=reason,
+        handoff={
+            "sourceLayer": candidate.source or "system_policy",
+            "reasonCode": candidate.target_id or "UNSPECIFIED",
+            "matchedTerms": list(candidate.matched_terms),
+            "routeEvidence": {
+                "candidateId": candidate.candidate_id,
+                "candidateType": str(candidate.candidate_type),
+                "score": candidate.score,
+                "riskLevel": candidate.risk_level,
+                "reason": candidate.reason,
+            },
+        },
+    )

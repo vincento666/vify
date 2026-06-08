@@ -1,0 +1,48 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/vincento/work/develop/hify
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 3 items
+
+tests/integration/runtime_lab/test_runtime_lab_handoff_policy.py .FF     [100%]
+
+=================================== FAILURES ===================================
+_ RuntimeLabHandoffPolicyTest.test_configured_handoff_service_receives_one_way_context_snapshot _
+
+self = <test_runtime_lab_handoff_policy.RuntimeLabHandoffPolicyTest testMethod=test_configured_handoff_service_receives_one_way_context_snapshot>
+
+    def test_configured_handoff_service_receives_one_way_context_snapshot(self) -> None:
+        with _session() as session:
+            handoff_service = _RecordingHandoffService()
+>           service = RuntimeLabService(RuntimeLabRepository(session), handoff_service=handoff_service)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           TypeError: RuntimeLabService.__init__() got an unexpected keyword argument 'handoff_service'
+
+tests/integration/runtime_lab/test_runtime_lab_handoff_policy.py:65: TypeError
+_ RuntimeLabHandoffPolicyTest.test_handoff_emits_events_context_snapshot_and_user_reply _
+
+self = <test_runtime_lab_handoff_policy.RuntimeLabHandoffPolicyTest testMethod=test_handoff_emits_events_context_snapshot_and_user_reply>
+
+    def test_handoff_emits_events_context_snapshot_and_user_reply(self) -> None:
+        with _session() as session:
+            service = RuntimeLabService(RuntimeLabRepository(session))
+            runtime_session = service.create_session()
+            session_id = int(runtime_session["id"])
+    
+            service.handle_message(session_id, "我要退票")
+            switched = service.handle_message(session_id, "我要开发票")
+            handoff = service.handle_message(session_id, "我要投诉，转人工")
+    
+            self.assertEqual(switched.route_decision.action, "SUSPEND_AND_START")
+>           self.assertEqual(handoff.reply, "已为您转接人工客服，请稍候。")
+E           AssertionError: '暂未匹配到可执行的航空业务流程。' != '已为您转接人工客服，请稍候。'
+E           - 暂未匹配到可执行的航空业务流程。
+E           + 已为您转接人工客服，请稍候。
+
+tests/integration/runtime_lab/test_runtime_lab_handoff_policy.py:43: AssertionError
+=========================== short test summary info ============================
+FAILED tests/integration/runtime_lab/test_runtime_lab_handoff_policy.py::RuntimeLabHandoffPolicyTest::test_configured_handoff_service_receives_one_way_context_snapshot
+FAILED tests/integration/runtime_lab/test_runtime_lab_handoff_policy.py::RuntimeLabHandoffPolicyTest::test_handoff_emits_events_context_snapshot_and_user_reply
+========================= 2 failed, 1 passed in 0.33s ==========================
