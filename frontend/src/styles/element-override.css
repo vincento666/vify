@@ -58,6 +58,12 @@
   --el-font-size-base:   var(--text-base);
   --el-font-size-small:  var(--text-sm);
   --el-font-size-large:  var(--text-lg);
+  --el-font-size-extra-small: var(--text-xs);
+  --el-font-size-extra-large: var(--text-2xl);
+  --el-component-size:       var(--control-height-md);
+  --el-component-size-small: var(--control-height-sm);
+  --el-component-size-large: var(--control-height-lg);
+  --el-dialog-width: var(--dialog-width-md);
 
   /* z-index */
   --el-index-normal:  var(--z-above);

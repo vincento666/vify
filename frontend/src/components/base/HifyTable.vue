@@ -12,8 +12,8 @@
           v-if="col.slot"
           :key="`slot-${col.slot}`"
           :label="col.label"
-          :width="col.width"
-          :min-width="col.minWidth"
+          :width="normalizeElementTableSize(col.width)"
+          :min-width="normalizeElementTableSize(col.minWidth)"
         >
           <template #default="scope">
             <slot :name="col.slot" v-bind="scope" />
@@ -24,14 +24,14 @@
           :key="`prop-${col.prop}`"
           :prop="col.prop"
           :label="col.label"
-          :width="col.width"
-          :min-width="col.minWidth"
+          :width="normalizeElementTableSize(col.width)"
+          :min-width="normalizeElementTableSize(col.minWidth)"
           :show-overflow-tooltip="col.ellipsis ?? true"
         />
       </template>
     </el-table>
 
-    <el-empty v-if="!loading && rows.length === 0" description="暂无数据" :image-size="80" />
+    <el-empty v-if="!loading && rows.length === 0" class="hify-table-empty" description="暂无数据" />
 
     <div v-if="showPagination && total > 0" class="hify-table-pagination">
       <el-pagination
@@ -49,6 +49,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { normalizeElementTableSize } from './hifyTableSizing'
 
 export interface TableColumn {
   label: string
@@ -116,7 +117,11 @@ defineExpose({ refresh })
 .hify-table-wrap {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
+}
+
+.hify-table-empty :deep(.el-empty__image) {
+  width: 5rem;
 }
 .hify-table-pagination {
   display: flex;

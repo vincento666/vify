@@ -7,7 +7,9 @@ import './styles/element-override.css'
 import './styles/global.css'
 import App from './App.vue'
 import router from './router'
+import { installGlobalUiScale } from './composables/useUiScale'
 
+const uiScaleController = installGlobalUiScale()
 const app = createApp(App)
 
 app.use(ElementPlus)
@@ -18,3 +20,9 @@ for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
 }
 
 app.mount('#app')
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    uiScaleController.dispose()
+  })
+}

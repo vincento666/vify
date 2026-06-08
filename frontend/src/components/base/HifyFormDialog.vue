@@ -39,8 +39,8 @@ interface Props {
 }
 
 withDefaults(defineProps<Props>(), {
-  width: '520px',
-  labelWidth: '90px',
+  width: '32.5rem',
+  labelWidth: '5.625rem',
   rules: () => ({}),
 })
 

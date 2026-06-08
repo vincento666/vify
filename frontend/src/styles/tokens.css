@@ -5,6 +5,13 @@
    ============================================================ */
 
 :root {
+  --hify-scale: 1;
+  --hify-font-scale: 1;
+  --hify-space-scale: 1;
+  --hify-control-scale: 1;
+  --hify-panel-scale: 1;
+  --hify-root-font-size: 16px;
+  --hify-viewport-width: 1920px;
 
   /* ── 主色（蓝紫） ──────────────────────────────────────────
      用于：主按钮、链接、选中态、焦点环、进度条
@@ -96,13 +103,13 @@
   --color-info-600:    #2563eb;
 
   /* ── 圆角 ────────────────────────────────────────────────*/
-  --radius-xs:  2px;   /* Tag 内小标记 */
-  --radius-sm:  4px;   /* 徽章、小按钮 */
-  --radius-md:  6px;   /* 按钮、Input、Select（主要使用） */
-  --radius-lg:  8px;   /* 卡片、面板 */
-  --radius-xl:  12px;  /* Modal、Drawer */
-  --radius-2xl: 16px;  /* 大卡片 */
-  --radius-full: 9999px; /* 胶囊按钮、头像 */
+  --radius-xs:  0.125rem;   /* Tag 内小标记 */
+  --radius-sm:  0.25rem;    /* 徽章、小按钮 */
+  --radius-md:  0.375rem;   /* 按钮、Input、Select（主要使用） */
+  --radius-lg:  0.5rem;     /* 卡片、面板 */
+  --radius-xl:  0.75rem;    /* Modal、Drawer */
+  --radius-2xl: 1rem;       /* 大卡片 */
+  --radius-full: 999rem;    /* 胶囊按钮、头像 */
 
   /* ── 阴影 ────────────────────────────────────────────────
      遵循层级语义，不是装饰性阴影
@@ -121,29 +128,29 @@
   /* ── 间距 ────────────────────────────────────────────────
      基于 4px 网格
   ── */
-  --space-1:  4px;
-  --space-2:  8px;
-  --space-3:  12px;
-  --space-4:  16px;
-  --space-5:  20px;
-  --space-6:  24px;
-  --space-8:  32px;
-  --space-10: 40px;
-  --space-12: 48px;
-  --space-16: 64px;
+  --space-1:  0.25rem;
+  --space-2:  0.5rem;
+  --space-3:  0.75rem;
+  --space-4:  1rem;
+  --space-5:  1.25rem;
+  --space-6:  1.5rem;
+  --space-8:  2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
 
   /* ── 字体 ────────────────────────────────────────────────*/
   --font-sans: "Inter", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
   --font-mono: "JetBrains Mono", "Fira Code", "SF Mono", Menlo, monospace;
 
-  --text-xs:   12px;
-  --text-sm:   13px;
-  --text-base: 14px;   /* 正文基准 */
-  --text-md:   15px;
-  --text-lg:   16px;
-  --text-xl:   18px;
-  --text-2xl:  20px;
-  --text-3xl:  24px;
+  --text-xs:   0.75rem;
+  --text-sm:   0.8125rem;
+  --text-base: 0.875rem;   /* 正文基准 */
+  --text-md:   0.9375rem;
+  --text-lg:   1rem;
+  --text-xl:   1.125rem;
+  --text-2xl:  1.25rem;
+  --text-3xl:  1.5rem;
 
   --leading-tight:  1.25;
   --leading-normal: 1.5;
@@ -176,10 +183,20 @@
   --transition-transform: transform var(--duration-slow) var(--ease-spring);
 
   /* ── 布局 ────────────────────────────────────────────────*/
-  --sidebar-width:         220px;
-  --sidebar-width-collapsed: 56px;
-  --header-height:         56px;
-  --content-max-width:     1200px;
+  --sidebar-width:         13.75rem;
+  --sidebar-width-collapsed: 3.5rem;
+  --header-height:         3.5rem;
+  --content-max-width:     75rem;
+
+  --control-height-sm: 1.5rem;
+  --control-height-md: 2rem;
+  --control-height-lg: 2.5rem;
+  --dialog-width-sm: 27.5rem;
+  --dialog-width-md: 32.5rem;
+  --dialog-width-lg: 42.5rem;
+  --form-label-width-sm: 5rem;
+  --form-label-width-md: 5.625rem;
+  --form-label-width-lg: 6.25rem;
 
   /* ── z-index 层级 ─────────────────────────────────────────*/
   --z-base:    0;

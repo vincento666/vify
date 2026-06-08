@@ -25,7 +25,7 @@
           class="nav-item"
           :class="{ active: isNavActive(item) }"
         >
-          <el-icon :size="17"><component :is="item.icon" /></el-icon>
+          <el-icon class="nav-icon"><component :is="item.icon" /></el-icon>
           <transition name="fade">
             <span v-if="!collapsed" class="nav-label">{{ item.label }}</span>
           </transition>
@@ -41,7 +41,7 @@
           <span v-if="!collapsed" class="version">v0.0.1</span>
         </transition>
         <button class="collapse-btn" @click="collapsed = !collapsed">
-          <el-icon :size="15">
+          <el-icon class="collapse-icon">
             <component :is="collapsed ? ArrowRight : ArrowLeft" />
           </el-icon>
         </button>
@@ -53,13 +53,13 @@
     <main class="hify-main">
       <!-- 顶栏 -->
       <div class="hify-topbar">
-        <div class="topbar-breadcrumb">
+        <div v-if="!hideShellBreadcrumb" class="topbar-breadcrumb">
           <span>首页</span>
           <span>/</span>
           <span class="current">{{ currentLabel }}</span>
         </div>
         <div class="topbar-user">
-          <el-avatar :size="32" :style="{ background: 'var(--color-primary-500)' }">A</el-avatar>
+          <el-avatar class="topbar-avatar" :style="{ background: 'var(--color-primary-500)' }">A</el-avatar>
           <span class="topbar-username">Admin</span>
         </div>
       </div>
@@ -99,12 +99,13 @@ const currentLabel = computed(() => {
 })
 
 const isCanvasWorkbenchRoute = computed(() => Boolean(route.meta.canvasWorkbench))
+const hideShellBreadcrumb = computed(() => Boolean(route.meta.hideShellBreadcrumb))
 </script>
 
 <style scoped>
 /* ── 侧边栏容器 ──────────────────────────────────────────── */
 .sidebar {
-  width: 220px;
+  width: var(--sidebar-width);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -113,31 +114,31 @@ const isCanvasWorkbenchRoute = computed(() => Boolean(route.meta.canvasWorkbench
   transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
 }
-.sidebar.collapsed { width: 56px; }
+.sidebar.collapsed { width: var(--sidebar-width-collapsed); }
 
 /* ── Logo ────────────────────────────────────────────────── */
 .sidebar-logo {
-  height: 56px;
+  height: var(--header-height);
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 14px;
+  gap: 0.625rem;
+  padding: 0 0.875rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 .logo-icon {
-  width: 28px;
-  height: 28px;
+  width: 1.75rem;
+  height: 1.75rem;
   flex-shrink: 0;
-  border-radius: 7px;
+  border-radius: 0.4375rem;
   background: linear-gradient(135deg, #6366f1, #8b5cf6);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   color: #fff;
-  box-shadow: 0 0 12px rgba(99, 102, 241, 0.5);
+  box-shadow: 0 0 0.75rem rgba(99, 102, 241, 0.5);
 }
 .logo-text {
   display: flex;
@@ -146,7 +147,7 @@ const isCanvasWorkbenchRoute = computed(() => Boolean(route.meta.canvasWorkbench
   white-space: nowrap;
 }
 .logo-brand {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 700;
   background: linear-gradient(90deg, #818cf8, #a78bfa);
   -webkit-background-clip: text;
@@ -155,7 +156,7 @@ const isCanvasWorkbenchRoute = computed(() => Boolean(route.meta.canvasWorkbench
   line-height: 1.3;
 }
 .logo-sub {
-  font-size: 10px;
+  font-size: 0.625rem;
   color: rgba(255, 255, 255, 0.3);
   letter-spacing: 0.04em;
   line-height: 1.4;
@@ -164,7 +165,7 @@ const isCanvasWorkbenchRoute = computed(() => Boolean(route.meta.canvasWorkbench
 /* ── 导航 ────────────────────────────────────────────────── */
 .sidebar-nav {
   flex: 1;
-  padding: 8px 0;
+  padding: 0.5rem 0;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -172,13 +173,13 @@ const isCanvasWorkbenchRoute = computed(() => Boolean(route.meta.canvasWorkbench
   position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
-  height: 40px;
-  padding: 0 16px;
-  margin: 1px 6px;
-  border-radius: 6px;
+  gap: 0.625rem;
+  height: 2.5rem;
+  padding: 0 1rem;
+  margin: 0.0625rem 0.375rem;
+  border-radius: var(--radius-md);
   color: rgba(255, 255, 255, 0.55);
-  font-size: 13.5px;
+  font-size: 0.84375rem;
   font-weight: 500;
   text-decoration: none;
   white-space: nowrap;
@@ -196,18 +197,21 @@ const isCanvasWorkbenchRoute = computed(() => Boolean(route.meta.canvasWorkbench
 .nav-item.active::before {
   content: '';
   position: absolute;
-  left: -6px;
+  left: -0.375rem;
   top: 25%;
   height: 50%;
-  width: 3px;
+  width: 0.1875rem;
   background: linear-gradient(180deg, #6366f1, #8b5cf6);
-  border-radius: 0 2px 2px 0;
+  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
 }
 /* collapsed 时图标居中 */
 .sidebar.collapsed .nav-item {
   padding: 0;
   justify-content: center;
-  margin: 1px 8px;
+  margin: 0.0625rem 0.5rem;
+}
+.nav-icon {
+  font-size: 1.0625rem;
 }
 .tooltip-anchor {
   position: absolute;
@@ -220,12 +224,12 @@ const isCanvasWorkbenchRoute = computed(() => Boolean(route.meta.canvasWorkbench
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 14px;
+  padding: 0.75rem 0.875rem;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   flex-shrink: 0;
 }
 .version {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: rgba(255, 255, 255, 0.2);
   white-space: nowrap;
 }
@@ -233,15 +237,24 @@ const isCanvasWorkbenchRoute = computed(() => Boolean(route.meta.canvasWorkbench
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 1.625rem;
+  height: 1.625rem;
   flex-shrink: 0;
-  border-radius: 5px;
+  border-radius: 0.3125rem;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: transparent;
   color: rgba(255, 255, 255, 0.4);
   cursor: pointer;
   transition: background-color 0.15s, color 0.15s;
+  margin-left: auto;
+}
+.collapse-icon {
+  font-size: 0.9375rem;
+}
+.topbar-avatar {
+  --el-avatar-size: 2rem;
+}
+.topbar-user {
   margin-left: auto;
 }
 .collapse-btn:hover {
