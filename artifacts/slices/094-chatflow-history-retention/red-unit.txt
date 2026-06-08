@@ -1,0 +1,85 @@
+> vitest run src/views/workflow/chatflowRunProfile.test.ts
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ ❯ src/views/workflow/chatflowRunProfile.test.ts (2 tests | 1 failed) 9ms
+   ✓ buildChatflowRunInput > maps a conversation test profile to sys variables and compatibility fields 1ms
+   × buildChatflowRunInput > passes chatflow history retention rounds as runtime metadata 7ms
+     → expected { userMessage: '继续', …(27) } to match object { …(2) }
+(49 matching properties omitted from actual)
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  23:27:34
+   Duration  381ms (transform 26ms, setup 0ms, collect 20ms, tests 9ms, environment 0ms, prepare 55ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/views/workflow/chatflowRunProfile.test.ts > buildChatflowRunInput > passes chatflow history retention rounds as runtime metadata
+AssertionError: expected { userMessage: '继续', …(27) } to match object { …(2) }
+(49 matching properties omitted from actual)
+- Expected
++ Received
+  {
+-   "historyRetentionRounds": 0,
+-   "sys.history_retention_rounds": 0,
++   "USER_INPUT": "继续",
++   "channel": {
++     "id": "web-preview",
++     "name": "web",
++     "source": "web",
++   },
++   "channel.name": "web",
++   "channel.source": "web",
++   "conversation": {
++     "last_message": "继续",
++     "topic": "conv-1",
++   },
++   "conversation.last_message": "继续",
++   "conversation.topic": "conv-1",
++   "global": {
++     "brand": "Hify",
++     "locale": "zh-CN",
++   },
++   "global.brand": "Hify",
++   "global.locale": "zh-CN",
++   "input": {
++     "payload": "继续",
++     "trace_id": "msg-1780932454815",
++   },
++   "input.payload": "继续",
++   "input.trace_id": "msg-1780932454815",
++   "sys": {
++     "channel": "web",
++     "channel_id": "web-preview",
++     "conversation_id": "conv-1",
++     "conversation_name": "conv-1",
++     "files": [],
++     "message_id": "msg-1780932454815",
++     "now": "2026-06-08T15:27:34.815Z",
++     "query": "继续",
++     "round": 2,
++     "user_id": "user-1",
++   },
++   "sys.channel": "web",
++   "sys.channel_id": "web-preview",
++   "sys.conversation_id": "conv-1",
++   "sys.conversation_name": "conv-1",
++   "sys.files": [],
++   "sys.message_id": "msg-1780932454815",
++   "sys.now": "2026-06-08T15:27:34.815Z",
++   "sys.query": "继续",
++   "sys.round": 2,
++   "sys.user_id": "user-1",
++   "user": {
++     "name": "user-1",
++     "vip_level": "standard",
++   },
++   "user.name": "user-1",
++   "user.vip_level": "standard",
++   "userMessage": "继续",
+  }
+ ❯ src/views/workflow/chatflowRunProfile.test.ts:43:19
+     41|     })
+     42| 
+     43|     expect(input).toMatchObject({
+       |                   ^
+     44|       'sys.history_retention_rounds': 0,
+     45|       historyRetentionRounds: 0,
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯

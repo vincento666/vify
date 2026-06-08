@@ -1,0 +1,10 @@
+> vitest run src/views/workflow/chatflowRunProfile.test.ts src/remScaleClosure.test.ts src/views/workflow/workflowCanvasRemGovernance.test.ts
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ ✓ src/remScaleClosure.test.ts (1 test) 8ms
+ ✓ src/views/workflow/chatflowRunProfile.test.ts (2 tests) 2ms
+ ✓ src/views/workflow/workflowCanvasRemGovernance.test.ts (2 tests) 5ms
+ Test Files  3 passed (3)
+      Tests  5 passed (5)
+   Start at  23:32:52
+   Duration  300ms (transform 57ms, setup 0ms, collect 59ms, tests 16ms, environment 0ms, prepare 238ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
