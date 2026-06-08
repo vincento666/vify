@@ -994,12 +994,27 @@
                   <span class="condition-drag-handle" aria-hidden="true">⋮⋮</span>
                   <span class="condition-branch-kind">{{ conditionBranchKindLabel(branchIndex) }}</span>
                   <span class="condition-branch-priority">优先级 {{ branchIndex + 1 }}</span>
+                  <button
+                    v-if="editingConditionBranchNameIndex !== branchIndex"
+                    type="button"
+                    class="condition-branch-title"
+                    data-testid="condition-branch-title"
+                    :aria-label="`编辑分支名称 ${branch.name}`"
+                    @click="startConditionBranchNameEdit(branchIndex)"
+                  >
+                    <strong>{{ branch.name }}</strong>
+                    <span>点击编辑</span>
+                  </button>
                   <el-input
+                    v-else
                     :model-value="branch.name"
                     aria-label="分支名称"
                     class="condition-branch-name-input"
                     placeholder="点击填写分支名称"
                     @update:model-value="setConditionBranchName(branchIndex, $event)"
+                    @blur="stopConditionBranchNameEdit"
+                    @keydown.enter="stopConditionBranchNameEdit"
+                    @keydown.esc="stopConditionBranchNameEdit"
                   />
                   <button type="button" class="output-row-icon" aria-label="删除分支" @click="removeConditionBranch(branchIndex)">
                     <XIcon aria-hidden="true" />
@@ -1207,11 +1222,26 @@
               </button>
               <div class="condition-default-row" data-testid="condition-default-card">
                 <span class="condition-branch-kind">否则</span>
+                <button
+                  v-if="!editingConditionDefaultName"
+                  type="button"
+                  class="condition-branch-title condition-default-title"
+                  data-testid="condition-default-title"
+                  :aria-label="`编辑否则分支名称 ${conditionDefaultBranchName(selectedNode.config)}`"
+                  @click="startConditionDefaultNameEdit"
+                >
+                  <strong>{{ conditionDefaultBranchName(selectedNode.config) }}</strong>
+                  <span>点击编辑</span>
+                </button>
                 <el-input
+                  v-else
                   :model-value="conditionDefaultBranchName(selectedNode.config)"
                   aria-label="否则分支名称"
                   placeholder="点击填写默认分支名称"
                   @update:model-value="setConditionDefaultBranchName($event)"
+                  @blur="stopConditionDefaultNameEdit"
+                  @keydown.enter="stopConditionDefaultNameEdit"
+                  @keydown.esc="stopConditionDefaultNameEdit"
                 />
               </div>
             </div>
@@ -3519,6 +3549,8 @@ const selectedNodeKey = ref('')
 const selectedEdgeId = ref('')
 const hoveredEdgeId = ref('')
 const edgeInsertPaletteId = ref('')
+const editingConditionBranchNameIndex = ref<number | null>(null)
+const editingConditionDefaultName = ref(false)
 const paletteOpen = ref(false)
 const nodePaletteSearch = ref('')
 const resourcePanelCollapsed = ref(false)
@@ -4725,6 +4757,8 @@ function handleNodeClick(event: any) {
   selectedEdgeId.value = ''
   hoveredEdgeId.value = ''
   edgeInsertPaletteId.value = ''
+  editingConditionBranchNameIndex.value = null
+  editingConditionDefaultName.value = false
   activeVariableField.value = ''
   activeInputParameterIndex.value = null
   activeInputVariableGroupKey.value = ''
@@ -4751,6 +4785,8 @@ function handlePaneClick() {
   selectedEdgeId.value = ''
   hoveredEdgeId.value = ''
   edgeInsertPaletteId.value = ''
+  editingConditionBranchNameIndex.value = null
+  editingConditionDefaultName.value = false
   paletteOpen.value = false
   closeVariablePickers()
   modelPickerOpen.value = false
@@ -5676,8 +5712,26 @@ function setConditionBranchName(branchIndex: number, value: string | number) {
   ))
 }
 
+function startConditionBranchNameEdit(branchIndex: number) {
+  editingConditionBranchNameIndex.value = branchIndex
+  editingConditionDefaultName.value = false
+}
+
+function stopConditionBranchNameEdit() {
+  editingConditionBranchNameIndex.value = null
+}
+
 function setConditionDefaultBranchName(value: string | number) {
   updateSelectedNode({ config: { defaultBranchName: String(value) } })
+}
+
+function startConditionDefaultNameEdit() {
+  editingConditionDefaultName.value = true
+  editingConditionBranchNameIndex.value = null
+}
+
+function stopConditionDefaultNameEdit() {
+  editingConditionDefaultName.value = false
 }
 
 function setConditionBranchLogic(branchIndex: number, value: string) {
@@ -10140,7 +10194,45 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.condition-branch-name-input :deep(.el-input__wrapper) {
+.condition-branch-title {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 2.25rem;
+  padding: 0 0.625rem;
+  border: 0.0625rem solid transparent;
+  border-radius: 0.5rem;
+  background: #f8f9fc;
+  color: #30364a;
+  text-align: left;
+  cursor: pointer;
+}
+
+.condition-branch-title:hover {
+  border-color: #d8def4;
+  background: #f4f6ff;
+}
+
+.condition-branch-title strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.9375rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.condition-branch-title span {
+  flex: 0 0 auto;
+  color: #8b93a7;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.condition-branch-name-input :deep(.el-input__wrapper),
+.condition-default-row :deep(.el-input__wrapper) {
   background: #f8f9fc;
 }
 
@@ -10226,10 +10318,8 @@ onUnmounted(() => {
   background: #fff;
 }
 
-.condition-default-row label {
-  color: #6f778a;
-  font-size: 0.75rem;
-  font-weight: 800;
+.condition-default-title {
+  width: 100%;
 }
 
 .input-parameter-editor {

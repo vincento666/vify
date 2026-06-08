@@ -106,12 +106,16 @@ try {
   await page.getByTestId('node-config-panel').waitFor({ state: 'visible', timeout: 5000 })
   const panelText = await page.getByTestId('node-config-panel').textContent()
   assert(panelText.includes('连接多个下游分支'), `Condition panel must explain selector branch priority, got ${panelText}`)
+  assert(panelText.includes('VIP 客户') && panelText.includes('普通客户'), `Condition panel must visibly render semantic branch names, got ${panelText}`)
   assert(!panelText.includes('全部满足') && !panelText.includes('任一满足'), `Condition panel must not expose generic all/any logic selectors, got ${panelText}`)
   assert(!panelText.includes('输入参数') && !panelText.includes('输出参数'), `Condition panel must not expose generic parameter sections, got ${panelText}`)
 
   await page.getByRole('button', { name: '添加条件分支', exact: true }).click()
   await page.waitForTimeout(200)
-  await page.getByLabel('分支名称', { exact: true }).last().fill('高价值订单')
+  await page.getByTestId('condition-branch-title').last().click()
+  const branchNameInput = page.getByLabel('分支名称', { exact: true }).last()
+  await branchNameInput.fill('高价值订单')
+  await branchNameInput.press('Enter')
   await page.waitForTimeout(200)
 
   labels = await conditionPortLabels(page)
@@ -129,6 +133,8 @@ try {
     (updatedRouterText.match(/高价值订单/g) || []).length === 1,
     `Renamed branch must not leave an extra visible endpoint label, got ${updatedRouterText}`,
   )
+  const updatedPanelText = await page.getByTestId('node-config-panel').textContent()
+  assert(updatedPanelText.includes('高价值订单'), `Renamed branch must remain visible in condition panel header, got ${updatedPanelText}`)
   for (const row of await conditionPortAlignment(page)) {
     assert(row.portCenterY !== null, `Condition branch must have a matching source endpoint after rename, got ${JSON.stringify(row)}`)
     assert(Math.abs(row.blockCenterY - row.portCenterY) <= 4, `Condition source endpoint must stay aligned after rename, got ${JSON.stringify(row)}`)
