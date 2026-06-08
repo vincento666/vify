@@ -490,17 +490,10 @@
                 :position="Position.Right"
                 class="node-port source-port condition-source-port"
                 data-testid="condition-source-port"
+                :data-branch-label="branch.label"
+                :aria-label="`${branch.kind}${branch.label}`"
                 :style="{ top: branch.top }"
               />
-              <span
-                v-for="branch in nodeProps.data.conditionBranches"
-                :key="`label-${branch.handleId}`"
-                class="condition-source-port-label"
-                data-testid="condition-source-port-label"
-                :style="{ top: branch.top }"
-              >
-                {{ branch.label }}
-              </span>
             </template>
             <Handle
               v-else-if="nodeProps.data.type !== 'END'"
@@ -5614,11 +5607,8 @@ function conditionHandleId(key: string) {
   return `condition-${key.replace(/[^a-zA-Z0-9_-]/g, '_') || 'default'}`
 }
 
-function conditionHandleTop(index: number, total: number) {
-  if (total <= 1) return '50%'
-  const offset = (index - (total - 1) / 2) * 1.65
-  const sign = offset < 0 ? '-' : '+'
-  return `calc(50% ${sign} ${Math.abs(offset).toFixed(3)}rem)`
+function conditionHandleTop(index: number) {
+  return `${(5.3125 + index * 3.125).toFixed(4)}rem`
 }
 
 function normalizeConditionBranchesFromConfig(config: Record<string, any> = {}) {
@@ -5659,7 +5649,7 @@ function conditionSourceHandles(config: Record<string, any> = {}): ConditionSour
   return rows.map((row, index) => ({
     ...row,
     handleId: conditionHandleId(row.key),
-    top: conditionHandleTop(index, rows.length),
+    top: conditionHandleTop(index),
   }))
 }
 
@@ -8080,25 +8070,6 @@ onUnmounted(() => {
 
 .condition-source-port {
   z-index: 5;
-}
-
-.condition-source-port-label {
-  position: absolute;
-  right: 0.875rem;
-  max-width: 6rem;
-  overflow: hidden;
-  transform: translateY(-50%);
-  padding: 0.125rem 0.375rem;
-  border: 1px solid #e4e7f2;
-  border-radius: 0.375rem;
-  background: rgba(255, 255, 255, 0.92);
-  color: #6d7486;
-  font-size: 0.6875rem;
-  font-weight: 800;
-  line-height: 1.2;
-  pointer-events: none;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .coze-node:hover .node-port,

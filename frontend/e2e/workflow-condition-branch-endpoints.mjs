@@ -15,8 +15,8 @@ async function unwrap(response, label) {
 }
 
 async function conditionPortLabels(page) {
-  return page.locator('.vue-flow__node[data-id="router"] [data-testid="condition-source-port-label"]').evaluateAll((nodes) =>
-    nodes.map((node) => node.textContent?.trim() || ''),
+  return page.locator('.vue-flow__node[data-id="router"] [data-testid="condition-source-port"]').evaluateAll((nodes) =>
+    nodes.map((node) => node.getAttribute('data-branch-label') || ''),
   )
 }
 
@@ -24,6 +24,21 @@ async function conditionBranchBlocks(page) {
   return page.locator('.vue-flow__node[data-id="router"] [data-testid="condition-branch-block"]').evaluateAll((nodes) =>
     nodes.map((node) => node.textContent?.replace(/\s+/g, ' ').trim() || ''),
   )
+}
+
+async function conditionPortAlignment(page) {
+  return page.locator('.vue-flow__node[data-id="router"]').evaluate((node) => {
+    const blocks = Array.from(node.querySelectorAll('[data-testid="condition-branch-block"]'))
+    const ports = Array.from(node.querySelectorAll('[data-testid="condition-source-port"]'))
+    return blocks.map((block, index) => {
+      const blockRect = block.getBoundingClientRect()
+      const portRect = ports[index]?.getBoundingClientRect()
+      return {
+        blockCenterY: blockRect.top + blockRect.height / 2,
+        portCenterY: portRect ? portRect.top + portRect.height / 2 : null,
+      }
+    })
+  })
 }
 
 const browser = await chromium.launch()
@@ -78,6 +93,14 @@ try {
   )
   const routerText = await routerNode.textContent()
   assert(!routerText.includes('输入') && !routerText.includes('输出'), `Condition card must not render generic input/output rows, got ${routerText}`)
+  assert(
+    (routerText.match(/VIP 客户/g) || []).length === 1 && (routerText.match(/普通客户/g) || []).length === 1,
+    `Condition card must not render duplicate visible endpoint labels, got ${routerText}`,
+  )
+  for (const row of await conditionPortAlignment(page)) {
+    assert(row.portCenterY !== null, `Condition branch must have a matching source endpoint, got ${JSON.stringify(row)}`)
+    assert(Math.abs(row.blockCenterY - row.portCenterY) <= 4, `Condition source endpoint must align with branch block center, got ${JSON.stringify(row)}`)
+  }
 
   await routerNode.click()
   await page.getByTestId('node-config-panel').waitFor({ state: 'visible', timeout: 5000 })
@@ -101,6 +124,15 @@ try {
     branchBlocks.some((text) => text.includes('否则如果') && text.includes('高价值订单')),
     `Renaming a branch header must update the condition card block, got ${JSON.stringify(branchBlocks)}`,
   )
+  const updatedRouterText = await routerNode.textContent()
+  assert(
+    (updatedRouterText.match(/高价值订单/g) || []).length === 1,
+    `Renamed branch must not leave an extra visible endpoint label, got ${updatedRouterText}`,
+  )
+  for (const row of await conditionPortAlignment(page)) {
+    assert(row.portCenterY !== null, `Condition branch must have a matching source endpoint after rename, got ${JSON.stringify(row)}`)
+    assert(Math.abs(row.blockCenterY - row.portCenterY) <= 4, `Condition source endpoint must stay aligned after rename, got ${JSON.stringify(row)}`)
+  }
 
   if (screenshotPath) {
     await page.screenshot({ path: screenshotPath, fullPage: true })
