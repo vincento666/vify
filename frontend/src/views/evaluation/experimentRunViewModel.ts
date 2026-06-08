@@ -25,6 +25,15 @@ export function formatRunSummary(run: RunSummaryInput) {
   }
 }
 
+export function runSummaryMetricItems(run: RunSummaryInput) {
+  const summary = formatRunSummary(run)
+  return [
+    { label: 'Score', value: summary.scoreText },
+    { label: 'Pass', value: summary.passRateText },
+    { label: 'Failed', value: String(run.failedCases) },
+  ]
+}
+
 export function runStatusTone(status: string): 'success' | 'warning' | 'danger' {
   if (status === 'COMPLETED') return 'success'
   if (status === 'FAILED') return 'danger'
