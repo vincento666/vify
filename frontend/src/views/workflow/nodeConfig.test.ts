@@ -83,7 +83,7 @@ describe('workflow node config schema', () => {
       'conditionBranches',
     ])
     expect(getNodeConfigSchema('KNOWLEDGE').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual(
-      expect.arrayContaining(['resourceId', 'query', 'topK', 'legacyResourceDebug', 'outputParameters']),
+      expect.arrayContaining(['resourceId', 'query', 'topK', 'outputParameters']),
     )
     expect(getNodeConfigSchema('API_CALL').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual(
       expect.arrayContaining(['endpoint', 'method', 'headers', 'body', 'timeout', 'outputParameters']),
@@ -95,13 +95,12 @@ describe('workflow node config schema', () => {
       expect.arrayContaining(['operation', 'template', 'pattern', 'replacement', 'outputParameters']),
     )
     expect(getNodeConfigSchema('JSON_PARSE').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual(
-      expect.arrayContaining(['source', 'fieldMap', 'outputParameters']),
+      expect.arrayContaining(['source', 'jsonFieldMappings', 'outputParameters']),
     )
     expect(getNodeConfigSchema('VARIABLE_AGGREGATION').sections.map((section) => section.title)).toEqual([
       '聚合策略',
       '变量分组',
       '输出',
-      '高级/兼容配置',
     ])
     expect(getNodeConfigSchema('VARIABLE_AGGREGATION').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual(
       expect.arrayContaining(['strategy', 'aggregationGroups', 'aggregationOutputs']),
@@ -126,19 +125,19 @@ describe('workflow node config schema', () => {
       expect.arrayContaining(['question', 'answerType', 'options', 'timeoutSeconds', 'outputParameters']),
     )
     expect(getNodeConfigSchema('HUMAN_INPUT').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual(
-      expect.arrayContaining(['prompt', 'inputSchema', 'approvalMode', 'assigneeRole', 'outputParameters']),
+      expect.arrayContaining(['prompt', 'humanInputSchema', 'approvalMode', 'assigneeRole', 'outputParameters']),
     )
     expect(getNodeConfigSchema('INFORMATION_COLLECTION').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual(
       expect.arrayContaining(['inputSource', 'fields', 'collectionKey', 'includeHistory', 'maxRounds', 'streamOutput', 'outputParameters']),
     )
     expect(getNodeConfigSchema('TOOL_CALL').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual(
-      expect.arrayContaining(['resourceId', 'adapterBadge', 'schemaInputMappings', 'retryCount', 'errorBehavior', 'legacyResourceDebug', 'outputParameters']),
+      expect.arrayContaining(['resourceId', 'adapterBadge', 'schemaInputMappings', 'retryCount', 'errorBehavior', 'outputParameters']),
     )
     expect(getNodeConfigSchema('EXECUTE_WORKFLOW').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual(
-      expect.arrayContaining(['resourceId', 'schemaInputMappings', 'legacyResourceDebug', 'outputParameters']),
+      expect.arrayContaining(['resourceId', 'schemaInputMappings', 'outputParameters']),
     )
     expect(getNodeConfigSchema('AGENT_CALL').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual(
-      expect.arrayContaining(['resourceId', 'schemaInputMappings', 'messageTemplate', 'historyMode', 'legacyResourceDebug', 'outputParameters']),
+      expect.arrayContaining(['resourceId', 'schemaInputMappings', 'messageTemplate', 'historyMode', 'outputParameters']),
     )
     expect(getNodeConfigSchema('TRANSFER_TO_HUMAN').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual(
       expect.arrayContaining(['message', 'queue', 'reason', 'priority', 'slaMinutes', 'outputParameters']),
@@ -273,7 +272,6 @@ describe('workflow node config schema', () => {
       '参数映射',
       '错误处理',
       '输出',
-      '高级/兼容配置',
     ])
     expect(toolBasicFields.map((field) => field.key)).toEqual(
       expect.arrayContaining(['resourceId', 'adapterBadge', 'schemaInputMappings', 'retryCount', 'errorBehavior', 'outputParameters']),
@@ -304,21 +302,49 @@ describe('workflow node config schema', () => {
     )
   })
 
-  it('shows legacy resource technical fields as read-only debug data, not editable raw controls', () => {
+  it('does not expose advanced compatibility sections in node config panels', () => {
+    const nodeTypes = [
+      'START',
+      'END',
+      'LLM',
+      'CONDITION',
+      'KNOWLEDGE',
+      'API_CALL',
+      'TOOL_CALL',
+      'EXECUTE_WORKFLOW',
+      'AGENT_CALL',
+      'CODE',
+      'TEXT_PROCESS',
+      'JSON_PARSE',
+      'VARIABLE_AGGREGATION',
+      'VARIABLE_ASSIGN',
+      'HUMAN_INPUT',
+      'INFORMATION_COLLECTION',
+      'INTENT_RECOGNITION',
+      'MESSAGE',
+      'QUESTION',
+      'TRANSFER_TO_HUMAN',
+    ] as const
+
+    for (const type of nodeTypes) {
+      expect(getNodeConfigSchema(type).sections.map((section) => section.title)).not.toContain('高级/兼容配置')
+    }
+  })
+
+  it('hides legacy resource technical fields from node panels', () => {
     for (const type of ['TOOL_CALL', 'KNOWLEDGE', 'EXECUTE_WORKFLOW', 'AGENT_CALL'] as const) {
-      const advanced = getNodeConfigSchema(type).sections.find((section) => section.title === '高级/兼容配置')
-      expect(advanced?.fields).toEqual([
-        { key: 'legacyResourceDebug', label: '兼容数据', type: 'legacy-resource-debug' },
-      ])
+      const fields = getNodeConfigSchema(type).sections.flatMap((section) => section.fields)
+      expect(fields.map((field) => field.key)).not.toContain('legacyResourceDebug')
+      expect(fields.map((field) => field.type)).not.toContain('legacy-resource-debug')
     }
   })
 
   it('uses structured editors for data and structured nodes instead of raw JSON in basic panels', () => {
     const expectations = [
-      { type: 'JSON_PARSE', structuredType: 'json-field-mappings', rawKeys: ['fieldMap'], advancedRawKeys: ['fieldMap'] },
-      { type: 'VARIABLE_AGGREGATION', structuredType: 'aggregation-groups', rawKeys: ['groups', 'sources'], advancedRawKeys: ['sources'] },
+      { type: 'JSON_PARSE', structuredType: 'json-field-mappings', rawKeys: ['fieldMap'], advancedRawKeys: [] },
+      { type: 'VARIABLE_AGGREGATION', structuredType: 'aggregation-groups', rawKeys: ['groups', 'sources'], advancedRawKeys: [] },
       { type: 'VARIABLE_ASSIGN', structuredType: 'variable-assignment', rawKeys: ['targetScope', 'targetVariable', 'source', 'writeMode'], advancedRawKeys: [] },
-      { type: 'HUMAN_INPUT', structuredType: 'human-input-schema', rawKeys: ['inputSchema'], advancedRawKeys: ['inputSchema'] },
+      { type: 'HUMAN_INPUT', structuredType: 'human-input-schema', rawKeys: ['inputSchema'], advancedRawKeys: [] },
     ] as const
 
     for (const expectation of expectations) {

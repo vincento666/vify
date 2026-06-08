@@ -61,7 +61,8 @@ try {
   assert(text.includes('工具'), 'Expected tool section')
   assert(text.includes('参数映射'), 'Expected tool schema mapping section')
   assert(!text.includes('参数值模式'), 'Schema mapping must not expose reference/literal mode selector')
-  assert(text.includes('高级/兼容配置'), 'Expected tool advanced compatibility section')
+  assert(!text.includes('高级/兼容配置'), 'Tool panel must not expose advanced compatibility section')
+  assert(!text.includes('MCP Server IDs'), 'Tool panel must not expose legacy MCP server ids')
   assert(await panel.locator('[data-testid="resource-adapter-badge"]').count() === 1, 'Expected adapter badge')
   assert(await panel.locator('[data-testid="schema-input-mapping-row"]').count() >= 1, 'Expected schema mapping rows')
   assert(await panel.locator('[data-testid="schema-input-variable-chip"]').count() >= 1, 'Expected schema mapping reference to render as a variable chip')
@@ -81,8 +82,7 @@ try {
   assert((await schemaFlyout.getAttribute('data-placement')) === 'left', 'Schema mapping flyout should adapt left near the config panel edge')
   assert(await schemaFlyout.locator('.variable-item-header, .variable-option-main small, .variable-source-icon, svg').count() === 0, 'Schema mapping flyout should only render variable names and type tags')
   await schemaFlyout.locator('[data-testid="schema-input-variable-option"]', { hasText: 'USER_INPUT' }).click()
-  assert(await panel.locator('[data-testid="legacy-resource-debug"] input, [data-testid="legacy-resource-debug"] textarea').count() === 0, 'Expected legacy resource debug data to be read-only')
-  assert(text.indexOf('MCP Server IDs') > text.indexOf('高级/兼容配置'), 'Expected MCP ids only in advanced section')
+  assert(await panel.locator('[data-testid="legacy-resource-debug"]').count() === 0, 'Expected legacy resource debug data to be hidden')
 
   text = await openNode('.coze-node.node-api_call')
   assert(text.includes('API Resource'), 'Expected API Resource selector section')
@@ -93,18 +93,21 @@ try {
   text = await openNode('.coze-node.node-knowledge')
   assert(text.includes('知识库'), 'Expected Knowledge resource section')
   assert(text.includes('检索问题'), 'Expected Knowledge query field')
-  assert(text.indexOf('知识库 ID') > text.indexOf('高级/兼容配置'), 'Expected knowledgeBaseId only in advanced section')
+  assert(!text.includes('高级/兼容配置'), 'Knowledge panel must not expose advanced compatibility section')
+  assert(!text.includes('知识库 ID'), 'Knowledge panel must not expose legacy knowledgeBaseId')
 
   text = await openNode('.coze-node.node-execute_workflow')
   assert(text.includes('工作流'), 'Expected subworkflow selector section')
   assert(text.includes('参数映射'), 'Expected subworkflow mapping section')
-  assert(text.indexOf('目标工作流 ID') > text.indexOf('高级/兼容配置'), 'Expected targetWorkflowId only in advanced section')
+  assert(!text.includes('高级/兼容配置'), 'Subworkflow panel must not expose advanced compatibility section')
+  assert(!text.includes('目标工作流 ID'), 'Subworkflow panel must not expose legacy targetWorkflowId')
 
   text = await openNode('.coze-node.node-agent_call')
   assert(text.includes('智能体'), 'Expected agent selector section')
   assert(text.includes('消息模板'), 'Expected agent message template')
   assert(await panel.locator('[data-testid="schema-input-mapping-editor"]').count() === 1, 'Expected agent mapping editor')
-  assert(text.indexOf('目标智能体 ID') > text.indexOf('高级/兼容配置'), 'Expected targetAgentId only in advanced section')
+  assert(!text.includes('高级/兼容配置'), 'Agent panel must not expose advanced compatibility section')
+  assert(!text.includes('目标智能体 ID'), 'Agent panel must not expose legacy targetAgentId')
 
   const run = await unwrap(await page.request.post(`${baseUrl}/api/v1/workflows/${workflow.id}/runs`, {
     data: { input: { USER_INPUT: 'A-100' } },

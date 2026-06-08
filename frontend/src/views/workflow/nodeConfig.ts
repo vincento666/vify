@@ -243,10 +243,6 @@ const SCHEMAS: Record<WorkflowCanvasNodeType, NodeConfigSchema> = {
           { key: 'topK', label: '召回数量', type: 'number', placeholder: '5' },
         ],
       },
-      {
-        title: '高级/兼容配置',
-        fields: [{ key: 'legacyResourceDebug', label: '兼容数据', type: 'legacy-resource-debug' }],
-      },
       OUTPUT_SECTION,
     ],
   },
@@ -302,10 +298,6 @@ const SCHEMAS: Record<WorkflowCanvasNodeType, NodeConfigSchema> = {
         ],
       },
       OUTPUT_SECTION,
-      {
-        title: '高级/兼容配置',
-        fields: [{ key: 'legacyResourceDebug', label: '兼容数据', type: 'legacy-resource-debug' }],
-      },
     ],
   },
   EXECUTE_WORKFLOW: {
@@ -324,10 +316,6 @@ const SCHEMAS: Record<WorkflowCanvasNodeType, NodeConfigSchema> = {
         fields: [{ key: 'schemaInputMappings', label: '参数映射', type: 'schema-input-mappings' }],
       },
       OUTPUT_SECTION,
-      {
-        title: '高级/兼容配置',
-        fields: [{ key: 'legacyResourceDebug', label: '兼容数据', type: 'legacy-resource-debug' }],
-      },
     ],
   },
   AGENT_CALL: {
@@ -350,10 +338,6 @@ const SCHEMAS: Record<WorkflowCanvasNodeType, NodeConfigSchema> = {
         ],
       },
       OUTPUT_SECTION,
-      {
-        title: '高级/兼容配置',
-        fields: [{ key: 'legacyResourceDebug', label: '兼容数据', type: 'legacy-resource-debug' }],
-      },
     ],
   },
   TRANSFER_TO_HUMAN: {
@@ -424,10 +408,6 @@ const SCHEMAS: Record<WorkflowCanvasNodeType, NodeConfigSchema> = {
         fields: [{ key: 'jsonFieldMappings', label: '字段映射', type: 'json-field-mappings' }],
       },
       OUTPUT_SECTION,
-      {
-        title: '高级/兼容配置',
-        fields: [{ key: 'fieldMap', label: '字段映射 JSON', type: 'textarea', placeholder: '[{\"name\":\"order_id\",\"path\":\"$.order.id\"}]' }],
-      },
     ],
   },
   VARIABLE_AGGREGATION: {
@@ -449,10 +429,6 @@ const SCHEMAS: Record<WorkflowCanvasNodeType, NodeConfigSchema> = {
       {
         title: '输出',
         fields: [{ key: 'aggregationOutputs', label: '输出', type: 'aggregation-output-summary' }],
-      },
-      {
-        title: '高级/兼容配置',
-        fields: [{ key: 'sources', label: '旧版 sources JSON', type: 'textarea', placeholder: '[{\"name\":\"route_a\",\"value\":\"{{condition_a.result}}\"}]' }],
       },
     ],
   },
@@ -544,10 +520,6 @@ const SCHEMAS: Record<WorkflowCanvasNodeType, NodeConfigSchema> = {
         fields: [{ key: 'humanInputSchema', label: '输入结构', type: 'human-input-schema' }],
       },
       OUTPUT_SECTION,
-      {
-        title: '高级/兼容配置',
-        fields: [{ key: 'inputSchema', label: '输入结构 JSON', type: 'textarea', placeholder: '[{\"name\":\"approved\",\"type\":\"boolean\"}]' }],
-      },
     ],
   },
   INFORMATION_COLLECTION: {

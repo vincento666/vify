@@ -73,6 +73,7 @@ try {
   assert(panelText.includes('聚合策略'), 'Expected official aggregation strategy section')
   assert(panelText.includes('返回每个分组中第一个非空的值'), 'Expected only first non-empty group strategy copy')
   assert(panelText.includes('新增分组'), 'Expected add group action')
+  assert(!panelText.includes('高级/兼容配置'), 'Variable aggregation must not expose advanced compatibility section')
   assert(!panelText.includes('新增变量'), 'Variable aggregation groups should append a candidate row automatically instead of showing an add-variable button')
   assert(!panelText.includes('输入参数'), 'Variable aggregation must not render as a generic input-parameter node')
   assert(!panelText.includes('来源列表'), 'Variable aggregation must not render the old flat source-list editor')
