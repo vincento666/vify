@@ -44,7 +44,7 @@ describe('workflow canvas controls', () => {
     expect(CANVAS_PANE_CLICK_DISTANCE).toBeGreaterThanOrEqual(3)
   })
 
-  it('keeps endpoint preview radius larger than the magnetic connection radius', () => {
-    expect(CANVAS_ENDPOINT_PREVIEW_RADIUS).toBeGreaterThan(CANVAS_CONNECTION_RADIUS)
+  it('uses the magnetic connection radius for endpoint hover and preview affordances', () => {
+    expect(CANVAS_ENDPOINT_PREVIEW_RADIUS).toBe(CANVAS_CONNECTION_RADIUS)
   })
 })

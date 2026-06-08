@@ -21,7 +21,13 @@ async function portBox(page, selector) {
     const box = element.getBoundingClientRect()
     const matrix = getComputedStyle(element).transform.match(/matrix\(([^,]+)/)
     const scale = matrix ? Number.parseFloat(matrix[1]) : 1
-    return { width: box.width, height: box.height, scale }
+    return {
+      width: box.width,
+      height: box.height,
+      centerX: box.left + box.width / 2,
+      centerY: box.top + box.height / 2,
+      scale,
+    }
   }, selector)
 }
 
@@ -74,15 +80,25 @@ try {
   await node.hover()
   await page.waitForTimeout(160)
   const nodeHoverSource = await portBox(page, sourceSelector)
-  assert(closeToRatio(nodeHoverSource.scale, 1.2), `Expected node hover port scale 1.2x, got ${JSON.stringify(nodeHoverSource)}`)
+  assert(closeToRatio(nodeHoverSource.scale, 2), `Expected node hover port scale 2x, got ${JSON.stringify(nodeHoverSource)}`)
   await maybeScreenshot(page, 'node-hover')
 
   const sourcePort = page.locator(sourceSelector)
   await sourcePort.hover({ force: true })
   await page.waitForTimeout(160)
   const endpointHoverSource = await portBox(page, sourceSelector)
-  assert(closeToRatio(endpointHoverSource.scale, 1.5), `Expected endpoint hover scale 1.5x, got ${JSON.stringify(endpointHoverSource)}`)
+  assert(closeToRatio(endpointHoverSource.scale, 3), `Expected endpoint hover scale 3x, got ${JSON.stringify(endpointHoverSource)}`)
   await maybeScreenshot(page, 'endpoint-hover')
+
+  const defaultHoverRadius = defaultSource.width / 2
+  await page.mouse.move(defaultSource.centerX + 42, defaultSource.centerY)
+  await page.waitForTimeout(160)
+  const radiusHoverSource = await portBox(page, sourceSelector)
+  assert(
+    closeToRatio(radiusHoverSource.scale, 3),
+    `Expected endpoint hover radius to trigger 3x scale 42px from center, defaultRadius=${defaultHoverRadius}, got ${JSON.stringify(radiusHoverSource)}`,
+  )
+  await maybeScreenshot(page, 'endpoint-radius-hover')
 
   await node.click()
   await page.mouse.move(40, 40)

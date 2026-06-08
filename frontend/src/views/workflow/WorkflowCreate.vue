@@ -8919,6 +8919,17 @@ onUnmounted(() => {
     background 0.14s ease;
 }
 
+.node-port::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5.5rem;
+  height: 5.5rem;
+  border-radius: 999rem;
+  transform: translate(-50%, -50%);
+}
+
 .source-port {
   right: -0.4375rem;
   transform: translate(50%, -50%) scale(var(--node-port-scale));
@@ -8933,7 +8944,11 @@ onUnmounted(() => {
   z-index: 5;
 }
 
-.coze-node:hover .node-port,
+.coze-node:hover .node-port {
+  --node-port-scale: 2;
+  box-shadow: 0 0 0 0.25rem rgba(107, 111, 247, 0.12);
+}
+
 .coze-node.selected .node-port {
   --node-port-scale: 1.2;
   box-shadow: 0 0 0 0.25rem rgba(107, 111, 247, 0.12);
@@ -8945,7 +8960,7 @@ onUnmounted(() => {
 .coze-node .node-port.connection-preview,
 .coze-node .node-port.vue-flow__handle-connecting,
 .coze-node .node-port.vue-flow__handle-valid {
-  --node-port-scale: 1.5;
+  --node-port-scale: 3;
   background: #5558f6;
   box-shadow: 0 0 0 0.3125rem rgba(85, 88, 246, 0.16);
   z-index: 4;

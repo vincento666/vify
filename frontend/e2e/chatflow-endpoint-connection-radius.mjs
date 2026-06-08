@@ -69,8 +69,8 @@ try {
   assert(nearTarget, 'Expected target port after connection drag')
   const nearRatio = nearTarget.width / target.width
   assert(
-    closeToRatio(nearRatio, 1.5),
-    `Expected target endpoint to scale to 1.5x ${magneticEdgeDistance}px from center inside the 44px magnetic radius, got ratio=${nearRatio}, metrics=${JSON.stringify(nearTarget)}`,
+    closeToRatio(nearRatio, 3),
+    `Expected target endpoint to scale to 3x ${magneticEdgeDistance}px from center inside the 44px magnetic radius, got ratio=${nearRatio}, metrics=${JSON.stringify(nearTarget)}`,
   )
 
   if (screenshotPath) {
