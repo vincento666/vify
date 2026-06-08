@@ -1,0 +1,14 @@
+RED evidence for this slice is the historical failing gate from the same
+feature boundary:
+
+- `artifacts/slices/015-core-flow-nodes-mvp/015.2-variable-aggregation-assignment/red.txt`
+
+The failure mode was:
+
+- Workflow `VARIABLE_AGGREGATION` run returned `400 Unknown node type: VARIABLE_AGGREGATION`.
+- Workflow `VARIABLE_ASSIGN` run returned `400 Unknown node type: VARIABLE_ASSIGN`.
+- Chatflow `VARIABLE_ASSIGN` run returned `400 Unknown node type: VARIABLE_ASSIGN`.
+- Frontend graph/config did not yet expose stable runnable variable aggregation and assignment node contracts.
+
+This slice stages the minimal runtime support and current gates for that
+specific node pair while leaving unrelated workflow runtime dirty work unstaged.

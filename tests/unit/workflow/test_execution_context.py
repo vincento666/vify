@@ -37,6 +37,18 @@ class ExecutionContextTest(unittest.TestCase):
 
         self.assertEqual(context.render("query={{start.sys.query}}"), "query=refund")
 
+    def test_loads_and_snapshots_variable_scopes(self) -> None:
+        self.assertIsNotNone(ExecutionContext)
+        context = ExecutionContext()
+        context.load_scopes({"conversation": {"topic": "refund"}, "unsupported": {"x": "ignored"}})
+        context.set_scope_value("user", "tier", "vip")
+
+        self.assertEqual(context.render("{{conversation.topic}}/{{user.tier}}"), "refund/vip")
+        snapshot = context.scopes_snapshot()
+        snapshot["conversation"]["topic"] = "mutated"
+
+        self.assertEqual(context.render("{{conversation.topic}}"), "refund")
+
 
 if __name__ == "__main__":
     unittest.main()

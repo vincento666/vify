@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from time import perf_counter
 from typing import Any, Protocol
@@ -93,6 +94,73 @@ class EndNodeExecutor:
         if "output" in config:
             return {output_variable: context.render(str(config["output"]))}
         return {output_variable: context.find_value(output_variable)}
+
+
+
+class VariableAggregationNodeExecutor:
+    def execute(self, node: dict[str, Any], context: ExecutionContext) -> dict[str, Any]:
+        config = _config(node)
+        output_variable = _first_output_name(config, str(config.get("outputVariable") or "aggregate"))
+        sources = _aggregation_sources(config, context)
+        strategy = str(config.get("strategy") or config.get("mergeStrategy") or "first_non_empty").lower()
+        default_value = _render_optional(config.get("defaultValue"), context)
+
+        if strategy in {"first_non_empty", "first", "coalesce"}:
+            value = next((source["value"] for source in sources if _not_empty(source["value"])), default_value)
+        elif strategy in {"last_non_empty", "last"}:
+            value = next((source["value"] for source in reversed(sources) if _not_empty(source["value"])), default_value)
+        elif strategy in {"concat", "concatenate"}:
+            separator = context.render(str(config.get("separator") or ""))
+            value = separator.join(str(source["value"]) for source in sources if _not_empty(source["value"]))
+            if value == "" and default_value is not None:
+                value = default_value
+        elif strategy in {"array", "list"}:
+            value = [source["value"] for source in sources if _not_empty(source["value"])]
+            if not value and default_value is not None:
+                value = default_value
+        elif strategy in {"object_merge", "merge_object"}:
+            merged: dict[str, Any] = {}
+            for source in sources:
+                if isinstance(source["value"], Mapping):
+                    merged.update(source["value"])
+                elif source["name"] and _not_empty(source["value"]):
+                    merged[str(source["name"])] = source["value"]
+            value = merged or default_value
+        else:
+            raise WorkflowExecutionError(f"Unsupported VARIABLE_AGGREGATION strategy: {strategy}")
+
+        return {
+            output_variable: value,
+            "sourceStatus": [
+                {"name": source["name"], "empty": not _not_empty(source["value"])}
+                for source in sources
+            ],
+        }
+
+
+class VariableAssignNodeExecutor:
+    def execute(self, node: dict[str, Any], context: ExecutionContext) -> dict[str, Any]:
+        config = _config(node)
+        scope = str(config.get("targetScope") or config.get("scope") or "flow").strip().lower()
+        variable_name = str(config.get("targetVariable") or config.get("variable") or "").strip()
+        if not variable_name:
+            raise WorkflowExecutionError("VARIABLE_ASSIGN requires targetVariable")
+        write_mode = str(config.get("writeMode") or "set").strip().lower()
+        if write_mode not in {"set", "append", "clear"}:
+            raise WorkflowExecutionError(f"Unsupported VARIABLE_ASSIGN writeMode: {write_mode}")
+        value = _source_value(config, context)
+        try:
+            written_value = context.set_scope_value(scope, variable_name, value, write_mode)
+        except ValueError as exc:
+            raise WorkflowExecutionError(str(exc)) from exc
+        output_variable = _first_output_name(config, str(config.get("outputVariable") or "assigned"))
+        return {
+            output_variable: written_value,
+            "assigned": write_mode != "clear",
+            "scope": scope,
+            "variable": variable_name,
+            "value": written_value,
+        }
 
 
 class ConditionBranchPicker:
@@ -191,6 +259,10 @@ class WorkflowExecutionEngine:
             return KnowledgeNodeExecutor(self._knowledge_facade).execute(node, context)
         if node_type == "CONDITION":
             return ConditionNodeExecutor().execute(node, context)
+        if node_type == "VARIABLE_AGGREGATION":
+            return VariableAggregationNodeExecutor().execute(node, context)
+        if node_type == "VARIABLE_ASSIGN":
+            return VariableAssignNodeExecutor().execute(node, context)
         if node_type == "END":
             return EndNodeExecutor().execute(node, context)
         raise WorkflowExecutionError(f"Unknown node type: {node_type}")
@@ -219,3 +291,57 @@ class WorkflowExecutionEngine:
 def _config(node: dict[str, Any]) -> dict[str, Any]:
     config = node.get("config")
     return dict(config) if isinstance(config, dict) else {}
+
+
+
+def _first_output_name(config: dict[str, Any], fallback: str) -> str:
+    parameters = config.get("outputParameters")
+    if isinstance(parameters, list):
+        first = next((item for item in parameters if isinstance(item, Mapping) and str(item.get("name") or "").strip()), None)
+        if first is not None:
+            return str(first["name"]).strip()
+    return fallback
+
+
+def _source_value(config: dict[str, Any], context: ExecutionContext) -> Any:
+    if "source" in config:
+        value = config["source"]
+    elif "value" in config:
+        value = config["value"]
+    elif "input" in config:
+        value = config["input"]
+    else:
+        value = ""
+    return context.render(value) if isinstance(value, str) else value
+
+
+def _aggregation_sources(config: dict[str, Any], context: ExecutionContext) -> list[dict[str, Any]]:
+    raw = config.get("sources") or config.get("inputSources") or []
+    if not isinstance(raw, list):
+        return []
+    result: list[dict[str, Any]] = []
+    for item in raw:
+        if not isinstance(item, Mapping):
+            continue
+        name = str(item.get("name") or item.get("label") or "").strip()
+        value = item.get("value")
+        if isinstance(value, str):
+            value = context.render(value)
+        result.append({"name": name, "value": value})
+    return result
+
+
+def _render_optional(value: Any, context: ExecutionContext) -> Any:
+    if value is None:
+        return None
+    return context.render(value) if isinstance(value, str) else value
+
+
+def _not_empty(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return value != ""
+    if isinstance(value, (list, tuple, dict, set)):
+        return len(value) > 0
+    return True
