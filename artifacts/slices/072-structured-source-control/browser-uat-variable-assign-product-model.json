@@ -1,0 +1,11 @@
+{
+  "url": "http://127.0.0.1:5173/workflows/6217/canvas",
+  "hasEditor": 1,
+  "hasRow": 1,
+  "hasTargetControl": 1,
+  "hasValueControl": 1,
+  "hasLegacyTargetScopeText": false,
+  "hasLegacyTargetVariableText": false,
+  "hasLegacyWriteModeText": false,
+  "panelText": "变量赋值\nvariable_assign_1\n›\n输入\n变量赋值\n将上游结果或固定值写入可写变量\n变量名\n赋值类型\n变量值\n覆盖\n追加\n清空\nselected\nstr.\n×\n›\n输出\n输出格式\n文本\n输出变量\n变量类型\nstr."
+}

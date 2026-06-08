@@ -432,21 +432,11 @@ const SCHEMAS: Record<WorkflowCanvasNodeType, NodeConfigSchema> = {
     type: 'VARIABLE_ASSIGN',
     title: '变量赋值',
     sections: [
-      INPUT_SECTION,
       {
-        title: '赋值目标',
-        fields: [{ key: 'variableAssignment', label: '赋值目标', type: 'variable-assignment' }],
+        title: '输入',
+        fields: [{ key: 'variableAssignment', label: '变量赋值', type: 'variable-assignment' }],
       },
       OUTPUT_SECTION,
-      {
-        title: '高级/兼容配置',
-        fields: [
-          { key: 'targetScope', label: '目标作用域', type: 'select', options: ['flow', 'conversation', 'user', 'channel', 'global'] },
-          { key: 'targetVariable', label: '目标变量', type: 'text', placeholder: 'topic' },
-          { key: 'source', label: '来源值', type: 'textarea', placeholder: '{{variable_aggregation_1.aggregate}}' },
-          { key: 'writeMode', label: '写入模式', type: 'select', options: ['set', 'append', 'clear'] },
-        ],
-      },
     ],
   },
   INTENT_RECOGNITION: {

@@ -1,0 +1,23 @@
+## 072 Variable Assignment Product Model UAT
+
+- URL: `http://127.0.0.1:5173/workflows/6217/canvas`
+- Reference checked:
+  - Coze Studio source: `VariableAssigner` uses assignment pairs with `left` writable variable and `input/right` value, and rejects system/global-system readonly targets.
+  - ViFly experiment reference: variable assignment rows are task-first (`target_ref`, `source_expr`, row policy), not a generic input/output parameter editor.
+- Browser result:
+  - Variable assignment config panel renders one task-first assignment table.
+  - Primary panel no longer shows raw `目标作用域` / `目标变量` / `写入模式`.
+  - Row has `变量名` target selector, `赋值类型` operation selector, and `变量值` input/reference control.
+  - Target variable picker opens, second-level flyout shows declared writable `route` variable, and outside click closes the picker.
+- Evidence:
+  - `red-variable-assign-product-model.txt`
+  - `e2e-variable-assign-product-model.txt`
+  - `unit-focused-variable-assign-product-model.txt`
+  - `unit-full-variable-assign-product-model.txt`
+  - `build-variable-assign-product-model.txt`
+  - `browser-uat-variable-assign-product-model.json`
+  - `browser-uat-variable-assign-target-picker.json`
+  - `browser-uat-variable-assign-target-flyout.json`
+  - `screenshots/browser-uat-variable-assign-product-model.png`
+- Blocked:
+  - Backend integration command is blocked by local Python/pytest availability in this shell: `python` is missing; `/opt/homebrew/opt/python@3.13/bin/python3.13` has no `pytest` module.

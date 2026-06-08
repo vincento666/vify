@@ -99,8 +99,12 @@ describe('workflow node config schema', () => {
     expect(getNodeConfigSchema('VARIABLE_AGGREGATION').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual(
       expect.arrayContaining(['sources', 'strategy', 'defaultValue', 'outputParameters']),
     )
+    expect(getNodeConfigSchema('VARIABLE_ASSIGN').sections.map((section) => section.title)).toEqual(['输入', '输出'])
     expect(getNodeConfigSchema('VARIABLE_ASSIGN').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual(
-      expect.arrayContaining(['targetScope', 'targetVariable', 'source', 'writeMode', 'outputParameters']),
+      expect.arrayContaining(['variableAssignment', 'outputParameters']),
+    )
+    expect(getNodeConfigSchema('VARIABLE_ASSIGN').sections.flatMap((section) => section.fields.map((field) => field.key))).not.toEqual(
+      expect.arrayContaining(['targetScope', 'targetVariable', 'writeMode']),
     )
     expect(getNodeConfigSchema('INTENT_RECOGNITION').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual(
       expect.arrayContaining(['inputSource', 'intents', 'defaultIntent', 'classifierMode', 'includeHistory', 'outputParameters']),
@@ -300,10 +304,10 @@ describe('workflow node config schema', () => {
 
   it('uses structured editors for data and structured nodes instead of raw JSON in basic panels', () => {
     const expectations = [
-      { type: 'JSON_PARSE', structuredType: 'json-field-mappings', rawKeys: ['fieldMap'] },
-      { type: 'VARIABLE_AGGREGATION', structuredType: 'aggregation-sources', rawKeys: ['sources'] },
-      { type: 'VARIABLE_ASSIGN', structuredType: 'variable-assignment', rawKeys: ['targetScope', 'targetVariable', 'source', 'writeMode'] },
-      { type: 'HUMAN_INPUT', structuredType: 'human-input-schema', rawKeys: ['inputSchema'] },
+      { type: 'JSON_PARSE', structuredType: 'json-field-mappings', rawKeys: ['fieldMap'], advancedRawKeys: ['fieldMap'] },
+      { type: 'VARIABLE_AGGREGATION', structuredType: 'aggregation-sources', rawKeys: ['sources'], advancedRawKeys: ['sources'] },
+      { type: 'VARIABLE_ASSIGN', structuredType: 'variable-assignment', rawKeys: ['targetScope', 'targetVariable', 'source', 'writeMode'], advancedRawKeys: [] },
+      { type: 'HUMAN_INPUT', structuredType: 'human-input-schema', rawKeys: ['inputSchema'], advancedRawKeys: ['inputSchema'] },
     ] as const
 
     for (const expectation of expectations) {
@@ -317,7 +321,11 @@ describe('workflow node config schema', () => {
 
       expect(basicFields.map((field) => field.type)).toContain(expectation.structuredType)
       expect(basicFields.map((field) => field.key)).not.toEqual(expect.arrayContaining([...expectation.rawKeys]))
-      expect(advancedFields.map((field) => field.key)).toEqual(expect.arrayContaining([...expectation.rawKeys]))
+      if (expectation.advancedRawKeys.length > 0) {
+        expect(advancedFields.map((field) => field.key)).toEqual(expect.arrayContaining([...expectation.advancedRawKeys]))
+      } else {
+        expect(advancedFields.map((field) => field.key)).toEqual([])
+      }
     }
   })
 
@@ -364,11 +372,14 @@ describe('workflow node config schema', () => {
   })
 
   it('adds a shared input parameter editor field to runnable middle node schemas', () => {
-    for (const type of ['LLM', 'KNOWLEDGE', 'API_CALL', 'CODE', 'TEXT_PROCESS', 'JSON_PARSE', 'VARIABLE_AGGREGATION', 'VARIABLE_ASSIGN', 'INTENT_RECOGNITION', 'MESSAGE', 'QUESTION', 'HUMAN_INPUT', 'INFORMATION_COLLECTION', 'TOOL_CALL', 'EXECUTE_WORKFLOW', 'AGENT_CALL', 'TRANSFER_TO_HUMAN'] as const) {
+    for (const type of ['LLM', 'KNOWLEDGE', 'API_CALL', 'CODE', 'TEXT_PROCESS', 'JSON_PARSE', 'VARIABLE_AGGREGATION', 'INTENT_RECOGNITION', 'MESSAGE', 'QUESTION', 'HUMAN_INPUT', 'INFORMATION_COLLECTION', 'TOOL_CALL', 'EXECUTE_WORKFLOW', 'AGENT_CALL', 'TRANSFER_TO_HUMAN'] as const) {
       expect(getNodeConfigSchema(type).sections.flatMap((section) => section.fields.map((field) => field.key))).toContain(
         'inputParameters',
       )
     }
+    expect(getNodeConfigSchema('VARIABLE_ASSIGN').sections.flatMap((section) => section.fields.map((field) => field.key))).not.toContain(
+      'inputParameters',
+    )
   })
 
   it('updates node name and config without dropping ui position metadata', () => {

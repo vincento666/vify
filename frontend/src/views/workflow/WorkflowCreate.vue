@@ -2207,56 +2207,42 @@
                   @update:model-value="setAggregationSourceName(index, $event)"
                 />
                 <div class="input-value-cell">
-                  <div v-if="row.valueMode === 'reference'" class="input-reference-control">
-                    <button
-                      v-if="!inputReferenceSelection(String(row.value || ''))"
-                      type="button"
-                      class="input-variable-empty"
-                      data-testid="aggregation-variable-empty"
-                      aria-label="选择聚合变量"
-                      @click="openStructuredVariablePicker(`aggregation:${index}`, $event)"
-                    >
-                      <input class="reference-value-proxy" aria-label="聚合引用变量" :value="String(row.value || '')" readonly tabindex="-1" />
-                      <span>选择变量</span>
-                      <el-icon><Connection /></el-icon>
-                    </button>
-                    <div
-                      v-else
-                      class="input-variable-chip"
-                      data-testid="aggregation-variable-chip"
-                      role="button"
-                      tabindex="0"
-                      aria-label="聚合变量引用"
-                      @click="openStructuredVariablePicker(`aggregation:${index}`, $event)"
-                      @keydown.enter.prevent="openStructuredVariablePicker(`aggregation:${index}`)"
-                      @keydown.space.prevent="openStructuredVariablePicker(`aggregation:${index}`)"
-                    >
-                      <input class="reference-value-proxy" aria-label="聚合引用变量" :value="String(row.value || '')" readonly tabindex="-1" />
-                      <span class="input-variable-chip-main">
-                        <strong>{{ inputReferenceSelection(String(row.value || ''))!.item.variable }}</strong>
-                      </span>
-                      <span class="variable-type-badge">{{ variableTypeLabel(inputReferenceSelection(String(row.value || ''))!.item.type) }}</span>
-                      <button type="button" class="input-variable-clear" aria-label="清除聚合变量引用" @click.stop="clearAggregationSourceReference(index)">
-                        <span aria-hidden="true">×</span>
-                      </button>
+                  <div class="variable-value-combo structured-value-control" data-testid="structured-value-control">
+                    <div class="variable-value-main">
+                      <div
+                        v-if="row.valueMode === 'reference' && inputReferenceSelection(String(row.value || ''))"
+                        class="input-variable-chip"
+                        data-testid="aggregation-variable-chip"
+                      >
+                        <input class="reference-value-proxy" aria-label="聚合引用变量" :value="String(row.value || '')" readonly tabindex="-1" />
+                        <span class="input-variable-chip-main">
+                          <strong>{{ inputReferenceSelection(String(row.value || ''))!.item.variable }}</strong>
+                        </span>
+                        <span class="variable-type-badge">{{ variableTypeLabel(inputReferenceSelection(String(row.value || ''))!.item.type) }}</span>
+                        <button type="button" class="input-variable-clear" aria-label="清除聚合来源变量引用" @click.stop="clearAggregationSourceReference(index)">
+                          <span aria-hidden="true">×</span>
+                        </button>
+                      </div>
+                      <input
+                        v-else
+                        class="variable-literal-input"
+                        data-testid="aggregation-variable-literal-input"
+                        type="text"
+                        aria-label="聚合来源值"
+                        :value="String(row.value ?? '')"
+                        placeholder="输入或引用来源值"
+                        @input="setAggregationSourceValue(index, ($event.target as HTMLInputElement).value)"
+                      />
                     </div>
+                    <button
+                      type="button"
+                      class="variable-picker-trigger"
+                      aria-label="选择聚合来源变量"
+                      @click="openStructuredVariablePicker(`aggregation:${index}`, $event)"
+                    >
+                      <Connection aria-hidden="true" />
+                    </button>
                   </div>
-                  <el-input
-                    v-else
-                    :model-value="String(row.value ?? '')"
-                    aria-label="聚合来源值"
-                    placeholder="输入或引用来源值"
-                    @update:model-value="setAggregationSourceValue(index, $event)"
-                  />
-                  <button
-                    v-if="row.valueMode !== 'reference'"
-                    type="button"
-                    class="input-reference-shortcut output-row-icon"
-                    aria-label="选择聚合变量"
-                    @click="openStructuredVariablePicker(`aggregation:${index}`, $event)"
-                  >
-                    <Connection aria-hidden="true" />
-                  </button>
                   <div
                     v-if="activeStructuredVariableTarget === `aggregation:${index}`"
                     class="variable-popover coze-variable-source-popover input-variable-popover"
@@ -2315,83 +2301,135 @@
               class="variable-assignment-editor"
               data-testid="variable-assignment-editor"
             >
-              <div class="variable-assignment-grid">
-                <label>
-                  <span>目标作用域</span>
-                  <el-select :model-value="String(fieldValue('targetScope') || 'flow')" aria-label="目标作用域" @update:model-value="setFieldValue('targetScope', $event)">
-                    <el-option label="flow" value="flow" />
-                    <el-option label="conversation" value="conversation" />
-                    <el-option label="user" value="user" />
-                    <el-option label="channel" value="channel" />
-                    <el-option label="global" value="global" />
-                  </el-select>
-                </label>
-                <label>
-                  <span>目标变量</span>
-                  <el-input :model-value="String(fieldValue('targetVariable') || '')" aria-label="目标变量" placeholder="topic" @update:model-value="setFieldValue('targetVariable', $event)" />
-                </label>
-                <label>
-                  <span>写入模式</span>
-                  <el-select :model-value="String(fieldValue('writeMode') || 'set')" aria-label="写入模式" @update:model-value="setFieldValue('writeMode', $event)">
-                    <el-option label="set" value="set" />
-                    <el-option label="append" value="append" />
-                    <el-option label="clear" value="clear" />
-                  </el-select>
-                </label>
+              <div class="variable-assignment-task">
+                <strong>变量赋值</strong>
+                <span>将上游结果或固定值写入可写变量</span>
               </div>
-              <div class="variable-assignment-source">
-                <span>来源值</span>
-                <div class="input-value-cell">
-                  <div v-if="variableAssignmentValueMode() === 'reference'" class="input-reference-control">
+              <div class="variable-assignment-header">
+                <span>变量名</span>
+                <span>赋值类型</span>
+                <span>变量值</span>
+              </div>
+              <div class="variable-assignment-row" data-testid="variable-assignment-row">
+                <div class="input-value-cell assignment-target-cell">
+                  <div class="variable-value-combo assignment-target-control" data-testid="assignment-target-control">
+                    <div class="variable-value-main">
+                      <input
+                        class="variable-literal-input"
+                        data-testid="assignment-target-input"
+                        type="text"
+                        aria-label="写入变量"
+                        :value="variableAssignmentTargetReference()"
+                        placeholder="选择或输入变量"
+                        @input="setVariableAssignmentTargetReference(($event.target as HTMLInputElement).value)"
+                      />
+                    </div>
                     <button
-                      v-if="!inputReferenceSelection(String(fieldValue('source') || ''))"
                       type="button"
-                      class="input-variable-empty"
-                      data-testid="assignment-variable-empty"
-                      aria-label="选择赋值变量"
-                      @click="openStructuredVariablePicker('assignment', $event)"
+                      class="variable-picker-trigger"
+                      aria-label="选择写入变量"
+                      @click="openVariableAssignmentTargetPicker($event)"
                     >
-                      <input class="reference-value-proxy" aria-label="赋值引用变量" :value="String(fieldValue('source') || '')" readonly tabindex="-1" />
-                      <span>选择变量</span>
-                      <el-icon><Connection /></el-icon>
+                      <Connection aria-hidden="true" />
                     </button>
-                    <div
-                      v-else
-                      class="input-variable-chip"
-                      data-testid="assignment-variable-chip"
-                      role="button"
-                      tabindex="0"
-                      aria-label="赋值变量引用"
-                      @click="openStructuredVariablePicker('assignment', $event)"
-                      @keydown.enter.prevent="openStructuredVariablePicker('assignment')"
-                      @keydown.space.prevent="openStructuredVariablePicker('assignment')"
-                    >
-                      <input class="reference-value-proxy" aria-label="赋值引用变量" :value="String(fieldValue('source') || '')" readonly tabindex="-1" />
-                      <span class="input-variable-chip-main">
-                        <strong>{{ inputReferenceSelection(String(fieldValue('source') || ''))!.item.variable }}</strong>
-                      </span>
-                      <span class="variable-type-badge">{{ variableTypeLabel(inputReferenceSelection(String(fieldValue('source') || ''))!.item.type) }}</span>
-                      <button type="button" class="input-variable-clear" aria-label="清除赋值变量引用" @click.stop="clearVariableAssignmentReference">
-                        <span aria-hidden="true">×</span>
+                  </div>
+                  <div
+                    v-if="activeVariableAssignmentTargetPicker"
+                    class="variable-popover coze-variable-source-popover input-variable-popover"
+                    data-testid="assignment-target-picker"
+                  >
+                    <el-input v-model="variableAssignmentTargetSearch" size="small" placeholder="搜索变量" />
+                    <div class="variable-source-list coze-variable-source-list" data-testid="assignment-target-source-list">
+                      <button
+                        v-for="group in filteredVariableAssignmentTargetGroups"
+                        :key="group.key"
+                        type="button"
+                        class="variable-source-item coze-variable-source-item"
+                        :class="{ active: activeVariableAssignmentTargetGroupKey === group.key }"
+                        data-testid="assignment-target-source-item"
+                        @mouseenter="activateVariableAssignmentTargetGroup(group, $event)"
+                        @click="activateVariableAssignmentTargetGroup(group, $event)"
+                      >
+                        <span class="variable-source-copy">
+                          <strong>{{ group.title }}</strong>
+                        </span>
+                        <span v-if="group.items.length > 0" class="variable-source-arrow" aria-hidden="true">›</span>
                       </button>
                     </div>
+                    <div
+                      v-if="activeVariableAssignmentTargetGroup"
+                      class="variable-flyout"
+                      :data-placement="variableFlyoutPlacement"
+                      data-testid="assignment-target-flyout"
+                    >
+                      <div class="variable-item-list" data-testid="assignment-target-item-list">
+                        <button
+                          v-for="item in activeVariableAssignmentTargetGroup.items"
+                          :key="item.reference"
+                          type="button"
+                          class="variable-option"
+                          data-testid="assignment-target-option"
+                          @click="selectVariableAssignmentTarget(item)"
+                        >
+                          <span class="variable-option-main">
+                            <strong>{{ item.variable }}</strong>
+                          </span>
+                          <span class="variable-type-badge">{{ variableListTypeLabel(item.type) }}</span>
+                        </button>
+                        <p v-if="activeVariableAssignmentTargetGroup.items.length === 0" class="variable-empty">暂无可写变量</p>
+                      </div>
+                    </div>
                   </div>
-                  <el-input
-                    v-else
-                    :model-value="String(fieldValue('source') ?? '')"
-                    aria-label="赋值来源值"
-                    placeholder="输入或引用来源值"
-                    @update:model-value="setVariableAssignmentSourceValue"
-                  />
-                  <button
-                    v-if="variableAssignmentValueMode() !== 'reference'"
-                    type="button"
-                    class="input-reference-shortcut output-row-icon"
-                    aria-label="选择赋值变量"
-                    @click="openStructuredVariablePicker('assignment', $event)"
-                  >
-                    <Connection aria-hidden="true" />
-                  </button>
+                </div>
+                <select
+                  class="variable-literal-select variable-assignment-mode-select"
+                  aria-label="赋值类型"
+                  :value="variableAssignmentWriteMode()"
+                  @change="setVariableAssignmentWriteMode(($event.target as HTMLSelectElement).value)"
+                >
+                  <option value="set">覆盖</option>
+                  <option value="append">追加</option>
+                  <option value="clear">清空</option>
+                </select>
+                <div class="input-value-cell">
+                  <div class="variable-value-combo assignment-value-control" data-testid="assignment-value-control">
+                    <div class="variable-value-main">
+                      <div
+                        v-if="variableAssignmentWriteMode() !== 'clear' && variableAssignmentValueMode() === 'reference' && inputReferenceSelection(String(fieldValue('source') || ''))"
+                        class="input-variable-chip"
+                        data-testid="assignment-variable-chip"
+                      >
+                        <input class="reference-value-proxy" aria-label="赋值引用变量" :value="String(fieldValue('source') || '')" readonly tabindex="-1" />
+                        <span class="input-variable-chip-main">
+                          <strong>{{ inputReferenceSelection(String(fieldValue('source') || ''))!.item.variable }}</strong>
+                        </span>
+                        <span class="variable-type-badge">{{ variableTypeLabel(inputReferenceSelection(String(fieldValue('source') || ''))!.item.type) }}</span>
+                        <button type="button" class="input-variable-clear" aria-label="清除赋值内容变量引用" @click.stop="clearVariableAssignmentReference">
+                          <span aria-hidden="true">×</span>
+                        </button>
+                      </div>
+                      <input
+                        v-else
+                        class="variable-literal-input"
+                        data-testid="assignment-variable-literal-input"
+                        type="text"
+                        aria-label="赋值内容"
+                        :value="String(fieldValue('source') ?? '')"
+                        :disabled="variableAssignmentWriteMode() === 'clear'"
+                        placeholder="输入或引用参数值"
+                        @input="setVariableAssignmentSourceValue(($event.target as HTMLInputElement).value)"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      class="variable-picker-trigger"
+                      aria-label="选择赋值内容变量"
+                      :disabled="variableAssignmentWriteMode() === 'clear'"
+                      @click="openStructuredVariablePicker('assignment', $event)"
+                    >
+                      <Connection aria-hidden="true" />
+                    </button>
+                  </div>
                   <div
                     v-if="activeStructuredVariableTarget === 'assignment'"
                     class="variable-popover coze-variable-source-popover input-variable-popover"
@@ -3576,6 +3614,20 @@ type SchemaInputMappingRow = {
   valueMode: InputValueMode
   value: string | number | boolean
 }
+type VariableAssignmentWriteMode = 'set' | 'append' | 'clear'
+type VariableAssignmentTargetOption = {
+  scope: string
+  scopeLabel: string
+  variable: string
+  label: string
+  reference: string
+  type: VariableCatalogType
+}
+type VariableAssignmentTargetGroup = {
+  key: string
+  title: string
+  items: VariableAssignmentTargetOption[]
+}
 type PaletteEntry = {
   type: NodePaletteEntry['type']
   label: NodePaletteEntry['label']
@@ -3646,6 +3698,9 @@ const schemaVariableSearch = ref('')
 const activeStructuredVariableTarget = ref('')
 const activeStructuredVariableGroupKey = ref('')
 const structuredVariableSearch = ref('')
+const activeVariableAssignmentTargetPicker = ref(false)
+const activeVariableAssignmentTargetGroupKey = ref('')
+const variableAssignmentTargetSearch = ref('')
 const activeConditionVariableTarget = ref('')
 const activeConditionVariableGroupKey = ref('')
 const conditionVariableSearch = ref('')
@@ -4111,6 +4166,24 @@ const activeSchemaVariableGroup = computed(() => {
   const groups = filteredSchemaVariableGroups.value
   if (groups.length === 0 || !activeSchemaVariableGroupKey.value) return null
   return groups.find((group) => variableGroupKey(group) === activeSchemaVariableGroupKey.value) || null
+})
+const variableAssignmentTargetGroups = computed<VariableAssignmentTargetGroup[]>(() => buildVariableAssignmentTargetGroups())
+const filteredVariableAssignmentTargetGroups = computed(() => {
+  const keyword = variableAssignmentTargetSearch.value.trim().toLowerCase()
+  if (!keyword) return variableAssignmentTargetGroups.value
+  return variableAssignmentTargetGroups.value
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) =>
+        `${item.scopeLabel} ${item.variable} ${item.reference}`.toLowerCase().includes(keyword),
+      ),
+    }))
+    .filter((group) => group.items.length > 0)
+})
+const activeVariableAssignmentTargetGroup = computed(() => {
+  const groups = filteredVariableAssignmentTargetGroups.value
+  if (groups.length === 0 || !activeVariableAssignmentTargetGroupKey.value) return null
+  return groups.find((group) => group.key === activeVariableAssignmentTargetGroupKey.value) || null
 })
 const filteredStructuredVariableGroups = computed(() => {
   const keyword = structuredVariableSearch.value.trim().toLowerCase()
@@ -4599,6 +4672,8 @@ function closeVariablePickers() {
   activeSchemaVariableGroupKey.value = ''
   activeStructuredVariableTarget.value = ''
   activeStructuredVariableGroupKey.value = ''
+  activeVariableAssignmentTargetPicker.value = false
+  activeVariableAssignmentTargetGroupKey.value = ''
   activeConditionVariableTarget.value = ''
   activeConditionVariableGroupKey.value = ''
   variableSearch.value = ''
@@ -4606,6 +4681,7 @@ function closeVariablePickers() {
   outputVariableSearch.value = ''
   schemaVariableSearch.value = ''
   structuredVariableSearch.value = ''
+  variableAssignmentTargetSearch.value = ''
   conditionVariableSearch.value = ''
 }
 
@@ -4778,6 +4854,7 @@ function hasOpenVariablePicker() {
     activeOutputParameterIndex.value !== null ||
     activeSchemaInputMappingIndex.value !== null ||
     activeStructuredVariableTarget.value ||
+    activeVariableAssignmentTargetPicker.value ||
     activeConditionVariableTarget.value,
   )
 }
@@ -5687,12 +5764,140 @@ function variableAssignmentValueMode(): InputValueMode {
   return inferDirectVariableValueMode(fieldValue('source'), explicit)
 }
 
+function variableAssignmentWriteMode(): VariableAssignmentWriteMode {
+  const mode = String(fieldValue('writeMode') || 'set').trim().toLowerCase()
+  return mode === 'append' || mode === 'clear' ? mode : 'set'
+}
+
+function variableAssignmentTargetReference() {
+  const scope = String(fieldValue('targetScope') || (isChatflowMode.value ? 'conversation' : 'flow')).trim()
+  const variable = String(fieldValue('targetVariable') || '').trim()
+  return variable ? `${scope}.${variable}` : ''
+}
+
+function setVariableAssignmentTargetReference(value: string | number) {
+  const parsed = parseVariableAssignmentTargetReference(String(value || ''))
+  updateSelectedNode({ config: { targetScope: parsed.scope, targetVariable: parsed.variable } })
+}
+
+function setVariableAssignmentWriteMode(value: string | number) {
+  const mode = normalizeVariableAssignmentWriteMode(value)
+  const patch: Record<string, string> = { writeMode: mode }
+  if (mode === 'clear') {
+    patch.sourceValueMode = 'literal'
+    patch.source = ''
+  }
+  updateSelectedNode({ config: patch })
+}
+
 function clearVariableAssignmentReference() {
   updateSelectedNode({ config: { sourceValueMode: 'literal', source: '' } })
 }
 
 function setVariableAssignmentSourceValue(value: string | number) {
   updateSelectedNode({ config: { sourceValueMode: 'literal', source: String(value) } })
+}
+
+function normalizeVariableAssignmentWriteMode(value: string | number): VariableAssignmentWriteMode {
+  const mode = String(value || 'set').trim().toLowerCase()
+  return mode === 'append' || mode === 'clear' ? mode : 'set'
+}
+
+function parseVariableAssignmentTargetReference(value: string) {
+  const trimmed = value.replace(/[{}]/g, '').trim()
+  const currentScope = String(fieldValue('targetScope') || (isChatflowMode.value ? 'conversation' : 'flow')).trim() || 'flow'
+  if (!trimmed) return { scope: currentScope, variable: '' }
+  const [first, ...rest] = trimmed.split('.')
+  if (rest.length === 0) return { scope: currentScope, variable: first.trim() }
+  const scope = normalizeAssignmentTargetScope(first)
+  return { scope, variable: rest.join('.').trim() }
+}
+
+function normalizeAssignmentTargetScope(scope: string) {
+  const normalized = String(scope || '').trim().toLowerCase()
+  if (normalized === 'app') return 'global'
+  if (['flow', 'conversation', 'user', 'global', 'channel'].includes(normalized)) return normalized
+  return isChatflowMode.value ? 'conversation' : 'flow'
+}
+
+function variableAssignmentScopeLabel(scope: string) {
+  const labels: Record<string, string> = {
+    flow: '流程变量',
+    conversation: '会话变量',
+    user: '用户变量',
+    global: '应用变量',
+    channel: '渠道变量',
+  }
+  return labels[normalizeAssignmentTargetScope(scope)] || '变量'
+}
+
+function makeVariableAssignmentTarget(scope: string, variable: string, type: VariableCatalogType = 'string'): VariableAssignmentTargetOption | null {
+  const normalizedScope = normalizeAssignmentTargetScope(scope)
+  const name = String(variable || '').trim()
+  if (!name) return null
+  return {
+    scope: normalizedScope,
+    scopeLabel: variableAssignmentScopeLabel(normalizedScope),
+    variable: name,
+    label: name,
+    reference: `${normalizedScope}.${name}`,
+    type,
+  }
+}
+
+function buildVariableAssignmentTargetGroups(): VariableAssignmentTargetGroup[] {
+  const byScope = new Map<string, VariableAssignmentTargetOption[]>()
+  const add = (scope: string, variable: string, type: VariableCatalogType = 'string') => {
+    const item = makeVariableAssignmentTarget(scope, variable, type)
+    if (!item) return
+    const items = byScope.get(item.scope) || []
+    if (!items.some((candidate) => candidate.reference === item.reference)) {
+      items.push(item)
+      byScope.set(item.scope, items)
+    }
+  }
+
+  add(String(fieldValue('targetScope') || (isChatflowMode.value ? 'conversation' : 'flow')), String(fieldValue('targetVariable') || ''))
+  graph.value.nodes.forEach((node) => {
+    if (node.type === 'VARIABLE_ASSIGN') {
+      add(String(node.config.targetScope || node.config.scope || ''), String(node.config.targetVariable || node.config.variable || ''))
+    }
+    if (node.type === 'INFORMATION_COLLECTION') {
+      normalizeCollectionFields(node.config).forEach((field) => {
+        add(field.targetScope, field.targetVariable || field.name, field.type)
+      })
+    }
+  })
+
+  const order = isChatflowMode.value
+    ? ['conversation', 'user', 'global', 'channel', 'flow']
+    : ['flow', 'global', 'user', 'conversation', 'channel']
+  return order
+    .map((scope) => ({
+      key: scope,
+      title: variableAssignmentScopeLabel(scope),
+      items: byScope.get(scope) || [],
+    }))
+    .filter((group) => group.items.length > 0)
+}
+
+function openVariableAssignmentTargetPicker(event?: Event) {
+  refreshVariablePickerAnchor(event?.currentTarget)
+  activeVariableAssignmentTargetPicker.value = !activeVariableAssignmentTargetPicker.value
+  variableAssignmentTargetSearch.value = ''
+  activeVariableAssignmentTargetGroupKey.value = ''
+}
+
+function activateVariableAssignmentTargetGroup(group: VariableAssignmentTargetGroup, event: MouseEvent) {
+  activeVariableAssignmentTargetGroupKey.value = group.key
+  refreshVariableFlyoutAnchor(event.currentTarget)
+}
+
+function selectVariableAssignmentTarget(item: VariableAssignmentTargetOption) {
+  updateSelectedNode({ config: { targetScope: item.scope, targetVariable: item.variable } })
+  activeVariableAssignmentTargetPicker.value = false
+  activeVariableAssignmentTargetGroupKey.value = ''
+  variableAssignmentTargetSearch.value = ''
 }
 
 function humanInputSchemaRows(): HumanInputSchemaField[] {
@@ -10789,21 +10994,54 @@ onUnmounted(() => {
   gap: 0.75rem;
 }
 
-.variable-assignment-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+.variable-assignment-task {
+  display: flex;
+  align-items: baseline;
   gap: 0.5rem;
 }
 
-.variable-assignment-grid label,
-.variable-assignment-source {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
+.variable-assignment-task strong {
+  color: #30364a;
+  font-size: 0.9375rem;
+  font-weight: 900;
+}
+
+.variable-assignment-task span {
   color: #7c8498;
   font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.variable-assignment-header,
+.variable-assignment-row {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 1fr) 5rem minmax(0, 1.4fr);
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.variable-assignment-header {
+  color: #8b93a7;
+  font-size: 0.75rem;
   font-weight: 800;
+}
+
+.assignment-target-cell,
+.variable-assignment-row > .input-value-cell {
+  display: block;
+}
+
+.variable-assignment-mode-select {
+  width: 100%;
+  height: 2.25rem;
+  padding: 0 0.625rem;
+  border: 0.0625rem solid #dfe3ee;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #30364a;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  outline: 0;
 }
 
 .input-parameter-toolbar {
@@ -10845,7 +11083,8 @@ onUnmounted(() => {
 }
 
 .input-parameter-row > .input-value-cell,
-.output-parameter-row > .output-value-cell {
+.output-parameter-row > .output-value-cell,
+.aggregation-source-row > .input-value-cell {
   display: block;
 }
 

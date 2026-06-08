@@ -125,17 +125,53 @@ try {
   assert(!panelText.includes('聚合来源值模式'), 'Aggregation editor must not expose reference/literal mode selector')
   assert(await panel.locator('[data-testid="aggregation-source-row"]').count() === 2, 'Expected aggregation source rows')
   assert(await panel.locator('[data-testid="aggregation-variable-chip"]').count() >= 2, 'Expected aggregation references to render as variable chips')
+  const aggregationRow = panel.locator('[data-testid="aggregation-source-row"]').first()
+  assert(
+    await aggregationRow.getByTestId('structured-value-control').count() === 1,
+    'Aggregation source value must use the shared split variable/literal control',
+  )
+  assert(
+    await aggregationRow.getByRole('button', { name: '选择聚合来源变量', exact: true }).count() === 1,
+    'Aggregation source must keep a persistent variable picker button',
+  )
+  assert(
+    await aggregationRow.getByRole('button', { name: '清除聚合来源变量引用', exact: true }).count() === 1,
+    'Aggregation referenced source must expose a clear action',
+  )
   await panel.getByRole('button', { name: '关闭配置' }).click()
   await panel.waitFor({ state: 'hidden', timeout: 5000 })
 
   await page.locator('.coze-node.node-variable_assign').click()
   await panel.waitFor({ state: 'visible', timeout: 5000 })
   panelText = await panel.innerText()
-  assert(panelText.includes('目标作用域'), 'Expected scope selector in VARIABLE_ASSIGN config')
-  assert(panelText.includes('写入模式'), 'Expected write mode selector in VARIABLE_ASSIGN config')
+  assert(!panelText.includes('目标作用域'), 'Assignment editor must not expose raw target scope as a primary field')
+  assert(!panelText.includes('目标变量'), 'Assignment editor must not expose raw target variable as a primary field')
+  assert(!panelText.includes('写入模式'), 'Assignment editor must not expose raw write mode as a primary field')
   assert(!panelText.includes('赋值来源值模式'), 'Assignment editor must not expose reference/literal mode selector')
+  assert(panelText.includes('变量赋值'), 'Assignment editor must use a task-first variable assignment section')
+  assert(panelText.includes('变量名'), 'Assignment editor must show a target variable column')
+  assert(panelText.includes('赋值类型'), 'Assignment editor must show assignment type column')
+  assert(panelText.includes('变量值'), 'Assignment editor must show assignment value column')
   assert(await panel.locator('[data-testid="variable-assignment-editor"]').count() === 1, 'Expected structured assignment editor')
+  assert(await panel.locator('[data-testid="variable-assignment-row"]').count() === 1, 'Expected assignment editor to render one assignment row')
+  assert(await panel.locator('[data-testid="assignment-target-control"]').count() === 1, 'Expected assignment row to expose a writable target variable selector')
+  assert(await panel.locator('[data-testid="assignment-value-control"]').count() === 1, 'Expected assignment row to expose a value input/reference control')
   assert(await panel.locator('[data-testid="assignment-variable-chip"]').count() === 1, 'Expected assignment source to render as variable chip')
+  const assignmentEditor = panel.locator('[data-testid="variable-assignment-editor"]')
+  assert(
+    await assignmentEditor.getByTestId('assignment-value-control').count() === 1,
+    'Assignment source value must use the shared split variable/literal control',
+  )
+  assert(
+    await assignmentEditor.getByRole('button', { name: '选择赋值内容变量', exact: true }).count() === 1,
+    'Assignment source must keep a persistent variable picker button',
+  )
+  assert(
+    await assignmentEditor.getByRole('button', { name: '清除赋值内容变量引用', exact: true }).count() === 1,
+    'Assignment referenced source must expose a clear action',
+  )
+  await assignmentEditor.getByRole('button', { name: '清除赋值内容变量引用', exact: true }).click()
+  assert(await assignmentEditor.getByTestId('assignment-variable-literal-input').inputValue() === '', 'Clearing assignment source must restore literal input mode')
 
   if (screenshotPath) {
     await page.screenshot({ path: screenshotPath, fullPage: true })
