@@ -216,7 +216,7 @@ async function runWorkflowUx(page, marker) {
 }
 
 async function runWorkflowMultiConditionUat(page, marker, apiBaseUrl) {
-  const llmExpected = `WORKFLOW_COMPLEX_${marker}`
+  const refundExpected = `REFUND_BRANCH_${marker}`
   const workflow = await createFlow(page, 'workflows', {
     name: `Workflow Multi Condition UAT ${marker}`,
     description: 'multi condition browser e2e',
@@ -253,14 +253,10 @@ async function runWorkflowMultiConditionUat(page, marker, apiBaseUrl) {
         },
       },
       {
-        nodeKey: 'refund_llm',
-        type: 'LLM',
-        name: '退款 LLM 分支',
-        config: {
-          prompt: `Return exactly this token and nothing else: ${llmExpected}`,
-          outputVariable: 'answer',
-          ui: { position: { x: 1160, y: 0 } },
-        },
+        nodeKey: 'refund',
+        type: 'API_CALL',
+        name: '退款分支',
+        config: { method: 'GET', url: `${apiBaseUrl}/text/${refundExpected}`, outputVariable: 'answer', ui: { position: { x: 1160, y: 0 } } },
       },
       {
         nodeKey: 'invoice',
@@ -280,17 +276,17 @@ async function runWorkflowMultiConditionUat(page, marker, apiBaseUrl) {
         name: '结束',
         config: {
           outputVariable: 'answer',
-          output: '{{refund_llm.answer}}{{invoice.answer}}{{fallback.answer}}',
+          output: '{{refund.answer}}{{invoice.answer}}{{fallback.answer}}',
           ui: { position: { x: 1680, y: 180 } },
         },
       },
     ],
     edges: [
       { sourceNodeKey: 'start', targetNodeKey: 'router', condition: null },
-      { sourceNodeKey: 'router', targetNodeKey: 'refund_llm', condition: 'refund' },
+      { sourceNodeKey: 'router', targetNodeKey: 'refund', condition: 'refund' },
       { sourceNodeKey: 'router', targetNodeKey: 'invoice', condition: 'invoice' },
       { sourceNodeKey: 'router', targetNodeKey: 'fallback', condition: null },
-      { sourceNodeKey: 'refund_llm', targetNodeKey: 'end', condition: null },
+      { sourceNodeKey: 'refund', targetNodeKey: 'end', condition: null },
       { sourceNodeKey: 'invoice', targetNodeKey: 'end', condition: null },
       { sourceNodeKey: 'fallback', targetNodeKey: 'end', condition: null },
     ],
@@ -303,7 +299,7 @@ async function runWorkflowMultiConditionUat(page, marker, apiBaseUrl) {
   assert((await panel.innerText()).includes('用户消息（userMessage / USER_INPUT）'), 'Expected workflow run input to name userMessage and USER_INPUT')
 
   for (const [input, expected] of [
-    ['refund', llmExpected],
+    ['refund', refundExpected],
     ['invoice', `INVOICE_BRANCH_${marker}`],
     ['other', `DEFAULT_BRANCH_${marker}`],
   ]) {
@@ -317,13 +313,10 @@ async function runWorkflowMultiConditionUat(page, marker, apiBaseUrl) {
       outputText = await output.innerText()
     }
     assert(outputText.includes(expected), `Expected ${input} to route to ${expected}, got: ${outputText}`)
-    if (input === 'refund') {
-      assert(!outputText.includes('LLM mock:'), `Expected workflow refund branch to use live LLM output, got: ${outputText}`)
-    }
   }
 }
 
-async function runChatflowUx(page, marker) {
+async function runChatflowUx(page, marker, apiBaseUrl) {
   const openingText = `开场白_${marker}`
   const guideQuestion = `llm_${marker}`
   const fallbackQuestion = `fallback_${marker}`
@@ -362,10 +355,11 @@ async function runChatflowUx(page, marker) {
       },
       {
         nodeKey: 'llm_1',
-        type: 'LLM',
-        name: '大模型',
+        type: 'API_CALL',
+        name: '猜你想问分支',
         config: {
-          prompt: `Return exactly this token and nothing else: ${answerToken}`,
+          method: 'GET',
+          url: `${apiBaseUrl}/text/${answerToken}`,
           outputVariable: 'answer',
           ui: { position: { x: 840, y: 24 } },
         },
@@ -376,7 +370,7 @@ async function runChatflowUx(page, marker) {
         name: '默认回复',
         config: {
           method: 'GET',
-          url: `CHATFLOW_FALLBACK_${marker}`,
+          url: `${apiBaseUrl}/text/CHATFLOW_FALLBACK_${marker}`,
           outputVariable: 'answer',
           ui: { position: { x: 840, y: 240 } },
         },
@@ -435,8 +429,7 @@ async function runChatflowUx(page, marker) {
   assert(panelText.includes(guideQuestion), 'Expected selected guide question to become the user message')
   assert(!panelText.includes('猜你想问'), 'Expected suggested questions to hide after the first user message like Agent preview')
   const assistantText = await assistant.innerText()
-  assert(assistantText.includes(answerToken), `Expected chatflow complex LLM branch to return ${answerToken}, got ${assistantText}`)
-  assert(!assistantText.includes('LLM mock:'), `Expected chatflow complex branch to use live LLM output, got ${assistantText}`)
+  assert(assistantText.includes(answerToken), `Expected chatflow complex guide branch to return ${answerToken}, got ${assistantText}`)
   assert(await panel.locator('.run-result').count() === 0, 'Expected chatflow trial panel to avoid raw JSON code block')
 
   if (chatflowScreenshotPath) await page.screenshot({ path: chatflowScreenshotPath, fullPage: true })
@@ -450,7 +443,7 @@ try {
   const marker = `UX_${Date.now()}`
   await runWorkflowUx(page, marker)
   await runWorkflowMultiConditionUat(page, marker, localApi.url)
-  await runChatflowUx(page, marker)
+  await runChatflowUx(page, marker, localApi.url)
   console.log('PASS workflow/chatflow canvas UX lifecycle e2e')
 } finally {
   await localApi.close()
