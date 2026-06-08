@@ -74,13 +74,23 @@
             <h4>开场白</h4>
             <el-input v-model="openingText" type="textarea" :rows="3" placeholder="欢迎语" @input="markGraphDirty" />
           </section>
-          <section class="resource-section">
+          <section class="resource-section" data-testid="chatflow-guide-question-settings">
             <h4>引导问题</h4>
             <div v-for="(_question, index) in guideQuestions" :key="index" class="question-row">
-              <input v-model="guideQuestions[index]" @input="markGraphDirty" />
-              <button type="button" @click="removeGuideQuestion(index)"><XIcon aria-hidden="true" /></button>
+              <input
+                v-model="guideQuestions[index]"
+                :aria-label="`引导问题 ${index + 1}`"
+                placeholder="输入猜你想问"
+                @input="markGraphDirty"
+              />
+              <button type="button" :aria-label="`删除引导问题 ${index + 1}`" @click="removeGuideQuestion(index)">
+                <XIcon aria-hidden="true" />
+              </button>
             </div>
-            <button type="button" class="resource-action" @click="addGuideQuestion">新增问题</button>
+            <button type="button" class="resource-action" aria-label="新增引导问题" @click="addGuideQuestion">
+              <LucidePlus aria-hidden="true" />
+              <span>新增引导问题</span>
+            </button>
           </section>
           <section class="resource-section" data-testid="chatflow-variable-panel">
             <h4>变量</h4>
@@ -7440,7 +7450,24 @@ onUnmounted(() => {
 .resource-action {
   width: 100%;
   height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
   font-weight: 700;
+}
+
+.question-row button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.question-row button svg,
+.resource-action svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  stroke-width: 1.9;
 }
 
 .resource-group {
@@ -11984,17 +12011,27 @@ onUnmounted(() => {
     grid-template-columns: 1fr;
   }
 
+  .canvas-workbench.resource-collapsed {
+    grid-template-columns: 1fr;
+  }
+
   .canvas-open-surface,
   .canvas-stage-shell {
     grid-column: 1;
   }
 
   .canvas-resource-panel {
-    display: none;
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: 11;
+    width: min(var(--workflow-resource-panel-width), calc(100% - 2.5rem));
+    max-width: calc(100% - 2.5rem);
+    box-shadow: 0.75rem 0 2rem rgba(27, 35, 58, 0.12);
   }
 
   .resource-panel-toggle {
-    display: none;
+    display: inline-flex;
+    left: min(var(--workflow-resource-panel-width), calc(100% - 2.5rem));
   }
 
   .workflow-canvas-page.has-right-panel .canvas-toolbar {

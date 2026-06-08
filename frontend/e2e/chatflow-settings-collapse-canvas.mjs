@@ -23,6 +23,7 @@ async function canvasGeometry(page) {
       }
     }
     const panel = rect('[data-testid="test-run-panel"]') || rect('[data-testid="node-config-panel"]')
+    const resourcePanel = document.querySelector('.canvas-resource-panel')
     const availableRight = panel ? panel.left : window.innerWidth
     return {
       viewportWidth: window.innerWidth,
@@ -32,7 +33,7 @@ async function canvasGeometry(page) {
       start: rect('.vue-flow__node[data-id="start"]'),
       end: rect('.vue-flow__node[data-id="end"]'),
       stage: rect('.canvas-stage-shell'),
-      resourcePanelDisplay: getComputedStyle(document.querySelector('.canvas-resource-panel') || document.body).display,
+      resourcePanelDisplay: resourcePanel ? getComputedStyle(resourcePanel).display : 'detached',
     }
   })
 }
@@ -46,13 +47,25 @@ try {
   await sideToggle.waitFor({ state: 'visible', timeout: 5000 })
   await sideToggle.click()
   await widePage.waitForTimeout(200)
+  const expandToggle = widePage.getByRole('button', { name: '展开侧栏', exact: true })
+  await expandToggle.waitFor({ state: 'visible', timeout: 5000 })
   const wideGeometry = await canvasGeometry(widePage)
   assert(wideGeometry.stage?.width > 300, `Collapsed dialog settings must keep canvas stage visible, got ${JSON.stringify(wideGeometry)}`)
   assert(wideGeometry.start?.width > 20 && wideGeometry.end?.width > 20, `Collapsed dialog settings must keep nodes visible, got ${JSON.stringify(wideGeometry)}`)
+  await expandToggle.click()
+  await widePage.getByTestId('canvas-resource-panel').waitFor({ state: 'visible', timeout: 5000 })
   await widePage.close()
 
   const page = await browser.newPage({ viewport: { width: 877, height: 832 } })
   await page.goto(`${baseUrl}/chatflows/create`, { waitUntil: 'networkidle' })
+  const compactPanel = page.getByTestId('canvas-resource-panel')
+  await compactPanel.waitFor({ state: 'visible', timeout: 5000 })
+  const compactCollapseToggle = page.getByRole('button', { name: '折叠侧栏', exact: true })
+  await compactCollapseToggle.waitFor({ state: 'visible', timeout: 5000 })
+  await compactCollapseToggle.click()
+  await page.getByRole('button', { name: '展开侧栏', exact: true }).waitFor({ state: 'visible', timeout: 5000 })
+  await compactPanel.waitFor({ state: 'detached', timeout: 5000 })
+
   const toolbar = page.getByTestId('canvas-bottom-toolbar')
   await toolbar.waitFor({ state: 'visible', timeout: 5000 })
   const testPanel = page.getByTestId('test-run-panel')
@@ -88,7 +101,7 @@ try {
   }, null, { timeout: 3000 })
 
   const geometry = await canvasGeometry(page)
-  assert(geometry.resourcePanelDisplay === 'none', `Expected compact canvas to hide/collapse dialog settings panel, got ${JSON.stringify(geometry)}`)
+  assert(geometry.resourcePanelDisplay === 'detached', `Expected compact canvas to collapse dialog settings panel, got ${JSON.stringify(geometry)}`)
   assert(geometry.toolbar, `Missing toolbar geometry ${JSON.stringify(geometry)}`)
   assert(geometry.toolbar.left >= 0, `Toolbar must stay in the visible canvas, got ${JSON.stringify(geometry)}`)
   assert(geometry.start && geometry.end, `Missing start/end nodes ${JSON.stringify(geometry)}`)
