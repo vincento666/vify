@@ -7979,14 +7979,6 @@ onUnmounted(() => {
   background-size: 1.5rem 1.5rem;
 }
 
-.workflow-canvas-page.has-right-panel .coze-flow {
-  width: calc(100% - var(--workflow-right-panel-reserve));
-}
-
-.workflow-canvas-page.has-node-test-drawer .coze-flow {
-  width: calc(100% - var(--workflow-node-test-reserve));
-}
-
 .coze-flow :deep(.vue-flow__node) {
   width: auto;
   overflow: visible;
