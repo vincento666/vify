@@ -1,0 +1,9 @@
+file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-edge-insert-button-visibility.mjs:7
+  if (!condition) throw new Error(message)
+                        ^
+
+Error: Expected non-edge toolbar click to clear selected edge insert button
+    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-edge-insert-button-visibility.mjs:7:25)
+    at file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-edge-insert-button-visibility.mjs:79:3
+
+Node.js v23.11.0

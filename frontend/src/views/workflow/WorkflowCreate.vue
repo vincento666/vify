@@ -4746,6 +4746,33 @@ function handleGlobalVariablePointerDown(event: PointerEvent) {
   closeVariablePickers()
 }
 
+function hasEdgeInteractionState() {
+  return Boolean(selectedEdgeId.value || hoveredEdgeId.value || edgeInsertPaletteId.value)
+}
+
+function isEdgeInteractionTarget(target: EventTarget | null) {
+  const element = target instanceof Element ? target : null
+  if (!element) return false
+  return Boolean(element.closest([
+    '.vue-flow__edge',
+    '.vue-flow__edge-interaction',
+    '.edge-insert-button',
+    '.edge-insert-palette',
+  ].join(',')))
+}
+
+function clearEdgeInteractionState() {
+  selectedEdgeId.value = ''
+  hoveredEdgeId.value = ''
+  edgeInsertPaletteId.value = ''
+}
+
+function handleGlobalEdgePointerDown(event: PointerEvent) {
+  if (!hasEdgeInteractionState()) return
+  if (isEdgeInteractionTarget(event.target)) return
+  clearEdgeInteractionState()
+}
+
 function handleConnect(connection: any) {
   graph.value = connectWorkflowNodes(
     graph.value,
@@ -6990,12 +7017,14 @@ watch(
 onMounted(() => {
   window.addEventListener('keydown', handleGlobalVariableKeydown)
   document.addEventListener('pointerdown', handleGlobalVariablePointerDown, true)
+  document.addEventListener('pointerdown', handleGlobalEdgePointerDown, true)
   void loadWorkflow()
 })
 onUnmounted(() => {
   window.clearTimeout(canvasLayoutRefitTimer)
   window.removeEventListener('keydown', handleGlobalVariableKeydown)
   document.removeEventListener('pointerdown', handleGlobalVariablePointerDown, true)
+  document.removeEventListener('pointerdown', handleGlobalEdgePointerDown, true)
 })
 </script>
 
