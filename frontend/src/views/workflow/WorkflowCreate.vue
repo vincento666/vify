@@ -92,27 +92,62 @@
               <span>新增引导问题</span>
             </button>
           </section>
-          <section class="resource-section" data-testid="chatflow-variable-panel">
-            <h4>变量</h4>
+          <section class="resource-section chatflow-memory-panel" data-testid="chatflow-variable-panel">
+            <div class="resource-section-heading">
+              <h4>记忆</h4>
+              <small>
+                会话变量 {{ chatflowConversationVariableCount }} · 用户变量 0
+              </small>
+            </div>
             <div v-for="scope in chatflowVariableScopes" :key="scope.title" class="resource-group">
               <button type="button" :aria-expanded="scope.open" @click="scope.open = !scope.open">
-                <span>{{ scope.title }}</span>
+                <span class="resource-group-title">
+                  <ChevronDownIcon v-if="scope.open" aria-hidden="true" />
+                  <ChevronRightIcon v-else aria-hidden="true" />
+                  <strong>{{ scope.title }}</strong>
+                </span>
                 <small>{{ scope.description }}</small>
+                <em class="resource-group-count">{{ scope.items.length }}</em>
               </button>
-              <div v-if="scope.open" class="resource-items">
+              <div v-if="scope.open" class="resource-items chatflow-variable-table">
+                <div class="chatflow-variable-table-head" aria-hidden="true">
+                  <span>变量 key</span>
+                  <span>变量显示名</span>
+                  <span>操作</span>
+                </div>
                 <div
                   v-for="item in scope.items"
                   :key="item.reference"
                   class="resource-variable-row"
                   data-testid="chatflow-resource-variable"
                 >
-                  <span>
+                  <span class="chatflow-variable-key">{{ item.key }}</span>
+                  <span class="chatflow-variable-name">
                     <strong>{{ item.label }}</strong>
                     <code>{{ item.reference }}</code>
                   </span>
-                  <em>{{ chatflowPanelVariableTypeLabel(item.type) }}</em>
+                  <span class="chatflow-variable-actions" aria-label="只读系统变量">
+                    <i class="chatflow-variable-switch" aria-hidden="true"></i>
+                    <button type="button" :aria-label="`配置 ${item.key}`" disabled>
+                      <SettingsIcon aria-hidden="true" />
+                    </button>
+                    <button type="button" :aria-label="`删除 ${item.key}`" disabled>
+                      <XIcon aria-hidden="true" />
+                    </button>
+                  </span>
                 </div>
               </div>
+            </div>
+            <div class="chatflow-user-variable-card" data-testid="chatflow-user-variable-summary">
+              <div>
+                <strong>用户变量</strong>
+                <button type="button" aria-label="新增用户变量" disabled>
+                  <LucidePlus aria-hidden="true" />
+                </button>
+              </div>
+              <p>
+                用于存储用户使用项目过程中需要持久化存储和读取的数据，如用户的语言偏好、个性化设置等，并可设置作用范围。
+              </p>
             </div>
           </section>
         </template>
@@ -3570,6 +3605,8 @@ import {
   User,
 } from '@element-plus/icons-vue'
 import {
+  ChevronDown as ChevronDownIcon,
+  ChevronRight as ChevronRightIcon,
   Hand as HandIcon,
   LayoutDashboard as LayoutDashboardIcon,
   Minus as LucideMinus,
@@ -3955,7 +3992,10 @@ const testProfile = ref({
   round: 1,
 })
 const chatflowVariableScopes = ref<ChatflowScopeState[]>(
-  buildChatflowVariableScopes().map((scope, index) => ({ ...scope, open: index === 0 })),
+  buildChatflowVariableScopes().map((scope) => ({ ...scope, open: false })),
+)
+const chatflowConversationVariableCount = computed(() =>
+  chatflowVariableScopes.value.reduce((total, scope) => total + scope.items.length, 0),
 )
 let requestedCanvasZoom = 1
 let programmaticZoomSerial = 0
@@ -6993,11 +7033,6 @@ function variableListTypeLabel(type: VariableCatalogType) {
   return labels[type] ?? String(type)
 }
 
-function chatflowPanelVariableTypeLabel(type: string) {
-  const normalized = String(type || 'string').toLowerCase() as VariableCatalogType
-  return variableListTypeLabel(normalized)
-}
-
 function insertVariable(key: string, reference: string) {
   const currentValue = String(fieldValue(key) || '')
   const nextValue = canUseVariable(key)
@@ -7804,7 +7839,7 @@ onUnmounted(() => {
   --debug-dock-height: min(23rem, calc(100vh - 8.25rem));
   --workflow-side-panel-width: 34rem;
   --workflow-side-panel-gap: 1.125rem;
-  --workflow-resource-panel-width: 15.75rem;
+  --workflow-resource-panel-width: 20rem;
   --workflow-node-test-panel-width: 23.75rem;
   --workflow-node-test-panel-gap: 1.125rem;
   --workflow-right-panel-reserve: calc(var(--workflow-side-panel-width) + var(--workflow-side-panel-gap) + var(--debug-dock-gap));
@@ -7963,7 +7998,7 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 15.75rem minmax(0, 1fr);
+  grid-template-columns: var(--workflow-resource-panel-width) minmax(0, 1fr);
   overflow: hidden;
   background: #f8f9fc;
   transition: grid-template-columns 0.18s ease;
@@ -8107,6 +8142,25 @@ onUnmounted(() => {
   text-transform: uppercase;
 }
 
+.resource-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.resource-section-heading h4 {
+  margin: 0;
+}
+
+.resource-section-heading small {
+  color: #9aa3b6;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-align: right;
+}
+
 .question-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 1.75rem;
@@ -8176,7 +8230,28 @@ onUnmounted(() => {
 }
 
 .resource-group > button {
+  position: relative;
   flex-direction: column;
+  padding-right: 2.375rem;
+}
+
+.resource-group-title {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3125rem;
+}
+
+.resource-group-title svg {
+  width: 0.8125rem;
+  height: 0.8125rem;
+  color: #7e879c;
+  stroke-width: 2;
+}
+
+.resource-group-title strong {
+  color: #30364a;
+  font-size: 0.8125rem;
 }
 
 .resource-group small,
@@ -8191,6 +8266,24 @@ onUnmounted(() => {
   background: #f7f8ff;
 }
 
+.resource-group-count {
+  position: absolute;
+  top: 0.5625rem;
+  right: 0.625rem;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.3125rem;
+  border-radius: 999rem;
+  background: #f0f2ff;
+  color: #5f61ff;
+  font-size: 0.6875rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
 .resource-items {
   display: flex;
   flex-direction: column;
@@ -8203,6 +8296,42 @@ onUnmounted(() => {
   cursor: default;
 }
 
+.chatflow-variable-table {
+  padding: 0.5rem;
+  border: 1px solid #e2e6f2;
+  border-radius: 0.625rem;
+  background: #fff;
+  overflow-x: auto;
+}
+
+.chatflow-variable-table-head,
+.chatflow-variable-table .resource-variable-row {
+  min-width: 18rem;
+  display: grid;
+  grid-template-columns: minmax(5.25rem, 1fr) minmax(5.25rem, 1fr) 5.25rem;
+  gap: 0.375rem;
+  align-items: center;
+}
+
+.chatflow-variable-table-head {
+  padding: 0 0.25rem 0.375rem;
+  color: #8a94aa;
+  font-size: 0.6875rem;
+  font-weight: 800;
+}
+
+.chatflow-variable-table .resource-variable-row {
+  min-height: 2rem;
+  padding: 0.25rem;
+  border: 0;
+  border-radius: 0.375rem;
+  background: transparent;
+}
+
+.chatflow-variable-table .resource-variable-row:hover {
+  background: #f6f7fb;
+}
+
 .resource-variable-row span {
   width: 100%;
   display: grid;
@@ -8213,6 +8342,144 @@ onUnmounted(() => {
 .resource-variable-row strong {
   color: #30364a;
   font-size: 0.75rem;
+}
+
+.chatflow-variable-key {
+  min-width: 0;
+  height: 1.875rem;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.5rem;
+  border: 1px solid #e1e5ef;
+  border-radius: 0.4375rem;
+  background: #fff;
+  color: #30364a;
+  font-size: 0.75rem;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chatflow-variable-name {
+  min-width: 0;
+  height: 1.875rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem;
+  padding: 0 0.5rem;
+  border: 1px solid #e1e5ef;
+  border-radius: 0.4375rem;
+  background: #fff;
+}
+
+.chatflow-variable-name strong {
+  overflow: hidden;
+  color: #30364a;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chatflow-variable-name code {
+  display: none;
+}
+
+.chatflow-variable-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  flex-wrap: nowrap;
+}
+
+.chatflow-variable-table .resource-variable-row .chatflow-variable-key {
+  display: inline-flex;
+}
+
+.chatflow-variable-table .resource-variable-row .chatflow-variable-name {
+  display: flex;
+}
+
+.chatflow-variable-table .resource-variable-row .chatflow-variable-actions {
+  display: inline-flex;
+  grid-template-columns: none;
+}
+
+.chatflow-variable-actions button,
+.chatflow-user-variable-card button {
+  width: 1.5rem;
+  height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e1e5ef;
+  border-radius: 0.4375rem;
+  background: #f7f8fc;
+  color: #8b94a8;
+}
+
+.chatflow-variable-actions button:disabled,
+.chatflow-user-variable-card button:disabled {
+  cursor: not-allowed;
+  opacity: 0.64;
+}
+
+.chatflow-variable-actions svg,
+.chatflow-user-variable-card svg {
+  width: 0.8125rem;
+  height: 0.8125rem;
+  stroke-width: 1.9;
+}
+
+.chatflow-variable-switch {
+  width: 1.75rem;
+  height: 1rem;
+  border-radius: 999rem;
+  background: #3f6cff;
+  position: relative;
+  box-shadow: inset 0 0 0 0.0625rem rgba(63, 108, 255, 0.16);
+}
+
+.chatflow-variable-switch::after {
+  content: '';
+  position: absolute;
+  top: 0.125rem;
+  right: 0.125rem;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 999rem;
+  background: #fff;
+}
+
+.chatflow-user-variable-card {
+  margin-top: 0.625rem;
+  padding: 0.625rem;
+  border: 1px solid #e2e6f2;
+  border-radius: 0.625rem;
+  background: #fbfcff;
+}
+
+.chatflow-user-variable-card div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.375rem;
+}
+
+.chatflow-user-variable-card strong {
+  color: #30364a;
+  font-size: 0.8125rem;
+}
+
+.chatflow-user-variable-card p {
+  margin: 0;
+  color: #70798d;
+  font-size: 0.75rem;
+  line-height: 1.5;
 }
 
 .resource-variable-row code {

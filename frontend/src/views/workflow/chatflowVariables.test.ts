@@ -6,7 +6,14 @@ describe('chatflow variables', () => {
   it('shows only configured runtime context variables by default', () => {
     const scopes = buildChatflowVariableScopes()
 
-    expect(scopes.map((scope) => scope.title)).toEqual(['运行上下文'])
+    expect(scopes.map((scope) => scope.title)).toEqual(['会话变量'])
+    expect(scopes[0].description).toContain('会话')
+    expect(scopes[0].items[0]).toMatchObject({
+      key: 'SYS_QUERY',
+      label: '本轮输入',
+      reference: '{{sys.query}}',
+      readonly: true,
+    })
     expect(scopes[0].items.map((item) => item.reference)).toEqual(
       expect.arrayContaining([
         '{{sys.query}}',

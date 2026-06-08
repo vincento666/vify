@@ -14,11 +14,12 @@ try {
   await page.goto(`${baseUrl}/chatflows/create`, { waitUntil: 'networkidle' })
   const variablePanel = page.getByTestId('chatflow-variable-panel')
   await variablePanel.waitFor({ state: 'visible', timeout: 5000 })
+  await variablePanel.getByRole('button', { name: /会话变量/ }).click()
 
   const configPanelBefore = await page.getByTestId('node-config-panel').count()
   assert(configPanelBefore === 0, `Create canvas should start without an open node config panel, got ${configPanelBefore}`)
 
-  await variablePanel.getByText('{{sys.query}}', { exact: true }).click()
+  await variablePanel.getByText('SYS_QUERY', { exact: true }).click()
   await page.waitForTimeout(200)
 
   const configPanelAfter = await page.getByTestId('node-config-panel').count()
