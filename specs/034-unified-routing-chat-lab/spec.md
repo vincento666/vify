@@ -522,3 +522,46 @@ through the same model configuration surface.
   `artifacts/slices/034-unified-routing-chat-lab/034.11/backend-full-pytest.txt`;
 - ruff:
   `artifacts/slices/034-unified-routing-chat-lab/034.11/ruff.txt`.
+
+## 034.12 Mixed Natural Core Airline Routing Gate
+
+Status: complete.
+
+034.12 adds a smaller but more realistic airline business gate across the four
+core areas: booking, refund, change, and consultation. The corpus contains 40
+natural utterances, 10 per area. These utterances are not direct fixed commands;
+they describe realistic travel, refund, change, and flight-status contexts while
+still carrying enough business signal for deterministic routing when that is the
+correct production behavior.
+
+034.12 final behavior:
+
+- all 40 natural scenarios complete their primary SOP through strong
+  explicit/keyword routing;
+- qwen LLM arbitration is exercised by representative active-task switch
+  journeys, not forced for every scenario;
+- representative live journeys follow the supported single-suspended-task
+  pattern:
+  `A start -> B switch -> B complete -> resume A -> A complete -> C complete`;
+- representative live journeys use qwen-backed Chatflow `LLM` nodes for SOP
+  completion markers;
+- `deepseek/deepseek-v4-flash` remains documented as the optional
+  high-intelligence model for slower investigations;
+- badcases are recorded for provider timeout/reset behavior, contaminated test
+  details that accidentally requested a different business SOP, and the test
+  design issue of over-forcing LLM arbitration.
+
+034.12 evidence:
+
+- mixed routing summary:
+  `artifacts/slices/034-unified-routing-chat-lab/034.12/mixed-routing-summary.md`;
+- qwen live representative core airline output:
+  `artifacts/slices/034-unified-routing-chat-lab/034.12/qwen-core-airline-live-output.txt`;
+- qwen live representative journey detail:
+  `artifacts/slices/034-unified-routing-chat-lab/034.12/qwen-core-airline-live.md`;
+- non-live 40-case core airline output:
+  `artifacts/slices/034-unified-routing-chat-lab/034.12/non-live-core-airline.txt`;
+- badcase notes:
+  `artifacts/slices/034-unified-routing-chat-lab/034.12/red-timeout.md`;
+- ruff:
+  `artifacts/slices/034-unified-routing-chat-lab/034.12/ruff.txt`.

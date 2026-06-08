@@ -169,6 +169,22 @@
 - [x] Run qwen full-chain live gate, qwen 5-SOP live Chatflow LLM gate, ordinary
   non-live targeted acceptance, ruff, and full backend pytest.
 
+## 034.12 Mixed natural core airline routing gate
+
+- [x] Add 40 natural core airline scenarios: booking/refund/change/consultation,
+  10 per business area.
+- [x] Keep utterances realistic and varied instead of direct fixed commands like
+  `我要退票`.
+- [x] Verify strong explicit/keyword routing with all 40 natural scenarios
+  completing their primary SOP.
+- [x] Verify qwen LLM arbitration with representative active-task switch
+  journeys, not every scenario.
+- [x] Verify the supported single-suspended-task journey:
+  `A start -> B switch -> B complete -> resume A -> A complete -> C complete`.
+- [x] Keep Chatflow SOP LLM nodes on qwen for the representative live journeys.
+- [x] Record qwen/OpenRouter badcases: live timeout, provider connection reset,
+  contaminated booking details, and over-forcing LLM arbitration.
+
 ## Future specs, not 034 tasks
 
 - [ ] Rename or consolidate final user-facing API to `/chat` or `/query`.

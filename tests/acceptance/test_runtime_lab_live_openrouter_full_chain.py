@@ -157,6 +157,9 @@ def _live_single_model_classifier(
     base_url: str,
     api_key: str,
     model: str,
+    timeout: float = 30.0,
+    max_attempts: int = 1,
+    retry_sleep: float = 0.5,
 ) -> _SingleOpenRouterModelClassifier:
     builder = OpenAIChatRequestBuilder()
     client = ProviderBackedOpenAIChatClient(
@@ -165,8 +168,9 @@ def _live_single_model_classifier(
             base_url=base_url,
             auth_config={"api_key": api_key},
         ),
-        timeout=30.0,
-        max_attempts=1,
+        timeout=timeout,
+        max_attempts=max_attempts,
+        retry_sleep=retry_sleep,
     )
 
     def complete(classifier_payload: dict[str, Any]) -> dict[str, Any]:
