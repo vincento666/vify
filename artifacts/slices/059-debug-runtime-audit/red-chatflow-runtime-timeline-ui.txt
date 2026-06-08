@@ -1,0 +1,14 @@
+node:internal/modules/run_main:104
+    triggerUncaughtException(
+    ^
+
+locator.waitFor: Error: strict mode violation: getByTestId('workflow-debug-dock').getByText('完成') resolved to 2 elements:
+    1) <span data-v-7f1d921a="">已完成</span> aka getByText('已完成')
+    2) <strong data-v-7f1d921a="">完成</strong> aka getByTestId('chatflow-event-timeline').getByText('完成')
+
+Call log:
+[2m  - waiting for getByTestId('workflow-debug-dock').getByText('完成') to be visible[22m
+
+    at /Users/vincento/work/develop/hify/frontend/e2e/chatflow-runtime-timeline-ui.mjs:71:30
+
+Node.js v23.11.0

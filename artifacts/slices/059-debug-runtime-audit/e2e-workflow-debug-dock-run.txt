@@ -1,0 +1,1 @@
+PASS workflow debug dock run e2e
