@@ -122,7 +122,7 @@ describe('workflow node config schema', () => {
       expect.arrayContaining(['inputSource', 'fields', 'collectionKey', 'includeHistory', 'maxRounds', 'streamOutput', 'outputParameters']),
     )
     expect(getNodeConfigSchema('TOOL_CALL').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual(
-      expect.arrayContaining(['resourceId', 'adapterBadge', 'schemaInputMappings', 'legacyResourceDebug', 'outputParameters']),
+      expect.arrayContaining(['resourceId', 'adapterBadge', 'schemaInputMappings', 'retryCount', 'errorBehavior', 'legacyResourceDebug', 'outputParameters']),
     )
     expect(getNodeConfigSchema('EXECUTE_WORKFLOW').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual(
       expect.arrayContaining(['resourceId', 'schemaInputMappings', 'legacyResourceDebug', 'outputParameters']),
@@ -261,11 +261,12 @@ describe('workflow node config schema', () => {
       '输入',
       '工具',
       '参数映射',
+      '错误处理',
       '输出',
       '高级/兼容配置',
     ])
     expect(toolBasicFields.map((field) => field.key)).toEqual(
-      expect.arrayContaining(['resourceId', 'adapterBadge', 'schemaInputMappings', 'outputParameters']),
+      expect.arrayContaining(['resourceId', 'adapterBadge', 'schemaInputMappings', 'retryCount', 'errorBehavior', 'outputParameters']),
     )
     expect(toolBasicFields.map((field) => field.type)).toEqual(
       expect.arrayContaining(['resource-select', 'resource-adapter-badge', 'schema-input-mappings']),

@@ -1,0 +1,11 @@
+Command:
+rtk npm --prefix frontend run build
+
+Result:
+PASS
+
+Summary:
+vue-tsc and vite production build completed successfully.
+
+Notes:
+Vite emitted its existing chunk-size warning for large bundles.

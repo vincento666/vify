@@ -1,0 +1,12 @@
+Commands:
+rtk node frontend/e2e/workflow-tool-call-node.mjs
+rtk node frontend/e2e/workflow-resource-policy.mjs
+
+Result:
+PASS workflow tool call node e2e
+PASS workflow resource policy e2e
+
+Coverage:
+- TOOL_CALL runtime still feeds END output.
+- TOOL_CALL config panel exposes resource id, input mapping, and error behavior.
+- Resource error behavior continues to work for failure policy routing.

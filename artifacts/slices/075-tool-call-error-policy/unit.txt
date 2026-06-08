@@ -1,0 +1,10 @@
+Commands:
+rtk npm --prefix frontend run test:unit -- src/views/workflow/nodeConfig.test.ts
+rtk npm --prefix frontend run test:unit
+
+Result:
+- Focused nodeConfig unit: 20 tests passed.
+- Full frontend unit: 58 files passed, 198 tests passed.
+
+Notes:
+The CJS Vite Node API deprecation warning is unchanged.

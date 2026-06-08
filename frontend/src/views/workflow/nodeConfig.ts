@@ -278,6 +278,13 @@ const SCHEMAS: Record<WorkflowCanvasNodeType, NodeConfigSchema> = {
         title: '参数映射',
         fields: [{ key: 'schemaInputMappings', label: '参数映射', type: 'schema-input-mappings' }],
       },
+      {
+        title: '错误处理',
+        fields: [
+          { key: 'retryCount', label: '重试次数', type: 'number', min: 0, max: 5, step: 1, placeholder: '0' },
+          { key: 'errorBehavior', label: '错误行为', type: 'select', options: ['fail', 'continue', 'branch'] },
+        ],
+      },
       OUTPUT_SECTION,
       {
         title: '高级/兼容配置',
