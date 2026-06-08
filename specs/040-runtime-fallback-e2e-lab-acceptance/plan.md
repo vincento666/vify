@@ -61,6 +61,17 @@ artifacts/slices/040-runtime-fallback-e2e-lab-acceptance/
   040.3/
 ```
 
+## SDD Gate
+
+040 may start only after 033 and 036-039 are implemented and their slice
+evidence exists. It is an acceptance and hardening spec, not a place to add new
+fallback algorithms.
+
+Each acceptance slice must update `spec.md`, `plan.md`, `tasks.md`, and the
+corresponding artifact directory. 040 is complete only when the full scenario
+matrix has expected-vs-actual evidence, active/suspended task preservation is
+audited, and any frontend evidence changes pass the required rem/frontend gates.
+
 ## Non-Goals
 
 - no production analytics dashboard;

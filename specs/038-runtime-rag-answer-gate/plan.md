@@ -54,3 +54,14 @@ artifacts/slices/038-runtime-rag-answer-gate/
 ```
 
 Live LLM generation remains opt-in.
+
+## SDD Gate
+
+038 may start only after 033, 036, and 037 route contracts pass. It must consume
+035 retrieval through runtime ports and must not add RAG document snippets to
+SOP/task classifier candidates.
+
+Each slice must update `spec.md`, `plan.md`, `tasks.md`, and the corresponding
+artifact directory before sign-off. 038 is complete only when RAG answers carry
+citations/evidence, low-confidence cases clarify or handoff by policy, and
+answer-only paths are proven not to mutate active SOP state.

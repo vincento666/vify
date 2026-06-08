@@ -60,3 +60,14 @@ artifacts/slices/039-runtime-controlled-agent-fallback/
 ```
 
 Live Agent/LLM behavior remains opt-in; CI uses fake deterministic Agent.
+
+## SDD Gate
+
+039 may start only after 033, 036, 037, and 038 route contracts pass. It must
+remain a policy-controlled fallback layer and must not give the Agent direct
+authority to start, suspend, resume, complete, or hand off SOP tasks.
+
+Each slice must update `spec.md`, `plan.md`, `tasks.md`, and the corresponding
+artifact directory before sign-off. 039 is complete only when Agent output is
+schema-validated, unsafe side effects are rejected, clarification counters are
+tested, and final handoff still goes through the 033 control-plane action.
