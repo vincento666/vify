@@ -240,7 +240,10 @@ const SCHEMAS: Record<WorkflowCanvasNodeType, NodeConfigSchema> = {
         fields: [
           { key: 'resourceId', label: '知识库', type: 'resource-select', resourceTypes: ['KNOWLEDGE_BASE'], placeholder: '选择知识库' },
           { key: 'query', label: '检索问题', type: 'textarea', placeholder: '{{start.USER_INPUT}}' },
-          { key: 'topK', label: '召回数量', type: 'number', placeholder: '5' },
+          { key: 'retrievalMode', label: '检索方式', type: 'select', options: ['auto', 'hybrid', 'semantic', 'keyword', 'faq'] },
+          { key: 'topK', label: '返回条数', type: 'number', placeholder: '5' },
+          { key: 'scoreThreshold', label: '最低命中分', type: 'number', placeholder: '0' },
+          { key: 'rerank', label: '结果重排', type: 'switch' },
         ],
       },
       OUTPUT_SECTION,

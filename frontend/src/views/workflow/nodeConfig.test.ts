@@ -83,7 +83,7 @@ describe('workflow node config schema', () => {
       'conditionBranches',
     ])
     expect(getNodeConfigSchema('KNOWLEDGE').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual(
-      expect.arrayContaining(['resourceId', 'query', 'topK', 'outputParameters']),
+      expect.arrayContaining(['resourceId', 'query', 'retrievalMode', 'topK', 'scoreThreshold', 'rerank', 'outputParameters']),
     )
     expect(getNodeConfigSchema('API_CALL').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual(
       expect.arrayContaining(['endpoint', 'method', 'headers', 'body', 'timeout', 'outputParameters']),
