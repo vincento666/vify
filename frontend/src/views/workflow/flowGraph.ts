@@ -337,7 +337,7 @@ function defaultNodeConfig(type: Exclude<WorkflowCanvasNodeType, 'START' | 'END'
       ...base,
       outputVariable: 'assigned',
       targetScope: 'flow',
-      targetVariable: 'value',
+      targetVariable: '',
       source: '{{start.USER_INPUT}}',
       writeMode: 'set',
       outputParameters: [{ name: 'assigned', type: 'string' }],

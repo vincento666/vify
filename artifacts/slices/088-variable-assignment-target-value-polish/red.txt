@@ -1,0 +1,9 @@
+file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-variable-aggregation-assignment.mjs:7
+  if (!condition) throw new Error(message)
+                        ^
+
+Error: Assignment editor must not show a redundant source type column
+    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-variable-aggregation-assignment.mjs:7:25)
+    at file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-variable-aggregation-assignment.mjs:156:3
+
+Node.js v23.11.0

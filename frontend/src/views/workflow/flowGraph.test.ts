@@ -196,7 +196,12 @@ describe('workflow canvas graph model', () => {
     expect(graph.nodes).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ nodeKey: 'variable_aggregation_1', type: 'VARIABLE_AGGREGATION', name: '变量聚合' }),
-        expect.objectContaining({ nodeKey: 'variable_assign_1', type: 'VARIABLE_ASSIGN', name: '变量赋值' }),
+        expect.objectContaining({
+          nodeKey: 'variable_assign_1',
+          type: 'VARIABLE_ASSIGN',
+          name: '变量赋值',
+          config: expect.objectContaining({ targetScope: 'flow', targetVariable: '' }),
+        }),
       ]),
     )
   })

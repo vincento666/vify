@@ -2481,7 +2481,6 @@
               </div>
               <div class="variable-assignment-header">
                 <span>变量名称</span>
-                <span>类型</span>
                 <span>值</span>
               </div>
               <div class="variable-assignment-row" data-testid="variable-assignment-row">
@@ -2494,8 +2493,9 @@
                         type="text"
                         aria-label="变量名称"
                         :value="variableAssignmentTargetReference()"
-                        placeholder="选择或输入变量"
-                        @input="setVariableAssignmentTargetReference(($event.target as HTMLInputElement).value)"
+                        placeholder="选择写入变量"
+                        readonly
+                        @click="openVariableAssignmentTargetPicker($event)"
                       />
                     </div>
                     <button
@@ -2555,15 +2555,6 @@
                     </div>
                   </div>
                 </div>
-                <select
-                  class="variable-literal-select variable-assignment-mode-select"
-                  aria-label="赋值来源类型"
-                  :value="variableAssignmentSourceType()"
-                  @change="setVariableAssignmentSourceType(($event.target as HTMLSelectElement).value)"
-                >
-                  <option value="reference">引用</option>
-                  <option value="input">输入</option>
-                </select>
                 <div class="input-value-cell">
                   <div class="variable-value-combo assignment-value-control" data-testid="assignment-value-control">
                     <div class="variable-value-main">
@@ -6112,36 +6103,12 @@ function variableAssignmentTargetReference() {
   return variable ? `${scope}.${variable}` : ''
 }
 
-function setVariableAssignmentTargetReference(value: string | number) {
-  const parsed = parseVariableAssignmentTargetReference(String(value || ''))
-  updateSelectedNode({ config: { targetScope: parsed.scope, targetVariable: parsed.variable } })
-}
-
-function setVariableAssignmentSourceType(value: string | number) {
-  const sourceType = String(value || 'input') === 'reference' ? 'reference' : 'input'
-  if (sourceType === 'reference') {
-    updateSelectedNode({ config: { writeMode: 'set', sourceValueMode: 'reference' } })
-    return
-  }
-  updateSelectedNode({ config: { writeMode: 'set', sourceValueMode: 'literal', source: '' } })
-}
-
 function clearVariableAssignmentReference() {
   updateSelectedNode({ config: { sourceValueMode: 'literal', source: '' } })
 }
 
 function setVariableAssignmentSourceValue(value: string | number) {
   updateSelectedNode({ config: { sourceValueMode: 'literal', source: String(value) } })
-}
-
-function parseVariableAssignmentTargetReference(value: string) {
-  const trimmed = value.replace(/[{}]/g, '').trim()
-  const currentScope = String(fieldValue('targetScope') || (isChatflowMode.value ? 'conversation' : 'flow')).trim() || 'flow'
-  if (!trimmed) return { scope: currentScope, variable: '' }
-  const [first, ...rest] = trimmed.split('.')
-  if (rest.length === 0) return { scope: currentScope, variable: first.trim() }
-  const scope = normalizeAssignmentTargetScope(first)
-  return { scope, variable: rest.join('.').trim() }
 }
 
 function normalizeAssignmentTargetScope(scope: string) {
@@ -11581,7 +11548,7 @@ onUnmounted(() => {
 .variable-assignment-header,
 .variable-assignment-row {
   display: grid;
-  grid-template-columns: minmax(7.5rem, 1fr) 5rem minmax(0, 1.4fr);
+  grid-template-columns: minmax(8rem, 0.85fr) minmax(0, 1.4fr);
   gap: 0.5rem;
   align-items: center;
 }
@@ -11595,19 +11562,6 @@ onUnmounted(() => {
 .assignment-target-cell,
 .variable-assignment-row > .input-value-cell {
   display: block;
-}
-
-.variable-assignment-mode-select {
-  width: 100%;
-  height: 2.25rem;
-  padding: 0 0.625rem;
-  border: 0.0625rem solid #dfe3ee;
-  border-radius: 0.5rem;
-  background: #fff;
-  color: #30364a;
-  font-size: 0.8125rem;
-  font-weight: 800;
-  outline: 0;
 }
 
 .input-parameter-toolbar {
