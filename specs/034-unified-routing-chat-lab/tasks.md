@@ -107,6 +107,28 @@
 - [x] Save evidence under `artifacts/slices/034-unified-routing-chat-lab/034.8/`
   and `artifacts/slices/034-unified-routing-chat-lab/034.8-scale/`.
 
+## 034.9 Natural booking and session reset hardening
+
+- [x] RED: backend gate fails until `我要定航班` starts `flight_booking`.
+- [x] RED: backend gate fails until booking starts with sales collection language,
+  not order-number collection language.
+- [x] RED: browser UAT fails until the lab exposes a visible session reset
+  control.
+- [x] Add `定航班`/`定机票` style strong trigger coverage for flight booking.
+- [x] Parse booking start utterances for origin, destination, travel time,
+  phone, and passenger variables without requiring an order number.
+- [x] Keep non-booking SOP start state compatible with existing
+  `business_refs == {}` contracts.
+- [x] Add a `清空会话` button that creates a fresh runtime-lab session and clears
+  transcript/task/event state.
+- [x] Harden the workflow step-limit fixture so full backend gates do not depend
+  on a configured live LLM provider.
+- [x] Run targeted backend runtime-lab gates and 100+ airline scale cases.
+- [x] Run browser UAT for natural booking, session reset, enabled-intent scope,
+  sample toggle, and 15-SOP/5-switch Chatflow-bound scale regression.
+- [x] Save evidence under `artifacts/slices/034-unified-routing-chat-lab/034.9/`
+  and `artifacts/slices/034-unified-routing-chat-lab/034.9-scale/`.
+
 ## Future specs, not 034 tasks
 
 - [ ] Rename or consolidate final user-facing API to `/chat` or `/query`.

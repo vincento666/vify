@@ -64,11 +64,21 @@ class MockSopAdapter:
     def __init__(self, manifests: dict[str, SopManifest] | None = None) -> None:
         self._manifests = manifests or mock_sop_manifests()
 
-    def start(self, sop_id: str) -> SopTurnResult:
+    def start(self, sop_id: str, message: str = "") -> SopTurnResult:
         manifest = self._manifest(sop_id)
         prompt = self._step(manifest, "collect_order_no").prompt
+        collected: dict[str, Any] = {}
+        if manifest.sop_id == "flight_booking":
+            text = message.strip()
+            collected = _parse_collection_variables(manifest, text)
+            if text:
+                collected["last_user_message"] = text
+                collected["node_trace"] = _node_trace(manifest)
+            prompt = _booking_collect_prompt(collected)
+            reply = f"已开始{manifest.display_name}，{_booking_ack(collected)}{prompt}"
+            return self._result(manifest, "collect_order_no", reply, prompt, collected, completed=False)
         reply = f"已开始{manifest.display_name}，{prompt}"
-        return self._result(manifest, "collect_order_no", reply, prompt, {}, completed=False)
+        return self._result(manifest, "collect_order_no", reply, prompt, collected, completed=False)
 
     def continue_task(
         self,
@@ -81,10 +91,19 @@ class MockSopAdapter:
         saved = dict(collected or {})
         text = message.strip()
         if current_step == "collect_order_no":
-            saved.update(_parse_business_variables(text))
-            saved.setdefault("order_no", text)
+            saved.update(_parse_collection_variables(manifest, text))
             saved["last_user_message"] = text
             saved["node_trace"] = _node_trace(manifest)
+            if manifest.sop_id == "flight_booking":
+                if _missing_booking_contact_fields(saved):
+                    prompt = _booking_collect_prompt(saved)
+                    reply = f"{_booking_ack(saved)}{prompt}"
+                    return self._result(manifest, "collect_order_no", reply, prompt, saved, completed=False)
+                prompt = self._step(manifest, "confirm").prompt
+                reply = f"{_booking_ack(saved)}{_policy_note(manifest)}{prompt}"
+                return self._result(manifest, "confirm", reply, prompt, saved, completed=False)
+            saved.update(_parse_business_variables(text))
+            saved.setdefault("order_no", text)
             prompt = self._step(manifest, "confirm").prompt
             order_no = saved.get("order_no") or text
             phone_note = f"，手机号 {saved['phone']}" if saved.get("phone") else ""
@@ -149,16 +168,54 @@ def mock_sop_manifests() -> dict[str, SopManifest]:
             sop_id="flight_booking",
             display_name="机票预订",
             business_area="SALES",
-            trigger_keywords=("买票", "买机票", "订机票", "购买航班", "出票", "购票", "可售航班", "订航班", "机票销售"),
-            strong_trigger_keywords=("买机票", "订机票", "购买航班", "购票", "机票销售", "订航班"),
+            trigger_keywords=(
+                "买票",
+                "买机票",
+                "订机票",
+                "定机票",
+                "购买航班",
+                "出票",
+                "购票",
+                "可售航班",
+                "订航班",
+                "定航班",
+                "预订航班",
+                "预定航班",
+                "机票销售",
+            ),
+            strong_trigger_keywords=(
+                "买机票",
+                "订机票",
+                "定机票",
+                "购买航班",
+                "购票",
+                "机票销售",
+                "订航班",
+                "定航班",
+                "预订航班",
+                "预定航班",
+            ),
             strong_trigger_templates=(
-                _phrase_template("flight_booking:phrase", "买机票", "订机票", "购买航班", "购票", "机票销售", "订航班"),
+                _phrase_template(
+                    "flight_booking:phrase",
+                    "买机票",
+                    "订机票",
+                    "定机票",
+                    "购买航班",
+                    "购票",
+                    "机票销售",
+                    "订航班",
+                    "定航班",
+                    "预订航班",
+                    "预定航班",
+                ),
                 _all_terms_template("flight_booking:buy_ticket", "买", "机票"),
                 _all_terms_template("flight_booking:sales_book", "机票销售", "订"),
                 _all_terms_template("flight_booking:need_issue", "需要", "出票"),
                 _all_terms_template("flight_booking:book_one_ticket", "订一张", "机票"),
             ),
             branch_step_id="booking_branch",
+            collect_prompt="请提供出发城市、到达城市、出行时间、手机号和乘机人信息。",
             resume_prompt="是否继续刚才的机票预订流程？",
         ),
         "fare_quote": _build_sop_manifest(
@@ -413,13 +470,14 @@ def _build_sop_manifest(
     branch_step_id: str,
     resume_prompt: str,
     branch_node_type: str = "CONDITION",
+    collect_prompt: str = "请提供订单号、手机号和乘机人信息。",
 ) -> SopManifest:
     return SopManifest(
         sop_id=sop_id,
         display_name=display_name,
         trigger_keywords=trigger_keywords,
         strong_trigger_keywords=strong_trigger_keywords,
-        steps=_deep_steps(branch_step_id, branch_node_type=branch_node_type),
+        steps=_deep_steps(branch_step_id, branch_node_type=branch_node_type, collect_prompt=collect_prompt),
         interruptible_steps=("collect_order_no",),
         resume_prompt=resume_prompt,
         business_area=business_area,
@@ -460,9 +518,13 @@ def _match_template(text: str, template: KeywordTriggerTemplate) -> tuple[str, .
     return ()
 
 
-def _deep_steps(branch_step_id: str, branch_node_type: str = "CONDITION") -> tuple[SopStep, ...]:
+def _deep_steps(
+    branch_step_id: str,
+    branch_node_type: str = "CONDITION",
+    collect_prompt: str = "请提供订单号、手机号和乘机人信息。",
+) -> tuple[SopStep, ...]:
     return (
-        SopStep("collect_order_no", "请提供订单号、手机号和乘机人信息。", True, "INFORMATION_COLLECTION"),
+        SopStep("collect_order_no", collect_prompt, True, "INFORMATION_COLLECTION"),
         SopStep("parse_variables", "解析订单、手机号、旅客姓名和航班线索。", True, "VARIABLE_PARSE"),
         SopStep("policy_llm", "生成民航客服政策解释。", True, "LLM"),
         SopStep("business_api", "模拟调用民航订单/航班/会员 API。", True, "API_CALL"),
@@ -487,6 +549,88 @@ def _parse_business_variables(text: str) -> dict[str, Any]:
     if passenger_match is not None:
         parsed["passenger_name"] = passenger_match.group(1)
     return parsed
+
+
+def _parse_collection_variables(manifest: SopManifest, text: str) -> dict[str, Any]:
+    parsed = _parse_business_variables(text)
+    if manifest.sop_id != "flight_booking":
+        return parsed
+    parsed.pop("order_no", None)
+    route_match = re.search(
+        r"从([\u4e00-\u9fa5A-Za-z]{2,16})(?:出发)?(?:到|去|飞)([\u4e00-\u9fa5A-Za-z]{2,16}?)"
+        r"(?:的?机票|的?航班|，|,|。|$)",
+        text,
+    )
+    if route_match is not None:
+        parsed["origin"] = route_match.group(1)
+        parsed["destination"] = route_match.group(2)
+    else:
+        origin_match = re.search(r"从([\u4e00-\u9fa5A-Za-z]{2,16})出发", text)
+        destination_match = re.search(r"(?:到|去)([\u4e00-\u9fa5A-Za-z]{2,16})(?:的?机票|的?航班|$)", text)
+        if origin_match is not None:
+            parsed["origin"] = origin_match.group(1)
+        if destination_match is not None:
+            parsed["destination"] = destination_match.group(1)
+    time_match = re.search(
+        r"((?:今天|明天|后天|大后天|周[一二三四五六日天]|星期[一二三四五六日天])?"
+        r"(?:早上|上午|中午|下午|晚上|夜里)?\s*\d{1,2}点(?:\d{1,2}分)?)",
+        text,
+    )
+    if time_match is not None:
+        parsed["travel_time"] = time_match.group(1).replace(" ", "")
+    else:
+        date_match = re.search(r"(今天|明天|后天|大后天|周[一二三四五六日天]|星期[一二三四五六日天])", text)
+        if date_match is not None:
+            parsed["travel_time"] = date_match.group(1)
+    return parsed
+
+
+def _missing_booking_fields(collected: dict[str, Any]) -> tuple[str, ...]:
+    missing: list[str] = []
+    if not collected.get("origin"):
+        missing.append("出发城市")
+    if not collected.get("destination"):
+        missing.append("到达城市")
+    if not collected.get("travel_time"):
+        missing.append("出行时间")
+    if not collected.get("phone"):
+        missing.append("手机号")
+    if not collected.get("passenger_name"):
+        missing.append("乘机人信息")
+    return tuple(missing)
+
+
+def _missing_booking_contact_fields(collected: dict[str, Any]) -> tuple[str, ...]:
+    missing: list[str] = []
+    if not collected.get("phone"):
+        missing.append("手机号")
+    if not collected.get("passenger_name"):
+        missing.append("乘机人信息")
+    return tuple(missing)
+
+
+def _booking_collect_prompt(collected: dict[str, Any]) -> str:
+    missing = _missing_booking_fields(collected)
+    if not missing:
+        return "请确认是否继续办理机票预订。"
+    return f"请提供{'、'.join(missing)}。"
+
+
+def _booking_ack(collected: dict[str, Any]) -> str:
+    chunks: list[str] = []
+    origin = collected.get("origin")
+    destination = collected.get("destination")
+    if origin and destination:
+        chunks.append(f"{origin}到{destination}")
+    if collected.get("travel_time"):
+        chunks.append(str(collected["travel_time"]))
+    if collected.get("phone"):
+        chunks.append(f"手机号 {collected['phone']}")
+    if collected.get("passenger_name"):
+        chunks.append(f"乘机人 {collected['passenger_name']}")
+    if not chunks:
+        return ""
+    return f"已记录{', '.join(chunks)}。"
 
 
 def _node_trace(manifest: SopManifest) -> list[str]:

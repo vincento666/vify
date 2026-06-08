@@ -28,7 +28,7 @@ export const AIRLINE_SOP_SCENARIOS: AirlineSopScenario[] = [
       '帮我订机票，两个人从北京飞成都，预算想控制一下',
       '临时出行需要订机票，麻烦帮我进入购票流程',
     ],
-    sampleReplies: ['订单号 CA0034，手机号 13800138000，乘机人张测试', '确认', '继续机票预订'],
+    sampleReplies: ['手机号 13800138000，乘机人张测试', '确认', '继续机票预订'],
   },
   {
     id: 'fare_quote',

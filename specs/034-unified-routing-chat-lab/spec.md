@@ -75,6 +75,10 @@ The page must support these manual validation paths:
 - Testers can enable a subset of SOP intents from the sample catalog; free-form
   messages only start or switch into enabled SOPs while active continuation and
   suspended resume behavior remain available.
+- Testers can clear the current lab conversation and start a fresh runtime-lab
+  session without reloading the page.
+- Flight-booking utterances use sales collection language for route/time/contact
+  details and must not ask for an order number before a ticket exists.
 - The page includes a way to open the ordinary Chat surface for comparison.
 - Unit and route tests pass.
 - REM governance gate passes for changed frontend files.
@@ -357,3 +361,77 @@ starts.
   `artifacts/slices/034-unified-routing-chat-lab/034.8/browser-uat.md`;
 - browser 15-SOP scale regression:
   `artifacts/slices/034-unified-routing-chat-lab/034.8-scale/browser-uat.md`.
+
+## 034.9 Natural Booking And Session Reset Hardening
+
+Status: complete.
+
+034.9 fixes three user-visible lab badcases found during manual UAT:
+
+- `我要定航班` did not match because the booking trigger catalog covered common
+  `订` phrases but missed `定航班` / `定机票` variants.
+- Flight booking reused the generic SOP collection prompt, so a sales flow could
+  ask for an order number before a ticket existed.
+- The lab did not expose a direct way to clear the current transcript and start
+  a fresh runtime-lab session.
+
+034.9 final behavior:
+
+- `我要定航班` and detailed booking utterances start `flight_booking` through
+  free-form routing.
+- Booking starts by asking for missing origin, destination, travel time, phone,
+  and passenger details. It does not ask for `订单号`.
+- Booking start/continue can parse route, time, phone, and passenger variables
+  from natural customer messages.
+- Non-booking SOP start state keeps the existing empty `business_refs`
+  contract, so active-task semantic switching is not mutated before routing
+  arbitration.
+- The page header includes `清空会话`, which creates a new runtime-lab session
+  and clears transcript, route decision, task, and event state.
+
+034.9 evidence:
+
+- RED backend booking badcase:
+  `artifacts/slices/034-unified-routing-chat-lab/034.9/red-backend-booking.txt`;
+- RED browser reset badcase:
+  `artifacts/slices/034-unified-routing-chat-lab/034.9/red-browser-reset.txt`;
+- targeted backend runtime-lab gate:
+  `artifacts/slices/034-unified-routing-chat-lab/034.9/backend-runtime-lab.txt`;
+- full backend pytest:
+  `artifacts/slices/034-unified-routing-chat-lab/034.9/backend-full-pytest.txt`;
+- targeted frontend/rem gate:
+  `artifacts/slices/034-unified-routing-chat-lab/034.9/frontend-targeted-unit.txt`;
+- full frontend unit:
+  `artifacts/slices/034-unified-routing-chat-lab/034.9/frontend-unit.txt`;
+- frontend build:
+  `artifacts/slices/034-unified-routing-chat-lab/034.9/frontend-build.txt`;
+- ruff:
+  `artifacts/slices/034-unified-routing-chat-lab/034.9/ruff.txt`;
+- browser natural booking UAT:
+  `artifacts/slices/034-unified-routing-chat-lab/034.9/browser-booking-natural.md`;
+- browser session reset UAT:
+  `artifacts/slices/034-unified-routing-chat-lab/034.9/browser-reset-session.md`;
+- browser enabled-intent regression:
+  `artifacts/slices/034-unified-routing-chat-lab/034.9/browser-uat-enabled-intents.md`;
+- browser sample-toggle regression:
+  `artifacts/slices/034-unified-routing-chat-lab/034.9/browser-uat.md`;
+- browser 15-SOP/5-switch scale regression:
+  `artifacts/slices/034-unified-routing-chat-lab/034.9-scale/browser-uat.md`.
+- browser 15-SOP/5-switch Chatflow-bound regression output:
+  `artifacts/slices/034-unified-routing-chat-lab/034.9/browser-scale-chatflow-bound.txt`.
+- workflow step-limit fixture hardening:
+  `artifacts/slices/034-unified-routing-chat-lab/034.9/workflow-failure-behavior.txt`.
+
+Full backend pytest initially exposed an unrelated workflow fixture badcase:
+`test_step_limit_fails_cleanly_and_records_failed_run` used a self-looping `LLM`
+node, so local databases with a configured live LLM agent could make the test
+call an external provider 50 times before hitting step limit. The fixture now
+uses a provider-free `MESSAGE` node while preserving the same step-limit
+assertion, and full backend pytest passes.
+
+Browser Chatflow-bound UAT also exposed a fixture badcase: a temporary refund
+fixture used `VARIABLE_PARSE`, which is valid as mock SOP design coverage but is
+not a currently executable Chatflow engine node type. The browser binding was
+rebuilt with executable Chatflow nodes (`INFORMATION_COLLECTION`,
+`VARIABLE_AGGREGATION`, `QUESTION`, `END`), then rerun with
+`Chatflow-bound refund SOP: yes`.

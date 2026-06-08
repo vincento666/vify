@@ -112,9 +112,20 @@
           <h1>统一路由对话</h1>
           <p>自由对话 · {{ routeScopeLabel }} · {{ lastRouteAction }}</p>
         </div>
-        <el-tag size="small" :type="sessionId ? 'success' : 'info'" effect="light">
-          {{ sessionId ? 'Runtime Ready' : 'Waiting' }}
-        </el-tag>
+        <div class="lab-header-actions">
+          <el-button
+            size="small"
+            :icon="Refresh"
+            :loading="creatingSession"
+            data-testid="runtime-lab-reset"
+            @click="createFreshSession"
+          >
+            清空会话
+          </el-button>
+          <el-tag size="small" :type="sessionId ? 'success' : 'info'" effect="light">
+            {{ sessionId ? 'Runtime Ready' : 'Waiting' }}
+          </el-tag>
+        </div>
       </header>
 
       <div ref="messagesEl" class="lab-messages">
@@ -625,6 +636,13 @@ function uid(prefix: string) {
   margin: 0;
   font-size: 1rem;
   line-height: 1.4;
+}
+
+.lab-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
 }
 
 .lab-chat-header p {

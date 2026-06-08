@@ -48,9 +48,9 @@ class WorkflowFailureBehaviorTest(unittest.TestCase):
                     {"nodeKey": "start", "type": "START", "name": "Start", "config": {}},
                     {
                         "nodeKey": "loop",
-                        "type": "LLM",
+                        "type": "MESSAGE",
                         "name": "Loop",
-                        "config": {"prompt": "{{start.userMessage}}", "outputVariable": "answer"},
+                        "config": {"content": "{{start.userMessage}}", "outputVariable": "answer"},
                     },
                 ],
                 edges=[

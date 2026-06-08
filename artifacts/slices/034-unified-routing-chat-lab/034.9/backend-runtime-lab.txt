@@ -1,0 +1,36 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/vincento/work/develop/hify
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 60 items
+
+tests/unit/runtime_lab/test_candidates.py ...                            [  5%]
+tests/unit/runtime_lab/test_constrained_classifier.py ......             [ 15%]
+tests/unit/runtime_lab/test_dependency_direction.py ..                   [ 18%]
+tests/unit/runtime_lab/test_explicit_signals.py .....                    [ 26%]
+tests/unit/runtime_lab/test_mock_semantic_recall.py ....                 [ 33%]
+tests/unit/runtime_lab/test_mock_sop_adapter.py .                        [ 35%]
+tests/unit/runtime_lab/test_router.py ....                               [ 41%]
+tests/unit/runtime_lab/test_runtime_lab_web_factory.py ......            [ 51%]
+tests/unit/runtime_lab/test_sop_adapter_contract.py ....                 [ 58%]
+tests/integration/runtime_lab/test_chatflow_sop_runtime_adapter.py ..    [ 61%]
+tests/integration/runtime_lab/test_runtime_lab_kernel.py ..              [ 65%]
+tests/integration/runtime_lab/test_runtime_lab_reliability.py .          [ 66%]
+tests/integration/runtime_lab/test_runtime_lab_repository.py ..          [ 70%]
+tests/integration/runtime_lab/test_runtime_lab_semantic_policy.py .....  [ 78%]
+tests/integration/runtime_lab/test_runtime_lab_service.py ...            [ 83%]
+tests/integration/runtime_lab/test_runtime_lab_sop_adapter_contract.py . [ 85%]
+.                                                                        [ 86%]
+tests/e2e/test_runtime_lab_airline_scale_e2e.py ......                   [ 96%]
+tests/contract/test_runtime_lab_api.py .                                 [ 98%]
+tests/contract/test_runtime_lab_semantic_evidence_api.py .               [100%]
+
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/vincento/work/develop/hify/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 60 passed, 1 warning in 5.80s =========================

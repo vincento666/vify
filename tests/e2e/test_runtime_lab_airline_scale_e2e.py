@@ -294,7 +294,10 @@ class RuntimeLabAirlineScaleE2ETest(unittest.TestCase):
                     self.assertEqual(collected["routeDecision"]["action"], "CONTINUE_ACTIVE_SOP")
                     self.assertEqual(collected["activeTask"]["currentStep"], "confirm")
                     self.assertEqual(collected["activeTask"]["businessRefs"]["phone"], f"1380013{index:04d}")
-                    self.assertTrue(collected["activeTask"]["businessRefs"]["order_no"].startswith("MU"))
+                    if sop_id == "flight_booking":
+                        self.assertNotIn("order_no", collected["activeTask"]["businessRefs"])
+                    else:
+                        self.assertTrue(collected["activeTask"]["businessRefs"]["order_no"].startswith("MU"))
                     self.assertEqual(completed["routeDecision"]["action"], "COMPLETE_TASK")
                     self.assertIsNone(completed["activeTask"])
                     executed += 1
@@ -344,6 +347,36 @@ class RuntimeLabAirlineScaleE2ETest(unittest.TestCase):
         self.assertEqual(invoice_started["activeTask"]["sopId"], "invoice_apply")
         self.assertEqual(disabled_refund_during_invoice["routeDecision"]["action"], "CONTINUE_ACTIVE_SOP")
         self.assertEqual(disabled_refund_during_invoice["activeTask"]["sopId"], "invoice_apply")
+
+    def test_booking_uses_sales_collection_language_for_natural_reservation_turns(self) -> None:
+        with TestClient(app) as client:
+            short_session_id = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
+            detailed_session_id = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
+
+            short_started = _message(client, short_session_id, "我要定航班")
+            detailed_started = _message(
+                client,
+                detailed_session_id,
+                "我要订一张明天上午9点从北京到广州的机票",
+            )
+
+        self.assertEqual(short_started["routeDecision"]["action"], "START_SOP")
+        self.assertEqual(short_started["activeTask"]["sopId"], "flight_booking")
+        self.assertNotIn("订单号", short_started["reply"])
+        self.assertIn("手机号", short_started["reply"])
+        self.assertIn("乘机人", short_started["reply"])
+
+        self.assertEqual(detailed_started["routeDecision"]["action"], "START_SOP")
+        self.assertEqual(detailed_started["activeTask"]["sopId"], "flight_booking")
+        self.assertNotIn("订单号", detailed_started["reply"])
+        self.assertEqual(detailed_started["activeTask"]["businessRefs"]["origin"], "北京")
+        self.assertEqual(detailed_started["activeTask"]["businessRefs"]["destination"], "广州")
+        self.assertEqual(detailed_started["activeTask"]["businessRefs"]["travel_time"], "明天上午9点")
+        self.assertIn("北京", detailed_started["reply"])
+        self.assertIn("广州", detailed_started["reply"])
+        self.assertNotIn("广州的机票", detailed_started["reply"])
+        self.assertIn("手机号", detailed_started["reply"])
+        self.assertIn("乘机人", detailed_started["reply"])
 
     def test_real_chatflow_bound_sop_still_routes_through_runtime_lab_control_plane(self) -> None:
         stamp = time.time_ns()
