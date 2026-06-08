@@ -1,0 +1,9 @@
+file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-edge-insert-button-visibility.mjs:7
+  if (!condition) throw new Error(message)
+                        ^
+
+Error: Selected edge insert button must not rely on stale hover state after the cursor leaves
+    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-edge-insert-button-visibility.mjs:7:25)
+    at file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-edge-insert-button-visibility.mjs:67:3
+
+Node.js v23.11.0

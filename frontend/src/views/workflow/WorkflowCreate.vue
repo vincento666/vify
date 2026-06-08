@@ -243,14 +243,14 @@
               'coze-edge-path',
               runPathEdgeClasses(edgeProps.id),
               {
-                'edge-hovered': hoveredEdgeId === edgeProps.id || edgeInsertPaletteId === edgeProps.id,
+                'edge-hovered': (hoveredEdgeId === edgeProps.id || edgeInsertPaletteId === edgeProps.id) && selectedEdgeId !== edgeProps.id,
                 'edge-selected': selectedEdgeId === edgeProps.id,
               },
             ]"
           />
           <EdgeLabelRenderer>
             <button
-              v-show="hoveredEdgeId === edgeProps.id || edgeInsertPaletteId === edgeProps.id"
+              v-show="hoveredEdgeId === edgeProps.id || selectedEdgeId === edgeProps.id || edgeInsertPaletteId === edgeProps.id"
               type="button"
               class="edge-insert-button"
               data-testid="edge-insert-button"

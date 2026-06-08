@@ -61,12 +61,22 @@ try {
   await page.mouse.move(80, 820)
   await page.waitForTimeout(180)
   assert(
+    await page.locator('.coze-edge-path.edge-selected').count() === 1,
+    'Expected selected edge to keep an explicit selected state',
+  )
+  assert(
+    await page.locator('.coze-edge-path.edge-hovered').count() === 0,
+    'Selected edge insert button must not rely on stale hover state after the cursor leaves',
+  )
+  assert(
     await visibleInsertButtonCount(page) === 1,
     'Expected selected edge to keep the insert button visible until pane click clears selection',
   )
 
   await page.mouse.click(1200, 820)
   await page.waitForTimeout(180)
+  assert(await page.locator('.coze-edge-path.edge-selected').count() === 0, 'Expected pane click to clear selected edge state')
+  assert(await page.locator('.coze-edge-path.edge-hovered').count() === 0, 'Expected pane click to clear hovered edge state')
   assert(
     await visibleInsertButtonCount(page) === 0,
     'Expected pane click to clear selected edge insert button',

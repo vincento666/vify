@@ -56,10 +56,12 @@ try {
   await page.mouse.click(selectPoint.x, selectPoint.y)
   await page.mouse.move(80, 80)
   await page.waitForTimeout(160)
-  assert(await visibleInsertButtonCount(page) === 0, 'Selecting a line should not keep the insert button visible after hover ends')
+  assert(await visibleInsertButtonCount(page) === 1, 'Selecting a line should keep the insert button visible after hover ends')
 
   const selectedEdgeClass = await page.locator('.coze-edge-path.edge-selected').count()
-  assert(selectedEdgeClass === 1, 'The line should remain selected/highlighted even when its insert button is hidden')
+  assert(selectedEdgeClass === 1, 'The line should remain selected/highlighted while its insert button is visible')
+  const hoveredEdgeClass = await page.locator('.coze-edge-path.edge-hovered').count()
+  assert(hoveredEdgeClass === 0, 'Selected line insert button must not rely on stale hover styling')
 
   if (screenshotPath) {
     await page.screenshot({ path: screenshotPath, fullPage: true })
