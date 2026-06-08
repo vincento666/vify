@@ -1,0 +1,13 @@
+Commands:
+rtk node frontend/e2e/workflow-condition-branch-values.mjs
+rtk node frontend/e2e/workflow-condition-branch-endpoints.mjs
+rtk env HIFY_E2E_SCREENSHOT=artifacts/slices/081-condition-operator-type-semantics/screenshots/condition-operator-type-semantics.png node frontend/e2e/workflow-condition-branch-values.mjs
+
+Result:
+PASS
+
+Summary:
+- String left variable operator menu exposes length comparison labels.
+- String left variable operator menu hides bare numeric greater/less labels.
+- Selecting an empty-check operator clears and disables the right operand input and variable picker.
+- Condition branch endpoints remain aligned after the operator behavior change.

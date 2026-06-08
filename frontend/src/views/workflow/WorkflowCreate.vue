@@ -1180,7 +1180,7 @@
                     @update:model-value="setConditionRowValue(branchIndex, conditionIndex, 'operator', $event)"
                   >
                     <el-option
-                      v-for="option in conditionOperatorOptions"
+                      v-for="option in conditionOperatorOptionsForCondition(condition)"
                       :key="option.value"
                       :label="option.label"
                       :value="option.value"
@@ -1212,7 +1212,8 @@
                           v-else
                           :model-value="condition.right.value"
                           aria-label="条件右值"
-                          placeholder="输入或引用参数值"
+                          :placeholder="conditionRightOperandPlaceholder(condition.operator)"
+                          :disabled="isConditionRightOperandDisabled(condition.operator)"
                           @update:model-value="handleConditionOperandInput(branchIndex, conditionIndex, 'right', $event)"
                         />
                       </div>
@@ -1220,6 +1221,7 @@
                         type="button"
                         class="variable-picker-trigger"
                         aria-label="选择右值变量"
+                        :disabled="isConditionRightOperandDisabled(condition.operator)"
                         @click="openConditionVariablePicker(branchIndex, conditionIndex, 'right', $event)"
                       >
                         <Connection aria-hidden="true" />
@@ -3580,7 +3582,8 @@ type LlmResource = {
   enabled?: boolean
 }
 type ConditionOperator = 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'greater_than' | 'greater_or_equal'
-  | 'less_than' | 'less_or_equal' | 'is_empty' | 'is_not_empty'
+  | 'less_than' | 'less_or_equal' | 'length_greater_than' | 'length_greater_or_equal' | 'length_less_than'
+  | 'length_less_or_equal' | 'is_empty' | 'is_not_empty' | 'is_true' | 'is_false'
 type ConditionOperand = {
   valueMode: InputValueMode
   value: string
@@ -3808,7 +3811,8 @@ const llmModelParameterDefaults: Record<string, number> = {
   presencePenalty: 0,
   seed: 0,
 }
-const conditionOperatorOptions: Array<{ label: string; value: ConditionOperator }> = [
+type ConditionOperatorOption = { label: string; value: ConditionOperator }
+const conditionOperatorOptions: ConditionOperatorOption[] = [
   { label: '等于', value: 'equals' },
   { label: '不等于', value: 'not_equals' },
   { label: '包含', value: 'contains' },
@@ -3817,8 +3821,49 @@ const conditionOperatorOptions: Array<{ label: string; value: ConditionOperator 
   { label: '大于等于', value: 'greater_or_equal' },
   { label: '小于', value: 'less_than' },
   { label: '小于等于', value: 'less_or_equal' },
+  { label: '长度大于', value: 'length_greater_than' },
+  { label: '长度大于等于', value: 'length_greater_or_equal' },
+  { label: '长度小于', value: 'length_less_than' },
+  { label: '长度小于等于', value: 'length_less_or_equal' },
   { label: '为空', value: 'is_empty' },
   { label: '不为空', value: 'is_not_empty' },
+  { label: '为真', value: 'is_true' },
+  { label: '为假', value: 'is_false' },
+]
+const conditionOperatorOptionByValue = new Map(conditionOperatorOptions.map((option) => [option.value, option]))
+const conditionStringOperatorValues: ConditionOperator[] = [
+  'equals',
+  'not_equals',
+  'contains',
+  'not_contains',
+  'length_greater_than',
+  'length_greater_or_equal',
+  'length_less_than',
+  'length_less_or_equal',
+  'is_empty',
+  'is_not_empty',
+]
+const conditionNumberOperatorValues: ConditionOperator[] = [
+  'equals',
+  'not_equals',
+  'greater_than',
+  'greater_or_equal',
+  'less_than',
+  'less_or_equal',
+  'is_empty',
+  'is_not_empty',
+]
+const conditionBooleanOperatorValues: ConditionOperator[] = ['equals', 'not_equals', 'is_empty', 'is_not_empty', 'is_true', 'is_false']
+const conditionObjectOperatorValues: ConditionOperator[] = ['contains', 'not_contains', 'is_empty', 'is_not_empty']
+const conditionArrayOperatorValues: ConditionOperator[] = [
+  'contains',
+  'not_contains',
+  'length_greater_than',
+  'length_greater_or_equal',
+  'length_less_than',
+  'length_less_or_equal',
+  'is_empty',
+  'is_not_empty',
 ]
 
 const icons = {
@@ -5967,11 +6012,16 @@ function conditionBranches(): ConditionBranch[] {
     name: normalizeConditionBranchName(branch, index),
     logic: String(branch?.logic || 'AND').toUpperCase() === 'OR' ? 'OR' : 'AND',
     conditions: Array.isArray(branch?.conditions) && branch.conditions.length > 0
-      ? branch.conditions.map((condition: any) => ({
-        left: normalizeConditionOperand(condition?.left || condition?.field || ''),
-        operator: normalizeConditionOperator(condition?.operator),
-        right: normalizeConditionOperand(condition?.right ?? condition?.value ?? ''),
-      }))
+      ? branch.conditions.map((condition: any) => {
+        const operator = normalizeConditionOperator(condition?.operator)
+        return {
+          left: normalizeConditionOperand(condition?.left || condition?.field || ''),
+          operator,
+          right: isConditionRightOperandDisabled(operator)
+            ? normalizeConditionOperand('')
+            : normalizeConditionOperand(condition?.right ?? condition?.value ?? ''),
+        }
+      })
       : [{
         left: normalizeConditionOperand('{{start.USER_INPUT}}'),
         operator: 'equals',
@@ -6001,6 +6051,74 @@ function normalizeConditionOperand(value: unknown): ConditionOperand {
 function normalizeConditionOperator(value: unknown): ConditionOperator {
   const raw = String(value || 'equals') as ConditionOperator
   return conditionOperatorOptions.some((option) => option.value === raw) ? raw : 'equals'
+}
+
+function conditionOperatorOptionsFromValues(values: ConditionOperator[]): ConditionOperatorOption[] {
+  return values
+    .map((value) => conditionOperatorOptionByValue.get(value))
+    .filter((option): option is ConditionOperatorOption => Boolean(option))
+}
+
+function conditionOperatorOptionsForType(type: VariableCatalogType | null): ConditionOperatorOption[] {
+  if (!type) return []
+  if (type === 'number') return conditionOperatorOptionsFromValues(conditionNumberOperatorValues)
+  if (type === 'boolean') return conditionOperatorOptionsFromValues(conditionBooleanOperatorValues)
+  if (type === 'object') return conditionOperatorOptionsFromValues(conditionObjectOperatorValues)
+  if (type === 'array') return conditionOperatorOptionsFromValues(conditionArrayOperatorValues)
+  return conditionOperatorOptionsFromValues(conditionStringOperatorValues)
+}
+
+function conditionOperandVariableType(operand: ConditionOperand): VariableCatalogType | null {
+  const selection = inputReferenceSelection(operand.value)
+  if (selection) return selection.item.type
+  return String(operand.value || '').trim() ? 'string' : null
+}
+
+function conditionOperatorOptionsForCondition(condition: ConditionRow): ConditionOperatorOption[] {
+  return conditionOperatorOptionsForType(conditionOperandVariableType(condition.left))
+}
+
+function defaultConditionOperatorForType(type: VariableCatalogType | null): ConditionOperator {
+  return conditionOperatorOptionsForType(type)[0]?.value || 'equals'
+}
+
+function isConditionOperatorAllowedForType(operator: ConditionOperator, type: VariableCatalogType | null) {
+  return conditionOperatorOptionsForType(type).some((option) => option.value === operator)
+}
+
+function isConditionRightOperandDisabled(operator: ConditionOperator) {
+  return ['is_empty', 'is_not_empty', 'is_true', 'is_false'].includes(operator)
+}
+
+function conditionRightOperandPlaceholder(operator: ConditionOperator) {
+  return isConditionRightOperandDisabled(operator) ? '无需填写右值' : '输入或引用参数值'
+}
+
+function nextConditionRowValue(condition: ConditionRow, field: keyof ConditionRow, value: string | number): ConditionRow {
+  if (field === 'operator') {
+    const operator = normalizeConditionOperator(value)
+    return {
+      ...condition,
+      operator,
+      right: isConditionRightOperandDisabled(operator) ? normalizeConditionOperand('') : condition.right,
+    }
+  }
+
+  const nextCondition = { ...condition, [field]: normalizeConditionOperand(value) }
+  if (field !== 'left') return nextCondition
+
+  const previousType = conditionOperandVariableType(condition.left)
+  const nextType = conditionOperandVariableType(nextCondition.left)
+  const operator = isConditionOperatorAllowedForType(nextCondition.operator, nextType)
+    ? nextCondition.operator
+    : defaultConditionOperatorForType(nextType)
+  return {
+    ...nextCondition,
+    operator,
+    right: previousType === nextType && !isConditionRightOperandDisabled(operator)
+      ? nextCondition.right
+      : normalizeConditionOperand(''),
+  }
 }
 
 function persistConditionBranches(branches: ConditionBranch[]) {
@@ -6120,12 +6238,7 @@ function setConditionRowValue(
       ...branch,
       conditions: branch.conditions.map((condition, rowIndex) =>
         rowIndex === conditionIndex
-          ? {
-            ...condition,
-            [field]: field === 'operator'
-              ? normalizeConditionOperator(value)
-              : normalizeConditionOperand(value),
-          }
+          ? nextConditionRowValue(condition, field, value)
           : condition,
       ),
     }
@@ -6159,6 +6272,8 @@ function isConditionVariablePickerOpen(branchIndex: number, conditionIndex: numb
 }
 
 function openConditionVariablePicker(branchIndex: number, conditionIndex: number, side: 'left' | 'right', event?: Event) {
+  const row = conditionBranches()[branchIndex]?.conditions[conditionIndex]
+  if (side === 'right' && row && isConditionRightOperandDisabled(row.operator)) return
   refreshVariablePickerAnchor(event?.currentTarget)
   activeConditionVariableTarget.value = conditionVariableTarget(branchIndex, conditionIndex, side)
   conditionVariableSearch.value = ''

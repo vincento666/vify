@@ -1,0 +1,19 @@
+Frontend RED command:
+rtk node frontend/e2e/workflow-condition-branch-values.mjs
+
+Frontend failure:
+String condition operator menu must expose length comparison labels, got:
+等于
+不等于
+包含
+不包含
+大于
+大于等于
+小于
+小于等于
+为空
+不为空
+
+Reference basis:
+- Coze Studio condition operator maps separate string/array length operators from numeric greater/less operators.
+- Coze disables the right value input for null/not-null/true/false style operators.

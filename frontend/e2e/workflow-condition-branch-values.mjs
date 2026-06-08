@@ -154,6 +154,27 @@ try {
   await rightOperand.getByRole('button', { name: '清除右值变量引用', exact: true }).click()
   assert(await rightValue.inputValue() === '', 'Clearing a condition variable chip must restore literal input mode')
 
+  await rightValue.fill('literal-before-empty')
+  await row.locator('.condition-operator-select').click()
+  const operatorDropdown = page.locator('.el-popper:visible').last()
+  const operatorText = await operatorDropdown.innerText()
+  const operatorLines = operatorText.split(/\s+/).filter(Boolean)
+  assert(
+    operatorLines.includes('长度大于') && operatorLines.includes('长度小于等于'),
+    `String condition operator menu must expose length comparison labels, got ${operatorText}`,
+  )
+  assert(
+    !operatorLines.includes('大于') && !operatorLines.includes('小于'),
+    `String condition operator menu must not expose bare numeric comparison labels, got ${operatorText}`,
+  )
+  await operatorDropdown.getByText('为空', { exact: true }).click()
+  assert(await rightValue.inputValue() === '', 'Selecting an empty-check operator must clear the right operand')
+  assert(await rightValue.isDisabled(), 'Selecting an empty-check operator must disable the right operand input')
+  assert(
+    await rightOperand.getByRole('button', { name: '选择右值变量', exact: true }).isDisabled(),
+    'Selecting an empty-check operator must disable the right operand variable picker',
+  )
+
   const addCondition = branch.getByRole('button', { name: '添加条件', exact: true })
   const conditionSection = page.getByTestId('config-section-条件分支')
   const addBranch = conditionSection.locator('.section-title').getByRole('button', { name: '添加条件分支', exact: true })
