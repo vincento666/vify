@@ -1,0 +1,15 @@
+Commands:
+rtk node frontend/e2e/chatflow-settings-collapse-canvas.mjs
+rtk node frontend/e2e/chatflow-left-panel-settings.mjs
+rtk node frontend/e2e/chatflow-left-panel-variable-readonly.mjs
+
+Result:
+PASS chatflow settings collapse canvas e2e
+PASS chatflow left panel settings e2e
+PASS chatflow left panel variable readonly e2e
+
+Coverage:
+- Chatflow left dialog settings panel remains usable.
+- Left runtime variable panel is readonly and does not mutate END config.
+- Collapsing the left panel keeps the canvas visible.
+- On compact viewports, opening the trial-run panel keeps the bottom toolbar inside the available canvas and outside the right panel.

@@ -12344,6 +12344,29 @@ onUnmounted(() => {
     left: calc((100% - var(--workflow-node-test-reserve)) / 2);
   }
 
+  .workflow-canvas-page.has-right-panel .canvas-toolbar,
+  .workflow-canvas-page.has-node-test-drawer .canvas-toolbar {
+    gap: 0.375rem;
+    padding: 0 0.5rem;
+  }
+
+  .workflow-canvas-page.has-right-panel .canvas-toolbar .toolbar-add-node,
+  .workflow-canvas-page.has-right-panel .canvas-toolbar .toolbar-run,
+  .workflow-canvas-page.has-node-test-drawer .canvas-toolbar .toolbar-add-node,
+  .workflow-canvas-page.has-node-test-drawer .canvas-toolbar .toolbar-run {
+    width: 2rem;
+    min-width: 2rem;
+    gap: 0;
+    padding: 0;
+  }
+
+  .workflow-canvas-page.has-right-panel .canvas-toolbar .toolbar-add-node span,
+  .workflow-canvas-page.has-right-panel .canvas-toolbar .toolbar-run span,
+  .workflow-canvas-page.has-node-test-drawer .canvas-toolbar .toolbar-add-node span,
+  .workflow-canvas-page.has-node-test-drawer .canvas-toolbar .toolbar-run span {
+    display: none;
+  }
+
   .coze-node {
     width: 21.25rem;
   }

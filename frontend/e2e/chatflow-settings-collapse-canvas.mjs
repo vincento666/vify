@@ -97,13 +97,17 @@ try {
     const end = rect('.vue-flow__node[data-id="end"]')
     if (!panel || !toolbar || !end) return false
     const endCenter = end.left + end.width / 2
-    return toolbar.left >= 0 && endCenter < panel.left - 8
+    return toolbar.left >= 0 && toolbar.right <= panel.left - 8 && endCenter < panel.left - 8
   }, null, { timeout: 3000 })
 
   const geometry = await canvasGeometry(page)
   assert(geometry.resourcePanelDisplay === 'detached', `Expected compact canvas to collapse dialog settings panel, got ${JSON.stringify(geometry)}`)
   assert(geometry.toolbar, `Missing toolbar geometry ${JSON.stringify(geometry)}`)
   assert(geometry.toolbar.left >= 0, `Toolbar must stay in the visible canvas, got ${JSON.stringify(geometry)}`)
+  assert(
+    geometry.toolbar.right <= geometry.availableRight - 8,
+    `Toolbar must stay centered in the available canvas and not overlap the run panel, got ${JSON.stringify(geometry)}`,
+  )
   assert(geometry.start && geometry.end, `Missing start/end nodes ${JSON.stringify(geometry)}`)
 
   for (const [name, box] of Object.entries({ start: geometry.start, end: geometry.end })) {
