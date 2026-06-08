@@ -1,0 +1,15 @@
+node:internal/modules/run_main:104
+    triggerUncaughtException(
+    ^
+
+locator.click: Timeout 30000ms exceeded.
+Call log:
+[2m  - waiting for locator('[data-testid="node-config-panel"]').getByRole('button', { name: '试运行当前节点', exact: true })[22m
+
+    at runSelectedNode (/Users/vincento/work/develop/hify/frontend/e2e/workflow-six-node-matrix.mjs:230:69)
+    at async runWorkflowSelectedNodeMatrix (/Users/vincento/work/develop/hify/frontend/e2e/workflow-six-node-matrix.mjs:251:3)
+    at async file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-six-node-matrix.mjs:280:3 {
+  name: 'TimeoutError'
+}
+
+Node.js v23.11.0
