@@ -206,14 +206,12 @@ const SCHEMAS: Record<WorkflowCanvasNodeType, NodeConfigSchema> = {
   },
   CONDITION: {
     type: 'CONDITION',
-    title: '条件',
+    title: '选择器',
     sections: [
-      INPUT_SECTION,
       {
-        title: '条件判断',
-        fields: [{ key: 'conditionBranches', label: '多条件分支', type: 'condition-branches' }],
+        title: '条件分支',
+        fields: [{ key: 'conditionBranches', label: '条件分支', type: 'condition-branches' }],
       },
-      OUTPUT_SECTION,
     ],
   },
   KNOWLEDGE: {

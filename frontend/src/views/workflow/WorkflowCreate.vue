@@ -314,7 +314,22 @@
                 </span>
               </div>
             </div>
-            <div class="node-line" :class="{ 'start-input-line': nodeProps.data.type === 'START' }">
+            <div
+              v-if="nodeProps.data.type === 'CONDITION'"
+              class="condition-node-branches"
+              data-testid="condition-node-branches"
+            >
+              <div
+                v-for="branch in nodeProps.data.conditionBranches"
+                :key="`branch-block-${branch.handleId}`"
+                class="condition-node-branch"
+                data-testid="condition-branch-block"
+              >
+                <span class="condition-node-branch-kind">{{ branch.kind }}</span>
+                <strong>{{ branch.label }}</strong>
+              </div>
+            </div>
+            <div v-else class="node-line" :class="{ 'start-input-line': nodeProps.data.type === 'START' }">
               <span>{{ nodeProps.data.type === 'END' ? '输出' : '输入' }}</span>
               <template v-if="nodeProps.data.type === 'START'">
                 <div class="node-variable-shell">
@@ -429,7 +444,7 @@
                 </div>
               </template>
             </div>
-            <div v-if="nodeProps.data.type !== 'START' && nodeProps.data.type !== 'END'" class="node-line">
+            <div v-if="nodeProps.data.type !== 'START' && nodeProps.data.type !== 'END' && nodeProps.data.type !== 'CONDITION'" class="node-line">
               <span>输出</span>
               <div class="node-variable-shell">
                 <div
@@ -466,8 +481,29 @@
                 </div>
               </div>
             </div>
+            <template v-if="nodeProps.data.type === 'CONDITION'">
+              <Handle
+                v-for="branch in nodeProps.data.conditionBranches"
+                :id="branch.handleId"
+                :key="branch.handleId"
+                type="source"
+                :position="Position.Right"
+                class="node-port source-port condition-source-port"
+                data-testid="condition-source-port"
+                :style="{ top: branch.top }"
+              />
+              <span
+                v-for="branch in nodeProps.data.conditionBranches"
+                :key="`label-${branch.handleId}`"
+                class="condition-source-port-label"
+                data-testid="condition-source-port-label"
+                :style="{ top: branch.top }"
+              >
+                {{ branch.label }}
+              </span>
+            </template>
             <Handle
-              v-if="nodeProps.data.type !== 'END'"
+              v-else-if="nodeProps.data.type !== 'END'"
               type="source"
               :position="Position.Right"
               class="node-port source-port"
@@ -482,8 +518,8 @@
             <component :is="nodeIcon(selectedNode.type)" />
           </div>
           <div>
-            <h3>{{ selectedSchema.title }}</h3>
-            <span>{{ selectedNode.type === 'LLM' ? '调用大语言模型，使用变量和提示词生成回复' : selectedNode.nodeKey }}</span>
+            <h3>{{ selectedConfigPanelTitle() }}</h3>
+            <span>{{ selectedConfigPanelSubtitle() }}</span>
           </div>
           <div v-if="canTestSelectedNode" class="config-header-actions">
             <button type="button" aria-label="试运行当前节点" title="试运行当前节点" @click="openSelectedNodeTest">
@@ -962,20 +998,16 @@
                 data-testid="condition-branch-card"
               >
                 <div class="condition-branch-header">
+                  <span class="condition-drag-handle" aria-hidden="true">⋮⋮</span>
+                  <span class="condition-branch-kind">{{ conditionBranchKindLabel(branchIndex) }}</span>
+                  <span class="condition-branch-priority">优先级 {{ branchIndex + 1 }}</span>
                   <el-input
-                    :model-value="branch.key"
-                    aria-label="分支标识"
-                    placeholder="分支 key，例如 vip_refund"
-                    @update:model-value="setConditionBranchKey(branchIndex, $event)"
+                    :model-value="branch.name"
+                    aria-label="分支名称"
+                    class="condition-branch-name-input"
+                    placeholder="点击填写分支名称"
+                    @update:model-value="setConditionBranchName(branchIndex, $event)"
                   />
-                  <el-select
-                    :model-value="branch.logic"
-                    aria-label="条件逻辑"
-                    @update:model-value="setConditionBranchLogic(branchIndex, $event)"
-                  >
-                    <el-option label="全部满足 AND" value="AND" />
-                    <el-option label="任一满足 OR" value="OR" />
-                  </el-select>
                   <button type="button" class="output-row-icon" aria-label="删除分支" @click="removeConditionBranch(branchIndex)">
                     <XIcon aria-hidden="true" />
                   </button>
@@ -986,6 +1018,27 @@
                   class="condition-row"
                   data-testid="condition-row"
                 >
+                  <div
+                    v-if="conditionIndex > 0"
+                    class="condition-logic-toggle"
+                    role="group"
+                    aria-label="条件连接关系"
+                  >
+                    <button
+                      type="button"
+                      :class="{ active: branch.logic === 'AND' }"
+                      @click="setConditionBranchLogic(branchIndex, 'AND')"
+                    >
+                      且
+                    </button>
+                    <button
+                      type="button"
+                      :class="{ active: branch.logic === 'OR' }"
+                      @click="setConditionBranchLogic(branchIndex, 'OR')"
+                    >
+                      或
+                    </button>
+                  </div>
                   <div class="condition-value-cell">
                     <div
                       v-if="condition.left.valueMode === 'reference' && inputReferenceSelection(condition.left.value)"
@@ -1159,13 +1212,13 @@
                 <LucidePlus aria-hidden="true" />
                 <span>添加条件分支</span>
               </button>
-              <div class="condition-default-row">
-                <label>默认分支</label>
+              <div class="condition-default-row" data-testid="condition-default-card">
+                <span class="condition-branch-kind">否则</span>
                 <el-input
-                  :model-value="String(fieldValue('defaultBranch') || 'default')"
-                  aria-label="默认分支"
-                  placeholder="default"
-                  @update:model-value="setFieldValue('defaultBranch', $event)"
+                  :model-value="conditionDefaultBranchName(selectedNode.config)"
+                  aria-label="否则分支名称"
+                  placeholder="点击填写默认分支名称"
+                  @update:model-value="setConditionDefaultBranchName($event)"
                 />
               </div>
             </div>
@@ -3419,8 +3472,17 @@ type ConditionRow = {
 }
 type ConditionBranch = {
   key: string
+  name: string
   logic: 'AND' | 'OR'
   conditions: ConditionRow[]
+}
+type ConditionSourceHandle = {
+  key: string
+  kind: string
+  label: string
+  handleId: string
+  condition: string | null
+  top: string
 }
 type SchemaInputMappingRow = {
   name: string
@@ -3670,6 +3732,18 @@ const visibleConfigSections = computed(() => {
 const rightSidePanelOpen = computed(() => Boolean((selectedNode.value && selectedSchema.value) || testPanelOpen.value))
 const canTestSelectedNode = computed(() => canRunSingleNodeTest(selectedNode.value))
 const nodeTestTarget = computed(() => graph.value.nodes.find((node) => node.nodeKey === nodeTestTargetKey.value))
+function selectedConfigPanelTitle() {
+  if (!selectedNode.value || !selectedSchema.value) return ''
+  return selectedNode.value.type === 'CONDITION' ? selectedNode.value.name : selectedSchema.value.title
+}
+function selectedConfigPanelSubtitle() {
+  if (!selectedNode.value) return ''
+  if (selectedNode.value.type === 'LLM') return '调用大语言模型，使用变量和提示词生成回复'
+  if (selectedNode.value.type === 'CONDITION') {
+    return '连接多个下游分支，若设定的条件成立则仅运行对应的分支，若均不成立则只运行“否则”分支'
+  }
+  return selectedNode.value.nodeKey
+}
 const variableGroups = computed(() => selectedNode.value
   ? buildVariableCatalog(graph.value, selectedNode.value.nodeKey, { flowType: isChatflowMode.value ? 'CHATFLOW' : 'WORKFLOW' })
   : [])
@@ -3971,6 +4045,7 @@ const flowNodes = computed<Node[]>({
         outputVariable: primaryOutputVariable(node.config),
         inputVariables: nodeInputVariableNames(node),
         outputVariables: nodeOutputVariableNames(node),
+        conditionBranches: node.type === 'CONDITION' ? conditionSourceHandles(node.config) : [],
         runStatus: nodeRunStatus(node.nodeKey),
         runStatusLabel: nodeRunStatusLabel(node.nodeKey),
         runElapsedLabel: nodeRunElapsedLabel(node.nodeKey),
@@ -4003,6 +4078,7 @@ const flowEdges = computed<Edge[]>({
       source: edge.sourceNodeKey,
       target: edge.targetNodeKey,
       type: 'coze',
+      sourceHandle: edgeSourceHandle(edge),
       selected: selectedEdgeId.value === edge.id,
       markerEnd: MarkerType.ArrowClosed,
       data: {
@@ -4029,7 +4105,9 @@ const flowEdges = computed<Edge[]>({
         id: edge.id,
         sourceNodeKey: edge.source,
         targetNodeKey: edge.target,
-        condition: currentConditions.has(edge.id) ? currentConditions.get(edge.id) ?? null : null,
+        condition: currentConditions.has(edge.id)
+          ? currentConditions.get(edge.id) ?? null
+          : conditionFromSourceHandle(edge.source, edge.sourceHandle as string | null | undefined),
       })),
     }
     markGraphDirty()
@@ -4611,7 +4689,12 @@ function handleGlobalVariablePointerDown(event: PointerEvent) {
 }
 
 function handleConnect(connection: any) {
-  graph.value = connectWorkflowNodes(graph.value, connection.source, connection.target)
+  graph.value = connectWorkflowNodes(
+    graph.value,
+    connection.source,
+    connection.target,
+    conditionFromSourceHandle(connection.source, connection.sourceHandle),
+  )
   markGraphDirty()
 }
 
@@ -5473,6 +5556,7 @@ function conditionBranches(): ConditionBranch[] {
   if (!Array.isArray(raw) || raw.length === 0) {
     return [{
       key: 'branch_1',
+      name: '分支 1',
       logic: 'AND',
       conditions: [{
         left: normalizeConditionOperand('{{start.USER_INPUT}}'),
@@ -5483,6 +5567,7 @@ function conditionBranches(): ConditionBranch[] {
   }
   return raw.map((branch, index) => ({
     key: String(branch?.key || branch?.id || `branch_${index + 1}`),
+    name: normalizeConditionBranchName(branch, index),
     logic: String(branch?.logic || 'AND').toUpperCase() === 'OR' ? 'OR' : 'AND',
     conditions: Array.isArray(branch?.conditions) && branch.conditions.length > 0
       ? branch.conditions.map((condition: any) => ({
@@ -5496,6 +5581,14 @@ function conditionBranches(): ConditionBranch[] {
         right: normalizeConditionOperand(''),
       }],
   }))
+}
+
+function normalizeConditionBranchName(branch: any, index: number) {
+  const explicit = String(branch?.name || branch?.title || branch?.label || '').trim()
+  if (explicit) return explicit
+  const key = String(branch?.key || branch?.id || '').trim()
+  if (key && !/^branch_\d+$/.test(key)) return key
+  return `分支 ${index + 1}`
 }
 
 function normalizeConditionOperand(value: unknown): ConditionOperand {
@@ -5517,10 +5610,84 @@ function persistConditionBranches(branches: ConditionBranch[]) {
   updateSelectedNode({ config: { conditionBranches: branches } })
 }
 
-function setConditionBranchKey(branchIndex: number, value: string | number) {
+function conditionHandleId(key: string) {
+  return `condition-${key.replace(/[^a-zA-Z0-9_-]/g, '_') || 'default'}`
+}
+
+function conditionHandleTop(index: number, total: number) {
+  if (total <= 1) return '50%'
+  const offset = (index - (total - 1) / 2) * 1.65
+  const sign = offset < 0 ? '-' : '+'
+  return `calc(50% ${sign} ${Math.abs(offset).toFixed(3)}rem)`
+}
+
+function normalizeConditionBranchesFromConfig(config: Record<string, any> = {}) {
+  const raw = config.conditionBranches
+  if (!Array.isArray(raw) || raw.length === 0) return [{ key: 'branch_1', name: '分支 1' }]
+  return raw
+    .map((branch, index) => ({
+      key: String(branch?.key || branch?.id || `branch_${index + 1}`),
+      name: normalizeConditionBranchName(branch, index),
+    }))
+    .filter((branch) => branch.key.trim().length > 0)
+}
+
+function conditionDefaultBranchKey(config: Record<string, any> = {}) {
+  return String(config.defaultBranch || 'default').trim() || 'default'
+}
+
+function conditionDefaultBranchName(config: Record<string, any> = {}) {
+  return String(config.defaultBranchName || config.defaultBranchLabel || '').trim() || '默认分支'
+}
+
+function conditionBranchKindLabel(index: number) {
+  return index === 0 ? '如果' : '否则如果'
+}
+
+function conditionSourceHandles(config: Record<string, any> = {}): ConditionSourceHandle[] {
+  const branches = normalizeConditionBranchesFromConfig(config)
+  const defaultKey = conditionDefaultBranchKey(config)
+  const rows: Array<Omit<ConditionSourceHandle, 'handleId' | 'top'>> = [
+    ...branches.map((branch, index) => ({
+      key: branch.key,
+      kind: conditionBranchKindLabel(index),
+      label: branch.name,
+      condition: branch.key,
+    })),
+    { key: defaultKey, kind: '否则', label: conditionDefaultBranchName(config), condition: null },
+  ]
+  return rows.map((row, index) => ({
+    ...row,
+    handleId: conditionHandleId(row.key),
+    top: conditionHandleTop(index, rows.length),
+  }))
+}
+
+function conditionNodeByKey(nodeKey: string | null | undefined) {
+  if (!nodeKey) return null
+  return graph.value.nodes.find((node) => node.nodeKey === nodeKey && node.type === 'CONDITION') || null
+}
+
+function edgeSourceHandle(edge: { sourceNodeKey: string; condition: string | null }) {
+  const sourceNode = conditionNodeByKey(edge.sourceNodeKey)
+  if (!sourceNode) return undefined
+  return conditionHandleId(edge.condition || conditionDefaultBranchKey(sourceNode.config))
+}
+
+function conditionFromSourceHandle(sourceNodeKey: string | null | undefined, sourceHandle: string | null | undefined) {
+  const sourceNode = conditionNodeByKey(sourceNodeKey)
+  if (!sourceNode || !sourceHandle) return null
+  return conditionSourceHandles(sourceNode.config).find((item) => item.handleId === sourceHandle)?.condition ?? null
+}
+
+function setConditionBranchName(branchIndex: number, value: string | number) {
   persistConditionBranches(conditionBranches().map((branch, index) =>
-    index === branchIndex ? { ...branch, key: String(value) } : branch,
+    index === branchIndex ? { ...branch, name: String(value) } : branch,
   ))
+}
+
+function setConditionDefaultBranchName(value: string | number) {
+  updateSelectedNode({ config: { defaultBranchName: String(value) } })
 }
 
 function setConditionBranchLogic(branchIndex: number, value: string) {
@@ -5627,6 +5794,7 @@ function addConditionBranch() {
     ...branches,
     {
       key: `branch_${branches.length + 1}`,
+      name: `分支 ${branches.length + 1}`,
       logic: 'AND',
       conditions: [{
         left: normalizeConditionOperand('{{start.USER_INPUT}}'),
@@ -7444,6 +7612,16 @@ onUnmounted(() => {
   overflow: visible;
 }
 
+.coze-node.node-condition {
+  width: 27.5rem;
+  min-height: 12rem;
+  background: linear-gradient(180deg, #f4fbfb, #fff);
+}
+
+.coze-node.node-condition .node-header {
+  margin-bottom: 0.875rem;
+}
+
 .coze-node:active {
   cursor: grabbing;
 }
@@ -7783,7 +7961,7 @@ onUnmounted(() => {
   left: -0.625rem;
   z-index: 160;
   width: max-content;
-  max-width: min(28.75rem, calc(100vw - 3rem));
+  max-width: min(26rem, calc(100vw - 3rem));
   display: flex;
   flex-wrap: wrap;
   gap: 0.625rem 0.75rem;
@@ -7841,6 +8019,42 @@ onUnmounted(() => {
   font-weight: 500;
 }
 
+.condition-node-branches {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-right: 1.125rem;
+}
+
+.condition-node-branch {
+  display: grid;
+  grid-template-columns: 5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.625rem;
+  min-height: 2.625rem;
+}
+
+.condition-node-branch-kind {
+  color: #a2aabd;
+  font-size: 0.9375rem;
+  font-weight: 800;
+  text-align: right;
+}
+
+.condition-node-branch strong {
+  min-width: 0;
+  overflow: hidden;
+  padding: 0.5625rem 0.75rem;
+  border: 1px solid #d8deeb;
+  border-radius: 0.375rem;
+  background: #fff;
+  color: #30364a;
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .node-port {
   --node-port-scale: 1;
   width: 0.75rem;
@@ -7862,6 +8076,29 @@ onUnmounted(() => {
 .target-port {
   left: -0.4375rem;
   transform: translate(-50%, -50%) scale(var(--node-port-scale));
+}
+
+.condition-source-port {
+  z-index: 5;
+}
+
+.condition-source-port-label {
+  position: absolute;
+  right: 0.875rem;
+  max-width: 6rem;
+  overflow: hidden;
+  transform: translateY(-50%);
+  padding: 0.125rem 0.375rem;
+  border: 1px solid #e4e7f2;
+  border-radius: 0.375rem;
+  background: rgba(255, 255, 255, 0.92);
+  color: #6d7486;
+  font-size: 0.6875rem;
+  font-weight: 800;
+  line-height: 1.2;
+  pointer-events: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .coze-node:hover .node-port,
@@ -9893,18 +10130,47 @@ onUnmounted(() => {
 }
 
 .condition-branch-card {
-  padding: 0.625rem;
-  border: 1px solid #e4e8f2;
-  border-radius: 0.625rem;
-  background: #f8f9fc;
+  padding: 0.875rem;
+  border: 1px solid #dfe4f1;
+  border-radius: 0.75rem;
+  background: #fff;
 }
 
 .condition-branch-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 7.875rem 2rem;
+  grid-template-columns: 1rem auto auto minmax(0, 1fr) 2rem;
   gap: 0.5rem;
   align-items: center;
   margin-bottom: 0.625rem;
+}
+
+.condition-drag-handle {
+  color: #a2aabd;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  transform: rotate(90deg);
+}
+
+.condition-branch-kind {
+  color: #30364a;
+  font-size: 0.9375rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.condition-branch-priority {
+  padding: 0.3125rem 0.625rem;
+  border-radius: 0.5rem;
+  background: #f2f4f8;
+  color: #4c5367;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.condition-branch-name-input :deep(.el-input__wrapper) {
+  background: #f8f9fc;
 }
 
 .condition-row {
@@ -9913,6 +10179,34 @@ onUnmounted(() => {
   gap: 0.5rem;
   align-items: center;
   margin-bottom: 0.5rem;
+}
+
+.condition-logic-toggle {
+  grid-column: 1 / -1;
+  width: fit-content;
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.1875rem;
+  border-radius: 0.5rem;
+  background: #f1f3f8;
+}
+
+.condition-logic-toggle button {
+  min-width: 2.25rem;
+  height: 1.75rem;
+  border: 0;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: #71798e;
+  font-size: 0.75rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.condition-logic-toggle button.active {
+  background: #fff;
+  color: #565bf6;
+  box-shadow: 0 0.125rem 0.375rem rgba(33, 40, 60, 0.08);
 }
 
 .condition-value-cell {
@@ -9952,9 +10246,13 @@ onUnmounted(() => {
 
 .condition-default-row {
   display: grid;
-  grid-template-columns: 4.5rem minmax(0, 1fr);
-  gap: 0.5rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.75rem;
   align-items: center;
+  padding: 0.875rem;
+  border: 1px solid #dfe4f1;
+  border-radius: 0.75rem;
+  background: #fff;
 }
 
 .condition-default-row label {

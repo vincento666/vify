@@ -77,9 +77,10 @@ describe('workflow node config schema', () => {
         'outputParameters',
       ]),
     )
-    expect(getNodeConfigSchema('CONDITION').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual(
-      expect.arrayContaining(['conditionBranches', 'outputParameters']),
-    )
+    expect(getNodeConfigSchema('CONDITION').sections.map((section) => section.title)).toEqual(['条件分支'])
+    expect(getNodeConfigSchema('CONDITION').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual([
+      'conditionBranches',
+    ])
     expect(getNodeConfigSchema('KNOWLEDGE').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual(
       expect.arrayContaining(['resourceId', 'query', 'topK', 'legacyResourceDebug', 'outputParameters']),
     )
@@ -363,7 +364,7 @@ describe('workflow node config schema', () => {
   })
 
   it('adds a shared input parameter editor field to runnable middle node schemas', () => {
-    for (const type of ['LLM', 'CONDITION', 'KNOWLEDGE', 'API_CALL', 'CODE', 'TEXT_PROCESS', 'JSON_PARSE', 'VARIABLE_AGGREGATION', 'VARIABLE_ASSIGN', 'INTENT_RECOGNITION', 'MESSAGE', 'QUESTION', 'HUMAN_INPUT', 'INFORMATION_COLLECTION', 'TOOL_CALL', 'EXECUTE_WORKFLOW', 'AGENT_CALL', 'TRANSFER_TO_HUMAN'] as const) {
+    for (const type of ['LLM', 'KNOWLEDGE', 'API_CALL', 'CODE', 'TEXT_PROCESS', 'JSON_PARSE', 'VARIABLE_AGGREGATION', 'VARIABLE_ASSIGN', 'INTENT_RECOGNITION', 'MESSAGE', 'QUESTION', 'HUMAN_INPUT', 'INFORMATION_COLLECTION', 'TOOL_CALL', 'EXECUTE_WORKFLOW', 'AGENT_CALL', 'TRANSFER_TO_HUMAN'] as const) {
       expect(getNodeConfigSchema(type).sections.flatMap((section) => section.fields.map((field) => field.key))).toContain(
         'inputParameters',
       )
