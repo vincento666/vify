@@ -19,6 +19,7 @@ from app.modules.chat.domain.llm_request import (
     ProviderChatConfig,
 )
 from app.modules.knowledge.api.facade import KnowledgeFacade
+from app.modules.runtime_lab.domain.agent_fallback import AgentOutputPolicy, FakeFallbackAgent
 from app.modules.runtime_lab.domain.classifier import LlmConstrainedIntentClassifier
 from app.modules.runtime_lab.domain.chatflow_adapter import ChatflowSopRuntimeAdapter
 from app.modules.runtime_lab.domain.faq_gate import FaqExactAnswerGate, FaqSemanticAnswerGate
@@ -43,6 +44,8 @@ def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeL
     faq_answer_gate = _runtime_lab_faq_answer_gate(settings, session)
     faq_semantic_gate = _runtime_lab_faq_semantic_gate(settings, session)
     rag_answer_gate = _runtime_lab_rag_answer_gate(settings, session)
+    fallback_agent = FakeFallbackAgent()
+    agent_output_policy = AgentOutputPolicy()
     if not bindings:
         return RuntimeLabService(
             RuntimeLabRepository(session),
@@ -50,6 +53,8 @@ def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeL
             faq_answer_gate=faq_answer_gate,
             faq_semantic_gate=faq_semantic_gate,
             rag_answer_gate=rag_answer_gate,
+            fallback_agent=fallback_agent,
+            agent_output_policy=agent_output_policy,
         )
     workflow_service = WorkflowService(
         WorkflowRepository(session),
@@ -70,6 +75,8 @@ def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeL
         faq_answer_gate=faq_answer_gate,
         faq_semantic_gate=faq_semantic_gate,
         rag_answer_gate=rag_answer_gate,
+        fallback_agent=fallback_agent,
+        agent_output_policy=agent_output_policy,
     )
 
 

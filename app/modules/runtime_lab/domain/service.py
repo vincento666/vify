@@ -6,6 +6,7 @@ from time import perf_counter
 from typing import Any, Protocol
 
 from app.core.errors import BizError, ErrorCode
+from app.modules.runtime_lab.domain.agent_fallback import AgentOutputPolicy, FallbackAgentPort, FallbackAgentRequest
 from app.modules.runtime_lab.domain.candidates import RouteCandidate, ScoreBreakdown, select_top_candidates
 from app.modules.runtime_lab.domain.classifier import ClassifierInput, ClassifierResult, FakeConstrainedIntentClassifier
 from app.modules.runtime_lab.domain.explicit_signals import ExplicitSignalDetector
@@ -59,6 +60,8 @@ class RuntimeLabService:
         faq_answer_gate: FaqAnswerGate | None = None,
         faq_semantic_gate: FaqSemanticAnswerGate | None = None,
         rag_answer_gate: RagAnswerGate | None = None,
+        fallback_agent: FallbackAgentPort | None = None,
+        agent_output_policy: AgentOutputPolicy | None = None,
     ) -> None:
         self._repository = repository
         self._manifests = mock_sop_manifests()
@@ -72,6 +75,8 @@ class RuntimeLabService:
         self._faq_answer_gate = faq_answer_gate
         self._faq_semantic_gate = faq_semantic_gate
         self._rag_answer_gate = rag_answer_gate
+        self._fallback_agent = fallback_agent
+        self._agent_output_policy = agent_output_policy or AgentOutputPolicy()
 
     def create_session(self) -> dict[str, Any]:
         runtime_session = self._repository.create_session()
@@ -89,7 +94,7 @@ class RuntimeLabService:
         active_task = self._repository.get_active_task(session_id)
         suspended_tasks = self._repository.list_tasks(session_id, statuses={"SUSPENDED"})
         enabled_scope = self._normalize_enabled_sop_ids(enabled_sop_ids)
-        decision = self._semantic_decision(message, active_task, suspended_tasks, enabled_scope)
+        decision = self._semantic_decision(session_id, message, active_task, suspended_tasks, enabled_scope)
         self._repository.append_event(session_id, "ROUTE_DECISION", _decision_payload(decision))
 
         if decision.action == "HANDOFF_TO_HUMAN":
@@ -100,6 +105,9 @@ class RuntimeLabService:
 
         if decision.action == "ANSWER_RAG":
             return self._rag_turn(session_id, decision)
+
+        if decision.action == "AGENT_FALLBACK":
+            return self._agent_fallback_turn(session_id, decision)
 
         if decision.action == "START_SOP" and decision.target_sop_id is not None:
             result = self._adapter.start_sop(
@@ -155,6 +163,8 @@ class RuntimeLabService:
             return self._resume_task(session_id, decision, message)
 
         if decision.action == "CLARIFY":
+            if decision.agent_answer:
+                return self._agent_clarify_turn(session_id, decision)
             return self._turn(
                 session_id,
                 "请问您想办理订票、票价、团队票、增值服务、退票、改签、资料修改、发票、行李、"
@@ -207,6 +217,7 @@ class RuntimeLabService:
 
     def _semantic_decision(
         self,
+        session_id: int,
         message: str,
         active_task: dict[str, Any] | None,
         suspended_tasks: list[dict[str, Any]],
@@ -333,10 +344,45 @@ class RuntimeLabService:
                         {"reason": "No shallow or scoped finite route signal"},
                     )
                 )
+                agent_decision = self._agent_fallback_decision(session_id, message, active_task, suspended_tasks)
+                if agent_decision is not None:
+                    route_steps.append(
+                        _route_step(
+                            "agent_policy",
+                            perf_counter(),
+                            {"message": message, "activeTask": active_task is not None},
+                            {"decision": _decision_payload(agent_decision)},
+                        )
+                    )
+                    return _with_evidence(
+                        agent_decision,
+                        (),
+                        "agent_policy",
+                        route_steps=route_steps,
+                        route_elapsed_ms=_elapsed_ms(route_started_at),
+                    )
                 return _with_evidence(
                     RouteDecision(action="CLARIFY", reason="No shallow or scoped finite route signal"),
                     (),
                     "no_signal_clarify",
+                    route_steps=route_steps,
+                    route_elapsed_ms=_elapsed_ms(route_started_at),
+                )
+        if _should_agent_fallback_before_active_continue(candidates, active_task, message):
+            agent_decision = self._agent_fallback_decision(session_id, message, active_task, suspended_tasks)
+            if agent_decision is not None:
+                route_steps.append(
+                    _route_step(
+                        "agent_policy",
+                        perf_counter(),
+                        {"message": message, "activeTask": active_task is not None},
+                        {"decision": _decision_payload(agent_decision)},
+                    )
+                )
+                return _with_evidence(
+                    agent_decision,
+                    candidates,
+                    "agent_policy",
                     route_steps=route_steps,
                     route_elapsed_ms=_elapsed_ms(route_started_at),
                 )
@@ -399,6 +445,26 @@ class RuntimeLabService:
                 _decision_payload(decision),
             )
         )
+        if decision.action == "CLARIFY":
+            agent_decision = self._agent_fallback_decision(session_id, message, active_task, suspended_tasks)
+            if agent_decision is not None:
+                route_steps.append(
+                    _route_step(
+                        "agent_policy",
+                        perf_counter(),
+                        {"message": message, "activeTask": active_task is not None},
+                        {"decision": _decision_payload(agent_decision)},
+                    )
+                )
+                return _with_evidence(
+                    agent_decision,
+                    candidates,
+                    "agent_policy",
+                    classifier_input,
+                    classifier_result,
+                    route_steps=route_steps,
+                    route_elapsed_ms=_elapsed_ms(route_started_at),
+                )
         return _with_evidence(
             decision,
             candidates,
@@ -483,6 +549,28 @@ class RuntimeLabService:
             message,
             active_task=active_task,
             suspended_tasks=suspended_tasks,
+        )
+
+    def _agent_fallback_decision(
+        self,
+        session_id: int,
+        message: str,
+        active_task: dict[str, Any] | None,
+        suspended_tasks: list[dict[str, Any]],
+    ) -> RouteDecision | None:
+        if self._fallback_agent is None:
+            return None
+        output = self._fallback_agent.run(
+            FallbackAgentRequest(
+                message=message,
+                active_task=active_task,
+                suspended_tasks=suspended_tasks,
+                recent_events=self._recent_events(session_id, limit=12),
+            )
+        )
+        return self._agent_output_policy.decide(
+            output,
+            clarification_attempts=self._agent_clarification_attempts(session_id),
         )
 
     def _enabled_scope_fallback_candidates(self, enabled_sop_ids: frozenset[str]) -> list[RouteCandidate]:
@@ -744,6 +832,13 @@ class RuntimeLabService:
                 context.update(collected)
         return context
 
+    def _recent_events(self, session_id: int, *, limit: int) -> list[dict[str, Any]]:
+        events = self._repository.list_events(session_id)
+        return events[-limit:]
+
+    def _agent_clarification_attempts(self, session_id: int) -> int:
+        return sum(1 for event in self._repository.list_events(session_id) if event["event_type"] == "AGENT_CLARIFICATION_ASKED")
+
     def _turn(
         self,
         session_id: int,
@@ -797,6 +892,23 @@ class RuntimeLabService:
         rag_answer = decision.rag_answer or {}
         self._repository.append_event(session_id, "RAG_ANSWERED", rag_answer)
         return self._turn(session_id, str(rag_answer.get("answer") or ""), decision)
+
+    def _agent_fallback_turn(self, session_id: int, decision: RouteDecision) -> RuntimeLabTurn:
+        agent_answer = decision.agent_answer or {}
+        self._repository.append_event(session_id, "AGENT_FALLBACK_ANSWERED", agent_answer)
+        return self._turn(session_id, str(agent_answer.get("answer") or ""), decision)
+
+    def _agent_clarify_turn(self, session_id: int, decision: RouteDecision) -> RuntimeLabTurn:
+        agent_answer = decision.agent_answer or {}
+        reason_code = str(agent_answer.get("reasonCode") or "")
+        event_type = "AGENT_CLARIFICATION_ASKED" if reason_code == "AGENT_CLARIFICATION" else "AGENT_OUTPUT_REJECTED"
+        self._repository.append_event(session_id, event_type, agent_answer)
+        reply = str(
+            agent_answer.get("clarificationQuestion")
+            or agent_answer.get("answer")
+            or "请补充更多信息，我再继续为您处理。"
+        )
+        return self._turn(session_id, reply, decision)
 
     def _handoff_context_snapshot(
         self,
@@ -915,6 +1027,7 @@ def _decision_payload(decision: RouteDecision) -> dict[str, Any]:
         "handoff": decision.handoff,
         "faqAnswer": decision.faq_answer,
         "ragAnswer": decision.rag_answer,
+        "agentAnswer": decision.agent_answer,
     }
 
 
@@ -946,6 +1059,9 @@ def _final_decision_payload(decision: RouteDecision) -> dict[str, Any]:
     if decision.rag_answer:
         payload["sourceLayer"] = decision.rag_answer.get("sourceLayer")
         payload["reasonCode"] = decision.rag_answer.get("reasonCode")
+    if decision.agent_answer:
+        payload["sourceLayer"] = decision.agent_answer.get("sourceLayer")
+        payload["reasonCode"] = decision.agent_answer.get("reasonCode")
     return payload
 
 
@@ -986,6 +1102,10 @@ def _route_step_label(name: str) -> str:
         "finite_intent_fallback": "有限意图全集兜底",
         "scoped_finite_fallback": "有限意图局部兜底",
         "no_signal_clarify": "无业务信号澄清",
+        "faq_exact": "FAQ精确回答",
+        "faq_semantic": "FAQ语义回答",
+        "rag_policy": "RAG知识兜底",
+        "agent_policy": "受控Agent兜底",
         "pre_classifier_policy": "轻量策略闸门",
         "llm_intent_arbitration": "LLM有限意图仲裁",
         "post_classifier_policy": "仲裁后策略闸门",
@@ -1126,6 +1246,44 @@ def _looks_like_sop_request(message: str) -> bool:
     return any(marker in message for marker in request_markers)
 
 
+def _should_agent_fallback_before_active_continue(
+    candidates: Sequence[RouteCandidate],
+    active_task: dict[str, Any] | None,
+    message: str,
+) -> bool:
+    if active_task is None or len(candidates) != 1:
+        return False
+    candidate = candidates[0]
+    if str(candidate.candidate_type) != "ACTIVE_TASK_CONTINUE" or candidate.score >= 0.6:
+        return False
+    return not _looks_like_active_sop_continuation_detail(message)
+
+
+def _looks_like_active_sop_continuation_detail(message: str) -> bool:
+    text = message.strip()
+    if not text:
+        return False
+    if re.search(r"[A-Za-z]{2,}-?\d{2,}|\d{6,}|1[3-9]\d{9}", text):
+        return True
+    continuation_terms = (
+        "订单",
+        "票号",
+        "手机号",
+        "电话",
+        "证件",
+        "身份证",
+        "护照",
+        "乘机人",
+        "确认",
+        "好的",
+        "可以",
+        "是的",
+        "继续",
+        "取消",
+    )
+    return any(term in text for term in continuation_terms)
+
+
 def _request_hash(message: str, enabled_sop_ids: Sequence[str] | None = None) -> str:
     scope = "<all>" if enabled_sop_ids is None else ",".join(sorted(set(enabled_sop_ids)))
     return hashlib.sha256(f"{message}\0{scope}".encode("utf-8")).hexdigest()
@@ -1206,5 +1364,6 @@ def _with_evidence(
         handoff=decision.handoff,
         faq_answer=decision.faq_answer,
         rag_answer=decision.rag_answer,
+        agent_answer=decision.agent_answer,
         final_decision=_final_decision_payload(decision),
     )

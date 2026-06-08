@@ -31,6 +31,7 @@ class RouteDecision:
     handoff: dict[str, Any] | None = None
     faq_answer: dict[str, Any] | None = None
     rag_answer: dict[str, Any] | None = None
+    agent_answer: dict[str, Any] | None = None
 
 
 class RuntimeLabRouter:

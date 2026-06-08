@@ -131,6 +131,19 @@ class RuntimeLabApiE2ETest(unittest.TestCase):
         self.assertEqual(active_rag["activeTask"]["checkpointId"], started["activeTask"]["checkpointId"])
         self.assertIn("RAG_ANSWERED", [event["eventType"] for event in events])
 
+    def test_unresolved_query_reaches_controlled_agent_fallback_api(self) -> None:
+        with TestClient(app) as client:
+            session_id = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
+            fallback = _message(client, session_id, "机场大巴末班车几点")
+            events = client.get(f"/api/v1/runtime-lab/sessions/{session_id}/events").json()["data"]["list"]
+
+        self.assertEqual(fallback["routeDecision"]["action"], "AGENT_FALLBACK")
+        self.assertEqual(fallback["routeDecision"]["finalDecision"]["sourceLayer"], "agent_policy")
+        self.assertEqual(fallback["routeDecision"]["agentAnswer"]["reasonCode"], "AGENT_ANSWER")
+        self.assertFalse(fallback["routeDecision"]["agentAnswer"]["mutatesSopState"])
+        self.assertIsNone(fallback["activeTask"])
+        self.assertIn("AGENT_FALLBACK_ANSWERED", [event["eventType"] for event in events])
+
 
 def _message(client: TestClient, session_id: int, message: str) -> dict:
     response = client.post(

@@ -65,10 +65,34 @@ After 039, runtime-lab has a safe bottom layer for long-tail support: it can
 answer, clarify, calm, summarize, or recommend handoff without breaking SOP
 state discipline.
 
-## Specification Sign-off
+## Completion Evidence
 
-Status: ready for implementation.
+Status: completed on 2026-06-09.
 
 Numbering was rechecked on 2026-06-09. 039 follows 038 and is limited to a
 policy-controlled fallback Agent. It must not grant the Agent direct authority
 over SOP task mutation.
+
+Evidence:
+
+- RED:
+  - `artifacts/slices/039-runtime-controlled-agent-fallback/039.1/red.txt`
+  - `artifacts/slices/039-runtime-controlled-agent-fallback/039.2/red.txt`
+  - `artifacts/slices/039-runtime-controlled-agent-fallback/039.4/red.txt`
+- Unit/integration:
+  - `artifacts/slices/039-runtime-controlled-agent-fallback/039.1/unit.txt`
+  - `artifacts/slices/039-runtime-controlled-agent-fallback/039.2/unit-integration.txt`
+  - `artifacts/slices/039-runtime-controlled-agent-fallback/039.3/unit-integration.txt`
+- API E2E/regression:
+  - `artifacts/slices/039-runtime-controlled-agent-fallback/039.4/e2e.txt`
+  - `artifacts/slices/039-runtime-controlled-agent-fallback/039.4/final-targeted.txt`
+  - Result: `47 passed, 1 warning`
+- Browser UAT:
+  - `artifacts/slices/039-runtime-controlled-agent-fallback/039.4/browser-uat-result.json`
+  - `artifacts/slices/039-runtime-controlled-agent-fallback/039.4/uat.md`
+  - `artifacts/slices/039-runtime-controlled-agent-fallback/039.4/screenshots/browser-uat-agent.png`
+- Full backend:
+  - `artifacts/slices/039-runtime-controlled-agent-fallback/039.4/full-backend.txt`
+  - Result: `472 passed, 8 skipped, 15 failed`; failures match existing
+    unrelated runtime-lab scale/workflow baseline issues and are documented in
+    the artifact.

@@ -61,13 +61,24 @@ artifacts/slices/039-runtime-controlled-agent-fallback/
 
 Live Agent/LLM behavior remains opt-in; CI uses fake deterministic Agent.
 
+Completed evidence:
+
+- `039.1/red.txt`, `039.1/unit.txt`
+- `039.2/red.txt`, `039.2/unit-integration.txt`
+- `039.3/unit-integration.txt`
+- `039.4/red.txt`, `039.4/e2e.txt`
+- `039.4/final-targeted.txt`: `47 passed, 1 warning`
+- `039.4/browser-uat-result.json`: Swagger Browser UAT PASS
+- `039.4/screenshots/browser-uat-agent.png`
+- `039.4/full-backend.txt`: `472 passed, 8 skipped, 15 failed`
+
 ## SDD Gate
 
-039 may start only after 033, 036, 037, and 038 route contracts pass. It must
-remain a policy-controlled fallback layer and must not give the Agent direct
+039 started only after 033, 036, 037, and 038 route contracts passed. It
+remains a policy-controlled fallback layer and does not give the Agent direct
 authority to start, suspend, resume, complete, or hand off SOP tasks.
 
 Each slice must update `spec.md`, `plan.md`, `tasks.md`, and the corresponding
-artifact directory before sign-off. 039 is complete only when Agent output is
+artifact directory before sign-off. 039 is complete because Agent output is
 schema-validated, unsafe side effects are rejected, clarification counters are
 tested, and final handoff still goes through the 033 control-plane action.
