@@ -1,0 +1,16 @@
+Reference:
+Huawei Cloud AgentArts variable assignment node user manual:
+https://support.huaweicloud.com/usermanual-agentarts0/agentarts_05_0084.html
+
+Expected RED:
+The Hify variable assignment panel must follow the AgentArts/Coze-like three-column mental model:
+变量名称 / 类型 / 值.
+
+Failure command:
+rtk node frontend/e2e/workflow-variable-aggregation-assignment.mjs
+
+Failure:
+Error: Assignment editor must show a target variable column
+
+Reason:
+Current UI still renders the stale headers 变量名 / 赋值类型 / 变量值, and the middle select is wired to writeMode (覆盖/追加/清空) instead of source type (引用/输入).

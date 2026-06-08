@@ -1,0 +1,11 @@
+Command:
+rtk node frontend/e2e/workflow-variable-aggregation-assignment.mjs
+
+Result:
+PASS workflow/chatflow variable aggregation assignment e2e
+
+Coverage:
+- Variable aggregation runtime and UI stay usable.
+- Variable assignment runtime still writes workflow/chatflow variables.
+- Variable assignment panel follows the three-column UI: 变量名称 / 类型 / 值.
+- The stale "赋值类型" write-mode column is no longer visible in the basic panel.

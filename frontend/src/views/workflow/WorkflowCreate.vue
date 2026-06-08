@@ -2303,12 +2303,12 @@
             >
               <div class="variable-assignment-task">
                 <strong>变量赋值</strong>
-                <span>将上游结果或固定值写入可写变量</span>
+                <span>用于向变量赋值，实现数据的动态更新和传递</span>
               </div>
               <div class="variable-assignment-header">
-                <span>变量名</span>
-                <span>赋值类型</span>
-                <span>变量值</span>
+                <span>变量名称</span>
+                <span>类型</span>
+                <span>值</span>
               </div>
               <div class="variable-assignment-row" data-testid="variable-assignment-row">
                 <div class="input-value-cell assignment-target-cell">
@@ -2318,7 +2318,7 @@
                         class="variable-literal-input"
                         data-testid="assignment-target-input"
                         type="text"
-                        aria-label="写入变量"
+                        aria-label="变量名称"
                         :value="variableAssignmentTargetReference()"
                         placeholder="选择或输入变量"
                         @input="setVariableAssignmentTargetReference(($event.target as HTMLInputElement).value)"
@@ -2383,19 +2383,18 @@
                 </div>
                 <select
                   class="variable-literal-select variable-assignment-mode-select"
-                  aria-label="赋值类型"
-                  :value="variableAssignmentWriteMode()"
-                  @change="setVariableAssignmentWriteMode(($event.target as HTMLSelectElement).value)"
+                  aria-label="赋值来源类型"
+                  :value="variableAssignmentSourceType()"
+                  @change="setVariableAssignmentSourceType(($event.target as HTMLSelectElement).value)"
                 >
-                  <option value="set">覆盖</option>
-                  <option value="append">追加</option>
-                  <option value="clear">清空</option>
+                  <option value="reference">引用</option>
+                  <option value="input">输入</option>
                 </select>
                 <div class="input-value-cell">
                   <div class="variable-value-combo assignment-value-control" data-testid="assignment-value-control">
                     <div class="variable-value-main">
                       <div
-                        v-if="variableAssignmentWriteMode() !== 'clear' && variableAssignmentValueMode() === 'reference' && inputReferenceSelection(String(fieldValue('source') || ''))"
+                        v-if="variableAssignmentSourceType() === 'reference' && inputReferenceSelection(String(fieldValue('source') || ''))"
                         class="input-variable-chip"
                         data-testid="assignment-variable-chip"
                       >
@@ -2415,7 +2414,6 @@
                         type="text"
                         aria-label="赋值内容"
                         :value="String(fieldValue('source') ?? '')"
-                        :disabled="variableAssignmentWriteMode() === 'clear'"
                         placeholder="输入或引用参数值"
                         @input="setVariableAssignmentSourceValue(($event.target as HTMLInputElement).value)"
                       />
@@ -2424,7 +2422,6 @@
                       type="button"
                       class="variable-picker-trigger"
                       aria-label="选择赋值内容变量"
-                      :disabled="variableAssignmentWriteMode() === 'clear'"
                       @click="openStructuredVariablePicker('assignment', $event)"
                     >
                       <Connection aria-hidden="true" />
@@ -3615,7 +3612,6 @@ type SchemaInputMappingRow = {
   valueMode: InputValueMode
   value: string | number | boolean
 }
-type VariableAssignmentWriteMode = 'set' | 'append' | 'clear'
 type VariableAssignmentTargetOption = {
   scope: string
   scopeLabel: string
@@ -5771,9 +5767,8 @@ function variableAssignmentValueMode(): InputValueMode {
   return inferDirectVariableValueMode(fieldValue('source'), explicit)
 }
 
-function variableAssignmentWriteMode(): VariableAssignmentWriteMode {
-  const mode = String(fieldValue('writeMode') || 'set').trim().toLowerCase()
-  return mode === 'append' || mode === 'clear' ? mode : 'set'
+function variableAssignmentSourceType(): 'reference' | 'input' {
+  return variableAssignmentValueMode() === 'reference' ? 'reference' : 'input'
 }
 
 function variableAssignmentTargetReference() {
@@ -5787,14 +5782,13 @@ function setVariableAssignmentTargetReference(value: string | number) {
   updateSelectedNode({ config: { targetScope: parsed.scope, targetVariable: parsed.variable } })
 }
 
-function setVariableAssignmentWriteMode(value: string | number) {
-  const mode = normalizeVariableAssignmentWriteMode(value)
-  const patch: Record<string, string> = { writeMode: mode }
-  if (mode === 'clear') {
-    patch.sourceValueMode = 'literal'
-    patch.source = ''
+function setVariableAssignmentSourceType(value: string | number) {
+  const sourceType = String(value || 'input') === 'reference' ? 'reference' : 'input'
+  if (sourceType === 'reference') {
+    updateSelectedNode({ config: { writeMode: 'set', sourceValueMode: 'reference' } })
+    return
   }
-  updateSelectedNode({ config: patch })
+  updateSelectedNode({ config: { writeMode: 'set', sourceValueMode: 'literal', source: '' } })
 }
 
 function clearVariableAssignmentReference() {
@@ -5803,11 +5797,6 @@ function clearVariableAssignmentReference() {
 
 function setVariableAssignmentSourceValue(value: string | number) {
   updateSelectedNode({ config: { sourceValueMode: 'literal', source: String(value) } })
-}
-
-function normalizeVariableAssignmentWriteMode(value: string | number): VariableAssignmentWriteMode {
-  const mode = String(value || 'set').trim().toLowerCase()
-  return mode === 'append' || mode === 'clear' ? mode : 'set'
 }
 
 function parseVariableAssignmentTargetReference(value: string) {
