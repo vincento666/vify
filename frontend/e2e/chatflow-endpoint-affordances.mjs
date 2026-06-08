@@ -19,14 +19,32 @@ async function portBox(page, selector) {
     const element = document.querySelector(portSelector)
     if (!element) return null
     const box = element.getBoundingClientRect()
-    const matrix = getComputedStyle(element).transform.match(/matrix\(([^,]+)/)
-    const scale = matrix ? Number.parseFloat(matrix[1]) : 1
+    const matrixScale = (value) => {
+      const matrix = String(value || '').match(/matrix\(([^,]+)/)
+      return matrix ? Number.parseFloat(matrix[1]) : 1
+    }
+    const handleStyle = getComputedStyle(element)
+    const dotStyle = getComputedStyle(element, '::after')
     return {
       width: box.width,
       height: box.height,
       centerX: box.left + box.width / 2,
       centerY: box.top + box.height / 2,
-      scale,
+      handleScale: matrixScale(handleStyle.transform),
+      dotScale: matrixScale(dotStyle.transform),
+    }
+  }, selector)
+}
+
+async function nodeBox(page, selector) {
+  return page.evaluate((nodeSelector) => {
+    const node = document.querySelector(nodeSelector)
+    if (!node) return null
+    const box = node.getBoundingClientRect()
+    return {
+      left: box.left,
+      right: box.right,
+      centerY: box.top + box.height / 2,
     }
   }, selector)
 }
@@ -70,24 +88,30 @@ try {
   await page.goto(`${baseUrl}/chatflows/${chatflow.id}/canvas`, { waitUntil: 'networkidle' })
   const node = page.locator('.vue-flow__node[data-id="llm_1"]')
   await node.waitFor({ state: 'visible', timeout: 5000 })
+  const nodeSelector = '.vue-flow__node[data-id="llm_1"] .coze-node'
   const sourceSelector = '.vue-flow__node[data-id="llm_1"] .source-port'
   const targetSelector = '.vue-flow__node[data-id="llm_1"] .target-port'
+  const defaultNode = await nodeBox(page, nodeSelector)
   const defaultSource = await portBox(page, sourceSelector)
   const defaultTarget = await portBox(page, targetSelector)
-  assert(defaultSource && defaultTarget, 'Expected source and target ports to render')
+  assert(defaultNode && defaultSource && defaultTarget, 'Expected node source and target ports to render')
+  assert(Math.abs(defaultSource.centerX - defaultNode.right) <= 1, `Expected source port center to align with node right edge, got node=${JSON.stringify(defaultNode)} source=${JSON.stringify(defaultSource)}`)
+  assert(Math.abs(defaultTarget.centerX - defaultNode.left) <= 1, `Expected target port center to align with node left edge, got node=${JSON.stringify(defaultNode)} target=${JSON.stringify(defaultTarget)}`)
   await maybeScreenshot(page, 'default')
 
   await node.hover()
   await page.waitForTimeout(160)
   const nodeHoverSource = await portBox(page, sourceSelector)
-  assert(closeToRatio(nodeHoverSource.scale, 2), `Expected node hover port scale 2x, got ${JSON.stringify(nodeHoverSource)}`)
+  assert(closeToRatio(nodeHoverSource.width, defaultSource.width, 0.5), `Expected node hover hit box to keep the original 1x size, got default=${JSON.stringify(defaultSource)} hover=${JSON.stringify(nodeHoverSource)}`)
+  assert(closeToRatio(nodeHoverSource.dotScale, 2), `Expected node hover port dot scale 2x, got ${JSON.stringify(nodeHoverSource)}`)
   await maybeScreenshot(page, 'node-hover')
 
   const sourcePort = page.locator(sourceSelector)
   await sourcePort.hover({ force: true })
   await page.waitForTimeout(160)
   const endpointHoverSource = await portBox(page, sourceSelector)
-  assert(closeToRatio(endpointHoverSource.scale, 3), `Expected endpoint hover scale 3x, got ${JSON.stringify(endpointHoverSource)}`)
+  assert(closeToRatio(endpointHoverSource.width, defaultSource.width, 0.5), `Expected endpoint hover hit box to keep the original 1x size, got default=${JSON.stringify(defaultSource)} hover=${JSON.stringify(endpointHoverSource)}`)
+  assert(closeToRatio(endpointHoverSource.dotScale, 3), `Expected endpoint hover dot scale 3x, got ${JSON.stringify(endpointHoverSource)}`)
   await maybeScreenshot(page, 'endpoint-hover')
 
   const defaultHoverRadius = defaultSource.width / 2
@@ -95,7 +119,7 @@ try {
   await page.waitForTimeout(160)
   const radiusHoverSource = await portBox(page, sourceSelector)
   assert(
-    closeToRatio(radiusHoverSource.scale, 3),
+    closeToRatio(radiusHoverSource.dotScale, 3),
     `Expected endpoint hover radius to trigger 3x scale 42px from center, defaultRadius=${defaultHoverRadius}, got ${JSON.stringify(radiusHoverSource)}`,
   )
   await maybeScreenshot(page, 'endpoint-radius-hover')
@@ -104,7 +128,7 @@ try {
   await page.mouse.move(40, 40)
   await page.waitForTimeout(160)
   const selectedSource = await portBox(page, sourceSelector)
-  assert(closeToRatio(selectedSource.scale, 1.2), `Expected selected node port scale 1.2x, got ${JSON.stringify(selectedSource)}`)
+  assert(closeToRatio(selectedSource.dotScale, 1.2), `Expected selected node port dot scale 1.2x, got ${JSON.stringify(selectedSource)}`)
   await maybeScreenshot(page, 'selected')
 
   const selectedStyle = await page.evaluate(() => {

@@ -20,18 +20,18 @@ try {
 
   const historySettingsButton = panel.getByRole('button', { name: '对话历史策略', exact: true })
   assert(await historySettingsButton.count() === 1, 'Expected a header settings button for chatflow history strategy')
-  const collapseButton = page.getByRole('button', { name: '折叠侧栏', exact: true })
+  const collapseButton = panel.getByRole('button', { name: '折叠侧栏', exact: true })
   const panelBox = await panel.boundingBox()
   const historyButtonBox = await historySettingsButton.boundingBox()
   const collapseButtonBox = await collapseButton.boundingBox()
   assert(panelBox && historyButtonBox && collapseButtonBox, 'Expected chatflow settings header controls to have measurable layout boxes')
   assert(
-    collapseButtonBox.x >= panelBox.x + panelBox.width - 2,
-    'Expected side-panel collapse control to sit on the panel outer edge instead of overlapping header actions',
+    historyButtonBox.x + historyButtonBox.width + 4 <= collapseButtonBox.x,
+    `Expected history settings and collapse controls to be visually separated in the header action group, got history=${JSON.stringify(historyButtonBox)} collapse=${JSON.stringify(collapseButtonBox)}`,
   )
   assert(
-    historyButtonBox.x + historyButtonBox.width + 6 <= collapseButtonBox.x,
-    'Expected history settings and collapse controls to be visually separated',
+    Math.abs(historyButtonBox.y - collapseButtonBox.y) <= 1 && Math.abs(historyButtonBox.height - collapseButtonBox.height) <= 1,
+    `Expected history settings and collapse controls to align in one row, got history=${JSON.stringify(historyButtonBox)} collapse=${JSON.stringify(collapseButtonBox)}`,
   )
   await historySettingsButton.click()
 

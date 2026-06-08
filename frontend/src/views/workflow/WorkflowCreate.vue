@@ -52,15 +52,14 @@
       data-testid="workflow-canvas"
     >
       <button
-        v-if="canvasTab === 'compose'"
+        v-if="canvasTab === 'compose' && resourcePanelCollapsed"
         class="resource-panel-toggle"
         type="button"
-        :aria-label="resourcePanelCollapsed ? '展开侧栏' : '折叠侧栏'"
+        aria-label="展开侧栏"
         @click="resourcePanelCollapsed = !resourcePanelCollapsed"
       >
         <el-icon>
-          <ArrowRight v-if="resourcePanelCollapsed" />
-          <ArrowLeft v-else />
+          <ArrowRight />
         </el-icon>
       </button>
 
@@ -68,15 +67,25 @@
         <div class="resource-header">
           <div class="resource-header-main">
             <strong>{{ isChatflowMode ? '对话设置' : '画布概览' }}</strong>
-            <button
-              v-if="isChatflowMode"
-              type="button"
-              class="resource-header-icon-button"
-              aria-label="对话历史策略"
-              @click="chatflowHistorySettingsOpen = !chatflowHistorySettingsOpen"
-            >
-              <SettingsIcon aria-hidden="true" />
-            </button>
+            <div class="resource-header-actions">
+              <button
+                v-if="isChatflowMode"
+                type="button"
+                class="resource-header-icon-button"
+                aria-label="对话历史策略"
+                @click="chatflowHistorySettingsOpen = !chatflowHistorySettingsOpen"
+              >
+                <SettingsIcon aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                class="resource-header-icon-button"
+                aria-label="折叠侧栏"
+                @click="resourcePanelCollapsed = true"
+              >
+                <ArrowLeft aria-hidden="true" />
+              </button>
+            </div>
           </div>
           <div
             v-if="isChatflowMode && chatflowHistorySettingsOpen"
@@ -8205,9 +8214,20 @@ onUnmounted(() => {
   gap: 0.5rem;
 }
 
+.resource-header-main > strong {
+  min-width: 0;
+}
+
 .resource-header strong {
   color: #252b3d;
   font-size: 0.9375rem;
+}
+
+.resource-header-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.375rem;
 }
 
 .resource-header-icon-button {
@@ -9398,13 +9418,16 @@ onUnmounted(() => {
 
 .node-port {
   --node-port-scale: 1;
-  width: 0.75rem;
-  height: 0.75rem;
-  border: 0.125rem solid #fff;
-  background: #6b6ff7;
+  --node-port-bg: #6b6ff7;
+  --node-port-shadow: none;
+  --node-port-dot-size: 0.75rem;
+  --node-port-hit-size: 7.3333rem;
+  width: var(--node-port-hit-size);
+  height: var(--node-port-hit-size);
+  border: 0;
+  background: transparent;
   transform-origin: center;
   transition:
-    transform 0.14s ease,
     box-shadow 0.14s ease,
     background 0.14s ease;
 }
@@ -9412,22 +9435,38 @@ onUnmounted(() => {
 .node-port::before {
   content: '';
   position: absolute;
+  inset: 0;
+  border-radius: 999rem;
+}
+
+.node-port::after {
+  content: '';
+  position: absolute;
   left: 50%;
   top: 50%;
-  width: 5.5rem;
-  height: 5.5rem;
+  width: var(--node-port-dot-size);
+  height: var(--node-port-dot-size);
+  border: 0.125rem solid #fff;
   border-radius: 999rem;
-  transform: translate(-50%, -50%);
+  background: var(--node-port-bg);
+  box-shadow: var(--node-port-shadow);
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(var(--node-port-scale));
+  transform-origin: center;
+  transition:
+    transform 0.14s ease,
+    box-shadow 0.14s ease,
+    background 0.14s ease;
 }
 
 .source-port {
-  right: -0.4375rem;
-  transform: translate(50%, -50%) scale(var(--node-port-scale));
+  right: calc(var(--node-port-hit-size) / -2);
+  transform: translateY(-50%);
 }
 
 .target-port {
-  left: -0.4375rem;
-  transform: translate(-50%, -50%) scale(var(--node-port-scale));
+  left: calc(var(--node-port-hit-size) / -2);
+  transform: translateY(-50%);
 }
 
 .condition-source-port {
@@ -9436,12 +9475,12 @@ onUnmounted(() => {
 
 .coze-node:hover .node-port {
   --node-port-scale: 2;
-  box-shadow: 0 0 0 0.25rem rgba(107, 111, 247, 0.12);
+  --node-port-shadow: 0 0 0 0.25rem rgba(107, 111, 247, 0.12);
 }
 
 .coze-node.selected .node-port {
   --node-port-scale: 1.2;
-  box-shadow: 0 0 0 0.25rem rgba(107, 111, 247, 0.12);
+  --node-port-shadow: 0 0 0 0.25rem rgba(107, 111, 247, 0.12);
 }
 
 .coze-node .node-port:hover,
@@ -9451,8 +9490,8 @@ onUnmounted(() => {
 .coze-node .node-port.vue-flow__handle-connecting,
 .coze-node .node-port.vue-flow__handle-valid {
   --node-port-scale: 3;
-  background: #5558f6;
-  box-shadow: 0 0 0 0.3125rem rgba(85, 88, 246, 0.16);
+  --node-port-bg: #5558f6;
+  --node-port-shadow: 0 0 0 0.3125rem rgba(85, 88, 246, 0.16);
   z-index: 4;
 }
 
