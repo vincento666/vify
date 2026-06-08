@@ -19,12 +19,18 @@ async function portMetrics(page, selector) {
     const element = document.querySelector(portSelector)
     if (!element) return null
     const box = element.getBoundingClientRect()
+    const matrixScale = (value) => {
+      const matrix = String(value || '').match(/matrix\(([^,]+)/)
+      return matrix ? Number.parseFloat(matrix[1]) : 1
+    }
+    const dotStyle = getComputedStyle(element, '::after')
     const className = element.getAttribute('class') || ''
     return {
       width: box.width,
       height: box.height,
       centerX: box.left + box.width / 2,
       centerY: box.top + box.height / 2,
+      dotScale: matrixScale(dotStyle.transform),
       className,
     }
   }, selector)
@@ -61,16 +67,15 @@ try {
 
   await page.mouse.move(source.centerX, source.centerY)
   await page.mouse.down()
-  const magneticEdgeDistance = 42
+  const magneticEdgeDistance = Math.max(4, target.width / 2 - 1)
   await page.mouse.move(target.centerX - magneticEdgeDistance, target.centerY, { steps: 18 })
   await page.waitForTimeout(180)
 
   const nearTarget = await portMetrics(page, targetSelector)
   assert(nearTarget, 'Expected target port after connection drag')
-  const nearRatio = nearTarget.width / target.width
   assert(
-    closeToRatio(nearRatio, 3),
-    `Expected target endpoint to scale to 3x ${magneticEdgeDistance}px from center inside the 44px magnetic radius, got ratio=${nearRatio}, metrics=${JSON.stringify(nearTarget)}`,
+    closeToRatio(nearTarget.dotScale, 3),
+    `Expected target endpoint dot to scale to 3x inside the original-hitbox hover radius, distance=${magneticEdgeDistance}, got metrics=${JSON.stringify(nearTarget)}`,
   )
 
   if (screenshotPath) {

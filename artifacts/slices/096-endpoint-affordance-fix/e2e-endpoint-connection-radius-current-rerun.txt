@@ -1,0 +1,9 @@
+file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-endpoint-connection-radius.mjs:7
+  if (!condition) throw new Error(message)
+                        ^
+
+Error: Expected target endpoint to scale to 3x 42px from center inside the 44px magnetic radius, got ratio=1, metrics={"width":25.65838623046875,"height":25.658355712890625,"centerX":723.8456115722656,"centerY":483.4641876220703,"className":"vue-flow__handle vue-flow__handle-left vue-flow__handle-null nodrag nopan target connectable connectablestart connectableend connectionindicator node-port target-port"}
+    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-endpoint-connection-radius.mjs:7:25)
+    at file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-endpoint-connection-radius.mjs:71:3
+
+Node.js v23.11.0
