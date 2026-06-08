@@ -13,6 +13,7 @@ from app.modules.workflow.domain.context import ExecutionContext
 from app.modules.workflow.infra.repository import WorkflowRepository
 
 MAX_STEPS = 50
+_LOCAL_TEMPLATE_PATTERN = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
 
 
 class WorkflowExecutionError(Exception):
@@ -93,9 +94,16 @@ class ConditionNodeExecutor:
 class EndNodeExecutor:
     def execute(self, node: dict[str, Any], context: ExecutionContext) -> dict[str, Any]:
         config = _config(node)
-        output_variable = str(config.get("outputVariable") or "output")
-        if "output" in config:
-            return {output_variable: context.render(str(config["output"]))}
+        declared_output = _declared_end_output(config, context)
+        has_declared_output = isinstance(config.get("outputParameters"), list)
+        return_mode = str(config.get("returnMode") or "").lower()
+        variable_return_mode = return_mode in {"variables", "返回变量"}
+        output_variable = str(config.get("outputVariable") or next(iter(declared_output), "output") or "output")
+        if "output" in config and not variable_return_mode:
+            rendered_output = _render_local_template(context.render(str(config["output"])), declared_output)
+            return {output_variable: rendered_output}
+        if declared_output or has_declared_output:
+            return declared_output
         return {output_variable: context.find_value(output_variable)}
 
 
@@ -516,6 +524,36 @@ def _declared_output(values: dict[str, Any], config: dict[str, Any]) -> dict[str
         if name:
             output[name] = values.get(name)
     return output or values
+
+
+def _declared_end_output(config: dict[str, Any], context: ExecutionContext) -> dict[str, Any]:
+    parameters = config.get("outputParameters")
+    if not isinstance(parameters, list):
+        return {}
+    output: dict[str, Any] = {}
+    for item in parameters:
+        if not isinstance(item, Mapping):
+            continue
+        name = str(item.get("name") or "").strip()
+        if not name:
+            continue
+        if "value" in item or "valueMode" in item:
+            value = item.get("value")
+            if str(item.get("valueMode") or "reference") == "literal":
+                output[name] = value
+            else:
+                output[name] = context.render(str(value or ""))
+        else:
+            output[name] = context.find_value(name)
+    return output
+
+
+def _render_local_template(template: str, values: Mapping[str, Any]) -> str:
+    def replace(match: re.Match[str]) -> str:
+        value = values.get(match.group(1))
+        return "" if value is None else str(value)
+
+    return _LOCAL_TEMPLATE_PATTERN.sub(replace, template)
 
 
 def _field_map(config: dict[str, Any]) -> list[dict[str, Any]]:

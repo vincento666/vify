@@ -1,0 +1,85 @@
+Using CPython 3.12.9 interpreter at: /opt/homebrew/opt/python@3.12/bin/python3.12
+Creating virtual environment at: .venv
+Downloading pygments (1.2MiB)
+Downloading ruff (10.0MiB)
+Downloading uvloop (1.3MiB)
+Downloading ast-serialize (1.1MiB)
+Downloading pydantic-core (1.9MiB)
+Downloading mypy (13.0MiB)
+Downloading sqlalchemy (2.1MiB)
+Downloading psycopg-binary (4.5MiB)
+Downloading numpy (5.0MiB)
+ Downloaded ast-serialize
+ Downloaded uvloop
+ Downloaded pygments
+ Downloaded pydantic-core
+ Downloaded sqlalchemy
+ Downloaded psycopg-binary
+ Downloaded numpy
+ Downloaded ruff
+ Downloaded mypy
+Installed 51 packages in 67ms
+FF..                                                                     [100%]
+=================================== FAILURES ===================================
+_ LinearExecutorTest.test_end_executor_maps_declared_output_parameters_from_upstream_references _
+
+self = <tests.unit.workflow.test_linear_executors.LinearExecutorTest testMethod=test_end_executor_maps_declared_output_parameters_from_upstream_references>
+
+    def test_end_executor_maps_declared_output_parameters_from_upstream_references(self) -> None:
+        self.assertIsNotNone(EndNodeExecutor)
+        context = ExecutionContext()
+        context.set_output("llm_1", {"answer": "LLM mock: upstream"})
+    
+        output = EndNodeExecutor().execute(
+            {
+                "node_key": "end",
+                "type": "END",
+                "config": {
+                    "outputParameters": [
+                        {"name": "final", "type": "string", "valueMode": "reference", "value": "{{llm_1.answer}}"},
+                    ],
+                },
+            },
+            context,
+        )
+    
+>       self.assertEqual(output, {"final": "LLM mock: upstream"})
+E       AssertionError: {'output': None} != {'final': 'LLM mock: upstream'}
+E       - {'output': None}
+E       + {'final': 'LLM mock: upstream'}
+
+tests/unit/workflow/test_linear_executors.py:59: AssertionError
+_ LinearExecutorTest.test_end_executor_renders_answer_content_with_declared_local_outputs _
+
+self = <tests.unit.workflow.test_linear_executors.LinearExecutorTest testMethod=test_end_executor_renders_answer_content_with_declared_local_outputs>
+
+    def test_end_executor_renders_answer_content_with_declared_local_outputs(self) -> None:
+        self.assertIsNotNone(EndNodeExecutor)
+        context = ExecutionContext()
+        context.set_output("llm_1", {"answer": "LLM mock: upstream"})
+    
+        output = EndNodeExecutor().execute(
+            {
+                "node_key": "end",
+                "type": "END",
+                "config": {
+                    "outputVariable": "output",
+                    "output": "回答：{{final}}",
+                    "outputParameters": [
+                        {"name": "final", "type": "string", "valueMode": "reference", "value": "{{llm_1.answer}}"},
+                    ],
+                },
+            },
+            context,
+        )
+    
+>       self.assertEqual(output, {"output": "回答：LLM mock: upstream"})
+E       AssertionError: {'output': '回答：{{final}}'} != {'output': '回答：LLM mock: upstream'}
+E       - {'output': '回答：{{final}}'}
+E       + {'output': '回答：LLM mock: upstream'}
+
+tests/unit/workflow/test_linear_executors.py:81: AssertionError
+=========================== short test summary info ============================
+FAILED tests/unit/workflow/test_linear_executors.py::LinearExecutorTest::test_end_executor_maps_declared_output_parameters_from_upstream_references
+FAILED tests/unit/workflow/test_linear_executors.py::LinearExecutorTest::test_end_executor_renders_answer_content_with_declared_local_outputs
+2 failed, 2 passed in 3.33s

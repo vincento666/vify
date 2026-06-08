@@ -38,6 +38,48 @@ class LinearExecutorTest(unittest.TestCase):
 
         self.assertEqual(output, {"answer": "LLM mock: hello"})
 
+    def test_end_executor_maps_declared_output_parameters_from_upstream_references(self) -> None:
+        self.assertIsNotNone(EndNodeExecutor)
+        context = ExecutionContext()
+        context.set_output("llm_1", {"answer": "LLM mock: upstream"})
+
+        output = EndNodeExecutor().execute(
+            {
+                "node_key": "end",
+                "type": "END",
+                "config": {
+                    "outputParameters": [
+                        {"name": "final", "type": "string", "valueMode": "reference", "value": "{{llm_1.answer}}"},
+                    ],
+                },
+            },
+            context,
+        )
+
+        self.assertEqual(output, {"final": "LLM mock: upstream"})
+
+    def test_end_executor_renders_answer_content_with_declared_local_outputs(self) -> None:
+        self.assertIsNotNone(EndNodeExecutor)
+        context = ExecutionContext()
+        context.set_output("llm_1", {"answer": "LLM mock: upstream"})
+
+        output = EndNodeExecutor().execute(
+            {
+                "node_key": "end",
+                "type": "END",
+                "config": {
+                    "outputVariable": "output",
+                    "output": "回答：{{final}}",
+                    "outputParameters": [
+                        {"name": "final", "type": "string", "valueMode": "reference", "value": "{{llm_1.answer}}"},
+                    ],
+                },
+            },
+            context,
+        )
+
+        self.assertEqual(output, {"output": "回答：LLM mock: upstream"})
+
 
 if __name__ == "__main__":
     unittest.main()
