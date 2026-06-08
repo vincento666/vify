@@ -1,4 +1,5 @@
 import { chromium } from 'playwright'
+import { createServer } from 'node:http'
 
 const baseUrl = process.env.HIFY_E2E_BASE_URL || 'http://127.0.0.1:5173'
 const workflowScreenshotPath = process.env.HIFY_E2E_WORKFLOW_SCREENSHOT
@@ -28,6 +29,25 @@ async function getFlow(page, path, id) {
     await page.request.get(`${baseUrl}/api/v1/${path}/${id}`),
     `get ${path}`,
   )
+}
+
+async function createLocalApiServer() {
+  const server = createServer((request, response) => {
+    if (request.url?.startsWith('/text/')) {
+      response.writeHead(200, { 'Content-Type': 'text/plain' })
+      response.end(`API_REAL: ${request.method} ${request.url}`)
+      return
+    }
+    response.writeHead(404)
+    response.end('not found')
+  })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const address = server.address()
+  assert(address && typeof address === 'object', 'Expected local API server to listen on a TCP port')
+  return {
+    url: `http://127.0.0.1:${address.port}`,
+    close: () => new Promise((resolve) => server.close(resolve)),
+  }
 }
 
 async function runWorkflowUx(page, marker) {
@@ -195,7 +215,7 @@ async function runWorkflowUx(page, marker) {
   if (workflowScreenshotPath) await page.screenshot({ path: workflowScreenshotPath, fullPage: true })
 }
 
-async function runWorkflowMultiConditionUat(page, marker) {
+async function runWorkflowMultiConditionUat(page, marker, apiBaseUrl) {
   const llmExpected = `WORKFLOW_COMPLEX_${marker}`
   const workflow = await createFlow(page, 'workflows', {
     name: `Workflow Multi Condition UAT ${marker}`,
@@ -211,7 +231,26 @@ async function runWorkflowMultiConditionUat(page, marker) {
         nodeKey: 'router',
         type: 'CONDITION',
         name: '条件',
-        config: { expression: '{{start.USER_INPUT}}', outputVariable: 'route', ui: { position: { x: 640, y: 96 } } },
+        config: {
+          outputVariable: 'route',
+          conditionBranches: [
+            {
+              key: 'refund',
+              name: '退款分支',
+              logic: 'AND',
+              conditions: [{ left: '{{start.USER_INPUT}}', operator: 'contains', right: 'refund' }],
+            },
+            {
+              key: 'invoice',
+              name: '发票分支',
+              logic: 'AND',
+              conditions: [{ left: '{{start.USER_INPUT}}', operator: 'contains', right: 'invoice' }],
+            },
+          ],
+          defaultBranch: 'default',
+          defaultBranchName: '默认分支',
+          ui: { position: { x: 640, y: 96 } },
+        },
       },
       {
         nodeKey: 'refund_llm',
@@ -227,13 +266,13 @@ async function runWorkflowMultiConditionUat(page, marker) {
         nodeKey: 'invoice',
         type: 'API_CALL',
         name: '发票分支',
-        config: { method: 'GET', url: `INVOICE_BRANCH_${marker}`, outputVariable: 'answer', ui: { position: { x: 1160, y: 180 } } },
+        config: { method: 'GET', url: `${apiBaseUrl}/text/INVOICE_BRANCH_${marker}`, outputVariable: 'answer', ui: { position: { x: 1160, y: 180 } } },
       },
       {
         nodeKey: 'fallback',
         type: 'API_CALL',
         name: '默认分支',
-        config: { method: 'GET', url: `DEFAULT_BRANCH_${marker}`, outputVariable: 'answer', ui: { position: { x: 1160, y: 360 } } },
+        config: { method: 'GET', url: `${apiBaseUrl}/text/DEFAULT_BRANCH_${marker}`, outputVariable: 'answer', ui: { position: { x: 1160, y: 360 } } },
       },
       {
         nodeKey: 'end',
@@ -258,7 +297,7 @@ async function runWorkflowMultiConditionUat(page, marker) {
   })
 
   await page.goto(`${baseUrl}/workflows/${workflow.id}/canvas`, { waitUntil: 'networkidle' })
-  await page.getByRole('button', { name: '试运行' }).click()
+  await page.getByTestId('canvas-bottom-toolbar').getByRole('button', { name: '试运行' }).click()
   const panel = page.locator('[data-testid="test-run-panel"]')
   await panel.waitFor({ state: 'visible', timeout: 5000 })
   assert((await panel.innerText()).includes('用户消息（userMessage / USER_INPUT）'), 'Expected workflow run input to name userMessage and USER_INPUT')
@@ -309,8 +348,15 @@ async function runChatflowUx(page, marker) {
         type: 'CONDITION',
         name: '条件',
         config: {
-          expression: '{{start.sys.query}}',
           outputVariable: 'route',
+          conditionBranches: [{
+            key: guideQuestion,
+            name: '猜你想问分支',
+            logic: 'AND',
+            conditions: [{ left: '{{start.sys.query}}', operator: 'contains', right: guideQuestion }],
+          }],
+          defaultBranch: 'fallback',
+          defaultBranchName: '默认回复',
           ui: { position: { x: 480, y: 96 } },
         },
       },
@@ -358,9 +404,10 @@ async function runChatflowUx(page, marker) {
   await page.getByRole('button', { name: '对话试运行' }).click()
   const panel = page.locator('[data-testid="test-run-panel"]')
   await panel.waitFor({ state: 'visible', timeout: 5000 })
+  await panel.getByTestId('chatflow-run-fields-toggle').click()
   const inputPanelText = await panel.innerText()
-  for (const label of ['用户消息（sys.query）', '会话 ID（sys.conversation_id）', '用户 ID（sys.user_id）', '渠道（sys.channel）']) {
-    assert(inputPanelText.includes(label), `Expected chatflow run input label ${label}`)
+  for (const label of ['会话 ID（sys.conversation_id）', '用户 ID（sys.user_id）', '渠道（sys.channel）']) {
+    assert(inputPanelText.includes(label), `Expected chatflow run parameter label ${label}`)
   }
   await panel.getByTestId('chatflow-opening-message').waitFor({ state: 'visible', timeout: 5000 })
   assert((await panel.getByTestId('chatflow-opening-message').innerText()).includes(openingText), 'Expected opening text to appear before a user run')
@@ -381,17 +428,12 @@ async function runChatflowUx(page, marker) {
   assert(guideLayout.buttonWidth < guideLayout.listWidth * 0.8, `Expected suggested question bubble width to fit content, got ${JSON.stringify(guideLayout)}`)
 
   await panel.getByRole('button', { name: guideQuestion, exact: true }).click()
-  assert(await panel.getByPlaceholder('输入用户消息').inputValue() === guideQuestion, 'Expected guide question to fill the chat input')
-  assert(await suggested.isVisible(), 'Expected guide question choices to remain visible after the user picks one')
-  assert((await suggested.innerText()).includes(guideQuestion), 'Expected selected guide question to remain available after click')
-
-  await panel.getByRole('button', { name: '运行', exact: true }).click()
   const assistant = panel.getByTestId('chatflow-assistant-message')
   await assistant.waitFor({ state: 'visible', timeout: 10000 })
   const panelText = await panel.innerText()
   assert(panelText.includes('SUCCEEDED'), 'Expected chatflow run to succeed')
-  assert(panelText.includes(openingText), 'Expected opening text to remain in the conversation result')
-  assert(panelText.includes('猜你想问'), 'Expected suggested questions to remain visually distinct in the conversation result')
+  assert(panelText.includes(guideQuestion), 'Expected selected guide question to become the user message')
+  assert(!panelText.includes('猜你想问'), 'Expected suggested questions to hide after the first user message like Agent preview')
   const assistantText = await assistant.innerText()
   assert(assistantText.includes(answerToken), `Expected chatflow complex LLM branch to return ${answerToken}, got ${assistantText}`)
   assert(!assistantText.includes('LLM mock:'), `Expected chatflow complex branch to use live LLM output, got ${assistantText}`)
@@ -402,13 +444,15 @@ async function runChatflowUx(page, marker) {
 
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+const localApi = await createLocalApiServer()
 
 try {
   const marker = `UX_${Date.now()}`
   await runWorkflowUx(page, marker)
-  await runWorkflowMultiConditionUat(page, marker)
+  await runWorkflowMultiConditionUat(page, marker, localApi.url)
   await runChatflowUx(page, marker)
   console.log('PASS workflow/chatflow canvas UX lifecycle e2e')
 } finally {
+  await localApi.close()
   await browser.close()
 }
