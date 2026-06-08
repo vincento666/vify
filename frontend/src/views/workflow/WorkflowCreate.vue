@@ -85,20 +85,23 @@
           <section class="resource-section" data-testid="chatflow-variable-panel">
             <h4>变量</h4>
             <div v-for="scope in chatflowVariableScopes" :key="scope.title" class="resource-group">
-              <button type="button" @click="scope.open = !scope.open">
+              <button type="button" :aria-expanded="scope.open" @click="scope.open = !scope.open">
                 <span>{{ scope.title }}</span>
                 <small>{{ scope.description }}</small>
               </button>
               <div v-if="scope.open" class="resource-items">
-                <button
+                <div
                   v-for="item in scope.items"
                   :key="item.reference"
-                  type="button"
-                  @click="insertChatflowVariable(item.reference)"
+                  class="resource-variable-row"
+                  data-testid="chatflow-resource-variable"
                 >
-                  <span>{{ item.label }}</span>
-                  <code>{{ item.reference }}</code>
-                </button>
+                  <span>
+                    <strong>{{ item.label }}</strong>
+                    <code>{{ item.reference }}</code>
+                  </span>
+                  <em>{{ chatflowPanelVariableTypeLabel(item.type) }}</em>
+                </div>
               </div>
             </div>
           </section>
@@ -3270,7 +3273,7 @@ import {
   summarizeChatflowRunDebug,
   type ChatflowRunDebugDetail,
 } from './chatflowRunDebug'
-import { buildChatflowVariableScopes, insertChatflowVariableReference, type ChatflowVariableScope } from './chatflowVariables'
+import { buildChatflowVariableScopes, type ChatflowVariableScope } from './chatflowVariables'
 import {
   buildChatflowChannelRows,
   buildChatflowOpenShell,
@@ -5958,6 +5961,11 @@ function variableListTypeLabel(type: VariableCatalogType) {
   return labels[type] ?? String(type)
 }
 
+function chatflowPanelVariableTypeLabel(type: string) {
+  const normalized = String(type || 'string').toLowerCase() as VariableCatalogType
+  return variableListTypeLabel(normalized)
+}
+
 function insertVariable(key: string, reference: string) {
   const currentValue = String(fieldValue(key) || '')
   const nextValue = canUseVariable(key)
@@ -6017,22 +6025,6 @@ function insertStructuredVariableReference(target: string, reference: string) {
   activeStructuredVariableTarget.value = ''
   activeStructuredVariableGroupKey.value = ''
   structuredVariableSearch.value = ''
-}
-
-function insertChatflowVariable(reference: string) {
-  const endNode = graph.value.nodes.find((node) => node.nodeKey === 'end')
-  const currentValue = String(endNode?.config.output || '')
-  const nextValue = insertChatflowVariableReference(currentValue, reference)
-  graph.value = {
-    ...graph.value,
-    nodes: graph.value.nodes.map((node) =>
-      node.nodeKey === 'end'
-        ? { ...node, config: { ...node.config, outputVariable: 'output', output: nextValue } }
-        : node,
-    ),
-  }
-  selectedNodeKey.value = 'end'
-  markGraphDirty()
 }
 
 function addGuideQuestion() {
@@ -7108,7 +7100,7 @@ onUnmounted(() => {
 }
 
 .resource-group > button,
-.resource-items button {
+.resource-variable-row {
   width: 100%;
   display: flex;
   align-items: flex-start;
@@ -7127,9 +7119,15 @@ onUnmounted(() => {
 }
 
 .resource-group small,
-.resource-items code {
+.resource-variable-row code,
+.resource-variable-row em {
   color: #8b94a8;
   font-size: 0.6875rem;
+}
+
+.resource-group > button[aria-expanded='true'] {
+  border-color: #d8def4;
+  background: #f7f8ff;
 }
 
 .resource-items {
@@ -7139,11 +7137,38 @@ onUnmounted(() => {
   margin-top: 0.375rem;
 }
 
-.resource-items button {
+.resource-variable-row {
   flex-direction: column;
+  cursor: default;
 }
 
-.resource-items button:hover,
+.resource-variable-row span {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.125rem;
+}
+
+.resource-variable-row strong {
+  color: #30364a;
+  font-size: 0.75rem;
+}
+
+.resource-variable-row code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resource-variable-row em {
+  align-self: flex-start;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.375rem;
+  background: #f0f2f7;
+  font-style: normal;
+  font-weight: 700;
+}
+
 .resource-group > button:hover {
   border-color: #cdd3f7;
   background: #f5f6ff;
