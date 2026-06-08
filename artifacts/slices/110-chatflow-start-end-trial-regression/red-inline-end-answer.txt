@@ -1,0 +1,30 @@
+> vitest run src/views/workflow/variableCatalog.test.ts
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ ❯ src/views/workflow/variableCatalog.test.ts (10 tests | 1 failed) 7ms
+   ✓ workflow variable catalog > offers only START and connected upstream node outputs for a selected node 2ms
+   ✓ workflow variable catalog > formats inserted references with the workflow template syntax 0ms
+   ✓ workflow variable catalog > uses declared output parameter rows as downstream variable options 0ms
+   ✓ workflow variable catalog > keeps sibling branch-local variables out of the current branch picker 0ms
+   ✓ workflow variable catalog > builds Coze-like source groups with typed variable rows 1ms
+   ✓ workflow variable catalog > uses Coze Chatflow preset start variables without hardcoded global scopes 1ms
+   ✓ workflow variable catalog > adds configured global memory variables without inventing system variables 0ms
+   ✓ workflow variable catalog > does not show unconfigured Chatflow scoped variables on workflow canvases 0ms
+   ✓ workflow variable catalog > limits inline text references to current node declared input variables 0ms
+   × workflow variable catalog > uses upstream variables for END answer inline references 2ms
+     → buildInlineVariableCatalog is not a function
+ Test Files  1 failed (1)
+      Tests  1 failed | 9 passed (10)
+   Start at  07:27:40
+   Duration  285ms (transform 43ms, setup 0ms, collect 48ms, tests 7ms, environment 0ms, prepare 47ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/views/workflow/variableCatalog.test.ts > workflow variable catalog > uses upstream variables for END answer inline references
+TypeError: buildInlineVariableCatalog is not a function
+ ❯ src/views/workflow/variableCatalog.test.ts:207:21
+    205|     graph = connectWorkflowNodes(connectWorkflowNodes(graph, 'start', …
+    206| 
+    207|     const catalog = buildInlineVariableCatalog(graph, end.nodeKey, { f…
+       |                     ^
+    208|     const references = catalog.flatMap((group) => group.items.map((ite…
+    209| 
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯

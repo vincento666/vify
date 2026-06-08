@@ -180,3 +180,18 @@ export function buildLocalVariableCatalog(graph: WorkflowCanvasGraph, selectedNo
     }]
     : []
 }
+
+export function buildInlineVariableCatalog(
+  graph: WorkflowCanvasGraph,
+  selectedNodeKey: string,
+  options: BuildVariableCatalogOptions = {},
+): VariableCatalogGroup[] {
+  const node = graph.nodes.find((item) => item.nodeKey === selectedNodeKey)
+  if (!node) return []
+
+  if (node.type === 'END') {
+    return buildVariableCatalog(graph, selectedNodeKey, options)
+  }
+
+  return buildLocalVariableCatalog(graph, selectedNodeKey)
+}

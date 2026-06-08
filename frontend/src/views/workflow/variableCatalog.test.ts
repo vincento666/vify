@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildLocalVariableCatalog, buildVariableCatalog, formatVariableReference } from './variableCatalog'
+import { buildInlineVariableCatalog, buildLocalVariableCatalog, buildVariableCatalog, formatVariableReference } from './variableCatalog'
 import { addWorkflowNode, connectWorkflowNodes, createDefaultChatflowGraph, createDefaultWorkflowGraph } from './flowGraph'
 
 describe('workflow variable catalog', () => {
@@ -112,14 +112,17 @@ describe('workflow variable catalog', () => {
 
     expect(catalog.map((group) => group.title)).toEqual(['开始'])
     expect(catalog[0]?.items).toEqual([
-      expect.objectContaining({ variable: 'USER_INPUT', label: 'USER_INPUT', type: 'string', reference: '{{start.USER_INPUT}}' }),
-      expect.objectContaining({ variable: 'CONVERSATION_NAME', label: 'CONVERSATION_NAME', type: 'string', reference: '{{start.CONVERSATION_NAME}}' }),
+      expect.objectContaining({ variable: 'sys.query', label: 'sys.query', type: 'string', reference: '{{start.sys.query}}' }),
+      expect.objectContaining({ variable: 'sys.conversation_id', label: 'sys.conversation_id', type: 'string', reference: '{{start.sys.conversation_id}}' }),
+      expect.objectContaining({ variable: 'sys.user_id', label: 'sys.user_id', type: 'string', reference: '{{start.sys.user_id}}' }),
+      expect.objectContaining({ variable: 'sys.channel', label: 'sys.channel', type: 'string', reference: '{{start.sys.channel}}' }),
+      expect.objectContaining({ variable: 'sys.channel_id', label: 'sys.channel_id', type: 'string', reference: '{{start.sys.channel_id}}' }),
     ])
     expect(references).not.toContain('{{user.tier}}')
     expect(references).not.toContain('{{global.brand}}')
     expect(references).not.toContain('{{sys.query}}')
     expect(references).not.toContain('{{sys.round}}')
-    expect(references).not.toContain('{{start.sys.query}}')
+    expect(references).toContain('{{start.sys.query}}')
     expect(references).not.toContain('{{start.sys.round}}')
     expect(references).not.toContain('{{conversation.conversation_id}}')
     expect(references).not.toContain('{{channel.source}}')
@@ -144,7 +147,7 @@ describe('workflow variable catalog', () => {
     expect(references).toContain('{{user.name}}')
     expect(references).toContain('{{global.brand}}')
     expect(references).toContain('{{sys.sys_uuid}}')
-    expect(references).toContain('{{start.USER_INPUT}}')
+    expect(references).toContain('{{start.sys.query}}')
     expect(references).not.toContain('{{sys.round}}')
     expect(references).not.toContain('{{sys.query}}')
   })
@@ -188,8 +191,8 @@ describe('workflow variable catalog', () => {
     expect(references).not.toContain(`{{${downstreamKnowledge.nodeKey}.references}}`)
   })
 
-  it('uses end node return rows as local inline variables without exposing upstream directly', () => {
-    let graph = createDefaultWorkflowGraph()
+  it('uses upstream variables for END answer inline references', () => {
+    let graph = createDefaultChatflowGraph()
     graph = addWorkflowNode(graph, 'LLM', { x: 320, y: 240 })
     const llm = graph.nodes.find((node) => node.type === 'LLM')!
     const end = graph.nodes.find((node) => node.type === 'END')!
@@ -201,12 +204,13 @@ describe('workflow variable catalog', () => {
     ]
     graph = connectWorkflowNodes(connectWorkflowNodes(graph, 'start', llm.nodeKey), llm.nodeKey, end.nodeKey)
 
-    const catalog = buildLocalVariableCatalog(graph, end.nodeKey)
+    const catalog = buildInlineVariableCatalog(graph, end.nodeKey, { flowType: 'CHATFLOW' })
     const references = catalog.flatMap((group) => group.items.map((item) => item.reference))
 
-    expect(catalog.map((group) => group.title)).toEqual(['输出'])
-    expect(references).toEqual(['{{final}}', '{{debug}}'])
-    expect(references).not.toContain(`{{${llm.nodeKey}.answer}}`)
-    expect(references).not.toContain('{{start.USER_INPUT}}')
+    expect(catalog.map((group) => group.title)).toEqual(expect.arrayContaining(['开始', '大模型']))
+    expect(references).toContain('{{start.sys.query}}')
+    expect(references).toContain(`{{${llm.nodeKey}.answer}}`)
+    expect(references).not.toContain('{{final}}')
+    expect(references).not.toContain('{{debug}}')
   })
 })

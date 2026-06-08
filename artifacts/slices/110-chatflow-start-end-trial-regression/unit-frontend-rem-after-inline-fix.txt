@@ -1,0 +1,11 @@
+> vitest run src/views/workflow/flowGraph.test.ts src/views/workflow/nodeConfig.test.ts src/views/workflow/variableCatalog.test.ts src/remScaleClosure.test.ts
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ ✓ src/remScaleClosure.test.ts (1 test) 10ms
+ ✓ src/views/workflow/flowGraph.test.ts (17 tests) 8ms
+ ✓ src/views/workflow/variableCatalog.test.ts (10 tests) 5ms
+ ✓ src/views/workflow/nodeConfig.test.ts (21 tests) 10ms
+ Test Files  4 passed (4)
+      Tests  49 passed (49)
+   Start at  07:29:58
+   Duration  322ms (transform 128ms, setup 0ms, collect 183ms, tests 33ms, environment 1ms, prepare 261ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m

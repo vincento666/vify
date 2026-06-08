@@ -144,7 +144,7 @@ export function createDefaultChatflowGraph(): WorkflowCanvasGraph {
         type: 'START',
         name: NODE_LABELS.START,
         config: {
-          outputVariables: ['USER_INPUT', 'CONVERSATION_NAME'],
+          outputVariables: ['sys.query', 'sys.conversation_id', 'sys.user_id', 'sys.channel', 'sys.channel_id'],
           ui: { position: DEFAULT_POSITIONS.start },
         },
         position: DEFAULT_POSITIONS.start,

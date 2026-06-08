@@ -43,8 +43,11 @@ describe('chatflow node test fixtures', () => {
       { role: 'assistant', content: '上一轮助手回复' },
     ])
     expect(graph.nodes.find((node) => node.nodeKey === 'start')?.config.outputVariables).toEqual([
-      'USER_INPUT',
-      'CONVERSATION_NAME',
+      'sys.query',
+      'sys.conversation_id',
+      'sys.user_id',
+      'sys.channel',
+      'sys.channel_id',
     ])
   })
 

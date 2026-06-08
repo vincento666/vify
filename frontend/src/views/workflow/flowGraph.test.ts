@@ -123,8 +123,11 @@ describe('workflow canvas graph model', () => {
     const start = graph.nodes.find((node) => node.nodeKey === 'start')
 
     expect(start?.config.outputVariables).toEqual([
-      'USER_INPUT',
-      'CONVERSATION_NAME',
+      'sys.query',
+      'sys.conversation_id',
+      'sys.user_id',
+      'sys.channel',
+      'sys.channel_id',
     ])
   })
 

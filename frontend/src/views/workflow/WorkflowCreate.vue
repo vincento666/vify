@@ -3810,7 +3810,7 @@ import { buildNodePaletteGroups, filterNodePaletteGroups, type NodePaletteEntry 
 import { isResourceSelectable, resourceStatusLabel, type WorkflowResource } from './resourceRegistry'
 import { deriveRunPathEdgeClasses } from './runPathEdges'
 import { completeVariableBraceTrigger, insertInlineVariableReference } from './inlineVariableText'
-import { buildLocalVariableCatalog, buildVariableCatalog, type VariableCatalogGroup, type VariableCatalogType } from './variableCatalog'
+import { buildInlineVariableCatalog, buildVariableCatalog, type VariableCatalogGroup, type VariableCatalogType } from './variableCatalog'
 import { evaluateWorkflowPublishGate } from './workflowPublish'
 import { validateWorkflowGraph } from './workflowValidation'
 import { buildChatflowRunDebugLink, buildWorkflowRunDebugLink } from '@/router/runDebugDeepLinks'
@@ -4244,7 +4244,9 @@ function selectedConfigPanelSubtitle() {
 const variableGroups = computed(() => selectedNode.value
   ? buildVariableCatalog(graph.value, selectedNode.value.nodeKey, { flowType: isChatflowMode.value ? 'CHATFLOW' : 'WORKFLOW' })
   : [])
-const localVariableGroups = computed(() => selectedNode.value ? buildLocalVariableCatalog(graph.value, selectedNode.value.nodeKey) : [])
+const inlineVariableGroups = computed(() => selectedNode.value
+  ? buildInlineVariableCatalog(graph.value, selectedNode.value.nodeKey, { flowType: isChatflowMode.value ? 'CHATFLOW' : 'WORKFLOW' })
+  : [])
 const llmModelDisplayName = computed(() => String(fieldValue('model') || 'xiaomi/mimo-v2-flash'))
 const filteredLlmModelOptions = computed(() => {
   const keyword = llmModelSearchTerm.value.trim().toLowerCase()
@@ -4453,8 +4455,8 @@ const runOutputRows = computed(() => {
 })
 const filteredVariableGroups = computed(() => {
   const keyword = variableSearch.value.trim().toLowerCase()
-  if (!keyword) return localVariableGroups.value
-  return localVariableGroups.value
+  if (!keyword) return inlineVariableGroups.value
+  return inlineVariableGroups.value
     .map((group) => ({
       ...group,
       items: group.items.filter((item) =>
