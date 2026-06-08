@@ -23,7 +23,7 @@ const COZE_NODE_PALETTE_GROUPS: NodePaletteGroup[] = [
       { type: 'TOOL_CALL', label: '插件', searchTerms: ['工具调用', 'tool', 'mcp'] },
       { type: 'EXECUTE_WORKFLOW', label: '工作流', searchTerms: ['子工作流', 'subworkflow'] },
       { type: 'API_CALL', label: 'API 调用', searchTerms: ['http', '接口'] },
-      { type: 'AGENT_CALL', label: '智能体', searchTerms: ['agent'] },
+      { type: 'AGENT_CALL', label: '智能体', searchTerms: ['agent'], modes: ['chatflow'] },
     ],
   },
   {
@@ -41,11 +41,11 @@ const COZE_NODE_PALETTE_GROUPS: NodePaletteGroup[] = [
   {
     title: '输入&输出',
     items: [
-      { type: 'MESSAGE', label: '消息', searchTerms: ['message'] },
-      { type: 'QUESTION', label: '问题', searchTerms: ['question'] },
-      { type: 'INFORMATION_COLLECTION', label: '信息收集', searchTerms: ['收集', 'collection'] },
+      { type: 'MESSAGE', label: '消息', searchTerms: ['message'], modes: ['chatflow'] },
+      { type: 'QUESTION', label: '问题', searchTerms: ['question'], modes: ['chatflow'] },
+      { type: 'INFORMATION_COLLECTION', label: '信息收集', searchTerms: ['收集', 'collection'], modes: ['chatflow'] },
       { type: 'HUMAN_INPUT', label: '人工输入', searchTerms: ['人工', 'human'] },
-      { type: 'TRANSFER_TO_HUMAN', label: '转人工', searchTerms: ['handoff', '转接'] },
+      { type: 'TRANSFER_TO_HUMAN', label: '转人工', searchTerms: ['handoff', '转接'], modes: ['chatflow'] },
     ],
   },
   {
