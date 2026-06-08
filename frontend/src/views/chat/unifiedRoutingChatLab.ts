@@ -1,4 +1,11 @@
-import type { RuntimeLabTask, RuntimeLabTurn } from '@/api/runtimeLab'
+import type {
+  RuntimeLabChatflowTrace,
+  RuntimeLabConfig,
+  RuntimeLabRouteDecision,
+  RuntimeLabTask,
+  RuntimeLabTraceNode,
+  RuntimeLabTurn,
+} from '@/api/runtimeLab'
 
 export interface AirlineSopScenario {
   id: string
@@ -12,10 +19,51 @@ export interface RuntimeLabTranscriptRow {
   id: string
   role: 'user' | 'assistant'
   content: string
+  pending?: boolean
   routeAction?: string
   targetSopId?: string | null
   taskSummary?: string
   resumePrompt?: string
+}
+
+export interface RuntimeLabConfigSummary {
+  bindingLabel: string
+  arbitratorLabel: string
+  secretLabel: string
+  availableLabel: string
+  bindingRows: string[]
+}
+
+export interface RuntimeLabFunnelSummary {
+  stageLabel: string
+  sourceLabel: string
+  arbitratorLabel: string
+}
+
+export interface RuntimeLabBoundScenarioRow {
+  id: string
+  label: string
+  shortLabel: string
+  triggerUtterances: string[]
+  sampleReplies: string[]
+  chatflowId: number
+  chatflowName: string
+  exists: boolean
+  canvasPath: string
+}
+
+export interface RuntimeLabTraceCard {
+  taskId: number
+  sopId: string
+  status: string
+  chatflowName: string
+  currentNodeLabel: string
+  completedCountLabel: string
+  canvasPath: string
+  debugPath: string
+  nodes: RuntimeLabTraceNode[]
+  events: Array<{ id: number; type: string; nodeKey: string }>
+  slotRows: Array<{ key: string; value: unknown }>
 }
 
 export const AIRLINE_SOP_SCENARIOS: AirlineSopScenario[] = [
@@ -138,7 +186,7 @@ export const AIRLINE_SOP_SCENARIOS: AirlineSopScenario[] = [
       '帮我看航班是不是延误了，机场通知不清楚',
       '查一下到达时间，司机在等',
     ],
-    sampleReplies: ['订单号 CA6034，手机号 13800138000，乘机人张测试', '确认', '继续航班动态'],
+    sampleReplies: ['航班号 CA6034，今天北京飞广州', '确认', '继续航班动态'],
   },
   {
     id: 'special_assistance',
@@ -215,4 +263,116 @@ export function summarizeTasks(activeTask: RuntimeLabTask | null, suspendedTasks
   if (activeTask) chunks.push(`active: ${activeTask.sopId}`)
   if (suspendedTasks.length) chunks.push(`suspended: ${suspendedTasks.map((task) => task.sopId).join(', ')}`)
   return chunks.join(' | ') || 'no active task'
+}
+
+export function buildRuntimeLabConfigSummary(config: RuntimeLabConfig | null): RuntimeLabConfigSummary {
+  if (!config) {
+    return {
+      bindingLabel: '配置加载中',
+      arbitratorLabel: '-',
+      secretLabel: '-',
+      availableLabel: '-',
+      bindingRows: [],
+    }
+  }
+  const mode = config.arbitrator.mode || 'fake'
+  const model = config.arbitrator.model || '-'
+  return {
+    bindingLabel: `已绑定 ${config.sopBindings.length} 个 Chatflow SOP`,
+    arbitratorLabel: `${mode} · ${model}`,
+    secretLabel: config.arbitrator.apiKeyConfigured ? 'API Key 已配置' : 'API Key 未配置',
+    availableLabel: config.arbitrator.available ? '可用' : '不可用',
+    bindingRows: config.sopBindings.map((binding) => {
+      const name = binding.chatflowName || '未找到 Chatflow'
+      const status = binding.exists ? 'ok' : 'missing'
+      return `${binding.sopId} -> #${binding.chatflowId} ${name} (${status})`
+    }),
+  }
+}
+
+export function buildRuntimeLabBoundScenarios(config: RuntimeLabConfig | null): RuntimeLabBoundScenarioRow[] {
+  if (!config) return []
+  return config.sopBindings.map((binding) => {
+    const scenario = getAirlineSopScenario(binding.sopId)
+    const canvasPath = stringValue(binding.canvasPath) || `/chatflows/${binding.chatflowId}/canvas`
+    const fallbackLabel = binding.chatflowName || binding.sopId
+    return {
+      id: binding.sopId,
+      label: scenario?.label || fallbackLabel,
+      shortLabel: scenario?.shortLabel || fallbackLabel.slice(0, 4),
+      triggerUtterances: scenario?.triggerUtterances || [],
+      sampleReplies: scenario?.sampleReplies || [],
+      chatflowId: binding.chatflowId,
+      chatflowName: binding.chatflowName,
+      exists: binding.exists,
+      canvasPath,
+    }
+  })
+}
+
+export function buildRuntimeLabTraceCards(input: RuntimeLabChatflowTrace | null | undefined): RuntimeLabTraceCard[] {
+  return (input?.tasks || []).map((task) => {
+    const nodes = Array.isArray(task.nodes) ? task.nodes : []
+    const currentNode = nodes.find((node) => node.current) || nodes.find((node) => isRunningNode(node.status)) || nodes[nodes.length - 1] || null
+    const completed = nodes.filter((node) => isCompletedNode(node.status)).length
+    const variables = task.variables || { businessRefs: {}, collected: {}, scoped: {}, session: {} }
+    const businessRefs = variables.businessRefs || {}
+    const collected = variables.collected || {}
+    const slotSource = Object.keys(businessRefs).length ? businessRefs : collected
+    return {
+      taskId: Number(task.taskId || 0),
+      sopId: task.sopId || '',
+      status: task.status || '',
+      chatflowName: task.chatflow?.chatflowName || '',
+      currentNodeLabel: currentNode ? `${String(currentNode.nodeKey || '')} · ${String(currentNode.name || currentNode.nodeType || '')}` : '-',
+      completedCountLabel: `${completed}/${nodes.length} 完成`,
+      canvasPath: task.chatflow?.canvasPath || '',
+      debugPath: task.chatflow?.debugPath || '',
+      nodes,
+      events: (task.events || []).map((event) => ({
+        id: event.id,
+        type: event.type,
+        nodeKey: event.nodeKey,
+      })),
+      slotRows: Object.entries(slotSource).map(([key, value]) => ({ key, value: displayValue(value) })),
+    }
+  })
+}
+
+export function buildRuntimeLabFunnelSummary(decision: RuntimeLabRouteDecision | null | undefined): RuntimeLabFunnelSummary {
+  if (!decision) {
+    return {
+      stageLabel: '-',
+      sourceLabel: '-',
+      arbitratorLabel: '-',
+    }
+  }
+  const stage = stringValue(decision.policyGate?.stage) || '-'
+  const sources = decision.candidateSources?.length ? decision.candidateSources.join(', ') : '-'
+  const mode = stringValue(decision.classifierResult?.arbitrator_mode)
+  const usedRealLlm = decision.classifierResult?.used_real_llm === true
+  const arbitrator = mode ? `${mode} · ${usedRealLlm ? 'real' : 'mock'}` : '-'
+  return {
+    stageLabel: stage,
+    sourceLabel: sources,
+    arbitratorLabel: arbitrator,
+  }
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === 'string' ? value : ''
+}
+
+function isCompletedNode(status: string) {
+  return ['SUCCEEDED', 'COMPLETED', 'DONE'].includes(status.toUpperCase())
+}
+
+function isRunningNode(status: string) {
+  return ['RUNNING', 'WAITING', 'INTERRUPTED'].includes(status.toUpperCase())
+}
+
+function displayValue(value: unknown) {
+  if (value == null) return ''
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value
+  return JSON.stringify(value)
 }

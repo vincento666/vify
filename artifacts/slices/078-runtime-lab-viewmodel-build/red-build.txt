@@ -1,0 +1,8 @@
+Command:
+rtk npm --prefix frontend run build
+
+Failure:
+src/views/chat/unifiedRoutingChatLab.test.ts imported buildRuntimeLabBoundScenarios and buildRuntimeLabTraceCards, but unifiedRoutingChatLab.ts did not export them.
+
+Expected:
+Runtime Lab view-model helpers required by the tests should exist and typecheck.
