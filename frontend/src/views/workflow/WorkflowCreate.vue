@@ -9103,6 +9103,14 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
+.workflow-canvas-page.has-right-panel .coze-flow {
+  width: calc(100% - var(--workflow-right-panel-reserve));
+}
+
+.workflow-canvas-page.has-node-test-drawer .coze-flow {
+  width: calc(100% - var(--workflow-node-test-reserve));
+}
+
 .node-run-status {
   flex: 0 0 auto;
   max-width: 7.5rem;
@@ -10271,6 +10279,8 @@ onUnmounted(() => {
 
 .node-config-panel {
   position: absolute;
+  grid-column: 2;
+  justify-self: end;
   top: 1.125rem;
   right: 1.125rem;
   bottom: 4.75rem;
@@ -10289,6 +10299,8 @@ onUnmounted(() => {
 .test-run-panel,
 .ops-panel {
   position: absolute;
+  grid-column: 2;
+  justify-self: end;
   top: 1.125rem;
   right: 1.125rem;
   bottom: var(--debug-dock-gap);
