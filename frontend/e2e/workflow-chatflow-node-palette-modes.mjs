@@ -29,10 +29,10 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 try {
   await page.goto(`${baseUrl}/workflows/create`, { waitUntil: 'networkidle' })
   const workflowLabels = await paletteLabels(page)
-  for (const label of ['大模型', '工作流', 'API 调用', '变量聚合', '人工输入', '知识库检索']) {
+  for (const label of ['大模型', '工作流', 'API 调用', '智能体', '变量聚合', '人工输入', '知识库检索']) {
     assert(workflowLabels.includes(label), `Workflow palette should include ${label}: ${workflowLabels.join(',')}`)
   }
-  for (const label of ['消息', '问题', '信息收集', '转人工', '智能体']) {
+  for (const label of ['消息', '问题', '信息收集', '转人工']) {
     assert(!workflowLabels.includes(label), `Workflow palette should hide conversation-only node ${label}: ${workflowLabels.join(',')}`)
   }
   await saveScreenshot(page, 'workflow-node-palette')

@@ -23,7 +23,7 @@ const COZE_NODE_PALETTE_GROUPS: NodePaletteGroup[] = [
       { type: 'TOOL_CALL', label: '插件', searchTerms: ['工具调用', 'tool', 'mcp'] },
       { type: 'EXECUTE_WORKFLOW', label: '工作流', searchTerms: ['子工作流', 'subworkflow'] },
       { type: 'API_CALL', label: 'API 调用', searchTerms: ['http', '接口'] },
-      { type: 'AGENT_CALL', label: '智能体', searchTerms: ['agent'], modes: ['chatflow'] },
+      { type: 'AGENT_CALL', label: '智能体', searchTerms: ['agent'] },
     ],
   },
   {

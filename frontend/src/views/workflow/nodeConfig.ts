@@ -232,7 +232,7 @@ const SCHEMAS: Record<WorkflowCanvasNodeType, NodeConfigSchema> = {
   },
   KNOWLEDGE: {
     type: 'KNOWLEDGE',
-    title: '知识库',
+    title: '知识检索',
     sections: [
       INPUT_SECTION,
       {

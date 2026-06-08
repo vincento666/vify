@@ -82,6 +82,7 @@ describe('workflow node config schema', () => {
     expect(getNodeConfigSchema('CONDITION').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual([
       'conditionBranches',
     ])
+    expect(getNodeConfigSchema('KNOWLEDGE').title).toBe('知识检索')
     expect(getNodeConfigSchema('KNOWLEDGE').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual(
       expect.arrayContaining(['resourceId', 'query', 'retrievalMode', 'topK', 'scoreThreshold', 'rerank', 'outputParameters']),
     )

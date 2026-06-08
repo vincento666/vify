@@ -50,7 +50,7 @@ const NODE_LABELS: Record<WorkflowCanvasNodeType, string> = {
   START: '开始',
   LLM: '大模型',
   CONDITION: '条件',
-  KNOWLEDGE: '知识库',
+  KNOWLEDGE: '知识检索',
   API_CALL: 'API 调用',
   TOOL_CALL: '工具调用',
   EXECUTE_WORKFLOW: '工作流',

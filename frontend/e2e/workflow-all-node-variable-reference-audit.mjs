@@ -17,7 +17,7 @@ async function unwrap(response, label) {
 const auditedNodes = [
   ['llm_1', 'LLM', '大模型'],
   ['condition_1', 'CONDITION', '条件'],
-  ['knowledge_1', 'KNOWLEDGE', '知识库'],
+  ['knowledge_1', 'KNOWLEDGE', '知识检索'],
   ['api_1', 'API_CALL', 'API 调用'],
   ['tool_1', 'TOOL_CALL', '工具调用'],
   ['workflow_1', 'EXECUTE_WORKFLOW', '工作流'],

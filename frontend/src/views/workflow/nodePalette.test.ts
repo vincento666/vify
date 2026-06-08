@@ -18,12 +18,12 @@ describe('nodePalette', () => {
 
     expect(labels).toContain('大模型')
     expect(labels).toContain('工作流')
+    expect(labels).toContain('智能体')
     expect(labels).toContain('变量聚合')
     expect(labels).not.toContain('消息')
     expect(labels).not.toContain('问题')
     expect(labels).not.toContain('信息收集')
     expect(labels).not.toContain('转人工')
-    expect(labels).not.toContain('智能体')
   })
 
   it('searches by concise labels and aliases while preserving group order', () => {

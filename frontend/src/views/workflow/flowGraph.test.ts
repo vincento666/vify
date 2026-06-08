@@ -264,6 +264,16 @@ describe('workflow canvas graph model', () => {
     )
   })
 
+  it('uses official knowledge retrieval naming for the knowledge node', () => {
+    const graph = addWorkflowNode(createDefaultWorkflowGraph(), 'KNOWLEDGE', { x: 520, y: 120 })
+
+    expect(graph.nodes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ nodeKey: 'knowledge_1', type: 'KNOWLEDGE', name: '知识检索' }),
+      ]),
+    )
+  })
+
   it('adds execute workflow as an explicit published subworkflow node', () => {
     const graph = addWorkflowNode(createDefaultWorkflowGraph(), 'EXECUTE_WORKFLOW', { x: 520, y: 120 })
 

@@ -1,0 +1,170 @@
+
+> hify-web@0.0.1 test:unit
+> vitest run src/views/workflow/nodePalette.test.ts src/views/workflow/nodeConfig.test.ts src/views/workflow/flowGraph.test.ts
+
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+
+ ❯ src/views/workflow/nodePalette.test.ts (3 tests | 1 failed) 10ms
+   ✓ nodePalette > uses a Coze-like compact category order without duplicate labels 3ms
+   × nodePalette > keeps task workflow palette free of conversation-only nodes 6ms
+     → expected [ '大模型', '插件', '工作流', 'API 调用', …(9) ] to include '智能体'
+   ✓ nodePalette > searches by concise labels and aliases while preserving group order 1ms
+ ❯ src/views/workflow/flowGraph.test.ts (17 tests | 1 failed) 22ms
+   ✓ workflow canvas graph model > serializes and rehydrates a saved canvas graph with positions and edges 3ms
+   ✓ workflow canvas graph model > deletes a canvas node and removes incident edges while preserving fixed nodes 1ms
+   ✓ workflow canvas graph model > deletes a selected edge without removing its nodes 0ms
+   ✓ workflow canvas graph model > inserts a node on an existing edge and reconnects through the new node 0ms
+   ✓ workflow canvas graph model > preserves a condition branch when inserting a node on a conditional edge 0ms
+   ✓ workflow canvas graph model > creates Coze-like default Chatflow START variables for conversational context 0ms
+   ✓ workflow canvas graph model > auto-layouts nodes into deterministic columns while preserving configs and conditional edges 0ms
+   ✓ workflow canvas graph model > adds runtime-backed data transform nodes with Coze-aligned labels 1ms
+   ✓ workflow canvas graph model > adds variable aggregation and assignment as separate runtime-backed nodes 1ms
+   ✓ workflow canvas graph model > adds intent recognition as a separate semantic branch node 0ms
+   ✓ workflow canvas graph model > adds Chatflow message/question/human input nodes with separate labels 0ms
+   ✓ workflow canvas graph model > adds Chatflow information collection as a distinct slot filling node 0ms
+   ✓ workflow canvas graph model > adds tool call as an explicit runtime-backed resource node 0ms
+   × workflow canvas graph model > uses official knowledge retrieval naming for the knowledge node 12ms
+     → expected [ { nodeKey: 'start', …(4) }, …(2) ] to deeply equal ArrayContaining{…}
+   ✓ workflow canvas graph model > adds execute workflow as an explicit published subworkflow node 0ms
+   ✓ workflow canvas graph model > adds agent call as an explicit runtime-backed Agent resource node 0ms
+   ✓ workflow canvas graph model > adds transfer to human as a Chatflow-only handoff node with ticket outputs 0ms
+ ❯ src/views/workflow/nodeConfig.test.ts (21 tests | 1 failed) 21ms
+   ✓ workflow node config schema > does not expose node-name editing fields on any node panel 3ms
+   ✓ workflow node config schema > uses switch controls for stream-output fields instead of select rows 0ms
+   ✓ workflow node config schema > uses registry-backed selector for TOOL_CALL resources 0ms
+   ✓ workflow node config schema > uses compact variable type labels in selectors and parameter rows 0ms
+   × workflow node config schema > provides runtime-backed editable fields for each canvas node type 12ms
+     → expected '知识库' to be '知识检索' // Object.is equality
+   ✓ workflow node config schema > models END output variables as a normal output section and keeps return mode panel-level 0ms
+   ✓ workflow node config schema > puts LLM core sections in Coze-like order before advanced settings 0ms
+   ✓ workflow node config schema > uses structured Coze-like editors for secondary Chatflow panels 1ms
+   ✓ workflow node config schema > normalizes secondary Chatflow row editors without raw JSON strings 0ms
+   ✓ workflow node config schema > keeps resource-node raw ids and JSON mappings out of basic panels 0ms
+   ✓ workflow node config schema > does not expose advanced compatibility sections in node config panels 0ms
+   ✓ workflow node config schema > hides legacy resource technical fields from node panels 0ms
+   ✓ workflow node config schema > uses structured editors for data and structured nodes instead of raw JSON in basic panels 0ms
+   ✓ workflow node config schema > normalizes structured data node rows from legacy JSON-compatible config 0ms
+   ✓ workflow node config schema > normalizes START variables into Coze-like input rows while preserving legacy outputVariables 0ms
+   ✓ workflow node config schema > adds a shared input parameter editor field to runnable middle node schemas 0ms
+   ✓ workflow node config schema > updates node name and config without dropping ui position metadata 0ms
+   ✓ workflow node config schema > normalizes Coze-like output format and output parameter rows 0ms
+   ✓ workflow node config schema > keeps END-style output variable mappings for upstream references 0ms
+   ✓ workflow node config schema > keeps legacy outputVariable compatible while validating duplicate and illegal names 0ms
+   ✓ workflow node config schema > normalizes and validates typed input parameter rows 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/views/workflow/flowGraph.test.ts > workflow canvas graph model > uses official knowledge retrieval naming for the knowledge node
+AssertionError: expected [ { nodeKey: 'start', …(4) }, …(2) ] to deeply equal ArrayContaining{…}
+
+- Expected
++ Received
+
+- ArrayContaining [
+-   ObjectContaining {
+-     "name": "知识检索",
++ [
++   {
++     "config": {
++       "outputVariables": [
++         "USER_INPUT",
++       ],
++       "ui": {
++         "position": {
++           "x": 120,
++           "y": 96,
++         },
++       },
++     },
++     "name": "开始",
++     "nodeKey": "start",
++     "position": {
++       "x": 120,
++       "y": 96,
++     },
++     "type": "START",
++   },
++   {
++     "config": {
++       "outputVariable": "output",
++       "ui": {
++         "position": {
++           "x": 780,
++           "y": 280,
++         },
++       },
++     },
++     "name": "结束",
++     "nodeKey": "end",
++     "position": {
++       "x": 780,
++       "y": 280,
++     },
++     "type": "END",
++   },
++   {
++     "config": {
++       "outputVariable": "output",
++       "ui": {
++         "position": {
++           "x": 520,
++           "y": 120,
++         },
++       },
++     },
++     "name": "知识库",
+      "nodeKey": "knowledge_1",
++     "position": {
++       "x": 520,
++       "y": 120,
++     },
+      "type": "KNOWLEDGE",
+    },
+  ]
+
+ ❯ src/views/workflow/flowGraph.test.ts:270:25
+    268|     const graph = addWorkflowNode(createDefaultWorkflowGraph(), 'KNOWL…
+    269| 
+    270|     expect(graph.nodes).toEqual(
+       |                         ^
+    271|       expect.arrayContaining([
+    272|         expect.objectContaining({ nodeKey: 'knowledge_1', type: 'KNOWL…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/views/workflow/nodeConfig.test.ts > workflow node config schema > provides runtime-backed editable fields for each canvas node type
+AssertionError: expected '知识库' to be '知识检索' // Object.is equality
+
+Expected: "知识检索"
+Received: "知识库"
+
+ ❯ src/views/workflow/nodeConfig.test.ts:85:52
+     83|       'conditionBranches',
+     84|     ])
+     85|     expect(getNodeConfigSchema('KNOWLEDGE').title).toBe('知识检索')
+       |                                                    ^
+     86|     expect(getNodeConfigSchema('KNOWLEDGE').sections.flatMap((section)…
+     87|       expect.arrayContaining(['resourceId', 'query', 'retrievalMode', …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/views/workflow/nodePalette.test.ts > nodePalette > keeps task workflow palette free of conversation-only nodes
+AssertionError: expected [ '大模型', '插件', '工作流', 'API 调用', …(9) ] to include '智能体'
+ ❯ src/views/workflow/nodePalette.test.ts:21:20
+     19|     expect(labels).toContain('大模型')
+     20|     expect(labels).toContain('工作流')
+     21|     expect(labels).toContain('智能体')
+       |                    ^
+     22|     expect(labels).toContain('变量聚合')
+     23|     expect(labels).not.toContain('消息')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  3 failed (3)
+      Tests  3 failed | 38 passed (41)
+   Start at  00:50:19
+   Duration  518ms (transform 117ms, setup 0ms, collect 169ms, tests 53ms, environment 0ms, prepare 232ms)
+
