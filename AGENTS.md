@@ -20,6 +20,24 @@
 7. **浏览器 UAT 必须执行**：凡影响前端或用户流程的 slice，必须用真实浏览器
    验证并保存截图/记录。
 
+## Frontend rem 规范
+
+前端视觉尺寸必须以 `rem` 为默认单位，保持全局缩放、浏览器字号和不同视口下
+的一致性。除非已有测试明确 allowlist，否则不得在 Vue/CSS 中新增裸 `px`。
+
+- **禁止裸 `px`**：宽高、间距、边框圆角、阴影偏移、字体大小、图标尺寸、
+  固定定位偏移等视觉尺寸必须使用 `rem`，例如 `1px` 写为 `0.0625rem`。
+- **允许的例外必须可解释**：确实依赖设备像素、canvas/SVG 内部坐标、
+  第三方库要求、或测试 allowlist 的场景，必须局部说明原因，不能顺手使用。
+- **前端改动必须跑 rem 门禁**：凡修改 `frontend/src/**/*.vue`、
+  `frontend/src/**/*.css`、或视觉尺寸相关 TS，至少运行
+  `rtk npm --prefix frontend run test:unit -- src/remScaleClosure.test.ts`；
+  slice 最终门禁仍需跑完整 `test:unit`。
+- **新增样式先查单位**：提交前用 `rg "px|rpx|vw|vh"` 等方式快速扫新增样式，
+  裸 `px` 必须改成 `rem` 或补入明确 allowlist。
+- **E2E/UAT 不替代 rem 门禁**：浏览器看起来正常不代表缩放治理通过，必须以
+  `remScaleClosure` 和完整前端单测结果为准。
+
 ## 项目结构目标
 
 ```text
@@ -53,6 +71,7 @@ specs/
 - **Integration/Contract**：接口、数据库或跨模块行为全绿。
 - **E2E**：关键用户路径自动化验证全绿。
 - **Browser UAT**：真实浏览器手工或 Playwright 验证用户可见结果。
+- **Frontend rem**：涉及前端视觉尺寸时，`remScaleClosure` 和完整前端单测必须全绿。
 - **Docs**：`spec.md`/`plan.md`/`tasks.md` 状态更新，记录完成证据。
 
 推荐证据目录：

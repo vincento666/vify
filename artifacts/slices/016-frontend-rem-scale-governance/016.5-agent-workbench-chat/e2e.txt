@@ -1,0 +1,54 @@
+{
+  "baseUrl": "http://127.0.0.1:5173",
+  "results": [
+    {
+      "route": "/agents/new",
+      "width": 1280,
+      "ready": "ready",
+      "rootFont": 14,
+      "scale": "0.8750",
+      "targetWidth": 1045.5,
+      "targetHeight": 902.4375,
+      "bodyTextLength": 450,
+      "overflowX": 0,
+      "previewWidth": 341.25
+    },
+    {
+      "route": "/chat",
+      "width": 1280,
+      "ready": "ready",
+      "rootFont": 14,
+      "scale": "0.8750",
+      "targetWidth": 1045.5,
+      "targetHeight": 806,
+      "bodyTextLength": 313,
+      "overflowX": 0,
+      "dialogWidth": 350
+    },
+    {
+      "route": "/agents/new",
+      "width": 1920,
+      "ready": "ready",
+      "rootFont": 16,
+      "scale": "1.0000",
+      "targetWidth": 1652,
+      "targetHeight": 1016.5,
+      "bodyTextLength": 450,
+      "overflowX": 0,
+      "previewWidth": 390
+    },
+    {
+      "route": "/chat",
+      "width": 1920,
+      "ready": "ready",
+      "rootFont": 16,
+      "scale": "1.0000",
+      "targetWidth": 1652,
+      "targetHeight": 800,
+      "bodyTextLength": 313,
+      "overflowX": 0,
+      "dialogWidth": 400
+    }
+  ],
+  "failures": []
+}

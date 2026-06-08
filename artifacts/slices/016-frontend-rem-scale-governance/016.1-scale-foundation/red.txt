@@ -1,0 +1,26 @@
+> vitest run src/utils/uiScale.test.ts
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  09:44:20
+   Duration  694ms (transform 14ms, setup 0ms, collect 0ms, tests 0ms, environment 348ms, prepare 51ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/utils/uiScale.test.ts [ src/utils/uiScale.test.ts ]
+Error: Failed to resolve import "./uiScale" from "src/utils/uiScale.test.ts". Does the file exist?
+  Plugin: vite:import-analysis
+  File: /Users/vincento/work/develop/hify/frontend/src/utils/uiScale.test.ts:12:7
+  8  |    createUiScaleSnapshot,
+  9  |    toUiScaleCssVariables
+  10 |  } from "./uiScale";
+     |          ^
+  11 |  const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+  12 |  function readProjectFile(path) {
+ ❯ TransformPluginContext._formatError node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49258:41
+ ❯ TransformPluginContext.error node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49253:16
+ ❯ normalizeUrl node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64307:23
+ ❯ node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64439:39
+ ❯ TransformPluginContext.transform node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:64366:7
+ ❯ PluginContainer.transform node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:49099:18
+ ❯ loadAndTransform node_modules/vite/dist/node/chunks/dep-BK3b2jBa.js:51978:27
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯

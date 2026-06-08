@@ -1,0 +1,126 @@
+> vitest run src/remScaleClosure.test.ts
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ ❯ src/remScaleClosure.test.ts (1 test | 1 failed) 36ms
+   × frontend rem scale closure > keeps all Vue/CSS visual sizing rem-based or explicitly allowlisted 33ms
+     → expected [ …(100) ] to deeply equal []
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  10:33:10
+   Duration  907ms (transform 82ms, setup 0ms, collect 59ms, tests 36ms, environment 1ms, prepare 352ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/remScaleClosure.test.ts > frontend rem scale closure > keeps all Vue/CSS visual sizing rem-based or explicitly allowlisted
+AssertionError: expected [ …(100) ] to deeply equal []
+- Expected
++ Received
+- []
++ [
++   "src/components/base/HifyTable.vue: :image-size=\"80\"",
++   "src/styles/global.css: width: 6px",
++   "src/styles/global.css: height: 6px",
++   "src/styles/global.css: padding: 1px 5px",
++   "src/styles/global.css: margin: 1px",
++   "src/styles/global.css: width: 3px",
++   "src/styles/global.css: height: 52px",
++   "src/styles/global.css: padding: 0 24px",
++   "src/styles/global.css: gap: 6px",
++   "src/styles/global.css: font-size: 13px",
++   "src/styles/global.css: gap: 8px",
++   "src/styles/global.css: font-size: 13px",
++   "src/styles/global.css: gap: 6px",
++   "src/styles/global.css: height: 34px",
++   "src/styles/global.css: padding: 0 16px",
++   "src/styles/global.css: font-size: 13px",
++   "src/styles/global.css: gap: 6px",
++   "src/styles/global.css: height: 34px",
++   "src/styles/global.css: padding: 0 16px",
++   "src/styles/global.css: font-size: 13px",
++   "src/styles/global.css: gap: 6px",
++   "src/styles/global.css: height: 34px",
++   "src/styles/global.css: padding: 0 16px",
++   "src/styles/global.css: font-size: 13px",
++   "src/styles/global.css: padding: 24px",
++   "src/styles/global.css: margin-bottom: 20px",
++   "src/styles/global.css: font-size: 18px",
++   "src/styles/global.css: margin-top: 4px",
++   "src/styles/global.css: font-size: 13px",
++   "src/styles/global.css: gap: 8px",
++   "src/styles/global.css: padding: 20px",
++   "src/views/chat/ChatView.vue: padding: 1px",
++   "src/views/mcp/McpServerDebug.vue: margin-right: 4px",
++   "src/views/mcp/McpServerDebug.vue: gap: 16px",
++   "src/views/mcp/McpServerDebug.vue: width: 360px",
++   "src/views/mcp/McpServerDebug.vue: gap: 12px",
++   "src/views/mcp/McpServerDebug.vue: border-radius: 10px",
++   "src/views/mcp/McpServerDebug.vue: padding: 16px",
++   "src/views/mcp/McpServerDebug.vue: font-size: 12px",
++   "src/views/mcp/McpServerDebug.vue: margin-bottom: 10px",
++   "src/views/mcp/McpServerDebug.vue: gap: 8px",
++   "src/views/mcp/McpServerDebug.vue: margin-bottom: 6px",
++   "src/views/mcp/McpServerDebug.vue: font-size: 12px",
++   "src/views/mcp/McpServerDebug.vue: width: 48px",
++   "src/views/mcp/McpServerDebug.vue: padding-top: 1px",
++   "src/views/mcp/McpServerDebug.vue: font-size: 13px",
++   "src/views/mcp/McpServerDebug.vue: font-size: 12px",
++   "src/views/mcp/McpServerDebug.vue: margin-bottom: 12px",
++   "src/views/mcp/McpServerDebug.vue: font-size: 13px",
++   "src/views/mcp/McpServerDebug.vue: padding: 4px",
++   "src/views/mcp/McpServerDebug.vue: gap: 6px",
++   "src/views/mcp/McpServerDebug.vue: font-size: 12px",
++   "src/views/mcp/McpServerDebug.vue: padding: 8px",
++   "src/views/mcp/McpServerDebug.vue: padding: 4px",
++   "src/views/mcp/McpServerDebug.vue: gap: 4px",
++   "src/views/mcp/McpServerDebug.vue: max-height: 220px",
++   "src/views/mcp/McpServerDebug.vue: gap: 8px",
++   "src/views/mcp/McpServerDebug.vue: padding: 8px 10px",
++   "src/views/mcp/McpServerDebug.vue: border-radius: 6px",
++   "src/views/mcp/McpServerDebug.vue: margin-top: 2px",
++   "src/views/mcp/McpServerDebug.vue: font-size: 14px",
++   "src/views/mcp/McpServerDebug.vue: font-size: 13px",
++   "src/views/mcp/McpServerDebug.vue: font-size: 11px",
++   "src/views/mcp/McpServerDebug.vue: margin-top: 2px",
++   "src/views/mcp/McpServerDebug.vue: font-size: 13px",
++   "src/views/mcp/McpServerDebug.vue: padding: 4px 0 8px",
++   "src/views/mcp/McpServerDebug.vue: gap: 12px",
++   "src/views/mcp/McpServerDebug.vue: gap: 5px",
++   "src/views/mcp/McpServerDebug.vue: gap: 6px",
++   "src/views/mcp/McpServerDebug.vue: font-size: 13px",
++   "src/views/mcp/McpServerDebug.vue: font-size: 11px",
++   "src/views/mcp/McpServerDebug.vue: font-size: 12px",
++   "src/views/mcp/McpServerDebug.vue: margin-top: 4px",
++   "src/views/mcp/McpServerDebug.vue: min-height: 400px",
++   "src/views/mcp/McpServerDebug.vue: padding: 60px",
++   "src/views/mcp/McpServerDebug.vue: gap: 12px",
++   "src/views/mcp/McpServerDebug.vue: font-size: 14px",
++   "src/views/mcp/McpServerDebug.vue: font-size: 12px",
++   "src/views/mcp/McpServerDebug.vue: gap: 12px",
++   "src/views/mcp/McpServerDebug.vue: border-radius: 8px",
++   "src/views/mcp/McpServerDebug.vue: padding: 14px 16px",
++   "src/views/mcp/McpServerDebug.vue: gap: 10px",
++   "src/views/mcp/McpServerDebug.vue: gap: 6px",
++   "src/views/mcp/McpServerDebug.vue: font-size: 16px",
++   "src/views/mcp/McpServerDebug.vue: font-size: 14px",
++   "src/views/mcp/McpServerDebug.vue: gap: 8px",
++   "src/views/mcp/McpServerDebug.vue: font-size: 12px",
++   "src/views/mcp/McpServerDebug.vue: gap: 4px",
++   "src/views/mcp/McpServerDebug.vue: font-size: 11px",
++   "src/views/mcp/McpServerDebug.vue: font-size: 12px",
++   "src/views/mcp/McpServerDebug.vue: padding: 6px 8px",
++   "src/views/mcp/McpServerDebug.vue: border-radius: 4px",
++   "src/views/mcp/McpServerDebug.vue: font-size: 13px",
++   "src/views/mcp/McpServerDebug.vue: padding: 10px 12px",
++   "src/views/mcp/McpServerDebug.vue: border-radius: 6px",
++   "src/views/mcp/McpServerDebug.vue: max-height: 300px",
++   "src/views/mcp/McpServerDebug.vue: style=\"margin-left:8px",
++   "src/views/mcp/McpServerDebug.vue: style=\"font-family: monospace; font-size: 13px",
++   "src/views/mcp/McpServerDebug.vue: :size=\"36\"",
++   "src/views/workflow/WorkflowModuleTabs.vue: height: 1px",
++ ]
+ ❯ src/remScaleClosure.test.ts:54:21
+     52|     })
+     53| 
+     54|     expect(matches).toEqual([])
+       |                     ^
+     55|   })
+     56| })
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯

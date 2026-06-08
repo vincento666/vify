@@ -1,0 +1,66 @@
+{
+  "baseUrl": "http://127.0.0.1:5173",
+  "results": [
+    {
+      "route": "/workflows/create",
+      "width": 1280,
+      "ready": "ready",
+      "rootFont": 14,
+      "scale": "0.8750",
+      "nodeCount": 2,
+      "canvasWidth": 1280,
+      "canvasHeight": 835.25,
+      "stageWidth": 1059.5,
+      "nodeWidth": 344.62060546875,
+      "panelWidth": 315,
+      "paletteWidth": 297.5,
+      "overflowX": 0
+    },
+    {
+      "route": "/workflows/create",
+      "width": 1920,
+      "ready": "ready",
+      "rootFont": 16,
+      "scale": "1.0000",
+      "nodeCount": 2,
+      "canvasWidth": 1920,
+      "canvasHeight": 826,
+      "stageWidth": 1668,
+      "nodeWidth": 590.3333129882812,
+      "panelWidth": 360,
+      "paletteWidth": 340,
+      "overflowX": 0
+    },
+    {
+      "route": "/chatflows/create",
+      "width": 1280,
+      "ready": "ready",
+      "rootFont": 14,
+      "scale": "0.8750",
+      "nodeCount": 2,
+      "canvasWidth": 1280,
+      "canvasHeight": 835.25,
+      "stageWidth": 1059.5,
+      "nodeWidth": 344.62060546875,
+      "panelWidth": 315,
+      "paletteWidth": 297.5,
+      "overflowX": 0
+    },
+    {
+      "route": "/chatflows/create",
+      "width": 1920,
+      "ready": "ready",
+      "rootFont": 16,
+      "scale": "1.0000",
+      "nodeCount": 2,
+      "canvasWidth": 1920,
+      "canvasHeight": 826,
+      "stageWidth": 1668,
+      "nodeWidth": 590.3333129882812,
+      "panelWidth": 360,
+      "paletteWidth": 340,
+      "overflowX": 0
+    }
+  ],
+  "failures": []
+}
