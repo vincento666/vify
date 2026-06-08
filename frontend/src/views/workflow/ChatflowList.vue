@@ -13,7 +13,7 @@
     </div>
 
     <el-table v-if="chatflows.length" :data="chatflows" v-loading="loading" class="workflow-table" stripe>
-      <el-table-column prop="name" label="名称" min-width="12.5rem">
+      <el-table-column prop="name" label="名称" :min-width="workflowTableColumnWidths.name">
         <template #default="{ row }">
           <div class="wf-name">
             <el-icon class="wf-icon"><ChatLineRound /></el-icon>
@@ -21,18 +21,18 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column prop="description" label="描述" min-width="15.625rem" show-overflow-tooltip />
-      <el-table-column prop="status" label="状态" width="6.875rem">
+      <el-table-column prop="description" label="描述" :min-width="workflowTableColumnWidths.description" show-overflow-tooltip />
+      <el-table-column prop="status" label="状态" :width="workflowTableColumnWidths.status">
         <template #default="{ row }">
           <el-tag :type="row.status === 'PUBLISHED' ? 'success' : row.status === 'DISABLED' ? 'danger' : 'info'" size="small">
             {{ statusLabel(row.status) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="更新时间" width="11.25rem">
+      <el-table-column label="更新时间" :width="workflowTableColumnWidths.updatedAt">
         <template #default="{ row }">{{ formatTime(row.updatedAt || row.createdAt) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="14.375rem" fixed="right">
+      <el-table-column label="操作" :width="workflowTableColumnWidths.actions" fixed="right">
         <template #default="{ row }">
           <el-button size="small" @click="$router.push(`/chatflows/${row.id}/canvas`)">查看</el-button>
           <el-button size="small" type="primary" plain @click="$router.push(`/chatflows/${row.id}/canvas`)">画布</el-button>
@@ -63,6 +63,16 @@ import WorkflowModuleTabs from './WorkflowModuleTabs.vue'
 
 const chatflows = ref<WorkflowListItem[]>([])
 const loading = ref(false)
+
+// Element Plus table column props parse CSS unit strings as pixel integers,
+// so rem strings collapse columns. Keep these numeric props scoped here.
+const workflowTableColumnWidths = {
+  name: 220,
+  description: 260,
+  status: 110,
+  updatedAt: 180,
+  actions: 230,
+}
 
 async function loadChatflows() {
   loading.value = true
