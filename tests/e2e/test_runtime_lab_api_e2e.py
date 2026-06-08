@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_session
 from app.main import app
 from app.modules.runtime_lab.domain.faq_gate import FaqAnswerEvidence, FaqAnswerProposal, FaqSemanticAnswerGate
+from app.modules.runtime_lab.domain.rag_gate import FakeRagAnswerGenerator, RagAnswerGate
 from app.modules.runtime_lab.domain.service import RuntimeLabService
 from app.modules.runtime_lab.infra.repository import RuntimeLabRepository
 from app.modules.runtime_lab.web.router import get_runtime_lab_service
@@ -106,6 +107,30 @@ class RuntimeLabApiE2ETest(unittest.TestCase):
         self.assertEqual(low_margin["routeDecision"]["action"], "CLARIFY")
         self.assertEqual(low_margin["routeDecision"]["faqAnswer"]["reasonCode"], "SEMANTIC_LOW_MARGIN")
 
+    def test_rag_answers_no_active_and_preserves_active_sop_state(self) -> None:
+        app.dependency_overrides[get_runtime_lab_service] = _rag_runtime_service
+        try:
+            with TestClient(app) as client:
+                session_id = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
+
+                rag = _message(client, session_id, "航班延误超过 4 小时保险怎么赔？")
+                started = _message(client, session_id, "我要退票")
+                active_rag = _message(client, session_id, "航班延误保险怎么赔？")
+                events = client.get(f"/api/v1/runtime-lab/sessions/{session_id}/events").json()["data"]["list"]
+        finally:
+            app.dependency_overrides.pop(get_runtime_lab_service, None)
+
+        self.assertEqual(rag["routeDecision"]["action"], "ANSWER_RAG")
+        self.assertEqual(rag["routeDecision"]["ragAnswer"]["sourceLayer"], "rag_policy")
+        self.assertEqual(rag["routeDecision"]["ragAnswer"]["citations"][0]["sourceId"], "chunk:70")
+        self.assertIsNone(rag["activeTask"])
+        self.assertEqual(started["routeDecision"]["action"], "START_SOP")
+        self.assertEqual(active_rag["routeDecision"]["action"], "ANSWER_RAG")
+        self.assertEqual(active_rag["activeTask"]["id"], started["activeTask"]["id"])
+        self.assertEqual(active_rag["activeTask"]["currentStep"], started["activeTask"]["currentStep"])
+        self.assertEqual(active_rag["activeTask"]["checkpointId"], started["activeTask"]["checkpointId"])
+        self.assertIn("RAG_ANSWERED", [event["eventType"] for event in events])
+
 
 def _message(client: TestClient, session_id: int, message: str) -> dict:
     response = client.post(
@@ -128,6 +153,18 @@ def _semantic_faq_runtime_service(session: Session = Depends(get_session)) -> Ru
     return RuntimeLabService(
         RuntimeLabRepository(session),
         faq_semantic_gate=FaqSemanticAnswerGate(_SemanticFaqFacade(), knowledge_base_ids=[33], rerank=True),
+    )
+
+
+def _rag_runtime_service(session: Session = Depends(get_session)) -> RuntimeLabService:
+    return RuntimeLabService(
+        RuntimeLabRepository(session),
+        rag_answer_gate=RagAnswerGate(
+            _RagFacade(),
+            knowledge_base_ids=[33],
+            generator=FakeRagAnswerGenerator(),
+            rerank=True,
+        ),
     )
 
 
@@ -190,4 +227,40 @@ class _SemanticFaqHit:
         self.faq_id = faq_id
         self.title = title
         self.answer = answer
+        self.score = score
+
+
+class _RagFacade:
+    def search_context(
+        self,
+        knowledge_base_id: int,
+        query: str,
+        top_k: int,
+        retrieval_mode: str | None = None,
+        score_threshold: float | None = None,
+        rerank: bool | None = None,
+    ) -> list["_RagHit"]:
+        del knowledge_base_id, top_k, retrieval_mode, score_threshold, rerank
+        if query in {"航班延误超过 4 小时保险怎么赔？", "航班延误保险怎么赔？"}:
+            return [
+                _RagHit(
+                    chunk_id=70,
+                    title="航班延误险条款",
+                    content="航班延误超过 4 小时，可提交保险理赔申请。",
+                    score=0.91,
+                )
+            ]
+        return []
+
+
+class _RagHit:
+    source_type = "DOCUMENT_CHUNK"
+    match_type = "VECTOR"
+    document_id = 7
+    chunk_index = 0
+
+    def __init__(self, chunk_id: int, title: str, content: str, score: float) -> None:
+        self.chunk_id = chunk_id
+        self.title = title
+        self.content = content
         self.score = score

@@ -63,10 +63,35 @@ may answer without task mutation only when policy confidence is high.
 After 038, runtime-lab can answer long-tail knowledge questions with cited
 evidence while keeping SOP routing deterministic and auditable.
 
-## Specification Sign-off
+## Completion Evidence
 
-Status: ready for implementation.
+Status: completed on 2026-06-09.
 
 Numbering was rechecked on 2026-06-09. 038 follows 037 and uses 035 retrieval
-capabilities through runtime ports; it does not alter SOP candidate arbitration
-or knowledge retrieval internals.
+capabilities through runtime ports.
+
+Evidence:
+
+- RED:
+  - `artifacts/slices/038-runtime-rag-answer-gate/038.1/red.txt`
+  - `artifacts/slices/038-runtime-rag-answer-gate/038.2/red.txt`
+  - `artifacts/slices/038-runtime-rag-answer-gate/038.3/red.txt`
+  - `artifacts/slices/038-runtime-rag-answer-gate/038.3/red-browser-confidence.txt`
+  - `artifacts/slices/038-runtime-rag-answer-gate/038.3/red-sop-low-rag.txt`
+- Unit/integration:
+  - `artifacts/slices/038-runtime-rag-answer-gate/038.1/unit.txt`
+  - `artifacts/slices/038-runtime-rag-answer-gate/038.2/unit-integration.txt`
+  - `artifacts/slices/038-runtime-rag-answer-gate/038.3/unit-integration-after-browser-fix.txt`
+  - `artifacts/slices/038-runtime-rag-answer-gate/038.3/unit-integration-after-sop-rag-order.txt`
+- API E2E/regression:
+  - `artifacts/slices/038-runtime-rag-answer-gate/038.3/final-targeted.txt`
+  - Result: `40 passed, 1 warning`
+- Browser UAT:
+  - `artifacts/slices/038-runtime-rag-answer-gate/038.3/browser-uat-result.json`
+  - `artifacts/slices/038-runtime-rag-answer-gate/038.3/uat.md`
+  - `artifacts/slices/038-runtime-rag-answer-gate/038.3/screenshots/browser-uat-rag.png`
+- Full backend:
+  - `artifacts/slices/038-runtime-rag-answer-gate/038.3/full-backend.txt`
+  - Result: `465 passed, 8 skipped, 15 failed`; failures match existing
+    unrelated runtime-lab scale/workflow baseline issues and are documented in
+    the artifact.

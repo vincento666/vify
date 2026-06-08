@@ -1,0 +1,53 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/vincento/work/develop/hify
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 6 items
+
+tests/integration/runtime_lab/test_runtime_lab_rag_policy.py .....F      [100%]
+
+=================================== FAILURES ===================================
+__ RuntimeLabRagPolicyTest.test_sop_intent_with_low_confidence_rag_starts_sop __
+
+self = <test_runtime_lab_rag_policy.RuntimeLabRagPolicyTest testMethod=test_sop_intent_with_low_confidence_rag_starts_sop>
+
+    def test_sop_intent_with_low_confidence_rag_starts_sop(self) -> None:
+        with _session() as session:
+            facade = _RecordingKnowledgeFacade(
+                [
+                    _KnowledgeHit(
+                        source_type="DOCUMENT_CHUNK",
+                        match_type="VECTOR",
+                        score=0.016,
+                        title="航班延误险条款",
+                        content="航班延误超过 4 小时，可提交保险理赔申请。",
+                        document_id=7,
+                        chunk_id=70,
+                        chunk_index=0,
+                    )
+                ]
+            )
+            service = RuntimeLabService(
+                RuntimeLabRepository(session),
+                rag_answer_gate=RagAnswerGate(
+                    facade,
+                    knowledge_base_ids=[33],
+                    generator=FakeRagAnswerGenerator(),
+                    rerank=True,
+                ),
+            )
+            runtime_session = service.create_session()
+    
+            turn = service.handle_message(int(runtime_session["id"]), "我要退票")
+    
+>           self.assertEqual(turn.route_decision.action, "START_SOP")
+E           AssertionError: 'CLARIFY' != 'START_SOP'
+E           - CLARIFY
+E           + START_SOP
+
+tests/integration/runtime_lab/test_runtime_lab_rag_policy.py:120: AssertionError
+=========================== short test summary info ============================
+FAILED tests/integration/runtime_lab/test_runtime_lab_rag_policy.py::RuntimeLabRagPolicyTest::test_sop_intent_with_low_confidence_rag_starts_sop
+========================= 1 failed, 5 passed in 0.34s ==========================

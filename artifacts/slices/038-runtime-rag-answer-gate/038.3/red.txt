@@ -1,0 +1,60 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/vincento/work/develop/hify
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1 item
+
+tests/integration/runtime_lab/test_runtime_lab_rag_policy.py F           [100%]
+
+=================================== FAILURES ===================================
+_ RuntimeLabRagPolicyTest.test_active_sop_rag_question_with_slot_payload_clarifies_without_task_mutation _
+
+self = <test_runtime_lab_rag_policy.RuntimeLabRagPolicyTest testMethod=test_active_sop_rag_question_with_slot_payload_clarifies_without_task_mutation>
+
+    def test_active_sop_rag_question_with_slot_payload_clarifies_without_task_mutation(self) -> None:
+        with _session() as session:
+            facade = _RecordingKnowledgeFacade(
+                {
+                    "航班延误保险怎么赔？订单TK-100": [
+                        _KnowledgeHit(
+                            source_type="DOCUMENT_CHUNK",
+                            match_type="VECTOR",
+                            score=0.92,
+                            title="航班延误险条款",
+                            content="航班延误超过 4 小时，可提交保险理赔申请。",
+                            document_id=7,
+                            chunk_id=70,
+                            chunk_index=0,
+                        )
+                    ],
+                }
+            )
+            repository = RuntimeLabRepository(session)
+            service = RuntimeLabService(
+                repository,
+                rag_answer_gate=RagAnswerGate(
+                    facade,
+                    knowledge_base_ids=[33],
+                    generator=FakeRagAnswerGenerator(),
+                    rerank=True,
+                ),
+            )
+            runtime_session = service.create_session()
+            session_id = int(runtime_session["id"])
+    
+            started = service.handle_message(session_id, "我要退票")
+            before = dict(started.active_task)
+            clarified = service.handle_message(session_id, "航班延误保险怎么赔？订单TK-100")
+            after_checkpoint = repository.get_latest_checkpoint(int(before["id"]))
+    
+>           self.assertEqual(clarified.route_decision.action, "CLARIFY")
+E           AssertionError: 'ANSWER_RAG' != 'CLARIFY'
+E           - ANSWER_RAG
+E           + CLARIFY
+
+tests/integration/runtime_lab/test_runtime_lab_rag_policy.py:127: AssertionError
+=========================== short test summary info ============================
+FAILED tests/integration/runtime_lab/test_runtime_lab_rag_policy.py::RuntimeLabRagPolicyTest::test_active_sop_rag_question_with_slot_payload_clarifies_without_task_mutation
+============================== 1 failed in 0.37s ===============================
