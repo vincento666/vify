@@ -1,0 +1,9 @@
+> vitest run src/views/workflow/nodeConfig.test.ts src/views/workflow/workflowCanvasRemGovernance.test.ts
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ ✓ src/views/workflow/workflowCanvasRemGovernance.test.ts (3 tests) 8ms
+ ✓ src/views/workflow/nodeConfig.test.ts (21 tests) 8ms
+ Test Files  2 passed (2)
+      Tests  24 passed (24)
+   Start at  07:06:00
+   Duration  322ms (transform 52ms, setup 0ms, collect 67ms, tests 16ms, environment 0ms, prepare 147ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
