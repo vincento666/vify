@@ -160,7 +160,12 @@ try {
   assert(assignmentHeaderText.includes('值'), 'Assignment editor must show assignment value column')
   assert(await panel.locator('[data-testid="variable-assignment-row"]').count() === 1, 'Expected assignment editor to render one assignment row')
   assert(await panel.locator('[data-testid="assignment-target-control"]').count() === 1, 'Expected assignment row to expose a writable target variable selector')
-  assert(await panel.getByLabel('变量名称', { exact: true }).getAttribute('readonly') !== null, 'Assignment target name must not allow typing arbitrary new variables')
+  const targetInput = panel.getByLabel('变量名称', { exact: true })
+  assert(await targetInput.getAttribute('readonly') !== null, 'Assignment target name must not allow typing arbitrary new variables')
+  assert(
+    await targetInput.inputValue() === '',
+    'Unconfigured assignment target must not render as a valid writable variable',
+  )
   const assignmentEditor = panel.locator('[data-testid="variable-assignment-editor"]')
   await assignmentEditor.getByRole('button', { name: '选择写入变量', exact: true }).click()
   assert(

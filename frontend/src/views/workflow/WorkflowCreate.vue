@@ -6100,7 +6100,13 @@ function variableAssignmentSourceType(): 'reference' | 'input' {
 function variableAssignmentTargetReference() {
   const scope = String(fieldValue('targetScope') || (isChatflowMode.value ? 'conversation' : 'flow')).trim()
   const variable = String(fieldValue('targetVariable') || '').trim()
-  return variable ? `${scope}.${variable}` : ''
+  if (!variable) return ''
+  const reference = `${normalizeAssignmentTargetScope(scope)}.${variable}`
+  return variableAssignmentTargetGroups.value.some((group) =>
+    group.items.some((item) => item.reference === reference),
+  )
+    ? reference
+    : ''
 }
 
 function clearVariableAssignmentReference() {

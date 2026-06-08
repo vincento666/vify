@@ -51,6 +51,17 @@ class WorkflowVariableAggregationAssignmentTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()["data"]["output"], {"final": 'raw={"name":"Ada"}'})
 
+    def test_variable_assign_operation_adds_to_existing_scoped_variable(self) -> None:
+        with TestClient(app) as client:
+            workflow = _create_operation_assignment_workflow(client)
+            response = client.post(
+                f"/api/v1/workflows/{workflow['id']}/runs",
+                json={"input": {"conversation.score": 7, "delta": 3}},
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["data"]["output"], {"final": "score=10"})
+
 
 def _create_variable_workflow(client: TestClient) -> dict[str, object]:
     response = client.post(
@@ -218,6 +229,44 @@ def _create_raw_json_assignment_workflow(client: TestClient) -> dict[str, object
                     "type": "END",
                     "name": "End",
                     "config": {"outputVariable": "final", "output": "raw={{flow.raw}}"},
+                },
+            ],
+            "edges": [
+                {"sourceNodeKey": "start", "targetNodeKey": "variable_assign_1", "condition": None},
+                {"sourceNodeKey": "variable_assign_1", "targetNodeKey": "end", "condition": None},
+            ],
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["data"]
+
+
+def _create_operation_assignment_workflow(client: TestClient) -> dict[str, object]:
+    response = client.post(
+        "/api/v1/workflows",
+        json={
+            "name": f"Operation Assign Workflow {datetime.now().timestamp()}",
+            "description": "",
+            "nodes": [
+                {"nodeKey": "start", "type": "START", "name": "Start", "config": {}},
+                {
+                    "nodeKey": "variable_assign_1",
+                    "type": "VARIABLE_ASSIGN",
+                    "name": "变量赋值",
+                    "config": {
+                        "targetScope": "conversation",
+                        "targetVariable": "score",
+                        "sourceValueMode": "operation",
+                        "operation": "add",
+                        "operand": "{{start.delta}}",
+                        "writeMode": "set",
+                    },
+                },
+                {
+                    "nodeKey": "end",
+                    "type": "END",
+                    "name": "End",
+                    "config": {"outputVariable": "final", "output": "score={{conversation.score}}"},
                 },
             ],
             "edges": [

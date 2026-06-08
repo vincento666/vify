@@ -287,7 +287,7 @@ class VariableAssignNodeExecutor:
         write_mode = str(config.get("writeMode") or "set").strip().lower()
         if write_mode not in {"set", "append", "clear"}:
             raise WorkflowExecutionError(f"Unsupported VARIABLE_ASSIGN writeMode: {write_mode}")
-        value = _source_value(config, context)
+        value = _assignment_source_value(config, context, scope, variable_name)
         try:
             written_value = context.set_scope_value(scope, variable_name, value, write_mode)
         except ValueError as exc:
@@ -458,6 +458,59 @@ def _source_value(config: dict[str, Any], context: ExecutionContext) -> Any:
     else:
         value = ""
     return context.render(value) if isinstance(value, str) else value
+
+
+def _assignment_source_value(
+    config: dict[str, Any],
+    context: ExecutionContext,
+    scope: str,
+    variable_name: str,
+) -> Any:
+    mode = str(config.get("sourceValueMode") or config.get("valueMode") or config.get("assignmentMode") or "").strip().lower()
+    if mode in {"operation", "calculation", "compute", "operator"}:
+        return _assignment_operation_value(config, context, scope, variable_name)
+    return _source_value(config, context)
+
+
+def _assignment_operation_value(
+    config: dict[str, Any],
+    context: ExecutionContext,
+    scope: str,
+    variable_name: str,
+) -> int | float:
+    operation = str(config.get("operation") or config.get("operator") or "add").strip().lower()
+    raw_operand = config.get("operand")
+    if raw_operand is None:
+        raw_operand = config.get("source")
+    if raw_operand is None:
+        raw_operand = 1 if operation in {"increment", "inc", "decrement", "dec"} else 0
+    operand = context.render(raw_operand) if isinstance(raw_operand, str) else raw_operand
+    current = context.get_scope(scope).get(variable_name, 0)
+    current_number = _assignment_number(current, f"{scope}.{variable_name}")
+    operand_number = _assignment_number(operand, "operand")
+
+    if operation in {"add", "plus", "increment", "inc"}:
+        return _normalized_assignment_number(current_number + operand_number)
+    if operation in {"subtract", "minus", "decrement", "dec"}:
+        return _normalized_assignment_number(current_number - operand_number)
+    if operation in {"multiply", "mul", "times"}:
+        return _normalized_assignment_number(current_number * operand_number)
+    if operation in {"divide", "div"}:
+        if operand_number == 0:
+            raise WorkflowExecutionError("VARIABLE_ASSIGN operation divide requires non-zero operand")
+        return _normalized_assignment_number(current_number / operand_number)
+    raise WorkflowExecutionError(f"Unsupported VARIABLE_ASSIGN operation: {operation}")
+
+
+def _assignment_number(value: Any, label: str) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError) as exc:
+        raise WorkflowExecutionError(f"VARIABLE_ASSIGN operation requires numeric {label}: {value}") from exc
+
+
+def _normalized_assignment_number(value: float) -> int | float:
+    return int(value) if value.is_integer() else value
 
 
 def _aggregation_sources(config: dict[str, Any], context: ExecutionContext) -> list[dict[str, Any]]:
