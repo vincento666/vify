@@ -69,8 +69,34 @@ auditable retrieval evidence.
 
 ## Specification Sign-off
 
-Status: ready for implementation.
+Status: complete.
 
 Numbering was rechecked on 2026-06-09. 037 follows 036 and depends on 035's FAQ
 embedding/retrieval contracts; it is the runtime routing consumer, not a
 knowledge-module rebuild.
+
+## Completion Evidence
+
+Completed on 2026-06-09 with the following gates:
+
+- RED:
+  `artifacts/slices/037-runtime-faq-embedding-answer-gate/037.1/red.txt`,
+  `artifacts/slices/037-runtime-faq-embedding-answer-gate/037.2/red.txt`,
+  `artifacts/slices/037-runtime-faq-embedding-answer-gate/037.3/red.txt`
+- Unit/integration:
+  `artifacts/slices/037-runtime-faq-embedding-answer-gate/037.1/unit.txt`,
+  `artifacts/slices/037-runtime-faq-embedding-answer-gate/037.2/unit-integration.txt`,
+  `artifacts/slices/037-runtime-faq-embedding-answer-gate/037.3/unit-integration.txt`
+- Runtime-lab API E2E and 033/036/SOP regression:
+  `artifacts/slices/037-runtime-faq-embedding-answer-gate/037.3/final-targeted.txt`
+  (`31 passed`)
+- Browser UAT through Swagger UI:
+  `artifacts/slices/037-runtime-faq-embedding-answer-gate/037.3/uat.md`,
+  `artifacts/slices/037-runtime-faq-embedding-answer-gate/037.3/browser-uat-result.json`,
+  `artifacts/slices/037-runtime-faq-embedding-answer-gate/037.3/screenshots/browser-uat-semantic-faq.png`
+
+Full backend pytest was attempted and saved to
+`artifacts/slices/037-runtime-faq-embedding-answer-gate/037.3/full-backend.txt`.
+It produced `456 passed, 8 skipped, 15 failed`; the remaining failures match
+the documented non-037 residue from runtime-lab chatflow-adapter host resolution
+and workflow knowledge-facade stub drift.

@@ -1,0 +1,2620 @@
+{
+  "slice": "037-runtime-faq-embedding-answer-gate",
+  "server": "http://127.0.0.1:18085",
+  "exercisedVia": "Swagger UI controlled through in-app browser",
+  "sessionId": 1,
+  "assertions": {
+    "semanticAnswered": true,
+    "semanticSourceLayer": "faq_semantic",
+    "semanticReasonCode": "SEMANTIC_HIGH_CONFIDENCE",
+    "semanticMatchType": "VECTOR",
+    "semanticRetrievalMode": "faq",
+    "semanticRerankUsed": true,
+    "semanticDoesNotMutateSop": true,
+    "lowMarginClarified": true,
+    "lowMarginReasonCode": "SEMANTIC_LOW_MARGIN",
+    "lowMarginTopCandidateCount": 2,
+    "lowMarginDoesNotMutateSop": true
+  },
+  "results": [
+    {
+      "message": "儿童 票 怎么 返钱 规则？",
+      "key": "uat-037-semantic-faq",
+      "responseCode": 200,
+      "action": "ANSWER_FAQ",
+      "finalDecision": {
+        "action": "ANSWER_FAQ",
+        "targetSopId": null,
+        "activeTaskId": null,
+        "sourceLayer": "faq_semantic",
+        "reasonCode": "SEMANTIC_HIGH_CONFIDENCE"
+      },
+      "faqAnswer": {
+        "sourceLayer": "faq_semantic",
+        "reasonCode": "SEMANTIC_HIGH_CONFIDENCE",
+        "answer": "儿童票如未使用可按客票规则申请退票。",
+        "confidence": 0.99,
+        "margin": 1.1,
+        "mutatesSopState": false,
+        "evidence": {
+          "faqId": 1,
+          "question": "儿童 票 退款 规则",
+          "answer": "儿童票如未使用可按客票规则申请退票。",
+          "score": 1.1,
+          "matchType": "VECTOR",
+          "source": "structured_faq",
+          "matchedTerms": [],
+          "retrievalMode": "faq",
+          "rerankUsed": true,
+          "topCandidates": [
+            {
+              "faqId": 1,
+              "question": "儿童 票 退款 规则",
+              "score": 1.1,
+              "matchType": "VECTOR",
+              "knowledgeBaseId": null
+            }
+          ]
+        }
+      },
+      "activeTask": null,
+      "eventTypes": [
+        "SESSION_CREATED",
+        "USER_MESSAGE",
+        "ROUTE_DECISION",
+        "FAQ_ANSWERED"
+      ],
+      "raw": {
+        "code": 200,
+        "message": "success",
+        "data": {
+          "reply": "儿童票如未使用可按客票规则申请退票。",
+          "routeDecision": {
+            "action": "ANSWER_FAQ",
+            "reason": "Semantic FAQ accepted before SOP arbitration",
+            "targetSopId": null,
+            "activeTaskId": null,
+            "matchedKeyword": null,
+            "candidates": [],
+            "candidateSources": [],
+            "policyGate": {
+              "stage": "faq_semantic",
+              "decisionAction": "ANSWER_FAQ",
+              "steps": [
+                {
+                  "id": "candidate_recall",
+                  "name": "candidate_recall",
+                  "label": "候选召回",
+                  "elapsedMs": 0,
+                  "input": {
+                    "message": "儿童 票 怎么 返钱 规则？",
+                    "enabledSopIds": [
+                      "refund_ticket"
+                    ]
+                  },
+                  "output": {
+                    "candidateCount": 0,
+                    "candidates": []
+                  },
+                  "usage": {
+                    "inputTokens": 0,
+                    "outputTokens": 0,
+                    "totalTokens": 0,
+                    "estimated": false
+                  }
+                },
+                {
+                  "id": "faq_semantic",
+                  "name": "faq_semantic",
+                  "label": "faq_semantic",
+                  "elapsedMs": 0,
+                  "input": {
+                    "message": "儿童 票 怎么 返钱 规则？",
+                    "activeTask": false
+                  },
+                  "output": {
+                    "decision": {
+                      "action": "ANSWER_FAQ",
+                      "reason": "Semantic FAQ accepted before SOP arbitration",
+                      "targetSopId": null,
+                      "activeTaskId": null,
+                      "matchedKeyword": null,
+                      "candidates": [],
+                      "candidateSources": [],
+                      "policyGate": null,
+                      "classifierRequest": null,
+                      "classifierResult": null,
+                      "finalDecision": {
+                        "action": "ANSWER_FAQ",
+                        "targetSopId": null,
+                        "activeTaskId": null,
+                        "sourceLayer": "faq_semantic",
+                        "reasonCode": "SEMANTIC_HIGH_CONFIDENCE"
+                      },
+                      "handoff": null,
+                      "faqAnswer": {
+                        "sourceLayer": "faq_semantic",
+                        "reasonCode": "SEMANTIC_HIGH_CONFIDENCE",
+                        "answer": "儿童票如未使用可按客票规则申请退票。",
+                        "confidence": 0.99,
+                        "margin": 1.1,
+                        "mutatesSopState": false,
+                        "evidence": {
+                          "faqId": 1,
+                          "question": "儿童 票 退款 规则",
+                          "answer": "儿童票如未使用可按客票规则申请退票。",
+                          "score": 1.1,
+                          "matchType": "VECTOR",
+                          "source": "structured_faq",
+                          "matchedTerms": [],
+                          "retrievalMode": "faq",
+                          "rerankUsed": true,
+                          "topCandidates": [
+                            {
+                              "faqId": 1,
+                              "question": "儿童 票 退款 规则",
+                              "score": 1.1,
+                              "matchType": "VECTOR",
+                              "knowledgeBaseId": null
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "usage": {
+                    "inputTokens": 0,
+                    "outputTokens": 0,
+                    "totalTokens": 0,
+                    "estimated": false
+                  }
+                }
+              ],
+              "elapsedMs": 4
+            },
+            "classifierRequest": null,
+            "classifierResult": null,
+            "handoff": null,
+            "faqAnswer": {
+              "sourceLayer": "faq_semantic",
+              "reasonCode": "SEMANTIC_HIGH_CONFIDENCE",
+              "answer": "儿童票如未使用可按客票规则申请退票。",
+              "confidence": 0.99,
+              "margin": 1.1,
+              "mutatesSopState": false,
+              "evidence": {
+                "faqId": 1,
+                "question": "儿童 票 退款 规则",
+                "answer": "儿童票如未使用可按客票规则申请退票。",
+                "score": 1.1,
+                "matchType": "VECTOR",
+                "source": "structured_faq",
+                "matchedTerms": [],
+                "retrievalMode": "faq",
+                "rerankUsed": true,
+                "topCandidates": [
+                  {
+                    "faqId": 1,
+                    "question": "儿童 票 退款 规则",
+                    "score": 1.1,
+                    "matchType": "VECTOR",
+                    "knowledgeBaseId": null
+                  }
+                ]
+              }
+            },
+            "finalDecision": {
+              "action": "ANSWER_FAQ",
+              "targetSopId": null,
+              "activeTaskId": null,
+              "sourceLayer": "faq_semantic",
+              "reasonCode": "SEMANTIC_HIGH_CONFIDENCE"
+            }
+          },
+          "activeTask": null,
+          "suspendedTasks": [],
+          "resumeOffer": null,
+          "events": [
+            {
+              "id": 1,
+              "sessionId": 1,
+              "sequence": 1,
+              "eventType": "SESSION_CREATED",
+              "payload": {},
+              "createdAt": "2026-06-09T02:03:14.630254"
+            },
+            {
+              "id": 2,
+              "sessionId": 1,
+              "sequence": 2,
+              "eventType": "USER_MESSAGE",
+              "payload": {
+                "message": "儿童 票 怎么 返钱 规则？"
+              },
+              "createdAt": "2026-06-09T02:03:20.557833"
+            },
+            {
+              "id": 3,
+              "sessionId": 1,
+              "sequence": 3,
+              "eventType": "ROUTE_DECISION",
+              "payload": {
+                "action": "ANSWER_FAQ",
+                "reason": "Semantic FAQ accepted before SOP arbitration",
+                "targetSopId": null,
+                "activeTaskId": null,
+                "matchedKeyword": null,
+                "candidates": [],
+                "candidateSources": [],
+                "policyGate": {
+                  "stage": "faq_semantic",
+                  "decisionAction": "ANSWER_FAQ",
+                  "steps": [
+                    {
+                      "id": "candidate_recall",
+                      "name": "candidate_recall",
+                      "label": "候选召回",
+                      "elapsedMs": 0,
+                      "input": {
+                        "message": "儿童 票 怎么 返钱 规则？",
+                        "enabledSopIds": [
+                          "refund_ticket"
+                        ]
+                      },
+                      "output": {
+                        "candidateCount": 0,
+                        "candidates": []
+                      },
+                      "usage": {
+                        "inputTokens": 0,
+                        "outputTokens": 0,
+                        "totalTokens": 0,
+                        "estimated": false
+                      }
+                    },
+                    {
+                      "id": "faq_semantic",
+                      "name": "faq_semantic",
+                      "label": "faq_semantic",
+                      "elapsedMs": 0,
+                      "input": {
+                        "message": "儿童 票 怎么 返钱 规则？",
+                        "activeTask": false
+                      },
+                      "output": {
+                        "decision": {
+                          "action": "ANSWER_FAQ",
+                          "reason": "Semantic FAQ accepted before SOP arbitration",
+                          "targetSopId": null,
+                          "activeTaskId": null,
+                          "matchedKeyword": null,
+                          "candidates": [],
+                          "candidateSources": [],
+                          "policyGate": null,
+                          "classifierRequest": null,
+                          "classifierResult": null,
+                          "finalDecision": {
+                            "action": "ANSWER_FAQ",
+                            "targetSopId": null,
+                            "activeTaskId": null,
+                            "sourceLayer": "faq_semantic",
+                            "reasonCode": "SEMANTIC_HIGH_CONFIDENCE"
+                          },
+                          "handoff": null,
+                          "faqAnswer": {
+                            "sourceLayer": "faq_semantic",
+                            "reasonCode": "SEMANTIC_HIGH_CONFIDENCE",
+                            "answer": "儿童票如未使用可按客票规则申请退票。",
+                            "confidence": 0.99,
+                            "margin": 1.1,
+                            "mutatesSopState": false,
+                            "evidence": {
+                              "faqId": 1,
+                              "question": "儿童 票 退款 规则",
+                              "answer": "儿童票如未使用可按客票规则申请退票。",
+                              "score": 1.1,
+                              "matchType": "VECTOR",
+                              "source": "structured_faq",
+                              "matchedTerms": [],
+                              "retrievalMode": "faq",
+                              "rerankUsed": true,
+                              "topCandidates": [
+                                {
+                                  "faqId": 1,
+                                  "question": "儿童 票 退款 规则",
+                                  "score": 1.1,
+                                  "matchType": "VECTOR",
+                                  "knowledgeBaseId": null
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "usage": {
+                        "inputTokens": 0,
+                        "outputTokens": 0,
+                        "totalTokens": 0,
+                        "estimated": false
+                      }
+                    }
+                  ],
+                  "elapsedMs": 4
+                },
+                "classifierRequest": null,
+                "classifierResult": null,
+                "finalDecision": {
+                  "action": "ANSWER_FAQ",
+                  "targetSopId": null,
+                  "activeTaskId": null,
+                  "sourceLayer": "faq_semantic",
+                  "reasonCode": "SEMANTIC_HIGH_CONFIDENCE"
+                },
+                "handoff": null,
+                "faqAnswer": {
+                  "sourceLayer": "faq_semantic",
+                  "reasonCode": "SEMANTIC_HIGH_CONFIDENCE",
+                  "answer": "儿童票如未使用可按客票规则申请退票。",
+                  "confidence": 0.99,
+                  "margin": 1.1,
+                  "mutatesSopState": false,
+                  "evidence": {
+                    "faqId": 1,
+                    "question": "儿童 票 退款 规则",
+                    "answer": "儿童票如未使用可按客票规则申请退票。",
+                    "score": 1.1,
+                    "matchType": "VECTOR",
+                    "source": "structured_faq",
+                    "matchedTerms": [],
+                    "retrievalMode": "faq",
+                    "rerankUsed": true,
+                    "topCandidates": [
+                      {
+                        "faqId": 1,
+                        "question": "儿童 票 退款 规则",
+                        "score": 1.1,
+                        "matchType": "VECTOR",
+                        "knowledgeBaseId": null
+                      }
+                    ]
+                  }
+                }
+              },
+              "createdAt": "2026-06-09T02:03:20.564413"
+            },
+            {
+              "id": 4,
+              "sessionId": 1,
+              "sequence": 4,
+              "eventType": "FAQ_ANSWERED",
+              "payload": {
+                "sourceLayer": "faq_semantic",
+                "reasonCode": "SEMANTIC_HIGH_CONFIDENCE",
+                "answer": "儿童票如未使用可按客票规则申请退票。",
+                "confidence": 0.99,
+                "margin": 1.1,
+                "mutatesSopState": false,
+                "evidence": {
+                  "faqId": 1,
+                  "question": "儿童 票 退款 规则",
+                  "answer": "儿童票如未使用可按客票规则申请退票。",
+                  "score": 1.1,
+                  "matchType": "VECTOR",
+                  "source": "structured_faq",
+                  "matchedTerms": [],
+                  "retrievalMode": "faq",
+                  "rerankUsed": true,
+                  "topCandidates": [
+                    {
+                      "faqId": 1,
+                      "question": "儿童 票 退款 规则",
+                      "score": 1.1,
+                      "matchType": "VECTOR",
+                      "knowledgeBaseId": null
+                    }
+                  ]
+                }
+              },
+              "createdAt": "2026-06-09T02:03:20.564937"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "message": "儿童 票 规则？",
+      "key": "uat-037-low-margin",
+      "responseCode": 200,
+      "action": "ANSWER_FAQ",
+      "finalDecision": {
+        "action": "ANSWER_FAQ",
+        "targetSopId": null,
+        "activeTaskId": null,
+        "sourceLayer": "faq_semantic",
+        "reasonCode": "SEMANTIC_HIGH_CONFIDENCE"
+      },
+      "faqAnswer": {
+        "sourceLayer": "faq_semantic",
+        "reasonCode": "SEMANTIC_HIGH_CONFIDENCE",
+        "answer": "儿童票如未使用可按客票规则申请退票。",
+        "confidence": 0.99,
+        "margin": 1.15,
+        "mutatesSopState": false,
+        "evidence": {
+          "faqId": 1,
+          "question": "儿童 票 退款 规则",
+          "answer": "儿童票如未使用可按客票规则申请退票。",
+          "score": 1.15,
+          "matchType": "VECTOR",
+          "source": "structured_faq",
+          "matchedTerms": [],
+          "retrievalMode": "faq",
+          "rerankUsed": true,
+          "topCandidates": [
+            {
+              "faqId": 1,
+              "question": "儿童 票 退款 规则",
+              "score": 1.15,
+              "matchType": "VECTOR",
+              "knowledgeBaseId": null
+            }
+          ]
+        }
+      },
+      "activeTask": null,
+      "eventTypes": [
+        "SESSION_CREATED",
+        "USER_MESSAGE",
+        "ROUTE_DECISION",
+        "FAQ_ANSWERED",
+        "USER_MESSAGE",
+        "ROUTE_DECISION",
+        "FAQ_ANSWERED"
+      ],
+      "raw": {
+        "code": 200,
+        "message": "success",
+        "data": {
+          "reply": "儿童票如未使用可按客票规则申请退票。",
+          "routeDecision": {
+            "action": "ANSWER_FAQ",
+            "reason": "Semantic FAQ accepted before SOP arbitration",
+            "targetSopId": null,
+            "activeTaskId": null,
+            "matchedKeyword": null,
+            "candidates": [],
+            "candidateSources": [],
+            "policyGate": {
+              "stage": "faq_semantic",
+              "decisionAction": "ANSWER_FAQ",
+              "steps": [
+                {
+                  "id": "candidate_recall",
+                  "name": "candidate_recall",
+                  "label": "候选召回",
+                  "elapsedMs": 0,
+                  "input": {
+                    "message": "儿童 票 规则？",
+                    "enabledSopIds": [
+                      "refund_ticket"
+                    ]
+                  },
+                  "output": {
+                    "candidateCount": 0,
+                    "candidates": []
+                  },
+                  "usage": {
+                    "inputTokens": 0,
+                    "outputTokens": 0,
+                    "totalTokens": 0,
+                    "estimated": false
+                  }
+                },
+                {
+                  "id": "faq_semantic",
+                  "name": "faq_semantic",
+                  "label": "faq_semantic",
+                  "elapsedMs": 0,
+                  "input": {
+                    "message": "儿童 票 规则？",
+                    "activeTask": false
+                  },
+                  "output": {
+                    "decision": {
+                      "action": "ANSWER_FAQ",
+                      "reason": "Semantic FAQ accepted before SOP arbitration",
+                      "targetSopId": null,
+                      "activeTaskId": null,
+                      "matchedKeyword": null,
+                      "candidates": [],
+                      "candidateSources": [],
+                      "policyGate": null,
+                      "classifierRequest": null,
+                      "classifierResult": null,
+                      "finalDecision": {
+                        "action": "ANSWER_FAQ",
+                        "targetSopId": null,
+                        "activeTaskId": null,
+                        "sourceLayer": "faq_semantic",
+                        "reasonCode": "SEMANTIC_HIGH_CONFIDENCE"
+                      },
+                      "handoff": null,
+                      "faqAnswer": {
+                        "sourceLayer": "faq_semantic",
+                        "reasonCode": "SEMANTIC_HIGH_CONFIDENCE",
+                        "answer": "儿童票如未使用可按客票规则申请退票。",
+                        "confidence": 0.99,
+                        "margin": 1.15,
+                        "mutatesSopState": false,
+                        "evidence": {
+                          "faqId": 1,
+                          "question": "儿童 票 退款 规则",
+                          "answer": "儿童票如未使用可按客票规则申请退票。",
+                          "score": 1.15,
+                          "matchType": "VECTOR",
+                          "source": "structured_faq",
+                          "matchedTerms": [],
+                          "retrievalMode": "faq",
+                          "rerankUsed": true,
+                          "topCandidates": [
+                            {
+                              "faqId": 1,
+                              "question": "儿童 票 退款 规则",
+                              "score": 1.15,
+                              "matchType": "VECTOR",
+                              "knowledgeBaseId": null
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "usage": {
+                    "inputTokens": 0,
+                    "outputTokens": 0,
+                    "totalTokens": 0,
+                    "estimated": false
+                  }
+                }
+              ],
+              "elapsedMs": 1
+            },
+            "classifierRequest": null,
+            "classifierResult": null,
+            "handoff": null,
+            "faqAnswer": {
+              "sourceLayer": "faq_semantic",
+              "reasonCode": "SEMANTIC_HIGH_CONFIDENCE",
+              "answer": "儿童票如未使用可按客票规则申请退票。",
+              "confidence": 0.99,
+              "margin": 1.15,
+              "mutatesSopState": false,
+              "evidence": {
+                "faqId": 1,
+                "question": "儿童 票 退款 规则",
+                "answer": "儿童票如未使用可按客票规则申请退票。",
+                "score": 1.15,
+                "matchType": "VECTOR",
+                "source": "structured_faq",
+                "matchedTerms": [],
+                "retrievalMode": "faq",
+                "rerankUsed": true,
+                "topCandidates": [
+                  {
+                    "faqId": 1,
+                    "question": "儿童 票 退款 规则",
+                    "score": 1.15,
+                    "matchType": "VECTOR",
+                    "knowledgeBaseId": null
+                  }
+                ]
+              }
+            },
+            "finalDecision": {
+              "action": "ANSWER_FAQ",
+              "targetSopId": null,
+              "activeTaskId": null,
+              "sourceLayer": "faq_semantic",
+              "reasonCode": "SEMANTIC_HIGH_CONFIDENCE"
+            }
+          },
+          "activeTask": null,
+          "suspendedTasks": [],
+          "resumeOffer": null,
+          "events": [
+            {
+              "id": 1,
+              "sessionId": 1,
+              "sequence": 1,
+              "eventType": "SESSION_CREATED",
+              "payload": {},
+              "createdAt": "2026-06-09T02:03:14.630254"
+            },
+            {
+              "id": 2,
+              "sessionId": 1,
+              "sequence": 2,
+              "eventType": "USER_MESSAGE",
+              "payload": {
+                "message": "儿童 票 怎么 返钱 规则？"
+              },
+              "createdAt": "2026-06-09T02:03:20.557833"
+            },
+            {
+              "id": 3,
+              "sessionId": 1,
+              "sequence": 3,
+              "eventType": "ROUTE_DECISION",
+              "payload": {
+                "action": "ANSWER_FAQ",
+                "reason": "Semantic FAQ accepted before SOP arbitration",
+                "targetSopId": null,
+                "activeTaskId": null,
+                "matchedKeyword": null,
+                "candidates": [],
+                "candidateSources": [],
+                "policyGate": {
+                  "stage": "faq_semantic",
+                  "decisionAction": "ANSWER_FAQ",
+                  "steps": [
+                    {
+                      "id": "candidate_recall",
+                      "name": "candidate_recall",
+                      "label": "候选召回",
+                      "elapsedMs": 0,
+                      "input": {
+                        "message": "儿童 票 怎么 返钱 规则？",
+                        "enabledSopIds": [
+                          "refund_ticket"
+                        ]
+                      },
+                      "output": {
+                        "candidateCount": 0,
+                        "candidates": []
+                      },
+                      "usage": {
+                        "inputTokens": 0,
+                        "outputTokens": 0,
+                        "totalTokens": 0,
+                        "estimated": false
+                      }
+                    },
+                    {
+                      "id": "faq_semantic",
+                      "name": "faq_semantic",
+                      "label": "faq_semantic",
+                      "elapsedMs": 0,
+                      "input": {
+                        "message": "儿童 票 怎么 返钱 规则？",
+                        "activeTask": false
+                      },
+                      "output": {
+                        "decision": {
+                          "action": "ANSWER_FAQ",
+                          "reason": "Semantic FAQ accepted before SOP arbitration",
+                          "targetSopId": null,
+                          "activeTaskId": null,
+                          "matchedKeyword": null,
+                          "candidates": [],
+                          "candidateSources": [],
+                          "policyGate": null,
+                          "classifierRequest": null,
+                          "classifierResult": null,
+                          "finalDecision": {
+                            "action": "ANSWER_FAQ",
+                            "targetSopId": null,
+                            "activeTaskId": null,
+                            "sourceLayer": "faq_semantic",
+                            "reasonCode": "SEMANTIC_HIGH_CONFIDENCE"
+                          },
+                          "handoff": null,
+                          "faqAnswer": {
+                            "sourceLayer": "faq_semantic",
+                            "reasonCode": "SEMANTIC_HIGH_CONFIDENCE",
+                            "answer": "儿童票如未使用可按客票规则申请退票。",
+                            "confidence": 0.99,
+                            "margin": 1.1,
+                            "mutatesSopState": false,
+                            "evidence": {
+                              "faqId": 1,
+                              "question": "儿童 票 退款 规则",
+                              "answer": "儿童票如未使用可按客票规则申请退票。",
+                              "score": 1.1,
+                              "matchType": "VECTOR",
+                              "source": "structured_faq",
+                              "matchedTerms": [],
+                              "retrievalMode": "faq",
+                              "rerankUsed": true,
+                              "topCandidates": [
+                                {
+                                  "faqId": 1,
+                                  "question": "儿童 票 退款 规则",
+                                  "score": 1.1,
+                                  "matchType": "VECTOR",
+                                  "knowledgeBaseId": null
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "usage": {
+                        "inputTokens": 0,
+                        "outputTokens": 0,
+                        "totalTokens": 0,
+                        "estimated": false
+                      }
+                    }
+                  ],
+                  "elapsedMs": 4
+                },
+                "classifierRequest": null,
+                "classifierResult": null,
+                "finalDecision": {
+                  "action": "ANSWER_FAQ",
+                  "targetSopId": null,
+                  "activeTaskId": null,
+                  "sourceLayer": "faq_semantic",
+                  "reasonCode": "SEMANTIC_HIGH_CONFIDENCE"
+                },
+                "handoff": null,
+                "faqAnswer": {
+                  "sourceLayer": "faq_semantic",
+                  "reasonCode": "SEMANTIC_HIGH_CONFIDENCE",
+                  "answer": "儿童票如未使用可按客票规则申请退票。",
+                  "confidence": 0.99,
+                  "margin": 1.1,
+                  "mutatesSopState": false,
+                  "evidence": {
+                    "faqId": 1,
+                    "question": "儿童 票 退款 规则",
+                    "answer": "儿童票如未使用可按客票规则申请退票。",
+                    "score": 1.1,
+                    "matchType": "VECTOR",
+                    "source": "structured_faq",
+                    "matchedTerms": [],
+                    "retrievalMode": "faq",
+                    "rerankUsed": true,
+                    "topCandidates": [
+                      {
+                        "faqId": 1,
+                        "question": "儿童 票 退款 规则",
+                        "score": 1.1,
+                        "matchType": "VECTOR",
+                        "knowledgeBaseId": null
+                      }
+                    ]
+                  }
+                }
+              },
+              "createdAt": "2026-06-09T02:03:20.564413"
+            },
+            {
+              "id": 4,
+              "sessionId": 1,
+              "sequence": 4,
+              "eventType": "FAQ_ANSWERED",
+              "payload": {
+                "sourceLayer": "faq_semantic",
+                "reasonCode": "SEMANTIC_HIGH_CONFIDENCE",
+                "answer": "儿童票如未使用可按客票规则申请退票。",
+                "confidence": 0.99,
+                "margin": 1.1,
+                "mutatesSopState": false,
+                "evidence": {
+                  "faqId": 1,
+                  "question": "儿童 票 退款 规则",
+                  "answer": "儿童票如未使用可按客票规则申请退票。",
+                  "score": 1.1,
+                  "matchType": "VECTOR",
+                  "source": "structured_faq",
+                  "matchedTerms": [],
+                  "retrievalMode": "faq",
+                  "rerankUsed": true,
+                  "topCandidates": [
+                    {
+                      "faqId": 1,
+                      "question": "儿童 票 退款 规则",
+                      "score": 1.1,
+                      "matchType": "VECTOR",
+                      "knowledgeBaseId": null
+                    }
+                  ]
+                }
+              },
+              "createdAt": "2026-06-09T02:03:20.564937"
+            },
+            {
+              "id": 5,
+              "sessionId": 1,
+              "sequence": 5,
+              "eventType": "USER_MESSAGE",
+              "payload": {
+                "message": "儿童 票 规则？"
+              },
+              "createdAt": "2026-06-09T02:03:22.501337"
+            },
+            {
+              "id": 6,
+              "sessionId": 1,
+              "sequence": 6,
+              "eventType": "ROUTE_DECISION",
+              "payload": {
+                "action": "ANSWER_FAQ",
+                "reason": "Semantic FAQ accepted before SOP arbitration",
+                "targetSopId": null,
+                "activeTaskId": null,
+                "matchedKeyword": null,
+                "candidates": [],
+                "candidateSources": [],
+                "policyGate": {
+                  "stage": "faq_semantic",
+                  "decisionAction": "ANSWER_FAQ",
+                  "steps": [
+                    {
+                      "id": "candidate_recall",
+                      "name": "candidate_recall",
+                      "label": "候选召回",
+                      "elapsedMs": 0,
+                      "input": {
+                        "message": "儿童 票 规则？",
+                        "enabledSopIds": [
+                          "refund_ticket"
+                        ]
+                      },
+                      "output": {
+                        "candidateCount": 0,
+                        "candidates": []
+                      },
+                      "usage": {
+                        "inputTokens": 0,
+                        "outputTokens": 0,
+                        "totalTokens": 0,
+                        "estimated": false
+                      }
+                    },
+                    {
+                      "id": "faq_semantic",
+                      "name": "faq_semantic",
+                      "label": "faq_semantic",
+                      "elapsedMs": 0,
+                      "input": {
+                        "message": "儿童 票 规则？",
+                        "activeTask": false
+                      },
+                      "output": {
+                        "decision": {
+                          "action": "ANSWER_FAQ",
+                          "reason": "Semantic FAQ accepted before SOP arbitration",
+                          "targetSopId": null,
+                          "activeTaskId": null,
+                          "matchedKeyword": null,
+                          "candidates": [],
+                          "candidateSources": [],
+                          "policyGate": null,
+                          "classifierRequest": null,
+                          "classifierResult": null,
+                          "finalDecision": {
+                            "action": "ANSWER_FAQ",
+                            "targetSopId": null,
+                            "activeTaskId": null,
+                            "sourceLayer": "faq_semantic",
+                            "reasonCode": "SEMANTIC_HIGH_CONFIDENCE"
+                          },
+                          "handoff": null,
+                          "faqAnswer": {
+                            "sourceLayer": "faq_semantic",
+                            "reasonCode": "SEMANTIC_HIGH_CONFIDENCE",
+                            "answer": "儿童票如未使用可按客票规则申请退票。",
+                            "confidence": 0.99,
+                            "margin": 1.15,
+                            "mutatesSopState": false,
+                            "evidence": {
+                              "faqId": 1,
+                              "question": "儿童 票 退款 规则",
+                              "answer": "儿童票如未使用可按客票规则申请退票。",
+                              "score": 1.15,
+                              "matchType": "VECTOR",
+                              "source": "structured_faq",
+                              "matchedTerms": [],
+                              "retrievalMode": "faq",
+                              "rerankUsed": true,
+                              "topCandidates": [
+                                {
+                                  "faqId": 1,
+                                  "question": "儿童 票 退款 规则",
+                                  "score": 1.15,
+                                  "matchType": "VECTOR",
+                                  "knowledgeBaseId": null
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "usage": {
+                        "inputTokens": 0,
+                        "outputTokens": 0,
+                        "totalTokens": 0,
+                        "estimated": false
+                      }
+                    }
+                  ],
+                  "elapsedMs": 1
+                },
+                "classifierRequest": null,
+                "classifierResult": null,
+                "finalDecision": {
+                  "action": "ANSWER_FAQ",
+                  "targetSopId": null,
+                  "activeTaskId": null,
+                  "sourceLayer": "faq_semantic",
+                  "reasonCode": "SEMANTIC_HIGH_CONFIDENCE"
+                },
+                "handoff": null,
+                "faqAnswer": {
+                  "sourceLayer": "faq_semantic",
+                  "reasonCode": "SEMANTIC_HIGH_CONFIDENCE",
+                  "answer": "儿童票如未使用可按客票规则申请退票。",
+                  "confidence": 0.99,
+                  "margin": 1.15,
+                  "mutatesSopState": false,
+                  "evidence": {
+                    "faqId": 1,
+                    "question": "儿童 票 退款 规则",
+                    "answer": "儿童票如未使用可按客票规则申请退票。",
+                    "score": 1.15,
+                    "matchType": "VECTOR",
+                    "source": "structured_faq",
+                    "matchedTerms": [],
+                    "retrievalMode": "faq",
+                    "rerankUsed": true,
+                    "topCandidates": [
+                      {
+                        "faqId": 1,
+                        "question": "儿童 票 退款 规则",
+                        "score": 1.15,
+                        "matchType": "VECTOR",
+                        "knowledgeBaseId": null
+                      }
+                    ]
+                  }
+                }
+              },
+              "createdAt": "2026-06-09T02:03:22.506423"
+            },
+            {
+              "id": 7,
+              "sessionId": 1,
+              "sequence": 7,
+              "eventType": "FAQ_ANSWERED",
+              "payload": {
+                "sourceLayer": "faq_semantic",
+                "reasonCode": "SEMANTIC_HIGH_CONFIDENCE",
+                "answer": "儿童票如未使用可按客票规则申请退票。",
+                "confidence": 0.99,
+                "margin": 1.15,
+                "mutatesSopState": false,
+                "evidence": {
+                  "faqId": 1,
+                  "question": "儿童 票 退款 规则",
+                  "answer": "儿童票如未使用可按客票规则申请退票。",
+                  "score": 1.15,
+                  "matchType": "VECTOR",
+                  "source": "structured_faq",
+                  "matchedTerms": [],
+                  "retrievalMode": "faq",
+                  "rerankUsed": true,
+                  "topCandidates": [
+                    {
+                      "faqId": 1,
+                      "question": "儿童 票 退款 规则",
+                      "score": 1.15,
+                      "matchType": "VECTOR",
+                      "knowledgeBaseId": null
+                    }
+                  ]
+                }
+              },
+              "createdAt": "2026-06-09T02:03:22.507000"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "message": "儿童 票 规则？",
+      "key": "uat-037-low-margin-2",
+      "responseCode": 200,
+      "action": "CLARIFY",
+      "finalDecision": {
+        "action": "CLARIFY",
+        "targetSopId": null,
+        "activeTaskId": null,
+        "sourceLayer": "faq_semantic",
+        "reasonCode": "SEMANTIC_LOW_MARGIN"
+      },
+      "faqAnswer": {
+        "sourceLayer": "faq_semantic",
+        "reasonCode": "SEMANTIC_LOW_MARGIN",
+        "answer": "儿童票如未使用可按客票规则申请退票。",
+        "confidence": 0.99,
+        "margin": 0,
+        "mutatesSopState": false,
+        "evidence": {
+          "faqId": 1,
+          "question": "儿童 票 退款 规则",
+          "answer": "儿童票如未使用可按客票规则申请退票。",
+          "score": 1.15,
+          "matchType": "VECTOR",
+          "source": "structured_faq",
+          "matchedTerms": [],
+          "retrievalMode": "faq",
+          "rerankUsed": true,
+          "topCandidates": [
+            {
+              "faqId": 1,
+              "question": "儿童 票 退款 规则",
+              "score": 1.15,
+              "matchType": "VECTOR",
+              "knowledgeBaseId": null
+            },
+            {
+              "faqId": 2,
+              "question": "儿童 票 改签 规则",
+              "score": 1.15,
+              "matchType": "VECTOR",
+              "knowledgeBaseId": null
+            }
+          ]
+        }
+      },
+      "activeTask": null,
+      "eventTypes": [
+        "SESSION_CREATED",
+        "USER_MESSAGE",
+        "ROUTE_DECISION",
+        "FAQ_ANSWERED",
+        "USER_MESSAGE",
+        "ROUTE_DECISION",
+        "FAQ_ANSWERED",
+        "USER_MESSAGE",
+        "ROUTE_DECISION"
+      ],
+      "raw": {
+        "code": 200,
+        "message": "success",
+        "data": {
+          "reply": "请问您想办理订票、票价、团队票、增值服务、退票、改签、资料修改、发票、行李、值机、航班动态、特殊协助、宠物乘机、异常航班还是会员里程？",
+          "routeDecision": {
+            "action": "CLARIFY",
+            "reason": "Semantic FAQ candidates are too close to answer safely",
+            "targetSopId": null,
+            "activeTaskId": null,
+            "matchedKeyword": null,
+            "candidates": [],
+            "candidateSources": [],
+            "policyGate": {
+              "stage": "faq_semantic",
+              "decisionAction": "CLARIFY",
+              "steps": [
+                {
+                  "id": "candidate_recall",
+                  "name": "candidate_recall",
+                  "label": "候选召回",
+                  "elapsedMs": 0,
+                  "input": {
+                    "message": "儿童 票 规则？",
+                    "enabledSopIds": [
+                      "refund_ticket"
+                    ]
+                  },
+                  "output": {
+                    "candidateCount": 0,
+                    "candidates": []
+                  },
+                  "usage": {
+                    "inputTokens": 0,
+                    "outputTokens": 0,
+                    "totalTokens": 0,
+                    "estimated": false
+                  }
+                },
+                {
+                  "id": "faq_semantic",
+                  "name": "faq_semantic",
+                  "label": "faq_semantic",
+                  "elapsedMs": 0,
+                  "input": {
+                    "message": "儿童 票 规则？",
+                    "activeTask": false
+                  },
+                  "output": {
+                    "decision": {
+                      "action": "CLARIFY",
+                      "reason": "Semantic FAQ candidates are too close to answer safely",
+                      "targetSopId": null,
+                      "activeTaskId": null,
+                      "matchedKeyword": null,
+                      "candidates": [],
+                      "candidateSources": [],
+                      "policyGate": null,
+                      "classifierRequest": null,
+                      "classifierResult": null,
+                      "finalDecision": {
+                        "action": "CLARIFY",
+                        "targetSopId": null,
+                        "activeTaskId": null,
+                        "sourceLayer": "faq_semantic",
+                        "reasonCode": "SEMANTIC_LOW_MARGIN"
+                      },
+                      "handoff": null,
+                      "faqAnswer": {
+                        "sourceLayer": "faq_semantic",
+                        "reasonCode": "SEMANTIC_LOW_MARGIN",
+                        "answer": "儿童票如未使用可按客票规则申请退票。",
+                        "confidence": 0.99,
+                        "margin": 0,
+                        "mutatesSopState": false,
+                        "evidence": {
+                          "faqId": 1,
+                          "question": "儿童 票 退款 规则",
+                          "answer": "儿童票如未使用可按客票规则申请退票。",
+                          "score": 1.15,
+                          "matchType": "VECTOR",
+                          "source": "structured_faq",
+                          "matchedTerms": [],
+                          "retrievalMode": "faq",
+                          "rerankUsed": true,
+                          "topCandidates": [
+                            {
+                              "faqId": 1,
+                              "question": "儿童 票 退款 规则",
+                              "score": 1.15,
+                              "matchType": "VECTOR",
+                              "knowledgeBaseId": null
+                            },
+                            {
+                              "faqId": 2,
+                              "question": "儿童 票 改签 规则",
+                              "score": 1.15,
+                              "matchType": "VECTOR",
+                              "knowledgeBaseId": null
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "usage": {
+                    "inputTokens": 0,
+                    "outputTokens": 0,
+                    "totalTokens": 0,
+                    "estimated": false
+                  }
+                }
+              ],
+              "elapsedMs": 2
+            },
+            "classifierRequest": null,
+            "classifierResult": null,
+            "handoff": null,
+            "faqAnswer": {
+              "sourceLayer": "faq_semantic",
+              "reasonCode": "SEMANTIC_LOW_MARGIN",
+              "answer": "儿童票如未使用可按客票规则申请退票。",
+              "confidence": 0.99,
+              "margin": 0,
+              "mutatesSopState": false,
+              "evidence": {
+                "faqId": 1,
+                "question": "儿童 票 退款 规则",
+                "answer": "儿童票如未使用可按客票规则申请退票。",
+                "score": 1.15,
+                "matchType": "VECTOR",
+                "source": "structured_faq",
+                "matchedTerms": [],
+                "retrievalMode": "faq",
+                "rerankUsed": true,
+                "topCandidates": [
+                  {
+                    "faqId": 1,
+                    "question": "儿童 票 退款 规则",
+                    "score": 1.15,
+                    "matchType": "VECTOR",
+                    "knowledgeBaseId": null
+                  },
+                  {
+                    "faqId": 2,
+                    "question": "儿童 票 改签 规则",
+                    "score": 1.15,
+                    "matchType": "VECTOR",
+                    "knowledgeBaseId": null
+                  }
+                ]
+              }
+            },
+            "finalDecision": {
+              "action": "CLARIFY",
+              "targetSopId": null,
+              "activeTaskId": null,
+              "sourceLayer": "faq_semantic",
+              "reasonCode": "SEMANTIC_LOW_MARGIN"
+            }
+          },
+          "activeTask": null,
+          "suspendedTasks": [],
+          "resumeOffer": null,
+          "events": [
+            {
+              "id": 1,
+              "sessionId": 1,
+              "sequence": 1,
+              "eventType": "SESSION_CREATED",
+              "payload": {},
+              "createdAt": "2026-06-09T02:03:14.630254"
+            },
+            {
+              "id": 2,
+              "sessionId": 1,
+              "sequence": 2,
+              "eventType": "USER_MESSAGE",
+              "payload": {
+                "message": "儿童 票 怎么 返钱 规则？"
+              },
+              "createdAt": "2026-06-09T02:03:20.557833"
+            },
+            {
+              "id": 3,
+              "sessionId": 1,
+              "sequence": 3,
+              "eventType": "ROUTE_DECISION",
+              "payload": {
+                "action": "ANSWER_FAQ",
+                "reason": "Semantic FAQ accepted before SOP arbitration",
+                "targetSopId": null,
+                "activeTaskId": null,
+                "matchedKeyword": null,
+                "candidates": [],
+                "candidateSources": [],
+                "policyGate": {
+                  "stage": "faq_semantic",
+                  "decisionAction": "ANSWER_FAQ",
+                  "steps": [
+                    {
+                      "id": "candidate_recall",
+                      "name": "candidate_recall",
+                      "label": "候选召回",
+                      "elapsedMs": 0,
+                      "input": {
+                        "message": "儿童 票 怎么 返钱 规则？",
+                        "enabledSopIds": [
+                          "refund_ticket"
+                        ]
+                      },
+                      "output": {
+                        "candidateCount": 0,
+                        "candidates": []
+                      },
+                      "usage": {
+                        "inputTokens": 0,
+                        "outputTokens": 0,
+                        "totalTokens": 0,
+                        "estimated": false
+                      }
+                    },
+                    {
+                      "id": "faq_semantic",
+                      "name": "faq_semantic",
+                      "label": "faq_semantic",
+                      "elapsedMs": 0,
+                      "input": {
+                        "message": "儿童 票 怎么 返钱 规则？",
+                        "activeTask": false
+                      },
+                      "output": {
+                        "decision": {
+                          "action": "ANSWER_FAQ",
+                          "reason": "Semantic FAQ accepted before SOP arbitration",
+                          "targetSopId": null,
+                          "activeTaskId": null,
+                          "matchedKeyword": null,
+                          "candidates": [],
+                          "candidateSources": [],
+                          "policyGate": null,
+                          "classifierRequest": null,
+                          "classifierResult": null,
+                          "finalDecision": {
+                            "action": "ANSWER_FAQ",
+                            "targetSopId": null,
+                            "activeTaskId": null,
+                            "sourceLayer": "faq_semantic",
+                            "reasonCode": "SEMANTIC_HIGH_CONFIDENCE"
+                          },
+                          "handoff": null,
+                          "faqAnswer": {
+                            "sourceLayer": "faq_semantic",
+                            "reasonCode": "SEMANTIC_HIGH_CONFIDENCE",
+                            "answer": "儿童票如未使用可按客票规则申请退票。",
+                            "confidence": 0.99,
+                            "margin": 1.1,
+                            "mutatesSopState": false,
+                            "evidence": {
+                              "faqId": 1,
+                              "question": "儿童 票 退款 规则",
+                              "answer": "儿童票如未使用可按客票规则申请退票。",
+                              "score": 1.1,
+                              "matchType": "VECTOR",
+                              "source": "structured_faq",
+                              "matchedTerms": [],
+                              "retrievalMode": "faq",
+                              "rerankUsed": true,
+                              "topCandidates": [
+                                {
+                                  "faqId": 1,
+                                  "question": "儿童 票 退款 规则",
+                                  "score": 1.1,
+                                  "matchType": "VECTOR",
+                                  "knowledgeBaseId": null
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "usage": {
+                        "inputTokens": 0,
+                        "outputTokens": 0,
+                        "totalTokens": 0,
+                        "estimated": false
+                      }
+                    }
+                  ],
+                  "elapsedMs": 4
+                },
+                "classifierRequest": null,
+                "classifierResult": null,
+                "finalDecision": {
+                  "action": "ANSWER_FAQ",
+                  "targetSopId": null,
+                  "activeTaskId": null,
+                  "sourceLayer": "faq_semantic",
+                  "reasonCode": "SEMANTIC_HIGH_CONFIDENCE"
+                },
+                "handoff": null,
+                "faqAnswer": {
+                  "sourceLayer": "faq_semantic",
+                  "reasonCode": "SEMANTIC_HIGH_CONFIDENCE",
+                  "answer": "儿童票如未使用可按客票规则申请退票。",
+                  "confidence": 0.99,
+                  "margin": 1.1,
+                  "mutatesSopState": false,
+                  "evidence": {
+                    "faqId": 1,
+                    "question": "儿童 票 退款 规则",
+                    "answer": "儿童票如未使用可按客票规则申请退票。",
+                    "score": 1.1,
+                    "matchType": "VECTOR",
+                    "source": "structured_faq",
+                    "matchedTerms": [],
+                    "retrievalMode": "faq",
+                    "rerankUsed": true,
+                    "topCandidates": [
+                      {
+                        "faqId": 1,
+                        "question": "儿童 票 退款 规则",
+                        "score": 1.1,
+                        "matchType": "VECTOR",
+                        "knowledgeBaseId": null
+                      }
+                    ]
+                  }
+                }
+              },
+              "createdAt": "2026-06-09T02:03:20.564413"
+            },
+            {
+              "id": 4,
+              "sessionId": 1,
+              "sequence": 4,
+              "eventType": "FAQ_ANSWERED",
+              "payload": {
+                "sourceLayer": "faq_semantic",
+                "reasonCode": "SEMANTIC_HIGH_CONFIDENCE",
+                "answer": "儿童票如未使用可按客票规则申请退票。",
+                "confidence": 0.99,
+                "margin": 1.1,
+                "mutatesSopState": false,
+                "evidence": {
+                  "faqId": 1,
+                  "question": "儿童 票 退款 规则",
+                  "answer": "儿童票如未使用可按客票规则申请退票。",
+                  "score": 1.1,
+                  "matchType": "VECTOR",
+                  "source": "structured_faq",
+                  "matchedTerms": [],
+                  "retrievalMode": "faq",
+                  "rerankUsed": true,
+                  "topCandidates": [
+                    {
+                      "faqId": 1,
+                      "question": "儿童 票 退款 规则",
+                      "score": 1.1,
+                      "matchType": "VECTOR",
+                      "knowledgeBaseId": null
+                    }
+                  ]
+                }
+              },
+              "createdAt": "2026-06-09T02:03:20.564937"
+            },
+            {
+              "id": 5,
+              "sessionId": 1,
+              "sequence": 5,
+              "eventType": "USER_MESSAGE",
+              "payload": {
+                "message": "儿童 票 规则？"
+              },
+              "createdAt": "2026-06-09T02:03:22.501337"
+            },
+            {
+              "id": 6,
+              "sessionId": 1,
+              "sequence": 6,
+              "eventType": "ROUTE_DECISION",
+              "payload": {
+                "action": "ANSWER_FAQ",
+                "reason": "Semantic FAQ accepted before SOP arbitration",
+                "targetSopId": null,
+                "activeTaskId": null,
+                "matchedKeyword": null,
+                "candidates": [],
+                "candidateSources": [],
+                "policyGate": {
+                  "stage": "faq_semantic",
+                  "decisionAction": "ANSWER_FAQ",
+                  "steps": [
+                    {
+                      "id": "candidate_recall",
+                      "name": "candidate_recall",
+                      "label": "候选召回",
+                      "elapsedMs": 0,
+                      "input": {
+                        "message": "儿童 票 规则？",
+                        "enabledSopIds": [
+                          "refund_ticket"
+                        ]
+                      },
+                      "output": {
+                        "candidateCount": 0,
+                        "candidates": []
+                      },
+                      "usage": {
+                        "inputTokens": 0,
+                        "outputTokens": 0,
+                        "totalTokens": 0,
+                        "estimated": false
+                      }
+                    },
+                    {
+                      "id": "faq_semantic",
+                      "name": "faq_semantic",
+                      "label": "faq_semantic",
+                      "elapsedMs": 0,
+                      "input": {
+                        "message": "儿童 票 规则？",
+                        "activeTask": false
+                      },
+                      "output": {
+                        "decision": {
+                          "action": "ANSWER_FAQ",
+                          "reason": "Semantic FAQ accepted before SOP arbitration",
+                          "targetSopId": null,
+                          "activeTaskId": null,
+                          "matchedKeyword": null,
+                          "candidates": [],
+                          "candidateSources": [],
+                          "policyGate": null,
+                          "classifierRequest": null,
+                          "classifierResult": null,
+                          "finalDecision": {
+                            "action": "ANSWER_FAQ",
+                            "targetSopId": null,
+                            "activeTaskId": null,
+                            "sourceLayer": "faq_semantic",
+                            "reasonCode": "SEMANTIC_HIGH_CONFIDENCE"
+                          },
+                          "handoff": null,
+                          "faqAnswer": {
+                            "sourceLayer": "faq_semantic",
+                            "reasonCode": "SEMANTIC_HIGH_CONFIDENCE",
+                            "answer": "儿童票如未使用可按客票规则申请退票。",
+                            "confidence": 0.99,
+                            "margin": 1.15,
+                            "mutatesSopState": false,
+                            "evidence": {
+                              "faqId": 1,
+                              "question": "儿童 票 退款 规则",
+                              "answer": "儿童票如未使用可按客票规则申请退票。",
+                              "score": 1.15,
+                              "matchType": "VECTOR",
+                              "source": "structured_faq",
+                              "matchedTerms": [],
+                              "retrievalMode": "faq",
+                              "rerankUsed": true,
+                              "topCandidates": [
+                                {
+                                  "faqId": 1,
+                                  "question": "儿童 票 退款 规则",
+                                  "score": 1.15,
+                                  "matchType": "VECTOR",
+                                  "knowledgeBaseId": null
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "usage": {
+                        "inputTokens": 0,
+                        "outputTokens": 0,
+                        "totalTokens": 0,
+                        "estimated": false
+                      }
+                    }
+                  ],
+                  "elapsedMs": 1
+                },
+                "classifierRequest": null,
+                "classifierResult": null,
+                "finalDecision": {
+                  "action": "ANSWER_FAQ",
+                  "targetSopId": null,
+                  "activeTaskId": null,
+                  "sourceLayer": "faq_semantic",
+                  "reasonCode": "SEMANTIC_HIGH_CONFIDENCE"
+                },
+                "handoff": null,
+                "faqAnswer": {
+                  "sourceLayer": "faq_semantic",
+                  "reasonCode": "SEMANTIC_HIGH_CONFIDENCE",
+                  "answer": "儿童票如未使用可按客票规则申请退票。",
+                  "confidence": 0.99,
+                  "margin": 1.15,
+                  "mutatesSopState": false,
+                  "evidence": {
+                    "faqId": 1,
+                    "question": "儿童 票 退款 规则",
+                    "answer": "儿童票如未使用可按客票规则申请退票。",
+                    "score": 1.15,
+                    "matchType": "VECTOR",
+                    "source": "structured_faq",
+                    "matchedTerms": [],
+                    "retrievalMode": "faq",
+                    "rerankUsed": true,
+                    "topCandidates": [
+                      {
+                        "faqId": 1,
+                        "question": "儿童 票 退款 规则",
+                        "score": 1.15,
+                        "matchType": "VECTOR",
+                        "knowledgeBaseId": null
+                      }
+                    ]
+                  }
+                }
+              },
+              "createdAt": "2026-06-09T02:03:22.506423"
+            },
+            {
+              "id": 7,
+              "sessionId": 1,
+              "sequence": 7,
+              "eventType": "FAQ_ANSWERED",
+              "payload": {
+                "sourceLayer": "faq_semantic",
+                "reasonCode": "SEMANTIC_HIGH_CONFIDENCE",
+                "answer": "儿童票如未使用可按客票规则申请退票。",
+                "confidence": 0.99,
+                "margin": 1.15,
+                "mutatesSopState": false,
+                "evidence": {
+                  "faqId": 1,
+                  "question": "儿童 票 退款 规则",
+                  "answer": "儿童票如未使用可按客票规则申请退票。",
+                  "score": 1.15,
+                  "matchType": "VECTOR",
+                  "source": "structured_faq",
+                  "matchedTerms": [],
+                  "retrievalMode": "faq",
+                  "rerankUsed": true,
+                  "topCandidates": [
+                    {
+                      "faqId": 1,
+                      "question": "儿童 票 退款 规则",
+                      "score": 1.15,
+                      "matchType": "VECTOR",
+                      "knowledgeBaseId": null
+                    }
+                  ]
+                }
+              },
+              "createdAt": "2026-06-09T02:03:22.507000"
+            },
+            {
+              "id": 8,
+              "sessionId": 1,
+              "sequence": 8,
+              "eventType": "USER_MESSAGE",
+              "payload": {
+                "message": "儿童 票 规则？"
+              },
+              "createdAt": "2026-06-09T02:03:52.436532"
+            },
+            {
+              "id": 9,
+              "sessionId": 1,
+              "sequence": 9,
+              "eventType": "ROUTE_DECISION",
+              "payload": {
+                "action": "CLARIFY",
+                "reason": "Semantic FAQ candidates are too close to answer safely",
+                "targetSopId": null,
+                "activeTaskId": null,
+                "matchedKeyword": null,
+                "candidates": [],
+                "candidateSources": [],
+                "policyGate": {
+                  "stage": "faq_semantic",
+                  "decisionAction": "CLARIFY",
+                  "steps": [
+                    {
+                      "id": "candidate_recall",
+                      "name": "candidate_recall",
+                      "label": "候选召回",
+                      "elapsedMs": 0,
+                      "input": {
+                        "message": "儿童 票 规则？",
+                        "enabledSopIds": [
+                          "refund_ticket"
+                        ]
+                      },
+                      "output": {
+                        "candidateCount": 0,
+                        "candidates": []
+                      },
+                      "usage": {
+                        "inputTokens": 0,
+                        "outputTokens": 0,
+                        "totalTokens": 0,
+                        "estimated": false
+                      }
+                    },
+                    {
+                      "id": "faq_semantic",
+                      "name": "faq_semantic",
+                      "label": "faq_semantic",
+                      "elapsedMs": 0,
+                      "input": {
+                        "message": "儿童 票 规则？",
+                        "activeTask": false
+                      },
+                      "output": {
+                        "decision": {
+                          "action": "CLARIFY",
+                          "reason": "Semantic FAQ candidates are too close to answer safely",
+                          "targetSopId": null,
+                          "activeTaskId": null,
+                          "matchedKeyword": null,
+                          "candidates": [],
+                          "candidateSources": [],
+                          "policyGate": null,
+                          "classifierRequest": null,
+                          "classifierResult": null,
+                          "finalDecision": {
+                            "action": "CLARIFY",
+                            "targetSopId": null,
+                            "activeTaskId": null,
+                            "sourceLayer": "faq_semantic",
+                            "reasonCode": "SEMANTIC_LOW_MARGIN"
+                          },
+                          "handoff": null,
+                          "faqAnswer": {
+                            "sourceLayer": "faq_semantic",
+                            "reasonCode": "SEMANTIC_LOW_MARGIN",
+                            "answer": "儿童票如未使用可按客票规则申请退票。",
+                            "confidence": 0.99,
+                            "margin": 0,
+                            "mutatesSopState": false,
+                            "evidence": {
+                              "faqId": 1,
+                              "question": "儿童 票 退款 规则",
+                              "answer": "儿童票如未使用可按客票规则申请退票。",
+                              "score": 1.15,
+                              "matchType": "VECTOR",
+                              "source": "structured_faq",
+                              "matchedTerms": [],
+                              "retrievalMode": "faq",
+                              "rerankUsed": true,
+                              "topCandidates": [
+                                {
+                                  "faqId": 1,
+                                  "question": "儿童 票 退款 规则",
+                                  "score": 1.15,
+                                  "matchType": "VECTOR",
+                                  "knowledgeBaseId": null
+                                },
+                                {
+                                  "faqId": 2,
+                                  "question": "儿童 票 改签 规则",
+                                  "score": 1.15,
+                                  "matchType": "VECTOR",
+                                  "knowledgeBaseId": null
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "usage": {
+                        "inputTokens": 0,
+                        "outputTokens": 0,
+                        "totalTokens": 0,
+                        "estimated": false
+                      }
+                    }
+                  ],
+                  "elapsedMs": 2
+                },
+                "classifierRequest": null,
+                "classifierResult": null,
+                "finalDecision": {
+                  "action": "CLARIFY",
+                  "targetSopId": null,
+                  "activeTaskId": null,
+                  "sourceLayer": "faq_semantic",
+                  "reasonCode": "SEMANTIC_LOW_MARGIN"
+                },
+                "handoff": null,
+                "faqAnswer": {
+                  "sourceLayer": "faq_semantic",
+                  "reasonCode": "SEMANTIC_LOW_MARGIN",
+                  "answer": "儿童票如未使用可按客票规则申请退票。",
+                  "confidence": 0.99,
+                  "margin": 0,
+                  "mutatesSopState": false,
+                  "evidence": {
+                    "faqId": 1,
+                    "question": "儿童 票 退款 规则",
+                    "answer": "儿童票如未使用可按客票规则申请退票。",
+                    "score": 1.15,
+                    "matchType": "VECTOR",
+                    "source": "structured_faq",
+                    "matchedTerms": [],
+                    "retrievalMode": "faq",
+                    "rerankUsed": true,
+                    "topCandidates": [
+                      {
+                        "faqId": 1,
+                        "question": "儿童 票 退款 规则",
+                        "score": 1.15,
+                        "matchType": "VECTOR",
+                        "knowledgeBaseId": null
+                      },
+                      {
+                        "faqId": 2,
+                        "question": "儿童 票 改签 规则",
+                        "score": 1.15,
+                        "matchType": "VECTOR",
+                        "knowledgeBaseId": null
+                      }
+                    ]
+                  }
+                }
+              },
+              "createdAt": "2026-06-09T02:03:52.441397"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "message": "儿童 票 规则？",
+      "key": "uat-037-low-margin-2-extra-snapshot",
+      "responseCode": 200,
+      "action": "CLARIFY",
+      "finalDecision": {
+        "action": "CLARIFY",
+        "targetSopId": null,
+        "activeTaskId": null,
+        "sourceLayer": "faq_semantic",
+        "reasonCode": "SEMANTIC_LOW_MARGIN"
+      },
+      "faqAnswer": {
+        "sourceLayer": "faq_semantic",
+        "reasonCode": "SEMANTIC_LOW_MARGIN",
+        "answer": "儿童票如未使用可按客票规则申请退票。",
+        "confidence": 0.99,
+        "margin": 0,
+        "mutatesSopState": false,
+        "evidence": {
+          "faqId": 1,
+          "question": "儿童 票 退款 规则",
+          "answer": "儿童票如未使用可按客票规则申请退票。",
+          "score": 1.15,
+          "matchType": "VECTOR",
+          "source": "structured_faq",
+          "matchedTerms": [],
+          "retrievalMode": "faq",
+          "rerankUsed": true,
+          "topCandidates": [
+            {
+              "faqId": 1,
+              "question": "儿童 票 退款 规则",
+              "score": 1.15,
+              "matchType": "VECTOR",
+              "knowledgeBaseId": null
+            },
+            {
+              "faqId": 2,
+              "question": "儿童 票 改签 规则",
+              "score": 1.15,
+              "matchType": "VECTOR",
+              "knowledgeBaseId": null
+            }
+          ]
+        }
+      },
+      "activeTask": null,
+      "eventTypes": [
+        "SESSION_CREATED",
+        "USER_MESSAGE",
+        "ROUTE_DECISION",
+        "FAQ_ANSWERED",
+        "USER_MESSAGE",
+        "ROUTE_DECISION",
+        "FAQ_ANSWERED",
+        "USER_MESSAGE",
+        "ROUTE_DECISION"
+      ],
+      "raw": {
+        "code": 200,
+        "message": "success",
+        "data": {
+          "reply": "请问您想办理订票、票价、团队票、增值服务、退票、改签、资料修改、发票、行李、值机、航班动态、特殊协助、宠物乘机、异常航班还是会员里程？",
+          "routeDecision": {
+            "action": "CLARIFY",
+            "reason": "Semantic FAQ candidates are too close to answer safely",
+            "targetSopId": null,
+            "activeTaskId": null,
+            "matchedKeyword": null,
+            "candidates": [],
+            "candidateSources": [],
+            "policyGate": {
+              "stage": "faq_semantic",
+              "decisionAction": "CLARIFY",
+              "steps": [
+                {
+                  "id": "candidate_recall",
+                  "name": "candidate_recall",
+                  "label": "候选召回",
+                  "elapsedMs": 0,
+                  "input": {
+                    "message": "儿童 票 规则？",
+                    "enabledSopIds": [
+                      "refund_ticket"
+                    ]
+                  },
+                  "output": {
+                    "candidateCount": 0,
+                    "candidates": []
+                  },
+                  "usage": {
+                    "inputTokens": 0,
+                    "outputTokens": 0,
+                    "totalTokens": 0,
+                    "estimated": false
+                  }
+                },
+                {
+                  "id": "faq_semantic",
+                  "name": "faq_semantic",
+                  "label": "faq_semantic",
+                  "elapsedMs": 0,
+                  "input": {
+                    "message": "儿童 票 规则？",
+                    "activeTask": false
+                  },
+                  "output": {
+                    "decision": {
+                      "action": "CLARIFY",
+                      "reason": "Semantic FAQ candidates are too close to answer safely",
+                      "targetSopId": null,
+                      "activeTaskId": null,
+                      "matchedKeyword": null,
+                      "candidates": [],
+                      "candidateSources": [],
+                      "policyGate": null,
+                      "classifierRequest": null,
+                      "classifierResult": null,
+                      "finalDecision": {
+                        "action": "CLARIFY",
+                        "targetSopId": null,
+                        "activeTaskId": null,
+                        "sourceLayer": "faq_semantic",
+                        "reasonCode": "SEMANTIC_LOW_MARGIN"
+                      },
+                      "handoff": null,
+                      "faqAnswer": {
+                        "sourceLayer": "faq_semantic",
+                        "reasonCode": "SEMANTIC_LOW_MARGIN",
+                        "answer": "儿童票如未使用可按客票规则申请退票。",
+                        "confidence": 0.99,
+                        "margin": 0,
+                        "mutatesSopState": false,
+                        "evidence": {
+                          "faqId": 1,
+                          "question": "儿童 票 退款 规则",
+                          "answer": "儿童票如未使用可按客票规则申请退票。",
+                          "score": 1.15,
+                          "matchType": "VECTOR",
+                          "source": "structured_faq",
+                          "matchedTerms": [],
+                          "retrievalMode": "faq",
+                          "rerankUsed": true,
+                          "topCandidates": [
+                            {
+                              "faqId": 1,
+                              "question": "儿童 票 退款 规则",
+                              "score": 1.15,
+                              "matchType": "VECTOR",
+                              "knowledgeBaseId": null
+                            },
+                            {
+                              "faqId": 2,
+                              "question": "儿童 票 改签 规则",
+                              "score": 1.15,
+                              "matchType": "VECTOR",
+                              "knowledgeBaseId": null
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "usage": {
+                    "inputTokens": 0,
+                    "outputTokens": 0,
+                    "totalTokens": 0,
+                    "estimated": false
+                  }
+                }
+              ],
+              "elapsedMs": 2
+            },
+            "classifierRequest": null,
+            "classifierResult": null,
+            "handoff": null,
+            "faqAnswer": {
+              "sourceLayer": "faq_semantic",
+              "reasonCode": "SEMANTIC_LOW_MARGIN",
+              "answer": "儿童票如未使用可按客票规则申请退票。",
+              "confidence": 0.99,
+              "margin": 0,
+              "mutatesSopState": false,
+              "evidence": {
+                "faqId": 1,
+                "question": "儿童 票 退款 规则",
+                "answer": "儿童票如未使用可按客票规则申请退票。",
+                "score": 1.15,
+                "matchType": "VECTOR",
+                "source": "structured_faq",
+                "matchedTerms": [],
+                "retrievalMode": "faq",
+                "rerankUsed": true,
+                "topCandidates": [
+                  {
+                    "faqId": 1,
+                    "question": "儿童 票 退款 规则",
+                    "score": 1.15,
+                    "matchType": "VECTOR",
+                    "knowledgeBaseId": null
+                  },
+                  {
+                    "faqId": 2,
+                    "question": "儿童 票 改签 规则",
+                    "score": 1.15,
+                    "matchType": "VECTOR",
+                    "knowledgeBaseId": null
+                  }
+                ]
+              }
+            },
+            "finalDecision": {
+              "action": "CLARIFY",
+              "targetSopId": null,
+              "activeTaskId": null,
+              "sourceLayer": "faq_semantic",
+              "reasonCode": "SEMANTIC_LOW_MARGIN"
+            }
+          },
+          "activeTask": null,
+          "suspendedTasks": [],
+          "resumeOffer": null,
+          "events": [
+            {
+              "id": 1,
+              "sessionId": 1,
+              "sequence": 1,
+              "eventType": "SESSION_CREATED",
+              "payload": {},
+              "createdAt": "2026-06-09T02:03:14.630254"
+            },
+            {
+              "id": 2,
+              "sessionId": 1,
+              "sequence": 2,
+              "eventType": "USER_MESSAGE",
+              "payload": {
+                "message": "儿童 票 怎么 返钱 规则？"
+              },
+              "createdAt": "2026-06-09T02:03:20.557833"
+            },
+            {
+              "id": 3,
+              "sessionId": 1,
+              "sequence": 3,
+              "eventType": "ROUTE_DECISION",
+              "payload": {
+                "action": "ANSWER_FAQ",
+                "reason": "Semantic FAQ accepted before SOP arbitration",
+                "targetSopId": null,
+                "activeTaskId": null,
+                "matchedKeyword": null,
+                "candidates": [],
+                "candidateSources": [],
+                "policyGate": {
+                  "stage": "faq_semantic",
+                  "decisionAction": "ANSWER_FAQ",
+                  "steps": [
+                    {
+                      "id": "candidate_recall",
+                      "name": "candidate_recall",
+                      "label": "候选召回",
+                      "elapsedMs": 0,
+                      "input": {
+                        "message": "儿童 票 怎么 返钱 规则？",
+                        "enabledSopIds": [
+                          "refund_ticket"
+                        ]
+                      },
+                      "output": {
+                        "candidateCount": 0,
+                        "candidates": []
+                      },
+                      "usage": {
+                        "inputTokens": 0,
+                        "outputTokens": 0,
+                        "totalTokens": 0,
+                        "estimated": false
+                      }
+                    },
+                    {
+                      "id": "faq_semantic",
+                      "name": "faq_semantic",
+                      "label": "faq_semantic",
+                      "elapsedMs": 0,
+                      "input": {
+                        "message": "儿童 票 怎么 返钱 规则？",
+                        "activeTask": false
+                      },
+                      "output": {
+                        "decision": {
+                          "action": "ANSWER_FAQ",
+                          "reason": "Semantic FAQ accepted before SOP arbitration",
+                          "targetSopId": null,
+                          "activeTaskId": null,
+                          "matchedKeyword": null,
+                          "candidates": [],
+                          "candidateSources": [],
+                          "policyGate": null,
+                          "classifierRequest": null,
+                          "classifierResult": null,
+                          "finalDecision": {
+                            "action": "ANSWER_FAQ",
+                            "targetSopId": null,
+                            "activeTaskId": null,
+                            "sourceLayer": "faq_semantic",
+                            "reasonCode": "SEMANTIC_HIGH_CONFIDENCE"
+                          },
+                          "handoff": null,
+                          "faqAnswer": {
+                            "sourceLayer": "faq_semantic",
+                            "reasonCode": "SEMANTIC_HIGH_CONFIDENCE",
+                            "answer": "儿童票如未使用可按客票规则申请退票。",
+                            "confidence": 0.99,
+                            "margin": 1.1,
+                            "mutatesSopState": false,
+                            "evidence": {
+                              "faqId": 1,
+                              "question": "儿童 票 退款 规则",
+                              "answer": "儿童票如未使用可按客票规则申请退票。",
+                              "score": 1.1,
+                              "matchType": "VECTOR",
+                              "source": "structured_faq",
+                              "matchedTerms": [],
+                              "retrievalMode": "faq",
+                              "rerankUsed": true,
+                              "topCandidates": [
+                                {
+                                  "faqId": 1,
+                                  "question": "儿童 票 退款 规则",
+                                  "score": 1.1,
+                                  "matchType": "VECTOR",
+                                  "knowledgeBaseId": null
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "usage": {
+                        "inputTokens": 0,
+                        "outputTokens": 0,
+                        "totalTokens": 0,
+                        "estimated": false
+                      }
+                    }
+                  ],
+                  "elapsedMs": 4
+                },
+                "classifierRequest": null,
+                "classifierResult": null,
+                "finalDecision": {
+                  "action": "ANSWER_FAQ",
+                  "targetSopId": null,
+                  "activeTaskId": null,
+                  "sourceLayer": "faq_semantic",
+                  "reasonCode": "SEMANTIC_HIGH_CONFIDENCE"
+                },
+                "handoff": null,
+                "faqAnswer": {
+                  "sourceLayer": "faq_semantic",
+                  "reasonCode": "SEMANTIC_HIGH_CONFIDENCE",
+                  "answer": "儿童票如未使用可按客票规则申请退票。",
+                  "confidence": 0.99,
+                  "margin": 1.1,
+                  "mutatesSopState": false,
+                  "evidence": {
+                    "faqId": 1,
+                    "question": "儿童 票 退款 规则",
+                    "answer": "儿童票如未使用可按客票规则申请退票。",
+                    "score": 1.1,
+                    "matchType": "VECTOR",
+                    "source": "structured_faq",
+                    "matchedTerms": [],
+                    "retrievalMode": "faq",
+                    "rerankUsed": true,
+                    "topCandidates": [
+                      {
+                        "faqId": 1,
+                        "question": "儿童 票 退款 规则",
+                        "score": 1.1,
+                        "matchType": "VECTOR",
+                        "knowledgeBaseId": null
+                      }
+                    ]
+                  }
+                }
+              },
+              "createdAt": "2026-06-09T02:03:20.564413"
+            },
+            {
+              "id": 4,
+              "sessionId": 1,
+              "sequence": 4,
+              "eventType": "FAQ_ANSWERED",
+              "payload": {
+                "sourceLayer": "faq_semantic",
+                "reasonCode": "SEMANTIC_HIGH_CONFIDENCE",
+                "answer": "儿童票如未使用可按客票规则申请退票。",
+                "confidence": 0.99,
+                "margin": 1.1,
+                "mutatesSopState": false,
+                "evidence": {
+                  "faqId": 1,
+                  "question": "儿童 票 退款 规则",
+                  "answer": "儿童票如未使用可按客票规则申请退票。",
+                  "score": 1.1,
+                  "matchType": "VECTOR",
+                  "source": "structured_faq",
+                  "matchedTerms": [],
+                  "retrievalMode": "faq",
+                  "rerankUsed": true,
+                  "topCandidates": [
+                    {
+                      "faqId": 1,
+                      "question": "儿童 票 退款 规则",
+                      "score": 1.1,
+                      "matchType": "VECTOR",
+                      "knowledgeBaseId": null
+                    }
+                  ]
+                }
+              },
+              "createdAt": "2026-06-09T02:03:20.564937"
+            },
+            {
+              "id": 5,
+              "sessionId": 1,
+              "sequence": 5,
+              "eventType": "USER_MESSAGE",
+              "payload": {
+                "message": "儿童 票 规则？"
+              },
+              "createdAt": "2026-06-09T02:03:22.501337"
+            },
+            {
+              "id": 6,
+              "sessionId": 1,
+              "sequence": 6,
+              "eventType": "ROUTE_DECISION",
+              "payload": {
+                "action": "ANSWER_FAQ",
+                "reason": "Semantic FAQ accepted before SOP arbitration",
+                "targetSopId": null,
+                "activeTaskId": null,
+                "matchedKeyword": null,
+                "candidates": [],
+                "candidateSources": [],
+                "policyGate": {
+                  "stage": "faq_semantic",
+                  "decisionAction": "ANSWER_FAQ",
+                  "steps": [
+                    {
+                      "id": "candidate_recall",
+                      "name": "candidate_recall",
+                      "label": "候选召回",
+                      "elapsedMs": 0,
+                      "input": {
+                        "message": "儿童 票 规则？",
+                        "enabledSopIds": [
+                          "refund_ticket"
+                        ]
+                      },
+                      "output": {
+                        "candidateCount": 0,
+                        "candidates": []
+                      },
+                      "usage": {
+                        "inputTokens": 0,
+                        "outputTokens": 0,
+                        "totalTokens": 0,
+                        "estimated": false
+                      }
+                    },
+                    {
+                      "id": "faq_semantic",
+                      "name": "faq_semantic",
+                      "label": "faq_semantic",
+                      "elapsedMs": 0,
+                      "input": {
+                        "message": "儿童 票 规则？",
+                        "activeTask": false
+                      },
+                      "output": {
+                        "decision": {
+                          "action": "ANSWER_FAQ",
+                          "reason": "Semantic FAQ accepted before SOP arbitration",
+                          "targetSopId": null,
+                          "activeTaskId": null,
+                          "matchedKeyword": null,
+                          "candidates": [],
+                          "candidateSources": [],
+                          "policyGate": null,
+                          "classifierRequest": null,
+                          "classifierResult": null,
+                          "finalDecision": {
+                            "action": "ANSWER_FAQ",
+                            "targetSopId": null,
+                            "activeTaskId": null,
+                            "sourceLayer": "faq_semantic",
+                            "reasonCode": "SEMANTIC_HIGH_CONFIDENCE"
+                          },
+                          "handoff": null,
+                          "faqAnswer": {
+                            "sourceLayer": "faq_semantic",
+                            "reasonCode": "SEMANTIC_HIGH_CONFIDENCE",
+                            "answer": "儿童票如未使用可按客票规则申请退票。",
+                            "confidence": 0.99,
+                            "margin": 1.15,
+                            "mutatesSopState": false,
+                            "evidence": {
+                              "faqId": 1,
+                              "question": "儿童 票 退款 规则",
+                              "answer": "儿童票如未使用可按客票规则申请退票。",
+                              "score": 1.15,
+                              "matchType": "VECTOR",
+                              "source": "structured_faq",
+                              "matchedTerms": [],
+                              "retrievalMode": "faq",
+                              "rerankUsed": true,
+                              "topCandidates": [
+                                {
+                                  "faqId": 1,
+                                  "question": "儿童 票 退款 规则",
+                                  "score": 1.15,
+                                  "matchType": "VECTOR",
+                                  "knowledgeBaseId": null
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "usage": {
+                        "inputTokens": 0,
+                        "outputTokens": 0,
+                        "totalTokens": 0,
+                        "estimated": false
+                      }
+                    }
+                  ],
+                  "elapsedMs": 1
+                },
+                "classifierRequest": null,
+                "classifierResult": null,
+                "finalDecision": {
+                  "action": "ANSWER_FAQ",
+                  "targetSopId": null,
+                  "activeTaskId": null,
+                  "sourceLayer": "faq_semantic",
+                  "reasonCode": "SEMANTIC_HIGH_CONFIDENCE"
+                },
+                "handoff": null,
+                "faqAnswer": {
+                  "sourceLayer": "faq_semantic",
+                  "reasonCode": "SEMANTIC_HIGH_CONFIDENCE",
+                  "answer": "儿童票如未使用可按客票规则申请退票。",
+                  "confidence": 0.99,
+                  "margin": 1.15,
+                  "mutatesSopState": false,
+                  "evidence": {
+                    "faqId": 1,
+                    "question": "儿童 票 退款 规则",
+                    "answer": "儿童票如未使用可按客票规则申请退票。",
+                    "score": 1.15,
+                    "matchType": "VECTOR",
+                    "source": "structured_faq",
+                    "matchedTerms": [],
+                    "retrievalMode": "faq",
+                    "rerankUsed": true,
+                    "topCandidates": [
+                      {
+                        "faqId": 1,
+                        "question": "儿童 票 退款 规则",
+                        "score": 1.15,
+                        "matchType": "VECTOR",
+                        "knowledgeBaseId": null
+                      }
+                    ]
+                  }
+                }
+              },
+              "createdAt": "2026-06-09T02:03:22.506423"
+            },
+            {
+              "id": 7,
+              "sessionId": 1,
+              "sequence": 7,
+              "eventType": "FAQ_ANSWERED",
+              "payload": {
+                "sourceLayer": "faq_semantic",
+                "reasonCode": "SEMANTIC_HIGH_CONFIDENCE",
+                "answer": "儿童票如未使用可按客票规则申请退票。",
+                "confidence": 0.99,
+                "margin": 1.15,
+                "mutatesSopState": false,
+                "evidence": {
+                  "faqId": 1,
+                  "question": "儿童 票 退款 规则",
+                  "answer": "儿童票如未使用可按客票规则申请退票。",
+                  "score": 1.15,
+                  "matchType": "VECTOR",
+                  "source": "structured_faq",
+                  "matchedTerms": [],
+                  "retrievalMode": "faq",
+                  "rerankUsed": true,
+                  "topCandidates": [
+                    {
+                      "faqId": 1,
+                      "question": "儿童 票 退款 规则",
+                      "score": 1.15,
+                      "matchType": "VECTOR",
+                      "knowledgeBaseId": null
+                    }
+                  ]
+                }
+              },
+              "createdAt": "2026-06-09T02:03:22.507000"
+            },
+            {
+              "id": 8,
+              "sessionId": 1,
+              "sequence": 8,
+              "eventType": "USER_MESSAGE",
+              "payload": {
+                "message": "儿童 票 规则？"
+              },
+              "createdAt": "2026-06-09T02:03:52.436532"
+            },
+            {
+              "id": 9,
+              "sessionId": 1,
+              "sequence": 9,
+              "eventType": "ROUTE_DECISION",
+              "payload": {
+                "action": "CLARIFY",
+                "reason": "Semantic FAQ candidates are too close to answer safely",
+                "targetSopId": null,
+                "activeTaskId": null,
+                "matchedKeyword": null,
+                "candidates": [],
+                "candidateSources": [],
+                "policyGate": {
+                  "stage": "faq_semantic",
+                  "decisionAction": "CLARIFY",
+                  "steps": [
+                    {
+                      "id": "candidate_recall",
+                      "name": "candidate_recall",
+                      "label": "候选召回",
+                      "elapsedMs": 0,
+                      "input": {
+                        "message": "儿童 票 规则？",
+                        "enabledSopIds": [
+                          "refund_ticket"
+                        ]
+                      },
+                      "output": {
+                        "candidateCount": 0,
+                        "candidates": []
+                      },
+                      "usage": {
+                        "inputTokens": 0,
+                        "outputTokens": 0,
+                        "totalTokens": 0,
+                        "estimated": false
+                      }
+                    },
+                    {
+                      "id": "faq_semantic",
+                      "name": "faq_semantic",
+                      "label": "faq_semantic",
+                      "elapsedMs": 0,
+                      "input": {
+                        "message": "儿童 票 规则？",
+                        "activeTask": false
+                      },
+                      "output": {
+                        "decision": {
+                          "action": "CLARIFY",
+                          "reason": "Semantic FAQ candidates are too close to answer safely",
+                          "targetSopId": null,
+                          "activeTaskId": null,
+                          "matchedKeyword": null,
+                          "candidates": [],
+                          "candidateSources": [],
+                          "policyGate": null,
+                          "classifierRequest": null,
+                          "classifierResult": null,
+                          "finalDecision": {
+                            "action": "CLARIFY",
+                            "targetSopId": null,
+                            "activeTaskId": null,
+                            "sourceLayer": "faq_semantic",
+                            "reasonCode": "SEMANTIC_LOW_MARGIN"
+                          },
+                          "handoff": null,
+                          "faqAnswer": {
+                            "sourceLayer": "faq_semantic",
+                            "reasonCode": "SEMANTIC_LOW_MARGIN",
+                            "answer": "儿童票如未使用可按客票规则申请退票。",
+                            "confidence": 0.99,
+                            "margin": 0,
+                            "mutatesSopState": false,
+                            "evidence": {
+                              "faqId": 1,
+                              "question": "儿童 票 退款 规则",
+                              "answer": "儿童票如未使用可按客票规则申请退票。",
+                              "score": 1.15,
+                              "matchType": "VECTOR",
+                              "source": "structured_faq",
+                              "matchedTerms": [],
+                              "retrievalMode": "faq",
+                              "rerankUsed": true,
+                              "topCandidates": [
+                                {
+                                  "faqId": 1,
+                                  "question": "儿童 票 退款 规则",
+                                  "score": 1.15,
+                                  "matchType": "VECTOR",
+                                  "knowledgeBaseId": null
+                                },
+                                {
+                                  "faqId": 2,
+                                  "question": "儿童 票 改签 规则",
+                                  "score": 1.15,
+                                  "matchType": "VECTOR",
+                                  "knowledgeBaseId": null
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "usage": {
+                        "inputTokens": 0,
+                        "outputTokens": 0,
+                        "totalTokens": 0,
+                        "estimated": false
+                      }
+                    }
+                  ],
+                  "elapsedMs": 2
+                },
+                "classifierRequest": null,
+                "classifierResult": null,
+                "finalDecision": {
+                  "action": "CLARIFY",
+                  "targetSopId": null,
+                  "activeTaskId": null,
+                  "sourceLayer": "faq_semantic",
+                  "reasonCode": "SEMANTIC_LOW_MARGIN"
+                },
+                "handoff": null,
+                "faqAnswer": {
+                  "sourceLayer": "faq_semantic",
+                  "reasonCode": "SEMANTIC_LOW_MARGIN",
+                  "answer": "儿童票如未使用可按客票规则申请退票。",
+                  "confidence": 0.99,
+                  "margin": 0,
+                  "mutatesSopState": false,
+                  "evidence": {
+                    "faqId": 1,
+                    "question": "儿童 票 退款 规则",
+                    "answer": "儿童票如未使用可按客票规则申请退票。",
+                    "score": 1.15,
+                    "matchType": "VECTOR",
+                    "source": "structured_faq",
+                    "matchedTerms": [],
+                    "retrievalMode": "faq",
+                    "rerankUsed": true,
+                    "topCandidates": [
+                      {
+                        "faqId": 1,
+                        "question": "儿童 票 退款 规则",
+                        "score": 1.15,
+                        "matchType": "VECTOR",
+                        "knowledgeBaseId": null
+                      },
+                      {
+                        "faqId": 2,
+                        "question": "儿童 票 改签 规则",
+                        "score": 1.15,
+                        "matchType": "VECTOR",
+                        "knowledgeBaseId": null
+                      }
+                    ]
+                  }
+                }
+              },
+              "createdAt": "2026-06-09T02:03:52.441397"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

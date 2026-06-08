@@ -1,0 +1,23 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/vincento/work/develop/hify
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1 item
+
+tests/unit/runtime_lab/test_faq_semantic_answer_contract.py F            [100%]
+
+=================================== FAILURES ===================================
+_ FaqSemanticAnswerContractTest.test_semantic_gate_uses_faq_retrieval_and_emits_rerank_evidence _
+
+self = <test_faq_semantic_answer_contract.FaqSemanticAnswerContractTest testMethod=test_semantic_gate_uses_faq_retrieval_and_emits_rerank_evidence>
+
+    def test_semantic_gate_uses_faq_retrieval_and_emits_rerank_evidence(self) -> None:
+>       from app.modules.runtime_lab.domain.faq_gate import FaqSemanticAnswerGate
+E       ImportError: cannot import name 'FaqSemanticAnswerGate' from 'app.modules.runtime_lab.domain.faq_gate' (/Users/vincento/work/develop/hify/app/modules/runtime_lab/domain/faq_gate.py)
+
+tests/unit/runtime_lab/test_faq_semantic_answer_contract.py:6: ImportError
+=========================== short test summary info ============================
+FAILED tests/unit/runtime_lab/test_faq_semantic_answer_contract.py::FaqSemanticAnswerContractTest::test_semantic_gate_uses_faq_retrieval_and_emits_rerank_evidence
+============================== 1 failed in 0.04s ===============================

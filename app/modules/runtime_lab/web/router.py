@@ -17,7 +17,7 @@ from app.modules.chat.domain.llm_request import (
 from app.modules.runtime_lab.domain.classifier import LlmConstrainedIntentClassifier
 from app.modules.knowledge.api.facade import KnowledgeFacade
 from app.modules.runtime_lab.domain.chatflow_adapter import ChatflowSopRuntimeAdapter
-from app.modules.runtime_lab.domain.faq_gate import FaqExactAnswerGate
+from app.modules.runtime_lab.domain.faq_gate import FaqExactAnswerGate, FaqSemanticAnswerGate
 from app.modules.runtime_lab.domain.payload import format_event, format_session, format_task
 from app.modules.runtime_lab.domain.service import RuntimeLabService
 from app.modules.runtime_lab.domain.sop_adapter import FakeSopRuntimeAdapter
@@ -35,8 +35,14 @@ def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeL
     bindings = _runtime_lab_chatflow_bindings(settings.runtime_lab_sop_chatflow_ids)
     classifier = _runtime_lab_intent_classifier(settings)
     faq_answer_gate = _runtime_lab_faq_answer_gate(settings, session)
+    faq_semantic_gate = _runtime_lab_faq_semantic_gate(settings, session)
     if not bindings:
-        return RuntimeLabService(RuntimeLabRepository(session), classifier=classifier, faq_answer_gate=faq_answer_gate)
+        return RuntimeLabService(
+            RuntimeLabRepository(session),
+            classifier=classifier,
+            faq_answer_gate=faq_answer_gate,
+            faq_semantic_gate=faq_semantic_gate,
+        )
     workflow_service = WorkflowService(
         WorkflowRepository(session),
         flow_type="CHATFLOW",
@@ -52,6 +58,7 @@ def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeL
         adapter=adapter,
         classifier=classifier,
         faq_answer_gate=faq_answer_gate,
+        faq_semantic_gate=faq_semantic_gate,
     )
 
 
@@ -118,6 +125,13 @@ def _runtime_lab_faq_answer_gate(settings: Settings, session: Session) -> FaqExa
     if not knowledge_base_ids:
         return None
     return FaqExactAnswerGate(KnowledgeFacade(session), knowledge_base_ids=knowledge_base_ids)
+
+
+def _runtime_lab_faq_semantic_gate(settings: Settings, session: Session) -> FaqSemanticAnswerGate | None:
+    knowledge_base_ids = _runtime_lab_id_list(settings.runtime_lab_faq_knowledge_base_ids)
+    if not knowledge_base_ids:
+        return None
+    return FaqSemanticAnswerGate(KnowledgeFacade(session), knowledge_base_ids=knowledge_base_ids)
 
 
 def _runtime_lab_id_list(raw: str | None) -> list[int]:

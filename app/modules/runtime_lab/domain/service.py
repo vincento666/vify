@@ -8,7 +8,7 @@ from app.core.errors import BizError, ErrorCode
 from app.modules.runtime_lab.domain.candidates import RouteCandidate, select_top_candidates
 from app.modules.runtime_lab.domain.classifier import ClassifierInput, ClassifierResult, FakeConstrainedIntentClassifier
 from app.modules.runtime_lab.domain.explicit_signals import ExplicitSignalDetector
-from app.modules.runtime_lab.domain.faq_gate import FaqAnswerGate
+from app.modules.runtime_lab.domain.faq_gate import FaqAnswerGate, FaqSemanticAnswerGate
 from app.modules.runtime_lab.domain.payload import format_turn
 from app.modules.runtime_lab.domain.policy import PolicyGate
 from app.modules.runtime_lab.domain.recall import MockSemanticCandidateRecall
@@ -55,6 +55,7 @@ class RuntimeLabService:
         classifier: Any | None = None,
         handoff_service: HandoffRuntimeService | None = None,
         faq_answer_gate: FaqAnswerGate | None = None,
+        faq_semantic_gate: FaqSemanticAnswerGate | None = None,
     ) -> None:
         self._repository = repository
         self._manifests = mock_sop_manifests()
@@ -66,6 +67,7 @@ class RuntimeLabService:
         self._policy_gate = PolicyGate(self._adapter)
         self._handoff_service = handoff_service
         self._faq_answer_gate = faq_answer_gate
+        self._faq_semantic_gate = faq_semantic_gate
 
     def create_session(self) -> dict[str, Any]:
         runtime_session = self._repository.create_session()
@@ -195,6 +197,9 @@ class RuntimeLabService:
         faq_decision = self._faq_answer_decision(message, active_task, suspended_tasks)
         if faq_decision is not None:
             return _with_evidence(faq_decision, candidates, "faq_exact")
+        semantic_faq_decision = self._faq_semantic_decision(message, active_task, suspended_tasks)
+        if semantic_faq_decision is not None:
+            return _with_evidence(semantic_faq_decision, candidates, "faq_semantic")
         if not candidates:
             if enabled_sop_ids is not None:
                 return _with_evidence(
@@ -277,6 +282,20 @@ class RuntimeLabService:
                 faq_answer=faq_answer,
             )
         return proposal.to_route_decision()
+
+    def _faq_semantic_decision(
+        self,
+        message: str,
+        active_task: dict[str, Any] | None,
+        suspended_tasks: list[dict[str, Any]],
+    ) -> RouteDecision | None:
+        if self._faq_semantic_gate is None:
+            return None
+        return self._faq_semantic_gate.decide(
+            message,
+            active_task=active_task,
+            suspended_tasks=suspended_tasks,
+        )
 
     def _normalize_enabled_sop_ids(self, enabled_sop_ids: Sequence[str] | None) -> frozenset[str] | None:
         if enabled_sop_ids is None:

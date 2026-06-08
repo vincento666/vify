@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_session
 from app.main import app
-from app.modules.runtime_lab.domain.faq_gate import FaqAnswerEvidence, FaqAnswerProposal
+from app.modules.runtime_lab.domain.faq_gate import FaqAnswerEvidence, FaqAnswerProposal, FaqSemanticAnswerGate
 from app.modules.runtime_lab.domain.service import RuntimeLabService
 from app.modules.runtime_lab.infra.repository import RuntimeLabRepository
 from app.modules.runtime_lab.web.router import get_runtime_lab_service
@@ -89,6 +89,23 @@ class RuntimeLabApiE2ETest(unittest.TestCase):
         self.assertEqual(active_faq["activeTask"]["checkpointId"], started["activeTask"]["checkpointId"])
         self.assertIn("FAQ_ANSWERED", [event["eventType"] for event in events])
 
+    def test_semantic_faq_answers_and_low_margin_clarifies(self) -> None:
+        app.dependency_overrides[get_runtime_lab_service] = _semantic_faq_runtime_service
+        try:
+            with TestClient(app) as client:
+                session_id = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
+
+                semantic = _message(client, session_id, "儿童机票能不能返钱？")
+                low_margin = _message(client, session_id, "儿童机票规则怎么算？")
+        finally:
+            app.dependency_overrides.pop(get_runtime_lab_service, None)
+
+        self.assertEqual(semantic["routeDecision"]["action"], "ANSWER_FAQ")
+        self.assertEqual(semantic["routeDecision"]["faqAnswer"]["sourceLayer"], "faq_semantic")
+        self.assertTrue(semantic["routeDecision"]["faqAnswer"]["evidence"]["rerankUsed"])
+        self.assertEqual(low_margin["routeDecision"]["action"], "CLARIFY")
+        self.assertEqual(low_margin["routeDecision"]["faqAnswer"]["reasonCode"], "SEMANTIC_LOW_MARGIN")
+
 
 def _message(client: TestClient, session_id: int, message: str) -> dict:
     response = client.post(
@@ -105,6 +122,13 @@ def _fake_runtime_service(session: Session = Depends(get_session)) -> RuntimeLab
 
 def _faq_runtime_service(session: Session = Depends(get_session)) -> RuntimeLabService:
     return RuntimeLabService(RuntimeLabRepository(session), faq_answer_gate=_StaticFaqGate())
+
+
+def _semantic_faq_runtime_service(session: Session = Depends(get_session)) -> RuntimeLabService:
+    return RuntimeLabService(
+        RuntimeLabRepository(session),
+        faq_semantic_gate=FaqSemanticAnswerGate(_SemanticFaqFacade(), knowledge_base_ids=[33], rerank=True),
+    )
 
 
 class _StaticFaqGate:
@@ -132,3 +156,38 @@ class _StaticFaqGate:
                 matched_terms=("儿童票可以退吗",),
             ),
         )
+
+
+class _SemanticFaqFacade:
+    def search_context(
+        self,
+        knowledge_base_id: int,
+        query: str,
+        top_k: int,
+        retrieval_mode: str | None = None,
+        score_threshold: float | None = None,
+        rerank: bool | None = None,
+    ) -> list["_SemanticFaqHit"]:
+        del knowledge_base_id, top_k, retrieval_mode, score_threshold, rerank
+        if query == "儿童机票能不能返钱？":
+            return [
+                _SemanticFaqHit(37, "儿童票退票规则", "儿童票如未使用可按客票规则申请退票。", 0.93),
+                _SemanticFaqHit(38, "婴儿票退票规则", "婴儿票退票以客票规则为准。", 0.70),
+            ]
+        if query == "儿童机票规则怎么算？":
+            return [
+                _SemanticFaqHit(37, "儿童票退票规则", "儿童票如未使用可按客票规则申请退票。", 0.88),
+                _SemanticFaqHit(39, "儿童票改签规则", "儿童票改签按客票规则办理。", 0.84),
+            ]
+        return []
+
+
+class _SemanticFaqHit:
+    source_type = "FAQ"
+    match_type = "VECTOR"
+
+    def __init__(self, faq_id: int, title: str, answer: str, score: float) -> None:
+        self.faq_id = faq_id
+        self.title = title
+        self.answer = answer
+        self.score = score

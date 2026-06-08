@@ -1,0 +1,1408 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/vincento/work/develop/hify
+configfile: pyproject.toml
+testpaths: tests
+plugins: asyncio-1.4.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 478 items
+
+tests/acceptance/test_openrouter_llm_acceptance.py s                     [  0%]
+tests/acceptance/test_openrouter_product_chat_paths.py s                 [  0%]
+tests/acceptance/test_runtime_lab_live_chatflow_llm_sop.py s             [  0%]
+tests/acceptance/test_runtime_lab_live_openrouter_full_chain.py s        [  0%]
+tests/acceptance/test_runtime_lab_live_qwen_core_airline_scenarios.py Fs [  1%]
+                                                                         [  1%]
+tests/acceptance/test_runtime_lab_openrouter_free_arbitrator.py ..s      [  1%]
+tests/contract/test_error_envelope.py ..                                 [  2%]
+tests/contract/test_runtime_lab_api.py ..                                [  2%]
+tests/contract/test_runtime_lab_config_api.py .                          [  2%]
+tests/contract/test_runtime_lab_semantic_evidence_api.py .               [  3%]
+tests/e2e/test_runtime_lab_airline_scale_e2e.py F.FFFF                   [  4%]
+tests/e2e/test_runtime_lab_airline_sop_business_gate.py ..               [  4%]
+tests/e2e/test_runtime_lab_api_e2e.py ....                               [  5%]
+tests/e2e/test_runtime_lab_chatflow_sop_api_e2e.py .                     [  5%]
+tests/e2e/test_runtime_lab_semantic_api_e2e.py .                         [  6%]
+tests/integration/agent/test_agent_access_sharing_analytics.py .         [  6%]
+tests/integration/agent/test_agent_binding_options.py .                  [  6%]
+tests/integration/agent/test_agent_bindings.py .                         [  6%]
+tests/integration/agent/test_agent_crud.py .                             [  6%]
+tests/integration/agent/test_agent_evaluation_gate.py .                  [  7%]
+tests/integration/agent/test_agent_memory_variables.py ..                [  7%]
+tests/integration/agent/test_agent_model_validation.py ..                [  7%]
+tests/integration/agent/test_agent_preview_run_debug.py .                [  8%]
+tests/integration/agent/test_agent_prompt_optimization.py .              [  8%]
+tests/integration/agent/test_agent_publish_channels.py .                 [  8%]
+tests/integration/agent/test_agent_tool_binding.py ..                    [  8%]
+tests/integration/agent/test_agent_versions.py .                         [  9%]
+tests/integration/architecture/test_host_request_context.py .            [  9%]
+tests/integration/chat/test_agent_tool_call_hardening.py ...             [ 10%]
+tests/integration/chat/test_chat_bound_agent_hooks.py ..                 [ 10%]
+tests/integration/chat/test_chat_mcp_fake_tools.py .                     [ 10%]
+tests/integration/chat/test_chat_provider_backed_paths.py ....           [ 11%]
+tests/integration/chat/test_chat_rag_references.py ..                    [ 11%]
+tests/integration/chat/test_chat_session_crud.py ..                      [ 12%]
+tests/integration/chat/test_chat_streaming.py .                          [ 12%]
+tests/integration/chat/test_chat_sync_message.py .                       [ 12%]
+tests/integration/chat/test_chat_tool_boundary.py .                      [ 12%]
+tests/integration/chat/test_chat_two_round_tool_flow.py .                [ 13%]
+tests/integration/chat/test_chat_workflow_execution.py .                 [ 13%]
+tests/integration/chat/test_chat_workflow_failure.py .                   [ 13%]
+tests/integration/chat/test_openai_tools_request.py .                    [ 13%]
+tests/integration/chat/test_tool_call_response_fixture.py .              [ 14%]
+tests/integration/evaluation/test_case_rerun.py .                        [ 14%]
+tests/integration/evaluation/test_csv_import_export.py .                 [ 14%]
+tests/integration/evaluation/test_eval_set_crud.py ..                    [ 14%]
+tests/integration/evaluation/test_eval_set_fields.py .                   [ 15%]
+tests/integration/evaluation/test_eval_set_related_experiments.py .      [ 15%]
+tests/integration/evaluation/test_eval_set_versions.py .                 [ 15%]
+tests/integration/evaluation/test_evaluator_crud.py ..                   [ 15%]
+tests/integration/evaluation/test_evaluator_versions_presets.py ...      [ 16%]
+tests/integration/evaluation/test_experiment_mapping_run_settings.py .   [ 16%]
+tests/integration/evaluation/test_experiment_run.py .....                [ 17%]
+tests/integration/evaluation/test_live_provider_opt_in.py ss             [ 18%]
+tests/integration/evaluation/test_llm_judge_evaluator.py ...             [ 18%]
+tests/integration/evaluation/test_run_compare.py .                       [ 19%]
+tests/integration/evaluation/test_run_report.py .                        [ 19%]
+tests/integration/knowledge/test_document_parser_upload.py .             [ 19%]
+tests/integration/knowledge/test_document_processing.py .                [ 19%]
+tests/integration/knowledge/test_document_processing_hardening.py ..     [ 20%]
+tests/integration/knowledge/test_document_upload.py .                    [ 20%]
+tests/integration/knowledge/test_embedding_pipeline.py .                 [ 20%]
+tests/integration/knowledge/test_knowledge_base_crud.py .                [ 20%]
+tests/integration/knowledge/test_mock_search_facade.py .                 [ 20%]
+tests/integration/knowledge/test_structured_faq.py ...                   [ 21%]
+tests/integration/knowledge/test_vector_schema_migration.py .            [ 21%]
+tests/integration/knowledge/test_vector_similarity_search.py ...         [ 22%]
+tests/integration/mcp/test_mcp_bound_tool_execution.py ..                [ 22%]
+tests/integration/mcp/test_mcp_connection_and_tools.py ..                [ 23%]
+tests/integration/mcp/test_mcp_debug_tool.py .                           [ 23%]
+tests/integration/mcp/test_mcp_server_crud.py .                          [ 23%]
+tests/integration/mcp/test_mcp_server_list.py .                          [ 23%]
+tests/integration/provider/test_provider_connection.py .                 [ 24%]
+tests/integration/provider/test_provider_crud.py .                       [ 24%]
+tests/integration/provider/test_provider_models.py .                     [ 24%]
+tests/integration/runtime_lab/test_airline_chatflow_seed.py ..           [ 24%]
+tests/integration/runtime_lab/test_chatflow_sop_runtime_adapter.py ..... [ 25%]
+...                                                                      [ 26%]
+tests/integration/runtime_lab/test_chatflow_trace_api.py .               [ 26%]
+tests/integration/runtime_lab/test_runtime_lab_faq_exact_policy.py ....  [ 27%]
+tests/integration/runtime_lab/test_runtime_lab_faq_semantic_policy.py .. [ 28%]
+.                                                                        [ 28%]
+tests/integration/runtime_lab/test_runtime_lab_handoff_policy.py ...     [ 28%]
+tests/integration/runtime_lab/test_runtime_lab_kernel.py ..              [ 29%]
+tests/integration/runtime_lab/test_runtime_lab_reliability.py F          [ 29%]
+tests/integration/runtime_lab/test_runtime_lab_repository.py ..          [ 29%]
+tests/integration/runtime_lab/test_runtime_lab_semantic_policy.py ...... [ 31%]
+.......                                                                  [ 32%]
+tests/integration/runtime_lab/test_runtime_lab_service.py .......        [ 34%]
+tests/integration/runtime_lab/test_runtime_lab_sop_adapter_contract.py . [ 34%]
+.                                                                        [ 34%]
+tests/integration/test_alembic_baseline.py .                             [ 34%]
+tests/integration/test_health.py .                                       [ 34%]
+tests/integration/test_runtime_services.py ..                            [ 35%]
+tests/integration/workflow/test_agent_call_node.py .......               [ 36%]
+tests/integration/workflow/test_api_resource_tool_builder.py ..          [ 37%]
+tests/integration/workflow/test_chatflow_channels.py ...                 [ 37%]
+tests/integration/workflow/test_chatflow_conversation_run.py F..         [ 38%]
+tests/integration/workflow/test_chatflow_execute_workflow_node.py .....  [ 39%]
+tests/integration/workflow/test_chatflow_message_question_input.py ....  [ 40%]
+tests/integration/workflow/test_chatflow_publish_status.py .             [ 40%]
+tests/integration/workflow/test_chatflow_resource_separation.py .        [ 40%]
+tests/integration/workflow/test_chatflow_resume_api.py ...               [ 41%]
+tests/integration/workflow/test_chatflow_resume_reliability.py ...       [ 42%]
+tests/integration/workflow/test_chatflow_run_debug_detail.py .           [ 42%]
+tests/integration/workflow/test_chatflow_scoped_variables_history.py ... [ 42%]
+.                                                                        [ 43%]
+tests/integration/workflow/test_chatflow_session_state.py ..             [ 43%]
+tests/integration/workflow/test_chatflow_variable_roundtrip.py ..        [ 43%]
+tests/integration/workflow/test_composer_debug_url_contract.py ..        [ 44%]
+tests/integration/workflow/test_execute_workflow_node.py ....            [ 45%]
+tests/integration/workflow/test_information_collection_node.py ......    [ 46%]
+tests/integration/workflow/test_intent_recognition_node.py ...           [ 47%]
+tests/integration/workflow/test_knowledge_faq_runtime.py ..              [ 47%]
+tests/integration/workflow/test_llm_callable_skills.py ..                [ 47%]
+tests/integration/workflow/test_llm_model_parameters.py .                [ 48%]
+tests/integration/workflow/test_observe_surfaces.py .                    [ 48%]
+tests/integration/workflow/test_ops_security_polish.py ..                [ 48%]
+tests/integration/workflow/test_resource_policy.py ......                [ 50%]
+tests/integration/workflow/test_resource_registry.py .                   [ 50%]
+tests/integration/workflow/test_six_node_matrix.py F                     [ 50%]
+tests/integration/workflow/test_tool_call_node.py ....                   [ 51%]
+tests/integration/workflow/test_transfer_to_human_node.py ..             [ 51%]
+tests/integration/workflow/test_transform_nodes.py ...                   [ 52%]
+tests/integration/workflow/test_variable_aggregation_assignment.py ..... [ 53%]
+                                                                         [ 53%]
+tests/integration/workflow/test_workflow_condition_run.py ...            [ 53%]
+tests/integration/workflow/test_workflow_failure_behavior.py ...         [ 54%]
+tests/integration/workflow/test_workflow_graph_crud.py ....              [ 55%]
+tests/integration/workflow/test_workflow_linear_run.py F                 [ 55%]
+tests/integration/workflow/test_workflow_llm_resources.py ..             [ 56%]
+tests/integration/workflow/test_workflow_node_run.py ...                 [ 56%]
+tests/integration/workflow/test_workflow_publish_status.py .             [ 56%]
+tests/integration/workflow/test_workflow_publish_versions.py ...         [ 57%]
+tests/integration/workflow/test_workflow_run_debug_detail.py .           [ 57%]
+tests/unit/agent/test_agent_model_validation.py .                        [ 57%]
+tests/unit/agent/test_agent_schemas.py ...                               [ 58%]
+tests/unit/agent/test_agent_tool_binding.py .                            [ 58%]
+tests/unit/architecture/test_023_inventory.py ..                         [ 59%]
+tests/unit/architecture/test_host_context.py ..                          [ 59%]
+tests/unit/chat/test_agent_retrieval_settings.py .                       [ 59%]
+tests/unit/chat/test_chat_mode_router.py .                               [ 60%]
+tests/unit/chat/test_chat_orchestrator.py .                              [ 60%]
+tests/unit/chat/test_chat_schemas.py .                                   [ 60%]
+tests/unit/chat/test_context_store.py ..                                 [ 60%]
+tests/unit/chat/test_llm_request_client.py .                             [ 61%]
+tests/unit/chat/test_prompt_builder.py .                                 [ 61%]
+tests/unit/chat/test_real_tool_call_runner.py .                          [ 61%]
+tests/unit/chat/test_sse_event_encoder.py .                              [ 61%]
+tests/unit/chat/test_tool_call_runner.py ..                              [ 62%]
+tests/unit/chat/test_tool_execution_hardening.py ..                      [ 62%]
+tests/unit/chat/test_tool_policy.py ..                                   [ 62%]
+tests/unit/chat/test_tool_schema_serializer.py .                         [ 63%]
+tests/unit/core/test_config.py .                                         [ 63%]
+tests/unit/core/test_database_metadata.py ...                            [ 64%]
+tests/unit/core/test_errors.py .                                         [ 64%]
+tests/unit/evaluation/test_deterministic_scoring.py ..                   [ 64%]
+tests/unit/evaluation/test_eval_set_fields.py ...                        [ 65%]
+tests/unit/evaluation/test_eval_set_versions.py ..                       [ 65%]
+tests/unit/evaluation/test_experiment_mapping.py ..                      [ 66%]
+tests/unit/evaluation/test_llm_debug_adapter.py ...                      [ 66%]
+tests/unit/handoff/test_handoff_service.py .                             [ 66%]
+tests/unit/knowledge/test_chunk_splitter.py ...                          [ 67%]
+tests/unit/knowledge/test_document_file_validation.py ...                [ 68%]
+tests/unit/knowledge/test_document_parser.py ....                        [ 69%]
+tests/unit/knowledge/test_embedding_pipeline.py ..                       [ 69%]
+tests/unit/knowledge/test_embedding_provider_adapter.py .......          [ 70%]
+tests/unit/knowledge/test_faq_retrieval.py .                             [ 71%]
+tests/unit/knowledge/test_faq_vector_productization.py ..                [ 71%]
+tests/unit/knowledge/test_knowledge_schemas.py .                         [ 71%]
+tests/unit/knowledge/test_mock_search.py ...                             [ 72%]
+tests/unit/knowledge/test_reranker_adapter.py ...                        [ 73%]
+tests/unit/knowledge/test_retrieval_strategy.py ......                   [ 74%]
+tests/unit/knowledge/test_vector_schema.py ...                           [ 74%]
+tests/unit/knowledge/test_vector_similarity.py ..                        [ 75%]
+tests/unit/knowledge/test_vector_store_adapter.py .........              [ 77%]
+tests/unit/mcp/test_mcp_debug_client.py ..                               [ 77%]
+tests/unit/mcp/test_mcp_fake_client.py ..                                [ 78%]
+tests/unit/mcp/test_mcp_schemas.py ..                                    [ 78%]
+tests/unit/mcp/test_mcp_tool_schema_builder.py .                         [ 78%]
+tests/unit/provider/test_connection_tester.py ..                         [ 79%]
+tests/unit/provider/test_health_checker.py .                             [ 79%]
+tests/unit/provider/test_llm_adapters.py ...                             [ 79%]
+tests/unit/provider/test_model_config_lookup.py .                        [ 80%]
+tests/unit/provider/test_provider_schemas.py .                           [ 80%]
+tests/unit/provider/test_tool_call_parser.py .                           [ 80%]
+tests/unit/runtime_lab/test_candidates.py ...                            [ 81%]
+tests/unit/runtime_lab/test_constrained_classifier.py ........           [ 82%]
+tests/unit/runtime_lab/test_dependency_direction.py ..                   [ 83%]
+tests/unit/runtime_lab/test_explicit_handoff_signals.py ..               [ 83%]
+tests/unit/runtime_lab/test_explicit_signals.py ......                   [ 84%]
+tests/unit/runtime_lab/test_faq_exact_answer_contract.py ...             [ 85%]
+tests/unit/runtime_lab/test_faq_semantic_answer_contract.py .            [ 85%]
+tests/unit/runtime_lab/test_handoff_action_contract.py ....              [ 86%]
+tests/unit/runtime_lab/test_mock_semantic_recall.py ....                 [ 87%]
+tests/unit/runtime_lab/test_mock_sop_adapter.py .                        [ 87%]
+tests/unit/runtime_lab/test_router.py ....                               [ 88%]
+tests/unit/runtime_lab/test_runtime_lab_web_factory.py ......            [ 89%]
+tests/unit/runtime_lab/test_sop_adapter_contract.py ....                 [ 90%]
+tests/unit/test_project_skeleton.py ..                                   [ 91%]
+tests/unit/workflow/test_chatflow_channel_adapters.py ...                [ 91%]
+tests/unit/workflow/test_chatflow_resource_context.py .F                 [ 92%]
+tests/unit/workflow/test_chatflow_state_helpers.py .......               [ 93%]
+tests/unit/workflow/test_condition_branching.py ..                       [ 93%]
+tests/unit/workflow/test_execution_context.py .....                      [ 94%]
+tests/unit/workflow/test_information_collection_history_modes.py ..      [ 95%]
+tests/unit/workflow/test_linear_executors.py ....                        [ 96%]
+tests/unit/workflow/test_llm_node_completer.py ...                       [ 96%]
+tests/unit/workflow/test_runtime_parity.py ..                            [ 97%]
+tests/unit/workflow/test_service_knowledge_condition.py ..               [ 97%]
+tests/unit/workflow/test_service_provider_llm.py F......                 [ 99%]
+tests/unit/workflow/test_six_node_matrix.py FF                          [ 99%]
+tests/unit/workflow/test_workflow_schemas.py ..                          [100%]
+
+=================================== FAILURES ===================================
+_ RuntimeLabCoreAirlineMixedRoutingContractTest.test_forty_natural_core_airline_scenarios_cover_strong_keyword_routes_and_completion _
+
+self = <tests.acceptance.test_runtime_lab_live_qwen_core_airline_scenarios.RuntimeLabCoreAirlineMixedRoutingContractTest testMethod=test_forty_natural_core_airline_scenarios_cover_strong_keyword_routes_and_completion>
+
+    def test_forty_natural_core_airline_scenarios_cover_strong_keyword_routes_and_completion(self) -> None:
+        initialise_database()
+        register_baseline_tables()
+        scenarios = _core_scenarios()
+    
+        self.assertEqual(len(scenarios), 40)
+        self.assertGreaterEqual(_average_words(scenarios), 5)
+        self.assertFalse(any(_looks_like_direct_keyword(scenario.primary_utterance) for scenario in scenarios))
+    
+        with TestClient(app) as client:
+>           results = [_run_single_sop_contract(client, index, scenario) for index, scenario in enumerate(scenarios)]
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/acceptance/test_runtime_lab_live_qwen_core_airline_scenarios.py:158: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+client = <starlette.testclient.TestClient object at 0x115d35820>, index = 0
+scenario = CoreScenario(business_area='flight_booking', primary_sop_id='flight_booking', primary_utterance='周五早上从北京去深圳，差旅审批说需要出票，...ary_utterance='临时被通知会议取消，明天那段不飞了，票款想处理回来', tertiary_sop_id='change_flight', tertiary_utterance='原来的落地安排赶不上会议，需要改签到晚一点')
+
+    def _run_single_sop_contract(client: TestClient, index: int, scenario: CoreScenario) -> dict[str, Any]:
+        session_id = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
+        started = _message(client, session_id, scenario.primary_utterance)
+        details = _message(client, session_id, _details_for(index, scenario.primary_sop_id))
+        completed = _message(client, session_id, "确认，按这个方案办理")
+    
+        assert started["routeDecision"]["action"] == "START_SOP"
+>       assert started["activeTask"]["sopId"] == scenario.primary_sop_id
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: 'NoneType' object is not subscriptable
+
+tests/acceptance/test_runtime_lab_live_qwen_core_airline_scenarios.py:292: TypeError
+_ RuntimeLabAirlineScaleE2ETest.test_100_plus_realistic_airline_turns_route_collect_and_complete _
+
+self = <test_runtime_lab_airline_scale_e2e.RuntimeLabAirlineScaleE2ETest testMethod=test_100_plus_realistic_airline_turns_route_collect_and_complete>
+
+    def test_100_plus_realistic_airline_turns_route_collect_and_complete(self) -> None:
+        total_case_count = sum(len(utterances) for utterances in START_UTTERANCES.values())
+        average_length = sum(len(utterance.strip()) for utterances in START_UTTERANCES.values() for utterance in utterances)
+        average_length = average_length / total_case_count
+        self.assertGreaterEqual(total_case_count, 100)
+        self.assertGreaterEqual(average_length, 5)
+    
+        with TestClient(app) as client:
+            executed = 0
+            for sop_id, utterances in START_UTTERANCES.items():
+                for index, utterance in enumerate(utterances):
+                    session_id = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
+                    started = _message(client, session_id, utterance)
+                    collected = _message(
+                        client,
+                        session_id,
+                        f"订单号 MU{sop_id[:2].upper()}{index:03d}，手机号 1380013{index:04d}，"
+                        f"乘机人张测试，明天上午从北京出发，备注希望短信通知",
+                    )
+                    completed = _message(client, session_id, "确认，按这个方案办理")
+    
+                    self.assertEqual(started["routeDecision"]["action"], "START_SOP", utterance)
+>                   self.assertEqual(started["activeTask"]["sopId"], sop_id)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E                   TypeError: 'NoneType' object is not subscriptable
+
+tests/e2e/test_runtime_lab_airline_scale_e2e.py:292: TypeError
+_ RuntimeLabAirlineScaleE2ETest.test_booking_uses_sales_collection_language_for_natural_reservation_turns _
+
+self = <test_runtime_lab_airline_scale_e2e.RuntimeLabAirlineScaleE2ETest testMethod=test_booking_uses_sales_collection_language_for_natural_reservation_turns>
+
+    def test_booking_uses_sales_collection_language_for_natural_reservation_turns(self) -> None:
+        with TestClient(app) as client:
+            short_session_id = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
+            detailed_session_id = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
+    
+            short_started = _message(client, short_session_id, "我要定航班")
+            detailed_started = _message(
+                client,
+                detailed_session_id,
+                "我要订一张明天上午9点从北京到广州的机票",
+            )
+    
+        self.assertEqual(short_started["routeDecision"]["action"], "START_SOP")
+>       self.assertEqual(short_started["activeTask"]["sopId"], "flight_booking")
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: 'NoneType' object is not subscriptable
+
+tests/e2e/test_runtime_lab_airline_scale_e2e.py:364: TypeError
+_ RuntimeLabAirlineScaleE2ETest.test_enabled_sop_ids_scope_new_intent_routing_without_breaking_active_continuation _
+
+self = <test_runtime_lab_airline_scale_e2e.RuntimeLabAirlineScaleE2ETest testMethod=test_enabled_sop_ids_scope_new_intent_routing_without_breaking_active_continuation>
+
+    def test_enabled_sop_ids_scope_new_intent_routing_without_breaking_active_continuation(self) -> None:
+        with TestClient(app) as client:
+            session_id = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
+            enabled = ("flight_booking", "invoice_apply")
+    
+            disabled_refund = _message(client, session_id, "我要退票", enabled_sop_ids=enabled)
+            booking_started = _message(client, session_id, "我想买一张明天去上海的机票", enabled_sop_ids=enabled)
+            invoice_started = _message(client, session_id, "公司报销要凭证，帮我开一下电子发票", enabled_sop_ids=enabled)
+            disabled_refund_during_invoice = _message(client, session_id, "我要退票", enabled_sop_ids=enabled)
+    
+>       self.assertEqual(disabled_refund["routeDecision"]["action"], "NO_MATCH")
+E       AssertionError: 'CLARIFY' != 'NO_MATCH'
+E       - CLARIFY
+E       + NO_MATCH
+
+tests/e2e/test_runtime_lab_airline_scale_e2e.py:342: AssertionError
+_ RuntimeLabAirlineScaleE2ETest.test_real_chatflow_bound_sop_still_routes_through_runtime_lab_control_plane _
+
+self = <test_runtime_lab_airline_scale_e2e.RuntimeLabAirlineScaleE2ETest testMethod=test_real_chatflow_bound_sop_still_routes_through_runtime_lab_control_plane>
+
+    def test_real_chatflow_bound_sop_still_routes_through_runtime_lab_control_plane(self) -> None:
+        stamp = time.time_ns()
+        with TestClient(app) as client:
+            chatflow = _create_rich_chatflow_sop_fixture(client, stamp)
+            app.dependency_overrides[get_runtime_lab_service] = _runtime_service_override(
+                int(cast(int | str, chatflow["id"]))
+            )
+            try:
+                session_id = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
+                started = _message(client, session_id, "我想退票，顺便确认一下非自愿政策")
+                switched = _message(client, session_id, "先帮我开发票，公司报销急用")
+                _message(client, session_id, "订单号 INV034，手机号 13800139999，抬头是测试科技")
+                invoice_done = _message(client, session_id, "确认")
+                resumed = _message(client, session_id, "继续处理退票")
+                collected = _message(client, session_id, "订单号：MU034，手机号 13800130034，乘机人王测试")
+            finally:
+                app.dependency_overrides.pop(get_runtime_lab_service, None)
+    
+        self.assertEqual(started["routeDecision"]["action"], "START_SOP")
+        self.assertEqual(started["activeTask"]["sopId"], "refund_ticket")
+        self.assertEqual(started["activeTask"]["currentStep"], "info_order")
+        self.assertIn("手机号", started["reply"])
+        self.assertEqual(switched["routeDecision"]["action"], "SUSPEND_AND_START")
+        self.assertEqual(invoice_done["resumeOffer"]["sopId"], "refund_ticket")
+        self.assertEqual(resumed["routeDecision"]["action"], "RESUME_TASK")
+        self.assertEqual(collected["activeTask"]["currentStep"], "confirm_1")
+>       self.assertEqual(collected["activeTask"]["businessRefs"]["phone"], "13800130034")
+E       AssertionError: '13800139999' != '13800130034'
+E       - 13800139999
+E       + 13800130034
+
+tests/e2e/test_runtime_lab_airline_scale_e2e.py:407: AssertionError
+_ RuntimeLabAirlineScaleE2ETest.test_switch_resume_matrix_covers_five_airline_jumps_with_single_suspended_boundary _
+
+self = <test_runtime_lab_airline_scale_e2e.RuntimeLabAirlineScaleE2ETest testMethod=test_switch_resume_matrix_covers_five_airline_jumps_with_single_suspended_boundary>
+
+    def test_switch_resume_matrix_covers_five_airline_jumps_with_single_suspended_boundary(self) -> None:
+        jump_pairs = (
+            ("refund_ticket", "flight_status"),
+            ("change_flight", "special_assistance"),
+            ("invoice_apply", "membership_service"),
+            ("baggage_service", "pet_cabin"),
+            ("seat_checkin", "irregular_flight"),
+        )
+        with TestClient(app) as client:
+            for primary, secondary in jump_pairs:
+                session_id = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
+                primary_started = _message(client, session_id, START_UTTERANCES[primary][0])
+                secondary_started = _message(client, session_id, START_UTTERANCES[secondary][0])
+                _message(client, session_id, "订单号 CA8888，手机号 13800138888，乘机人李测试")
+                secondary_done = _message(client, session_id, "确认办理")
+>               resumed = _message(client, session_id, f"继续处理{primary_started['activeTask']['sopId']}")
+                                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               TypeError: 'NoneType' object is not subscriptable
+
+tests/e2e/test_runtime_lab_airline_scale_e2e.py:322: TypeError
+_ RuntimeLabReliabilityTest.test_duplicate_idempotency_key_replays_without_duplicate_task_or_events _
+
+self = <test_runtime_lab_reliability.RuntimeLabReliabilityTest testMethod=test_duplicate_idempotency_key_replays_without_duplicate_task_or_events>
+
+    def test_duplicate_idempotency_key_replays_without_duplicate_task_or_events(self) -> None:
+        with TestClient(app) as client:
+            session_id = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
+            first = client.post(
+                f"/api/v1/runtime-lab/sessions/{session_id}/messages",
+                json={"message": "我要退票", "idempotencyKey": "dup-start"},
+            ).json()["data"]
+            second = client.post(
+                f"/api/v1/runtime-lab/sessions/{session_id}/messages",
+                json={"message": "我要退票", "idempotencyKey": "dup-start"},
+            ).json()["data"]
+            tasks = client.get(f"/api/v1/runtime-lab/sessions/{session_id}/tasks").json()["data"]["list"]
+            events = client.get(f"/api/v1/runtime-lab/sessions/{session_id}/events").json()["data"]["list"]
+    
+        self.assertEqual(second, first)
+>       self.assertEqual([task["status"] for task in tasks], ["RUNNING"])
+E       AssertionError: Lists differ: [] != ['RUNNING']
+E       
+E       Second list contains 1 additional elements.
+E       First extra element 0:
+E       'RUNNING'
+E       
+E       - []
+E       + ['RUNNING']
+
+tests/integration/runtime_lab/test_runtime_lab_reliability.py:24: AssertionError
+_ ChatflowConversationRunTest.test_chatflow_llm_run_emits_llm_delta_and_final_output _
+
+    @contextlib.contextmanager
+    def map_httpcore_exceptions() -> typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+>           yield
+
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:101: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:250: in handle_request
+    resp = self._pool.handle_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py:256: in handle_request
+    raise exc from None
+.venv/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py:236: in handle_request
+    response = connection.handle_request(
+.venv/lib/python3.12/site-packages/httpcore/_sync/connection.py:101: in handle_request
+    raise exc
+.venv/lib/python3.12/site-packages/httpcore/_sync/connection.py:78: in handle_request
+    stream = self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpcore/_sync/connection.py:124: in _connect
+    stream = self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpcore/_backends/sync.py:207: in connect_tcp
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+map = {<class 'TimeoutError'>: <class 'httpcore.ConnectTimeout'>, <class 'OSError'>: <class 'httpcore.ConnectError'>}
+
+    @contextlib.contextmanager
+    def map_exceptions(map: ExceptionMapping) -> typing.Iterator[None]:
+        try:
+            yield
+        except Exception as exc:  # noqa: PIE786
+            for from_exc, to_exc in map.items():
+                if isinstance(exc, from_exc):
+>                   raise to_exc(exc) from exc
+E                   httpcore.ConnectError: [Errno 8] nodename nor servname provided, or not known
+
+.venv/lib/python3.12/site-packages/httpcore/_exceptions.py:14: ConnectError
+
+The above exception was the direct cause of the following exception:
+
+self = <tests.integration.workflow.test_chatflow_conversation_run.ChatflowConversationRunTest testMethod=test_chatflow_llm_run_emits_llm_delta_and_final_output>
+
+    def test_chatflow_llm_run_emits_llm_delta_and_final_output(self) -> None:
+        with TestClient(app) as client:
+            create_response = client.post(
+                "/api/v1/chatflows",
+                json={
+                    "name": f"Chatflow llm stream {time.time_ns()}",
+                    "description": "",
+                    "nodes": [
+                        {"nodeKey": "start", "type": "START", "name": "Start", "config": {"outputVariables": ["sys.query"]}},
+                        {
+                            "nodeKey": "llm_1",
+                            "type": "LLM",
+                            "name": "LLM",
+                            "config": {"prompt": "User: {{start.sys.query}}", "outputVariable": "answer"},
+                        },
+                        {
+                            "nodeKey": "end",
+                            "type": "END",
+                            "name": "End",
+                            "config": {"outputVariable": "final", "output": "Final {{llm_1.answer}}"},
+                        },
+                    ],
+                    "edges": [
+                        {"sourceNodeKey": "start", "targetNodeKey": "llm_1", "condition": None},
+                        {"sourceNodeKey": "llm_1", "targetNodeKey": "end", "condition": None},
+                    ],
+                },
+            )
+            chatflow = create_response.json()["data"]
+>           run_response = client.post(
+                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                json={"input": {"sys.query": "refund"}},
+            )
+
+tests/integration/workflow/test_chatflow_conversation_run.py:146: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/starlette/testclient.py:560: in post
+    return super().post(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1144: in post
+    return self.request(
+.venv/lib/python3.12/site-packages/starlette/testclient.py:459: in request
+    return super().request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:914: in send
+    response = self._send_handling_auth(
+.venv/lib/python3.12/site-packages/httpx/_client.py:942: in _send_handling_auth
+    response = self._send_handling_redirects(
+.venv/lib/python3.12/site-packages/httpx/_client.py:979: in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1014: in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:362: in handle_request
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/testclient.py:359: in handle_request
+    portal.call(self.app, scope, receive, send)
+.venv/lib/python3.12/site-packages/anyio/from_thread.py:334: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/concurrent/futures/_base.py:456: in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/concurrent/futures/_base.py:401: in __get_result
+    raise self._exception
+.venv/lib/python3.12/site-packages/anyio/from_thread.py:259: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/fastapi/applications.py:1159: in __call__
+    await super().__call__(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/applications.py:90: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+.venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:660: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:680: in app
+    await route.handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:276: in handle
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:134: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:120: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/fastapi/routing.py:674: in app
+    raw_response = await run_endpoint_function(
+.venv/lib/python3.12/site-packages/fastapi/routing.py:330: in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/concurrency.py:32: in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/anyio/to_thread.py:63: in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+.venv/lib/python3.12/site-packages/anyio/_backends/_asyncio.py:2518: in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/anyio/_backends/_asyncio.py:1002: in run
+    result = context.run(func, *args)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/web/router.py:259: in run_chatflow
+    return success(service.execute(chatflow_id, request))
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/service.py:166: in execute
+    ).run(workflow_id, input_data)
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/engine.py:1206: in run
+    output = self._run_graph(workflow_id, run_id, nodes, edges, input_data)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/engine.py:1325: in _run_graph
+    output = self._execute_node(workflow_id, current, context, input_data)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/engine.py:1361: in _execute_node
+    return LlmNodeExecutor(self._llm_completer, self._knowledge_facade, self._mcp_tool_executor).execute(node, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/engine.py:158: in execute
+    answer = self._completer.complete_prompt(prompt, _llm_options(config))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/service.py:927: in complete_prompt
+    response = self._complete_with_fallback(payload)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/service.py:1037: in _complete_with_fallback
+    return client.complete(payload)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/chat/domain/llm_request.py:81: in complete
+    response = self._post_with_retry(headers, payload)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/chat/domain/llm_request.py:97: in _post_with_retry
+    return client.post(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1144: in post
+    return self.request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:914: in send
+    response = self._send_handling_auth(
+.venv/lib/python3.12/site-packages/httpx/_client.py:942: in _send_handling_auth
+    response = self._send_handling_redirects(
+.venv/lib/python3.12/site-packages/httpx/_client.py:979: in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1014: in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:249: in handle_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    @contextlib.contextmanager
+    def map_httpcore_exceptions() -> typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+            yield
+        except Exception as exc:
+            mapped_exc = None
+    
+            for from_exc, to_exc in HTTPCORE_EXC_MAP.items():
+                if not isinstance(exc, from_exc):
+                    continue
+                # We want to map to the most specific exception we can find.
+                # Eg if `exc` is an `httpcore.ReadTimeout`, we want to map to
+                # `httpx.ReadTimeout`, not just `httpx.TimeoutException`.
+                if mapped_exc is None or issubclass(to_exc, mapped_exc):
+                    mapped_exc = to_exc
+    
+            if mapped_exc is None:  # pragma: no cover
+                raise
+    
+            message = str(exc)
+>           raise mapped_exc(message) from exc
+E           httpx.ConnectError: [Errno 8] nodename nor servname provided, or not known
+
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:118: ConnectError
+_ WorkflowSixNodeMatrixIntegrationTest.test_workflow_api_runs_existing_six_node_matrix _
+
+self = <tests.integration.workflow.test_six_node_matrix.WorkflowSixNodeMatrixIntegrationTest testMethod=test_workflow_api_runs_existing_six_node_matrix>
+
+    def test_workflow_api_runs_existing_six_node_matrix(self) -> None:
+        fake_client = FakeOpenAIChatClient(response_payload=_assistant_payload("LLM_MATRIX_OK"))
+        knowledge_facade = _KnowledgeFacadeStub()
+        app.dependency_overrides[get_workflow_service] = _service_override(fake_client, knowledge_facade)
+        server = LocalApiServer()
+        server.start()
+        self.addCleanup(server.stop)
+    
+        with TestClient(app) as client:
+            workflow = _create_workflow(client, server.url)
+>           response = client.post(
+                f"/api/v1/workflows/{workflow['id']}/runs",
+                json={"input": {"USER_INPUT": "kb"}},
+            )
+
+tests/integration/workflow/test_six_node_matrix.py:41: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/starlette/testclient.py:560: in post
+    return super().post(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1144: in post
+    return self.request(
+.venv/lib/python3.12/site-packages/starlette/testclient.py:459: in request
+    return super().request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:914: in send
+    response = self._send_handling_auth(
+.venv/lib/python3.12/site-packages/httpx/_client.py:942: in _send_handling_auth
+    response = self._send_handling_redirects(
+.venv/lib/python3.12/site-packages/httpx/_client.py:979: in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1014: in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:362: in handle_request
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/testclient.py:359: in handle_request
+    portal.call(self.app, scope, receive, send)
+.venv/lib/python3.12/site-packages/anyio/from_thread.py:334: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/concurrent/futures/_base.py:456: in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/concurrent/futures/_base.py:401: in __get_result
+    raise self._exception
+.venv/lib/python3.12/site-packages/anyio/from_thread.py:259: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/fastapi/applications.py:1159: in __call__
+    await super().__call__(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/applications.py:90: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+.venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:660: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:680: in app
+    await route.handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:276: in handle
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:134: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:120: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/fastapi/routing.py:674: in app
+    raw_response = await run_endpoint_function(
+.venv/lib/python3.12/site-packages/fastapi/routing.py:330: in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/concurrency.py:32: in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/anyio/to_thread.py:63: in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+.venv/lib/python3.12/site-packages/anyio/_backends/_asyncio.py:2518: in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/anyio/_backends/_asyncio.py:1002: in run
+    result = context.run(func, *args)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/web/router.py:147: in run_workflow
+    return success(service.execute(workflow_id, request))
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/service.py:166: in execute
+    ).run(workflow_id, input_data)
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/engine.py:1206: in run
+    output = self._run_graph(workflow_id, run_id, nodes, edges, input_data)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/engine.py:1325: in _run_graph
+    output = self._execute_node(workflow_id, current, context, input_data)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/engine.py:1405: in _execute_node
+    return KnowledgeNodeExecutor(self._knowledge_facade).execute(node, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.modules.workflow.domain.engine.KnowledgeNodeExecutor object at 0x11658e1b0>
+node = {'config': {'knowledgeBaseId': 42, 'outputVariable': 'answer', 'query': 'Matrix lookup', 'topK': 2}, 'created_at': datetime.datetime(2026, 6, 9, 2, 5, 25, 267704), 'deleted': False, 'id': 26345, ...}
+context = <app.modules.workflow.domain.context.ExecutionContext object at 0x115e07590>
+
+    def execute(self, node: dict[str, Any], context: ExecutionContext) -> dict[str, Any]:
+        config = _config(node)
+        output_variable = str(config.get("outputVariable") or "answer")
+        query = context.render(str(config.get("query") or ""))
+        knowledge_base_id = config.get("knowledgeBaseId") or config.get("knowledge_base_id")
+        if self._knowledge_facade is None or knowledge_base_id is None:
+            return {output_variable: f"Knowledge mock: {query}"}
+        top_k = _positive_int(config.get("topK") or config.get("top_k"), default=1)
+>       results = self._knowledge_facade.search_chunks(
+            int(knowledge_base_id),
+            query,
+            top_k=top_k,
+            retrieval_mode=_retrieval_mode(config.get("retrievalMode") or config.get("retrieval_mode")),
+            score_threshold=_score_threshold(config.get("scoreThreshold") or config.get("score_threshold")),
+            rerank=_bool_setting(config.get("rerank"), default=False),
+        )
+E       TypeError: _KnowledgeFacadeStub.search_chunks() got an unexpected keyword argument 'retrieval_mode'
+
+app/modules/workflow/domain/engine.py:1115: TypeError
+___ WorkflowLinearRunTest.test_run_linear_workflow_records_run_and_node_runs ___
+
+    @contextlib.contextmanager
+    def map_httpcore_exceptions() -> typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+>           yield
+
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:101: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:250: in handle_request
+    resp = self._pool.handle_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py:256: in handle_request
+    raise exc from None
+.venv/lib/python3.12/site-packages/httpcore/_sync/connection_pool.py:236: in handle_request
+    response = connection.handle_request(
+.venv/lib/python3.12/site-packages/httpcore/_sync/connection.py:101: in handle_request
+    raise exc
+.venv/lib/python3.12/site-packages/httpcore/_sync/connection.py:78: in handle_request
+    stream = self._connect(request)
+             ^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpcore/_sync/connection.py:124: in _connect
+    stream = self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpcore/_backends/sync.py:207: in connect_tcp
+    with map_exceptions(exc_map):
+         ^^^^^^^^^^^^^^^^^^^^^^^
+/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+map = {<class 'TimeoutError'>: <class 'httpcore.ConnectTimeout'>, <class 'OSError'>: <class 'httpcore.ConnectError'>}
+
+    @contextlib.contextmanager
+    def map_exceptions(map: ExceptionMapping) -> typing.Iterator[None]:
+        try:
+            yield
+        except Exception as exc:  # noqa: PIE786
+            for from_exc, to_exc in map.items():
+                if isinstance(exc, from_exc):
+>                   raise to_exc(exc) from exc
+E                   httpcore.ConnectError: [Errno 8] nodename nor servname provided, or not known
+
+.venv/lib/python3.12/site-packages/httpcore/_exceptions.py:14: ConnectError
+
+The above exception was the direct cause of the following exception:
+
+self = <tests.integration.workflow.test_workflow_linear_run.WorkflowLinearRunTest testMethod=test_run_linear_workflow_records_run_and_node_runs>
+
+    def test_run_linear_workflow_records_run_and_node_runs(self) -> None:
+        with TestClient(app) as client:
+            workflow = _create_linear_workflow(client)
+    
+>           response = client.post(
+                f"/api/v1/workflows/{workflow['id']}/runs",
+                json={"input": {"userMessage": "reset password"}},
+            )
+
+tests/integration/workflow/test_workflow_linear_run.py:15: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/starlette/testclient.py:560: in post
+    return super().post(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1144: in post
+    return self.request(
+.venv/lib/python3.12/site-packages/starlette/testclient.py:459: in request
+    return super().request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:914: in send
+    response = self._send_handling_auth(
+.venv/lib/python3.12/site-packages/httpx/_client.py:942: in _send_handling_auth
+    response = self._send_handling_redirects(
+.venv/lib/python3.12/site-packages/httpx/_client.py:979: in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1014: in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:362: in handle_request
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/testclient.py:359: in handle_request
+    portal.call(self.app, scope, receive, send)
+.venv/lib/python3.12/site-packages/anyio/from_thread.py:334: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/concurrent/futures/_base.py:456: in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/concurrent/futures/_base.py:401: in __get_result
+    raise self._exception
+.venv/lib/python3.12/site-packages/anyio/from_thread.py:259: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/fastapi/applications.py:1159: in __call__
+    await super().__call__(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/applications.py:90: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+.venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:660: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:680: in app
+    await route.handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:276: in handle
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:134: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:120: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/fastapi/routing.py:674: in app
+    raw_response = await run_endpoint_function(
+.venv/lib/python3.12/site-packages/fastapi/routing.py:330: in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/concurrency.py:32: in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/anyio/to_thread.py:63: in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+.venv/lib/python3.12/site-packages/anyio/_backends/_asyncio.py:2518: in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/anyio/_backends/_asyncio.py:1002: in run
+    result = context.run(func, *args)
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/web/router.py:147: in run_workflow
+    return success(service.execute(workflow_id, request))
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/service.py:166: in execute
+    ).run(workflow_id, input_data)
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/engine.py:1206: in run
+    output = self._run_graph(workflow_id, run_id, nodes, edges, input_data)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/engine.py:1325: in _run_graph
+    output = self._execute_node(workflow_id, current, context, input_data)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/engine.py:1361: in _execute_node
+    return LlmNodeExecutor(self._llm_completer, self._knowledge_facade, self._mcp_tool_executor).execute(node, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/engine.py:158: in execute
+    answer = self._completer.complete_prompt(prompt, _llm_options(config))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/service.py:927: in complete_prompt
+    response = self._complete_with_fallback(payload)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/service.py:1037: in _complete_with_fallback
+    return client.complete(payload)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/chat/domain/llm_request.py:81: in complete
+    response = self._post_with_retry(headers, payload)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/chat/domain/llm_request.py:97: in _post_with_retry
+    return client.post(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1144: in post
+    return self.request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:914: in send
+    response = self._send_handling_auth(
+.venv/lib/python3.12/site-packages/httpx/_client.py:942: in _send_handling_auth
+    response = self._send_handling_redirects(
+.venv/lib/python3.12/site-packages/httpx/_client.py:979: in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1014: in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:249: in handle_request
+    with map_httpcore_exceptions():
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    @contextlib.contextmanager
+    def map_httpcore_exceptions() -> typing.Iterator[None]:
+        global HTTPCORE_EXC_MAP
+        if len(HTTPCORE_EXC_MAP) == 0:
+            HTTPCORE_EXC_MAP = _load_httpcore_exceptions()
+        try:
+            yield
+        except Exception as exc:
+            mapped_exc = None
+    
+            for from_exc, to_exc in HTTPCORE_EXC_MAP.items():
+                if not isinstance(exc, from_exc):
+                    continue
+                # We want to map to the most specific exception we can find.
+                # Eg if `exc` is an `httpcore.ReadTimeout`, we want to map to
+                # `httpx.ReadTimeout`, not just `httpx.TimeoutException`.
+                if mapped_exc is None or issubclass(to_exc, mapped_exc):
+                    mapped_exc = to_exc
+    
+            if mapped_exc is None:  # pragma: no cover
+                raise
+    
+            message = str(exc)
+>           raise mapped_exc(message) from exc
+E           httpx.ConnectError: [Errno 8] nodename nor servname provided, or not known
+
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:118: ConnectError
+_ ChatflowResourceContextTest.test_chatflow_llm_resource_context_includes_sys_query_and_history _
+
+self = <tests.unit.workflow.test_chatflow_resource_context.ChatflowResourceContextTest testMethod=test_chatflow_llm_resource_context_includes_sys_query_and_history>
+
+    def test_chatflow_llm_resource_context_includes_sys_query_and_history(self) -> None:
+        fake_client = FakeOpenAIChatClient(response_payload=_assistant_payload("CHATFLOW_RESOURCE_OK"))
+        knowledge_facade = _KnowledgeFacadeStub()
+        service = WorkflowService(
+            _ChatflowRepositoryStub(),
+            flow_type="CHATFLOW",
+            agent_repository=_AgentRepositoryStub(),
+            model_facade=_ModelFacadeStub(),
+            knowledge_facade=knowledge_facade,
+            llm_client_factory=lambda _config: fake_client,
+        )
+    
+>       result = service.execute(
+            901,
+            WorkflowRunRequest(input={
+                "sys.query": "refund",
+                "history": [{"role": "user", "content": "previous refund question"}],
+            }),
+        )
+
+tests/unit/workflow/test_chatflow_resource_context.py:33: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/modules/workflow/domain/service.py:166: in execute
+    ).run(workflow_id, input_data)
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/engine.py:1206: in run
+    output = self._run_graph(workflow_id, run_id, nodes, edges, input_data)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/engine.py:1325: in _run_graph
+    output = self._execute_node(workflow_id, current, context, input_data)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/engine.py:1361: in _execute_node
+    return LlmNodeExecutor(self._llm_completer, self._knowledge_facade, self._mcp_tool_executor).execute(node, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/engine.py:153: in execute
+    prompt = self._with_resource_context(config, context, prompt)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/engine.py:225: in _with_resource_context
+    snippets.extend(self._knowledge_context(resource, context, prompt))
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.modules.workflow.domain.engine.LlmNodeExecutor object at 0x11637cf80>
+resource = {'knowledgeBaseId': 42, 'query': 'Lookup {{sys.query}}', 'topK': 1, 'type': 'KNOWLEDGE_BASE'}
+context = <app.modules.workflow.domain.context.ExecutionContext object at 0x11637d7c0>
+prompt = 'Chatflow prompt: refund'
+
+    def _knowledge_context(self, resource: dict[str, Any], context: ExecutionContext, prompt: str) -> list[str]:
+        if self._knowledge_facade is None:
+            raise WorkflowExecutionError("Workflow knowledge facade is not configured")
+        knowledge_base_id = _resource_id(resource)
+        if knowledge_base_id is None:
+            raise WorkflowExecutionError("Knowledge resource requires knowledgeBaseId")
+        query = context.render(str(resource.get("query") or prompt))
+        top_k = _positive_int(resource.get("topK") or resource.get("top_k"), default=3)
+        return [
+            result.content
+>           for result in self._knowledge_facade.search_chunks(
+                knowledge_base_id,
+                query,
+                top_k=top_k,
+                retrieval_mode=_retrieval_mode(resource.get("retrievalMode") or resource.get("retrieval_mode")),
+                score_threshold=_score_threshold(
+                    resource.get("scoreThreshold") or resource.get("score_threshold")
+                ),
+                rerank=_bool_setting(resource.get("rerank"), default=False),
+            )
+        ]
+E       TypeError: _KnowledgeFacadeStub.search_chunks() got an unexpected keyword argument 'retrieval_mode'
+
+app/modules/workflow/domain/engine.py:255: TypeError
+_ WorkflowServiceProviderLlmTest.test_execute_appends_knowledge_resource_context_before_llm_call _
+
+self = <tests.unit.workflow.test_service_provider_llm.WorkflowServiceProviderLlmTest testMethod=test_execute_appends_knowledge_resource_context_before_llm_call>
+
+    def test_execute_appends_knowledge_resource_context_before_llm_call(self) -> None:
+        repository = _WorkflowRepositoryStub(
+            llm_config={
+                "prompt": "Canvas prompt: {{start.userMessage}}",
+                "outputVariable": "answer",
+                "resources": [
+                    {
+                        "type": "KNOWLEDGE_BASE",
+                        "knowledgeBaseId": 42,
+                        "query": "Lookup {{start.userMessage}}",
+                        "topK": 2,
+                    }
+                ],
+            }
+        )
+        knowledge_facade = _KnowledgeFacadeStub()
+        fake_client = FakeOpenAIChatClient(response_payload=_assistant_payload("RESOURCE_CONTEXT_OK"))
+        service = WorkflowService(
+            repository,
+            flow_type="WORKFLOW",
+            agent_repository=_AgentRepositoryStub(),
+            model_facade=_ModelFacadeStub(),
+            knowledge_facade=knowledge_facade,
+            llm_client_factory=lambda _config: fake_client,
+        )
+    
+>       result = service.execute(123, WorkflowRunRequest(input={"userMessage": "refund"}))
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/unit/workflow/test_service_provider_llm.py:101: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/modules/workflow/domain/service.py:166: in execute
+    ).run(workflow_id, input_data)
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/engine.py:1206: in run
+    output = self._run_graph(workflow_id, run_id, nodes, edges, input_data)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/engine.py:1325: in _run_graph
+    output = self._execute_node(workflow_id, current, context, input_data)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/engine.py:1361: in _execute_node
+    return LlmNodeExecutor(self._llm_completer, self._knowledge_facade, self._mcp_tool_executor).execute(node, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/engine.py:153: in execute
+    prompt = self._with_resource_context(config, context, prompt)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/engine.py:225: in _with_resource_context
+    snippets.extend(self._knowledge_context(resource, context, prompt))
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.modules.workflow.domain.engine.LlmNodeExecutor object at 0x11637e210>
+resource = {'knowledgeBaseId': 42, 'query': 'Lookup {{start.userMessage}}', 'topK': 2, 'type': 'KNOWLEDGE_BASE'}
+context = <app.modules.workflow.domain.context.ExecutionContext object at 0x11637c6e0>
+prompt = 'Canvas prompt: refund'
+
+    def _knowledge_context(self, resource: dict[str, Any], context: ExecutionContext, prompt: str) -> list[str]:
+        if self._knowledge_facade is None:
+            raise WorkflowExecutionError("Workflow knowledge facade is not configured")
+        knowledge_base_id = _resource_id(resource)
+        if knowledge_base_id is None:
+            raise WorkflowExecutionError("Knowledge resource requires knowledgeBaseId")
+        query = context.render(str(resource.get("query") or prompt))
+        top_k = _positive_int(resource.get("topK") or resource.get("top_k"), default=3)
+        return [
+            result.content
+>           for result in self._knowledge_facade.search_chunks(
+                knowledge_base_id,
+                query,
+                top_k=top_k,
+                retrieval_mode=_retrieval_mode(resource.get("retrievalMode") or resource.get("retrieval_mode")),
+                score_threshold=_score_threshold(
+                    resource.get("scoreThreshold") or resource.get("score_threshold")
+                ),
+                rerank=_bool_setting(resource.get("rerank"), default=False),
+            )
+        ]
+E       TypeError: _KnowledgeFacadeStub.search_chunks() got an unexpected keyword argument 'retrieval_mode'
+
+app/modules/workflow/domain/engine.py:255: TypeError
+_ WorkflowSixNodeMatrixTest.test_full_existing_six_node_chain_uses_branching_variables_and_outputs _
+
+self = <tests.unit.workflow.test_six_node_matrix.WorkflowSixNodeMatrixTest testMethod=test_full_existing_six_node_chain_uses_branching_variables_and_outputs>
+
+    def test_full_existing_six_node_chain_uses_branching_variables_and_outputs(self) -> None:
+        server = LocalApiServer()
+        server.start()
+        self.addCleanup(server.stop)
+        repository = _SixNodeRepositoryStub(server.url)
+        knowledge_facade = _KnowledgeFacadeStub()
+        llm_completer = _LlmCompleterStub()
+        engine = WorkflowExecutionEngine(
+            repository,
+            knowledge_facade=knowledge_facade,
+            llm_completer=llm_completer,
+        )
+    
+>       result = engine.run(8112, {"route": "kb", "question": "refund"})
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/unit/workflow/test_six_node_matrix.py:24: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/modules/workflow/domain/engine.py:1206: in run
+    output = self._run_graph(workflow_id, run_id, nodes, edges, input_data)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/engine.py:1325: in _run_graph
+    output = self._execute_node(workflow_id, current, context, input_data)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/engine.py:1405: in _execute_node
+    return KnowledgeNodeExecutor(self._knowledge_facade).execute(node, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.modules.workflow.domain.engine.KnowledgeNodeExecutor object at 0x11658dd00>
+node = {'config': {'knowledgeBaseId': 42, 'outputVariable': 'answer', 'query': 'Lookup {{start.question}}', 'topK': 2}, 'name': 'Knowledge', 'node_key': 'kb', 'type': 'KNOWLEDGE'}
+context = <app.modules.workflow.domain.context.ExecutionContext object at 0x11658e120>
+
+    def execute(self, node: dict[str, Any], context: ExecutionContext) -> dict[str, Any]:
+        config = _config(node)
+        output_variable = str(config.get("outputVariable") or "answer")
+        query = context.render(str(config.get("query") or ""))
+        knowledge_base_id = config.get("knowledgeBaseId") or config.get("knowledge_base_id")
+        if self._knowledge_facade is None or knowledge_base_id is None:
+            return {output_variable: f"Knowledge mock: {query}"}
+        top_k = _positive_int(config.get("topK") or config.get("top_k"), default=1)
+>       results = self._knowledge_facade.search_chunks(
+            int(knowledge_base_id),
+            query,
+            top_k=top_k,
+            retrieval_mode=_retrieval_mode(config.get("retrievalMode") or config.get("retrieval_mode")),
+            score_threshold=_score_threshold(config.get("scoreThreshold") or config.get("score_threshold")),
+            rerank=_bool_setting(config.get("rerank"), default=False),
+        )
+E       TypeError: _KnowledgeFacadeStub.search_chunks() got an unexpected keyword argument 'retrieval_mode'
+
+app/modules/workflow/domain/engine.py:1115: TypeError
+_ WorkflowSixNodeMatrixTest.test_selected_node_matrix_runs_each_existing_node_type_without_downstream (node_key='kb') _
+
+self = <tests.unit.workflow.test_six_node_matrix.WorkflowSixNodeMatrixTest testMethod=test_selected_node_matrix_runs_each_existing_node_type_without_downstream>
+
+    def test_selected_node_matrix_runs_each_existing_node_type_without_downstream(self) -> None:
+        server = LocalApiServer()
+        server.start()
+        self.addCleanup(server.stop)
+        repository = _SixNodeRepositoryStub(server.url)
+        knowledge_facade = _KnowledgeFacadeStub()
+        llm_completer = _LlmCompleterStub()
+        engine = WorkflowExecutionEngine(
+            repository,
+            knowledge_facade=knowledge_facade,
+            llm_completer=llm_completer,
+        )
+    
+        cases = [
+            ("start", {"route": "kb", "question": "refund"}, {"route": "kb", "question": "refund"}),
+            ("router", {"route": "kb"}, {"route": "kb"}),
+            ("kb", {"question": "refund"}, {"answer": "Refund policy matrix context."}),
+            (
+                "llm",
+                {"kb": {"answer": "KB fixture"}},
+                {
+                    "answer": "LLM_MATRIX_OK",
+                    "events": [
+                        {"type": "llm_delta", "nodeKey": "llm", "content": "LLM_MATRIX_OK"},
+                        {"type": "message_done", "nodeKey": "llm", "content": "LLM_MATRIX_OK"},
+                    ],
+                },
+            ),
+            (
+                "api",
+                {"llm": {"answer": "LLM_MATRIX_OK"}},
+                {"response": "API_REAL: POST /text/LLM_MATRIX_OK"},
+            ),
+            ("end", {"api": {"response": "API fixture"}}, {"final": "Final API fixture"}),
+        ]
+    
+        for node_key, input_data, expected_output in cases:
+            with self.subTest(node_key=node_key):
+>               result = engine.run_node(8112, node_key, input_data)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/unit/workflow/test_six_node_matrix.py:73: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/modules/workflow/domain/engine.py:1289: in run_node
+    output = self._execute_node(workflow_id, node, context, input_data)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/engine.py:1405: in _execute_node
+    return KnowledgeNodeExecutor(self._knowledge_facade).execute(node, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.modules.workflow.domain.engine.KnowledgeNodeExecutor object at 0x11637eba0>
+node = {'config': {'knowledgeBaseId': 42, 'outputVariable': 'answer', 'query': 'Lookup {{start.question}}', 'topK': 2}, 'name': 'Knowledge', 'node_key': 'kb', 'type': 'KNOWLEDGE'}
+context = <app.modules.workflow.domain.context.ExecutionContext object at 0x11637f7d0>
+
+    def execute(self, node: dict[str, Any], context: ExecutionContext) -> dict[str, Any]:
+        config = _config(node)
+        output_variable = str(config.get("outputVariable") or "answer")
+        query = context.render(str(config.get("query") or ""))
+        knowledge_base_id = config.get("knowledgeBaseId") or config.get("knowledge_base_id")
+        if self._knowledge_facade is None or knowledge_base_id is None:
+            return {output_variable: f"Knowledge mock: {query}"}
+        top_k = _positive_int(config.get("topK") or config.get("top_k"), default=1)
+>       results = self._knowledge_facade.search_chunks(
+            int(knowledge_base_id),
+            query,
+            top_k=top_k,
+            retrieval_mode=_retrieval_mode(config.get("retrievalMode") or config.get("retrieval_mode")),
+            score_threshold=_score_threshold(config.get("scoreThreshold") or config.get("score_threshold")),
+            rerank=_bool_setting(config.get("rerank"), default=False),
+        )
+E       TypeError: _KnowledgeFacadeStub.search_chunks() got an unexpected keyword argument 'retrieval_mode'
+
+app/modules/workflow/domain/engine.py:1115: TypeError
+_ WorkflowSixNodeMatrixTest.test_selected_node_matrix_runs_each_existing_node_type_without_downstream _
+
+self = <tests.unit.workflow.test_six_node_matrix.WorkflowSixNodeMatrixTest testMethod=test_selected_node_matrix_runs_each_existing_node_type_without_downstream>
+
+    def test_selected_node_matrix_runs_each_existing_node_type_without_downstream(self) -> None:
+        server = LocalApiServer()
+        server.start()
+        self.addCleanup(server.stop)
+        repository = _SixNodeRepositoryStub(server.url)
+        knowledge_facade = _KnowledgeFacadeStub()
+        llm_completer = _LlmCompleterStub()
+        engine = WorkflowExecutionEngine(
+            repository,
+            knowledge_facade=knowledge_facade,
+            llm_completer=llm_completer,
+        )
+    
+        cases = [
+            ("start", {"route": "kb", "question": "refund"}, {"route": "kb", "question": "refund"}),
+            ("router", {"route": "kb"}, {"route": "kb"}),
+            ("kb", {"question": "refund"}, {"answer": "Refund policy matrix context."}),
+            (
+                "llm",
+                {"kb": {"answer": "KB fixture"}},
+                {
+                    "answer": "LLM_MATRIX_OK",
+                    "events": [
+                        {"type": "llm_delta", "nodeKey": "llm", "content": "LLM_MATRIX_OK"},
+                        {"type": "message_done", "nodeKey": "llm", "content": "LLM_MATRIX_OK"},
+                    ],
+                },
+            ),
+            (
+                "api",
+                {"llm": {"answer": "LLM_MATRIX_OK"}},
+                {"response": "API_REAL: POST /text/LLM_MATRIX_OK"},
+            ),
+            ("end", {"api": {"response": "API fixture"}}, {"final": "Final API fixture"}),
+        ]
+    
+        for node_key, input_data, expected_output in cases:
+            with self.subTest(node_key=node_key):
+                result = engine.run_node(8112, node_key, input_data)
+                self.assertEqual(result.status, "SUCCEEDED")
+                self.assertEqual(result.output, expected_output)
+    
+>       self.assertEqual(knowledge_facade.requests, [(42, "Lookup refund", 2)])
+E       AssertionError: Lists differ: [] != [(42, 'Lookup refund', 2)]
+E       
+E       Second list contains 1 additional elements.
+E       First extra element 0:
+E       (42, 'Lookup refund', 2)
+E       
+E       - []
+E       + [(42, 'Lookup refund', 2)]
+
+tests/unit/workflow/test_six_node_matrix.py:77: AssertionError
+----------------------------- Captured stdout call -----------------------------
+u
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/vincento/work/develop/hify/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/acceptance/test_runtime_lab_live_qwen_core_airline_scenarios.py::RuntimeLabCoreAirlineMixedRoutingContractTest::test_forty_natural_core_airline_scenarios_cover_strong_keyword_routes_and_completion
+FAILED tests/e2e/test_runtime_lab_airline_scale_e2e.py::RuntimeLabAirlineScaleE2ETest::test_100_plus_realistic_airline_turns_route_collect_and_complete
+FAILED tests/e2e/test_runtime_lab_airline_scale_e2e.py::RuntimeLabAirlineScaleE2ETest::test_booking_uses_sales_collection_language_for_natural_reservation_turns
+FAILED tests/e2e/test_runtime_lab_airline_scale_e2e.py::RuntimeLabAirlineScaleE2ETest::test_enabled_sop_ids_scope_new_intent_routing_without_breaking_active_continuation
+FAILED tests/e2e/test_runtime_lab_airline_scale_e2e.py::RuntimeLabAirlineScaleE2ETest::test_real_chatflow_bound_sop_still_routes_through_runtime_lab_control_plane
+FAILED tests/e2e/test_runtime_lab_airline_scale_e2e.py::RuntimeLabAirlineScaleE2ETest::test_switch_resume_matrix_covers_five_airline_jumps_with_single_suspended_boundary
+FAILED tests/integration/runtime_lab/test_runtime_lab_reliability.py::RuntimeLabReliabilityTest::test_duplicate_idempotency_key_replays_without_duplicate_task_or_events
+FAILED tests/integration/workflow/test_chatflow_conversation_run.py::ChatflowConversationRunTest::test_chatflow_llm_run_emits_llm_delta_and_final_output
+FAILED tests/integration/workflow/test_six_node_matrix.py::WorkflowSixNodeMatrixIntegrationTest::test_workflow_api_runs_existing_six_node_matrix
+FAILED tests/integration/workflow/test_workflow_linear_run.py::WorkflowLinearRunTest::test_run_linear_workflow_records_run_and_node_runs
+FAILED tests/unit/workflow/test_chatflow_resource_context.py::ChatflowResourceContextTest::test_chatflow_llm_resource_context_includes_sys_query_and_history
+FAILED tests/unit/workflow/test_service_provider_llm.py::WorkflowServiceProviderLlmTest::test_execute_appends_knowledge_resource_context_before_llm_call
+FAILED tests/unit/workflow/test_six_node_matrix.py::WorkflowSixNodeMatrixTest::test_full_existing_six_node_chain_uses_branching_variables_and_outputs
+SUBFAILED(node_key='kb') tests/unit/workflow/test_six_node_matrix.py::WorkflowSixNodeMatrixTest::test_selected_node_matrix_runs_each_existing_node_type_without_downstream
+FAILED tests/unit/workflow/test_six_node_matrix.py::WorkflowSixNodeMatrixTest::test_selected_node_matrix_runs_each_existing_node_type_without_downstream
+============ 15 failed, 456 passed, 8 skipped, 1 warning in 52.52s =============

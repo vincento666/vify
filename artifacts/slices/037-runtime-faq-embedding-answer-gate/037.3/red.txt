@@ -1,0 +1,61 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/vincento/work/develop/hify
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1 item
+
+tests/integration/runtime_lab/test_runtime_lab_faq_semantic_policy.py F  [100%]
+
+=================================== FAILURES ===================================
+_ RuntimeLabFaqSemanticPolicyTest.test_active_sop_semantic_faq_with_slot_payload_clarifies_without_task_mutation _
+
+self = <test_runtime_lab_faq_semantic_policy.RuntimeLabFaqSemanticPolicyTest testMethod=test_active_sop_semantic_faq_with_slot_payload_clarifies_without_task_mutation>
+
+    def test_active_sop_semantic_faq_with_slot_payload_clarifies_without_task_mutation(self) -> None:
+        with _session() as session:
+            facade = _RecordingKnowledgeFacade(
+                {
+                    "儿童机票能不能返钱？订单TK-100": [
+                        _KnowledgeHit(
+                            source_type="FAQ",
+                            match_type="VECTOR",
+                            score=0.94,
+                            title="儿童票退票规则",
+                            answer="儿童票如未使用可按客票规则申请退票。",
+                            faq_id=37,
+                        ),
+                        _KnowledgeHit(
+                            source_type="FAQ",
+                            match_type="VECTOR",
+                            score=0.71,
+                            title="婴儿票退票规则",
+                            answer="婴儿票退票以客票规则为准。",
+                            faq_id=38,
+                        ),
+                    ],
+                }
+            )
+            repository = RuntimeLabRepository(session)
+            service = RuntimeLabService(
+                repository,
+                faq_semantic_gate=FaqSemanticAnswerGate(facade, knowledge_base_ids=[33], rerank=True),
+            )
+            runtime_session = service.create_session()
+            session_id = int(runtime_session["id"])
+    
+            started = service.handle_message(session_id, "我要退票")
+            before = dict(started.active_task)
+            clarified = service.handle_message(session_id, "儿童机票能不能返钱？订单TK-100")
+            after_checkpoint = repository.get_latest_checkpoint(int(before["id"]))
+    
+>           self.assertEqual(clarified.route_decision.action, "CLARIFY")
+E           AssertionError: 'ANSWER_FAQ' != 'CLARIFY'
+E           - ANSWER_FAQ
+E           + CLARIFY
+
+tests/integration/runtime_lab/test_runtime_lab_faq_semantic_policy.py:128: AssertionError
+=========================== short test summary info ============================
+FAILED tests/integration/runtime_lab/test_runtime_lab_faq_semantic_policy.py::RuntimeLabFaqSemanticPolicyTest::test_active_sop_semantic_faq_with_slot_payload_clarifies_without_task_mutation
+============================== 1 failed in 0.29s ===============================
