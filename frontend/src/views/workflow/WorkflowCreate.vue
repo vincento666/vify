@@ -828,6 +828,16 @@
               />
               会话历史
             </label>
+            <button
+              v-if="hasConditionBranchField(section)"
+              type="button"
+              class="section-icon-button"
+              aria-label="添加条件分支"
+              title="添加条件分支"
+              @click.stop="addConditionBranch"
+            >
+              <LucidePlus aria-hidden="true" />
+            </button>
           </div>
           <div
             v-show="!isConfigSectionCollapsed(section.title)"
@@ -835,7 +845,7 @@
             class="config-section-content"
           >
           <div v-for="field in section.fields" :key="field.key" class="config-field">
-            <div v-if="!['output-parameters', 'input-parameters', 'switch', 'end-response', 'end-answer-content', 'question-options', 'collection-fields', 'intent-rows', 'resource-adapter-badge', 'schema-input-mappings', 'legacy-resource-debug', 'json-field-mappings', 'aggregation-sources', 'variable-assignment', 'human-input-schema'].includes(field.type)" class="field-label-row">
+            <div v-if="shouldShowConfigFieldLabel(field.type)" class="field-label-row">
               <label>{{ field.label }}</label>
             </div>
             <div v-if="field.type === 'readonly'" class="readonly-values">
@@ -1216,10 +1226,6 @@
                   <span>添加条件</span>
                 </button>
               </article>
-              <button type="button" class="input-add-button condition-add-button" @click="addConditionBranch">
-                <LucidePlus aria-hidden="true" />
-                <span>添加条件分支</span>
-              </button>
               <div class="condition-default-row" data-testid="condition-default-card">
                 <span class="condition-branch-kind">否则</span>
                 <button
@@ -3798,6 +3804,33 @@ const filteredLlmSkillResources = computed(() => {
     )
     .slice(0, 20)
 })
+
+const labelHiddenConfigFieldTypes = new Set([
+  'output-parameters',
+  'input-parameters',
+  'condition-branches',
+  'switch',
+  'end-response',
+  'end-answer-content',
+  'question-options',
+  'collection-fields',
+  'intent-rows',
+  'resource-adapter-badge',
+  'schema-input-mappings',
+  'legacy-resource-debug',
+  'json-field-mappings',
+  'aggregation-sources',
+  'variable-assignment',
+  'human-input-schema',
+])
+
+function shouldShowConfigFieldLabel(fieldType: string) {
+  return !labelHiddenConfigFieldTypes.has(fieldType)
+}
+
+function hasConditionBranchField(section: { fields: Array<{ type: string }> }) {
+  return section.fields.some((field) => field.type === 'condition-branches')
+}
 
 function configSectionKey(title: string) {
   return `${selectedNode.value?.nodeKey || 'none'}:${title}`

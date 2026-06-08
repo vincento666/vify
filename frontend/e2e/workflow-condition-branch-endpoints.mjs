@@ -109,8 +109,23 @@ try {
   assert(panelText.includes('VIP 客户') && panelText.includes('普通客户'), `Condition panel must visibly render semantic branch names, got ${panelText}`)
   assert(!panelText.includes('全部满足') && !panelText.includes('任一满足'), `Condition panel must not expose generic all/any logic selectors, got ${panelText}`)
   assert(!panelText.includes('输入参数') && !panelText.includes('输出参数'), `Condition panel must not expose generic parameter sections, got ${panelText}`)
+  const conditionSection = page.getByTestId('config-section-条件分支')
+  const conditionSectionText = await conditionSection.textContent()
+  assert(
+    (conditionSectionText.match(/条件分支/g) || []).length === 1,
+    `Condition branch section must not repeat its title as a field label or text button, got ${conditionSectionText}`,
+  )
+  const conditionSectionHeader = conditionSection.locator('.section-title')
+  assert(
+    await conditionSectionHeader.getByRole('button', { name: '添加条件分支', exact: true }).count() === 1,
+    'Condition branch add action must be in the section header',
+  )
+  assert(
+    await conditionSection.getByTestId('condition-branch-editor').getByRole('button', { name: '添加条件分支', exact: true }).count() === 0,
+    'Condition branch editor must not render a duplicate bottom add-branch button',
+  )
 
-  await page.getByRole('button', { name: '添加条件分支', exact: true }).click()
+  await conditionSectionHeader.getByRole('button', { name: '添加条件分支', exact: true }).click()
   await page.waitForTimeout(200)
   await page.getByTestId('condition-branch-title').last().click()
   const branchNameInput = page.getByLabel('分支名称', { exact: true }).last()

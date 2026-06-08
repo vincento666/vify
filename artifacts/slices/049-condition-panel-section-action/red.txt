@@ -1,0 +1,9 @@
+file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-condition-branch-endpoints.mjs:7
+  if (!condition) throw new Error(message)
+                        ^
+
+Error: Condition branch section must not repeat its title as a field label or text button, got ›条件分支条件分支⋮⋮如果优先级 1VIP 客户点击编辑USER_INPUTstr.等于添加条件添加条件分支否则普通客户点击编辑
+    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-condition-branch-endpoints.mjs:7:25)
+    at file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-condition-branch-endpoints.mjs:114:3
+
+Node.js v23.11.0
