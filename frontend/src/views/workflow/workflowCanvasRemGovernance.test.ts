@@ -56,4 +56,17 @@ describe('workflow canvas rem governance', () => {
     expect(content).toContain('addWorkflowNode(graph.value, type, { x: 360 + offset, y: 260 + offset })')
     expect(content).toContain('event.node.position')
   })
+
+  it('anchors endpoint affordances from the original dot size instead of compounding hover scale', () => {
+    const content = readProjectFile('src/views/workflow/WorkflowCreate.vue')
+
+    expect(content).toContain('--node-port-dot-size: 0.75rem;')
+    expect(content).toContain('--node-port-hit-size: 7.3333rem;')
+    expect(content).toContain('--node-port-scale: 2;')
+    expect(content).toContain('--node-port-scale: 3;')
+    expect(content).toContain('width: var(--node-port-dot-size);')
+    expect(content).toContain('height: var(--node-port-dot-size);')
+    expect(content).toContain('right: calc(var(--node-port-hit-size) / -2);')
+    expect(content).toContain('left: calc(var(--node-port-hit-size) / -2);')
+  })
 })
