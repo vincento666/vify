@@ -68,6 +68,7 @@ def format_route_decision(decision: RouteDecision) -> dict[str, Any]:
         "classifierRequest": decision.classifier_request,
         "classifierResult": decision.classifier_result,
         "handoff": decision.handoff,
+        "faqAnswer": decision.faq_answer,
         "finalDecision": decision.final_decision or _final_decision(decision),
     }
 
@@ -89,4 +90,7 @@ def _final_decision(decision: RouteDecision) -> dict[str, Any]:
     if decision.handoff:
         payload["sourceLayer"] = decision.handoff.get("sourceLayer")
         payload["reasonCode"] = decision.handoff.get("reasonCode")
+    if decision.faq_answer:
+        payload["sourceLayer"] = decision.faq_answer.get("sourceLayer")
+        payload["reasonCode"] = decision.faq_answer.get("reasonCode")
     return payload

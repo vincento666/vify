@@ -15,7 +15,9 @@ from app.modules.chat.domain.llm_request import (
     ProviderChatConfig,
 )
 from app.modules.runtime_lab.domain.classifier import LlmConstrainedIntentClassifier
+from app.modules.knowledge.api.facade import KnowledgeFacade
 from app.modules.runtime_lab.domain.chatflow_adapter import ChatflowSopRuntimeAdapter
+from app.modules.runtime_lab.domain.faq_gate import FaqExactAnswerGate
 from app.modules.runtime_lab.domain.payload import format_event, format_session, format_task
 from app.modules.runtime_lab.domain.service import RuntimeLabService
 from app.modules.runtime_lab.domain.sop_adapter import FakeSopRuntimeAdapter
@@ -32,8 +34,9 @@ def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeL
     settings = get_settings()
     bindings = _runtime_lab_chatflow_bindings(settings.runtime_lab_sop_chatflow_ids)
     classifier = _runtime_lab_intent_classifier(settings)
+    faq_answer_gate = _runtime_lab_faq_answer_gate(settings, session)
     if not bindings:
-        return RuntimeLabService(RuntimeLabRepository(session), classifier=classifier)
+        return RuntimeLabService(RuntimeLabRepository(session), classifier=classifier, faq_answer_gate=faq_answer_gate)
     workflow_service = WorkflowService(
         WorkflowRepository(session),
         flow_type="CHATFLOW",
@@ -44,7 +47,12 @@ def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeL
         sop_chatflow_ids=bindings,
         fallback_adapter=FakeSopRuntimeAdapter(),
     )
-    return RuntimeLabService(RuntimeLabRepository(session), adapter=adapter, classifier=classifier)
+    return RuntimeLabService(
+        RuntimeLabRepository(session),
+        adapter=adapter,
+        classifier=classifier,
+        faq_answer_gate=faq_answer_gate,
+    )
 
 
 @router.post("/sessions")
@@ -103,6 +111,29 @@ def _runtime_lab_chatflow_bindings(raw: str | None) -> dict[str, int]:
         if sop_id.strip() and chatflow_id.strip():
             bindings[sop_id.strip()] = int(chatflow_id.strip())
     return bindings
+
+
+def _runtime_lab_faq_answer_gate(settings: Settings, session: Session) -> FaqExactAnswerGate | None:
+    knowledge_base_ids = _runtime_lab_id_list(settings.runtime_lab_faq_knowledge_base_ids)
+    if not knowledge_base_ids:
+        return None
+    return FaqExactAnswerGate(KnowledgeFacade(session), knowledge_base_ids=knowledge_base_ids)
+
+
+def _runtime_lab_id_list(raw: str | None) -> list[int]:
+    text = (raw or "").strip()
+    if not text:
+        return []
+    ids: list[int] = []
+    for item in text.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        try:
+            ids.append(int(item))
+        except ValueError:
+            continue
+    return ids
 
 
 def _runtime_lab_intent_classifier(settings: Settings) -> LlmConstrainedIntentClassifier | None:

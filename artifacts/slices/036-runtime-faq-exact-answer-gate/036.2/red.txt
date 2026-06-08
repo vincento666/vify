@@ -1,0 +1,39 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/vincento/work/develop/hify
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 2 items
+
+tests/integration/runtime_lab/test_runtime_lab_faq_exact_policy.py FF    [100%]
+
+=================================== FAILURES ===================================
+_ RuntimeLabFaqExactPolicyTest.test_explicit_handoff_mixed_with_faq_wins_before_faq_gate _
+
+self = <test_runtime_lab_faq_exact_policy.RuntimeLabFaqExactPolicyTest testMethod=test_explicit_handoff_mixed_with_faq_wins_before_faq_gate>
+
+    def test_explicit_handoff_mixed_with_faq_wins_before_faq_gate(self) -> None:
+        with _session() as session:
+            faq_gate = _StaticFaqGate(_child_ticket_refund_proposal())
+>           service = RuntimeLabService(RuntimeLabRepository(session), faq_answer_gate=faq_gate)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           TypeError: RuntimeLabService.__init__() got an unexpected keyword argument 'faq_answer_gate'
+
+tests/integration/runtime_lab/test_runtime_lab_faq_exact_policy.py:39: TypeError
+_ RuntimeLabFaqExactPolicyTest.test_no_active_exact_faq_answers_before_sop_arbitration _
+
+self = <test_runtime_lab_faq_exact_policy.RuntimeLabFaqExactPolicyTest testMethod=test_no_active_exact_faq_answers_before_sop_arbitration>
+
+    def test_no_active_exact_faq_answers_before_sop_arbitration(self) -> None:
+        with _session() as session:
+            faq_gate = _StaticFaqGate(_child_ticket_refund_proposal())
+>           service = RuntimeLabService(RuntimeLabRepository(session), faq_answer_gate=faq_gate)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           TypeError: RuntimeLabService.__init__() got an unexpected keyword argument 'faq_answer_gate'
+
+tests/integration/runtime_lab/test_runtime_lab_faq_exact_policy.py:19: TypeError
+=========================== short test summary info ============================
+FAILED tests/integration/runtime_lab/test_runtime_lab_faq_exact_policy.py::RuntimeLabFaqExactPolicyTest::test_explicit_handoff_mixed_with_faq_wins_before_faq_gate
+FAILED tests/integration/runtime_lab/test_runtime_lab_faq_exact_policy.py::RuntimeLabFaqExactPolicyTest::test_no_active_exact_faq_answers_before_sop_arbitration
+============================== 2 failed in 0.31s ===============================

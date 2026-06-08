@@ -1,4 +1,5 @@
 import hashlib
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -7,6 +8,7 @@ from app.core.errors import BizError, ErrorCode
 from app.modules.runtime_lab.domain.candidates import RouteCandidate, select_top_candidates
 from app.modules.runtime_lab.domain.classifier import ClassifierInput, ClassifierResult, FakeConstrainedIntentClassifier
 from app.modules.runtime_lab.domain.explicit_signals import ExplicitSignalDetector
+from app.modules.runtime_lab.domain.faq_gate import FaqAnswerGate
 from app.modules.runtime_lab.domain.payload import format_turn
 from app.modules.runtime_lab.domain.policy import PolicyGate
 from app.modules.runtime_lab.domain.recall import MockSemanticCandidateRecall
@@ -52,6 +54,7 @@ class RuntimeLabService:
         adapter: SopRuntimeAdapter | None = None,
         classifier: Any | None = None,
         handoff_service: HandoffRuntimeService | None = None,
+        faq_answer_gate: FaqAnswerGate | None = None,
     ) -> None:
         self._repository = repository
         self._manifests = mock_sop_manifests()
@@ -62,6 +65,7 @@ class RuntimeLabService:
         self._classifier = classifier or FakeConstrainedIntentClassifier()
         self._policy_gate = PolicyGate(self._adapter)
         self._handoff_service = handoff_service
+        self._faq_answer_gate = faq_answer_gate
 
     def create_session(self) -> dict[str, Any]:
         runtime_session = self._repository.create_session()
@@ -84,6 +88,9 @@ class RuntimeLabService:
 
         if decision.action == "HANDOFF_TO_HUMAN":
             return self._handoff_turn(session_id, message, decision)
+
+        if decision.action == "ANSWER_FAQ":
+            return self._faq_turn(session_id, decision)
 
         if decision.action == "START_SOP" and decision.target_sop_id is not None:
             result = self._adapter.start_sop(
@@ -182,6 +189,12 @@ class RuntimeLabService:
         enabled_sop_ids: frozenset[str] | None,
     ) -> RouteDecision:
         candidates = self._route_candidates(message, active_task, suspended_tasks, enabled_sop_ids)
+        hard_stop_decision = self._policy_gate.pre_classifier_decision(candidates, active_task, len(suspended_tasks))
+        if hard_stop_decision is not None and hard_stop_decision.action == "HANDOFF_TO_HUMAN":
+            return _with_evidence(hard_stop_decision, candidates, "explicit_signal")
+        faq_decision = self._faq_answer_decision(message, active_task, suspended_tasks)
+        if faq_decision is not None:
+            return _with_evidence(faq_decision, candidates, "faq_exact")
         if not candidates:
             if enabled_sop_ids is not None:
                 return _with_evidence(
@@ -239,6 +252,31 @@ class RuntimeLabService:
             ),
         ]
         return select_top_candidates(candidates, top_k=5)
+
+    def _faq_answer_decision(
+        self,
+        message: str,
+        active_task: dict[str, Any] | None,
+        suspended_tasks: list[dict[str, Any]],
+    ) -> RouteDecision | None:
+        if self._faq_answer_gate is None:
+            return None
+        proposal = self._faq_answer_gate.propose(
+            message,
+            active_task=active_task,
+            suspended_tasks=suspended_tasks,
+        )
+        if proposal is None:
+            return None
+        if active_task is not None and _is_ambiguous_active_faq_input(message):
+            faq_answer = dict(proposal.to_route_decision().faq_answer or {})
+            faq_answer["reasonCode"] = "AMBIGUOUS_ACTIVE_SOP"
+            return RouteDecision(
+                action="CLARIFY",
+                reason="Active SOP input is ambiguous between FAQ answer and slot collection",
+                faq_answer=faq_answer,
+            )
+        return proposal.to_route_decision()
 
     def _normalize_enabled_sop_ids(self, enabled_sop_ids: Sequence[str] | None) -> frozenset[str] | None:
         if enabled_sop_ids is None:
@@ -450,6 +488,11 @@ class RuntimeLabService:
             events=self._repository.list_events(session_id),
         )
 
+    def _faq_turn(self, session_id: int, decision: RouteDecision) -> RuntimeLabTurn:
+        faq_answer = decision.faq_answer or {}
+        self._repository.append_event(session_id, "FAQ_ANSWERED", faq_answer)
+        return self._turn(session_id, str(faq_answer.get("answer") or ""), decision)
+
     def _handoff_turn(self, session_id: int, message: str, decision: RouteDecision) -> RuntimeLabTurn:
         self._repository.append_event(session_id, "HANDOFF_DECIDED", _decision_payload(decision))
         snapshot = self._handoff_context_snapshot(session_id, message, decision)
@@ -579,6 +622,7 @@ def _decision_payload(decision: RouteDecision) -> dict[str, Any]:
         "classifierResult": decision.classifier_result,
         "finalDecision": decision.final_decision or _final_decision_payload(decision),
         "handoff": decision.handoff,
+        "faqAnswer": decision.faq_answer,
     }
 
 
@@ -604,7 +648,28 @@ def _final_decision_payload(decision: RouteDecision) -> dict[str, Any]:
     if decision.handoff:
         payload["sourceLayer"] = decision.handoff.get("sourceLayer")
         payload["reasonCode"] = decision.handoff.get("reasonCode")
+    if decision.faq_answer:
+        payload["sourceLayer"] = decision.faq_answer.get("sourceLayer")
+        payload["reasonCode"] = decision.faq_answer.get("reasonCode")
     return payload
+
+
+def _is_ambiguous_active_faq_input(message: str) -> bool:
+    text = message.strip()
+    if not _looks_like_question(text):
+        return False
+    return _looks_like_slot_payload(text)
+
+
+def _looks_like_question(text: str) -> bool:
+    return "?" in text or "？" in text or any(term in text for term in ("可以", "能", "怎么", "如何", "吗"))
+
+
+def _looks_like_slot_payload(text: str) -> bool:
+    slot_terms = ("订单", "票号", "手机号", "电话", "证件", "身份证", "护照", "乘机人")
+    if any(term in text for term in slot_terms):
+        return True
+    return re.search(r"[A-Za-z]{1,6}-?\d{2,}|\d{6,}", text) is not None
 
 
 def _request_hash(message: str, enabled_sop_ids: Sequence[str] | None = None) -> str:
@@ -663,5 +728,6 @@ def _with_evidence(
         classifier_request=classifier_input.to_dict() if classifier_input else None,
         classifier_result=classifier_result.to_dict() if classifier_result else None,
         handoff=decision.handoff,
+        faq_answer=decision.faq_answer,
         final_decision=_final_decision_payload(decision),
     )

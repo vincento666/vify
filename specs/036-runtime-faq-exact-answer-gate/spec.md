@@ -78,8 +78,35 @@ answer was returned and prove the answer came from a structured FAQ source.
 
 ## Specification Sign-off
 
-Status: ready for implementation.
+Status: complete.
 
 Numbering was rechecked on 2026-06-09. 036 follows the existing 035 Knowledge
 Retrieval Productization spec and consumes its retrieval contracts without
 duplicating knowledge-module implementation work.
+
+## Completion Evidence
+
+Completed on 2026-06-09 with the following gates:
+
+- RED:
+  `artifacts/slices/036-runtime-faq-exact-answer-gate/036.1/red.txt`,
+  `artifacts/slices/036-runtime-faq-exact-answer-gate/036.2/red.txt`,
+  `artifacts/slices/036-runtime-faq-exact-answer-gate/036.2/red-knowledge-gate.txt`,
+  `artifacts/slices/036-runtime-faq-exact-answer-gate/036.3/red.txt`
+- Unit/integration:
+  `artifacts/slices/036-runtime-faq-exact-answer-gate/036.1/unit.txt`,
+  `artifacts/slices/036-runtime-faq-exact-answer-gate/036.2/unit-integration.txt`,
+  `artifacts/slices/036-runtime-faq-exact-answer-gate/036.3/unit-integration.txt`
+- Runtime-lab API E2E and regression:
+  `artifacts/slices/036-runtime-faq-exact-answer-gate/036.3/final-targeted.txt`
+  (`26 passed`)
+- Browser UAT through Swagger UI:
+  `artifacts/slices/036-runtime-faq-exact-answer-gate/036.3/uat.md`,
+  `artifacts/slices/036-runtime-faq-exact-answer-gate/036.3/browser-uat-result.json`,
+  `artifacts/slices/036-runtime-faq-exact-answer-gate/036.3/screenshots/browser-uat-faq.png`
+
+Full backend pytest was attempted and saved to
+`artifacts/slices/036-runtime-faq-exact-answer-gate/036.3/full-backend.txt`.
+It produced `451 passed, 8 skipped, 15 failed`; the observed failures are
+outside the 036 target gate, including existing runtime-lab chatflow-adapter
+host resolution failures and workflow knowledge-facade stub signature drift.

@@ -1,0 +1,52 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/vincento/work/develop/hify
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 2 items
+
+tests/unit/runtime_lab/test_faq_exact_answer_contract.py FF              [100%]
+
+=================================== FAILURES ===================================
+_ FaqExactAnswerContractTest.test_answer_faq_route_decision_payload_exposes_normalized_evidence _
+
+self = <test_faq_exact_answer_contract.FaqExactAnswerContractTest testMethod=test_answer_faq_route_decision_payload_exposes_normalized_evidence>
+
+    def test_answer_faq_route_decision_payload_exposes_normalized_evidence(self) -> None:
+        payload = format_route_decision(
+>           RouteDecision(
+                action="ANSWER_FAQ",
+                reason="Exact FAQ accepted before SOP arbitration",
+                faq_answer={
+                    "sourceLayer": "faq_exact",
+                    "reasonCode": "EXACT_MATCH",
+                    "answer": "儿童票如未使用可按客票规则申请退票。",
+                    "confidence": 1.0,
+                    "margin": 1.0,
+                    "mutatesSopState": False,
+                    "evidence": {
+                        "faqId": 12,
+                        "question": "儿童票可以退吗？",
+                        "matchType": "EXACT",
+                        "source": "structured_faq",
+                    },
+                },
+            )
+        )
+E       TypeError: RouteDecision.__init__() got an unexpected keyword argument 'faq_answer'
+
+tests/unit/runtime_lab/test_faq_exact_answer_contract.py:10: TypeError
+_ FaqExactAnswerContractTest.test_faq_answer_proposal_builds_route_decision_without_sop_mutation _
+
+self = <test_faq_exact_answer_contract.FaqExactAnswerContractTest testMethod=test_faq_answer_proposal_builds_route_decision_without_sop_mutation>
+
+    def test_faq_answer_proposal_builds_route_decision_without_sop_mutation(self) -> None:
+>       from app.modules.runtime_lab.domain.faq_gate import FaqAnswerEvidence, FaqAnswerProposal
+E       ModuleNotFoundError: No module named 'app.modules.runtime_lab.domain.faq_gate'
+
+tests/unit/runtime_lab/test_faq_exact_answer_contract.py:40: ModuleNotFoundError
+=========================== short test summary info ============================
+FAILED tests/unit/runtime_lab/test_faq_exact_answer_contract.py::FaqExactAnswerContractTest::test_answer_faq_route_decision_payload_exposes_normalized_evidence
+FAILED tests/unit/runtime_lab/test_faq_exact_answer_contract.py::FaqExactAnswerContractTest::test_faq_answer_proposal_builds_route_decision_without_sop_mutation
+============================== 2 failed in 0.03s ===============================

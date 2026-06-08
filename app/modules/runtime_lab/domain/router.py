@@ -29,6 +29,7 @@ class RouteDecision:
     classifier_result: dict[str, Any] | None = None
     final_decision: dict[str, Any] | None = None
     handoff: dict[str, Any] | None = None
+    faq_answer: dict[str, Any] | None = None
 
 
 class RuntimeLabRouter:

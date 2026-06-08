@@ -57,6 +57,31 @@ artifacts/slices/036-runtime-faq-exact-answer-gate/
 No frontend change is required unless the existing 034 lab cannot show the
 route action/evidence.
 
+## Execution Result
+
+036 was implemented as a single completion commit after all 036.1-036.3 gates
+were green, rather than committing each internal sub-slice independently. This
+keeps the stricter user gate intact: no work moves to 037 until 036 RED,
+unit/integration, API E2E, and browser-control UAT evidence exists.
+
+Final targeted gate:
+
+```text
+artifacts/slices/036-runtime-faq-exact-answer-gate/036.3/final-targeted.txt
+26 passed
+```
+
+Browser-control UAT:
+
+```text
+artifacts/slices/036-runtime-faq-exact-answer-gate/036.3/uat.md
+artifacts/slices/036-runtime-faq-exact-answer-gate/036.3/browser-uat-result.json
+```
+
+Full backend pytest was attempted and documented at
+`artifacts/slices/036-runtime-faq-exact-answer-gate/036.3/full-backend.txt`.
+The remaining failures are pre-existing or outside 036's target surface.
+
 ## Non-Goals
 
 - no semantic FAQ embeddings;
