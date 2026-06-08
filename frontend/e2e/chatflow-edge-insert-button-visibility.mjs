@@ -72,6 +72,19 @@ try {
     'Expected pane click to clear selected edge insert button',
   )
 
+  await edge.locator('.vue-flow__edge-interaction').hover({ force: true })
+  await visibleButton.waitFor({ state: 'visible', timeout: 5000 })
+  await visibleButton.click()
+  await page.getByTestId('edge-insert-palette').waitFor({ state: 'visible', timeout: 5000 })
+  await visibleButton.click()
+  await page.getByTestId('edge-insert-palette').waitFor({ state: 'hidden', timeout: 5000 })
+  await page.mouse.move(80, 820)
+  await page.waitForTimeout(180)
+  assert(
+    await visibleInsertButtonCount(page) === 0,
+    'Expected closing the edge insert palette to also clear stale edge selection and hide the plus button',
+  )
+
   if (screenshotPath) {
     await page.screenshot({ path: screenshotPath, fullPage: true })
   }

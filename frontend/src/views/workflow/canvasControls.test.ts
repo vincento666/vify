@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  CANVAS_CONNECTION_RADIUS,
+  CANVAS_ENDPOINT_PREVIEW_RADIUS,
   CANVAS_PANE_CLICK_DISTANCE,
   CANVAS_TRACKPAD_PAN_SPEED,
   CANVAS_ZOOM_ANIMATION_MS,
@@ -40,5 +42,9 @@ describe('workflow canvas controls', () => {
     expect(CANVAS_TRACKPAD_PAN_SPEED).toBeLessThanOrEqual(1.2)
     expect(CANVAS_ZOOM_ANIMATION_MS).toBeLessThanOrEqual(90)
     expect(CANVAS_PANE_CLICK_DISTANCE).toBeGreaterThanOrEqual(3)
+  })
+
+  it('keeps endpoint preview radius larger than the magnetic connection radius', () => {
+    expect(CANVAS_ENDPOINT_PREVIEW_RADIUS).toBeGreaterThan(CANVAS_CONNECTION_RADIUS)
   })
 })

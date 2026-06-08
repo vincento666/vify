@@ -3420,6 +3420,7 @@ import {
 } from './chatflowDebugTimeline'
 import {
   CANVAS_CONNECTION_RADIUS,
+  CANVAS_ENDPOINT_PREVIEW_RADIUS,
   CANVAS_PANE_CLICK_DISTANCE,
   CANVAS_TRACKPAD_PAN_SPEED,
   CANVAS_ZOOM_ANIMATION_MS,
@@ -4620,9 +4621,15 @@ function removeEdge(edgeId: string) {
 }
 
 function openEdgeInsertPalette(edgeId: string) {
+  if (edgeInsertPaletteId.value === edgeId) {
+    clearEdgeInteractionState()
+    nodePaletteSearch.value = ''
+    void nextTick(() => canvasStageRef.value?.focus())
+    return
+  }
   selectedEdgeId.value = edgeId
   hoveredEdgeId.value = edgeId
-  edgeInsertPaletteId.value = edgeInsertPaletteId.value === edgeId ? '' : edgeId
+  edgeInsertPaletteId.value = edgeId
   paletteOpen.value = false
   selectedNodeKey.value = ''
   void nextTick(() => canvasStageRef.value?.focus())
@@ -4948,7 +4955,7 @@ function handleGlobalConnectionPointerMove(event: PointerEvent) {
     const centerX = rect.left + rect.width / 2
     const centerY = rect.top + rect.height / 2
     const distance = Math.hypot(centerX - event.clientX, centerY - event.clientY)
-    if (distance > CANVAS_CONNECTION_RADIUS || distance >= nearestDistance) return
+    if (distance > CANVAS_ENDPOINT_PREVIEW_RADIUS || distance >= nearestDistance) return
     nearestDistance = distance
     nearestKey = nodePortKey(nodeKey, expectedPortType, port.dataset.handleId || '')
   })
@@ -7960,7 +7967,7 @@ onUnmounted(() => {
 
 .edge-insert-button {
   position: absolute;
-  z-index: 72;
+  z-index: 130;
   width: 2.5rem;
   height: 2.5rem;
   display: inline-flex;
