@@ -7,6 +7,7 @@ export const CANVAS_ZOOM_MAX = CANVAS_ZOOM_PRESETS[CANVAS_ZOOM_PRESETS.length - 
 export const CANVAS_TRACKPAD_PAN_SPEED = 0.9
 export const CANVAS_ZOOM_ANIMATION_MS = 80
 export const CANVAS_PANE_CLICK_DISTANCE = 4
+export const CANVAS_CONNECTION_RADIUS = 44
 
 export function clampCanvasZoom(zoom: number) {
   if (!Number.isFinite(zoom)) return 1

@@ -206,6 +206,7 @@
         :zoom-on-scroll="operationMode === 'mouse'"
         :zoom-on-pinch="operationMode === 'trackpad'"
         :pane-click-distance="CANVAS_PANE_CLICK_DISTANCE"
+        :connection-radius="CANVAS_CONNECTION_RADIUS"
         :delete-key-code="null"
         fit-view-on-init
         @viewport-change="handleViewportChange"
@@ -3240,6 +3241,7 @@ import {
   type ChatflowResumeField,
 } from './chatflowDebugTimeline'
 import {
+  CANVAS_CONNECTION_RADIUS,
   CANVAS_PANE_CLICK_DISTANCE,
   CANVAS_TRACKPAD_PAN_SPEED,
   CANVAS_ZOOM_ANIMATION_MS,
@@ -7843,7 +7845,11 @@ onUnmounted(() => {
   box-shadow: 0 0 0 0.25rem rgba(107, 111, 247, 0.12);
 }
 
-.coze-node .node-port:hover {
+.coze-node .node-port:hover,
+.coze-node .node-port.connecting,
+.coze-node .node-port.valid,
+.coze-node .node-port.vue-flow__handle-connecting,
+.coze-node .node-port.vue-flow__handle-valid {
   --node-port-scale: 1.5;
   background: #5558f6;
   box-shadow: 0 0 0 0.3125rem rgba(85, 88, 246, 0.16);
