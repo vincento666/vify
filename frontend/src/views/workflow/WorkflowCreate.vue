@@ -348,7 +348,7 @@
               </div>
             </div>
             <div v-else class="node-line" :class="{ 'start-input-line': nodeProps.data.type === 'START' }">
-              <span>{{ nodeProps.data.type === 'END' ? '输出' : '输入' }}</span>
+              <span>{{ nodeProps.data.type === 'START' ? '输出' : '输入' }}</span>
               <template v-if="nodeProps.data.type === 'START'">
                 <div class="node-variable-shell">
                   <div
@@ -392,30 +392,30 @@
                 <div class="node-variable-shell">
                   <div
                     class="node-variable-list"
-                    :aria-label="nodeVariableTooltip(nodeProps.data.outputVariables)"
+                    :aria-label="nodeVariableTooltip(nodeProps.data.inputVariables)"
                     tabindex="0"
                   >
                     <em
-                      v-for="value in nodeVisibleVariables(nodeProps.data.outputVariables)"
+                      v-for="value in nodeVisibleVariables(nodeProps.data.inputVariables)"
                       :key="value"
                       class="node-variable-badge"
                     >
                       <span>str.</span>{{ value }}
                     </em>
                     <span
-                      v-if="nodeHasHiddenVariables(nodeProps.data.outputVariables)"
+                      v-if="nodeHasHiddenVariables(nodeProps.data.inputVariables)"
                       class="node-variable-more"
                     >
                       ...
                     </span>
                   </div>
                   <div
-                    v-if="nodeHasHiddenVariables(nodeProps.data.outputVariables)"
+                    v-if="nodeHasHiddenVariables(nodeProps.data.inputVariables)"
                     class="node-variable-popover"
                     role="tooltip"
                   >
                     <em
-                      v-for="value in nodeProps.data.outputVariables"
+                      v-for="value in nodeProps.data.inputVariables"
                       :key="`popover-output-${value}`"
                       class="node-variable-popover-badge"
                     >

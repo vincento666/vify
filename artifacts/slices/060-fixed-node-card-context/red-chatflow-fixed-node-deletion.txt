@@ -1,0 +1,12 @@
+file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-fixed-node-deletion.mjs:7
+  if (!condition) throw new Error(message)
+                        ^
+
+Error: START card should expose output variables, got 开始
+输入
+str.USER_INPUT
+str.CONVERSATION_NAME
+    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-fixed-node-deletion.mjs:7:25)
+    at file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-fixed-node-deletion.mjs:45:3
+
+Node.js v23.11.0
