@@ -1043,7 +1043,6 @@
                     @click="startConditionBranchNameEdit(branchIndex)"
                   >
                     <strong>{{ branch.name }}</strong>
-                    <span>点击编辑</span>
                   </button>
                   <el-input
                     v-else
@@ -1267,7 +1266,6 @@
                   @click="startConditionDefaultNameEdit"
                 >
                   <strong>{{ conditionDefaultBranchName(selectedNode.config) }}</strong>
-                  <span>点击编辑</span>
                 </button>
                 <el-input
                   v-else
@@ -10386,13 +10384,6 @@ onUnmounted(() => {
   font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.condition-branch-title span {
-  flex: 0 0 auto;
-  color: #8b93a7;
-  font-size: 0.75rem;
-  font-weight: 800;
 }
 
 .condition-branch-name-input :deep(.el-input__wrapper),

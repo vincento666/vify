@@ -107,6 +107,7 @@ try {
   const panelText = await page.getByTestId('node-config-panel').textContent()
   assert(panelText.includes('连接多个下游分支'), `Condition panel must explain selector branch priority, got ${panelText}`)
   assert(panelText.includes('VIP 客户') && panelText.includes('普通客户'), `Condition panel must visibly render semantic branch names, got ${panelText}`)
+  assert(!panelText.includes('点击编辑'), `Condition branch headers must be directly editable without visible helper copy, got ${panelText}`)
   assert(!panelText.includes('全部满足') && !panelText.includes('任一满足'), `Condition panel must not expose generic all/any logic selectors, got ${panelText}`)
   assert(!panelText.includes('输入参数') && !panelText.includes('输出参数'), `Condition panel must not expose generic parameter sections, got ${panelText}`)
   const conditionSection = page.getByTestId('config-section-条件分支')
