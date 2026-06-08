@@ -227,3 +227,56 @@ and follow-up reply samples.
   `artifacts/slices/034-unified-routing-chat-lab/034.5/frontend-related.txt`;
 - browser UAT:
   `artifacts/slices/034-unified-routing-chat-lab/034.5/browser-uat.md`.
+
+## 034.6 Strong Trigger Templates And Airline Four-Area Scale
+
+Status: complete.
+
+034.6 answers two routing-readiness questions:
+
+- Strong SOP triggering can be configured with keyword templates, not only exact
+  literal keywords. Templates support phrase matches, all-term matches, and
+  regex matches with per-template score tuning.
+- The default runtime-lab intent arbitrator remains deterministic fake mode.
+  A constrained LLM arbitrator adapter now exists for injection, and every
+  classifier result exposes `arbitrator_mode` and `used_real_llm` evidence so
+  tests and operators can tell whether a real LLM was used.
+
+The airline catalog is expanded to 15 SOPs across four business areas:
+
+- sales: `flight_booking`, `fare_quote`, `group_booking`,
+  `ancillary_sales`;
+- refund: `refund_ticket`;
+- change: `change_flight`, `passenger_info_change`;
+- consultation: `invoice_apply`, `baggage_service`, `seat_checkin`,
+  `flight_status`, `special_assistance`, `pet_cabin`, `irregular_flight`,
+  `membership_service`.
+
+034.6 final coverage:
+
+- each SOP has depth >= 5 and at least three strong trigger templates;
+- backend scale gate covers 150 realistic start utterances, collection,
+  confirmation, five switch/resume journeys, and one real Chatflow-bound SOP;
+- frontend lab exposes all 15 SOP trigger-sample groups while keeping free-form
+  message entry as the actual trigger mechanism;
+- browser UAT drives 15 complete journeys and five switch/resume journeys
+  through `/runtime-lab/chat`.
+
+034.6 evidence:
+
+- RED backend:
+  `artifacts/slices/034-unified-routing-chat-lab/034.6/red-backend-effective.txt`;
+- backend runtime-lab gate:
+  `artifacts/slices/034-unified-routing-chat-lab/034.6/backend-runtime-lab-all-final.txt`;
+- full backend pytest:
+  `artifacts/slices/034-unified-routing-chat-lab/034.6/backend-full-pytest-final.txt`;
+- frontend REM:
+  `artifacts/slices/034-unified-routing-chat-lab/034.6/frontend-rem.txt`;
+- full frontend unit:
+  `artifacts/slices/034-unified-routing-chat-lab/034.6/frontend-unit.txt`;
+- frontend build:
+  `artifacts/slices/034-unified-routing-chat-lab/034.6/frontend-build.txt`;
+- browser UAT:
+  `artifacts/slices/034-unified-routing-chat-lab/034.6/browser-uat.md`;
+- badcases:
+  `artifacts/slices/034-unified-routing-chat-lab/034.6/badcases.md`.

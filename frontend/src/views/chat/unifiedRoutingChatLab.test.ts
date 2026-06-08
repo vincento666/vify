@@ -7,10 +7,15 @@ import {
 } from './unifiedRoutingChatLab'
 
 describe('unified routing chat lab model', () => {
-  it('offers the ten airline SOP scenarios used by the runtime business gate', () => {
+  it('offers the fifteen airline SOP scenarios used by the runtime business gate', () => {
     expect(AIRLINE_SOP_SCENARIOS.map((scenario) => scenario.id)).toEqual([
+      'flight_booking',
+      'fare_quote',
+      'group_booking',
+      'ancillary_sales',
       'refund_ticket',
       'change_flight',
+      'passenger_info_change',
       'invoice_apply',
       'baggage_service',
       'seat_checkin',

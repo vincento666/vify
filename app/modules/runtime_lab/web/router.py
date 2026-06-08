@@ -5,9 +5,16 @@ from typing import Any
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.core.database import get_session
 from app.core.responses import success
+from app.modules.chat.domain.llm_request import (
+    ChatRequestMessage,
+    OpenAIChatRequestBuilder,
+    ProviderBackedOpenAIChatClient,
+    ProviderChatConfig,
+)
+from app.modules.runtime_lab.domain.classifier import LlmConstrainedIntentClassifier
 from app.modules.runtime_lab.domain.chatflow_adapter import ChatflowSopRuntimeAdapter
 from app.modules.runtime_lab.domain.payload import format_event, format_session, format_task
 from app.modules.runtime_lab.domain.service import RuntimeLabService
@@ -22,9 +29,11 @@ router = APIRouter(prefix="/api/v1/runtime-lab", tags=["runtime-lab"])
 
 
 def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeLabService:
-    bindings = _runtime_lab_chatflow_bindings(get_settings().runtime_lab_sop_chatflow_ids)
+    settings = get_settings()
+    bindings = _runtime_lab_chatflow_bindings(settings.runtime_lab_sop_chatflow_ids)
+    classifier = _runtime_lab_intent_classifier(settings)
     if not bindings:
-        return RuntimeLabService(RuntimeLabRepository(session))
+        return RuntimeLabService(RuntimeLabRepository(session), classifier=classifier)
     workflow_service = WorkflowService(
         WorkflowRepository(session),
         flow_type="CHATFLOW",
@@ -35,7 +44,7 @@ def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeL
         sop_chatflow_ids=bindings,
         fallback_adapter=FakeSopRuntimeAdapter(),
     )
-    return RuntimeLabService(RuntimeLabRepository(session), adapter=adapter)
+    return RuntimeLabService(RuntimeLabRepository(session), adapter=adapter, classifier=classifier)
 
 
 @router.post("/sessions")
@@ -89,3 +98,73 @@ def _runtime_lab_chatflow_bindings(raw: str | None) -> dict[str, int]:
         if sop_id.strip() and chatflow_id.strip():
             bindings[sop_id.strip()] = int(chatflow_id.strip())
     return bindings
+
+
+def _runtime_lab_intent_classifier(settings: Settings) -> LlmConstrainedIntentClassifier | None:
+    mode = settings.runtime_lab_intent_arbitrator_mode.strip().lower()
+    if mode != "llm":
+        return None
+    base_url = (settings.runtime_lab_intent_arbitrator_base_url or "").strip()
+    model = settings.runtime_lab_intent_arbitrator_model.strip()
+    api_key = (settings.runtime_lab_intent_arbitrator_api_key or "").strip()
+    if not base_url or not model:
+        return None
+    if not api_key and not base_url.startswith("mock://"):
+        return None
+    client = ProviderBackedOpenAIChatClient(
+        ProviderChatConfig(
+            provider_type="OPENAI_COMPATIBLE",
+            base_url=base_url,
+            auth_config={"api_key": api_key},
+        ),
+        timeout=20.0,
+        max_attempts=1,
+    )
+    builder = OpenAIChatRequestBuilder()
+
+    def complete(classifier_payload: dict[str, Any]) -> dict[str, Any]:
+        llm_payload = builder.build(
+            model=model,
+            messages=[
+                ChatRequestMessage(
+                    role="system",
+                    content=(
+                        "你是民航客服路由仲裁器。只能从用户给定的 candidates 和 allowedActions 中选择，"
+                        "返回 JSON 对象：selected_action, selected_candidate_id, confidence, rationale, "
+                        "needs_clarification, clarification_question。不要创造候选。"
+                    ),
+                ),
+                ChatRequestMessage(role="user", content=json.dumps(classifier_payload, ensure_ascii=False)),
+            ],
+            temperature=0.0,
+            max_tokens=400,
+            extra_params={"response_format": {"type": "json_object"}},
+        )
+        return _parse_llm_classifier_response(client.complete(llm_payload))
+
+    return LlmConstrainedIntentClassifier(complete)
+
+
+def _parse_llm_classifier_response(response: dict[str, Any]) -> dict[str, Any]:
+    choices = response.get("choices")
+    if not isinstance(choices, list) or not choices:
+        raise RuntimeError("LLM classifier response has no choices")
+    message = choices[0].get("message") if isinstance(choices[0], dict) else None
+    content = message.get("content") if isinstance(message, dict) else None
+    if not isinstance(content, str):
+        raise RuntimeError("LLM classifier response has no text content")
+    try:
+        parsed = json.loads(content)
+    except JSONDecodeError:
+        parsed = json.loads(_extract_json_object(content))
+    if not isinstance(parsed, dict):
+        raise RuntimeError("LLM classifier response JSON is not an object")
+    return parsed
+
+
+def _extract_json_object(text: str) -> str:
+    start = text.find("{")
+    end = text.rfind("}")
+    if start < 0 or end < start:
+        raise JSONDecodeError("No JSON object found", text, 0)
+    return text[start : end + 1]

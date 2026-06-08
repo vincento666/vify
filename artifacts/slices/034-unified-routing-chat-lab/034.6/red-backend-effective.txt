@@ -1,0 +1,180 @@
+....F.FF...FFF..                                                         [100%]
+=================================== FAILURES ===================================
+_ ExplicitSignalDetectorTest.test_strong_trigger_template_can_require_multiple_terms_without_literal_keyword _
+
+self = <test_explicit_signals.ExplicitSignalDetectorTest testMethod=test_strong_trigger_template_can_require_multiple_terms_without_literal_keyword>
+
+    def test_strong_trigger_template_can_require_multiple_terms_without_literal_keyword(self) -> None:
+        manifests = mock_sop_manifests()
+        refund_manifest = manifests["refund_ticket"]
+    
+        candidates = ExplicitSignalDetector(manifests).detect(
+            "我不确定今天还能不能飞，这张票款想拿回来，先帮我处理一下",
+            active_task=None,
+            suspended_tasks=(),
+        )
+    
+>       self.assertGreaterEqual(len(refund_manifest.strong_trigger_templates), 3)
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'SopManifest' object has no attribute 'strong_trigger_templates'. Did you mean: 'strong_trigger_keywords'?
+
+tests/unit/runtime_lab/test_explicit_signals.py:34: AttributeError
+_ ConstrainedClassifierTest.test_fake_classifier_result_reports_arbitrator_mode_without_real_llm _
+
+self = <test_constrained_classifier.ConstrainedClassifierTest testMethod=test_fake_classifier_result_reports_arbitrator_mode_without_real_llm>
+
+    def test_fake_classifier_result_reports_arbitrator_mode_without_real_llm(self) -> None:
+        result = FakeConstrainedIntentClassifier().classify(_input())
+    
+        payload = result.to_dict()
+    
+>       self.assertEqual(payload["arbitrator_mode"], "fake")
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'arbitrator_mode'
+
+tests/unit/runtime_lab/test_constrained_classifier.py:81: KeyError
+_ ConstrainedClassifierTest.test_llm_classifier_uses_external_arbitrator_inside_finite_candidate_contract _
+
+self = <test_constrained_classifier.ConstrainedClassifierTest testMethod=test_llm_classifier_uses_external_arbitrator_inside_finite_candidate_contract>
+
+    def test_llm_classifier_uses_external_arbitrator_inside_finite_candidate_contract(self) -> None:
+        captured_payloads: list[dict[str, object]] = []
+    
+        def complete(payload: dict[str, object]) -> dict[str, object]:
+            captured_payloads.append(payload)
+            return {
+                "selected_action": "START_SOP",
+                "selected_candidate_id": "sop:refund_ticket",
+                "confidence": 0.92,
+                "rationale": "用户表达票款退回诉求，命中有限候选中的退票 SOP",
+                "needs_clarification": False,
+                "clarification_question": None,
+            }
+    
+>       classifier = classifier_module.LlmConstrainedIntentClassifier(complete)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: module 'app.modules.runtime_lab.domain.classifier' has no attribute 'LlmConstrainedIntentClassifier'. Did you mean: 'FakeConstrainedIntentClassifier'?
+
+tests/unit/runtime_lab/test_constrained_classifier.py:98: AttributeError
+_____ MockSopAdapterTest.test_start_collect_confirm_and_complete_mock_sop ______
+
+self = <test_mock_sop_adapter.MockSopAdapterTest testMethod=test_start_collect_confirm_and_complete_mock_sop>
+
+    def test_start_collect_confirm_and_complete_mock_sop(self) -> None:
+        manifests = mock_sop_manifests()
+        adapter = MockSopAdapter(manifests)
+    
+>       self.assertEqual(
+            set(manifests),
+            {
+                "flight_booking",
+                "fare_quote",
+                "group_booking",
+                "ancillary_sales",
+                "refund_ticket",
+                "change_flight",
+                "passenger_info_change",
+                "invoice_apply",
+                "baggage_service",
+                "seat_checkin",
+                "flight_status",
+                "special_assistance",
+                "pet_cabin",
+                "irregular_flight",
+                "membership_service",
+            },
+        )
+E       AssertionError: Items in the second set but not the first:
+E       'ancillary_sales'
+E       'group_booking'
+E       'flight_booking'
+E       'fare_quote'
+E       'passenger_info_change'
+
+tests/unit/runtime_lab/test_mock_sop_adapter.py:11: AssertionError
+_ RuntimeLabAirlineScaleE2ETest.test_100_plus_realistic_airline_turns_route_collect_and_complete _
+
+self = <test_runtime_lab_airline_scale_e2e.RuntimeLabAirlineScaleE2ETest testMethod=test_100_plus_realistic_airline_turns_route_collect_and_complete>
+
+    def test_100_plus_realistic_airline_turns_route_collect_and_complete(self) -> None:
+        total_case_count = sum(len(utterances) for utterances in START_UTTERANCES.values())
+        average_length = sum(len(utterance.strip()) for utterances in START_UTTERANCES.values() for utterance in utterances)
+        average_length = average_length / total_case_count
+        self.assertGreaterEqual(total_case_count, 100)
+        self.assertGreaterEqual(average_length, 5)
+    
+        with TestClient(app) as client:
+            executed = 0
+            for sop_id, utterances in START_UTTERANCES.items():
+                for index, utterance in enumerate(utterances):
+                    session_id = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
+                    started = _message(client, session_id, utterance)
+                    collected = _message(
+                        client,
+                        session_id,
+                        f"订单号 MU{sop_id[:2].upper()}{index:03d}，手机号 1380013{index:04d}，"
+                        f"乘机人张测试，明天上午从北京出发，备注希望短信通知",
+                    )
+                    completed = _message(client, session_id, "确认，按这个方案办理")
+    
+>                   self.assertEqual(started["routeDecision"]["action"], "START_SOP", utterance)
+E                   AssertionError: 'NO_MATCH' != 'START_SOP'
+E                   - NO_MATCH
+E                   + START_SOP
+E                    : 我想买一张明天去上海的机票，时间最好别太早
+
+tests/e2e/test_runtime_lab_airline_scale_e2e.py:291: AssertionError
+_ RuntimeLabAirlineScaleE2ETest.test_airline_sop_catalog_has_15_deep_node_designs_across_four_business_areas _
+
+self = <test_runtime_lab_airline_scale_e2e.RuntimeLabAirlineScaleE2ETest testMethod=test_airline_sop_catalog_has_15_deep_node_designs_across_four_business_areas>
+
+    def test_airline_sop_catalog_has_15_deep_node_designs_across_four_business_areas(self) -> None:
+        manifests = mock_sop_manifests()
+    
+>       self.assertEqual(tuple(manifests), EXPECTED_SOP_IDS)
+E       AssertionError: Tuples differ: ('refund_ticket', 'change_flight', 'invoice[132 chars]ice') != ('flight_booking', 'fare_quote', 'group_boo[225 chars]ice')
+E       
+E       First differing element 0:
+E       'refund_ticket'
+E       'flight_booking'
+E       
+E       Second tuple contains 5 additional elements.
+E       First extra element 10:
+E       'flight_status'
+E       
+E       + ('flight_booking',
+E       +  'fare_quote',
+E       +  'group_booking',
+E       +  'ancillary_sales',
+E       - ('refund_ticket',
+E       ? ^
+E       
+E       +  'refund_ticket',
+E       ? ^
+E       
+E          'change_flight',
+E       +  'passenger_info_change',
+E          'invoice_apply',
+E          'baggage_service',
+E          'seat_checkin',
+E          'flight_status',
+E          'special_assistance',
+E          'pet_cabin',
+E          'irregular_flight',
+E          'membership_service')
+
+tests/e2e/test_runtime_lab_airline_scale_e2e.py:255: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/vincento/work/develop/hify/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/unit/runtime_lab/test_explicit_signals.py::ExplicitSignalDetectorTest::test_strong_trigger_template_can_require_multiple_terms_without_literal_keyword
+FAILED tests/unit/runtime_lab/test_constrained_classifier.py::ConstrainedClassifierTest::test_fake_classifier_result_reports_arbitrator_mode_without_real_llm
+FAILED tests/unit/runtime_lab/test_constrained_classifier.py::ConstrainedClassifierTest::test_llm_classifier_uses_external_arbitrator_inside_finite_candidate_contract
+FAILED tests/unit/runtime_lab/test_mock_sop_adapter.py::MockSopAdapterTest::test_start_collect_confirm_and_complete_mock_sop
+FAILED tests/e2e/test_runtime_lab_airline_scale_e2e.py::RuntimeLabAirlineScaleE2ETest::test_100_plus_realistic_airline_turns_route_collect_and_complete
+FAILED tests/e2e/test_runtime_lab_airline_scale_e2e.py::RuntimeLabAirlineScaleE2ETest::test_airline_sop_catalog_has_15_deep_node_designs_across_four_business_areas
+6 failed, 10 passed, 1 warning in 0.88s

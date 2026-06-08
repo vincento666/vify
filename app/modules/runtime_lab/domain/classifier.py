@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from app.modules.runtime_lab.domain.candidates import CandidateType, RouteCandidate, select_top_candidates
@@ -44,6 +45,8 @@ class ClassifierResult:
     rationale: str
     needs_clarification: bool
     clarification_question: str | None
+    arbitrator_mode: str = "fake"
+    used_real_llm: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -53,6 +56,8 @@ class ClassifierResult:
             "rationale": self.rationale,
             "needs_clarification": self.needs_clarification,
             "clarification_question": self.clarification_question,
+            "arbitrator_mode": self.arbitrator_mode,
+            "used_real_llm": self.used_real_llm,
         }
 
 
@@ -93,6 +98,26 @@ class FakeConstrainedIntentClassifier:
         return result
 
 
+class LlmConstrainedIntentClassifier:
+    def __init__(self, complete: Callable[[dict[str, Any]], Mapping[str, Any]]) -> None:
+        self._complete = complete
+
+    def classify(self, classifier_input: ClassifierInput) -> ClassifierResult:
+        raw = self._complete(classifier_input.to_dict())
+        result = ClassifierResult(
+            selected_action=str(raw.get("selected_action") or ""),
+            selected_candidate_id=_optional_string(raw.get("selected_candidate_id")),
+            confidence=float(raw.get("confidence") or 0.0),
+            rationale=str(raw.get("rationale") or "LLM constrained arbitrator selected from finite candidates"),
+            needs_clarification=bool(raw.get("needs_clarification", False)),
+            clarification_question=_optional_string(raw.get("clarification_question")),
+            arbitrator_mode="llm",
+            used_real_llm=True,
+        )
+        _validate_result(result, classifier_input)
+        return result
+
+
 def _validate_result(result: ClassifierResult, classifier_input: ClassifierInput) -> None:
     if result.selected_action not in ALLOWED_ACTIONS or result.selected_action not in classifier_input.allowed_actions:
         raise ValueError(f"Classifier selected unsupported action: {result.selected_action}")
@@ -108,8 +133,17 @@ def _clarify_result(rationale: str) -> ClassifierResult:
         confidence=0.0,
         rationale=rationale,
         needs_clarification=True,
-        clarification_question="请问您想办理退票、改签、发票、行李、值机、航班动态、特殊协助、宠物乘机、异常航班还是会员里程？",
+        clarification_question=(
+            "请问您想办理订票、票价、团队票、增值服务、退票、改签、资料修改、发票、行李、"
+            "值机、航班动态、特殊协助、宠物乘机、异常航班还是会员里程？"
+        ),
     )
+
+
+def _optional_string(value: object) -> str | None:
+    if value is None:
+        return None
+    return str(value)
 
 
 def _action_for_candidate(candidate: RouteCandidate) -> str:

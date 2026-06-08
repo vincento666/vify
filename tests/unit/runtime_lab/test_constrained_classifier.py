@@ -2,6 +2,7 @@ import json
 import unittest
 
 from app.modules.runtime_lab.domain.candidates import CandidateType, RouteCandidate, ScoreBreakdown
+import app.modules.runtime_lab.domain.classifier as classifier_module
 from app.modules.runtime_lab.domain.classifier import (
     ClassifierInput,
     ClassifierResult,
@@ -71,6 +72,41 @@ class ConstrainedClassifierTest(unittest.TestCase):
         self.assertIsNone(result.selected_candidate_id)
         self.assertTrue(result.needs_clarification)
         self.assertIsNotNone(result.clarification_question)
+
+    def test_fake_classifier_result_reports_arbitrator_mode_without_real_llm(self) -> None:
+        result = FakeConstrainedIntentClassifier().classify(_input())
+
+        payload = result.to_dict()
+
+        self.assertEqual(payload["arbitrator_mode"], "fake")
+        self.assertFalse(payload["used_real_llm"])
+
+    def test_llm_classifier_uses_external_arbitrator_inside_finite_candidate_contract(self) -> None:
+        captured_payloads: list[dict[str, object]] = []
+
+        def complete(payload: dict[str, object]) -> dict[str, object]:
+            captured_payloads.append(payload)
+            return {
+                "selected_action": "START_SOP",
+                "selected_candidate_id": "sop:refund_ticket",
+                "confidence": 0.92,
+                "rationale": "用户表达票款退回诉求，命中有限候选中的退票 SOP",
+                "needs_clarification": False,
+                "clarification_question": None,
+            }
+
+        classifier = classifier_module.LlmConstrainedIntentClassifier(complete)
+        result = classifier.classify(_input())
+
+        self.assertEqual(result.selected_action, "START_SOP")
+        self.assertEqual(result.selected_candidate_id, "sop:refund_ticket")
+        self.assertEqual(result.arbitrator_mode, "llm")
+        self.assertTrue(result.used_real_llm)
+        self.assertEqual(captured_payloads[0]["allowedActions"], ["START_SOP", "CLARIFY"])
+        self.assertEqual(
+            [candidate["candidate_id"] for candidate in captured_payloads[0]["candidates"]],
+            ["sop:refund_ticket"],
+        )
 
 
 def _input() -> ClassifierInput:

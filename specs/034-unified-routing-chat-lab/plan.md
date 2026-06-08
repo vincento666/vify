@@ -77,3 +77,20 @@ Evidence:
   explicitly provided.
 - The existing ordinary Chat page requires Agent/session setup. 034 exposes it
   as a comparison entry rather than forcing it into the runtime-lab lab flow.
+
+## 034.6 Expansion Strategy
+
+Strong triggers are treated as configurable templates on SOP manifests:
+
+- phrase templates cover exact operational labels and high-value synonyms;
+- all-term templates cover natural utterances where the important words are not
+  adjacent;
+- regex templates cover compact phrase families when literal keyword lists
+  would be brittle;
+- score tuning resolves high-risk overlaps such as group booking vs ordinary
+  booking, flight status vs irregular flight, and membership vs ancillary
+  products.
+
+The default classifier remains fake/deterministic for repeatable gates. A real
+LLM arbitrator can be injected through the constrained classifier adapter, and
+the route evidence must show whether the turn used `fake` or `llm` mode.

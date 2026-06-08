@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     redis_url: str | None = None
     log_level: str = "INFO"
     runtime_lab_sop_chatflow_ids: str | None = None
+    runtime_lab_intent_arbitrator_mode: str = "fake"
+    runtime_lab_intent_arbitrator_base_url: str | None = None
+    runtime_lab_intent_arbitrator_api_key: str | None = None
+    runtime_lab_intent_arbitrator_model: str = "xiaomi/mimo-v2-flash"
 
     model_config = SettingsConfigDict(env_prefix="HIFY_", env_file=".env", extra="ignore")
 

@@ -21,6 +21,24 @@ class ExplicitSignalDetectorTest(unittest.TestCase):
         self.assertEqual(candidate.score_breakdown.keyword, 1.0)
         self.assertFalse(candidate.requires_classifier)
 
+    def test_strong_trigger_template_can_require_multiple_terms_without_literal_keyword(self) -> None:
+        manifests = mock_sop_manifests()
+        refund_manifest = manifests["refund_ticket"]
+
+        candidates = ExplicitSignalDetector(manifests).detect(
+            "我不确定今天还能不能飞，这张票款想拿回来，先帮我处理一下",
+            active_task=None,
+            suspended_tasks=(),
+        )
+
+        self.assertGreaterEqual(len(refund_manifest.strong_trigger_templates), 3)
+        self.assertEqual(candidates[0].target_id, "refund_ticket")
+        self.assertEqual(candidates[0].score, 1.0)
+        self.assertEqual(candidates[0].score_breakdown.keyword, 1.0)
+        self.assertIn("票款", candidates[0].matched_terms)
+        self.assertIn("拿回来", candidates[0].matched_terms)
+        self.assertIn("template", candidates[0].reason.lower())
+
     def test_alias_keyword_candidate_keeps_score_evidence_and_requires_later_arbitration(self) -> None:
         candidates = ExplicitSignalDetector(mock_sop_manifests()).detect(
             "我想退机票",

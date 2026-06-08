@@ -1,6 +1,8 @@
 import unittest
 
-from app.modules.runtime_lab.web.router import _runtime_lab_chatflow_bindings
+from app.core.config import Settings
+from app.modules.runtime_lab.domain.classifier import LlmConstrainedIntentClassifier
+from app.modules.runtime_lab.web.router import _runtime_lab_chatflow_bindings, _runtime_lab_intent_classifier
 
 
 class RuntimeLabWebFactoryTest(unittest.TestCase):
@@ -22,3 +24,18 @@ class RuntimeLabWebFactoryTest(unittest.TestCase):
     def test_empty_chatflow_bindings_disable_adapter_bridge(self) -> None:
         self.assertEqual(_runtime_lab_chatflow_bindings(None), {})
         self.assertEqual(_runtime_lab_chatflow_bindings(""), {})
+
+    def test_default_intent_arbitrator_mode_uses_fake_classifier(self) -> None:
+        self.assertIsNone(_runtime_lab_intent_classifier(Settings()))
+
+    def test_llm_intent_arbitrator_mode_builds_real_llm_classifier(self) -> None:
+        classifier = _runtime_lab_intent_classifier(
+            Settings(
+                runtime_lab_intent_arbitrator_mode="llm",
+                runtime_lab_intent_arbitrator_base_url="https://openrouter.ai/api/v1",
+                runtime_lab_intent_arbitrator_api_key="sk-test",
+                runtime_lab_intent_arbitrator_model="test/model",
+            )
+        )
+
+        self.assertIsInstance(classifier, LlmConstrainedIntentClassifier)

@@ -3,13 +3,37 @@ import { resolve } from 'node:path'
 import { chromium } from 'playwright'
 
 const baseUrl = process.env.HIFY_E2E_BASE_URL || 'http://127.0.0.1:5175/runtime-lab/chat'
-const artifactSlice = process.env.HIFY_E2E_ARTIFACT_SLICE || '034.4'
+const artifactSlice = process.env.HIFY_E2E_ARTIFACT_SLICE || '034.6'
 const chatflowBound = process.env.HIFY_E2E_CHATFLOW_BOUND === '1'
 const artifactDir = resolve(process.cwd(), `artifacts/slices/034-unified-routing-chat-lab/${artifactSlice}`)
 const screenshotPath = resolve(artifactDir, 'browser-uat-unified-routing-chat-lab-scale.png')
 const reportPath = resolve(artifactDir, 'browser-uat.md')
 
 const scenarios = [
+  {
+    label: '机票预订',
+    sopId: 'flight_booking',
+    start: '我想买一张明天去上海的机票，时间最好别太早',
+    collect: '订单号 CA0034，手机号 13800138010，乘机人陈测试',
+  },
+  {
+    label: '票价咨询',
+    sopId: 'fare_quote',
+    start: '我先不出票，想问下北京到上海今天票价大概多少',
+    collect: '订单号 CA0134，手机号 13800138011，乘机人蒋测试',
+  },
+  {
+    label: '团队订票',
+    sopId: 'group_booking',
+    start: '我们公司十六个人出差，想咨询团队机票怎么订',
+    collect: '订单号 CA0234，手机号 13800138012，乘机人沈测试',
+  },
+  {
+    label: '增值服务',
+    sopId: 'ancillary_sales',
+    start: '买完票以后还能加购餐食和贵宾厅吗？',
+    collect: '订单号 CA0334，手机号 13800138013，乘机人韩测试',
+  },
   {
     label: '退票办理',
     sopId: 'refund_ticket',
@@ -21,6 +45,12 @@ const scenarios = [
     sopId: 'change_flight',
     start: '我明天会议提前，想把航班改签到更早一班',
     collect: '订单号 CA2034，手机号 13800138001，乘机人李测试',
+  },
+  {
+    label: '资料修改',
+    sopId: 'passenger_info_change',
+    start: '我证件号填错了一位，想修改乘机人信息',
+    collect: '订单号 CA2134，手机号 13800138014，乘机人许测试',
   },
   {
     label: '发票申请',
@@ -120,7 +150,7 @@ try {
 
   const routeAction = await page.getByTestId('route-action').innerText()
   const report = [
-    '# Browser UAT: Unified Routing Chat Lab 034.4',
+    `# Browser UAT: Unified Routing Chat Lab ${artifactSlice}`,
     '',
     `- URL: ${baseUrl}`,
     `- Chatflow-bound refund SOP: ${chatflowBound ? 'yes' : 'no'}`,

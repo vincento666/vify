@@ -2,7 +2,12 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from app.modules.runtime_lab.domain.sop import MockSopAdapter, SopManifest, mock_sop_manifests
+from app.modules.runtime_lab.domain.sop import (
+    MockSopAdapter,
+    SopManifest,
+    match_strong_trigger_template,
+    mock_sop_manifests,
+)
 
 
 class InterruptibilityPolicy(Protocol):
@@ -99,17 +104,21 @@ class RuntimeLabRouter:
         return RouteDecision(action="NO_MATCH", reason="No strong SOP keyword matched")
 
     def _match_strong_keyword(self, message: str) -> "_StrongMatch | None":
+        matches: list[_StrongMatch] = []
         for manifest in self._manifests.values():
-            for keyword in manifest.strong_trigger_keywords:
-                if keyword and keyword in message:
-                    return _StrongMatch(manifest.sop_id, keyword)
-        return None
+            matched = match_strong_trigger_template(message, manifest)
+            if matched is not None:
+                keyword = "+".join(matched.matched_terms)
+                matches.append(_StrongMatch(manifest.sop_id, keyword, matched.template_id, matched.score))
+        return max(matches, key=lambda match: match.score, default=None)
 
 
 @dataclass(frozen=True)
 class _StrongMatch:
     sop_id: str
     keyword: str
+    template_id: str
+    score: float
 
 
 def _task_id(active_task: Mapping[str, Any] | None) -> int | None:

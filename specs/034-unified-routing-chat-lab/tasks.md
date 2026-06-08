@@ -64,6 +64,20 @@
 - [x] Run targeted frontend and REM gates.
 - [x] Run browser UAT through `/runtime-lab/chat` with free-form trigger starts.
 
+## 034.6 Strong trigger templates and four-area airline scale
+
+- [x] RED: backend gate fails before strong trigger templates, classifier LLM metadata, and 15 SOP manifests exist.
+- [x] Add configurable strong trigger templates for phrase, all-term, and regex matching.
+- [x] Preserve deterministic fake classifier as default and expose `arbitrator_mode` / `used_real_llm`.
+- [x] Add injectable constrained LLM arbitrator adapter for real LLM integration.
+- [x] Expand airline catalog to 15 SOPs across sales, refund, change, and consultation.
+- [x] Add 100+ realistic free-form start utterances with average turn length >= 5 characters.
+- [x] Tune badcase routing collisions from the expanded corpus.
+- [x] Update frontend lab scenario catalog to all 15 SOPs.
+- [x] Run backend runtime-lab gates, full backend pytest, frontend REM, full frontend unit, frontend build, ruff, and browser UAT.
+- [x] Save badcase/fix notes and evidence under
+  `artifacts/slices/034-unified-routing-chat-lab/034.6/`.
+
 ## Future specs, not 034 tasks
 
 - [ ] Rename or consolidate final user-facing API to `/chat` or `/query`.

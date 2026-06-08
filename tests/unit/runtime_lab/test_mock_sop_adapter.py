@@ -11,8 +11,13 @@ class MockSopAdapterTest(unittest.TestCase):
         self.assertEqual(
             set(manifests),
             {
+                "flight_booking",
+                "fare_quote",
+                "group_booking",
+                "ancillary_sales",
                 "refund_ticket",
                 "change_flight",
+                "passenger_info_change",
                 "invoice_apply",
                 "baggage_service",
                 "seat_checkin",

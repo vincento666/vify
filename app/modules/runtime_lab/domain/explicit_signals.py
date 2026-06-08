@@ -2,7 +2,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from app.modules.runtime_lab.domain.candidates import CandidateType, RouteCandidate, ScoreBreakdown, select_top_candidates
-from app.modules.runtime_lab.domain.sop import SopManifest
+from app.modules.runtime_lab.domain.sop import SopManifest, match_strong_trigger_template
 
 RESUME_PHRASES = {"continue", "resume", "继续", "继续刚才", "继续第一个"}
 REFUSAL_PHRASES = {"不用了", "不用", "不了", "先这样"}
@@ -31,6 +31,8 @@ class ExplicitSignalDetector:
     def _refusal_candidate(self, text: str) -> RouteCandidate | None:
         matched = next((phrase for phrase in REFUSAL_PHRASES if phrase in text), None)
         if matched is None:
+            return None
+        if _is_embedded_business_negation(text):
             return None
         return RouteCandidate(
             candidate_id="clarify:no_op",
@@ -80,15 +82,15 @@ class ExplicitSignalDetector:
     ) -> list[RouteCandidate]:
         candidates: list[RouteCandidate] = []
         for manifest in self._manifests.values():
-            strong = self._matched_term(text, manifest.strong_trigger_keywords)
+            strong = match_strong_trigger_template(text, manifest)
             if strong is not None:
                 candidates.append(
                     self._sop_candidate(
                         manifest,
-                        score=1.0,
-                        breakdown=ScoreBreakdown(keyword=1.0, alias=0.0, semantic=0.0),
-                        matched_term=strong,
-                        reason="Exact strong SOP keyword",
+                        score=strong.score,
+                        breakdown=ScoreBreakdown(keyword=strong.score, alias=0.0, semantic=0.0),
+                        matched_terms=strong.matched_terms,
+                        reason=f"Matched strong trigger template: {strong.template_id}",
                         requires_classifier=active_task is not None,
                     )
                 )
@@ -101,7 +103,7 @@ class ExplicitSignalDetector:
                         manifest,
                         score=0.85,
                         breakdown=ScoreBreakdown(keyword=0.0, alias=0.85, semantic=0.0),
-                        matched_term=alias,
+                        matched_terms=(alias,),
                         reason="Configured SOP alias",
                         requires_classifier=True,
                     )
@@ -113,7 +115,7 @@ class ExplicitSignalDetector:
         manifest: SopManifest,
         score: float,
         breakdown: ScoreBreakdown,
-        matched_term: str,
+        matched_terms: tuple[str, ...],
         reason: str,
         requires_classifier: bool,
     ) -> RouteCandidate:
@@ -125,7 +127,7 @@ class ExplicitSignalDetector:
             source="explicit_signal",
             score=score,
             score_breakdown=breakdown,
-            matched_terms=(matched_term,),
+            matched_terms=matched_terms,
             risk_level="LOW",
             requires_classifier=requires_classifier,
             reason=reason,
@@ -133,3 +135,7 @@ class ExplicitSignalDetector:
 
     def _matched_term(self, text: str, terms: Sequence[str]) -> str | None:
         return next((term for term in terms if term and term in text), None)
+
+
+def _is_embedded_business_negation(text: str) -> bool:
+    return any(phrase in text for phrase in ("不用买票", "不用出票", "暂时不用买票", "先不用买票", "先不出票"))

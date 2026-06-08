@@ -20,6 +20,50 @@ export interface RuntimeLabTranscriptRow {
 
 export const AIRLINE_SOP_SCENARIOS: AirlineSopScenario[] = [
   {
+    id: 'flight_booking',
+    label: '机票预订',
+    shortLabel: '订票',
+    triggerUtterances: [
+      '我想买一张明天去上海的机票，时间最好别太早',
+      '帮我订机票，两个人从北京飞成都，预算想控制一下',
+      '临时出行需要订机票，麻烦帮我进入购票流程',
+    ],
+    sampleReplies: ['订单号 CA0034，手机号 13800138000，乘机人张测试', '确认', '继续机票预订'],
+  },
+  {
+    id: 'fare_quote',
+    label: '票价咨询',
+    shortLabel: '票价',
+    triggerUtterances: [
+      '我先不出票，想问下北京到上海今天票价大概多少',
+      '帮我查一下机票报价，周五晚上飞深圳',
+      '现在去成都的航班价格怎么样？我想比较一下',
+    ],
+    sampleReplies: ['订单号 CA0134，手机号 13800138000，乘机人张测试', '确认', '继续票价咨询'],
+  },
+  {
+    id: 'group_booking',
+    label: '团队订票',
+    shortLabel: '团队',
+    triggerUtterances: [
+      '我们公司十六个人出差，想咨询团队机票怎么订',
+      '帮我开团队订票流程，人数比较多需要统一出票',
+      '团队机票能不能给报价？大概二十个人',
+    ],
+    sampleReplies: ['订单号 CA0234，手机号 13800138000，乘机人张测试', '确认', '继续团队订票'],
+  },
+  {
+    id: 'ancillary_sales',
+    label: '增值服务',
+    shortLabel: '增值',
+    triggerUtterances: [
+      '买完票以后还能加购餐食和贵宾厅吗？',
+      '我想给这张票加买保险和接送机服务',
+      '帮我看看附加服务，行李和餐食一起买',
+    ],
+    sampleReplies: ['订单号 CA0334，手机号 13800138000，乘机人张测试', '确认', '继续增值服务'],
+  },
+  {
     id: 'refund_ticket',
     label: '退票办理',
     shortLabel: '退票',
@@ -40,6 +84,17 @@ export const AIRLINE_SOP_SCENARIOS: AirlineSopScenario[] = [
       '计划变了，想调整航班时间，不知道差价多少',
     ],
     sampleReplies: ['订单号 CA2034，手机号 13800138000，乘机人张测试', '确认', '继续改签'],
+  },
+  {
+    id: 'passenger_info_change',
+    label: '资料修改',
+    shortLabel: '资料',
+    triggerUtterances: [
+      '我证件号填错了一位，想修改乘机人信息',
+      '订票时手机号写错了，能帮我改联系人吗？',
+      '乘机人姓名拼音有问题，需要更正一下',
+    ],
+    sampleReplies: ['订单号 CA2134，手机号 13800138000，乘机人张测试', '确认', '继续资料修改'],
   },
   {
     id: 'invoice_apply',

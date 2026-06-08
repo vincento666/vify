@@ -21,8 +21,13 @@ from app.modules.workflow.infra.repository import WorkflowRepository
 
 
 EXPECTED_SOP_IDS = (
+    "flight_booking",
+    "fare_quote",
+    "group_booking",
+    "ancillary_sales",
     "refund_ticket",
     "change_flight",
+    "passenger_info_change",
     "invoice_apply",
     "baggage_service",
     "seat_checkin",
@@ -32,6 +37,22 @@ EXPECTED_SOP_IDS = (
     "irregular_flight",
     "membership_service",
 )
+
+EXPECTED_BUSINESS_AREAS = {
+    "SALES": {"flight_booking", "fare_quote", "group_booking", "ancillary_sales"},
+    "REFUND": {"refund_ticket"},
+    "CHANGE": {"change_flight", "passenger_info_change"},
+    "CONSULTATION": {
+        "invoice_apply",
+        "baggage_service",
+        "seat_checkin",
+        "flight_status",
+        "special_assistance",
+        "pet_cabin",
+        "irregular_flight",
+        "membership_service",
+    },
+}
 
 REQUIRED_NODE_TYPES = {
     "LLM",
@@ -44,6 +65,54 @@ REQUIRED_NODE_TYPES = {
 }
 
 START_UTTERANCES: dict[str, tuple[str, ...]] = {
+    "flight_booking": (
+        "我想买一张明天去上海的机票，时间最好别太早",
+        "帮我订机票，两个人从北京飞成都，预算想控制一下",
+        "我要购买航班，上午出发下午到就可以",
+        "现在还能买今晚去广州的票吗？我需要尽快出票",
+        "帮我看看机票销售流程，我要给同事订一张",
+        "我想订航班，优先直飞，行李政策也帮我看下",
+        "我要买票，身份证信息稍后发你，先查可售航班",
+        "临时出行需要订机票，麻烦帮我进入购票流程",
+        "帮我买机票，出发城市是杭州，到达深圳",
+        "我需要订一张经济舱机票，尽量选靠前时间",
+    ),
+    "fare_quote": (
+        "我先不出票，想问下北京到上海今天票价大概多少",
+        "帮我查一下机票报价，周五晚上飞深圳",
+        "现在去成都的航班价格怎么样？我想比较一下",
+        "我想咨询票价，看看公务舱和经济舱差多少",
+        "帮我估个机票价格，出发时间还没完全定",
+        "我要查价格，暂时不用买票，先给我几个方案",
+        "这两天飞广州哪天便宜？帮我报价看看",
+        "帮我看机票价格趋势，合适的话后面再出票",
+        "票价咨询一下，我要从南京飞重庆",
+        "麻烦先查个报价，人数和证件稍后确认",
+    ),
+    "group_booking": (
+        "我们公司十六个人出差，想咨询团队机票怎么订",
+        "帮我开团队订票流程，人数比较多需要统一出票",
+        "我要买团体票，航线是上海到昆明",
+        "团队机票能不能给报价？大概二十个人",
+        "我们有学生团要飞北京，想走团体购票",
+        "帮我处理多人订票，名单还在整理",
+        "公司团建要订一批机票，想先看团队政策",
+        "团体机票需要提前多久申请？帮我进入流程",
+        "我要咨询团队票，人数超过十个人",
+        "集体出行想统一订航班，麻烦帮我登记",
+    ),
+    "ancillary_sales": (
+        "买完票以后还能加购餐食和贵宾厅吗？",
+        "我想给这张票加买保险和接送机服务",
+        "帮我看看附加服务，行李和餐食一起买",
+        "我要购买升舱券或者优先登机，先查能不能买",
+        "这趟航班有餐食加购吗？我想一起办理",
+        "帮我加购民航增值服务，订单等会给你",
+        "我想买贵宾厅权益，看看这张票支持不支持",
+        "能不能给航班加买保险？我想一起确认",
+        "我要买附加产品，最好和机票订单关联",
+        "帮我处理增值服务购买，先进入流程吧",
+    ),
     "refund_ticket": (
         "您好，我临时出差取消了，想把今晚这张机票退掉，麻烦帮我看看退票规则",
         "我不飞了，票款能不能退回来？订单还在手机里",
@@ -67,6 +136,18 @@ START_UTTERANCES: dict[str, tuple[str, ...]] = {
         "小孩同行，改时间时帮我保留邻座",
         "我需要换航班，别取消订单",
         "我要改签航班，优先同舱位",
+    ),
+    "passenger_info_change": (
+        "我证件号填错了一位，想修改乘机人信息",
+        "订票时手机号写错了，能帮我改联系人吗？",
+        "乘机人姓名拼音有问题，需要更正一下",
+        "我想改证件信息，航班不要改动",
+        "订单里的乘客资料填错了，麻烦帮我处理",
+        "孩子证件类型选错了，能不能修改旅客信息",
+        "我要改乘机人联系方式，别取消机票",
+        "证件有效期更新了，想同步到订单里",
+        "乘机人信息有误，帮我进入资料修改流程",
+        "姓名少填了一个字，想咨询能不能更正",
     ),
     "invoice_apply": (
         "公司报销要凭证，帮我开一下电子发票",
@@ -168,20 +249,31 @@ START_UTTERANCES: dict[str, tuple[str, ...]] = {
 
 
 class RuntimeLabAirlineScaleE2ETest(unittest.TestCase):
-    def test_airline_sop_catalog_has_10_deep_node_designs(self) -> None:
+    def test_airline_sop_catalog_has_15_deep_node_designs_across_four_business_areas(self) -> None:
         manifests = mock_sop_manifests()
 
         self.assertEqual(tuple(manifests), EXPECTED_SOP_IDS)
+        by_area: dict[str, set[str]] = {}
+        for sop_id, manifest in manifests.items():
+            by_area.setdefault(manifest.business_area, set()).add(sop_id)
+        self.assertEqual(by_area, EXPECTED_BUSINESS_AREAS)
         node_types = {step.node_type for manifest in manifests.values() for step in manifest.steps}
         self.assertTrue(REQUIRED_NODE_TYPES.issubset(node_types), node_types)
         for sop_id, manifest in manifests.items():
             self.assertGreaterEqual(len(manifest.steps), 5, sop_id)
             self.assertGreaterEqual(len(manifest.trigger_keywords), 5, sop_id)
             self.assertGreaterEqual(len(manifest.strong_trigger_keywords), 3, sop_id)
+            self.assertGreaterEqual(len(manifest.strong_trigger_templates), 3, sop_id)
             self.assertIn("collect_order_no", {step.step_id for step in manifest.steps})
             self.assertIn("confirm", {step.step_id for step in manifest.steps})
 
-    def test_100_realistic_airline_turns_route_collect_and_complete(self) -> None:
+    def test_100_plus_realistic_airline_turns_route_collect_and_complete(self) -> None:
+        total_case_count = sum(len(utterances) for utterances in START_UTTERANCES.values())
+        average_length = sum(len(utterance.strip()) for utterances in START_UTTERANCES.values() for utterance in utterances)
+        average_length = average_length / total_case_count
+        self.assertGreaterEqual(total_case_count, 100)
+        self.assertGreaterEqual(average_length, 5)
+
         with TestClient(app) as client:
             executed = 0
             for sop_id, utterances in START_UTTERANCES.items():
