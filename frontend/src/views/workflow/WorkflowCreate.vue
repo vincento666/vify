@@ -7076,6 +7076,16 @@ function variableTypeLabel(type: VariableCatalogType) {
 
 function selectOptionLabel(key: string, option: string) {
   if (key === 'strategy' && option === 'first_non_empty') return '返回每个分组中第一个非空的值'
+  if (key === 'retrievalMode') {
+    const labels: Record<string, string> = {
+      auto: '智能推荐',
+      hybrid: '综合匹配',
+      semantic: '语义理解',
+      keyword: '关键词匹配',
+      faq: '仅问答库',
+    }
+    return labels[option] ?? option
+  }
   return option
 }
 
