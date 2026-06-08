@@ -25,11 +25,23 @@
       </section>
 
       <section class="lab-panel">
-        <div class="panel-heading">
-          <ChatLineRound class="panel-heading-icon" />
-          <span>意图样例</span>
+        <div class="panel-heading panel-heading-between">
+          <span class="panel-heading-title">
+            <ChatLineRound class="panel-heading-icon" />
+            <span>意图样例</span>
+          </span>
+          <el-switch
+            v-model="showIntentSamples"
+            class="samples-toggle"
+            size="small"
+            inline-prompt
+            active-text="开"
+            inactive-text="关"
+            aria-label="显示意图样例"
+            data-testid="intent-samples-toggle"
+          />
         </div>
-        <div class="sop-list">
+        <div v-if="showIntentSamples" class="sop-list">
           <button
             v-for="scenario in AIRLINE_SOP_SCENARIOS"
             :key="scenario.id"
@@ -44,7 +56,7 @@
         </div>
       </section>
 
-      <section class="lab-panel">
+      <section v-if="showIntentSamples" class="lab-panel">
         <div class="panel-heading">触发样例</div>
         <div class="sample-stack">
           <button
@@ -60,7 +72,7 @@
         </div>
       </section>
 
-      <section class="lab-panel">
+      <section v-if="showIntentSamples" class="lab-panel">
         <div class="panel-heading">流程回复</div>
         <div class="sample-stack">
           <button
@@ -212,6 +224,7 @@ import type { RuntimeLabTranscriptRow } from './unifiedRoutingChatLab'
 
 const router = useRouter()
 const selectedScenarioId = ref(AIRLINE_SOP_SCENARIOS[0]?.id ?? '')
+const showIntentSamples = ref(true)
 const inputText = ref('')
 const sending = ref(false)
 const creatingSession = ref(false)
@@ -365,10 +378,25 @@ function uid(prefix: string) {
   color: var(--color-text-primary);
 }
 
+.panel-heading-between {
+  justify-content: space-between;
+}
+
+.panel-heading-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
 .panel-heading-icon {
   width: 1rem;
   height: 1rem;
   color: var(--color-primary);
+}
+
+.samples-toggle {
+  flex-shrink: 0;
 }
 
 .system-stack,

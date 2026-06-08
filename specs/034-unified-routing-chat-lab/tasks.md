@@ -78,6 +78,20 @@
 - [x] Save badcase/fix notes and evidence under
   `artifacts/slices/034-unified-routing-chat-lab/034.6/`.
 
+## 034.7 Toggleable sample assistant panel
+
+- [x] RED: browser UAT fails until the intent-sample visibility toggle exists.
+- [x] Add a default-on switch to the intent sample panel.
+- [x] Hide SOP samples, trigger samples, and flow reply samples when the switch is off.
+- [x] Keep the free-form composer and runtime route inspector usable while samples are hidden.
+- [x] Run targeted frontend/rem gate.
+- [x] Run full frontend unit gate.
+- [x] Run frontend build gate.
+- [x] Run browser UAT for the toggle behavior.
+- [x] Run the existing 15-SOP/5-switch browser scale UAT as regression.
+- [x] Save evidence under `artifacts/slices/034-unified-routing-chat-lab/034.7/`
+  and `artifacts/slices/034-unified-routing-chat-lab/034.7-scale/`.
+
 ## Future specs, not 034 tasks
 
 - [ ] Rename or consolidate final user-facing API to `/chat` or `/query`.

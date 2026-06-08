@@ -70,6 +70,8 @@ The page must support these manual validation paths:
 - Free-form messages append user and assistant transcript rows.
 - Runtime route action, active task, suspended task, and resume offer are
   visible after each turn.
+- Intent samples, trigger samples, and flow reply samples can be hidden behind a
+  default-on switch without disabling free-form routing.
 - The page includes a way to open the ordinary Chat surface for comparison.
 - Unit and route tests pass.
 - REM governance gate passes for changed frontend files.
@@ -280,3 +282,29 @@ The airline catalog is expanded to 15 SOPs across four business areas:
   `artifacts/slices/034-unified-routing-chat-lab/034.6/browser-uat.md`;
 - badcases:
   `artifacts/slices/034-unified-routing-chat-lab/034.6/badcases.md`.
+
+## 034.7 Toggleable Sample Assistant Panel
+
+Status: complete.
+
+The lab now treats the left-side intent sample catalog as optional testing
+assistance instead of required conversation scaffolding. The panel defaults on
+for fast QA, but testers can switch it off to run pure free-form dialogue. When
+off, SOP samples, trigger samples, and flow reply samples are hidden while the
+composer, session controls, route inspector, task ledger, and event ledger keep
+working.
+
+034.7 evidence:
+
+- RED browser toggle gate:
+  `artifacts/slices/034-unified-routing-chat-lab/034.7/red-samples-toggle.txt`;
+- targeted frontend/rem gate:
+  `artifacts/slices/034-unified-routing-chat-lab/034.7/frontend-targeted-unit.txt`;
+- full frontend unit:
+  `artifacts/slices/034-unified-routing-chat-lab/034.7/frontend-unit.txt`;
+- frontend build:
+  `artifacts/slices/034-unified-routing-chat-lab/034.7/frontend-build.txt`;
+- browser toggle UAT:
+  `artifacts/slices/034-unified-routing-chat-lab/034.7/browser-uat.md`;
+- browser 15-SOP scale regression:
+  `artifacts/slices/034-unified-routing-chat-lab/034.7-scale/browser-uat.md`.
