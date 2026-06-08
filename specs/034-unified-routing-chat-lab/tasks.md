@@ -129,6 +129,23 @@
 - [x] Save evidence under `artifacts/slices/034-unified-routing-chat-lab/034.9/`
   and `artifacts/slices/034-unified-routing-chat-lab/034.9-scale/`.
 
+## 034.10 Test-stage OpenRouter free LLM arbitrator
+
+- [x] Keep production/runtime-lab LLM arbitrator configuration single-model
+  only through system settings.
+- [x] Add an opt-in acceptance harness for current test-stage OpenRouter free
+  model pooling.
+- [x] Discover zero-priced text-output models from OpenRouter `/models`
+  dynamically instead of hard-coding a model list.
+- [x] Try discovered free models as finite-candidate intent arbitrators, skipping
+  quota, transport, invalid JSON, and test-expectation failures.
+- [x] Fall back to `xiaomi/mimo-v2-flash` only inside the 034.10 live acceptance
+  harness.
+- [x] Preserve ordinary CI stability by skipping live OpenRouter arbitration
+  unless `HIFY_RUN_LIVE_RUNTIME_LAB_OPENROUTER_FREE_ARBITRATOR=1` and
+  `OPENROUTER_API_KEY` are set.
+- [x] Run backend full pytest and save 034.10 evidence.
+
 ## Future specs, not 034 tasks
 
 - [ ] Rename or consolidate final user-facing API to `/chat` or `/query`.

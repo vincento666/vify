@@ -435,3 +435,42 @@ not a currently executable Chatflow engine node type. The browser binding was
 rebuilt with executable Chatflow nodes (`INFORMATION_COLLECTION`,
 `VARIABLE_AGGREGATION`, `QUESTION`, `END`), then rerun with
 `Chatflow-bound refund SOP: yes`.
+
+## 034.10 Test-Stage OpenRouter Free LLM Arbitrator
+
+Status: complete.
+
+034.10 adds a live acceptance harness for testing real LLM intent arbitration
+with OpenRouter free text models. This is explicitly a test-stage mechanism and
+does not change production runtime-lab configuration. Production/runtime-lab
+still uses exactly one LLM arbitrator model from system settings
+(`runtime_lab_intent_arbitrator_model`) when `runtime_lab_intent_arbitrator_mode`
+is `llm`.
+
+034.10 final behavior:
+
+- ordinary CI keeps using deterministic fake arbitration by default;
+- production LLM arbitration remains single-model and system-configured;
+- live 034.10 acceptance is opt-in via
+  `HIFY_RUN_LIVE_RUNTIME_LAB_OPENROUTER_FREE_ARBITRATOR=1` plus
+  `OPENROUTER_API_KEY`;
+- the live harness discovers free text-output models from OpenRouter `/models`
+  at runtime, using zero prompt and completion pricing as the filter;
+- the test-stage harness tries free models one by one for a finite-candidate
+  runtime-lab switch decision, skipping quota, transport, invalid JSON, and
+  valid-but-wrong test-stage decisions;
+- if free models do not produce a valid expected decision, the harness tries
+  `xiaomi/mimo-v2-flash` as the final test-stage fallback.
+
+034.10 evidence:
+
+- OpenRouter free model discovery snapshot:
+  `artifacts/slices/034-unified-routing-chat-lab/034.10/openrouter-free-model-discovery.txt`;
+- opt-in live acceptance skipped in ordinary environment:
+  `artifacts/slices/034-unified-routing-chat-lab/034.10/openrouter-free-arbitrator-skip.txt`;
+- targeted backend gate:
+  `artifacts/slices/034-unified-routing-chat-lab/034.10/backend-targeted.txt`;
+- full backend pytest:
+  `artifacts/slices/034-unified-routing-chat-lab/034.10/backend-full-pytest.txt`;
+- ruff:
+  `artifacts/slices/034-unified-routing-chat-lab/034.10/ruff.txt`.
