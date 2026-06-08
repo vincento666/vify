@@ -2555,8 +2555,36 @@
                     </div>
                   </div>
                 </div>
-                <div class="input-value-cell">
-                  <div class="variable-value-combo assignment-value-control" data-testid="assignment-value-control">
+                <div class="input-value-cell assignment-value-cell">
+                  <div
+                    v-if="variableAssignmentValueMode() === 'operation'"
+                    class="assignment-operation-control"
+                    data-testid="assignment-operation-control"
+                  >
+                    <select
+                      class="assignment-operation-select"
+                      aria-label="运算赋值操作"
+                      :value="String(fieldValue('operation') || 'add')"
+                      @change="setVariableAssignmentOperation(($event.target as HTMLSelectElement).value)"
+                    >
+                      <option value="add">加</option>
+                      <option value="subtract">减</option>
+                      <option value="multiply">乘</option>
+                      <option value="divide">除</option>
+                    </select>
+                    <input
+                      class="assignment-operation-operand"
+                      type="text"
+                      aria-label="运算赋值操作数"
+                      :value="String(fieldValue('operand') ?? '1')"
+                      placeholder="输入或引用操作数"
+                      @input="setVariableAssignmentOperand(($event.target as HTMLInputElement).value)"
+                    />
+                    <button type="button" class="assignment-mode-button" aria-label="切回输入或引用赋值" @click="setVariableAssignmentLiteralMode">
+                      输入
+                    </button>
+                  </div>
+                  <div v-else class="variable-value-combo assignment-value-control" data-testid="assignment-value-control">
                     <div class="variable-value-main">
                       <div
                         v-if="variableAssignmentSourceType() === 'reference' && inputReferenceSelection(String(fieldValue('source') || ''))"
@@ -2592,6 +2620,15 @@
                       <Connection aria-hidden="true" />
                     </button>
                   </div>
+                  <button
+                    v-if="variableAssignmentValueMode() !== 'operation'"
+                    type="button"
+                    class="assignment-mode-button assignment-operation-toggle"
+                    aria-label="切换为运算赋值"
+                    @click="setVariableAssignmentOperationMode"
+                  >
+                    fx
+                  </button>
                   <div
                     v-if="activeStructuredVariableTarget === 'assignment'"
                     class="variable-popover coze-variable-source-popover input-variable-popover"
@@ -5078,7 +5115,7 @@ function hasOpenVariablePicker() {
 }
 
 function isVariablePickerInternalTarget(target: EventTarget | null) {
-  const element = target instanceof HTMLElement ? target : null
+  const element = target instanceof Element ? target : null
   if (!element) return false
   return Boolean(element.closest([
     '.variable-popover',
@@ -6088,8 +6125,9 @@ function removeAggregationSource(index: number) {
   }
 }
 
-function variableAssignmentValueMode(): InputValueMode {
+function variableAssignmentValueMode(): InputValueMode | 'operation' {
   const explicit = fieldValue('sourceValueMode')
+  if (explicit === 'operation') return 'operation'
   return inferDirectVariableValueMode(fieldValue('source'), explicit)
 }
 
@@ -6115,6 +6153,28 @@ function clearVariableAssignmentReference() {
 
 function setVariableAssignmentSourceValue(value: string | number) {
   updateSelectedNode({ config: { sourceValueMode: 'literal', source: String(value) } })
+}
+
+function setVariableAssignmentOperationMode() {
+  updateSelectedNode({
+    config: {
+      sourceValueMode: 'operation',
+      operation: String(fieldValue('operation') || 'add'),
+      operand: String(fieldValue('operand') ?? '1'),
+    },
+  })
+}
+
+function setVariableAssignmentLiteralMode() {
+  updateSelectedNode({ config: { sourceValueMode: 'literal', source: String(fieldValue('source') ?? '') } })
+}
+
+function setVariableAssignmentOperation(operation: string) {
+  updateSelectedNode({ config: { sourceValueMode: 'operation', operation } })
+}
+
+function setVariableAssignmentOperand(operand: string) {
+  updateSelectedNode({ config: { sourceValueMode: 'operation', operand } })
 }
 
 function normalizeAssignmentTargetScope(scope: string) {
@@ -6182,8 +6242,13 @@ function buildVariableAssignmentTargetGroups(): VariableAssignmentTargetGroup[] 
 }
 
 function openVariableAssignmentTargetPicker(event?: Event) {
+  event?.preventDefault()
+  event?.stopPropagation()
+  const shouldOpen = !activeVariableAssignmentTargetPicker.value
+  closeVariablePickers()
+  if (!shouldOpen) return
   refreshVariablePickerAnchor(event?.currentTarget)
-  activeVariableAssignmentTargetPicker.value = !activeVariableAssignmentTargetPicker.value
+  activeVariableAssignmentTargetPicker.value = true
   variableAssignmentTargetSearch.value = ''
   activeVariableAssignmentTargetGroupKey.value = ''
 }
@@ -11564,6 +11629,68 @@ onUnmounted(() => {
 .assignment-target-cell,
 .variable-assignment-row > .input-value-cell {
   display: block;
+}
+
+.assignment-value-cell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 2.25rem;
+  gap: 0.375rem;
+}
+
+.assignment-operation-control {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 4rem minmax(0, 1fr) 3rem;
+  align-items: center;
+  overflow: hidden;
+  border: 0.0625rem solid #dfe3ee;
+  border-radius: 0.5rem;
+  background: #fff;
+}
+
+.assignment-operation-select,
+.assignment-operation-operand {
+  width: 100%;
+  min-width: 0;
+  height: 2.25rem;
+  border: 0;
+  border-right: 0.0625rem solid #e5e8f0;
+  background: transparent;
+  color: #34394b;
+  font-size: 0.875rem;
+  font-weight: 800;
+  outline: none;
+}
+
+.assignment-operation-select {
+  padding: 0 0.5rem;
+}
+
+.assignment-operation-operand {
+  padding: 0 0.625rem;
+}
+
+.assignment-mode-button {
+  min-width: 2.25rem;
+  height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0.0625rem solid #dfe3ee;
+  border-radius: 0.5rem;
+  background: #f8f9fd;
+  color: #5f61ff;
+  font-size: 0.8125rem;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.assignment-operation-control .assignment-mode-button {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .input-parameter-toolbar {

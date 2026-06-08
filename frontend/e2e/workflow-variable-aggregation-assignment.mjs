@@ -173,6 +173,7 @@ try {
     'Assignment target picker must not treat existing assignment targets as configured writable variables',
   )
   await assignmentEditor.getByRole('button', { name: '选择写入变量', exact: true }).click()
+  await assignmentEditor.getByTestId('assignment-target-picker').waitFor({ state: 'hidden', timeout: 5000 })
   assert(await panel.getByLabel('赋值来源类型', { exact: true }).count() === 0, 'Assignment row must not expose source type selector')
   assert(await panel.locator('[data-testid="assignment-value-control"]').count() === 1, 'Expected assignment row to expose a value input/reference control')
   assert(await panel.locator('[data-testid="assignment-variable-chip"]').count() === 1, 'Expected assignment source to render as variable chip')
@@ -185,15 +186,24 @@ try {
     'Assignment source must keep a persistent variable picker button',
   )
   assert(
+    await assignmentEditor.getByRole('button', { name: '切换为运算赋值', exact: true }).count() === 1,
+    'Assignment source must expose operation assignment as a first-class mode',
+  )
+  assert(
     await assignmentEditor.getByRole('button', { name: '清除赋值内容变量引用', exact: true }).count() === 1,
     'Assignment referenced source must expose a clear action',
   )
   await assignmentEditor.getByRole('button', { name: '清除赋值内容变量引用', exact: true }).click()
   assert(await assignmentEditor.getByTestId('assignment-variable-literal-input').inputValue() === '', 'Clearing assignment source must restore literal input mode')
-
+  await assignmentEditor.getByRole('button', { name: '切换为运算赋值', exact: true }).click()
+  assert(await assignmentEditor.getByTestId('assignment-operation-control').count() === 1, 'Operation assignment mode must render compact controls')
+  assert(await assignmentEditor.getByLabel('运算赋值操作', { exact: true }).count() === 1, 'Operation assignment mode must expose an operator control')
+  assert(await assignmentEditor.getByLabel('运算赋值操作数', { exact: true }).count() === 1, 'Operation assignment mode must expose an operand input')
   if (screenshotPath) {
     await page.screenshot({ path: screenshotPath, fullPage: true })
   }
+  await assignmentEditor.getByRole('button', { name: '切回输入或引用赋值', exact: true }).click()
+  assert(await assignmentEditor.getByTestId('assignment-variable-literal-input').count() === 1, 'Assignment operation mode must switch back to literal/reference mode')
 
   console.log('PASS workflow/chatflow variable aggregation assignment e2e')
 } finally {
