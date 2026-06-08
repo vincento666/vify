@@ -61,7 +61,7 @@ describe('workflow canvas rem governance', () => {
     const content = readProjectFile('src/views/workflow/WorkflowCreate.vue')
 
     expect(content).toContain('--node-port-dot-size: 0.75rem;')
-    expect(content).toContain('--node-port-hit-size: 7.3333rem;')
+    expect(content).toContain('--node-port-hit-size: 2.25rem;')
     expect(content).toContain('--node-port-scale: 2;')
     expect(content).toContain('--node-port-scale: 3;')
     expect(content).toContain('width: var(--node-port-dot-size);')

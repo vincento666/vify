@@ -28,6 +28,8 @@ async function portBox(page, selector) {
     return {
       width: box.width,
       height: box.height,
+      cssWidth: Number.parseFloat(handleStyle.width),
+      cssHeight: Number.parseFloat(handleStyle.height),
       centerX: box.left + box.width / 2,
       centerY: box.top + box.height / 2,
       handleScale: matrixScale(handleStyle.transform),
@@ -49,6 +51,10 @@ async function nodeBox(page, selector) {
   }, selector)
 }
 
+async function rootFontSize(page) {
+  return page.evaluate(() => Number.parseFloat(getComputedStyle(document.documentElement).fontSize))
+}
+
 function phaseScreenshotPath(name) {
   if (!screenshotPath) return ''
   const dot = screenshotPath.lastIndexOf('.')
@@ -63,6 +69,10 @@ async function maybeScreenshot(page, name) {
 
 function closeToRatio(actual, expected, tolerance = 0.12) {
   return Math.abs(actual - expected) <= tolerance
+}
+
+function assertClose(actual, expected, tolerance, message) {
+  assert(Math.abs(actual - expected) <= tolerance, `${message}: expected ${expected}, got ${actual}`)
 }
 
 const browser = await chromium.launch()
@@ -94,7 +104,10 @@ try {
   const defaultNode = await nodeBox(page, nodeSelector)
   const defaultSource = await portBox(page, sourceSelector)
   const defaultTarget = await portBox(page, targetSelector)
+  const expectedHitDiameter = 2.25 * await rootFontSize(page)
   assert(defaultNode && defaultSource && defaultTarget, 'Expected node source and target ports to render')
+  assertClose(defaultSource.cssWidth, expectedHitDiameter, 1, `Expected endpoint hitbox CSS to use the 3x original dot diameter, got ${JSON.stringify(defaultSource)}`)
+  assertClose(defaultTarget.cssWidth, expectedHitDiameter, 1, `Expected target endpoint hitbox CSS to use the 3x original dot diameter, got ${JSON.stringify(defaultTarget)}`)
   assert(Math.abs(defaultSource.centerX - defaultNode.right) <= 1, `Expected source port center to align with node right edge, got node=${JSON.stringify(defaultNode)} source=${JSON.stringify(defaultSource)}`)
   assert(Math.abs(defaultTarget.centerX - defaultNode.left) <= 1, `Expected target port center to align with node left edge, got node=${JSON.stringify(defaultNode)} target=${JSON.stringify(defaultTarget)}`)
   await maybeScreenshot(page, 'default')
@@ -114,15 +127,22 @@ try {
   assert(closeToRatio(endpointHoverSource.dotScale, 3), `Expected endpoint hover dot scale 3x, got ${JSON.stringify(endpointHoverSource)}`)
   await maybeScreenshot(page, 'endpoint-hover')
 
-  const defaultHoverRadius = defaultSource.width / 2
-  await page.mouse.move(defaultSource.centerX + 42, defaultSource.centerY)
+  await page.mouse.move(defaultSource.centerX + defaultSource.width / 2 - 1, defaultSource.centerY)
   await page.waitForTimeout(160)
   const radiusHoverSource = await portBox(page, sourceSelector)
   assert(
     closeToRatio(radiusHoverSource.dotScale, 3),
-    `Expected endpoint hover radius to trigger 3x scale 42px from center, defaultRadius=${defaultHoverRadius}, got ${JSON.stringify(radiusHoverSource)}`,
+    `Expected endpoint hover radius to trigger 3x scale inside the 3x original diameter, got ${JSON.stringify(radiusHoverSource)}`,
   )
   await maybeScreenshot(page, 'endpoint-radius-hover')
+
+  await page.mouse.move(defaultSource.centerX - defaultSource.width / 2 - 6, defaultSource.centerY)
+  await page.waitForTimeout(160)
+  const outsideRadiusSource = await portBox(page, sourceSelector)
+  assert(
+    closeToRatio(outsideRadiusSource.dotScale, 2),
+    `Expected endpoint hover to fall back to node-hover 2x outside the 3x original diameter, got ${JSON.stringify(outsideRadiusSource)}`,
+  )
 
   await node.click()
   await page.mouse.move(40, 40)

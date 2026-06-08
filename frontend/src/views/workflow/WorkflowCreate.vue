@@ -9413,7 +9413,7 @@ onUnmounted(() => {
   --node-port-bg: #6b6ff7;
   --node-port-shadow: none;
   --node-port-dot-size: 0.75rem;
-  --node-port-hit-size: 7.3333rem;
+  --node-port-hit-size: 2.25rem;
   width: var(--node-port-hit-size);
   height: var(--node-port-hit-size);
   border: 0;

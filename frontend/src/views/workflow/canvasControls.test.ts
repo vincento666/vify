@@ -51,10 +51,11 @@ describe('workflow canvas controls', () => {
 
   it('uses the magnetic connection radius for endpoint hover and preview affordances', () => {
     expect(CANVAS_ENDPOINT_PREVIEW_RADIUS).toBe(CANVAS_CONNECTION_RADIUS)
+    expect(CANVAS_CONNECTION_RADIUS).toBe(18)
     expect(CANVAS_ENDPOINT_BASE_DIAMETER_REM).toBe(0.75)
     expect(CANVAS_NODE_HOVER_ENDPOINT_SCALE).toBe(2)
     expect(CANVAS_ENDPOINT_HOVER_SCALE).toBe(3)
     expect(CANVAS_ENDPOINT_CONNECTED_SCALE).toBe(3)
-    expect(CANVAS_ENDPOINT_HIT_DIAMETER_REM).toBeCloseTo(7.3333, 4)
+    expect(CANVAS_ENDPOINT_HIT_DIAMETER_REM).toBeCloseTo(2.25, 4)
   })
 })
