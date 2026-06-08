@@ -474,3 +474,51 @@ is `llm`.
   `artifacts/slices/034-unified-routing-chat-lab/034.10/backend-full-pytest.txt`;
 - ruff:
   `artifacts/slices/034-unified-routing-chat-lab/034.10/ruff.txt`.
+
+## 034.11 Live OpenRouter Full-Chain Acceptance
+
+Status: complete.
+
+034.11 verifies that the live LLM paths are not merely tested in isolation. It
+uses one RuntimeLab session where a user starts a refund SOP, switches to an
+invoice SOP, completes the invoice SOP, resumes the refund SOP, and completes
+the refund SOP. The switch decision must be arbitrated by a real OpenRouter LLM,
+and both SOP completion replies must come from real provider-backed Chatflow
+`LLM` nodes. For speed and focused optimization, this gate uses
+`qwen/qwen3.5-9b` as the default single target model. Latency-insensitive,
+higher-intelligence investigations can opt into `deepseek/deepseek-v4-flash`
+through the same model configuration surface.
+
+034.11 final behavior:
+
+- the intent arbitrator uses a single live OpenRouter target model, defaulting
+  to `qwen/qwen3.5-9b`;
+- the optional high-intelligence model for slower investigations is
+  `deepseek/deepseek-v4-flash`;
+- the SOP `LLM` nodes use the single configured Chatflow provider model;
+- production/runtime-lab configuration remains single-model and unchanged;
+- the route decision evidence must show `arbitrator_mode=llm` and
+  `used_real_llm=true`;
+- completed SOP replies must contain the live marker and must not contain
+  `LLM mock:`, `Workflow mock:`, or `RAG mock:`;
+- qwen-specific badcases are recorded as optimization input: reasoning-only
+  output under too-small token limits, and provider rejection of multiple
+  system messages;
+- ordinary CI skips the live full-chain gate unless
+  `HIFY_RUN_LIVE_RUNTIME_LAB_OPENROUTER_FULL_CHAIN=1` and
+  `OPENROUTER_API_KEY` are set.
+
+034.11 evidence:
+
+- live full-chain OpenRouter acceptance:
+  `artifacts/slices/034-unified-routing-chat-lab/034.11/live-openrouter-full-chain.md`;
+- qwen full-chain command output:
+  `artifacts/slices/034-unified-routing-chat-lab/034.11/qwen-full-chain.txt`;
+- qwen 5-SOP live Chatflow LLM command output:
+  `artifacts/slices/034-unified-routing-chat-lab/034.11/qwen-chatflow-sop-llm.txt`;
+- ordinary non-live targeted acceptance:
+  `artifacts/slices/034-unified-routing-chat-lab/034.11/non-live-targeted.txt`;
+- full backend pytest:
+  `artifacts/slices/034-unified-routing-chat-lab/034.11/backend-full-pytest.txt`;
+- ruff:
+  `artifacts/slices/034-unified-routing-chat-lab/034.11/ruff.txt`.

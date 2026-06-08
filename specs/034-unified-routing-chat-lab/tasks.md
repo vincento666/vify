@@ -146,6 +146,29 @@
   `OPENROUTER_API_KEY` are set.
 - [x] Run backend full pytest and save 034.10 evidence.
 
+## 034.11 Live OpenRouter full-chain acceptance
+
+- [x] Add an opt-in live acceptance gate that exercises one RuntimeLab
+  conversation with both real OpenRouter intent arbitration and real
+  provider-backed Chatflow `LLM` nodes.
+- [x] Use `qwen/qwen3.5-9b` as the default single target model for focused,
+  low-latency live arbitration testing.
+- [x] Keep `deepseek/deepseek-v4-flash` documented as the opt-in
+  high-intelligence model for latency-insensitive scenarios.
+- [x] Keep Chatflow SOP LLM nodes on the single configured provider model.
+- [x] Assert route evidence reports `arbitrator_mode=llm` and
+  `used_real_llm=true` on the live switch decision.
+- [x] Assert SOP completion replies contain live LLM markers and no mock LLM
+  prefixes.
+- [x] Fix qwen live badcases by disabling reasoning for the test-stage
+  arbitrator, raising token limits, and avoiding multi-system-message Chatflow
+  fixtures.
+- [x] Preserve ordinary CI stability by skipping the full-chain live gate unless
+  `HIFY_RUN_LIVE_RUNTIME_LAB_OPENROUTER_FULL_CHAIN=1` and
+  `OPENROUTER_API_KEY` are set.
+- [x] Run qwen full-chain live gate, qwen 5-SOP live Chatflow LLM gate, ordinary
+  non-live targeted acceptance, ruff, and full backend pytest.
+
 ## Future specs, not 034 tasks
 
 - [ ] Rename or consolidate final user-facing API to `/chat` or `/query`.

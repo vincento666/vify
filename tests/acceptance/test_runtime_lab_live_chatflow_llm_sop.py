@@ -220,7 +220,7 @@ def _live_chatflow_nodes(case: LiveSopCase) -> list[dict[str, Any]]:
                     f"请只输出 {case.marker}。"
                 ),
                 "temperature": 0,
-                "maxTokens": 64,
+                "maxTokens": 1200,
                 "outputVariable": "answer",
             },
         },
@@ -271,7 +271,7 @@ def _seed_default_live_agent(api_key: str, base_url: str, model: str) -> int:
                 name="RuntimeLab live model",
                 model_id=model,
                 context_size=4096,
-                extra_params={"temperature": 0},
+                extra_params={"temperature": 0, "reasoning": {"effort": "none", "exclude": True}},
                 enabled=True,
                 deleted=False,
                 created_at=now,
@@ -282,7 +282,7 @@ def _seed_default_live_agent(api_key: str, base_url: str, model: str) -> int:
             agent.insert().values(
                 name=f"RuntimeLab live Chatflow agent {time.time_ns()}",
                 description="runtime-lab live LLM SOP acceptance agent",
-                system_prompt="Follow marker instructions exactly.",
+                system_prompt="",
                 model_config_id=model_id,
                 temperature=0,
                 max_tokens=128,
