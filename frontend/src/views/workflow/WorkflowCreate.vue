@@ -10629,7 +10629,7 @@ onUnmounted(() => {
 
 .condition-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 7.25rem 2rem;
+  grid-template-columns: 4.25rem minmax(0, 1fr) 2rem;
   gap: 0.5rem;
   align-items: start;
   margin-bottom: 0.5rem;
@@ -10664,15 +10664,16 @@ onUnmounted(() => {
 }
 
 .condition-left-cell {
-  grid-column: 1 / 2;
-}
-
-.condition-operator-select {
   grid-column: 2 / 3;
 }
 
+.condition-operator-select {
+  grid-column: 1 / 2;
+  grid-row: 1 / span 2;
+}
+
 .condition-right-cell {
-  grid-column: 1 / 3;
+  grid-column: 2 / 3;
 }
 
 .condition-delete-button {

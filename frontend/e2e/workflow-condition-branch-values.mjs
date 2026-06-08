@@ -87,6 +87,32 @@ try {
   const rowText = await row.innerText()
   assert(!rowText.includes('引用') && !rowText.includes('字面量'), `Condition row must not expose mode copy, got ${rowText}`)
 
+  const conditionLayout = await row.evaluate((element) => {
+    const box = (selector) => {
+      const target = element.querySelector(selector)
+      if (!target) return null
+      const rect = target.getBoundingClientRect()
+      return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height }
+    }
+    return {
+      operator: box('.condition-operator-select'),
+      left: box('.condition-left-cell'),
+      right: box('.condition-right-cell'),
+    }
+  })
+  assert(
+    conditionLayout.operator && conditionLayout.left && conditionLayout.right,
+    `Condition row must expose operator/left/right controls, got ${JSON.stringify(conditionLayout)}`,
+  )
+  assert(
+    conditionLayout.operator.left < conditionLayout.left.left,
+    `Condition operator must sit in the fixed left column before the variable selector, got ${JSON.stringify(conditionLayout)}`,
+  )
+  assert(
+    Math.abs(conditionLayout.left.left - conditionLayout.right.left) <= 2,
+    `Condition left variable selector and right value input must align in the main column, got ${JSON.stringify(conditionLayout)}`,
+  )
+
   const operandControls = row.getByTestId('condition-operand-control')
   assert(await operandControls.count() === 2, 'Condition row must render left and right split operand controls')
   const leftOperand = operandControls.nth(0)
