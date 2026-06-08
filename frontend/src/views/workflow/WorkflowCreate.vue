@@ -250,7 +250,7 @@
           />
           <EdgeLabelRenderer>
             <button
-              v-show="hoveredEdgeId === edgeProps.id || selectedEdgeId === edgeProps.id || edgeInsertPaletteId === edgeProps.id"
+              v-show="hoveredEdgeId === edgeProps.id || edgeInsertPaletteId === edgeProps.id"
               type="button"
               class="edge-insert-button"
               data-testid="edge-insert-button"
@@ -5122,6 +5122,11 @@ function isEdgeInteractionTarget(target: EventTarget | null) {
   ].join(',')))
 }
 
+function isEdgeInteractionPoint(event: PointerEvent | MouseEvent) {
+  const element = document.elementFromPoint(event.clientX, event.clientY)
+  return isEdgeInteractionTarget(element || event.target)
+}
+
 function clearEdgeInteractionState() {
   selectedEdgeId.value = ''
   hoveredEdgeId.value = ''
@@ -5160,7 +5165,10 @@ function handleConnectEnd() {
   clearConnectionPreview()
 }
 
-function handleGlobalConnectionPointerMove(event: PointerEvent) {
+function handleGlobalConnectionPointerMove(event: PointerEvent | MouseEvent) {
+  if (hoveredEdgeId.value && !edgeInsertPaletteId.value && !isEdgeInteractionPoint(event)) {
+    hoveredEdgeId.value = ''
+  }
   if (!connectionPreviewStart.value) return
 
   const expectedPortType = connectionPreviewStart.value.handleType === 'source' ? 'target' : 'source'
@@ -5196,7 +5204,7 @@ function handleConnect(connection: any) {
 
 function handleEdgeClick(event: any) {
   selectedEdgeId.value = event?.edge?.id || ''
-  hoveredEdgeId.value = selectedEdgeId.value
+  hoveredEdgeId.value = ''
   selectedNodeKey.value = ''
   edgeInsertPaletteId.value = ''
   void nextTick(() => canvasStageRef.value?.focus())
@@ -5208,7 +5216,7 @@ function handleEdgeMouseEnter(event: any) {
 
 function clearEdgeHover(edgeId: string) {
   if (!edgeId) return
-  if (edgeInsertPaletteId.value === edgeId || selectedEdgeId.value === edgeId) return
+  if (edgeInsertPaletteId.value === edgeId) return
   if (hoveredEdgeId.value === edgeId) hoveredEdgeId.value = ''
 }
 
@@ -7743,6 +7751,7 @@ onMounted(() => {
   document.addEventListener('pointerdown', handleGlobalVariablePointerDown, true)
   document.addEventListener('pointerdown', handleGlobalEdgePointerDown, true)
   document.addEventListener('pointermove', handleGlobalConnectionPointerMove, true)
+  document.addEventListener('mousemove', handleGlobalConnectionPointerMove, true)
   void loadWorkflow()
 })
 onUnmounted(() => {
@@ -7751,6 +7760,7 @@ onUnmounted(() => {
   document.removeEventListener('pointerdown', handleGlobalVariablePointerDown, true)
   document.removeEventListener('pointerdown', handleGlobalEdgePointerDown, true)
   document.removeEventListener('pointermove', handleGlobalConnectionPointerMove, true)
+  document.removeEventListener('mousemove', handleGlobalConnectionPointerMove, true)
 })
 </script>
 
