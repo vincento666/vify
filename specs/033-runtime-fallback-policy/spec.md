@@ -1,14 +1,19 @@
-# Spec 033: Runtime Fallback Policy
+# Spec 033: Runtime Handoff Foundation
 
 ## Goal
 
-Add controlled FAQ, RAG, Knowledge/Clarification Agent, and human handoff
-fallback policy to the runtime routing control plane after real Chatflow SOP
-integration is proven.
+Add the runtime-lab handoff foundation that every later fallback layer can use.
 
-033 is about response/fallback policy, not SOP execution mechanics.
+033 is not the FAQ/RAG/Agent implementation spec. It provides one normalized
+control-plane action for human handoff, hard-stop trigger detection, route
+evidence, and context snapshot behavior so later specs can escalate safely
+without inventing their own side effects.
 
-## Dependency
+## Numbering And Dependency
+
+Numbering was rechecked on 2026-06-09. `035` is already used by
+Knowledge Retrieval Productization, so the remaining fallback specs continue as
+`036` through `040`.
 
 033 starts only after 032 gates pass.
 
@@ -19,132 +24,149 @@ Required 032 capabilities:
 - preserved task ledger and checkpoint behavior;
 - existing Chatflow regression gates passing.
 
+## Current Code Baseline
+
+Available today:
+
+- `CLARIFY` exists as a route action and classifier action.
+- SOP strong trigger templates exist on SOP manifests.
+- Runtime-lab explicit signal detection handles SOP triggers, resume phrases,
+  and refusal/no-op phrases.
+- Existing `handoff` module can create queued tickets.
+- Chatflow has `TRANSFER_TO_HUMAN` node support.
+
+Missing today:
+
+- runtime-lab does not expose `HANDOFF_TO_HUMAN`;
+- handoff is not an allowed constrained classifier/policy action;
+- explicit handoff/safety triggers are not in runtime-lab candidate recall;
+- runtime-lab does not emit `HANDOFF_REQUESTED` events or context snapshots;
+- later FAQ/RAG/Agent fallback layers cannot escalate through a shared handoff
+  policy yet.
+
 ## Scope
 
 In scope:
 
-- policy actions:
-  - `ANSWER_FAQ`;
-  - `ANSWER_RAG`;
-  - `ASK_CLARIFICATION`;
-  - `AGENT_FALLBACK`;
-  - `HANDOFF_TO_HUMAN`;
-- FAQ exact and semantic answer routing;
-- RAG retrieval evidence for fallback answer generation;
-- controlled Knowledge/Clarification Agent fallback;
-- handoff trigger policy;
-- active-SOP safe handling of FAQ and fallback answers;
-- route evidence explaining why SOP state did or did not mutate.
+- `HANDOFF_TO_HUMAN` route action and serialized response contract;
+- finite candidate/action validation for handoff inside the existing policy
+  gate;
+- explicit handoff hard-stop trigger detection:
+  - user asks for human support;
+  - complaint/escalation wording;
+  - safety/compliance sensitive wording;
+  - unsupported business process wording;
+  - repeated low-confidence/clarification failure signal from later specs;
+- runtime events for handoff decision/request;
+- context snapshot for active task, suspended tasks, route evidence, recent
+  transcript, and business refs;
+- optional one-way call into the existing `handoff` module.
 
 Out of scope:
 
-- frontend agent console;
-- full human-agent chat UI;
-- production analytics dashboards;
-- broad knowledge-base refactor;
-- unconstrained autonomous Agent control over SOP state.
+- FAQ exact or semantic answering;
+- RAG answer generation;
+- fallback Agent response generation;
+- frontend human-service console;
+- autonomous Agent task mutation;
+- broad Chatflow internals rewrite.
 
-## Policy Design
+## Routing Position
 
-033 keeps the route control plane in charge.
+033 must run before every non-handoff layer:
 
 ```text
-Safety and handoff hard stops
-  -> FAQ exact/high confidence answer gate
-  -> SOP/resume candidate recall and arbitration
-  -> FAQ/RAG semantic answer gate
-  -> controlled Agent fallback
-  -> human handoff
+033 explicit handoff/safety hard stops
+  -> 036 exact/high-confidence FAQ answer gate
+  -> 037 semantic FAQ answer gate
+  -> SOP/resume constrained arbitration
+  -> 038 RAG answer gate
+  -> 039 controlled Agent fallback
+  -> 040 final E2E acceptance
 ```
 
-Active SOP behavior is stricter:
+Later layers may propose or trigger handoff only by returning the shared
+`HANDOFF_TO_HUMAN` route action. Final handoff execution stays centralized in
+the runtime control plane.
 
-- FAQ answers can be returned without mutating active SOP state when the user is
-  clearly asking a question;
-- uncertain "question vs business handling" cases must clarify instead of
-  collecting SOP slots;
-- Agent fallback cannot start, suspend, resume, or complete SOP tasks directly;
-- handoff policy can pause or mark task state according to an explicit runtime
-  event.
+## Handoff Contract
 
-## FAQ Policy
+The route action payload must preserve enough state for a human agent to
+understand the current conversation:
 
-FAQ matching methods may include:
+```text
+HANDOFF_TO_HUMAN {
+  sourceLayer,
+  reasonCode,
+  userMessage,
+  activeTaskSummary,
+  suspendedTaskSummaries,
+  routeEvidence,
+  recentTranscript,
+  businessRefs
+}
+```
 
-- exact question match;
-- normalized keyword/alias match;
-- BM25/ES lexical recall if available;
-- vector recall if available;
-- rerank if available;
-- confidence and margin policy.
+Active and suspended SOP state must not be lost or rewritten merely because the
+handoff route fires.
 
-High-confidence FAQ answers may exit before SOP arbitration only when policy
-rules say the answer is safe. In active-SOP contexts, the response must preserve
-task state unless an explicit route decision says otherwise.
+## Slice Plan
 
-## RAG Policy
+### 033.1 Handoff Action Contract
 
-RAG retrieval is for long-tail answer generation and evidence-backed responses.
-RAG document snippets are not SOP targets.
+Add action/candidate support only. The RED tests must fail until
+`HANDOFF_TO_HUMAN` is accepted by classifier validation, policy gate, payload
+formatting, and contract serialization.
 
-The RAG answer path must return:
+### 033.2 Explicit Handoff Trigger Templates
 
-- cited source metadata when available;
-- retrieval confidence or score evidence;
-- generated answer;
-- safety result;
-- decision reason.
+Add strong explicit trigger detection for human-support, complaint, compliance,
+emergency, and unsupported-process phrases. These triggers are hard stops and
+must exit before FAQ/SOP/RAG/Agent layers.
 
-## Agent Fallback Policy
+### 033.3 Runtime Handoff Event And Context Snapshot
 
-The fallback Agent may:
+Route `HANDOFF_TO_HUMAN` into runtime events and, when configured, the existing
+handoff service. Preserve active/suspended task summaries, route evidence,
+recent transcript, and business refs.
 
-- dynamically search knowledge;
-- answer long-tail questions;
-- provide calming or service-oriented small talk;
-- summarize user demand;
-- ask clarification questions;
-- recommend human handoff.
+### 033.4 Handoff Policy Regression Gate
 
-The fallback Agent must not:
-
-- mutate runtime task ledger directly;
-- decide final handoff without policy gate approval;
-- bypass SOP safety rules;
-- fabricate unavailable business status.
-
-## Handoff Policy
-
-Handoff triggers may include:
-
-- explicit user request for human support;
-- safety or compliance trigger;
-- repeated clarification failure;
-- repeated low-confidence routing;
-- Agent fallback recommendation approved by policy;
-- unsupported business process.
-
-Handoff emits explicit runtime events and preserves enough state for the human
-agent to understand active and suspended tasks.
+Prove existing SOP start/switch/resume behavior still passes and that handoff
+does not corrupt active/suspended task state.
 
 ## Acceptance Criteria
 
-- High-confidence FAQ can answer before SOP arbitration when safe.
-- Active SOP question can be answered without consuming the message as a slot.
-- Ambiguous active SOP question vs handling request asks clarification.
-- RAG fallback returns evidence and does not mutate SOP state.
-- Agent fallback is controlled by policy and cannot mutate ledger directly.
-- Handoff is triggered by explicit policy and emits audit events.
+- `HANDOFF_TO_HUMAN` is a first-class runtime route action.
+- Explicit handoff/safety wording exits before FAQ/SOP/RAG/Agent routing.
+- Active and suspended task state is preserved when handoff fires.
+- Handoff emits auditable route evidence and runtime events.
+- Optional existing `handoff` module integration is one-way from runtime-lab.
 - Existing 030 routing and 032 Chatflow-backed SOP paths still pass.
+- No FAQ/RAG/Agent implementation is introduced in 033.
 
 ## Completion Gate
 
 033 is complete only when:
 
-- FAQ/RAG/Agent/handoff policy tests pass;
-- active-SOP safety cases pass;
-- handoff event and state tests pass;
-- full backend pytest passes or unrelated failures are documented;
-- browser UAT is executed if any user-visible frontend behavior is changed;
+- RED evidence exists for each slice before implementation;
+- unit/contract/integration tests for handoff route behavior pass;
+- active/suspended state preservation tests pass;
+- SOP routing regressions pass;
+- browser UAT is executed only if user-visible lab behavior changes;
 - evidence is saved under `artifacts/slices/033-runtime-fallback-policy/`;
-- one git commit contains only 033 changes.
+- `spec.md`, `plan.md`, and `tasks.md` are updated with final evidence;
+- one git commit contains only 033 handoff-foundation changes.
+
+## Completion Capability
+
+After 033, every later routing layer can escalate through one normalized human
+handoff route. FAQ, RAG, and Agent fallback specs will propose or trigger
+handoff through this action instead of creating independent side effects.
+
+## Specification Sign-off
+
+Status: ready for implementation.
+
+This spec is scoped and numbered. It may be implemented before `036` and must
+not absorb any FAQ, RAG, or Agent fallback work reserved for `036-039`.

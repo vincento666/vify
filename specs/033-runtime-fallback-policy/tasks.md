@@ -1,69 +1,69 @@
-# Tasks 033: Runtime Fallback Policy
+# Tasks 033: Runtime Handoff Foundation
 
-## 033.0 Spec creation
+## 033.0 Spec refinement
 
-- [x] Create `spec.md`, `plan.md`, and `tasks.md`.
-- [x] Record dependency on 032 gates.
-- [x] Keep fallback systems under runtime policy gate control.
-- [x] Commit 030-033 spec skeleton documents only.
+- [x] Keep original fallback-policy intent.
+- [x] Refine 033 into shared handoff/control-plane foundation.
+- [x] Move FAQ exact, FAQ embedding, RAG, Agent fallback, and final browser
+  acceptance into later specs.
+- [x] Document current baseline and missing runtime-lab handoff behavior.
 
-## 033.1 FAQ answer gate
+## 033.1 Handoff action contract
 
-- [ ] Blocked until 032 completion gate passes.
-- [ ] RED: FAQ policy tests fail for exact match, semantic match, active-SOP
-  safe answer, active-SOP ambiguity, and confidence margin behavior.
-- [ ] Implement FAQ exact/high-confidence answer gate.
-- [ ] Preserve active SOP task state for FAQ answers.
-- [ ] Save evidence under
+- [ ] RED: classifier/action validation rejects `HANDOFF_TO_HUMAN`.
+- [ ] RED: policy gate cannot return `HANDOFF_TO_HUMAN`.
+- [ ] RED: runtime-lab payload lacks normalized handoff evidence.
+- [ ] Add `HANDOFF_TO_HUMAN` to route actions and finite classifier actions.
+- [ ] Add `HANDOFF_TO_HUMAN` candidate type and serialization.
+- [ ] Add policy-gate mapping from candidate/classifier result to route
+  decision.
+- [ ] Save RED/GREEN evidence under
   `artifacts/slices/033-runtime-fallback-policy/033.1/`.
-- [ ] Gates pass.
 - [ ] Commit 033.1 only.
 
-## 033.2 RAG answer gate
+## 033.2 Explicit handoff trigger templates
 
-- [ ] RED: RAG policy tests fail for evidence, low-confidence clarify, and no
-  SOP mutation behavior.
-- [ ] Add RAG answer route action and evidence payload.
-- [ ] Ensure RAG document snippets are not SOP classifier targets.
+- [ ] RED: explicit user request for human support does not trigger handoff.
+- [ ] RED: complaint/compliance/safety/unsupported phrases do not trigger
+  handoff.
+- [ ] Add explicit handoff signal detector with stable reason codes.
+- [ ] Ensure hard-stop triggers run before FAQ/SOP/RAG/Agent layers.
+- [ ] Ensure active/suspended tasks are not mutated by trigger detection alone.
 - [ ] Save evidence under
   `artifacts/slices/033-runtime-fallback-policy/033.2/`.
-- [ ] Gates pass.
 - [ ] Commit 033.2 only.
 
-## 033.3 Controlled Agent fallback
+## 033.3 Runtime handoff event and context snapshot
 
-- [ ] RED: Agent fallback tests fail for allowed answer actions, prohibited
-  task-ledger mutation, clarification proposal, and handoff recommendation.
-- [ ] Add fallback Agent port.
-- [ ] Add policy wrapper around Agent outputs.
-- [ ] Ensure Agent cannot directly start, suspend, resume, complete, or handoff
-  a task.
+- [ ] RED: runtime-lab does not emit `HANDOFF_DECIDED` and
+  `HANDOFF_REQUESTED` events.
+- [ ] RED: context snapshot lacks active task, suspended tasks, business refs,
+  route evidence, and recent transcript.
+- [ ] Add handoff runtime adapter over existing handoff service or a fake test
+  adapter.
+- [ ] Preserve active/suspended task state according to explicit policy.
+- [ ] Return a user-facing handoff reply without leaking internal evidence.
 - [ ] Save evidence under
   `artifacts/slices/033-runtime-fallback-policy/033.3/`.
-- [ ] Gates pass.
 - [ ] Commit 033.3 only.
 
-## 033.4 Human handoff policy
+## 033.4 Handoff policy regression gate
 
-- [ ] RED: handoff policy tests fail for explicit request, compliance trigger,
-  repeated clarification failure, Agent recommendation approval, and unsupported
-  process.
-- [ ] Add handoff route action and runtime events.
-- [ ] Preserve active/suspended task summaries for handoff context.
-- [ ] Save evidence under
+- [ ] RED: E2E fails until explicit handoff works through
+  `/api/v1/runtime-lab/sessions/{id}/messages`.
+- [ ] Prove existing SOP start/switch/resume/completion tests still pass.
+- [ ] Prove non-interruptible SOP switch rejection still passes.
+- [ ] Prove handoff does not consume active SOP slots.
+- [ ] Run targeted runtime-lab and handoff tests.
+- [ ] Run full backend pytest or document unrelated failures.
+- [ ] Save final evidence under
   `artifacts/slices/033-runtime-fallback-policy/033.4/`.
-- [ ] Gates pass.
 - [ ] Commit 033.4 only.
 
-## 033.5 End-to-end fallback policy gate
+## Future specs
 
-- [ ] RED: E2E tests fail for FAQ-before-SOP safe answer, active-SOP ambiguity
-  clarification, RAG fallback, Agent clarification, and human handoff.
-- [ ] Expose fallback decision evidence in runtime-lab API.
-- [ ] Run targeted runtime-lab and Chatflow adapter tests.
-- [ ] Run full backend pytest or document unrelated failures.
-- [ ] Run browser UAT only if frontend is changed.
-- [ ] Save evidence under
-  `artifacts/slices/033-runtime-fallback-policy/033.5/`.
-- [ ] Gates pass.
-- [ ] Commit 033.5 only.
+- [ ] 036 Runtime FAQ exact answer gate.
+- [ ] 037 Runtime semantic FAQ embedding gate.
+- [ ] 038 Runtime RAG answer gate.
+- [ ] 039 Runtime controlled Agent fallback and escalation.
+- [ ] 040 Runtime fallback E2E and lab acceptance.

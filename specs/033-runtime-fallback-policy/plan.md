@@ -1,82 +1,101 @@
-# Plan 033: Runtime Fallback Policy
+# Plan 033: Runtime Handoff Foundation
+
+## Role
+
+033 builds the shared handoff/fallback control-plane primitive for runtime-lab.
+It is the first layer after 034 and before FAQ/RAG/Agent fallback routing.
+
+Later specs may decide to answer, clarify, use RAG, or invoke a fallback Agent,
+but every layer must use the same `HANDOFF_TO_HUMAN` route action when it needs
+human escalation.
 
 ## Architecture
 
-Add fallback policy as route actions controlled by the runtime policy gate.
-
-Suggested conceptual components:
-
 ```text
-FaqAnswerGate
-RagAnswerGate
-FallbackAgentPort
-HandoffPolicy
-RuntimePolicyGate
+RuntimeLabService.handle_message
+  -> ExplicitHandoffSignalDetector
+  -> candidate recall
+  -> PolicyGate
+  -> HandoffRuntimeAdapter
+  -> HandoffService / runtime events
 ```
 
-The exact files should follow the runtime module shape after 032.
+033 keeps task ownership unchanged:
 
-## Control Plane Rule
+- runtime-lab owns route decision and active/suspended task ledger;
+- existing handoff module owns human ticket lifecycle;
+- Chatflow still owns internal SOP execution state;
+- future FAQ/RAG/Agent gates can only request handoff through policy.
 
-The route control plane owns final decisions.
+## Route Contract
 
-FAQ, RAG, and Agent systems provide evidence and proposed responses. They do not
-own runtime task mutation.
+Add:
 
-## Active SOP Safety
+```text
+RouteDecision.action = HANDOFF_TO_HUMAN
+CandidateType.HANDOFF_TO_HUMAN
+Classifier allowed action HANDOFF_TO_HUMAN
+Runtime event HANDOFF_REQUESTED
+Runtime event HANDOFF_DECIDED
+```
 
-Every fallback path must state whether it mutates SOP state.
+Decision evidence must include:
 
-Expected defaults:
+- `sourceLayer`: `explicit_signal`, `faq_policy`, `rag_policy`,
+  `agent_policy`, `clarification_policy`, or `system_policy`;
+- `reasonCode`: stable code such as `USER_REQUEST`, `COMPLAINT`,
+  `COMPLIANCE`, `SAFETY`, `UNSUPPORTED`, `REPEATED_CLARIFY_FAILURE`;
+- `matchedTerms`;
+- active/suspended task summaries;
+- recent transcript summary when available.
 
-- `ANSWER_FAQ`: no SOP mutation;
-- `ANSWER_RAG`: no SOP mutation;
-- `ASK_CLARIFICATION`: no SOP mutation;
-- `AGENT_FALLBACK`: no SOP mutation unless a future explicit tool policy says
-  otherwise;
-- `HANDOFF_TO_HUMAN`: emits handoff event and may pause task according to
-  explicit policy.
+## Explicit Trigger Groups
 
-## Test Strategy
+Initial hard-stop templates:
 
-Unit tests:
+- human support: `转人工`, `人工客服`, `找人工`, `人工处理`;
+- complaint/escalation: `投诉`, `主管`, `升级处理`, `不满意`;
+- compliance/safety: `监管`, `民航局`, `报警`, `安全事故`;
+- unsupported: `这个机器人处理不了`, `无法办理`, `不要机器人`.
 
-- FAQ confidence and margin policy;
-- RAG confidence and evidence policy;
-- Agent fallback allowed/prohibited actions;
-- handoff trigger rules.
+These templates should be configurable data in runtime-lab domain code first.
+Do not put them in frontend-only logic.
 
-Integration tests:
+## TDD Strategy
 
-- active SOP plus safe FAQ answer;
-- active SOP plus ambiguous question asks clarification;
-- no-active long-tail query reaches RAG or Agent;
-- repeated clarification failure triggers handoff;
-- Agent recommendation requires policy approval before handoff.
+RED first:
 
-Contract/E2E tests:
+- classifier rejects `HANDOFF_TO_HUMAN` before action support exists;
+- explicit trigger tests fail before detector support exists;
+- service integration fails before runtime event/context snapshot is emitted;
+- contract/E2E fails before API response includes normalized handoff evidence.
 
-- runtime-lab API exposes fallback decision evidence;
-- existing SOP routing and real Chatflow adapter path remain valid.
+GREEN:
 
-## Evidence
+- minimal action/candidate support;
+- minimal explicit detector;
+- minimal handoff adapter over existing handoff service or fake adapter in
+  tests;
+- no frontend change unless 040 later promotes UI evidence.
 
-Use:
+## SDD Gates
+
+Each slice must update `spec.md`, `plan.md`, `tasks.md`, and evidence under:
 
 ```text
 artifacts/slices/033-runtime-fallback-policy/
-  033.0/
   033.1/
-  ...
+  033.2/
+  033.3/
+  033.4/
 ```
 
-Frontend/browser UAT is required only if 033 changes user-visible UI.
+Do not start FAQ/RAG/Agent specs until 033 action/event/context contracts pass.
 
 ## Non-Goals
 
-Do not:
-
-- give Agent autonomous control over SOP task state;
-- merge fallback Agent with intent classifier;
-- remove constrained SOP arbitration;
-- build a full human-service console in this spec.
+- no FAQ/RAG answer policy;
+- no fallback Agent implementation;
+- no human-agent console;
+- no frontend routing page changes;
+- no autonomous state mutation outside runtime-lab policy.
