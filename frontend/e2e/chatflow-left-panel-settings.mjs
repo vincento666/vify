@@ -16,6 +16,37 @@ try {
   const panel = page.getByTestId('canvas-resource-panel')
   await panel.waitFor({ state: 'visible', timeout: 5000 })
   assert((await panel.innerText()).includes('对话设置'), 'Expected chatflow left panel to render dialog settings')
+  assert(await page.getByTestId('chatflow-history-settings-popover').count() === 0, 'History retention settings should not stay inline by default')
+
+  const historySettingsButton = panel.getByRole('button', { name: '对话历史策略', exact: true })
+  assert(await historySettingsButton.count() === 1, 'Expected a header settings button for chatflow history strategy')
+  const collapseButton = page.getByRole('button', { name: '折叠侧栏', exact: true })
+  const panelBox = await panel.boundingBox()
+  const historyButtonBox = await historySettingsButton.boundingBox()
+  const collapseButtonBox = await collapseButton.boundingBox()
+  assert(panelBox && historyButtonBox && collapseButtonBox, 'Expected chatflow settings header controls to have measurable layout boxes')
+  assert(
+    collapseButtonBox.x >= panelBox.x + panelBox.width - 2,
+    'Expected side-panel collapse control to sit on the panel outer edge instead of overlapping header actions',
+  )
+  assert(
+    historyButtonBox.x + historyButtonBox.width + 6 <= collapseButtonBox.x,
+    'Expected history settings and collapse controls to be visually separated',
+  )
+  await historySettingsButton.click()
+
+  const historyPopover = page.getByTestId('chatflow-history-settings-popover')
+  await historyPopover.waitFor({ state: 'visible', timeout: 5000 })
+  assert((await historyPopover.innerText()).includes('对话历史策略'), 'Expected history settings popover title')
+  assert((await historyPopover.innerText()).includes('对话轮数保留'), 'Expected history settings popover to configure retained rounds')
+  const retentionSlider = historyPopover.getByLabel('对话轮数保留滑块', { exact: true })
+  const retentionInput = historyPopover.getByLabel('对话轮数保留数值', { exact: true })
+  assert(await retentionSlider.getAttribute('type') === 'range', 'Expected retention control to use a slider')
+  assert(await retentionSlider.inputValue() === '3', 'Expected default history retention to be 3 rounds')
+  await retentionSlider.fill('5')
+  assert(await retentionInput.inputValue() === '5', 'Expected slider to sync the numeric retention input')
+  await retentionInput.fill('0')
+  assert(await retentionSlider.inputValue() === '0', 'Expected numeric retention input to sync the slider')
 
   const guideSection = panel.getByTestId('chatflow-guide-question-settings')
   await guideSection.waitFor({ state: 'visible', timeout: 5000 })

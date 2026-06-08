@@ -66,7 +66,57 @@
 
       <aside v-if="!resourcePanelCollapsed && canvasTab === 'compose'" class="canvas-resource-panel" data-testid="canvas-resource-panel">
         <div class="resource-header">
-          <strong>{{ isChatflowMode ? '对话设置' : '画布概览' }}</strong>
+          <div class="resource-header-main">
+            <strong>{{ isChatflowMode ? '对话设置' : '画布概览' }}</strong>
+            <button
+              v-if="isChatflowMode"
+              type="button"
+              class="resource-header-icon-button"
+              aria-label="对话历史策略"
+              @click="chatflowHistorySettingsOpen = !chatflowHistorySettingsOpen"
+            >
+              <SettingsIcon aria-hidden="true" />
+            </button>
+          </div>
+          <div
+            v-if="isChatflowMode && chatflowHistorySettingsOpen"
+            class="chatflow-history-settings-popover"
+            data-testid="chatflow-history-settings-popover"
+          >
+            <div class="chatflow-history-settings-header">
+              <strong>对话历史策略</strong>
+              <button type="button" aria-label="关闭对话历史策略" @click="chatflowHistorySettingsOpen = false">
+                <XIcon aria-hidden="true" />
+              </button>
+            </div>
+            <label class="chatflow-history-setting-field">
+              <span>对话轮数保留</span>
+              <div class="chatflow-history-slider-control">
+                <input
+                  v-model.number="chatflowHistoryRetentionRounds"
+                  aria-label="对话轮数保留滑块"
+                  class="model-parameter-slider chatflow-history-slider"
+                  type="range"
+                  min="0"
+                  max="20"
+                  step="1"
+                  :style="chatflowHistorySliderStyle"
+                  @input="setChatflowHistoryRetentionRounds(($event.target as HTMLInputElement).value)"
+                />
+                <input
+                  :value="chatflowHistoryRetentionRounds"
+                  aria-label="对话轮数保留数值"
+                  class="chatflow-history-number-input"
+                  type="number"
+                  min="0"
+                  max="20"
+                  step="1"
+                  @input="setChatflowHistoryRetentionRounds(($event.target as HTMLInputElement).value)"
+                />
+              </div>
+            </label>
+            <p>0 表示不注入历史；节点会话历史开启后默认跟随该全局策略。</p>
+          </div>
         </div>
 
         <template v-if="isChatflowMode">
@@ -3984,6 +4034,8 @@ const workflowRunDebugLoading = ref(false)
 const dirtySinceTestRun = ref(true)
 const openingText = ref('你好，我可以帮你处理订单、售后和产品咨询。')
 const guideQuestions = ref(['查订单进度', '申请退款', '咨询发票'])
+const chatflowHistorySettingsOpen = ref(false)
+const chatflowHistoryRetentionRounds = ref(3)
 const testProfile = ref({
   conversationId: 'conv-demo',
   userId: 'user-demo',
@@ -3997,6 +4049,12 @@ const chatflowVariableScopes = ref<ChatflowScopeState[]>(
 const chatflowConversationVariableCount = computed(() =>
   chatflowVariableScopes.value.reduce((total, scope) => total + scope.items.length, 0),
 )
+const chatflowHistorySliderStyle = computed(() => {
+  const percent = Math.round((chatflowHistoryRetentionRounds.value / 20) * 100)
+  return {
+    background: `linear-gradient(to right, #5b5ef6 ${percent}%, #e8ebf5 ${percent}% 100%)`,
+  }
+})
 let requestedCanvasZoom = 1
 let programmaticZoomSerial = 0
 let canvasLayoutRefitTimer = 0
@@ -4307,7 +4365,7 @@ const openApiEndpoint = computed(() =>
 )
 const openApiSample = computed(() => JSON.stringify({
   input: isChatflowMode.value
-    ? buildChatflowRunInput({ message: testInput.value, ...testProfile.value })
+    ? buildChatflowRunInput({ message: testInput.value, ...testProfile.value, historyRetentionRounds: chatflowHistoryRetentionRounds.value })
     : {
       userMessage: testInput.value,
       USER_INPUT: testInput.value,
@@ -7110,6 +7168,12 @@ function removeGuideQuestion(index: number) {
   markGraphDirty()
 }
 
+function setChatflowHistoryRetentionRounds(value: string | number) {
+  const numeric = Number(value)
+  chatflowHistoryRetentionRounds.value = Math.max(0, Math.min(20, Number.isFinite(numeric) ? Math.round(numeric) : 3))
+  markGraphDirty()
+}
+
 async function applyGuideQuestion(question: string) {
   testInput.value = question
   if (isChatflowMode.value) {
@@ -7125,6 +7189,8 @@ async function sendChatflowMessage() {
 function resetChatflowConversationSettings() {
   openingText.value = '你好，我可以帮你处理订单、售后和产品咨询。'
   guideQuestions.value = ['查订单进度', '申请退款', '咨询发票']
+  chatflowHistoryRetentionRounds.value = 3
+  chatflowHistorySettingsOpen.value = false
 }
 
 function syncChatflowSettingsFromGraph() {
@@ -7134,6 +7200,8 @@ function syncChatflowSettingsFromGraph() {
   guideQuestions.value = Array.isArray(startConfig.guideQuestions)
     ? startConfig.guideQuestions.map(String)
     : ['查订单进度', '申请退款', '咨询发票']
+  const retention = Number(startConfig.historyRetentionRounds ?? 3)
+  chatflowHistoryRetentionRounds.value = Math.max(0, Math.min(20, Number.isFinite(retention) ? Math.round(retention) : 3))
 }
 
 function graphForPersistence() {
@@ -7148,6 +7216,7 @@ function graphForPersistence() {
             ...node.config,
             openingText: openingText.value,
             guideQuestions: guideQuestions.value.map((item) => item.trim()).filter(Boolean),
+            historyRetentionRounds: chatflowHistoryRetentionRounds.value,
           },
         }
         : node,
@@ -7625,7 +7694,7 @@ async function runCanvasTest() {
     if (!id) return
 
     const result = await (isChatflowMode.value
-      ? runChatflow(id, buildChatflowRunInput({ message: runMessage, ...testProfile.value }))
+      ? runChatflow(id, buildChatflowRunInput({ message: runMessage, ...testProfile.value, historyRetentionRounds: chatflowHistoryRetentionRounds.value }))
       : runWorkflow(id, {
         userMessage: testInput.value,
         USER_INPUT: testInput.value,
@@ -8074,28 +8143,27 @@ onUnmounted(() => {
 
 .resource-panel-toggle {
   position: absolute;
-  top: 1.125rem;
-  left: 15.75rem;
+  top: 1rem;
+  left: var(--workflow-resource-panel-width);
   z-index: 12;
-  width: 1.75rem;
-  height: 2.375rem;
+  width: 1.875rem;
+  height: 1.875rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border: 1px solid #dfe3ee;
-  border-left: 0;
-  border-radius: 0 0.5625rem 0.5625rem 0;
-  background: #fff;
+  border-radius: 0.5rem;
+  background: #f7f8fc;
   color: #596273;
-  box-shadow: 0.375rem 0.5rem 1.25rem rgba(34, 41, 63, 0.1);
+  box-shadow: 0 0.375rem 1rem rgba(34, 41, 63, 0.08);
   cursor: pointer;
-  opacity: 0.52;
+  opacity: 0.82;
   transition: opacity 0.16s ease, left 0.18s ease, background 0.16s ease;
 }
 
 .resource-panel-toggle:hover,
 .resource-panel-toggle:focus-visible {
-  background: #f7f8fc;
+  background: #fff;
   opacity: 1;
 }
 
@@ -8112,6 +8180,7 @@ onUnmounted(() => {
 }
 
 .resource-header {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.125rem;
@@ -8119,9 +8188,111 @@ onUnmounted(() => {
   border-bottom: 1px solid #edf0f6;
 }
 
+.resource-header-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
 .resource-header strong {
   color: #252b3d;
   font-size: 0.9375rem;
+}
+
+.resource-header-icon-button {
+  width: 1.875rem;
+  height: 1.875rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e1e5ef;
+  border-radius: 0.5rem;
+  background: #f7f8fc;
+  color: #5f687a;
+  cursor: pointer;
+}
+
+.resource-header-icon-button svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  stroke-width: 1.9;
+}
+
+.chatflow-history-settings-popover {
+  position: absolute;
+  top: 2.25rem;
+  left: 0.25rem;
+  right: 0.25rem;
+  z-index: 16;
+  padding: 0.875rem;
+  border: 1px solid #e1e5ef;
+  border-radius: 0.75rem;
+  background: #fff;
+  box-shadow: 0 0.875rem 2.25rem rgba(34, 41, 63, 0.14);
+}
+
+.chatflow-history-settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.chatflow-history-settings-header button {
+  width: 1.625rem;
+  height: 1.625rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e1e5ef;
+  border-radius: 0.4375rem;
+  background: #f7f8fc;
+  color: #6f7789;
+  cursor: pointer;
+}
+
+.chatflow-history-settings-header svg {
+  width: 0.8125rem;
+  height: 0.8125rem;
+}
+
+.chatflow-history-setting-field {
+  display: grid;
+  gap: 0.5rem;
+  color: #30364a;
+  font-size: 0.8125rem;
+  font-weight: 800;
+}
+
+.chatflow-history-slider-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 3.75rem;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.chatflow-history-slider {
+  min-width: 0;
+}
+
+.chatflow-history-number-input {
+  width: 3.75rem;
+  height: 2rem;
+  padding: 0 0.375rem;
+  border: 1px solid #dfe3ee;
+  border-radius: 0.5rem;
+  color: #30364a;
+  font-size: 0.8125rem;
+  font-weight: 800;
+}
+
+.chatflow-history-settings-popover p {
+  margin: 0.625rem 0 0;
+  color: #8b94a8;
+  font-size: 0.75rem;
+  line-height: 1.45;
 }
 
 .resource-header span {

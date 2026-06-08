@@ -6,6 +6,7 @@ export interface ChatflowRunProfile {
   channel: string
   channelId?: string
   round: number
+  historyRetentionRounds?: number
   files?: unknown[]
 }
 
@@ -15,6 +16,7 @@ export function buildChatflowRunInput(profile: ChatflowRunProfile): Record<strin
   const conversationName = profile.conversationName || profile.conversationId
   const channelId = profile.channelId || `${profile.channel}-preview`
   const files = profile.files || []
+  const historyRetentionRounds = Math.max(0, Math.min(20, Number(profile.historyRetentionRounds ?? 3) || 0))
   const global = {
     brand: 'Hify',
     locale: 'zh-CN',
@@ -49,7 +51,9 @@ export function buildChatflowRunInput(profile: ChatflowRunProfile): Record<strin
     'sys.now': now,
     'sys.message_id': messageId,
     'sys.round': profile.round,
+    'sys.history_retention_rounds': historyRetentionRounds,
     'sys.files': files,
+    historyRetentionRounds,
     'global.brand': global.brand,
     'global.locale': global.locale,
     'conversation.topic': conversation.topic,
@@ -70,6 +74,7 @@ export function buildChatflowRunInput(profile: ChatflowRunProfile): Record<strin
       now,
       message_id: messageId,
       round: profile.round,
+      history_retention_rounds: historyRetentionRounds,
       files,
     },
     global,

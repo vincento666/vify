@@ -29,4 +29,21 @@ describe('buildChatflowRunInput', () => {
     expect(input.sys).toMatchObject({ channel_id: 'web-preview' })
     expect(input['sys.message_id']).toMatch(/^msg-/)
   })
+
+  it('passes chatflow history retention rounds as runtime metadata', () => {
+    const input = buildChatflowRunInput({
+      message: '继续',
+      conversationId: 'conv-1',
+      userId: 'user-1',
+      channel: 'web',
+      round: 2,
+      historyRetentionRounds: 0,
+    })
+
+    expect(input).toMatchObject({
+      'sys.history_retention_rounds': 0,
+      historyRetentionRounds: 0,
+    })
+    expect(input.sys).toMatchObject({ history_retention_rounds: 0 })
+  })
 })
