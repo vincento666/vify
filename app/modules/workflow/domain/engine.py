@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import ast
+import json
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from time import perf_counter
@@ -95,6 +98,113 @@ class EndNodeExecutor:
             return {output_variable: context.render(str(config["output"]))}
         return {output_variable: context.find_value(output_variable)}
 
+
+
+
+class CodeNodeExecutor:
+    _safe_builtins = {
+        "abs": abs,
+        "all": all,
+        "any": any,
+        "bool": bool,
+        "dict": dict,
+        "float": float,
+        "int": int,
+        "len": len,
+        "list": list,
+        "max": max,
+        "min": min,
+        "round": round,
+        "sorted": sorted,
+        "str": str,
+        "sum": sum,
+        "tuple": tuple,
+    }
+    _blocked_call_names = {"__import__", "open", "eval", "exec", "compile", "input", "globals", "locals", "vars"}
+    _blocked_nodes = (ast.Import, ast.ImportFrom, ast.Global, ast.Nonlocal)
+
+    def execute(self, node: dict[str, Any], context: ExecutionContext) -> dict[str, Any]:
+        config = _config(node)
+        language = str(config.get("language") or "python").lower()
+        if language not in {"python", "python3"}:
+            raise WorkflowExecutionError(f"Unsupported CODE language: {language}")
+        code = str(config.get("code") or config.get("body") or "").strip()
+        if not code:
+            raise WorkflowExecutionError("CODE node requires code")
+        tree = _validated_code_tree(code)
+        inputs = _node_inputs(config, context)
+        local_vars: dict[str, Any] = {"inputs": inputs, "result": None}
+        exec(  # noqa: S102 - deliberate restricted workflow node sandbox.
+            compile(tree, "<workflow-code-node>", "exec"),
+            {"__builtins__": self._safe_builtins, "json": json, "re": re},
+            local_vars,
+        )
+        result = local_vars.get("result")
+        if result is None:
+            result = local_vars.get("output")
+        if not isinstance(result, Mapping):
+            output_variable = str(config.get("outputVariable") or "output")
+            return {output_variable: result}
+        return _declared_output(dict(result), config)
+
+
+class TextProcessNodeExecutor:
+    def execute(self, node: dict[str, Any], context: ExecutionContext) -> dict[str, Any]:
+        config = _config(node)
+        operation = str(config.get("operation") or "format_template").lower()
+        output_variable = _first_output_name(config, str(config.get("outputVariable") or "text"))
+        if operation in {"format_template", "template", "format"}:
+            value = context.render(str(config.get("template") or config.get("source") or ""))
+            return {output_variable: value}
+        if operation in {"concatenate", "concat"}:
+            parts = config.get("parts") or config.get("texts") or []
+            if not isinstance(parts, list):
+                parts = [parts]
+            separator = context.render(str(config.get("separator") or ""))
+            value = separator.join(context.render(str(part)) for part in parts)
+            return {output_variable: value}
+        if operation in {"extract_regex", "regex_extract", "extract"}:
+            source = context.render(str(config.get("source") or config.get("text") or ""))
+            pattern = str(config.get("pattern") or "")
+            if not pattern:
+                raise WorkflowExecutionError("TEXT_PROCESS regex extraction requires pattern")
+            match = re.search(pattern, source)
+            group = config.get("group", 0)
+            try:
+                extracted = match.group(group) if match else ""
+            except IndexError as exc:
+                raise WorkflowExecutionError(f"TEXT_PROCESS regex group not found: {group}") from exc
+            return {output_variable: extracted, "matched": match is not None, "groups": list(match.groups()) if match else []}
+        if operation == "replace":
+            source = context.render(str(config.get("source") or config.get("text") or ""))
+            pattern = str(config.get("pattern") or config.get("search") or "")
+            replacement = context.render(str(config.get("replacement") or ""))
+            return {output_variable: re.sub(pattern, replacement, source) if pattern else source}
+        if operation == "trim":
+            source = context.render(str(config.get("source") or config.get("text") or ""))
+            return {output_variable: source.strip()}
+        raise WorkflowExecutionError(f"Unsupported TEXT_PROCESS operation: {operation}")
+
+
+class JsonParseNodeExecutor:
+    def execute(self, node: dict[str, Any], context: ExecutionContext) -> dict[str, Any]:
+        config = _config(node)
+        output_variable = _first_output_name(config, str(config.get("outputVariable") or "parsed"))
+        source = _source_value(config, context)
+        if isinstance(source, str):
+            try:
+                parsed = json.loads(source)
+            except json.JSONDecodeError as exc:
+                return {output_variable: None, "parsed": None, "parseStatus": "FAILED", "errorMessage": exc.msg}
+        else:
+            parsed = source
+        output = {output_variable: parsed, "parsed": parsed, "parseStatus": "SUCCEEDED", "errorMessage": ""}
+        for item in _field_map(config):
+            name = str(item.get("name") or "").strip()
+            if not name:
+                continue
+            output[name] = _json_path_value(parsed, str(item.get("path") or item.get("source") or ""))
+        return output
 
 
 class VariableAggregationNodeExecutor:
@@ -259,6 +369,12 @@ class WorkflowExecutionEngine:
             return KnowledgeNodeExecutor(self._knowledge_facade).execute(node, context)
         if node_type == "CONDITION":
             return ConditionNodeExecutor().execute(node, context)
+        if node_type == "CODE":
+            return CodeNodeExecutor().execute(node, context)
+        if node_type == "TEXT_PROCESS":
+            return TextProcessNodeExecutor().execute(node, context)
+        if node_type == "JSON_PARSE":
+            return JsonParseNodeExecutor().execute(node, context)
         if node_type == "VARIABLE_AGGREGATION":
             return VariableAggregationNodeExecutor().execute(node, context)
         if node_type == "VARIABLE_ASSIGN":
@@ -345,3 +461,86 @@ def _not_empty(value: Any) -> bool:
     if isinstance(value, (list, tuple, dict, set)):
         return len(value) > 0
     return True
+
+
+
+def _validated_code_tree(code: str) -> ast.Module:
+    try:
+        tree = ast.parse(code, mode="exec")
+    except SyntaxError as exc:
+        raise WorkflowExecutionError(f"CODE syntax error: {exc.msg}") from exc
+    for node in ast.walk(tree):
+        if isinstance(node, CodeNodeExecutor._blocked_nodes):
+            raise WorkflowExecutionError("CODE node contains unsupported syntax")
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name) and node.func.id in CodeNodeExecutor._blocked_call_names:
+                raise WorkflowExecutionError(f"CODE node cannot call {node.func.id}")
+            if isinstance(node.func, ast.Attribute) and node.func.attr.startswith("__"):
+                raise WorkflowExecutionError("CODE node cannot call private attributes")
+        if isinstance(node, ast.Attribute) and node.attr.startswith("__"):
+            raise WorkflowExecutionError("CODE node cannot access private attributes")
+    return tree
+
+
+def _node_inputs(config: dict[str, Any], context: ExecutionContext) -> dict[str, Any]:
+    inputs = context.get_output("start")
+    parameters = config.get("inputParameters") or config.get("inputs") or []
+    if not isinstance(parameters, list):
+        return inputs
+    mapped: dict[str, Any] = {}
+    for item in parameters:
+        if not isinstance(item, Mapping):
+            continue
+        name = str(item.get("name") or item.get("key") or "").strip()
+        if not name:
+            continue
+        value = item.get("value")
+        if isinstance(value, str):
+            mapped[name] = context.render(value)
+        elif value is not None:
+            mapped[name] = value
+        else:
+            mapped[name] = inputs.get(name, "")
+    return mapped or inputs
+
+
+def _declared_output(values: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
+    parameters = config.get("outputParameters")
+    if not isinstance(parameters, list):
+        return values
+    output: dict[str, Any] = {}
+    for item in parameters:
+        if not isinstance(item, Mapping):
+            continue
+        name = str(item.get("name") or "").strip()
+        if name:
+            output[name] = values.get(name)
+    return output or values
+
+
+def _field_map(config: dict[str, Any]) -> list[dict[str, Any]]:
+    raw = config.get("fieldMap") or config.get("mappings") or []
+    if not isinstance(raw, list):
+        return []
+    return [dict(item) for item in raw if isinstance(item, Mapping)]
+
+
+def _json_path_value(value: Any, path: str) -> Any:
+    if path in {"", "$"}:
+        return value
+    current = value
+    tokens = path[2:].split(".") if path.startswith("$.") else path.split(".")
+    for token in tokens:
+        if token == "":
+            continue
+        if isinstance(current, Mapping):
+            current = current.get(token)
+            continue
+        if isinstance(current, list):
+            try:
+                current = current[int(token)]
+            except (ValueError, IndexError):
+                return None
+            continue
+        return None
+    return current

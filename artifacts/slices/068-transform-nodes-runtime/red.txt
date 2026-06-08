@@ -1,0 +1,14 @@
+RED evidence for this slice is the historical failing gate from the same
+feature boundary:
+
+- `artifacts/slices/015-core-flow-nodes-mvp/015.1-data-transform-nodes/red.txt`
+
+The failure mode was:
+
+- Workflow `CODE` run returned `400 Unknown node type: CODE`.
+- Workflow `JSON_PARSE` run returned `400 Unknown node type: JSON_PARSE`.
+- Frontend graph/config did not yet expose stable `CODE`, `TEXT_PROCESS`, and `JSON_PARSE` node contracts.
+
+This slice stages the minimal runtime support and current gates for the three
+data transform nodes while leaving unrelated workflow runtime dirty work
+unstaged.
