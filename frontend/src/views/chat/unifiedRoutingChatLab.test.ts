@@ -148,8 +148,8 @@ describe('unified routing chat lab model', () => {
             debugPath: '/chatflows/12/canvas?runId=88&debug=1',
           },
           nodes: [
-            { nodeKey: 'start', nodeType: 'START', name: 'Start', status: 'SUCCEEDED', current: false, elapsedMs: 1, outputs: {} },
-            { nodeKey: 'collect', nodeType: 'INFORMATION_COLLECTION', name: '收集信息', status: 'WAITING', current: true, elapsedMs: 12, outputs: { collected: { route: '广州飞北京' } } },
+            { nodeKey: 'start', nodeType: 'START', name: 'Start', status: 'SUCCEEDED', current: false, elapsedMs: 1, outputs: {}, error: '' },
+            { nodeKey: 'collect', nodeType: 'INFORMATION_COLLECTION', name: '收集信息', status: 'WAITING', current: true, elapsedMs: 12, outputs: { collected: { route: '广州飞北京' } }, error: '' },
           ],
           edges: [],
           events: [{ id: 1, type: 'interrupt', runId: 88, sequence: 1, nodeKey: 'collect', payload: {}, checkpointId: 100, createdAt: null }],

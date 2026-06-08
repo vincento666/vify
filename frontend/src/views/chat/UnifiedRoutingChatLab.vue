@@ -22,6 +22,31 @@
           </el-button>
           <span class="session-id">{{ sessionId ? `#${sessionId}` : '未连接' }}</span>
         </div>
+        <div class="runtime-config" data-testid="runtime-lab-config">
+          <div class="runtime-config-row">
+            <span>Chatflow</span>
+            <strong>{{ configSummary.bindingLabel }}</strong>
+          </div>
+          <div class="runtime-config-row">
+            <span>仲裁</span>
+            <strong>{{ configSummary.arbitratorLabel }}</strong>
+          </div>
+          <div class="runtime-config-row">
+            <span>密钥</span>
+            <strong>{{ configSummary.secretLabel }}</strong>
+          </div>
+          <div class="runtime-config-row">
+            <span>状态</span>
+            <strong>{{ runtimeConfigLoading ? '加载中' : configSummary.availableLabel }}</strong>
+          </div>
+          <details class="runtime-binding-details">
+            <summary>绑定明细</summary>
+            <div v-if="configSummary.bindingRows.length === 0" class="muted-line">暂无 Chatflow 绑定</div>
+            <div v-for="row in configSummary.bindingRows" :key="row" class="runtime-binding-row">
+              {{ row }}
+            </div>
+          </details>
+        </div>
       </section>
 
       <section class="lab-panel">
@@ -191,6 +216,18 @@
             <dd>{{ latestTurn?.routeDecision.targetSopId ?? '-' }}</dd>
           </div>
           <div>
+            <dt>funnel</dt>
+            <dd data-testid="route-funnel">{{ funnelSummary.stageLabel }}</dd>
+          </div>
+          <div>
+            <dt>source</dt>
+            <dd data-testid="route-source">{{ funnelSummary.sourceLabel }}</dd>
+          </div>
+          <div>
+            <dt>arbitrator</dt>
+            <dd data-testid="route-arbitrator">{{ funnelSummary.arbitratorLabel }}</dd>
+          </div>
+          <div>
             <dt>reason</dt>
             <dd>{{ latestTurn?.routeDecision.reason ?? '-' }}</dd>
           </div>
@@ -237,13 +274,24 @@ import {
 } from '@element-plus/icons-vue'
 import {
   createRuntimeLabSession,
+  getRuntimeLabChatflowTrace,
+  getRuntimeLabConfig,
   listRuntimeLabEvents,
   listRuntimeLabTasks,
   postRuntimeLabMessage,
 } from '@/api/runtimeLab'
-import type { RuntimeLabEvent, RuntimeLabTask, RuntimeLabTurn } from '@/api/runtimeLab'
+import type {
+  RuntimeLabChatflowTrace,
+  RuntimeLabConfig,
+  RuntimeLabEvent,
+  RuntimeLabTask,
+  RuntimeLabTurn,
+} from '@/api/runtimeLab'
 import {
   AIRLINE_SOP_SCENARIOS,
+  buildRuntimeLabBoundScenarios,
+  buildRuntimeLabConfigSummary,
+  buildRuntimeLabFunnelSummary,
   buildRuntimeLabTranscriptRow,
   buildUserTranscriptRow,
 } from './unifiedRoutingChatLab'
@@ -255,16 +303,22 @@ const enabledScenarioIds = ref(AIRLINE_SOP_SCENARIOS.map((scenario) => scenario.
 const inputText = ref('')
 const sending = ref(false)
 const creatingSession = ref(false)
+const traceLoading = ref(false)
+const runtimeConfigLoading = ref(false)
 const sessionId = ref<number | null>(null)
+const runtimeConfig = ref<RuntimeLabConfig | null>(null)
+const chatflowTrace = ref<RuntimeLabChatflowTrace | null>(null)
 const transcript = ref<RuntimeLabTranscriptRow[]>([])
 const tasks = ref<RuntimeLabTask[]>([])
 const events = ref<RuntimeLabEvent[]>([])
 const latestTurn = ref<RuntimeLabTurn | null>(null)
 const messagesEl = ref<HTMLElement>()
 
+const boundScenarios = computed(() => buildRuntimeLabBoundScenarios(runtimeConfig.value))
+const boundScenarioIds = computed(() => boundScenarios.value.map((scenario) => scenario.id))
 const enabledScenarioSet = computed(() => new Set(enabledScenarioIds.value))
 const enabledScenarios = computed(() =>
-  AIRLINE_SOP_SCENARIOS.filter((scenario) => enabledScenarioSet.value.has(scenario.id)),
+  boundScenarios.value.filter((scenario) => enabledScenarioSet.value.has(scenario.id)),
 )
 const triggerSamples = computed(() =>
   enabledScenarios.value.flatMap((scenario) =>
@@ -284,11 +338,14 @@ const replySamples = computed(() =>
     })),
   ),
 )
-const routeScopeLabel = computed(() => `已接通 ${enabledScenarioIds.value.length}/${AIRLINE_SOP_SCENARIOS.length} 个意图`)
+const routeScopeLabel = computed(() => `已接通 ${enabledScenarioIds.value.length}/${boundScenarios.value.length || AIRLINE_SOP_SCENARIOS.length} 个意图`)
 const lastRouteAction = computed(() => latestTurn.value?.routeDecision.action ?? '待开始')
+const configSummary = computed(() => buildRuntimeLabConfigSummary(runtimeConfig.value))
+const funnelSummary = computed(() => buildRuntimeLabFunnelSummary(latestTurn.value?.routeDecision))
 
 onMounted(() => {
   void createFreshSession()
+  void loadRuntimeLabConfig()
 })
 
 function openOrdinaryChat() {
@@ -310,13 +367,13 @@ function setScenarioEnabled(scenarioId: string, enabled: boolean) {
   } else {
     next.delete(scenarioId)
   }
-  enabledScenarioIds.value = AIRLINE_SOP_SCENARIOS.filter((scenario) => next.has(scenario.id)).map(
+  enabledScenarioIds.value = boundScenarios.value.filter((scenario) => next.has(scenario.id)).map(
     (scenario) => scenario.id,
   )
 }
 
 function selectAllScenarios() {
-  enabledScenarioIds.value = AIRLINE_SOP_SCENARIOS.map((scenario) => scenario.id)
+  enabledScenarioIds.value = boundScenarioIds.value
 }
 
 function clearScenarios() {
@@ -331,11 +388,25 @@ async function createFreshSession() {
     transcript.value = []
     tasks.value = []
     events.value = []
+    chatflowTrace.value = null
     latestTurn.value = null
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '创建实验会话失败')
   } finally {
     creatingSession.value = false
+  }
+}
+
+async function loadRuntimeLabConfig() {
+  runtimeConfigLoading.value = true
+  try {
+    runtimeConfig.value = await getRuntimeLabConfig()
+    syncEnabledScenarioIdsWithBindings()
+  } catch (error) {
+    runtimeConfig.value = null
+    ElMessage.error(error instanceof Error ? error.message : '加载路由配置失败')
+  } finally {
+    runtimeConfigLoading.value = false
   }
 }
 
@@ -353,6 +424,13 @@ async function sendMessage(content: string) {
 
   sending.value = true
   transcript.value.push(buildUserTranscriptRow(uid('user'), content))
+  const pendingId = uid('assistant-pending')
+  transcript.value.push({
+    id: pendingId,
+    role: 'assistant',
+    content: '',
+    pending: true,
+  })
   await scrollToBottom()
 
   try {
@@ -362,10 +440,10 @@ async function sendMessage(content: string) {
       enabledSopIds: [...enabledScenarioIds.value],
     })
     latestTurn.value = turn
-    transcript.value.push(buildRuntimeLabTranscriptRow(turn))
+    replacePendingAssistant(pendingId, buildRuntimeLabTranscriptRow(turn))
     await refreshLedger(currentSessionId, turn)
   } catch (error) {
-    transcript.value.push({
+    replacePendingAssistant(pendingId, {
       id: uid('assistant-error'),
       role: 'assistant',
       content: error instanceof Error ? error.message : '发送失败',
@@ -387,15 +465,37 @@ async function ensureSession() {
 async function refreshLedger(currentSessionId: number, turn: RuntimeLabTurn) {
   tasks.value = [turn.activeTask, ...turn.suspendedTasks].filter(Boolean) as RuntimeLabTask[]
   events.value = turn.events ?? []
+  traceLoading.value = true
   try {
-    const [taskResult, eventResult] = await Promise.all([
+    const [taskResult, eventResult, traceResult] = await Promise.all([
       listRuntimeLabTasks(currentSessionId),
       listRuntimeLabEvents(currentSessionId),
+      getRuntimeLabChatflowTrace(currentSessionId),
     ])
     tasks.value = taskResult.list
     events.value = eventResult.list
+    chatflowTrace.value = traceResult
   } catch {
     // The turn payload is sufficient for the transcript; ledger refresh is best effort.
+  } finally {
+    traceLoading.value = false
+  }
+}
+
+function syncEnabledScenarioIdsWithBindings() {
+  const ids = boundScenarioIds.value
+  if (ids.length === 0) return
+  const current = new Set(enabledScenarioIds.value)
+  const retained = ids.filter((id) => current.has(id))
+  enabledScenarioIds.value = retained.length ? retained : ids
+}
+
+function replacePendingAssistant(pendingId: string, row: RuntimeLabTranscriptRow) {
+  const index = transcript.value.findIndex((message) => message.id === pendingId)
+  if (index >= 0) {
+    transcript.value.splice(index, 1, row)
+  } else {
+    transcript.value.push(row)
   }
 }
 
@@ -528,6 +628,52 @@ function uid(prefix: string) {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
+}
+
+.runtime-config {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding-top: 0.75rem;
+  border-top: 0.0625rem solid var(--color-border-default);
+}
+
+.runtime-config-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.runtime-config-row strong {
+  min-width: 0;
+  max-width: 10rem;
+  overflow: hidden;
+  color: var(--color-text-primary);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runtime-binding-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.runtime-binding-details summary {
+  cursor: pointer;
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.runtime-binding-row {
+  overflow-wrap: anywhere;
+  line-height: 1.5;
 }
 
 .session-id,
