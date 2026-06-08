@@ -161,10 +161,16 @@ try {
   assert(await panel.locator('[data-testid="variable-assignment-row"]').count() === 1, 'Expected assignment editor to render one assignment row')
   assert(await panel.locator('[data-testid="assignment-target-control"]').count() === 1, 'Expected assignment row to expose a writable target variable selector')
   assert(await panel.getByLabel('变量名称', { exact: true }).getAttribute('readonly') !== null, 'Assignment target name must not allow typing arbitrary new variables')
+  const assignmentEditor = panel.locator('[data-testid="variable-assignment-editor"]')
+  await assignmentEditor.getByRole('button', { name: '选择写入变量', exact: true }).click()
+  assert(
+    await assignmentEditor.locator('[data-testid="assignment-target-source-item"]').count() === 0,
+    'Assignment target picker must not treat existing assignment targets as configured writable variables',
+  )
+  await assignmentEditor.getByRole('button', { name: '选择写入变量', exact: true }).click()
   assert(await panel.getByLabel('赋值来源类型', { exact: true }).count() === 0, 'Assignment row must not expose source type selector')
   assert(await panel.locator('[data-testid="assignment-value-control"]').count() === 1, 'Expected assignment row to expose a value input/reference control')
   assert(await panel.locator('[data-testid="assignment-variable-chip"]').count() === 1, 'Expected assignment source to render as variable chip')
-  const assignmentEditor = panel.locator('[data-testid="variable-assignment-editor"]')
   assert(
     await assignmentEditor.getByTestId('assignment-value-control').count() === 1,
     'Assignment source value must use the shared split variable/literal control',

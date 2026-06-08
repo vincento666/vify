@@ -6155,11 +6155,7 @@ function buildVariableAssignmentTargetGroups(): VariableAssignmentTargetGroup[] 
     }
   }
 
-  add(String(fieldValue('targetScope') || (isChatflowMode.value ? 'conversation' : 'flow')), String(fieldValue('targetVariable') || ''))
   graph.value.nodes.forEach((node) => {
-    if (node.type === 'VARIABLE_ASSIGN') {
-      add(String(node.config.targetScope || node.config.scope || ''), String(node.config.targetVariable || node.config.variable || ''))
-    }
     if (node.type === 'INFORMATION_COLLECTION') {
       normalizeCollectionFields(node.config).forEach((field) => {
         add(field.targetScope, field.targetVariable || field.name, field.type)
