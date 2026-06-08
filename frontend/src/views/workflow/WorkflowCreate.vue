@@ -214,6 +214,8 @@
         fit-view-on-init
         @viewport-change="handleViewportChange"
         @connect="handleConnect"
+        @connect-start="handleConnectStart"
+        @connect-end="handleConnectEnd"
         @edge-click="handleEdgeClick"
         @edge-mouse-enter="handleEdgeMouseEnter"
         @edge-mouse-leave="handleEdgeMouseLeave"
@@ -294,7 +296,13 @@
               v-if="nodeProps.data.type !== 'START'"
               type="target"
               :position="Position.Left"
-              class="node-port target-port"
+              :class="[
+                'node-port target-port',
+                { 'connection-preview': isConnectionPreviewPort(nodeProps.data.nodeKey, 'target') },
+              ]"
+              :data-node-key="nodeProps.data.nodeKey"
+              data-port-type="target"
+              data-handle-id=""
             />
             <div class="node-header">
               <div class="node-type-icon" :class="`icon-${nodeProps.data.type.toLowerCase()}`">
@@ -488,8 +496,14 @@
                 :key="branch.handleId"
                 type="source"
                 :position="Position.Right"
-                class="node-port source-port condition-source-port"
+                :class="[
+                  'node-port source-port condition-source-port',
+                  { 'connection-preview': isConnectionPreviewPort(nodeProps.data.nodeKey, 'source', branch.handleId) },
+                ]"
                 data-testid="condition-source-port"
+                :data-node-key="nodeProps.data.nodeKey"
+                data-port-type="source"
+                :data-handle-id="branch.handleId"
                 :data-branch-label="branch.label"
                 :aria-label="`${branch.kind}${branch.label}`"
                 :style="{ top: branch.top }"
@@ -499,7 +513,13 @@
               v-else-if="nodeProps.data.type !== 'END'"
               type="source"
               :position="Position.Right"
-              class="node-port source-port"
+              :class="[
+                'node-port source-port',
+                { 'connection-preview': isConnectionPreviewPort(nodeProps.data.nodeKey, 'source') },
+              ]"
+              :data-node-key="nodeProps.data.nodeKey"
+              data-port-type="source"
+              data-handle-id=""
             />
           </div>
         </template>
@@ -3555,6 +3575,8 @@ const selectedNodeKey = ref('')
 const selectedEdgeId = ref('')
 const hoveredEdgeId = ref('')
 const edgeInsertPaletteId = ref('')
+const connectionPreviewPortKey = ref('')
+const connectionPreviewStart = ref<{ nodeId: string; handleType: 'source' | 'target' } | null>(null)
 const editingConditionBranchNameIndex = ref<number | null>(null)
 const editingConditionDefaultName = ref(false)
 const paletteOpen = ref(false)
@@ -4773,7 +4795,57 @@ function handleGlobalEdgePointerDown(event: PointerEvent) {
   clearEdgeInteractionState()
 }
 
+function nodePortKey(nodeKey: string, portType: 'source' | 'target', handleId: string | null = '') {
+  return `${nodeKey}:${portType}:${handleId || ''}`
+}
+
+function isConnectionPreviewPort(nodeKey: string, portType: 'source' | 'target', handleId: string | null = '') {
+  return connectionPreviewPortKey.value === nodePortKey(nodeKey, portType, handleId)
+}
+
+function clearConnectionPreview() {
+  connectionPreviewPortKey.value = ''
+  connectionPreviewStart.value = null
+}
+
+function handleConnectStart(event: any) {
+  const handleType = event?.handleType === 'target' ? 'target' : 'source'
+  connectionPreviewStart.value = {
+    nodeId: String(event?.nodeId || ''),
+    handleType,
+  }
+  connectionPreviewPortKey.value = ''
+}
+
+function handleConnectEnd() {
+  clearConnectionPreview()
+}
+
+function handleGlobalConnectionPointerMove(event: PointerEvent) {
+  if (!connectionPreviewStart.value) return
+
+  const expectedPortType = connectionPreviewStart.value.handleType === 'source' ? 'target' : 'source'
+  const ports = Array.from(document.querySelectorAll<HTMLElement>(`.node-port.${expectedPortType}-port`))
+  let nearestKey = ''
+  let nearestDistance = Number.POSITIVE_INFINITY
+
+  ports.forEach((port) => {
+    const nodeKey = port.dataset.nodeKey || ''
+    if (!nodeKey || nodeKey === connectionPreviewStart.value?.nodeId) return
+    const rect = port.getBoundingClientRect()
+    const centerX = rect.left + rect.width / 2
+    const centerY = rect.top + rect.height / 2
+    const distance = Math.hypot(centerX - event.clientX, centerY - event.clientY)
+    if (distance > CANVAS_CONNECTION_RADIUS || distance >= nearestDistance) return
+    nearestDistance = distance
+    nearestKey = nodePortKey(nodeKey, expectedPortType, port.dataset.handleId || '')
+  })
+
+  connectionPreviewPortKey.value = nearestKey
+}
+
 function handleConnect(connection: any) {
+  clearConnectionPreview()
   graph.value = connectWorkflowNodes(
     graph.value,
     connection.source,
@@ -7018,6 +7090,7 @@ onMounted(() => {
   window.addEventListener('keydown', handleGlobalVariableKeydown)
   document.addEventListener('pointerdown', handleGlobalVariablePointerDown, true)
   document.addEventListener('pointerdown', handleGlobalEdgePointerDown, true)
+  document.addEventListener('pointermove', handleGlobalConnectionPointerMove, true)
   void loadWorkflow()
 })
 onUnmounted(() => {
@@ -7025,6 +7098,7 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleGlobalVariableKeydown)
   document.removeEventListener('pointerdown', handleGlobalVariablePointerDown, true)
   document.removeEventListener('pointerdown', handleGlobalEdgePointerDown, true)
+  document.removeEventListener('pointermove', handleGlobalConnectionPointerMove, true)
 })
 </script>
 
@@ -8197,6 +8271,7 @@ onUnmounted(() => {
 .coze-node .node-port:hover,
 .coze-node .node-port.connecting,
 .coze-node .node-port.valid,
+.coze-node .node-port.connection-preview,
 .coze-node .node-port.vue-flow__handle-connecting,
 .coze-node .node-port.vue-flow__handle-valid {
   --node-port-scale: 1.5;

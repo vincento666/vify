@@ -61,7 +61,8 @@ try {
 
   await page.mouse.move(source.centerX, source.centerY)
   await page.mouse.down()
-  await page.mouse.move(target.centerX - 30, target.centerY, { steps: 18 })
+  const magneticEdgeDistance = 42
+  await page.mouse.move(target.centerX - magneticEdgeDistance, target.centerY, { steps: 18 })
   await page.waitForTimeout(180)
 
   const nearTarget = await portMetrics(page, targetSelector)
@@ -69,7 +70,7 @@ try {
   const nearRatio = nearTarget.width / target.width
   assert(
     closeToRatio(nearRatio, 1.5),
-    `Expected target endpoint to scale to 1.5x when connection is within magnetic radius, got ratio=${nearRatio}, metrics=${JSON.stringify(nearTarget)}`,
+    `Expected target endpoint to scale to 1.5x ${magneticEdgeDistance}px from center inside the 44px magnetic radius, got ratio=${nearRatio}, metrics=${JSON.stringify(nearTarget)}`,
   )
 
   if (screenshotPath) {
