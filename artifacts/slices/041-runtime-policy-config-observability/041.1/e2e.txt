@@ -1,0 +1,16 @@
+041.1 E2E Gate
+
+Scope: backend-only RuntimePolicyProfile API.
+Runner: local FastAPI on http://127.0.0.1:8041 with isolated SQLite DB
+  artifacts/slices/041-runtime-policy-config-observability/041.1/uat.db
+
+Commands/evidence:
+- rtk env HIFY_DATABASE_URL=sqlite:///artifacts/slices/041-runtime-policy-config-observability/041.1/uat.db uv run uvicorn app.main:app --host 127.0.0.1 --port 8041
+- Browser opened http://127.0.0.1:8041/docs
+- Live API setup output saved in uat-api.txt:
+  createdCode=200
+  createdName="041 browser uat policy"
+  createdVersion=1
+  total=1
+
+Verdict: PASS

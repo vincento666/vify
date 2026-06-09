@@ -76,6 +76,11 @@ artifacts/slices/041-runtime-policy-config-observability/
 041 is complete only when profile API, effective profile resolution, and
 decision logging all pass backend gates with no frontend changes.
 
+## Slice Progress
+
+- 041.1 complete: profile table/repository/service/API and nested config
+  validation passed RED, unit, contract, backend E2E, and browser UAT gates.
+
 ## Non-Goals
 
 - no frontend configuration UI;

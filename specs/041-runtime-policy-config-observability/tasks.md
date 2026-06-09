@@ -9,13 +9,13 @@
 
 ## 041.1 Runtime policy profile model and API
 
-- [ ] RED: profile CRUD API does not exist.
-- [ ] RED: invalid profile threshold/config payload is accepted.
-- [ ] Add `RuntimePolicyProfile` table/repository/service.
-- [ ] Add request/response schemas for thresholds, classifier, FAQ, RAG,
+- [x] RED: profile CRUD API does not exist.
+- [x] RED: invalid profile threshold/config payload is accepted.
+- [x] Add `RuntimePolicyProfile` table/repository/service.
+- [x] Add request/response schemas for thresholds, classifier, FAQ, RAG,
   fallback Agent, and handoff config.
-- [ ] Add profile CRUD API.
-- [ ] Save RED/GREEN evidence under
+- [x] Add profile CRUD API.
+- [x] Save RED/GREEN evidence under
   `artifacts/slices/041-runtime-policy-config-observability/041.1/`.
 - [ ] Commit 041.1 only.
 

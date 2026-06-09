@@ -254,3 +254,9 @@ Status: ready for implementation.
 
 041 is a backend-only configuration and observability spec. It must not
 implement release activation, rollback, or frontend configuration UI.
+
+## Implementation Status
+
+- 041.1 complete: `RuntimePolicyProfile` persistence, backend CRUD API,
+  nested policy validation, and Swagger/browser UAT evidence are recorded under
+  `artifacts/slices/041-runtime-policy-config-observability/041.1/`.

@@ -26,6 +26,7 @@ def register_baseline_tables() -> None:
         register_agent_memory_variable_columns(metadata)
         register_agent_prompt_optimization_tables(metadata)
         register_api_resource_tables(metadata)
+        _register_runtime_policy_tables(metadata)
         return
 
     sa.Table(
@@ -270,6 +271,7 @@ def register_baseline_tables() -> None:
     register_knowledge_vector_tables(metadata)
     register_knowledge_faq_tables(metadata)
     register_evaluation_tables(metadata)
+    _register_runtime_policy_tables(metadata)
 
 
 def ensure_pgvector_extension(bind: Engine | Connection) -> None:
@@ -281,6 +283,12 @@ def ensure_pgvector_extension(bind: Engine | Connection) -> None:
             connection.execute(statement)
         return
     bind.execute(statement)
+
+
+def _register_runtime_policy_tables(metadata: sa.MetaData) -> None:
+    from app.modules.runtime_policy.infra.schema import register_runtime_policy_tables
+
+    register_runtime_policy_tables(metadata)
 
 
 def register_chatflow_state_tables(metadata: sa.MetaData) -> None:

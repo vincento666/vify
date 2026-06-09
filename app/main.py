@@ -23,6 +23,7 @@ from app.modules.mcp.web.router import router as mcp_router
 from app.modules.observe.web.router import router as observe_router
 from app.modules.provider.web.router import router as provider_router
 from app.modules.runtime_lab.web.router import router as runtime_lab_router
+from app.modules.runtime_policy.web.router import router as runtime_policy_router
 from app.modules.workflow.web.api_resource_router import router as api_resource_router
 from app.modules.workflow.web.api_resource_router import tool_router
 from app.modules.workflow.web.router import chatflow_router, resource_router as workflow_resource_router, router as workflow_router
@@ -62,3 +63,4 @@ app.include_router(handoff_router)
 app.include_router(observe_router)
 app.include_router(audit_router)
 app.include_router(runtime_lab_router)
+app.include_router(runtime_policy_router)

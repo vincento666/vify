@@ -2,6 +2,7 @@ from typing import Any, cast
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -60,5 +61,5 @@ def _as_http_error(exc: Exception) -> StarletteHTTPException:
 
 def _validation_data(exc: Exception) -> list[dict[str, Any]]:
     if isinstance(exc, RequestValidationError):
-        return cast(list[dict[str, Any]], list(exc.errors()))
+        return cast(list[dict[str, Any]], jsonable_encoder(list(exc.errors())))
     return []
