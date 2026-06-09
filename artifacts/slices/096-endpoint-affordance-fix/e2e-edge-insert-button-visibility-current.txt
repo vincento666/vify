@@ -1,0 +1,5 @@
+rtk node frontend/e2e/chatflow-edge-insert-button-visibility.mjs
+PASS chatflow edge insert button visibility e2e chatflow=8166
+
+rtk node frontend/e2e/workflow-edge-insert-button-hover-only.mjs
+PASS workflow edge insert button hover-only e2e
