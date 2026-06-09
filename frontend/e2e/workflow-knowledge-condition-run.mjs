@@ -137,10 +137,17 @@ async function runWorkflowPanel(page, input, expected) {
 }
 
 async function runChatflowPanel(page, input, expected) {
-  const textarea = page.getByPlaceholder('输入用户消息')
+  const textarea = page.getByPlaceholder('输入消息')
+  const assistantMessages = page.locator('[data-testid="chatflow-assistant-message"]')
+  const previousAssistantCount = await assistantMessages.count()
   await textarea.fill(input)
-  await page.getByRole('button', { name: '运行', exact: true }).click()
-  const assistant = page.locator('[data-testid="chatflow-assistant-message"]')
+  await page.getByRole('button', { name: '发送消息', exact: true }).click()
+  await page.waitForFunction(
+    (count) => document.querySelectorAll('[data-testid="chatflow-assistant-message"]').length > count,
+    previousAssistantCount,
+    { timeout: 20000 },
+  )
+  const assistant = assistantMessages.nth(previousAssistantCount)
   await assistant.waitFor({ state: 'visible', timeout: 20000 })
   const text = await assistant.innerText()
   assert(text.includes(expected), `Expected chatflow output ${expected}, got: ${text}`)
@@ -161,7 +168,7 @@ async function runWorkflowUat(page, kb, marker) {
   )
 
   await page.goto(`${baseUrl}/workflows/${workflow.id}/canvas`, { waitUntil: 'networkidle' })
-  await page.getByRole('button', { name: '试运行' }).click()
+  await page.locator('.canvas-actions').getByRole('button', { name: '试运行', exact: true }).click()
   const panel = page.locator('[data-testid="test-run-panel"]')
   await panel.waitFor({ state: 'visible', timeout: 5000 })
   await runWorkflowPanel(page, 'kb', `KB_CONDITION_${marker}`)

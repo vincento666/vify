@@ -1,0 +1,14 @@
+# RED Evidence
+
+1. `workflow-knowledge-condition-run.mjs`
+
+Failure: the chatflow multi-turn assertion read the first visible assistant message after sending the second message, so the default branch check saw the previous KB answer instead of the newly appended answer.
+
+Evidence: `e2e-workflow-knowledge-condition-run.txt`.
+
+2. `workflow-chatflow-llm-run.mjs`
+
+Failure: local/offline environment had a configured live LLM agent with an unreachable provider URL. The test waited only for `[data-testid="workflow-run-output"]`, so a valid visible provider error panel timed out the UAT instead of being asserted.
+
+Evidence: `e2e-workflow-chatflow-llm-run.txt`.
+

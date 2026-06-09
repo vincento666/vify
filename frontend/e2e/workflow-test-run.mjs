@@ -21,7 +21,7 @@ const name = `Workflow Test Run ${Date.now()}`
 try {
   await page.goto(`${baseUrl}/workflows/create`, { waitUntil: 'networkidle' })
   await page.getByPlaceholder('工作流名称').fill(name)
-  await page.getByRole('button', { name: '试运行' }).click()
+  await page.locator('.canvas-actions').getByRole('button', { name: '试运行', exact: true }).click()
 
   const panel = page.locator('[data-testid="test-run-panel"]')
   await panel.waitFor({ state: 'visible', timeout: 5000 })
@@ -61,7 +61,7 @@ try {
     'connect workflow graph',
   )
   await page.reload({ waitUntil: 'networkidle' })
-  await page.getByRole('button', { name: '试运行' }).click()
+  await page.locator('.canvas-actions').getByRole('button', { name: '试运行', exact: true }).click()
   await panel.waitFor({ state: 'visible', timeout: 5000 })
   await panel.getByPlaceholder('输入 userMessage').fill('hello from e2e')
   await panel.getByRole('button', { name: '运行', exact: true }).click()

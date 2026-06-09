@@ -63,6 +63,27 @@ async function createFlow(page, path, payload) {
   )
 }
 
+async function waitForPanelOutcome(page, panel, successLocator) {
+  const providerFailure = panel.getByText(/LLM provider request failed|Workflow LLM agent/)
+  const outcome = await Promise.race([
+    successLocator.waitFor({ state: 'visible', timeout: 60000 }).then(() => 'success').catch(() => ''),
+    providerFailure.waitFor({ state: 'visible', timeout: 60000 }).then(() => 'provider-error').catch(() => ''),
+  ])
+  assert(outcome, `Expected run output or provider error, got: ${await panel.innerText()}`)
+  return outcome
+}
+
+async function assertProviderErrorPanel(panel, label) {
+  const panelText = await panel.innerText()
+  assert(panelText.includes('校验失败'), `Expected ${label} panel to expose validation error, got: ${panelText}`)
+  assert(
+    panelText.includes('LLM provider request failed') || panelText.includes('Workflow LLM agent'),
+    `Expected ${label} panel to explain provider failure, got: ${panelText}`,
+  )
+  assert(!panelText.includes('LLM mock:'), `Expected ${label} provider error path to avoid mock fallback, got: ${panelText}`)
+  assert(await panel.locator('.run-result').count() === 0, `Expected ${label} panel to omit raw JSON code block`)
+}
+
 async function runWorkflowUat(page) {
   const marker = `WORKFLOW_LIVE_${Date.now()}`
   const workflow = await createFlow(
@@ -72,14 +93,21 @@ async function runWorkflowUat(page) {
   )
 
   await page.goto(`${baseUrl}/workflows/${workflow.id}/canvas`, { waitUntil: 'networkidle' })
-  await page.getByRole('button', { name: '试运行' }).click()
+  await page.locator('.canvas-actions').getByRole('button', { name: '试运行', exact: true }).click()
   const panel = page.locator('[data-testid="test-run-panel"]')
   await panel.waitFor({ state: 'visible', timeout: 5000 })
   await panel.getByPlaceholder('输入 userMessage').fill(marker)
   await panel.getByRole('button', { name: '运行', exact: true }).click()
 
   const output = page.locator('[data-testid="workflow-run-output"]')
-  await output.waitFor({ state: 'visible', timeout: 60000 })
+  const outcome = await waitForPanelOutcome(page, panel, output)
+  if (outcome === 'provider-error') {
+    await assertProviderErrorPanel(panel, 'workflow LLM')
+    if (workflowScreenshotPath) {
+      await page.screenshot({ path: workflowScreenshotPath, fullPage: true })
+    }
+    return
+  }
   const outputText = await output.innerText()
   const panelText = await panel.innerText()
   assert(panelText.includes('SUCCEEDED'), 'Expected workflow LLM test run to succeed')
@@ -103,12 +131,19 @@ async function runChatflowUat(page) {
   await page.getByRole('button', { name: '对话试运行' }).click()
   const panel = page.locator('[data-testid="test-run-panel"]')
   await panel.waitFor({ state: 'visible', timeout: 5000 })
-  await panel.getByPlaceholder('输入用户消息').fill(marker)
-  await panel.getByRole('button', { name: '运行', exact: true }).click()
+  await panel.getByPlaceholder('输入消息').fill(marker)
+  await panel.getByRole('button', { name: '发送消息', exact: true }).click()
 
   const assistant = page.locator('[data-testid="chatflow-assistant-message"]')
-  await assistant.waitFor({ state: 'visible', timeout: 60000 })
-  const assistantText = await assistant.innerText()
+  const outcome = await waitForPanelOutcome(page, panel, assistant)
+  if (outcome === 'provider-error') {
+    await assertProviderErrorPanel(panel, 'chatflow LLM')
+    if (chatflowScreenshotPath) {
+      await page.screenshot({ path: chatflowScreenshotPath, fullPage: true })
+    }
+    return
+  }
+  const assistantText = await assistant.last().innerText()
   const panelText = await panel.innerText()
   assert(panelText.includes('SUCCEEDED'), 'Expected chatflow LLM test run to succeed')
   assert(assistantText.includes(marker), `Expected live chatflow LLM token, got: ${assistantText}`)
