@@ -303,6 +303,145 @@ class RuntimePolicyEvaluationRunService:
         }
 
 
+class RuntimePolicyReleaseService:
+    def __init__(self, repository: RuntimePolicyRepository) -> None:
+        self._repository = repository
+
+    def approve_profile(self, profile_id: int, *, approved_by: str) -> dict[str, Any]:
+        profile = self._profile_or_404(profile_id)
+        evaluation_run_ids = self._required_passed_run_ids(profile)
+        existing = self._release_for_current_version(profile)
+        previous = self._previous_active_profile(profile_id)
+        values = {
+            "profile_id": profile["id"],
+            "profile_version": profile["version"],
+            "previous_active_profile_id": previous["id"] if previous else None,
+            "previous_active_profile_version": previous["version"] if previous else None,
+            "evaluation_run_ids": evaluation_run_ids,
+            "status": "approved",
+            "canary_percent": int(existing.get("canary_percent") or 0) if existing else 0,
+            "approved_by": approved_by,
+            "activated_by": "",
+            "rolled_back_by": "",
+            "activated_at": None,
+            "rolled_back_at": None,
+            "rollback_reason": "",
+            "audit_snapshot": {"approvedBy": approved_by},
+        }
+        row = (
+            self._repository.update_release(int(existing["id"]), values)
+            if existing
+            else self._repository.create_release(values)
+        )
+        return _release_response(row)
+
+    def canary_profile(self, profile_id: int, *, canary_percent: int) -> dict[str, Any]:
+        if canary_percent < 0 or canary_percent > 100:
+            raise BizError(ErrorCode.BAD_REQUEST, "canaryPercent must be between 0 and 100")
+        profile = self._profile_or_404(profile_id)
+        release = self._approved_release_for_current_version(profile)
+        row = self._repository.update_release(
+            int(release["id"]),
+            {
+                "status": "canary",
+                "canary_percent": canary_percent,
+                "audit_snapshot": {**(release.get("audit_snapshot") or {}), "canaryPercent": canary_percent},
+            },
+        )
+        return _release_response(row)
+
+    def activate_profile(self, profile_id: int, *, activated_by: str) -> dict[str, Any]:
+        profile = self._profile_or_404(profile_id)
+        self._raise_if_version_drift(profile)
+        self._required_passed_run_ids(profile)
+        release = self._approved_release_for_current_version(profile)
+        active_profiles = [row for row in self._repository.list_active_profiles() if int(row["id"]) != profile_id]
+        previous = active_profiles[0] if active_profiles else None
+        for active_profile in active_profiles:
+            self._repository.set_profile_status(int(active_profile["id"]), "archived")
+        self._repository.set_profile_status(profile_id, "active")
+        row = self._repository.update_release(
+            int(release["id"]),
+            {
+                "status": "active",
+                "previous_active_profile_id": previous["id"] if previous else release.get("previous_active_profile_id"),
+                "previous_active_profile_version": (
+                    previous["version"] if previous else release.get("previous_active_profile_version")
+                ),
+                "activated_by": activated_by,
+                "activated_at": datetime.now(),
+                "audit_snapshot": {**(release.get("audit_snapshot") or {}), "activatedBy": activated_by},
+            },
+        )
+        return _release_response(row)
+
+    def get(self, release_id: int) -> dict[str, Any]:
+        row = self._repository.get_release(release_id)
+        if row is None:
+            raise BizError(ErrorCode.NOT_FOUND, "Runtime policy release not found")
+        return _release_response(row)
+
+    def list_releases(
+        self,
+        page: int,
+        page_size: int,
+        *,
+        profile_id: int | None = None,
+        status: str | None = None,
+    ) -> dict[str, Any]:
+        rows, total = self._repository.list_releases(page, page_size, profile_id=profile_id, status=status)
+        return {
+            "list": [_release_response(row) for row in rows],
+            "total": total,
+            "page": page,
+            "pageSize": page_size,
+        }
+
+    def _profile_or_404(self, profile_id: int) -> dict[str, Any]:
+        profile = self._repository.get_profile(profile_id)
+        if profile is None:
+            raise BizError(ErrorCode.NOT_FOUND, "Runtime policy profile not found")
+        return profile
+
+    def _required_passed_run_ids(self, profile: dict[str, Any]) -> list[int]:
+        run_ids: list[int] = []
+        for run_type in ("validation", "golden_matrix", "decision_log_replay"):
+            rows, _total = self._repository.list_evaluation_runs(
+                1,
+                20,
+                profile_id=int(profile["id"]),
+                run_type=run_type,
+                status="passed",
+            )
+            current_rows = [row for row in rows if int(row["profile_version"]) == int(profile["version"])]
+            if not current_rows:
+                raise BizError(ErrorCode.BAD_REQUEST, f"{run_type} evaluation required before activation")
+            run_ids.append(int(current_rows[0]["id"]))
+        return run_ids
+
+    def _release_for_current_version(self, profile: dict[str, Any]) -> dict[str, Any] | None:
+        releases = self._repository.list_releases_for_profile(int(profile["id"]))
+        for release in releases:
+            if int(release["profile_version"]) == int(profile["version"]):
+                return release
+        return None
+
+    def _approved_release_for_current_version(self, profile: dict[str, Any]) -> dict[str, Any]:
+        release = self._release_for_current_version(profile)
+        if release is None or release["status"] not in {"approved", "canary"}:
+            raise BizError(ErrorCode.BAD_REQUEST, "approval required before activation")
+        return release
+
+    def _raise_if_version_drift(self, profile: dict[str, Any]) -> None:
+        releases = self._repository.list_releases_for_profile(int(profile["id"]))
+        if releases and all(int(release["profile_version"]) != int(profile["version"]) for release in releases):
+            raise BizError(ErrorCode.BAD_REQUEST, "Profile version changed since evaluation")
+
+    def _previous_active_profile(self, profile_id: int) -> dict[str, Any] | None:
+        active_profiles = [row for row in self._repository.list_active_profiles() if int(row["id"]) != profile_id]
+        return active_profiles[0] if active_profiles else None
+
+
 def _evaluation_run_values(validation_result: dict[str, Any]) -> dict[str, Any]:
     result = dict(validation_result.get("result") or {})
     result.setdefault("passed", validation_result["passed"])
@@ -337,6 +476,30 @@ def _evaluation_run_response(row: dict[str, Any]) -> dict[str, Any]:
         "result": result,
         "metrics": row.get("metrics") or {},
         "riskDeltas": row.get("risk_deltas") or {},
+        "createdAt": _iso(row["created_at"]),
+        "updatedAt": _iso(row["updated_at"]),
+    }
+
+
+def _release_response(row: dict[str, Any] | None) -> dict[str, Any]:
+    if row is None:
+        raise BizError(ErrorCode.NOT_FOUND, "Runtime policy release not found")
+    return {
+        "id": int(row["id"]),
+        "profileId": int(row["profile_id"]),
+        "profileVersion": int(row["profile_version"]),
+        "previousActiveProfileId": row.get("previous_active_profile_id"),
+        "previousActiveProfileVersion": row.get("previous_active_profile_version"),
+        "evaluationRunIds": row.get("evaluation_run_ids") or [],
+        "status": str(row["status"]),
+        "canaryPercent": int(row.get("canary_percent") or 0),
+        "approvedBy": str(row.get("approved_by") or ""),
+        "activatedBy": str(row.get("activated_by") or ""),
+        "rolledBackBy": str(row.get("rolled_back_by") or ""),
+        "activatedAt": _optional_iso(row.get("activated_at")),
+        "rolledBackAt": _optional_iso(row.get("rolled_back_at")),
+        "rollbackReason": str(row.get("rollback_reason") or ""),
+        "auditSnapshot": row.get("audit_snapshot") or {},
         "createdAt": _iso(row["created_at"]),
         "updatedAt": _iso(row["updated_at"]),
     }
@@ -484,3 +647,9 @@ def _iso(value: Any) -> str:
     if isinstance(value, datetime):
         return value.isoformat()
     return str(value)
+
+
+def _optional_iso(value: Any) -> str | None:
+    if value is None:
+        return None
+    return _iso(value)

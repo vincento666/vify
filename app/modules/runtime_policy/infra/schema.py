@@ -89,6 +89,31 @@ def register_runtime_policy_tables(metadata: sa.MetaData | None = None) -> None:
             sa.Index("idx_runtime_policy_eval_status", "status"),
         )
 
+    if "runtime_policy_release" not in target.tables:
+        sa.Table(
+            "runtime_policy_release",
+            target,
+            id_column(),
+            sa.Column("profile_id", BIGINT, nullable=False),
+            sa.Column("profile_version", sa.Integer(), nullable=False),
+            sa.Column("previous_active_profile_id", BIGINT, nullable=True),
+            sa.Column("previous_active_profile_version", sa.Integer(), nullable=True),
+            sa.Column("evaluation_run_ids", sa.JSON(), nullable=False),
+            sa.Column("status", sa.String(40), nullable=False),
+            sa.Column("canary_percent", sa.Integer(), nullable=False, server_default="0"),
+            sa.Column("approved_by", sa.String(120), nullable=False, server_default=""),
+            sa.Column("activated_by", sa.String(120), nullable=False, server_default=""),
+            sa.Column("rolled_back_by", sa.String(120), nullable=False, server_default=""),
+            sa.Column("activated_at", sa.DateTime(), nullable=True),
+            sa.Column("rolled_back_at", sa.DateTime(), nullable=True),
+            sa.Column("rollback_reason", sa.String(500), nullable=False, server_default=""),
+            sa.Column("audit_snapshot", sa.JSON(), nullable=False),
+            deleted_column(),
+            *timestamps(),
+            sa.Index("idx_runtime_policy_release_profile", "profile_id", "profile_version"),
+            sa.Index("idx_runtime_policy_release_status", "status"),
+        )
+
 
 def runtime_policy_tables() -> list[sa.Table]:
     register_runtime_policy_tables()
@@ -96,5 +121,6 @@ def runtime_policy_tables() -> list[sa.Table]:
         "runtime_policy_profile",
         "runtime_decision_log",
         "runtime_policy_evaluation_run",
+        "runtime_policy_release",
     ]
     return [Base.metadata.tables[name] for name in names]

@@ -19,6 +19,7 @@ class RuntimePolicyRepository:
         self._profile = Base.metadata.tables["runtime_policy_profile"]
         self._decision_log = Base.metadata.tables["runtime_decision_log"]
         self._evaluation_run = Base.metadata.tables["runtime_policy_evaluation_run"]
+        self._release = Base.metadata.tables["runtime_policy_release"]
         self._ensure_tables()
 
     @property
@@ -118,6 +119,18 @@ class RuntimePolicyRepository:
         )
         self._session.commit()
         return isinstance(result, CursorResult) and result.rowcount > 0
+
+    def set_profile_status(self, profile_id: int, status: str) -> dict[str, Any] | None:
+        self._session.execute(
+            self._profile.update()
+            .where(
+                self._profile.c.id == profile_id,
+                self._profile.c.deleted.is_(False),
+            )
+            .values(status=status, updated_at=datetime.now())
+        )
+        self._session.commit()
+        return self.get_profile(profile_id)
 
     def create_decision_log(self, values: dict[str, Any]) -> dict[str, Any]:
         now = datetime.now()
@@ -233,6 +246,80 @@ class RuntimePolicyRepository:
             .limit(page_size)
         ).mappings().all()
         return [dict(row) for row in rows], int(total)
+
+    def create_release(self, values: dict[str, Any]) -> dict[str, Any]:
+        now = datetime.now()
+        result = self._session.execute(
+            self._release.insert()
+            .values(
+                **values,
+                deleted=False,
+                created_at=now,
+                updated_at=now,
+            )
+            .returning(self._release)
+        )
+        row = dict(result.mappings().one())
+        self._session.commit()
+        return row
+
+    def get_release(self, release_id: int) -> dict[str, Any] | None:
+        row = self._session.execute(
+            sa.select(self._release).where(
+                self._release.c.id == release_id,
+                self._release.c.deleted.is_(False),
+            )
+        ).mappings().one_or_none()
+        return dict(row) if row else None
+
+    def update_release(self, release_id: int, values: dict[str, Any]) -> dict[str, Any] | None:
+        existing = self.get_release(release_id)
+        if existing is None:
+            return None
+        self._session.execute(
+            self._release.update()
+            .where(
+                self._release.c.id == release_id,
+                self._release.c.deleted.is_(False),
+            )
+            .values(**values, updated_at=datetime.now())
+        )
+        self._session.commit()
+        return self.get_release(release_id)
+
+    def list_releases(
+        self,
+        page: int,
+        page_size: int,
+        *,
+        profile_id: int | None = None,
+        status: str | None = None,
+    ) -> tuple[list[dict[str, Any]], int]:
+        conditions: list[ColumnElement[bool]] = [self._release.c.deleted.is_(False)]
+        if profile_id is not None:
+            conditions.append(self._release.c.profile_id == profile_id)
+        if status:
+            conditions.append(self._release.c.status == status)
+        total = self._session.execute(sa.select(sa.func.count()).select_from(self._release).where(*conditions)).scalar_one()
+        rows = self._session.execute(
+            sa.select(self._release)
+            .where(*conditions)
+            .order_by(self._release.c.id.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        ).mappings().all()
+        return [dict(row) for row in rows], int(total)
+
+    def list_releases_for_profile(self, profile_id: int) -> list[dict[str, Any]]:
+        rows = self._session.execute(
+            sa.select(self._release)
+            .where(
+                self._release.c.profile_id == profile_id,
+                self._release.c.deleted.is_(False),
+            )
+            .order_by(self._release.c.id.desc())
+        ).mappings().all()
+        return [dict(row) for row in rows]
 
     def _ensure_tables(self) -> None:
         bind = self._session.get_bind()

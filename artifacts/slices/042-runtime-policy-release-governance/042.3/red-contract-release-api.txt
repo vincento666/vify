@@ -1,0 +1,85 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/vincento/work/develop/hify
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 3 items
+
+tests/contract/test_runtime_policy_release_api.py FFF                    [100%]
+
+=================================== FAILURES ===================================
+_ RuntimePolicyReleaseApiContractTest.test_activate_is_blocked_before_required_gates_pass _
+
+self = <tests.contract.test_runtime_policy_release_api.RuntimePolicyReleaseApiContractTest testMethod=test_activate_is_blocked_before_required_gates_pass>
+
+    def test_activate_is_blocked_before_required_gates_pass(self) -> None:
+        with TestClient(app) as client:
+            created = client.post("/api/v1/runtime-policy/profiles", json=_profile_payload("042.3 blocked"))
+            profile_id = created.json()["data"]["id"]
+            activated = client.post(
+                f"/api/v1/runtime-policy/profiles/{profile_id}/activate",
+                json={"activatedBy": "ops"},
+            )
+    
+>       self.assertEqual(activated.status_code, 400)
+E       AssertionError: 404 != 400
+
+tests/contract/test_runtime_policy_release_api.py:48: AssertionError
+_ RuntimePolicyReleaseApiContractTest.test_approve_canary_activate_records_release_and_switches_active_profile _
+
+self = <tests.contract.test_runtime_policy_release_api.RuntimePolicyReleaseApiContractTest testMethod=test_approve_canary_activate_records_release_and_switches_active_profile>
+
+    def test_approve_canary_activate_records_release_and_switches_active_profile(self) -> None:
+        with TestClient(app) as client:
+            baseline = _profile_payload("042.3 baseline")
+            baseline["status"] = "active"
+            baseline_created = client.post("/api/v1/runtime-policy/profiles", json=baseline)
+            baseline_id = baseline_created.json()["data"]["id"]
+            profile_id = _create_candidate_with_gates(client, create_replay_source=False)
+            approved = client.post(
+                f"/api/v1/runtime-policy/profiles/{profile_id}/approve",
+                json={"approvedBy": "ops"},
+            )
+            canary = client.post(
+                f"/api/v1/runtime-policy/profiles/{profile_id}/canary",
+                json={"canaryPercent": 25},
+            )
+            activated = client.post(
+                f"/api/v1/runtime-policy/profiles/{profile_id}/activate",
+                json={"activatedBy": "ops"},
+            )
+            releases = client.get("/api/v1/runtime-policy/releases", params={"profileId": profile_id})
+            active_profile = client.get(f"/api/v1/runtime-policy/profiles/{profile_id}")
+            archived_baseline = client.get(f"/api/v1/runtime-policy/profiles/{baseline_id}")
+    
+>       self.assertEqual(approved.status_code, 200)
+E       AssertionError: 404 != 200
+
+tests/contract/test_runtime_policy_release_api.py:93: AssertionError
+_ RuntimePolicyReleaseApiContractTest.test_profile_version_drift_invalidates_old_evaluation _
+
+self = <tests.contract.test_runtime_policy_release_api.RuntimePolicyReleaseApiContractTest testMethod=test_profile_version_drift_invalidates_old_evaluation>
+
+    def test_profile_version_drift_invalidates_old_evaluation(self) -> None:
+        with TestClient(app) as client:
+            profile_id = _create_candidate_with_gates(client)
+            approved = client.post(
+                f"/api/v1/runtime-policy/profiles/{profile_id}/approve",
+                json={"approvedBy": "ops"},
+            )
+>           self.assertEqual(approved.status_code, 200)
+E           AssertionError: 404 != 200
+
+tests/contract/test_runtime_policy_release_api.py:58: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/vincento/work/develop/hify/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/contract/test_runtime_policy_release_api.py::RuntimePolicyReleaseApiContractTest::test_activate_is_blocked_before_required_gates_pass
+FAILED tests/contract/test_runtime_policy_release_api.py::RuntimePolicyReleaseApiContractTest::test_approve_canary_activate_records_release_and_switches_active_profile
+FAILED tests/contract/test_runtime_policy_release_api.py::RuntimePolicyReleaseApiContractTest::test_profile_version_drift_invalidates_old_evaluation
+========================= 3 failed, 1 warning in 1.07s =========================

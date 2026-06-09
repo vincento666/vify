@@ -89,6 +89,10 @@ validation/replay/approval gates, and rollback is proven through backend tests.
   expected-vs-actual results plus aggregate risk deltas, support decision-log
   filters, and preserve the 040 route matrix in focused backend E2E gates plus
   browser UAT.
+- 042.3 complete: release approval, canary, and activation APIs persist release
+  state, enforce validation/replay/approval/version gates before activation,
+  archive the previous active profile on activation, and preserve runtime-lab
+  route boundaries in focused backend E2E gates plus browser UAT.
 
 ## Non-Goals
 

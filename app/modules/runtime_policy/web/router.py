@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.core.database import get_session
 from app.core.responses import success
-from app.modules.runtime_policy.domain.governance import RuntimePolicyEvaluationRunService
+from app.modules.runtime_policy.domain.governance import RuntimePolicyEvaluationRunService, RuntimePolicyReleaseService
 from app.modules.runtime_policy.domain.resolver import RuntimePolicyResolveContext, RuntimePolicyResolver
 from app.modules.runtime_policy.domain.service import RuntimeDecisionLogService, RuntimePolicyProfileService
 from app.modules.runtime_policy.infra.repository import RuntimePolicyRepository
@@ -32,6 +32,10 @@ def get_runtime_decision_log_service(session: Session = Depends(get_session)) ->
 
 def get_runtime_evaluation_run_service(session: Session = Depends(get_session)) -> RuntimePolicyEvaluationRunService:
     return RuntimePolicyEvaluationRunService(RuntimePolicyRepository(session))
+
+
+def get_runtime_release_service(session: Session = Depends(get_session)) -> RuntimePolicyReleaseService:
+    return RuntimePolicyReleaseService(RuntimePolicyRepository(session))
 
 
 @router.get("/effective-profile")
@@ -142,6 +146,25 @@ def get_evaluation_run(
     return success(service.get(run_id))
 
 
+@router.get("/releases")
+def list_releases(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100, alias="pageSize"),
+    profile_id: int | None = Query(default=None, alias="profileId"),
+    status: str | None = None,
+    service: RuntimePolicyReleaseService = Depends(get_runtime_release_service),
+) -> dict[str, Any]:
+    return success(service.list_releases(page, page_size, profile_id=profile_id, status=status))
+
+
+@router.get("/releases/{release_id}")
+def get_release(
+    release_id: int,
+    service: RuntimePolicyReleaseService = Depends(get_runtime_release_service),
+) -> dict[str, Any]:
+    return success(service.get(release_id))
+
+
 @router.get("/profiles")
 def list_profiles(
     page: int = Query(1, ge=1),
@@ -184,6 +207,33 @@ def replay_decision_logs(
     service: RuntimePolicyEvaluationRunService = Depends(get_runtime_evaluation_run_service),
 ) -> dict[str, Any]:
     return success(service.replay_decision_logs(profile_id, filters or {}))
+
+
+@router.post("/profiles/{profile_id}/approve")
+def approve_profile(
+    profile_id: int,
+    request: dict[str, Any] | None = None,
+    service: RuntimePolicyReleaseService = Depends(get_runtime_release_service),
+) -> dict[str, Any]:
+    return success(service.approve_profile(profile_id, approved_by=str((request or {}).get("approvedBy") or "system")))
+
+
+@router.post("/profiles/{profile_id}/canary")
+def canary_profile(
+    profile_id: int,
+    request: dict[str, Any] | None = None,
+    service: RuntimePolicyReleaseService = Depends(get_runtime_release_service),
+) -> dict[str, Any]:
+    return success(service.canary_profile(profile_id, canary_percent=int((request or {}).get("canaryPercent") or 0)))
+
+
+@router.post("/profiles/{profile_id}/activate")
+def activate_profile(
+    profile_id: int,
+    request: dict[str, Any] | None = None,
+    service: RuntimePolicyReleaseService = Depends(get_runtime_release_service),
+) -> dict[str, Any]:
+    return success(service.activate_profile(profile_id, activated_by=str((request or {}).get("activatedBy") or "system")))
 
 
 @router.get("/profiles/{profile_id}")

@@ -195,3 +195,7 @@ allow direct activation without evaluation gates.
   decision-log replay with filters, expected-vs-actual persistence, aggregate
   risk deltas, backend E2E regression, and browser UAT evidence are recorded
   under `artifacts/slices/042-runtime-policy-release-governance/042.2/`.
+- 042.3 complete: release records, approval, canary, activation hard gates,
+  profile-version drift rejection, backend E2E regression, runtime-lab
+  confusion matrix regression, and browser UAT evidence are recorded under
+  `artifacts/slices/042-runtime-policy-release-governance/042.3/`.

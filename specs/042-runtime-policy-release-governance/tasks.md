@@ -32,15 +32,15 @@
 
 ## 042.3 Release approval, canary, and activation gate
 
-- [ ] RED: activate succeeds before validation/replay/approval gates pass.
-- [ ] RED: profile version drift does not invalidate old evaluation.
-- [ ] Add release record model.
-- [ ] Add approve API.
-- [ ] Add canary API.
-- [ ] Add activate API with hard gate checks.
-- [ ] Save evidence under
+- [x] RED: activate succeeds before validation/replay/approval gates pass.
+- [x] RED: profile version drift does not invalidate old evaluation.
+- [x] Add release record model.
+- [x] Add approve API.
+- [x] Add canary API.
+- [x] Add activate API with hard gate checks.
+- [x] Save evidence under
   `artifacts/slices/042-runtime-policy-release-governance/042.3/`.
-- [ ] Commit 042.3 only.
+- [x] Commit 042.3 only.
 
 ## 042.4 Rollback and audit
 
