@@ -1,0 +1,38 @@
+> vitest run src/views/workflow/nodeTestFixtures.test.ts
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ ❯ src/views/workflow/nodeTestFixtures.test.ts (3 tests | 1 failed) 18ms
+   ✓ chatflow node test fixtures > includes the Chatflow runtime profile variables for selected LLM node runs 6ms
+   ✓ chatflow node test fixtures > maps workflow userMessage to USER_INPUT without forcing Chatflow-only fields 1ms
+   × chatflow node test fixtures > uses START output variables as selected-node run inputs 10ms
+     → expected [] to deeply equal ArrayContaining{…}
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed (3)
+   Start at  07:55:10
+   Duration  593ms (transform 91ms, setup 0ms, collect 88ms, tests 18ms, environment 0ms, prepare 157ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/views/workflow/nodeTestFixtures.test.ts > chatflow node test fixtures > uses START output variables as selected-node run inputs
+AssertionError: expected [] to deeply equal ArrayContaining{…}
+- Expected
++ Received
+- ArrayContaining [
+-   ObjectContaining {
+-     "name": "USER_INPUT",
+-     "type": "string",
+-     "value": "矩阵输入",
+-   },
+-   ObjectContaining {
+-     "name": "CONVERSATION_NAME",
+-     "type": "string",
+-     "value": "",
+-   },
+- ]
++ []
+ ❯ src/views/workflow/nodeTestFixtures.test.ts:71:18
+     69|     const rows = buildNodeTestInputs(start, { isChatflowMode: false, d…
+     70| 
+     71|     expect(rows).toEqual(expect.arrayContaining([
+       |                  ^
+     72|       expect.objectContaining({ name: 'USER_INPUT', type: 'string', va…
+     73|       expect.objectContaining({ name: 'CONVERSATION_NAME', type: 'stri…
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯

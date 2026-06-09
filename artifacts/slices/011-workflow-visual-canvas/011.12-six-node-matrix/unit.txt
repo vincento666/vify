@@ -1,0 +1,20 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/vincento/work/develop/hify
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 5 items
+
+tests/unit/chat/test_llm_request_client.py .                             [ 20%]
+tests/unit/workflow/test_six_node_matrix.py ..                           [ 60%]
+tests/unit/workflow/test_service_knowledge_condition.py ..               [100%]
+
+============================== 5 passed in 0.77s ===============================
+
+RERUN 2026-06-09:
+Command:
+rtk .venv/bin/python -m pytest tests/unit/workflow/test_six_node_matrix.py tests/unit/workflow/test_service_knowledge_condition.py tests/unit/chat/test_llm_request_client.py -q
+
+Result:
+5 passed, 6 subtests passed in 1.37s

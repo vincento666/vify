@@ -1,0 +1,8 @@
+PASS workflow/chatflow six-node matrix e2e
+
+RERUN 2026-06-09:
+Command:
+HIFY_E2E_SCREENSHOT=artifacts/slices/011-workflow-visual-canvas/011.12-six-node-matrix/screenshots/e2e-workflow-six-node-rerun.png HIFY_E2E_CHATFLOW_SCREENSHOT=artifacts/slices/011-workflow-visual-canvas/011.12-six-node-matrix/screenshots/e2e-chatflow-six-node-rerun.png rtk node frontend/e2e/workflow-six-node-matrix.mjs
+
+Result:
+PASS workflow/chatflow six-node matrix e2e
