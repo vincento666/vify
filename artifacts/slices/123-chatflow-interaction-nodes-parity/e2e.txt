@@ -1,0 +1,18 @@
+PASS
+
+Commands:
+- rtk node frontend/e2e/chatflow-message-question-input.mjs
+  - PASS chatflow message question human input e2e
+- rtk node frontend/e2e/chatflow-information-collection.mjs
+  - PASS chatflow information collection e2e
+- rtk node frontend/e2e/chatflow-transfer-to-human-node.mjs
+  - PASS chatflow transfer to human e2e chatflow=8272 ticket=196
+- HIFY_E2E_SCREENSHOT=artifacts/slices/123-chatflow-interaction-nodes-parity/screenshots/message-question-human-input.png rtk node frontend/e2e/chatflow-message-question-input.mjs
+  - PASS chatflow message question human input e2e
+
+Scope:
+- MESSAGE streaming event contract and canvas panel affordance.
+- QUESTION interrupt/resume, answer config, option editor.
+- HUMAN_INPUT resume payload, schema editor.
+- INFORMATION_COLLECTION follow-up interrupt, field editor, history/context controls.
+- TRANSFER_TO_HUMAN ticket creation, run panel, debug dock event timeline.
