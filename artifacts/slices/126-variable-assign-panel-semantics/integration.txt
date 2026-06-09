@@ -1,0 +1,12 @@
+PASS
+
+Command:
+- rtk .venv/bin/python -m pytest tests/integration/workflow/test_variable_aggregation_assignment.py -q
+
+Result:
+- 5 passed, 1 warning
+
+Covered behavior:
+- Variable aggregation returns first non-empty branch value.
+- Variable assignment writes flow/conversation scoped variables.
+- JSON-text assignment and operation assignment runtime contracts remain intact.

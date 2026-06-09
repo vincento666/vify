@@ -443,7 +443,6 @@ const SCHEMAS: Record<WorkflowCanvasNodeType, NodeConfigSchema> = {
         title: '输入',
         fields: [{ key: 'variableAssignment', label: '变量赋值', type: 'variable-assignment' }],
       },
-      OUTPUT_SECTION,
     ],
   },
   INTENT_RECOGNITION: {

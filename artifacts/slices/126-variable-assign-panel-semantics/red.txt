@@ -1,0 +1,10 @@
+FAIL as expected.
+
+Commands:
+- rtk npm --prefix frontend run test:unit -- src/views/workflow/nodeConfig.test.ts
+  - expected VARIABLE_ASSIGN sections `[ '输入', '输出' ]` to equal `[ '输入' ]`
+- rtk node frontend/e2e/workflow-variable-aggregation-assignment.mjs
+  - Error: Assignment editor must not expose generic output format controls
+
+Reason:
+- The variable assignment panel still included the generic output configuration section. Coze/AgentArts product semantics center this node on selecting a target variable and assigning a value, not configuring an arbitrary output format/output variable.

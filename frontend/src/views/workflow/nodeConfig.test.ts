@@ -109,9 +109,12 @@ describe('workflow node config schema', () => {
     expect(getNodeConfigSchema('VARIABLE_AGGREGATION').sections.flatMap((section) => section.fields.map((field) => field.key))).not.toEqual(
       expect.arrayContaining(['inputParameters', 'sources', 'defaultValue', 'separator']),
     )
-    expect(getNodeConfigSchema('VARIABLE_ASSIGN').sections.map((section) => section.title)).toEqual(['输入', '输出'])
+    expect(getNodeConfigSchema('VARIABLE_ASSIGN').sections.map((section) => section.title)).toEqual(['输入'])
     expect(getNodeConfigSchema('VARIABLE_ASSIGN').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual(
-      expect.arrayContaining(['variableAssignment', 'outputParameters']),
+      expect.arrayContaining(['variableAssignment']),
+    )
+    expect(getNodeConfigSchema('VARIABLE_ASSIGN').sections.flatMap((section) => section.fields.map((field) => field.key))).not.toContain(
+      'outputParameters',
     )
     expect(getNodeConfigSchema('VARIABLE_ASSIGN').sections.flatMap((section) => section.fields.map((field) => field.key))).not.toEqual(
       expect.arrayContaining(['targetScope', 'targetVariable', 'writeMode']),

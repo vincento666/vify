@@ -1,0 +1,12 @@
+PASS
+
+Commands:
+- rtk npm --prefix frontend run test:unit -- src/views/workflow/nodeConfig.test.ts
+  - 21 passed
+- rtk npm --prefix frontend run test:unit
+  - 58 test files passed
+  - 212 tests passed
+
+Covered behavior:
+- VARIABLE_ASSIGN schema only exposes the compact `输入` section.
+- VARIABLE_ASSIGN no longer exposes generic outputParameters in the node panel schema.

@@ -1,0 +1,7 @@
+PASS
+
+Command:
+- rtk npm --prefix frontend run build
+
+Result:
+- vue-tsc and vite build completed successfully.

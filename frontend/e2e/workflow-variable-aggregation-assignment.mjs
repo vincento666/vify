@@ -150,6 +150,8 @@ try {
   assert(!panelText.includes('目标作用域'), 'Assignment editor must not expose raw target scope as a primary field')
   assert(!panelText.includes('目标变量'), 'Assignment editor must not expose raw target variable as a primary field')
   assert(!panelText.includes('写入模式'), 'Assignment editor must not expose raw write mode as a primary field')
+  assert(!panelText.includes('输出格式'), 'Assignment editor must not expose generic output format controls')
+  assert(!panelText.includes('输出变量'), 'Assignment editor must not expose generic output variable controls')
   assert(!panelText.includes('赋值来源值模式'), 'Assignment editor must not expose reference/literal mode selector')
   assert(
     !panelText.includes('用于向变量赋值，实现数据的动态更新和传递'),
