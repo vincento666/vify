@@ -8905,11 +8905,11 @@ onUnmounted(() => {
 .edge-insert-palette {
   position: absolute;
   z-index: 110;
-  width: min(19rem, calc(100vw - 2rem));
-  max-height: min(27rem, calc(100vh - 4rem));
-  padding: 0.625rem;
+  width: min(16rem, calc(100vw - 2rem));
+  max-height: min(22rem, calc(100vh - 4rem));
+  padding: 0.5rem;
   border: 1px solid #dfe3ee;
-  border-radius: 0.75rem;
+  border-radius: 0.625rem;
   background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 0.875rem 2rem rgba(34, 41, 63, 0.18);
   overflow-y: auto;
@@ -8917,23 +8917,23 @@ onUnmounted(() => {
 }
 
 .edge-insert-palette :deep(.el-input__wrapper) {
-  min-height: 2.25rem;
-  height: 2.25rem;
-  border-radius: 0.625rem;
+  min-height: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
   background: #fbfcff;
 }
 
 .edge-insert-palette :deep(.el-input__inner) {
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
 }
 
 .edge-insert-palette-group {
-  margin-top: 0.625rem;
+  margin-top: 0.5rem;
 }
 
 .edge-insert-palette-group > strong {
   display: block;
-  margin-bottom: 0.375rem;
+  margin-bottom: 0.25rem;
   color: #8b93a7;
   font-size: 0.75rem;
 }
@@ -8941,21 +8941,21 @@ onUnmounted(() => {
 .edge-insert-palette-group > div {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.125rem 0.375rem;
+  gap: 0.125rem 0.25rem;
 }
 
 .edge-insert-palette button {
   min-width: 0;
-  height: 2.25rem;
+  height: 2rem;
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0 0.5rem;
+  gap: 0.375rem;
+  padding: 0 0.375rem;
   border: 0;
   border-radius: 0.5rem;
   background: transparent;
   color: #2f3648;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 650;
   text-align: left;
   cursor: pointer;
@@ -9516,11 +9516,11 @@ onUnmounted(() => {
   left: 50%;
   bottom: 4.5rem;
   z-index: 10;
-  width: min(19rem, calc(100vw - 2rem));
-  max-height: min(27rem, calc(100vh - 8rem));
-  padding: 0.625rem;
+  width: min(16rem, calc(100vw - 2rem));
+  max-height: min(22rem, calc(100vh - 8rem));
+  padding: 0.5rem;
   border: 0.0625rem solid #dfe3ee;
-  border-radius: 0.75rem;
+  border-radius: 0.625rem;
   background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 0.875rem 2rem rgba(34, 41, 63, 0.18);
   overflow-y: auto;
@@ -9528,14 +9528,14 @@ onUnmounted(() => {
 }
 
 .node-palette :deep(.el-input__wrapper) {
-  min-height: 2.25rem;
-  height: 2.25rem;
-  border-radius: 0.625rem;
+  min-height: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
   background: #fbfcff;
 }
 
 .node-palette :deep(.el-input__inner) {
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
 }
 
 .workflow-debug-dock {
@@ -13251,12 +13251,12 @@ onUnmounted(() => {
 }
 
 .node-palette-group {
-  margin-top: 0.625rem;
+  margin-top: 0.5rem;
 }
 
 .node-palette-group strong {
   display: block;
-  margin-bottom: 0.375rem;
+  margin-bottom: 0.25rem;
   color: #8b93a7;
   font-size: 0.75rem;
 }
@@ -13264,21 +13264,21 @@ onUnmounted(() => {
 .node-palette-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.125rem 0.375rem;
+  gap: 0.125rem 0.25rem;
 }
 
 .node-palette button {
   min-width: 0;
-  height: 2.25rem;
+  height: 2rem;
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0 0.5rem;
+  gap: 0.375rem;
+  padding: 0 0.375rem;
   border: 0;
   border-radius: 0.5rem;
   background: transparent;
   color: #2f3648;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 650;
   text-align: left;
   cursor: pointer;
@@ -13289,8 +13289,8 @@ onUnmounted(() => {
 }
 
 .palette-icon {
-  width: 1.375rem;
-  height: 1.375rem;
+  width: 1.25rem;
+  height: 1.25rem;
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
@@ -13300,8 +13300,8 @@ onUnmounted(() => {
 }
 
 .palette-icon svg {
-  width: 0.875rem;
-  height: 0.875rem;
+  width: 0.8125rem;
+  height: 0.8125rem;
 }
 
 .canvas-toolbar {

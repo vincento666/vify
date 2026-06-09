@@ -59,10 +59,10 @@ function assertCozePalette(summary, label) {
 }
 
 function assertCompactPalette(metrics, label) {
-  assert(metrics.widthRem <= 20, `${label} width should be compact, got ${JSON.stringify(metrics)}`)
-  assert(metrics.buttonHeightRem <= 2.4, `${label} row height should be compact, got ${JSON.stringify(metrics)}`)
-  assert(metrics.buttonFontRem <= 0.875, `${label} font should be one step smaller, got ${JSON.stringify(metrics)}`)
-  assert(metrics.inputHeightRem <= 2.4, `${label} search input should be compact, got ${JSON.stringify(metrics)}`)
+  assert(metrics.widthRem <= 16.5, `${label} width should be compact, got ${JSON.stringify(metrics)}`)
+  assert(metrics.buttonHeightRem <= 2.1, `${label} row height should be compact, got ${JSON.stringify(metrics)}`)
+  assert(metrics.buttonFontRem <= 0.8125, `${label} font should be one step smaller, got ${JSON.stringify(metrics)}`)
+  assert(metrics.inputHeightRem <= 2.1, `${label} search input should be compact, got ${JSON.stringify(metrics)}`)
 }
 
 const browser = await chromium.launch()
@@ -92,7 +92,7 @@ try {
   assertCozePalette(await paletteSummary(edgePalette, '.edge-insert-palette-group'), 'edge insert palette')
   const edgeMetrics = await paletteMetrics(edgePalette)
   assertCompactPalette(edgeMetrics, 'edge insert palette')
-  assert(Math.abs(bottomMetrics.widthRem - edgeMetrics.widthRem) <= 1, `palette widths should match across entrypoints: ${JSON.stringify({ bottomMetrics, edgeMetrics })}`)
+  assert(Math.abs(bottomMetrics.widthRem - edgeMetrics.widthRem) <= 0.25, `palette widths should match across entrypoints: ${JSON.stringify({ bottomMetrics, edgeMetrics })}`)
 
   if (screenshotPath) {
     await page.screenshot({ path: screenshotPath, fullPage: true })
