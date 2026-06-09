@@ -5,9 +5,14 @@ import {
   buildRuntimeLabBoundScenarios,
   buildRuntimeLabConfigSummary,
   buildRuntimeLabFunnelSummary,
+  buildRuntimeLabNodeDebugDetail,
+  buildRuntimeLabRouteOutcome,
   buildRuntimeLabTraceCards,
   buildRuntimeLabTranscriptRow,
+  formatRuntimeLabElapsed,
+  formatRuntimeLabUsage,
   getAirlineSopScenario,
+  runtimeLabPendingDelayMs,
 } from './unifiedRoutingChatLab'
 
 describe('unified routing chat lab model', () => {
@@ -81,6 +86,7 @@ describe('unified routing chat lab model', () => {
       arbitrator: {
         mode: 'llm',
         model: 'qwen/qwen3.5-9b',
+        fallbackModel: 'deepseek/deepseek-v4-flash',
         baseUrl: 'https://openrouter.ai/api/v1',
         apiKeyConfigured: true,
         available: true,
@@ -88,7 +94,7 @@ describe('unified routing chat lab model', () => {
     })
 
     expect(summary.bindingLabel).toBe('已绑定 2 个 Chatflow SOP')
-    expect(summary.arbitratorLabel).toBe('llm · qwen/qwen3.5-9b')
+    expect(summary.arbitratorLabel).toBe('llm · qwen/qwen3.5-9b / fallback deepseek/deepseek-v4-flash')
     expect(summary.secretLabel).toBe('API Key 已配置')
     expect(summary.bindingRows[0]).toContain('flight_booking')
     expect(summary.bindingRows[0]).toContain('#12')
@@ -148,8 +154,30 @@ describe('unified routing chat lab model', () => {
             debugPath: '/chatflows/12/canvas?runId=88&debug=1',
           },
           nodes: [
-            { nodeKey: 'start', nodeType: 'START', name: 'Start', status: 'SUCCEEDED', current: false, elapsedMs: 1, outputs: {}, error: '' },
-            { nodeKey: 'collect', nodeType: 'INFORMATION_COLLECTION', name: '收集信息', status: 'WAITING', current: true, elapsedMs: 12, outputs: { collected: { route: '广州飞北京' } }, error: '' },
+            {
+              nodeKey: 'start',
+              nodeType: 'START',
+              name: 'Start',
+              status: 'SUCCEEDED',
+              current: false,
+              elapsedMs: 1,
+              inputs: {},
+              outputs: {},
+              usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, estimated: false },
+              error: '',
+            },
+            {
+              nodeKey: 'collect',
+              nodeType: 'INFORMATION_COLLECTION',
+              name: '收集信息',
+              status: 'WAITING',
+              current: true,
+              elapsedMs: 12,
+              inputs: { rendered: { inputText: '广州飞北京' } },
+              outputs: { collected: { route: '广州飞北京' } },
+              usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, estimated: false },
+              error: '',
+            },
           ],
           edges: [],
           events: [{ id: 1, type: 'interrupt', runId: 88, sequence: 1, nodeKey: 'collect', payload: {}, checkpointId: 100, createdAt: null }],
@@ -192,5 +220,132 @@ describe('unified routing chat lab model', () => {
     expect(summary.stageLabel).toBe('post_classifier')
     expect(summary.sourceLabel).toBe('enabled_scope_fallback')
     expect(summary.arbitratorLabel).toBe('llm · real')
+  })
+
+  it('builds visible route outcomes for handoff faq clarify and fallback actions', () => {
+    expect(
+      buildRuntimeLabRouteOutcome({
+        action: 'HANDOFF_TO_HUMAN',
+        reason: 'Explicit handoff candidate accepted before classifier',
+        handoff: { sourceLayer: 'explicit_signal', reasonCode: 'USER_REQUEST' },
+      }),
+    ).toEqual({
+      tone: 'danger',
+      title: '转人工',
+      detail: 'USER_REQUEST · explicit_signal',
+    })
+
+    expect(
+      buildRuntimeLabRouteOutcome({
+        action: 'ANSWER_FAQ',
+        reason: 'FAQ answered',
+        faqAnswer: { sourceLayer: 'runtime_airline_faq', reasonCode: 'CHILD_TICKET_REFUND' },
+      }),
+    ).toEqual({
+      tone: 'success',
+      title: 'FAQ命中',
+      detail: 'CHILD_TICKET_REFUND · runtime_airline_faq',
+    })
+
+    expect(buildRuntimeLabRouteOutcome({ action: 'CLARIFY', reason: 'No shallow signal' })!.tone).toBe('warning')
+    expect(buildRuntimeLabRouteOutcome({ action: 'AGENT_FALLBACK', reason: 'fallback' })!.title).toBe('兜底回答')
+  })
+
+  it('keeps the assistant pending indicator visible long enough to animate', () => {
+    expect(runtimeLabPendingDelayMs(1000, 1000)).toBeGreaterThanOrEqual(500)
+    expect(runtimeLabPendingDelayMs(1000, 1400)).toBeGreaterThan(0)
+    expect(runtimeLabPendingDelayMs(1000, 2000)).toBe(0)
+  })
+
+  it('builds assistant debug details from route steps and LLM arbitration usage', () => {
+    const row = buildRuntimeLabTranscriptRow(
+      {
+        reply: '已进入机票预订',
+        routeDecision: {
+          action: 'START_SOP',
+          targetSopId: 'flight_booking',
+          reason: 'LLM selected booking',
+          policyGate: {
+            elapsedMs: 845,
+            steps: [
+              { id: 'candidate_recall', label: '候选召回', elapsedMs: 3, input: { message: '我要订广州飞北京' }, output: { candidates: 0 } },
+              { id: 'llm_intent_arbitration', label: 'LLM有限意图仲裁', elapsedMs: 812, input: { model: 'qwen/qwen3.5-9b' }, output: { selectedIntent: 'flight_booking' } },
+            ],
+          },
+          classifierResult: {
+            _debug: {
+              model: 'qwen/qwen3.5-9b',
+              input: { messages: [{ role: 'user', content: '我要订广州飞北京' }] },
+              output: { selectedIntent: 'flight_booking' },
+              usage: { inputTokens: 128, outputTokens: 16, totalTokens: 144, estimated: false },
+              elapsedMs: 812,
+            },
+          },
+        },
+        activeTask: { id: 8, sopId: 'flight_booking', status: 'RUNNING' },
+        suspendedTasks: [],
+        resumeOffer: null,
+      },
+      930,
+    )
+
+    expect(row.elapsedMs).toBe(930)
+    expect(row.usage?.totalTokens).toBe(144)
+    expect(row.debugDetail?.steps.map((step) => step.id)).toContain('llm_intent_arbitration')
+    expect(row.debugDetail?.output).toEqual({ selectedIntent: 'flight_booking' })
+  })
+
+  it('builds node debug details with inputs outputs timing and usage', () => {
+    const card = buildRuntimeLabTraceCards({
+      total: 1,
+      tasks: [
+        {
+          taskId: 7,
+          sopId: 'flight_booking',
+          status: 'RUNNING',
+          currentStep: 'llm',
+          chatflow: {
+            chatflowId: 12,
+            chatflowName: '机票预订',
+            exists: true,
+            runId: 88,
+            eventId: 99,
+            checkpointId: 100,
+            sessionId: 'session-88',
+            canvasPath: '/chatflows/12/canvas',
+            debugPath: '/chatflows/12/canvas?runId=88&debug=1',
+          },
+          nodes: [
+            {
+              nodeKey: 'llm',
+              nodeType: 'LLM',
+              name: '话术生成',
+              status: 'SUCCEEDED',
+              current: false,
+              elapsedMs: 456,
+              inputs: { rendered: { prompt: '帮用户确认预订' } },
+              outputs: { answer: '已进入预订', __usage: { inputTokens: 30, outputTokens: 8, totalTokens: 38, estimated: false } },
+              usage: { inputTokens: 30, outputTokens: 8, totalTokens: 38, estimated: false },
+              error: '',
+            },
+          ],
+          edges: [],
+          events: [],
+          variables: {
+            businessRefs: {},
+            collected: {},
+            scoped: {},
+            session: {},
+          },
+        },
+      ],
+    })[0]
+
+    const detail = buildRuntimeLabNodeDebugDetail(card, card.nodes[0])
+    expect(detail.title).toBe('llm · 话术生成')
+    expect(detail.elapsedMs).toBe(456)
+    expect(detail.input).toEqual({ rendered: { prompt: '帮用户确认预订' } })
+    expect(formatRuntimeLabUsage(detail.usage)).toBe('in 30 / out 8 / total 38')
+    expect(formatRuntimeLabElapsed(detail.elapsedMs)).toBe('456ms')
   })
 })

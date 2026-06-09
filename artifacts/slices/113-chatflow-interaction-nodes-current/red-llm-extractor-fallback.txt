@@ -1,0 +1,54 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ InformationCollectionHistoryModeTest.test_llm_extractor_error_falls_back_to_rule_extraction _
+
+self = <tests.unit.workflow.test_information_collection_history_modes.InformationCollectionHistoryModeTest testMethod=test_llm_extractor_error_falls_back_to_rule_extraction>
+
+    def test_llm_extractor_error_falls_back_to_rule_extraction(self) -> None:
+        context = ExecutionContext()
+        context.set_output("start", {"sys.query": "目的城市:上海 预算金额:5000"})
+        executor = InformationCollectionNodeExecutor(_FailingCompleter())
+    
+>       output = executor.execute(
+            {
+                "node_key": "collect",
+                "type": "INFORMATION_COLLECTION",
+                "config": {
+                    "inputSource": "{{start.sys.query}}",
+                    "collectionKey": "travel",
+                    "outputVariable": "travel",
+                    "extractorMode": "llm",
+                    "fields": [
+                        {"name": "destination", "type": "string", "required": True, "description": "目的城市"},
+                        {"name": "budget", "type": "string", "required": True, "description": "预算金额"},
+                    ],
+                },
+            },
+            context,
+        )
+
+tests/unit/workflow/test_information_collection_history_modes.py:40: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+app/modules/workflow/domain/engine.py:1026: in execute
+    extracted.update(self._extract(_collection_input_text(config, context, node_key), history_enabled_fields, config))
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/engine.py:1099: in _extract
+    return _extract_collection_values_llm(self._completer, text, fields, config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/modules/workflow/domain/engine.py:2270: in _extract_collection_values_llm
+    raw = completer.complete_prompt(prompt, {**_llm_options(config), "responseFormat": "JSON"})
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <tests.unit.workflow.test_information_collection_history_modes._FailingCompleter object at 0x105ba7e00>
+_prompt = '你是信息抽取器。只输出 JSON object，不要输出解释、Markdown 或代码块。JSON key 必须优先使用字段 name；如果无法使用 name，也可以使用字段 description。未知值不要编造，直接省略。\n示例...ring", "required": true, "description": "预算金额", "historyMode": "", "extractionHint": ""}]\nMessage:\n目的城市:上海 预算金额:5000'
+_options = {'responseFormat': 'JSON'}
+
+    def complete_prompt(self, _prompt: str, _options: dict[str, object] | None = None) -> str:
+>       raise RuntimeError("provider unavailable")
+E       RuntimeError: provider unavailable
+
+tests/unit/workflow/test_information_collection_history_modes.py:120: RuntimeError
+=========================== short test summary info ============================
+FAILED tests/unit/workflow/test_information_collection_history_modes.py::InformationCollectionHistoryModeTest::test_llm_extractor_error_falls_back_to_rule_extraction
+1 failed in 0.35s

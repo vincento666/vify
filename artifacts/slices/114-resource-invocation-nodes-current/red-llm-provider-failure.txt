@@ -1,0 +1,37 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ LlmNodeCompleterTest.test_agent_backed_completer_wraps_provider_network_failure _
+
+self = <tests.unit.workflow.test_llm_node_completer.LlmNodeCompleterTest testMethod=test_agent_backed_completer_wraps_provider_network_failure>
+
+    def test_agent_backed_completer_wraps_provider_network_failure(self) -> None:
+        completer = _AgentBackedWorkflowLlmCompleter(
+            agent={"system_prompt": "", "temperature": 0.1, "max_tokens": 64},
+>           model_config=ModelConfigDto(
+                id=1,
+                provider_id=1,
+                provider_type="OPENAI",
+                provider_base_url="https://invalid.local",
+                provider_auth_config={},
+                model_id="demo",
+                display_name="Demo",
+                capabilities=[],
+                extra_params={},
+                enabled=True,
+            ),
+            request_builder=OpenAIChatRequestBuilder(),
+            parser=OpenAIAdapterParser(),
+            llm_client_factory=lambda _config: _FailingLlmClient(),
+        )
+E       pydantic_core._pydantic_core.ValidationError: 2 validation errors for ModelConfigDto
+E       name
+E         Field required [type=missing, input_value={'id': 1, 'provider_id': ...s': {}, 'enabled': True}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/missing
+E       context_size
+E         Field required [type=missing, input_value={'id': 1, 'provider_id': ...s': {}, 'enabled': True}, input_type=dict]
+E           For further information visit https://errors.pydantic.dev/2.13/v/missing
+
+tests/unit/workflow/test_llm_node_completer.py:107: ValidationError
+=========================== short test summary info ============================
+FAILED tests/unit/workflow/test_llm_node_completer.py::LlmNodeCompleterTest::test_agent_backed_completer_wraps_provider_network_failure
+1 failed in 0.22s

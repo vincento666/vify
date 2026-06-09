@@ -1,16 +1,39 @@
 import unittest
 
+import httpx
+
+from app.modules.chat.domain.llm_request import OpenAIChatRequestBuilder
+from app.modules.provider.api.schemas import ModelConfigDto
+from app.modules.provider.infra.llm_adapters import OpenAIAdapterParser
 from app.modules.workflow.domain.context import ExecutionContext
-from app.modules.workflow.domain.engine import LlmNodeExecutor
+from app.modules.workflow.domain.engine import LlmNodeExecutor, WorkflowExecutionError
+from app.modules.workflow.domain.service import _AgentBackedWorkflowLlmCompleter
 
 
 class RecordingLlmCompleter:
     def __init__(self) -> None:
         self.prompts: list[str] = []
 
-    def complete_prompt(self, prompt: str) -> str:
+    def complete_prompt(self, prompt: str, _options: dict[str, object] | None = None) -> str:
         self.prompts.append(prompt)
         return f"real llm: {prompt}"
+
+
+class UsageRecordingLlmCompleter(RecordingLlmCompleter):
+    def __init__(self) -> None:
+        super().__init__()
+        self._debug = {
+            "model": "debug-model",
+            "elapsedMs": 37,
+            "input": {"messages": [{"role": "user", "content": "User: reset password"}]},
+            "output": {"content": "real llm: User: reset password"},
+            "usage": {"inputTokens": 12, "outputTokens": 8, "totalTokens": 20, "estimated": False},
+        }
+
+    def consume_last_call_debug(self) -> dict[str, object]:
+        debug = dict(self._debug)
+        self._debug = {}
+        return debug
 
 
 class LlmNodeCompleterTest(unittest.TestCase):
@@ -28,8 +51,84 @@ class LlmNodeCompleterTest(unittest.TestCase):
             context,
         )
 
-        self.assertEqual(result, {"answer": "real llm: User: reset password"})
+        self.assertEqual(result["answer"], "real llm: User: reset password")
+        self.assertEqual(
+            result["events"],
+            [
+                {"type": "llm_delta", "nodeKey": "llm", "content": "real llm: User: reset password"},
+                {"type": "message_done", "nodeKey": "llm", "content": "real llm: User: reset password"},
+            ],
+        )
         self.assertEqual(completer.prompts, ["User: reset password"])
+
+    def test_llm_node_projects_debug_usage_into_output_and_events(self) -> None:
+        completer = UsageRecordingLlmCompleter()
+        context = ExecutionContext()
+        context.set_output("start", {"userMessage": "reset password"})
+
+        result = LlmNodeExecutor(completer).execute(
+            {
+                "node_key": "llm",
+                "type": "LLM",
+                "config": {"prompt": "User: {{start.userMessage}}", "outputVariable": "answer"},
+            },
+            context,
+        )
+
+        self.assertEqual(result["__usage"], {"inputTokens": 12, "outputTokens": 8, "totalTokens": 20, "estimated": False})
+        self.assertEqual(result["__debug"]["llm"]["model"], "debug-model")
+        self.assertEqual(
+            result["events"][-1],
+            {"type": "node_usage", "nodeKey": "llm", "inputTokens": 12, "outputTokens": 8, "totalTokens": 20},
+        )
+
+    def test_llm_stream_events_survive_declared_output_parameters(self) -> None:
+        context = ExecutionContext()
+
+        result = LlmNodeExecutor().execute(
+            {
+                "node_key": "llm",
+                "type": "LLM",
+                "config": {
+                    "prompt": "hello",
+                    "outputVariable": "answer",
+                    "outputParameters": [{"name": "answer", "type": "string"}],
+                },
+            },
+            context,
+        )
+
+        self.assertEqual(result["answer"], "LLM mock: hello")
+        self.assertEqual([event["type"] for event in result["events"]], ["llm_delta", "message_done"])
+
+    def test_agent_backed_completer_wraps_provider_network_failure(self) -> None:
+        completer = _AgentBackedWorkflowLlmCompleter(
+            agent={"system_prompt": "", "temperature": 0.1, "max_tokens": 64},
+            model_config=ModelConfigDto(
+                id=1,
+                provider_id=1,
+                provider_type="OPENAI",
+                provider_base_url="https://invalid.local",
+                provider_auth_config={},
+                name="Demo",
+                model_id="demo",
+                context_size=4096,
+                extra_params={},
+            ),
+            request_builder=OpenAIChatRequestBuilder(),
+            parser=OpenAIAdapterParser(),
+            llm_client_factory=lambda _config: _FailingLlmClient(),
+        )
+
+        with self.assertRaises(WorkflowExecutionError) as raised:
+            completer.complete_prompt("hello")
+
+        self.assertIn("LLM provider request failed", str(raised.exception))
+
+
+class _FailingLlmClient:
+    def complete(self, _payload: dict[str, object]) -> dict[str, object]:
+        raise httpx.ConnectError("provider unavailable")
 
 
 if __name__ == "__main__":

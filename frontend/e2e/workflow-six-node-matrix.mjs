@@ -4,6 +4,7 @@ import http from 'node:http'
 const baseUrl = process.env.HIFY_E2E_BASE_URL || 'http://127.0.0.1:5173'
 const screenshotPath = process.env.HIFY_E2E_SCREENSHOT
 const chatflowScreenshotPath = process.env.HIFY_E2E_CHATFLOW_SCREENSHOT
+const requireLiveLlm = process.env.HIFY_E2E_REQUIRE_LIVE_LLM === '1'
 
 function assert(condition, message) {
   if (!condition) throw new Error(message)
@@ -167,6 +168,27 @@ async function createFlow(page, payload, isChatflow) {
   )
 }
 
+async function probeFullChainApi(page, flow, marker, isChatflow) {
+  const response = await page.request.post(`${baseUrl}/api/v1/${isChatflow ? 'chatflows' : 'workflows'}/${flow.id}/runs`, {
+    data: { input: isChatflow ? { 'sys.query': 'kb' } : { USER_INPUT: 'kb' } },
+    timeout: 60000,
+  })
+  if (response.ok()) {
+    const payload = await response.json()
+    assert(payload.code === 200, `${isChatflow ? 'chatflow' : 'workflow'} run API ${payload.message}`)
+    assert(payload.data.status === 'SUCCEEDED', `Expected SUCCEEDED, got ${payload.data.status}`)
+    const outputText = JSON.stringify(payload.data.output)
+    assert(outputText.includes('API_REAL: POST /text/'), `Expected API output, got: ${outputText}`)
+    assert(outputText.includes(`LLM_MATRIX_${marker}`), `Expected LLM marker, got: ${outputText}`)
+    return true
+  }
+  const payload = await response.json().catch(() => ({}))
+  assert(response.status() === 400, `Expected graceful provider failure, got HTTP ${response.status()}`)
+  assert(String(payload.message || '').includes('LLM provider request failed'), `Unexpected run failure: ${JSON.stringify(payload)}`)
+  assert(!requireLiveLlm, `Live LLM is required but unavailable: ${JSON.stringify(payload)}`)
+  return false
+}
+
 async function runWorkflowFullChain(page, marker) {
   await page.locator('[data-testid="canvas-bottom-toolbar"]').getByRole('button', { name: '试运行', exact: true }).click()
   const panel = page.locator('[data-testid="test-run-panel"]')
@@ -258,12 +280,14 @@ async function assertNodeCannotRunStandalone(page, selector) {
   )
 }
 
-async function runWorkflowSelectedNodeMatrix(page, marker) {
+async function runWorkflowSelectedNodeMatrix(page, marker, liveLlmAvailable) {
   await closeRunPanel(page)
   await assertNodeCannotRunStandalone(page, '.coze-node.node-start')
   await runSelectedNode(page, '.coze-node.node-condition', { USER_INPUT: 'kb' }, 'route')
   await runSelectedNode(page, '.coze-node.node-knowledge', {}, `KB_SIX_NODE_${marker}`)
-  await runSelectedNode(page, '.coze-node.node-llm', { 'kb.answer': 'KB fixture' }, `LLM_MATRIX_${marker}`)
+  if (liveLlmAvailable) {
+    await runSelectedNode(page, '.coze-node.node-llm', { 'kb.answer': 'KB fixture' }, `LLM_MATRIX_${marker}`)
+  }
   await runSelectedNode(page, '.coze-node.node-api_call', { 'llm.answer': `LLM_MATRIX_${marker}` }, 'API_REAL: POST /text/')
   await assertNodeCannotRunStandalone(page, '.coze-node.node-end')
 }
@@ -287,9 +311,12 @@ try {
     }),
     false,
   )
+  const workflowLiveLlm = await probeFullChainApi(page, workflow, marker, false)
   await page.goto(`${baseUrl}/workflows/${workflow.id}/canvas`, { waitUntil: 'networkidle' })
-  await runWorkflowFullChain(page, marker)
-  await runWorkflowSelectedNodeMatrix(page, marker)
+  if (workflowLiveLlm) {
+    await runWorkflowFullChain(page, marker)
+  }
+  await runWorkflowSelectedNodeMatrix(page, marker, workflowLiveLlm)
   if (screenshotPath) await page.screenshot({ path: screenshotPath, fullPage: true })
 
   const chatflow = await createFlow(
@@ -304,8 +331,11 @@ try {
     }),
     true,
   )
+  const chatflowLiveLlm = await probeFullChainApi(page, chatflow, marker, true)
   await page.goto(`${baseUrl}/chatflows/${chatflow.id}/canvas`, { waitUntil: 'networkidle' })
-  await runChatflowFullChain(page, marker)
+  if (chatflowLiveLlm) {
+    await runChatflowFullChain(page, marker)
+  }
   if (chatflowScreenshotPath) await page.screenshot({ path: chatflowScreenshotPath, fullPage: true })
 
   console.log('PASS workflow/chatflow six-node matrix e2e')
