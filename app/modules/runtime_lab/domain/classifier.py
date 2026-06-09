@@ -37,6 +37,15 @@ class ClassifierInput:
             "thresholds": dict(self.thresholds),
         }
 
+    def to_llm_payload(self) -> dict[str, Any]:
+        return {
+            "message": self.message,
+            "sessionState": _compact_session_state(self.session_state),
+            "candidates": [_compact_candidate(candidate) for candidate in self.candidates],
+            "allowedActions": list(self.allowed_actions),
+            "thresholds": dict(self.thresholds),
+        }
+
 
 @dataclass(frozen=True)
 class ClassifierResult:
@@ -48,9 +57,10 @@ class ClassifierResult:
     clarification_question: str | None
     arbitrator_mode: str = "fake"
     used_real_llm: bool = False
+    debug: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "selected_action": self.selected_action,
             "selected_candidate_id": self.selected_candidate_id,
             "confidence": self.confidence,
@@ -60,6 +70,9 @@ class ClassifierResult:
             "arbitrator_mode": self.arbitrator_mode,
             "used_real_llm": self.used_real_llm,
         }
+        if self.debug:
+            payload["_debug"] = self.debug
+        return payload
 
 
 class FakeConstrainedIntentClassifier:
@@ -104,7 +117,7 @@ class LlmConstrainedIntentClassifier:
         self._complete = complete
 
     def classify(self, classifier_input: ClassifierInput) -> ClassifierResult:
-        raw = self._complete(classifier_input.to_dict())
+        raw = self._complete(classifier_input.to_llm_payload())
         result = ClassifierResult(
             selected_action=str(raw.get("selected_action") or ""),
             selected_candidate_id=_optional_string(raw.get("selected_candidate_id")),
@@ -114,6 +127,7 @@ class LlmConstrainedIntentClassifier:
             clarification_question=_optional_string(raw.get("clarification_question")),
             arbitrator_mode="llm",
             used_real_llm=True,
+            debug=dict(raw.get("_debug")) if isinstance(raw.get("_debug"), Mapping) else None,
         )
         _validate_result(result, classifier_input)
         return result
@@ -145,6 +159,52 @@ def _optional_string(value: object) -> str | None:
     if value is None:
         return None
     return str(value)
+
+
+def _compact_session_state(session_state: Mapping[str, Any]) -> dict[str, Any]:
+    allowed_keys = (
+        "activeTask",
+        "activeTaskId",
+        "activeSopId",
+        "activeStep",
+        "suspendedTaskCount",
+    )
+    return {key: session_state[key] for key in allowed_keys if key in session_state}
+
+
+def _compact_candidate(candidate: RouteCandidate) -> dict[str, Any]:
+    return {
+        "candidate_id": candidate.candidate_id,
+        "candidate_type": str(candidate.candidate_type),
+        "name": candidate.display_name,
+        "score": round(float(candidate.score), 3),
+        "matched_terms": list(candidate.matched_terms[:3]),
+        "requires_classifier": candidate.requires_classifier,
+        "reason": _compact_reason(candidate),
+    }
+
+
+def _compact_reason(candidate: RouteCandidate) -> str:
+    reason = str(candidate.reason or "")
+    source = str(candidate.source or "")
+    if "finite candidate fallback" in reason or "finite" in source:
+        return "finite fallback"
+    if "semantic" in source or "semantic" in reason.lower():
+        return "semantic match"
+    if "explicit" in source or "explicit" in reason.lower():
+        return "explicit match"
+    if "active" in source or str(candidate.candidate_type) == "ACTIVE_TASK_CONTINUE":
+        return "active task candidate"
+    if "suspended" in source or str(candidate.candidate_type) == "SUSPENDED_TASK_RESUME":
+        return "suspended task candidate"
+    return _compact_text(reason, max_chars=48)
+
+
+def _compact_text(value: str, *, max_chars: int) -> str:
+    text = " ".join(str(value or "").split())
+    if len(text) <= max_chars:
+        return text
+    return f"{text[: max_chars - 1]}…"
 
 
 def _action_for_candidate(candidate: RouteCandidate) -> str:
