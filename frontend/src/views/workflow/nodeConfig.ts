@@ -455,7 +455,6 @@ const SCHEMAS: Record<WorkflowCanvasNodeType, NodeConfigSchema> = {
         title: '识别策略',
         fields: [
           { key: 'inputSource', label: '输入来源', type: 'textarea', placeholder: '{{start.sys.query}}' },
-          { key: 'defaultIntent', label: '默认意图', type: 'text', placeholder: 'default' },
           { key: 'classifierMode', label: '分类模式', type: 'select', options: ['fake', 'llm'] },
           { key: 'includeHistory', label: '会话历史感知', type: 'switch' },
         ],

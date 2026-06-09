@@ -427,7 +427,7 @@
               </div>
             </div>
             <div
-              v-if="nodeProps.data.type === 'CONDITION'"
+              v-if="isBranchNodeType(nodeProps.data.type)"
               class="condition-node-branches"
               data-testid="condition-node-branches"
             >
@@ -556,7 +556,7 @@
                 </div>
               </template>
             </div>
-            <div v-if="nodeProps.data.type !== 'START' && nodeProps.data.type !== 'END' && nodeProps.data.type !== 'CONDITION'" class="node-line">
+            <div v-if="nodeProps.data.type !== 'START' && nodeProps.data.type !== 'END' && !isBranchNodeType(nodeProps.data.type)" class="node-line">
               <span>输出</span>
               <div class="node-variable-shell">
                 <div
@@ -593,7 +593,7 @@
                 </div>
               </div>
             </div>
-            <template v-if="nodeProps.data.type === 'CONDITION'">
+            <template v-if="isBranchNodeType(nodeProps.data.type)">
               <Handle
                 v-for="branch in nodeProps.data.conditionBranches"
                 :id="branch.handleId"
@@ -1521,11 +1521,9 @@
               data-testid="intent-row-editor"
             >
               <div class="secondary-row-header intent-row-header">
-                <span>意图 Key</span>
                 <span>名称</span>
                 <span>描述</span>
                 <span>示例</span>
-                <span>分支</span>
                 <button type="button" class="output-row-icon" aria-label="添加意图" @click="addIntentRow">
                   <LucidePlus aria-hidden="true" />
                 </button>
@@ -1536,12 +1534,6 @@
                 class="secondary-row intent-row"
                 data-testid="intent-row"
               >
-                <el-input
-                  :model-value="row.key"
-                  aria-label="意图 Key"
-                  placeholder="refund"
-                  @update:model-value="setIntentKey(index, $event)"
-                />
                 <el-input
                   :model-value="row.name"
                   aria-label="意图名称"
@@ -1561,12 +1553,6 @@
                   :rows="2"
                   placeholder="每行一个例句"
                   @update:model-value="setIntentExamples(index, $event)"
-                />
-                <el-input
-                  :model-value="row.branch"
-                  aria-label="意图分支"
-                  placeholder="refund_branch"
-                  @update:model-value="setIntentBranch(index, $event)"
                 />
                 <button type="button" class="output-row-icon" aria-label="删除意图" @click="removeIntentRow(index)">
                   <XIcon aria-hidden="true" />
@@ -4188,6 +4174,9 @@ const visibleConfigSections = computed(() => {
 const rightSidePanelOpen = computed(() => Boolean((selectedNode.value && selectedSchema.value) || testPanelOpen.value))
 const canTestSelectedNode = computed(() => canRunSingleNodeTest(selectedNode.value))
 const nodeTestTarget = computed(() => graph.value.nodes.find((node) => node.nodeKey === nodeTestTargetKey.value))
+function isBranchNodeType(type: string) {
+  return type === 'CONDITION' || type === 'INTENT_RECOGNITION'
+}
 function selectedConfigPanelTitle() {
   if (!selectedNode.value || !selectedSchema.value) return ''
   return selectedNode.value.type === 'CONDITION' ? selectedNode.value.name : selectedSchema.value.title
@@ -4550,7 +4539,7 @@ const flowNodes = computed<Node[]>({
         outputVariable: primaryOutputVariable(node.config),
         inputVariables: nodeInputVariableNames(node),
         outputVariables: nodeOutputVariableNames(node),
-        conditionBranches: node.type === 'CONDITION' ? conditionSourceHandles(node.config) : [],
+        conditionBranches: branchSourceHandles(node.type, node.config),
         runStatus: nodeRunStatus(node.nodeKey),
         runStatusLabel: nodeRunStatusLabel(node.nodeKey),
         runElapsedLabel: nodeRunElapsedLabel(node.nodeKey),
@@ -5723,15 +5712,6 @@ function updateIntentRow(index: number, patch: Partial<IntentRow>) {
   persistIntentRows(rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row))
 }
 
-function setIntentKey(index: number, value: string | number) {
-  const row = intentRows()[index]
-  const key = String(value)
-  updateIntentRow(index, {
-    key,
-    branch: !row?.branch || row.branch === row.key ? key : row.branch,
-  })
-}
-
 function setIntentName(index: number, value: string | number) {
   updateIntentRow(index, { name: String(value) })
 }
@@ -5747,10 +5727,6 @@ function setIntentExamples(index: number, value: string | number) {
       .map((item) => item.trim())
       .filter((item) => item.length > 0),
   })
-}
-
-function setIntentBranch(index: number, value: string | number) {
-  updateIntentRow(index, { branch: String(value) })
 }
 
 function removeIntentRow(index: number) {
@@ -6545,21 +6521,55 @@ function conditionSourceHandles(config: Record<string, any> = {}): ConditionSour
   }))
 }
 
-function conditionNodeByKey(nodeKey: string | null | undefined) {
+function intentDefaultBranchKey(config: Record<string, any> = {}) {
+  return String(config.defaultIntent || 'default').trim() || 'default'
+}
+
+function intentDefaultBranchName() {
+  return '其他意图'
+}
+
+function intentSourceHandles(config: Record<string, any> = {}): ConditionSourceHandle[] {
+  const defaultKey = intentDefaultBranchKey(config)
+  const intents = normalizeIntentRows(config).filter((intent) => intent.key !== defaultKey)
+  const rows: Array<Omit<ConditionSourceHandle, 'handleId' | 'top'>> = [
+    ...intents.map((intent) => ({
+      key: intent.key,
+      kind: '意图',
+      label: intent.name || intent.key,
+      condition: intent.key,
+    })),
+    { key: defaultKey, kind: '兜底', label: intentDefaultBranchName(), condition: null },
+  ]
+  return rows.map((row, index) => ({
+    ...row,
+    handleId: conditionHandleId(row.key),
+    top: conditionHandleTop(index),
+  }))
+}
+
+function branchSourceHandles(type: string, config: Record<string, any> = {}) {
+  if (type === 'CONDITION') return conditionSourceHandles(config)
+  if (type === 'INTENT_RECOGNITION') return intentSourceHandles(config)
+  return []
+}
+
+function branchNodeByKey(nodeKey: string | null | undefined) {
   if (!nodeKey) return null
-  return graph.value.nodes.find((node) => node.nodeKey === nodeKey && node.type === 'CONDITION') || null
+  return graph.value.nodes.find((node) => node.nodeKey === nodeKey && isBranchNodeType(node.type)) || null
 }
 
 function edgeSourceHandle(edge: { sourceNodeKey: string; condition: string | null }) {
-  const sourceNode = conditionNodeByKey(edge.sourceNodeKey)
+  const sourceNode = branchNodeByKey(edge.sourceNodeKey)
   if (!sourceNode) return undefined
-  return conditionHandleId(edge.condition || conditionDefaultBranchKey(sourceNode.config))
+  const edgeCondition = edge.condition ?? null
+  return branchSourceHandles(sourceNode.type, sourceNode.config).find((item) => item.condition === edgeCondition)?.handleId
 }
 
 function conditionFromSourceHandle(sourceNodeKey: string | null | undefined, sourceHandle: string | null | undefined) {
-  const sourceNode = conditionNodeByKey(sourceNodeKey)
+  const sourceNode = branchNodeByKey(sourceNodeKey)
   if (!sourceNode || !sourceHandle) return null
-  return conditionSourceHandles(sourceNode.config).find((item) => item.handleId === sourceHandle)?.condition ?? null
+  return branchSourceHandles(sourceNode.type, sourceNode.config).find((item) => item.handleId === sourceHandle)?.condition ?? null
 }
 
 function setConditionBranchName(branchIndex: number, value: string | number) {
@@ -9351,8 +9361,8 @@ onUnmounted(() => {
   --node-port-scale: 1;
   --node-port-bg: #6b6ff7;
   --node-port-shadow: none;
-  --node-port-dot-size: 0.75rem;
-  --node-port-hit-size: 2.25rem;
+  --node-port-dot-size: 0.875rem;
+  --node-port-hit-size: 2.625rem;
   width: var(--node-port-hit-size);
   height: var(--node-port-hit-size);
   border: 0;
@@ -11702,7 +11712,7 @@ onUnmounted(() => {
 
 .intent-row-header,
 .intent-row {
-  grid-template-columns: minmax(4rem, 0.75fr) minmax(4rem, 0.75fr) minmax(5rem, 1fr) minmax(5rem, 1fr) minmax(4.5rem, 0.85fr) 2rem;
+  grid-template-columns: minmax(5rem, 0.8fr) minmax(7rem, 1.1fr) minmax(7rem, 1.2fr) 2rem;
 }
 
 .collection-target-cell {

@@ -117,7 +117,10 @@ describe('workflow node config schema', () => {
       expect.arrayContaining(['targetScope', 'targetVariable', 'writeMode']),
     )
     expect(getNodeConfigSchema('INTENT_RECOGNITION').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual(
-      expect.arrayContaining(['inputSource', 'intents', 'defaultIntent', 'classifierMode', 'includeHistory', 'outputParameters']),
+      expect.arrayContaining(['inputSource', 'intents', 'classifierMode', 'includeHistory', 'outputParameters']),
+    )
+    expect(getNodeConfigSchema('INTENT_RECOGNITION').sections.flatMap((section) => section.fields.map((field) => field.key))).not.toContain(
+      'defaultIntent',
     )
     expect(getNodeConfigSchema('MESSAGE').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual(
       expect.arrayContaining(['content', 'streamOutput', 'streamTarget', 'fallbackMode', 'outputParameters']),

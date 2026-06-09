@@ -82,8 +82,29 @@ try {
   assert(defaultRun.output.final === 'default path', `Expected default branch, got ${JSON.stringify(defaultRun.output)}`)
 
   await page.goto(`${baseUrl}/chatflows/${chatflow.id}/canvas`, { waitUntil: 'networkidle' })
-  await page.locator('.coze-node.node-intent_recognition').waitFor({ state: 'visible', timeout: 10000 })
-  await page.locator('.coze-node.node-intent_recognition').click()
+  const intentNode = page.locator('.coze-node.node-intent_recognition')
+  await intentNode.waitFor({ state: 'visible', timeout: 10000 })
+  const branchBlocks = await intentNode.locator('[data-testid="condition-branch-block"]').evaluateAll((nodes) =>
+    nodes.map((node) => node.textContent?.replace(/\s+/g, ' ').trim() || ''),
+  )
+  assert(
+    branchBlocks.length === 3
+      && branchBlocks.some((text) => text.includes('意图') && text.includes('退款'))
+      && branchBlocks.some((text) => text.includes('意图') && text.includes('物流'))
+      && branchBlocks.some((text) => text.includes('其他意图')),
+    `Intent node must render semantic branch blocks, got ${JSON.stringify(branchBlocks)}`,
+  )
+  const intentNodeText = await intentNode.textContent()
+  assert(!intentNodeText.includes('输入') && !intentNodeText.includes('输出'), `Intent branch node must not render generic input/output rows, got ${intentNodeText}`)
+  const sourceLabels = await intentNode.locator('.condition-source-port').evaluateAll((nodes) =>
+    nodes.map((node) => node.getAttribute('data-branch-label') || ''),
+  )
+  assert(
+    sourceLabels.length === 3 && sourceLabels.includes('退款') && sourceLabels.includes('物流') && sourceLabels.includes('其他意图'),
+    `Intent node must expose one source endpoint per intent/default branch, got ${JSON.stringify(sourceLabels)}`,
+  )
+
+  await intentNode.click()
   const panel = page.locator('[data-testid="node-config-panel"]')
   await panel.waitFor({ state: 'visible', timeout: 5000 })
   const panelText = await panel.innerText()
@@ -92,8 +113,12 @@ try {
   assert(panelText.includes('输入来源'), 'Expected input source field')
   await panel.locator('[data-testid="intent-row-editor"]').waitFor({ state: 'visible', timeout: 5000 })
   assert(await panel.locator('[data-testid="intent-row"]').count() >= 2, 'Expected structured intent rows')
-  assert(panelText.includes('默认意图'), 'Expected default intent field')
+  assert(!panelText.includes('默认意图'), 'Default intent should be rendered as an automatic branch, not a raw config field')
   assert(panelText.includes('分类模式'), 'Expected classifier mode field')
+  const intentHeaderText = await panel.locator('.intent-row-header').innerText()
+  assert(!intentHeaderText.includes('意图 Key'), `Intent editor must not expose raw intent keys, got ${intentHeaderText}`)
+  assert(!intentHeaderText.includes('分支'), `Intent editor must not expose raw branch keys, got ${intentHeaderText}`)
+  assert(intentHeaderText.includes('名称') && intentHeaderText.includes('描述') && intentHeaderText.includes('示例'), `Intent editor must keep business fields, got ${intentHeaderText}`)
 
   if (screenshotPath) {
     await page.screenshot({ path: screenshotPath, fullPage: true })
