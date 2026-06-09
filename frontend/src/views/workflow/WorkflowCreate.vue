@@ -337,8 +337,8 @@
               'coze-edge-path',
               runPathEdgeClasses(edgeProps.id),
               {
-                'edge-hovered': (hoveredEdgeId === edgeProps.id || edgeInsertPaletteId === edgeProps.id) && selectedEdgeId !== edgeProps.id,
-                'edge-selected': selectedEdgeId === edgeProps.id,
+                'edge-hovered': isEdgeHovered(edgeProps),
+                'edge-selected': isEdgeSelected(edgeProps),
               },
             ]"
           />
@@ -395,6 +395,8 @@
               nodeProps.data.runStatus ? `run-${String(nodeProps.data.runStatus).toLowerCase()}` : '',
               { selected: selectedNodeKey === nodeProps.data.nodeKey },
             ]"
+            @mouseenter="handleNodeMouseEnter(nodeProps.data.nodeKey)"
+            @mouseleave="handleNodeMouseLeave(nodeProps.data.nodeKey)"
           >
             <Handle
               v-if="nodeProps.data.type !== 'START'"
@@ -3905,6 +3907,7 @@ const canvasStageRef = ref<HTMLElement | null>(null)
 const selectedNodeKey = ref('')
 const selectedEdgeId = ref('')
 const hoveredEdgeId = ref('')
+const hoveredNodeKey = ref('')
 const edgeInsertPaletteId = ref('')
 const connectionPreviewPortKey = ref('')
 const connectionPreviewStart = ref<{ nodeId: string; handleType: 'source' | 'target' } | null>(null)
@@ -4647,6 +4650,21 @@ function edgeInsertPosition(path: ReturnType<typeof getBezierPath>) {
   }
 }
 
+function edgeConnectsNode(edge: { source?: string; target?: string }, nodeKey: string) {
+  return Boolean(nodeKey && (edge.source === nodeKey || edge.target === nodeKey))
+}
+
+function isEdgeSelected(edge: { id?: string; source?: string; target?: string }) {
+  return selectedEdgeId.value === edge.id || edgeConnectsNode(edge, selectedNodeKey.value)
+}
+
+function isEdgeHovered(edge: { id?: string; source?: string; target?: string }) {
+  if (isEdgeSelected(edge)) return false
+  return hoveredEdgeId.value === edge.id
+    || edgeInsertPaletteId.value === edge.id
+    || edgeConnectsNode(edge, hoveredNodeKey.value)
+}
+
 function primaryOutputVariable(config: Record<string, any>) {
   return normalizeOutputConfig(config).parameters[0]?.name || 'output'
 }
@@ -4914,6 +4932,7 @@ function insertNodeOnEdge(
   selectedNodeKey.value = insertedNode?.nodeKey || ''
   selectedEdgeId.value = ''
   hoveredEdgeId.value = ''
+  hoveredNodeKey.value = ''
   edgeInsertPaletteId.value = ''
   nodePaletteSearch.value = ''
   markGraphDirty()
@@ -5292,6 +5311,7 @@ function handleConnect(connection: any) {
 function handleEdgeClick(event: any) {
   selectedEdgeId.value = event?.edge?.id || ''
   hoveredEdgeId.value = ''
+  hoveredNodeKey.value = ''
   selectedNodeKey.value = ''
   edgeInsertPaletteId.value = ''
   void nextTick(() => canvasStageRef.value?.focus())
@@ -5322,6 +5342,7 @@ function handleNodeClick(event: any) {
   selectedNodeKey.value = event?.node?.id || ''
   selectedEdgeId.value = ''
   hoveredEdgeId.value = ''
+  hoveredNodeKey.value = ''
   edgeInsertPaletteId.value = ''
   editingConditionBranchNameIndex.value = null
   editingConditionDefaultName.value = false
@@ -5346,10 +5367,19 @@ function handleNodeClick(event: any) {
   void nextTick(() => canvasStageRef.value?.focus())
 }
 
+function handleNodeMouseEnter(nodeKey: string) {
+  hoveredNodeKey.value = nodeKey || ''
+}
+
+function handleNodeMouseLeave(nodeKey: string) {
+  if (hoveredNodeKey.value === nodeKey) hoveredNodeKey.value = ''
+}
+
 function handlePaneClick() {
   selectedNodeKey.value = ''
   selectedEdgeId.value = ''
   hoveredEdgeId.value = ''
+  hoveredNodeKey.value = ''
   edgeInsertPaletteId.value = ''
   editingConditionBranchNameIndex.value = null
   editingConditionDefaultName.value = false
