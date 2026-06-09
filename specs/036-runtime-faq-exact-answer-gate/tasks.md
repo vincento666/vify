@@ -51,6 +51,19 @@
 - [x] Browser-control UAT passes through Swagger UI and records screenshot.
 - [x] Full backend pytest passes or unrelated failures are documented.
 
+## 036.R1 Unified arbitration refactor
+
+- [ ] RED: exact FAQ currently exits before central classifier arbitration.
+- [ ] RED: FAQ/SOP conflict lacks one combined candidate pool.
+- [ ] Convert exact/keyword FAQ answer gate into `ANSWER_FAQ` candidate
+  generator.
+- [ ] Ensure `ANSWER_FAQ` candidates enter constrained classifier input with
+  FAQ evidence.
+- [ ] Ensure selected FAQ candidate executes answer without task mutation.
+- [ ] Save evidence under
+  `artifacts/slices/036-runtime-faq-exact-answer-gate/036.R1/`.
+- [ ] Commit 036.R1 only.
+
 ## Evidence
 
 - 036.1 RED:

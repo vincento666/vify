@@ -2,8 +2,9 @@
 
 ## Goal
 
-Add a controlled fallback Agent layer for unresolved or long-tail conversations
-after FAQ, SOP, and RAG gates have failed or asked for escalation.
+Add controlled fallback Agent candidates and execution policy for unresolved or
+long-tail conversations after central arbitration selects Agent fallback or
+clarification.
 
 The fallback Agent may reason and use knowledge, but it must not mutate SOP
 state or directly execute handoff. Runtime policy remains the final authority.
@@ -21,7 +22,7 @@ Required:
 
 In scope:
 
-- `AGENT_FALLBACK` route action;
+- `AGENT_FALLBACK` route action and candidate type;
 - `ASK_CLARIFICATION` normalized action if separated from legacy `CLARIFY`;
 - fallback Agent port with deterministic fake implementation for tests;
 - policy wrapper for Agent outputs:
@@ -42,16 +43,18 @@ Out of scope:
 
 ```text
 033 handoff hard stops
-  -> FAQ
-  -> SOP/resume
-  -> RAG
-  -> 039 controlled Agent fallback
-  -> 033 HANDOFF_TO_HUMAN if policy approves
+  -> unified hybrid candidate recall
+       FAQ/SOP/RAG candidates
+       039 controlled Agent fallback candidates
+  -> central constrained LLM arbitration
+  -> PolicyGate
+  -> Agent executor or 033 HANDOFF_TO_HUMAN if policy approves
 ```
 
 ## Acceptance Criteria
 
-- unresolved query reaches fallback Agent only after earlier gates decline;
+- unresolved query reaches fallback Agent when central arbitration selects
+  `AGENT_FALLBACK` or when no finite answer/task candidate survives recall;
 - Agent answer returns `AGENT_FALLBACK` with policy evidence;
 - Agent clarification returns `ASK_CLARIFICATION`/`CLARIFY` and increments
   clarification state;
@@ -64,6 +67,15 @@ Out of scope:
 After 039, runtime-lab has a safe bottom layer for long-tail support: it can
 answer, clarify, calm, summarize, or recommend handoff without breaking SOP
 state discipline.
+
+## Unified Arbitration Refactor Gate
+
+Status: pending implementation.
+
+The previous 039 evidence proves the old post-gate Agent fallback. The current
+architecture requires Agent fallback to be represented as typed candidate
+evidence and/or a selected executor path, not as an independent answer layer
+that competes outside central arbitration.
 
 ## Completion Evidence
 

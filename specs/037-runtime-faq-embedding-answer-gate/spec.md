@@ -3,10 +3,11 @@
 ## Goal
 
 Connect semantic FAQ recall, embedding scores, and rerank evidence from 035 into
-runtime-lab policy.
+runtime-lab candidate recall.
 
-037 handles paraphrased FAQ questions that do not match exact/keyword rules but
-can be answered from structured FAQ entries with high semantic confidence.
+037 handles paraphrased FAQ questions that do not match exact/keyword rules by
+creating `ANSWER_FAQ` candidates with semantic evidence. Final FAQ-vs-SOP
+selection is made by central constrained LLM arbitration plus PolicyGate.
 
 ## Dependency
 
@@ -21,13 +22,14 @@ Required:
 
 In scope:
 
-- semantic FAQ proposal gate using retrieval mode `faq` or equivalent
+- semantic FAQ candidate generation using retrieval mode `faq` or equivalent
   structured FAQ vector recall;
 - top-k FAQ evidence with score, margin, retrieval mode, rerank state, and
   source metadata;
-- policy thresholds for answer, clarify, or continue to SOP arbitration;
+- policy thresholds for candidate inclusion and evidence quality;
 - active-SOP safe semantic FAQ answer;
-- explicit guarantee that FAQ candidates do not become SOP intent candidates.
+- explicit guarantee that FAQ candidates enter the unified classifier as
+  `ANSWER_FAQ`, not as SOP intent candidates.
 
 Out of scope:
 
@@ -40,10 +42,13 @@ Out of scope:
 
 ```text
 033 handoff hard stops
-  -> 036 exact FAQ
-  -> 037 semantic FAQ
-  -> SOP/resume arbitration
-  -> RAG/Agent fallback
+  -> unified hybrid candidate recall
+       exact FAQ candidates
+       037 semantic FAQ candidates
+       SOP/resume/RAG/Agent candidates
+  -> central constrained LLM arbitration
+  -> PolicyGate
+  -> typed executor
 ```
 
 If active SOP exists, 037 must be stricter:
@@ -54,10 +59,13 @@ If active SOP exists, 037 must be stricter:
 
 ## Acceptance Criteria
 
-- paraphrased FAQ query returns `ANSWER_FAQ` with semantic evidence;
-- low score or low margin does not answer;
+- paraphrased FAQ query creates an `ANSWER_FAQ` candidate with semantic
+  evidence;
+- low score or low margin does not enter the candidate pool or enters as
+  low-confidence evidence according to policy;
 - semantic FAQ answer preserves active SOP state;
-- semantic FAQ result never enters constrained SOP classifier candidate set;
+- semantic FAQ result enters central classifier input as `ANSWER_FAQ`, never as
+  `SOP_INTENT`;
 - rerank evidence is included when rerank is enabled;
 - 036 exact FAQ behavior remains stable.
 
@@ -66,6 +74,14 @@ If active SOP exists, 037 must be stricter:
 After 037, runtime-lab can answer structured FAQ questions even when users do
 not use the configured FAQ wording, while preserving SOP rigor and producing
 auditable retrieval evidence.
+
+## Unified Arbitration Refactor Gate
+
+Status: pending implementation.
+
+The previous 037 evidence proves the old semantic FAQ answer gate. The current
+architecture requires semantic FAQ to become typed candidate evidence for
+central arbitration.
 
 ## Specification Sign-off
 

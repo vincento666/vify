@@ -88,3 +88,16 @@ The remaining failures are pre-existing or outside 036's target surface.
 - no RAG generation;
 - no Agent fallback;
 - no human console UI.
+
+## Unified Arbitration Refactor Gate
+
+After the 2026-06-09 routing revision, 036 must no longer complete by answering
+FAQ before central arbitration. It must create typed `ANSWER_FAQ` candidates
+that join SOP/RAG/resume candidates in the same classifier payload.
+
+The refactor is complete only when route evidence shows:
+
+- `candidate_recall` includes FAQ and SOP candidates together when both match;
+- `llm_intent_arbitration` receives the FAQ candidate;
+- selected FAQ executes answer without task mutation;
+- hard-stop handoff still exits before arbitration.

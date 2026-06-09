@@ -22,6 +22,10 @@ layers that need configuration:
 - controlled fallback Agent;
 - final E2E route evidence matrix.
 
+After the 2026-06-09 architecture revision, 041 configures unified candidate
+recall, central arbitration, and PolicyGate parameters rather than independent
+per-layer early-exit gates.
+
 ## Current Baseline
 
 Available today:
@@ -36,7 +40,7 @@ Available today:
 - Fallback Agent is a `FallbackAgentPort`, but runtime-lab API wiring currently
   instantiates `FakeFallbackAgent()`.
 - Thresholds exist as code defaults across policy/classifier/FAQ/RAG/Agent
-  gates.
+  candidate/gate code.
 - Route evidence is returned per response.
 
 Missing today:
@@ -99,12 +103,16 @@ bindings:
 thresholds:
   strong_accept_threshold
   classifier_min_confidence
+  candidate_min_score
+  candidate_top_k
+  candidate_source_weights
   faq_keyword_min_score
   faq_keyword_min_margin
   faq_semantic_min_score
   faq_semantic_min_margin
   rag_min_score
   rag_lexical_accept_threshold
+  llm_arbitration_required_for_non_hard_stop
 classifier:
   enabled
   mode: fake | llm
@@ -241,6 +249,14 @@ No frontend work is required. Swagger/API-level acceptance is sufficient.
   time range;
 - no frontend files are modified;
 - existing 040 route matrix behavior remains compatible under default profile.
+
+Architecture revision acceptance:
+
+- profile can configure candidate recall topK, source weights, and classifier
+  threshold in one policy object;
+- profile snapshot records whether non-hard-stop decisions required central
+  arbitration;
+- decision logs can distinguish hard-stop exits from arbitrated decisions.
 
 ## Completion Capability
 

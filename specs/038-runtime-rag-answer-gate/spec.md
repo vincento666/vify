@@ -2,8 +2,8 @@
 
 ## Goal
 
-Add a controlled document RAG answer path to runtime-lab for long-tail knowledge
-questions that are not FAQ answers and not SOP handling intents.
+Add controlled document RAG answer candidates to runtime-lab for long-tail
+knowledge questions that may compete with SOP, FAQ, and Agent candidates.
 
 RAG provides evidence-backed answers and citations. It must not become an SOP
 intent source and must not mutate runtime task state.
@@ -21,7 +21,7 @@ Required:
 In scope:
 
 - `ANSWER_RAG` route action;
-- document/chunk retrieval proposal gate using 035 retrieval options;
+- document/chunk retrieval candidate generation using 035 retrieval options;
 - answer generator port with deterministic fake/local implementation for CI;
 - evidence payload: retrieval mode, top chunks, scores, citations, generation
   model/mode, safety result;
@@ -38,22 +38,26 @@ Out of scope:
 
 ```text
 033 handoff
-  -> 036/037 FAQ
-  -> SOP/resume arbitration
-  -> 038 RAG answer gate
-  -> 039 Agent fallback / handoff escalation
+  -> unified hybrid candidate recall
+       FAQ/SOP/resume candidates
+       038 RAG answer candidates
+       Agent/handoff/clarify candidates
+  -> central constrained LLM arbitration
+  -> PolicyGate
+  -> typed executor
 ```
 
-RAG runs after SOP arbitration because document snippets are not valid SOP
-targets. If the user clearly asks a knowledge question during active SOP, RAG
-may answer without task mutation only when policy confidence is high.
+RAG no longer runs as a separate post-SOP answer gate. It contributes typed
+`ANSWER_RAG` candidates with citations/evidence. Raw document snippets are not
+SOP targets and must not be represented as `SOP_INTENT`.
 
 ## Acceptance Criteria
 
-- long-tail document question returns `ANSWER_RAG` with citations;
+- long-tail document question creates `ANSWER_RAG` candidate with citations;
 - low retrieval confidence returns clarification or handoff according to policy;
 - active SOP RAG answer preserves task state;
-- RAG snippets never appear in SOP classifier candidates;
+- RAG snippets enter classifier evidence only as `ANSWER_RAG` candidates, never
+  as `SOP_INTENT`;
 - generation is controlled by a port and can be fake/deterministic in CI;
 - RAG answer can recommend but not directly create handoff unless 033 policy
   approves.
@@ -62,6 +66,14 @@ may answer without task mutation only when policy confidence is high.
 
 After 038, runtime-lab can answer long-tail knowledge questions with cited
 evidence while keeping SOP routing deterministic and auditable.
+
+## Unified Arbitration Refactor Gate
+
+Status: pending implementation.
+
+The previous 038 evidence proves the old post-SOP RAG answer gate. The current
+architecture requires RAG to become typed candidate evidence for central
+arbitration.
 
 ## Completion Evidence
 

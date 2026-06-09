@@ -45,6 +45,19 @@
 - [x] Existing exact FAQ, handoff, SOP switch/resume gates pass.
 - [x] Full backend pytest passes or unrelated failures are documented.
 
+## 037.R1 Unified arbitration refactor
+
+- [ ] RED: semantic FAQ currently exits before central classifier arbitration.
+- [ ] RED: semantic FAQ/SOP conflict lacks one combined candidate pool.
+- [ ] Convert semantic FAQ gate into `ANSWER_FAQ` candidate generator.
+- [ ] Include score, margin, retrieval mode, rerank, and top FAQ evidence in
+  classifier payload.
+- [ ] Ensure selected semantic FAQ candidate executes answer without task
+  mutation.
+- [ ] Save evidence under
+  `artifacts/slices/037-runtime-faq-embedding-answer-gate/037.R1/`.
+- [ ] Commit 037.R1 only.
+
 ## Evidence
 
 - 037.1 RED:

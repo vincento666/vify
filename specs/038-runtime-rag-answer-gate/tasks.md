@@ -43,3 +43,16 @@
   active-SOP RAG state preservation.
 - [x] Existing 033/036/037 gates pass.
 - [x] Full backend pytest passes or unrelated failures are documented.
+
+## 038.R1 Unified arbitration refactor
+
+- [ ] RED: RAG currently runs as independent answer gate before central
+  arbitration in some scenarios.
+- [ ] RED: RAG/SOP conflict lacks one combined candidate pool.
+- [ ] Convert RAG answer gate into `ANSWER_RAG` candidate generator.
+- [ ] Include citations, retrieval evidence, and generation readiness in
+  classifier payload.
+- [ ] Ensure selected RAG candidate executes generator without task mutation.
+- [ ] Save evidence under
+  `artifacts/slices/038-runtime-rag-answer-gate/038.R1/`.
+- [ ] Commit 038.R1 only.

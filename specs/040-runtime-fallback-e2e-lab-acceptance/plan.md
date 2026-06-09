@@ -92,3 +92,19 @@ within existing MVP policy scope:
 - no production analytics dashboard;
 - no human console;
 - no mandatory live LLM credentials.
+
+## Unified Arbitration Refactor Gate
+
+After the 2026-06-09 routing revision, 040 must prove the final architecture:
+
+```text
+hard stop
+  -> unified hybrid candidate recall
+  -> central constrained LLM arbitration
+  -> PolicyGate
+  -> typed executor
+```
+
+The acceptance matrix must include FAQ/SOP, semantic FAQ/SOP, and RAG/SOP
+conflict cases and must prove non-hard-stop decisions contain a visible central
+arbitration step.

@@ -2,12 +2,15 @@
 
 ## Goal
 
-Prove the complete runtime routing stack end to end, including handoff, FAQ,
-semantic FAQ, SOP, RAG, controlled Agent fallback, clarification, and browser
-lab observability.
+Prove the complete unified-arbitration runtime routing stack end to end,
+including hard-stop handoff, FAQ candidates, semantic FAQ candidates, SOP/RAG
+conflicts, controlled Agent fallback, clarification, and browser/API
+observability.
 
 040 is the acceptance spec after 033 and 036-039. It does not introduce new
-route policy primitives unless a gap is found during acceptance.
+route policy primitives unless a gap is found during acceptance. After the
+2026-06-09 architecture revision, 040 must prove central arbitration is the
+single decision point for non-hard-stop messages.
 
 ## Dependency
 
@@ -41,22 +44,31 @@ Out of scope:
 
 1. explicit handoff: user asks for human support during no-active context;
 2. explicit handoff during active SOP preserves task state/context;
-3. exact FAQ answers before SOP arbitration;
+3. exact FAQ/SOP conflict is recalled together and arbitrated once;
 4. active SOP FAQ answer does not consume a slot;
-5. semantic FAQ paraphrase answers with embedding/rerank evidence;
-6. long-tail document question returns RAG answer with citations;
+5. semantic FAQ/SOP conflict is recalled together with embedding/rerank
+   evidence and arbitrated once;
+6. long-tail document/SOP conflict is recalled together with RAG citations and
+   arbitrated once;
 7. ambiguous active SOP input asks clarification;
 8. repeated clarification failure escalates to handoff;
 9. unresolved long-tail query reaches controlled Agent fallback;
 10. Agent handoff recommendation routes through policy;
 11. normal SOP start/switch/resume/complete still passes;
 12. non-interruptible SOP switch rejection still passes.
+13. FAQ/SOP conflict enters one candidate pool and is arbitrated once;
+14. RAG/SOP conflict enters one candidate pool and is arbitrated once;
+15. non-hard-stop FAQ/RAG no longer exits before central arbitration.
 
 ## Acceptance Criteria
 
 - all scenarios pass through `/api/v1/runtime-lab/sessions/{id}/messages`;
 - route evidence identifies source layer and final action;
-- FAQ/RAG/Agent outputs never enter SOP intent classifier candidates;
+- FAQ/RAG/Agent/SOP/resume signals enter one central finite candidate pool;
+- FAQ/RAG/Agent outputs never masquerade as SOP intent candidates;
+- central constrained LLM arbitration is visible in route evidence for all
+  non-hard-stop decisions;
+- hard-stop handoff/safety remains the only pre-arbitration final exit;
 - active/suspended task state is preserved for answer-only fallback paths;
 - browser UAT shows route action, route source, evidence, task ledger, and final
   reply for representative scenarios;
@@ -74,6 +86,14 @@ After 040, the system is a complete controlled customer-service routing runtime:
 - controlled Agent fallback;
 - clarification and escalation;
 - browser-visible evidence for manual business acceptance.
+
+## Unified Arbitration Refactor Gate
+
+Status: pending implementation.
+
+040 must be rerun for the 2026-06-09 architecture revision. The new final gate
+must prove the system no longer uses independent FAQ/RAG early-exit answer gates
+for non-hard-stop messages.
 
 ## Completion Evidence
 

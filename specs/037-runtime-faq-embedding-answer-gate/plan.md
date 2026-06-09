@@ -65,8 +65,10 @@ to enter constrained SOP classifier input.
 
 ## Execution Result
 
-037 was implemented only after 036 was committed. It adds a semantic FAQ policy
-gate after exact FAQ and before SOP arbitration.
+037 was originally implemented after 036 as a semantic FAQ policy gate after
+exact FAQ and before SOP arbitration. The 2026-06-09 architecture revision
+supersedes that placement with semantic FAQ candidate generation before central
+arbitration.
 
 Final targeted gate:
 
@@ -86,3 +88,14 @@ Full backend pytest was attempted and documented at
 `artifacts/slices/037-runtime-faq-embedding-answer-gate/037.3/full-backend.txt`.
 The remaining failures are the same pre-existing workflow/runtime-lab residue
 documented during 036 and are outside 037's target surface.
+
+## Unified Arbitration Refactor Gate
+
+After the 2026-06-09 routing revision, 037 must create typed semantic
+`ANSWER_FAQ` candidates for the unified classifier payload. The old requirement
+that FAQ candidates stay out of classifier input is replaced by the stricter
+requirement that they enter only as `ANSWER_FAQ`, never as `SOP_INTENT`.
+
+The refactor is complete only when semantic FAQ/SOP conflicts are arbitrated in
+one classifier step with score, margin, retrieval mode, rerank, and evidence
+visible in the payload.

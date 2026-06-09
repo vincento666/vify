@@ -82,3 +82,14 @@ Each slice must update `spec.md`, `plan.md`, `tasks.md`, and the corresponding
 artifact directory before sign-off. 039 is complete because Agent output is
 schema-validated, unsafe side effects are rejected, clarification counters are
 tested, and final handoff still goes through the 033 control-plane action.
+
+## Unified Arbitration Refactor Gate
+
+After the 2026-06-09 routing revision, 039 must no longer behave as a free
+post-gate answer layer. Agent fallback must either appear as typed candidate
+evidence or execute only after central arbitration/PolicyGate selects the Agent
+path.
+
+The refactor is complete only when Agent answer, Agent clarification, and Agent
+handoff recommendation keep their existing safety guarantees under the unified
+candidate architecture.

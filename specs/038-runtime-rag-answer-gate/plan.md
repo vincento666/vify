@@ -79,3 +79,13 @@ Each slice must update `spec.md`, `plan.md`, `tasks.md`, and the corresponding
 artifact directory before sign-off. 038 is complete because RAG answers carry
 citations/evidence, low-confidence cases clarify or handoff by policy, and
 answer-only paths are proven not to mutate active SOP state.
+
+## Unified Arbitration Refactor Gate
+
+After the 2026-06-09 routing revision, 038 must create typed `ANSWER_RAG`
+candidates before central arbitration rather than running as a separate
+post-SOP gate. Raw document snippets must never be represented as `SOP_INTENT`.
+
+The refactor is complete only when RAG/SOP conflicts are arbitrated in one
+classifier step and the selected RAG candidate executes generation with
+citations while preserving task state.

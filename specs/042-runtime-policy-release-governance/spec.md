@@ -91,6 +91,8 @@ Golden matrix:
 
 - use the final 040 scenario matrix;
 - expected action/source/reason/state-mutation assertions must be explicit;
+- expected candidate pool and central arbitration assertions must be explicit
+  for non-hard-stop scenarios;
 - matrix replay should be deterministic with fake/local providers by default.
 
 Historical decision logs:
@@ -100,6 +102,8 @@ Historical decision logs:
 - report changed decisions, handoff-rate delta, clarification-rate delta,
   FAQ/RAG/Agent hit-rate delta, SOP mutation-risk delta, and unsupported action
   count.
+- report central-arbitration coverage and any non-hard-stop direct-exit
+  regression.
 
 ## Backend API
 
@@ -169,6 +173,8 @@ not through frontend in 042.
 - activation writes release record and switches effective profile;
 - rollback restores previous active profile;
 - all release transitions emit audit events;
+- activation fails if a candidate profile reintroduces non-hard-stop FAQ/RAG
+  direct exits outside central arbitration;
 - no frontend files are modified.
 
 ## Completion Capability

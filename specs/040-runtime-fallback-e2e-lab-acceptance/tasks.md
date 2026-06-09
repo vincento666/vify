@@ -41,3 +41,17 @@
 - [x] Browser UAT passes.
 - [x] Existing SOP switch/resume and non-interruptible rejection remain valid.
 - [x] Final capability summary is updated in `spec.md`.
+
+## 040.R1 Unified arbitration final gate
+
+- [ ] RED: FAQ/SOP conflict does not show one candidate pool and central
+  classifier step.
+- [ ] RED: RAG/SOP conflict does not show one candidate pool and central
+  classifier step.
+- [ ] RED: non-hard-stop FAQ/RAG can still bypass central arbitration.
+- [ ] Prove hard-stop handoff remains the only pre-arbitration final exit.
+- [ ] Prove 033/036.R1/037.R1/038.R1/039.R1 targeted gates pass together.
+- [ ] Run API E2E matrix and browser/API-doc UAT evidence.
+- [ ] Save evidence under
+  `artifacts/slices/040-runtime-fallback-e2e-lab-acceptance/040.R1/`.
+- [ ] Commit 040.R1 only.

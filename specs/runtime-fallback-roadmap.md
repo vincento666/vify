@@ -44,16 +44,31 @@ production-system operations without adding frontend UI.
 This order preserves the agreed routing architecture:
 
 ```text
-explicit safety/handoff triggers
-  -> exact/high-confidence FAQ answer
-  -> semantic FAQ answer
-  -> constrained SOP/task intent arbitration
-  -> RAG answer
-  -> controlled fallback Agent
-  -> human handoff
+explicit safety/handoff hard stops
+  -> unified hybrid candidate recall
+       active SOP continuation
+       suspended task resume
+       SOP intents
+       FAQ answer candidates
+       RAG answer candidates
+       Agent fallback candidates
+       handoff / clarify / no-match candidates
+  -> central constrained LLM arbitration
+  -> PolicyGate
+  -> typed executor: SOP / FAQ / RAG / Agent / handoff / clarify
   -> policy profile config and decision logs
   -> evaluation-gated release and rollback
 ```
+
+Architecture revision on 2026-06-09:
+
+- hard-stop handoff/safety triggers may still exit before LLM arbitration;
+- ordinary keyword, FAQ, RAG, SOP, resume, and Agent signals are recall
+  evidence, not independent final judges;
+- FAQ/SOP/RAG must not fight through separate early-exit gates;
+- the LLM classifier is the central finite-candidate arbitrator for all
+  non-hard-stop route actions;
+- PolicyGate remains the final safety/state authority.
 
 ## SDD Boundary
 
@@ -64,6 +79,10 @@ module internals while implementing 033 and 036-040.
 
 `035` remains the knowledge provider boundary. `036-040` consume retrieval
 results and policy evidence through runtime-lab contracts.
+
+After the 2026-06-09 architecture revision, `036-039` are candidate-generation
+specs rather than independent early-exit answer gates. `040` is the refactor
+acceptance spec proving unified candidate recall and central arbitration.
 
 `041-042` are backend-only production embedding specs. They add operational
 configuration, observability, evaluation, release, and rollback APIs for a host
@@ -95,31 +114,31 @@ Use these goals one by one.
 ### Goal 036
 
 ```text
-请严格按照 specs/036-runtime-faq-exact-answer-gate 的 spec.md、plan.md、tasks.md 完成 036.1-036.3。实现 runtime-lab 的 ANSWER_FAQ exact/high-confidence FAQ answer gate，消费 035 的知识检索能力但不改知识模块内核；FAQ 高置信可在 SOP 意图仲裁前提前回答，active_sop 场景不得污染 SOP slot/state。必须 TDD+SDD，保存 RED/green/e2e 证据，完成后更新文档并提交 git。
+请严格按照 specs/036-runtime-faq-exact-answer-gate 的 spec.md、plan.md、tasks.md 完成 036 的统一仲裁重构。将 FAQ exact/high-confidence 从提前回答 gate 改为 ANSWER_FAQ 候选生成器，消费 035 的知识检索能力但不改知识模块内核；FAQ 候选必须进入 central constrained LLM arbitration，与 SOP/RAG/挂起任务候选统一仲裁；hard stop 仍提前退出；active_sop 场景不得污染 SOP slot/state。必须 TDD+SDD，保存 RED/green/e2e 证据，完成后更新文档并提交 git。
 ```
 
 ### Goal 037
 
 ```text
-请严格按照 specs/037-runtime-faq-embedding-answer-gate 的 spec.md、plan.md、tasks.md 完成 037.1-037.3。实现 runtime-lab 的 semantic FAQ answer gate，基于 035 的 faq retrieval mode、FAQ embeddings、score/margin/rerank evidence 做高置信问答；低置信或冲突必须交给后续 SOP 仲裁/澄清/兜底，不能绕过策略门禁。必须 TDD+SDD，保存证据并提交 git。
+请严格按照 specs/037-runtime-faq-embedding-answer-gate 的 spec.md、plan.md、tasks.md 完成 037 的统一仲裁重构。将 semantic FAQ 从提前回答 gate 改为 ANSWER_FAQ 候选生成器，基于 035 的 faq retrieval mode、FAQ embeddings、score/margin/rerank evidence 进入 unified candidate pool；最终是否回答由 central constrained LLM arbitration + PolicyGate 决定。必须 TDD+SDD，保存证据并提交 git。
 ```
 
 ### Goal 038
 
 ```text
-请严格按照 specs/038-runtime-rag-answer-gate 的 spec.md、plan.md、tasks.md 完成 038.1-038.3。实现 runtime-lab 的 ANSWER_RAG gate 和 RAG generator port，RAG 只处理咨询/长尾知识回答，必须带 citations/evidence，不得把 RAG 文档片段塞入 SOP intent classifier 候选，不得修改 active_sop slot/state。必须 TDD+SDD，保存证据并提交 git。
+请严格按照 specs/038-runtime-rag-answer-gate 的 spec.md、plan.md、tasks.md 完成 038 的统一仲裁重构。将 RAG 从 SOP 仲裁后的 answer gate 改为 ANSWER_RAG 候选生成器，RAG 候选必须带 citations/evidence 并进入 unified candidate pool；不得把原始文档片段伪装成 SOP intent，不得修改 active_sop slot/state；最终是否回答由 central constrained LLM arbitration + PolicyGate 决定。必须 TDD+SDD，保存证据并提交 git。
 ```
 
 ### Goal 039
 
 ```text
-请严格按照 specs/039-runtime-controlled-agent-fallback 的 spec.md、plan.md、tasks.md 完成 039.1-039.4。实现 policy-controlled fallback Agent：Agent 只能在 PolicyGate 放行后回答、澄清、整理诉求或建议转人工；最终转人工动作仍由路由控制面执行，Agent 不得直接恢复/启动/挂起 SOP。必须覆盖澄清次数、低置信升级、handoff escalation 和 no task mutation 回归测试，保存证据并提交 git。
+请严格按照 specs/039-runtime-controlled-agent-fallback 的 spec.md、plan.md、tasks.md 完成 039 的统一仲裁重构。fallback Agent 不再作为所有前序 gate 失败后的独立抢答层，而是生成 AGENT_FALLBACK/CLARIFY/HANDOFF 建议候选或在中央仲裁选择后执行；Agent 仍不能直接恢复/启动/挂起 SOP，最终转人工动作仍由路由控制面执行。必须覆盖澄清次数、低置信升级、handoff escalation 和 no task mutation 回归测试，保存证据并提交 git。
 ```
 
 ### Goal 040
 
 ```text
-请严格按照 specs/040-runtime-fallback-e2e-lab-acceptance 的 spec.md、plan.md、tasks.md 完成最终验收。构建覆盖 handoff、exact FAQ、semantic FAQ、RAG、controlled Agent、clarification、active_sop safe answer、SOP continue/resume/switch、non-interruptible rejection 的真实 API + 后端高规格验收矩阵；必要时补 runtime-lab 前端证据，但不做新前端产品功能。必须输出预期/实际对比、完整 artifacts、最终能力审计，并提交 git。
+请严格按照 specs/040-runtime-fallback-e2e-lab-acceptance 的 spec.md、plan.md、tasks.md 完成统一仲裁最终验收。构建覆盖 hard stop、FAQ/SOP 冲突、semantic FAQ/SOP 冲突、RAG/SOP 冲突、controlled Agent、clarification、active_sop safe answer、SOP continue/resume/switch、non-interruptible rejection 的真实 API + 后端高规格验收矩阵；必须证明 FAQ/RAG/SOP/挂起任务候选进入同一个 central constrained LLM arbitration，且除了 hard stop 外不再由 FAQ/RAG 独立提前裁决。必要时补 runtime-lab 前端证据，但不做新前端产品功能。必须输出预期/实际对比、完整 artifacts、最终能力审计，并提交 git。
 ```
 
 ### Goal 041
@@ -140,13 +159,15 @@ After all specs are complete, the runtime will support a controlled enterprise
 customer-service dialogue stack:
 
 - route-level human handoff can be triggered explicitly at any layer;
-- FAQ exact/high-confidence answers can return before SOP arbitration;
-- semantic FAQ answers can use embedding/rerank evidence without entering SOP;
+- FAQ exact/high-confidence candidates can be selected by central arbitration
+  instead of being confused with SOP handling;
+- semantic FAQ candidates can use embedding/rerank evidence without
+  masquerading as SOP intents;
 - active SOP state is protected from FAQ/RAG/Agent answers;
 - SOP entry, resume, suspend, and switch decisions still pass through
   constrained SOP/task arbitration when needed;
-- RAG answers handle long-tail knowledge questions with citations and no task
-  mutation;
+- RAG candidates handle long-tail knowledge questions with citations and no
+  task mutation after central arbitration selects them;
 - fallback Agent handles low-confidence tail cases, clarification, user
   reassurance, issue summarization, and handoff recommendation only after
   PolicyGate approval;

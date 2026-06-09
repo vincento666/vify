@@ -52,3 +52,16 @@
   handoff.
 - [x] Agent cannot mutate runtime task ledger in tests.
 - [x] 033 handoff escalation works through policy only.
+
+## 039.R1 Unified arbitration refactor
+
+- [ ] RED: fallback Agent can still run as a separate post-gate answer layer.
+- [ ] RED: unresolved user input lacks `AGENT_FALLBACK` candidate evidence.
+- [ ] Add typed Agent fallback/clarify/handoff candidate generation or selected
+  executor path.
+- [ ] Ensure Agent execution happens only after central arbitration selects
+  Agent fallback or no finite answer/task candidate survives recall.
+- [ ] Preserve clarification counter and handoff escalation behavior.
+- [ ] Save evidence under
+  `artifacts/slices/039-runtime-controlled-agent-fallback/039.R1/`.
+- [ ] Commit 039.R1 only.

@@ -2,13 +2,14 @@
 
 ## Goal
 
-Add the first FAQ answer gate to runtime-lab: exact, normalized, keyword, and
-high-confidence structured FAQ answers controlled by the runtime policy plane.
+Add the first FAQ candidate generator to runtime-lab: exact, normalized,
+keyword, and high-confidence structured FAQ answer candidates controlled by the
+runtime policy plane.
 
-036 is the safe, low-cost answer layer before semantic FAQ, RAG, and fallback
-Agent. It must answer clear FAQ questions without entering SOP arbitration, and
-it must preserve active SOP state when a user asks a safe FAQ during a business
-flow.
+Architecture revision on 2026-06-09: 036 is no longer an independent early-exit
+FAQ answer layer. It produces `ANSWER_FAQ` candidates for the unified candidate
+pool. Except for 033 hard stops, final FAQ-vs-SOP decisions are made by central
+constrained LLM arbitration plus PolicyGate.
 
 ## Dependency
 
@@ -24,7 +25,7 @@ Required before 036 implementation:
 In scope:
 
 - `ANSWER_FAQ` runtime route action;
-- FAQ exact/normalized/keyword high-confidence answer gate;
+- FAQ exact/normalized/keyword high-confidence candidate generation;
 - FAQ evidence payload: FAQ id, question, answer, score, match type, source;
 - active-SOP safe answer behavior with no slot consumption and no task mutation;
 - ambiguity handling: question-vs-business-handling conflict returns
@@ -43,30 +44,34 @@ Out of scope:
 
 ```text
 033 hard handoff triggers
-  -> 036 FAQ exact/high-confidence gate
-  -> 037 semantic FAQ gate
-  -> SOP/resume recall and LLM arbitration
-  -> later RAG/Agent layers
+  -> unified hybrid candidate recall
+       036 FAQ exact/high-confidence candidates
+       037 semantic FAQ candidates
+       SOP/resume candidates
+       RAG/Agent candidates
+  -> central constrained LLM arbitration
+  -> PolicyGate
+  -> typed executor
 ```
 
 Active SOP exception:
 
 ```text
-active SOP + clear safe FAQ question -> ANSWER_FAQ, no task mutation
-active SOP + ambiguous FAQ/business input -> CLARIFY, no task mutation
-active SOP + slot answer -> CONTINUE_ACTIVE_SOP
+active SOP + clear safe FAQ question -> FAQ candidate may be selected as ANSWER_FAQ, no task mutation
+active SOP + ambiguous FAQ/business input -> CLARIFY candidate may be selected, no task mutation
+active SOP + slot answer -> CONTINUE_ACTIVE_SOP candidate may be selected
 ```
 
 ## Acceptance Criteria
 
-- exact FAQ question answers before SOP arbitration when no hard handoff trigger
-  exists;
-- keyword/high-confidence FAQ answers can answer when score and margin pass;
+- exact FAQ question creates `ANSWER_FAQ` candidate before central arbitration;
+- keyword/high-confidence FAQ creates candidate when score and margin pass;
 - active SOP FAQ answer does not change active task step, checkpoint, business
   refs, or suspended task list;
 - active SOP ambiguous question vs slot input asks clarification;
 - FAQ answer emits runtime evidence and event;
-- FAQ hits never appear inside constrained SOP intent classifier candidates;
+- FAQ hits appear as typed `ANSWER_FAQ` candidates in constrained classifier
+  input, never as `SOP_INTENT` candidates;
 - explicit handoff trigger still wins over FAQ;
 - existing SOP routing regressions still pass.
 
@@ -75,6 +80,14 @@ active SOP + slot answer -> CONTINUE_ACTIVE_SOP
 After 036, runtime-lab can safely answer known FAQ questions, including inside
 an active SOP, without damaging SOP state. The system can explain why a FAQ
 answer was returned and prove the answer came from a structured FAQ source.
+
+## Unified Arbitration Refactor Gate
+
+Status: pending implementation.
+
+The previous 036 evidence proves the old early-exit FAQ gate. The current
+architecture requires exact/keyword FAQ results to become candidate evidence for
+central arbitration rather than independent final judges.
 
 ## Specification Sign-off
 
