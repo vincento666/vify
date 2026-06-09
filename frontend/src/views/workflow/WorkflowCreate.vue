@@ -9361,8 +9361,8 @@ onUnmounted(() => {
   --node-port-scale: 1;
   --node-port-bg: #6b6ff7;
   --node-port-shadow: none;
-  --node-port-dot-size: 0.875rem;
-  --node-port-hit-size: 2.625rem;
+  --node-port-dot-size: 1rem;
+  --node-port-hit-size: 3rem;
   width: var(--node-port-hit-size);
   height: var(--node-port-hit-size);
   border: 0;

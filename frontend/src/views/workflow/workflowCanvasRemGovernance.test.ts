@@ -60,8 +60,8 @@ describe('workflow canvas rem governance', () => {
   it('anchors endpoint affordances from the original dot size instead of compounding hover scale', () => {
     const content = readProjectFile('src/views/workflow/WorkflowCreate.vue')
 
-    expect(content).toContain('--node-port-dot-size: 0.875rem;')
-    expect(content).toContain('--node-port-hit-size: 2.625rem;')
+    expect(content).toContain('--node-port-dot-size: 1rem;')
+    expect(content).toContain('--node-port-hit-size: 3rem;')
     expect(content).toContain('--node-port-scale: 2;')
     expect(content).toContain('--node-port-scale: 3;')
     expect(content).toContain('width: var(--node-port-dot-size);')

@@ -107,8 +107,8 @@ try {
   const defaultSource = await portBox(page, sourceSelector)
   const defaultTarget = await portBox(page, targetSelector)
   const rem = await rootFontSize(page)
-  const expectedBaseDiameter = 0.875 * rem
-  const expectedHitDiameter = 2.625 * rem
+  const expectedBaseDiameter = 1 * rem
+  const expectedHitDiameter = 3 * rem
   assert(defaultNode && defaultSource && defaultTarget, 'Expected node source and target ports to render')
   assertClose(Number.parseFloat(defaultSource.dotWidth || '0'), expectedBaseDiameter, 1, `Expected endpoint 1x dot to keep the original size, got ${JSON.stringify(defaultSource)}`)
   assertClose(Number.parseFloat(defaultTarget.dotWidth || '0'), expectedBaseDiameter, 1, `Expected target endpoint 1x dot to keep the original size, got ${JSON.stringify(defaultTarget)}`)

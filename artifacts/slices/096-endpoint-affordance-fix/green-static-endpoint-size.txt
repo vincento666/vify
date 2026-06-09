@@ -1,0 +1,14 @@
+Unit:
+rtk npm --prefix frontend run test:unit -- src/views/workflow/canvasControls.test.ts src/views/workflow/workflowCanvasRemGovernance.test.ts
+PASS: 2 files, 8 tests
+
+REM:
+rtk npm --prefix frontend run test:unit -- src/remScaleClosure.test.ts
+PASS: 1 file, 1 test
+
+E2E:
+rtk node frontend/e2e/chatflow-endpoint-affordances.mjs
+PASS 025.6 endpoint affordances e2e chatflow=8164
+
+rtk node frontend/e2e/chatflow-endpoint-connection-radius.mjs
+PASS chatflow endpoint connection radius e2e chatflow=8165
