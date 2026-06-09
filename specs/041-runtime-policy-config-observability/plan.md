@@ -80,6 +80,9 @@ decision logging all pass backend gates with no frontend changes.
 
 - 041.1 complete: profile table/repository/service/API and nested config
   validation passed RED, unit, contract, backend E2E, and browser UAT gates.
+- 041.2 complete: effective policy resolution by binding, env fallback, and
+  runtime-lab config sourcing from profile passed RED, unit, contract, backend
+  E2E, and browser UAT gates.
 
 ## Non-Goals
 

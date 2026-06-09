@@ -75,6 +75,17 @@ class RuntimePolicyRepository:
         ).mappings().all()
         return [dict(row) for row in rows], int(total)
 
+    def list_active_profiles(self) -> list[dict[str, Any]]:
+        rows = self._session.execute(
+            sa.select(self._profile)
+            .where(
+                self._profile.c.status == "active",
+                self._profile.c.deleted.is_(False),
+            )
+            .order_by(self._profile.c.id.desc())
+        ).mappings().all()
+        return [dict(row) for row in rows]
+
     def update_profile(self, profile_id: int, values: dict[str, Any]) -> dict[str, Any] | None:
         existing = self.get_profile(profile_id)
         if existing is None:

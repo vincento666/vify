@@ -1,0 +1,18 @@
+041.2 E2E Gate
+
+Scope: backend-only effective RuntimePolicyProfile resolver and runtime-lab
+config consumption.
+Runner: local FastAPI on http://127.0.0.1:8042 with isolated SQLite DB
+  artifacts/slices/041-runtime-policy-config-observability/041.2/uat.db
+
+Commands/evidence:
+- rtk env HIFY_DATABASE_URL=sqlite:///artifacts/slices/041-runtime-policy-config-observability/041.2/uat.db uv run uvicorn app.main:app --host 127.0.0.1 --port 8042
+- Live HTTP API output saved in e2e-api.txt:
+  createdCode=200
+  effectiveSource=profile
+  runtimeConfigSource=profile
+  runtimeClassifierModel=profile-e2e-classifier
+  faqKnowledgeBaseIds=[111,112]
+  ragKnowledgeBaseIds=[211]
+
+Verdict: PASS

@@ -21,12 +21,12 @@
 
 ## 041.2 Effective policy resolver
 
-- [ ] RED: runtime-lab cannot resolve active profile by tenant/bot/channel/session.
-- [ ] RED: env settings are still the only classifier/FAQ/RAG source.
-- [ ] Add `RuntimePolicyResolver`.
-- [ ] Add env bootstrap fallback when no active profile exists.
-- [ ] Add effective-profile API.
-- [ ] Save evidence under
+- [x] RED: runtime-lab cannot resolve active profile by tenant/bot/channel/session.
+- [x] RED: env settings are still the only classifier/FAQ/RAG source.
+- [x] Add `RuntimePolicyResolver`.
+- [x] Add env bootstrap fallback when no active profile exists.
+- [x] Add effective-profile API.
+- [x] Save evidence under
   `artifacts/slices/041-runtime-policy-config-observability/041.2/`.
 - [ ] Commit 041.2 only.
 

@@ -9,6 +9,7 @@ class RuntimePolicyBindings(BaseModel):
     tenant_id: str = Field(default="", alias="tenantId", max_length=120)
     bot_id: str = Field(default="", alias="botId", max_length=120)
     channel: str = Field(default="", max_length=80)
+    session_id: str = Field(default="", alias="sessionId", max_length=120)
     sop_group: str = Field(default="", alias="sopGroup", max_length=120)
 
 

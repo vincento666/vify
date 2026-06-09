@@ -1,0 +1,24 @@
+# UAT
+
+- Spec: 041-runtime-policy-config-observability
+- Slice: 041.2 Effective policy resolver
+- URL: http://127.0.0.1:8042/docs
+- Browser: Codex in-app browser
+- Steps:
+  - Started FastAPI with isolated SQLite DB.
+  - Created active profile bound to tenant/bot/channel through live API.
+  - Queried `/api/v1/runtime-policy/effective-profile` and `/api/v1/runtime-lab/config`.
+  - Opened Swagger UI in real browser and scrolled to `runtime-policy`.
+- Expected:
+  - Effective profile resolves active profile before env fallback.
+  - Runtime-lab config exposes profile-sourced classifier/FAQ/RAG values.
+  - Browser-visible API docs expose effective-profile endpoint.
+- Actual:
+  - `effectiveSource=profile`.
+  - `runtimeConfigSource=profile`.
+  - `runtimeClassifierModel=profile-e2e-classifier`.
+  - Browser showed `/api/v1/runtime-policy/effective-profile`.
+- Screenshots:
+  - `screenshots/browser-effective-profile-endpoint.png`
+  - `screenshots/browser-runtime-policy-visible.png`
+- Verdict: PASS

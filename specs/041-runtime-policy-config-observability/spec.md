@@ -260,3 +260,7 @@ implement release activation, rollback, or frontend configuration UI.
 - 041.1 complete: `RuntimePolicyProfile` persistence, backend CRUD API,
   nested policy validation, and Swagger/browser UAT evidence are recorded under
   `artifacts/slices/041-runtime-policy-config-observability/041.1/`.
+- 041.2 complete: `RuntimePolicyResolver`, env bootstrap fallback,
+  effective-profile API, and runtime-lab config consumption of profile
+  classifier/FAQ/RAG sections are recorded under
+  `artifacts/slices/041-runtime-policy-config-observability/041.2/`.

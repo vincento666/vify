@@ -4,7 +4,7 @@ from json import JSONDecodeError
 from time import perf_counter
 from typing import Any, Mapping
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
@@ -22,19 +22,29 @@ from app.modules.knowledge.api.facade import KnowledgeFacade
 from app.modules.runtime_lab.domain.agent_fallback import AgentOutputPolicy, FakeFallbackAgent
 from app.modules.runtime_lab.domain.classifier import LlmConstrainedIntentClassifier
 from app.modules.runtime_lab.domain.chatflow_adapter import ChatflowSopRuntimeAdapter
-from app.modules.runtime_lab.domain.faq_gate import FaqExactAnswerGate, FaqSemanticAnswerGate
+from app.modules.runtime_lab.domain.faq_gate import (
+    CompositeFaqAnswerGate,
+    FaqAnswerGate,
+    FaqExactAnswerGate,
+    FaqSemanticAnswerGate,
+    RuntimeAirlineFaqGate,
+)
 from app.modules.runtime_lab.domain.payload import format_event, format_session, format_task
 from app.modules.runtime_lab.domain.rag_gate import RagAnswerGate
 from app.modules.runtime_lab.domain.service import RuntimeLabService
 from app.modules.runtime_lab.domain.sop_adapter import FakeSopRuntimeAdapter
 from app.modules.runtime_lab.infra.repository import RuntimeLabRepository
 from app.modules.runtime_lab.web.schemas import RuntimeLabMessageRequest
+from app.modules.runtime_policy.domain.resolver import RuntimePolicyResolveContext, RuntimePolicyResolver
+from app.modules.runtime_policy.infra.repository import RuntimePolicyRepository
 from app.modules.provider.api.facade import ProviderModelFacade
 from app.modules.workflow.domain.service import WorkflowService
 from app.modules.workflow.infra.chatflow_state_repository import ChatflowStateRepository
 from app.modules.workflow.infra.repository import WorkflowRepository
 
 router = APIRouter(prefix="/api/v1/runtime-lab", tags=["runtime-lab"])
+
+RUNTIME_LAB_AIRLINE_LLM_AGENT_NAME = "034 RuntimeLab Airline Chatflow LLM Agent"
 
 
 def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeLabService:
@@ -62,6 +72,7 @@ def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeL
         agent_repository=AgentRepository(session),
         model_facade=ProviderModelFacade(session),
         chatflow_state_repository=ChatflowStateRepository(session),
+        preferred_llm_agent_name=RUNTIME_LAB_AIRLINE_LLM_AGENT_NAME,
     )
     adapter = ChatflowSopRuntimeAdapter(
         workflow_service,
@@ -128,10 +139,22 @@ def get_chatflow_trace(
 
 @router.get("/config")
 def get_config(
+    tenant_id: str = Query("", alias="tenantId"),
+    bot_id: str = Query("", alias="botId"),
+    channel: str = "",
+    session_id: str = Query("", alias="sessionId"),
+    sop_group: str = Query("", alias="sopGroup"),
     session: Session = Depends(get_session),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
-    return success(_runtime_lab_config(settings, session))
+    context = RuntimePolicyResolveContext(
+        tenant_id=tenant_id,
+        bot_id=bot_id,
+        channel=channel,
+        session_id=session_id,
+        sop_group=sop_group,
+    )
+    return success(_runtime_lab_config(settings, session, context))
 
 
 def _runtime_lab_chatflow_bindings(raw: str | None) -> dict[str, int]:
@@ -154,13 +177,27 @@ def _runtime_lab_chatflow_bindings(raw: str | None) -> dict[str, int]:
     return bindings
 
 
-def _runtime_lab_config(settings: Settings, session: Session) -> dict[str, Any]:
+def _runtime_lab_config(
+    settings: Settings,
+    session: Session,
+    context: RuntimePolicyResolveContext | None = None,
+) -> dict[str, Any]:
     bindings = _runtime_lab_chatflow_bindings(settings.runtime_lab_sop_chatflow_ids)
     names = _chatflow_names(session, bindings.values())
-    base_url = (settings.runtime_lab_intent_arbitrator_base_url or "").strip()
-    api_key_configured = bool((settings.runtime_lab_intent_arbitrator_api_key or "").strip())
-    fallback_model = (settings.runtime_lab_intent_arbitrator_fallback_model or "").strip()
+    effective = RuntimePolicyResolver(RuntimePolicyRepository(session), settings).resolve(context)
+    snapshot = effective["policySnapshot"]
+    classifier = snapshot["classifier"]
+    base_url = str(classifier.get("baseUrl") or "").strip()
+    fallback_model = str(classifier.get("fallbackModel") or "").strip()
+    api_key_configured = bool(str(classifier.get("apiKeyRef") or "").strip())
+    mode = str(classifier.get("mode") or "fake").strip().lower()
+    model = str(classifier.get("model") or "").strip()
     return {
+        "policyProfile": {
+            "source": effective["source"],
+            "profileId": effective["profileId"],
+            "profileVersion": effective["profileVersion"],
+        },
         "sopBindings": [
             {
                 "sopId": sop_id,
@@ -172,30 +209,36 @@ def _runtime_lab_config(settings: Settings, session: Session) -> dict[str, Any]:
             for sop_id, chatflow_id in bindings.items()
         ],
         "arbitrator": {
-            "mode": settings.runtime_lab_intent_arbitrator_mode.strip().lower(),
-            "model": settings.runtime_lab_intent_arbitrator_model.strip(),
+            "mode": mode,
+            "model": model,
             "fallbackModel": fallback_model,
             "baseUrl": base_url,
             "apiKeyConfigured": api_key_configured,
             "available": (
-                settings.runtime_lab_intent_arbitrator_mode.strip().lower() != "llm"
-                or bool(base_url and settings.runtime_lab_intent_arbitrator_model.strip() and api_key_configured)
+                mode != "llm"
+                or bool(base_url and model and api_key_configured)
             ),
         },
         "faq": {
-            "knowledgeBaseIds": _runtime_lab_id_list(settings.runtime_lab_faq_knowledge_base_ids),
+            "knowledgeBaseIds": list(snapshot["faq"].get("knowledgeBaseIds") or []),
         },
         "rag": {
-            "knowledgeBaseIds": _runtime_lab_id_list(settings.runtime_lab_rag_knowledge_base_ids),
+            "knowledgeBaseIds": list(snapshot["rag"].get("knowledgeBaseIds") or []),
         },
     }
 
 
-def _runtime_lab_faq_answer_gate(settings: Settings, session: Session) -> FaqExactAnswerGate | None:
+def _runtime_lab_faq_answer_gate(settings: Settings, session: Session) -> FaqAnswerGate | None:
+    runtime_faq_gate = RuntimeAirlineFaqGate()
     knowledge_base_ids = _runtime_lab_id_list(settings.runtime_lab_faq_knowledge_base_ids)
     if not knowledge_base_ids:
-        return None
-    return FaqExactAnswerGate(KnowledgeFacade(session), knowledge_base_ids=knowledge_base_ids)
+        return runtime_faq_gate
+    return CompositeFaqAnswerGate(
+        (
+            runtime_faq_gate,
+            FaqExactAnswerGate(KnowledgeFacade(session), knowledge_base_ids=knowledge_base_ids),
+        )
+    )
 
 
 def _runtime_lab_faq_semantic_gate(settings: Settings, session: Session) -> FaqSemanticAnswerGate | None:
