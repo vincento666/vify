@@ -1,0 +1,12 @@
+file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-shared-controls-polish.mjs:7
+  if (!condition) throw new Error(message)
+                        ^
+
+Error: Close action must use lightweight icon, got {"border":"rgb(104, 114, 135)","background":"rgb(241, 243, 248)","width":"25.375px","height":"25.375px","text":"×","svg":0}
+    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-shared-controls-polish.mjs:7:25)
+    at file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-shared-controls-polish.mjs:33:3
+    at runNextTicks (node:internal/process/task_queues:65:5)
+    at process.processImmediate (node:internal/timers:473:9)
+    at process.callbackTrampoline (node:internal/async_hooks:130:17)
+
+Node.js v23.11.0

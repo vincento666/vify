@@ -1,0 +1,8 @@
+> vitest run src/remScaleClosure.test.ts
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ ✓ src/remScaleClosure.test.ts (1 test) 15ms
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  00:36:59
+   Duration  589ms (transform 23ms, setup 0ms, collect 15ms, tests 15ms, environment 0ms, prepare 58ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m

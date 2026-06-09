@@ -1,0 +1,11 @@
+file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-variable-selector-polish.mjs:7
+  if (!condition) throw new Error(message)
+                        ^
+
+Error: Input row must not expose reference/literal mode copy, got str.
+引用
+选择引用变量
+    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-variable-selector-polish.mjs:7:25)
+    at file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-variable-selector-polish.mjs:24:3
+
+Node.js v23.11.0
