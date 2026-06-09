@@ -1,0 +1,28 @@
+{
+  "chatflowState": {
+    "nextEdge": [
+      "coze-edge-path",
+      "vue-flow__edge-path"
+    ],
+    "runningEdge": [
+      "coze-edge-path",
+      "edge-running",
+      "vue-flow__edge-path"
+    ],
+    "url": "http://127.0.0.1:5173/chatflows/1727/canvas?debug=1&runId=1395"
+  },
+  "workflowState": {
+    "activeBranch": [
+      "coze-edge-path",
+      "edge-succeeded",
+      "edge-active-branch",
+      "vue-flow__edge-path"
+    ],
+    "inactiveBranch": [
+      "coze-edge-path",
+      "edge-inactive-branch",
+      "vue-flow__edge-path"
+    ],
+    "url": "http://127.0.0.1:5173/workflows/1728/canvas?debug=1&runId=1396"
+  }
+}

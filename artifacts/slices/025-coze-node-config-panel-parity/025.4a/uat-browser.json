@@ -1,0 +1,17 @@
+{
+  "url": "http://127.0.0.1:5173/chatflows/1719/canvas",
+  "inAppBrowser": {
+    "modelSelectorScreenshot": "screenshots/uat-model-selector.png",
+    "modelParametersScreenshot": "screenshots/uat-model-parameters.png",
+    "skillTabsScreenshot": "screenshots/uat-skill-tabs.png",
+    "modelParametersVisible": true,
+    "skillTabsVisible": true,
+    "mixedRegistryVisible": false,
+    "systemPromptVariableButtons": 0
+  },
+  "inlineVariablePicker": {
+    "status": "verified-by-playwright-e2e",
+    "screenshot": "screenshots/green-llm-interactions.png",
+    "reason": "The in-app browser input channel reported that the Browser Use virtual clipboard is not installed when typing into textarea; the same UI path is covered by the green Playwright E2E."
+  }
+}

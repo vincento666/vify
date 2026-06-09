@@ -1,0 +1,14 @@
+
+> hify-web@0.0.1 test:unit
+> vitest run nodeConfig.test.ts
+
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+
+ ✓ src/views/workflow/nodeConfig.test.ts (16 tests) 6ms
+
+ Test Files  1 passed (1)
+      Tests  16 passed (16)
+   Start at  20:04:44
+   Duration  232ms (transform 48ms, setup 0ms, collect 32ms, tests 6ms, environment 0ms, prepare 66ms)

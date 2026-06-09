@@ -1,0 +1,59 @@
+
+> hify-web@0.0.1 test:unit
+> vitest run nodeConfig.test.ts
+
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+
+ ❯ src/views/workflow/nodeConfig.test.ts (16 tests | 1 failed) 14ms
+   ✓ workflow node config schema > does not expose node-name editing fields on any node panel 2ms
+   ✓ workflow node config schema > uses switch controls for stream-output fields instead of select rows 0ms
+   ✓ workflow node config schema > uses registry-backed selector for TOOL_CALL resources 0ms
+   ✓ workflow node config schema > uses compact variable type labels in selectors and parameter rows 0ms
+   ✓ workflow node config schema > provides runtime-backed editable fields for each canvas node type 1ms
+   ✓ workflow node config schema > models END as a Coze-like response editor with return mode and stream switch 0ms
+   ✓ workflow node config schema > puts LLM core sections in Coze-like order before advanced settings 0ms
+   ✓ workflow node config schema > uses structured Coze-like editors for secondary Chatflow panels 0ms
+   ✓ workflow node config schema > normalizes secondary Chatflow row editors without raw JSON strings 1ms
+   × workflow node config schema > keeps resource-node raw ids and JSON mappings out of basic panels 4ms
+     → expected [ '输入参数', '资源', '输出' ] to deeply equal [ '输入参数', '工具', '参数映射', '输出', …(1) ]
+   ✓ workflow node config schema > normalizes START variables into Coze-like input rows while preserving legacy outputVariables 0ms
+   ✓ workflow node config schema > adds a shared input parameter editor field to runnable middle node schemas 0ms
+   ✓ workflow node config schema > updates node name and config without dropping ui position metadata 0ms
+   ✓ workflow node config schema > normalizes Coze-like output format and output parameter rows 0ms
+   ✓ workflow node config schema > keeps legacy outputVariable compatible while validating duplicate and illegal names 3ms
+   ✓ workflow node config schema > normalizes and validates typed input parameter rows 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/views/workflow/nodeConfig.test.ts > workflow node config schema > keeps resource-node raw ids and JSON mappings out of basic panels
+AssertionError: expected [ '输入参数', '资源', '输出' ] to deeply equal [ '输入参数', '工具', '参数映射', '输出', …(1) ]
+
+- Expected
++ Received
+
+  [
+    "输入参数",
+-   "工具",
+-   "参数映射",
++   "资源",
+    "输出",
+-   "高级/兼容配置",
+  ]
+
+ ❯ src/views/workflow/nodeConfig.test.ts:251:63
+    249|       .filter((section) => section.title !== '高级/兼容配置')
+    250|       .flatMap((section) => section.fields)
+    251|     expect(toolCall.sections.map((section) => section.title)).toEqual([
+       |                                                               ^
+    252|       '输入参数',
+    253|       '工具',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 15 passed (16)
+   Start at  20:03:39
+   Duration  275ms (transform 34ms, setup 0ms, collect 37ms, tests 14ms, environment 0ms, prepare 51ms)

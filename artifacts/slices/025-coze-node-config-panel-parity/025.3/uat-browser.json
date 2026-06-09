@@ -1,0 +1,19 @@
+{
+  "chatflowId": 1705,
+  "url": "http://127.0.0.1:5173/chatflows/1705/canvas",
+  "textMode": {
+    "modeText": "返回文本 返回变量",
+    "panelText": "结束end×›输出 返回文本 返回变量 输出格式文本响应内容 变量 流式输出",
+    "textareaResize": "none"
+  },
+  "variableMode": {
+    "panelText": "返回文本 返回变量 输出格式文本输出变量变量类型str. ×",
+    "rows": [
+      "str. ×"
+    ]
+  },
+  "screenshots": [
+    "screenshots/uat-end-text-mode.png",
+    "screenshots/uat-end-variable-mode.png"
+  ]
+}

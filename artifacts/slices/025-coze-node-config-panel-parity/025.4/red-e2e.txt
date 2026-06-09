@@ -1,0 +1,9 @@
+file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-llm-panel-parity.mjs:7
+  if (!condition) throw new Error(message)
+                        ^
+
+Error: Expected LLM panel sections, missing config-section-系统提示词, config-section-用户提示词
+    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-llm-panel-parity.mjs:7:25)
+    at file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-llm-panel-parity.mjs:63:3
+
+Node.js v23.11.0

@@ -1,0 +1,9 @@
+file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-variable-reference-foundation.mjs:7
+  if (!condition) throw new Error(message)
+                        ^
+
+Error: Expected variable source 应用变量
+    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-variable-reference-foundation.mjs:7:25)
+    at file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-variable-reference-foundation.mjs:89:5
+
+Node.js v23.11.0

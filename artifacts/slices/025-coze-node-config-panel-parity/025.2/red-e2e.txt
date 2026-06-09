@@ -1,0 +1,9 @@
+file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-start-panel-parity.mjs:7
+  if (!condition) throw new Error(message)
+                        ^
+
+Error: START panel should not expose separate 输出变量 section
+    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-start-panel-parity.mjs:7:25)
+    at file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-start-panel-parity.mjs:45:3
+
+Node.js v23.11.0

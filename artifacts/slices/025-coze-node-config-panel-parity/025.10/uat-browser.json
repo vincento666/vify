@@ -1,0 +1,24 @@
+{
+  "slice": "025.10",
+  "target": "http://127.0.0.1:5176",
+  "checkedAt": "2026-06-05",
+  "checks": {
+    "jsonParseStructuredRows": true,
+    "jsonParseRawTextareaInsideBasicEditor": false,
+    "aggregationStructuredRows": true,
+    "aggregationReferenceChips": true,
+    "variableAssignmentStructuredEditor": true,
+    "variableAssignmentReferenceChip": true,
+    "humanInputSchemaRows": true,
+    "runtimePathsSucceeded": true
+  },
+  "screenshots": [
+    "artifacts/slices/025-coze-node-config-panel-parity/025.10/e2e-transform-nodes.png",
+    "artifacts/slices/025-coze-node-config-panel-parity/025.10/e2e-variable-aggregation-assignment.png",
+    "artifacts/slices/025-coze-node-config-panel-parity/025.10/e2e-human-input-schema.png"
+  ],
+  "notes": [
+    "Browser evidence is produced by Playwright against the local app URL.",
+    "The Codex in-app browser accepted address-bar focus but its virtual clipboard navigation path was unavailable, so 025.10 visual UAT uses the same real-browser E2E screenshots."
+  ]
+}

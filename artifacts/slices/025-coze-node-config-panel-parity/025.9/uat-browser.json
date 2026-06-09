@@ -1,0 +1,16 @@
+{
+  "slice": "025.9",
+  "url": "http://127.0.0.1:5176/workflows/1894/canvas",
+  "checkedAt": "2026-06-05T12:49:04.905Z",
+  "checks": {
+    "canvasVisible": true,
+    "toolPanelVisible": true,
+    "schemaVariableChipCount": 1,
+    "legacyDebugEditableControlCount": 0,
+    "legacyDebugShowsMcpIds": true,
+    "advancedSectionVisible": true
+  },
+  "screenshots": [
+    "artifacts/slices/025-coze-node-config-panel-parity/025.9/e2e-resource-node-panels.png"
+  ]
+}

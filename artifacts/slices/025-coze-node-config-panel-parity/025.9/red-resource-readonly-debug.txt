@@ -1,0 +1,103 @@
+
+> hify-web@0.0.1 test:unit
+> vitest run nodeConfig.test.ts
+
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+
+ ❯ src/views/workflow/nodeConfig.test.ts (17 tests | 1 failed) 12ms
+   ✓ workflow node config schema > does not expose node-name editing fields on any node panel 2ms
+   ✓ workflow node config schema > uses switch controls for stream-output fields instead of select rows 0ms
+   ✓ workflow node config schema > uses registry-backed selector for TOOL_CALL resources 0ms
+   ✓ workflow node config schema > uses compact variable type labels in selectors and parameter rows 0ms
+   ✓ workflow node config schema > provides runtime-backed editable fields for each canvas node type 1ms
+   ✓ workflow node config schema > models END as a Coze-like response editor with return mode and stream switch 0ms
+   ✓ workflow node config schema > puts LLM core sections in Coze-like order before advanced settings 0ms
+   ✓ workflow node config schema > uses structured Coze-like editors for secondary Chatflow panels 1ms
+   ✓ workflow node config schema > normalizes secondary Chatflow row editors without raw JSON strings 0ms
+   ✓ workflow node config schema > keeps resource-node raw ids and JSON mappings out of basic panels 0ms
+   × workflow node config schema > shows legacy resource technical fields as read-only debug data, not editable raw controls 5ms
+     → expected [ { key: 'toolName', …(3) }, …(5) ] to deeply equal [ Array(1) ]
+   ✓ workflow node config schema > normalizes START variables into Coze-like input rows while preserving legacy outputVariables 0ms
+   ✓ workflow node config schema > adds a shared input parameter editor field to runnable middle node schemas 1ms
+   ✓ workflow node config schema > updates node name and config without dropping ui position metadata 0ms
+   ✓ workflow node config schema > normalizes Coze-like output format and output parameter rows 0ms
+   ✓ workflow node config schema > keeps legacy outputVariable compatible while validating duplicate and illegal names 0ms
+   ✓ workflow node config schema > normalizes and validates typed input parameter rows 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/views/workflow/nodeConfig.test.ts > workflow node config schema > shows legacy resource technical fields as read-only debug data, not editable raw controls
+AssertionError: expected [ { key: 'toolName', …(3) }, …(5) ] to deeply equal [ Array(1) ]
+
+- Expected
++ Received
+
+  [
+    {
+-     "key": "legacyResourceDebug",
+-     "label": "兼容数据",
+-     "type": "legacy-resource-debug",
++     "key": "toolName",
++     "label": "工具名称",
++     "placeholder": "lookup_order",
++     "type": "text",
++   },
++   {
++     "key": "serverIds",
++     "label": "MCP Server IDs",
++     "placeholder": "[1]",
++     "type": "textarea",
++   },
++   {
++     "key": "inputMappings",
++     "label": "输入映射",
++     "placeholder": "[{\"name\":\"orderId\",\"valueMode\":\"reference\",\"value\":\"{{start.USER_INPUT}}\",\"required\":true}]",
++     "type": "textarea",
++   },
++   {
++     "key": "timeoutMs",
++     "label": "超时毫秒",
++     "max": 120000,
++     "min": 100,
++     "placeholder": "30000",
++     "step": 1000,
++     "type": "number",
++   },
++   {
++     "key": "retryCount",
++     "label": "重试次数",
++     "max": 5,
++     "min": 0,
++     "placeholder": "0",
++     "step": 1,
++     "type": "number",
++   },
++   {
++     "key": "errorBehavior",
++     "label": "错误行为",
++     "options": [
++       "fail",
++       "continue",
++       "branch",
++     ],
++     "type": "select",
+    },
+  ]
+
+ ❯ src/views/workflow/nodeConfig.test.ts:290:32
+    288|     for (const type of ['TOOL_CALL', 'KNOWLEDGE', 'EXECUTE_WORKFLOW', …
+    289|       const advanced = getNodeConfigSchema(type).sections.find((sectio…
+    290|       expect(advanced?.fields).toEqual([
+       |                                ^
+    291|         { key: 'legacyResourceDebug', label: '兼容数据', type: 'legacy-res…
+    292|       ])
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 16 passed (17)
+   Start at  20:36:03
+   Duration  270ms (transform 37ms, setup 0ms, collect 39ms, tests 12ms, environment 0ms, prepare 51ms)

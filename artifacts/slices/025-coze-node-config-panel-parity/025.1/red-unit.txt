@@ -1,0 +1,54 @@
+> vitest run src/views/workflow/variableCatalog.test.ts
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ ❯ src/views/workflow/variableCatalog.test.ts (5 tests | 2 failed) 8ms
+   ✓ workflow variable catalog > offers only START and connected upstream node outputs for a selected node 2ms
+   ✓ workflow variable catalog > formats inserted references with the workflow template syntax 0ms
+   ✓ workflow variable catalog > uses declared output parameter rows as downstream variable options 0ms
+   × workflow variable catalog > builds Coze-like source groups with typed variable rows 4ms
+     → expected [ [ 'user', '用户变量', '开始' ], …(3) ] to deeply equal [ [ 'user', '用户变量', '开始' ], …(4) ]
+   × workflow variable catalog > adds Chatflow scoped variables to the shared selector as direct references 1ms
+     → expected [ '{{start.sys.query}}', …(19) ] to include '{{sys.channel_id}}'
+ Test Files  1 failed (1)
+      Tests  2 failed | 3 passed (5)
+   Start at  10:17:04
+   Duration  293ms (transform 54ms, setup 0ms, collect 43ms, tests 8ms, environment 0ms, prepare 80ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/views/workflow/variableCatalog.test.ts > workflow variable catalog > builds Coze-like source groups with typed variable rows
+AssertionError: expected [ [ 'user', '用户变量', '开始' ], …(3) ] to deeply equal [ [ 'user', '用户变量', '开始' ], …(4) ]
+- Expected
++ Received
+@@ -3,15 +3,10 @@
+      "user",
+      "用户变量",
+      "开始",
+    ],
+    [
+-     "global",
+-     "应用变量",
+-     "Global",
+-   ],
+-   [
+      "conversation",
+      "会话变量",
+      "会话",
+    ],
+    [
+ ❯ src/views/workflow/variableCatalog.test.ts:67:83
+     65|     const catalog = buildVariableCatalog(graph, end.nodeKey)
+     66|
+     67|     expect(catalog.map((group) => [group.scope, group.title, group.sou…
+       |                                                                                   ^
+     68|       ['user', '用户变量', '开始'],
+     69|       ['global', '应用变量', 'Global'],
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+ FAIL  src/views/workflow/variableCatalog.test.ts > workflow variable catalog > adds Chatflow scoped variables to the shared selector as direct references
+AssertionError: expected [ '{{start.sys.query}}', …(19) ] to include '{{sys.channel_id}}'
+ ❯ src/views/workflow/variableCatalog.test.ts:105:24
+    103|     expect(references).toContain('{{sys.query}}')
+    104|     expect(references).toContain('{{sys.conversation_id}}')
+    105|     expect(references).toContain('{{sys.channel_id}}')
+       |                        ^
+    106|     expect(references).toContain('{{conversation.conversation_id}}')
+    107|     expect(references).toContain('{{user.vip_level}}')
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯

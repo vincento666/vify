@@ -1,0 +1,54 @@
+{
+  "chatflowId": 1868,
+  "url": "http://127.0.0.1:5176/chatflows/1868/canvas",
+  "viewport": "default",
+  "checks": [
+    {
+      "nodeSelector": ".coze-node.node-message",
+      "expectedText": [
+        "发送消息",
+        "发送内容",
+        "流式输出"
+      ],
+      "rowTestId": "output-parameter-row",
+      "rowCount": 1,
+      "screenshotName": "uat-message-panel.png"
+    },
+    {
+      "nodeSelector": ".coze-node.node-question",
+      "expectedText": [
+        "提问并等待",
+        "回答选项",
+        "问题内容",
+        "答案类型"
+      ],
+      "rowTestId": "question-option-row",
+      "rowCount": 2,
+      "screenshotName": "uat-question-panel.png"
+    },
+    {
+      "nodeSelector": ".coze-node.node-information_collection",
+      "expectedText": [
+        "收集策略",
+        "收集字段",
+        "写入会话上下文",
+        "追问流式输出"
+      ],
+      "rowTestId": "collection-field-row",
+      "rowCount": 2,
+      "screenshotName": "uat-information-collection-panel.png"
+    },
+    {
+      "nodeSelector": ".coze-node.node-intent_recognition",
+      "expectedText": [
+        "识别策略",
+        "意图分支",
+        "默认意图",
+        "分类模式"
+      ],
+      "rowTestId": "intent-row",
+      "rowCount": 2,
+      "screenshotName": "uat-intent-panel.png"
+    }
+  ]
+}

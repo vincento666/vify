@@ -1,0 +1,60 @@
+> vitest run src/views/workflow/nodeConfig.test.ts
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ ❯ src/views/workflow/nodeConfig.test.ts (11 tests | 2 failed) 16ms
+   ✓ workflow node config schema > does not expose node-name editing fields on any node panel 2ms
+   ✓ workflow node config schema > uses switch controls for stream-output fields instead of select rows 0ms
+   ✓ workflow node config schema > uses compact variable type labels in selectors and parameter rows 0ms
+   × workflow node config schema > provides runtime-backed editable fields for each canvas node type 10ms
+     → expected [ 'output-parameters', 'textarea' ] to include 'end-response'
+   × workflow node config schema > models END as a Coze-like response editor with return mode and stream switch 2ms
+     → expected [ …(2) ] to deeply equal [ { key: 'endResponse', …(2) } ]
+   ✓ workflow node config schema > normalizes START variables into Coze-like input rows while preserving legacy outputVariables 0ms
+   ✓ workflow node config schema > adds a shared input parameter editor field to runnable middle node schemas 0ms
+   ✓ workflow node config schema > updates node name and config without dropping ui position metadata 0ms
+   ✓ workflow node config schema > normalizes Coze-like output format and output parameter rows 0ms
+   ✓ workflow node config schema > keeps legacy outputVariable compatible while validating duplicate and illegal names 0ms
+   ✓ workflow node config schema > normalizes and validates typed input parameter rows 0ms
+ Test Files  1 failed (1)
+      Tests  2 failed | 9 passed (11)
+   Start at  11:44:36
+   Duration  307ms (transform 56ms, setup 0ms, collect 54ms, tests 16ms, environment 0ms, prepare 65ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/views/workflow/nodeConfig.test.ts > workflow node config schema > provides runtime-backed editable fields for each canvas node type
+AssertionError: expected [ 'output-parameters', 'textarea' ] to include 'end-response'
+ ❯ src/views/workflow/nodeConfig.test.ts:121:113
+    119|       'inputParameters',
+    120|     )
+    121|     expect(getNodeConfigSchema('END').sections.flatMap((section) => se…
+       |                                                                                                                 ^
+    122|       'end-response',
+    123|     )
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+ FAIL  src/views/workflow/nodeConfig.test.ts > workflow node config schema > models END as a Coze-like response editor with return mode and stream switch
+AssertionError: expected [ …(2) ] to deeply equal [ { key: 'endResponse', …(2) } ]
+- Expected
++ Received
+  [
+    {
+-     "key": "endResponse",
+-     "label": "输出",
+-     "type": "end-response",
++     "key": "outputParameters",
++     "label": "输出参数",
++     "type": "output-parameters",
++   },
++   {
++     "key": "output",
++     "label": "响应内容",
++     "placeholder": "返回给调用方的文本，可使用变量引用",
++     "type": "textarea",
+    },
+  ]
+ ❯ src/views/workflow/nodeConfig.test.ts:129:20
+    127|     const fields = getNodeConfigSchema('END').sections.flatMap((sectio…
+    128|
+    129|     expect(fields).toEqual([
+       |                    ^
+    130|       { key: 'endResponse', label: '输出', type: 'end-response' },
+    131|     ])
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
