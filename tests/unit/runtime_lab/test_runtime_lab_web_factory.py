@@ -39,3 +39,26 @@ class RuntimeLabWebFactoryTest(unittest.TestCase):
         )
 
         self.assertIsInstance(classifier, LlmConstrainedIntentClassifier)
+
+    def test_default_runtime_lab_faq_gate_answers_airline_faq_without_external_kb(self) -> None:
+        from app.modules.runtime_lab.web.router import _runtime_lab_faq_answer_gate
+
+        gate = _runtime_lab_faq_answer_gate(Settings(), None)
+
+        self.assertIsNotNone(gate)
+        assert gate is not None
+        proposal = gate.propose("儿童票可以退吗？", active_task=None, suspended_tasks=[])
+        self.assertIsNotNone(proposal)
+        assert proposal is not None
+        self.assertEqual(proposal.source_layer, "runtime_airline_faq")
+        self.assertIn("儿童票", proposal.answer)
+
+    def test_runtime_airline_faq_gate_does_not_steal_transactional_sop_request(self) -> None:
+        from app.modules.runtime_lab.web.router import _runtime_lab_faq_answer_gate
+
+        gate = _runtime_lab_faq_answer_gate(Settings(), None)
+
+        self.assertIsNotNone(gate)
+        assert gate is not None
+        proposal = gate.propose("行李可能超重，能不能提前买一点额度", active_task=None, suspended_tasks=[])
+        self.assertIsNone(proposal)

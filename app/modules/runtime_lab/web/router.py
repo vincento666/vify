@@ -33,7 +33,7 @@ from app.modules.runtime_lab.domain.rag_gate import RagAnswerGate
 from app.modules.runtime_lab.domain.service import RuntimeLabService
 from app.modules.runtime_lab.domain.sop_adapter import FakeSopRuntimeAdapter
 from app.modules.runtime_lab.infra.repository import RuntimeLabRepository
-from app.modules.runtime_lab.web.schemas import RuntimeLabMessageRequest
+from app.modules.runtime_lab.web.schemas import RuntimeLabFallbackAgentRequest, RuntimeLabMessageRequest
 from app.modules.runtime_policy.domain.factories import (
     build_agent_output_policy_from_snapshot,
     build_classifier_from_snapshot,
@@ -41,7 +41,9 @@ from app.modules.runtime_policy.domain.factories import (
 )
 from app.modules.runtime_policy.domain.resolver import RuntimePolicyResolveContext, RuntimePolicyResolver
 from app.modules.runtime_policy.domain.service import RuntimeDecisionLogService
+from app.modules.runtime_policy.domain.service import RuntimePolicyProfileService
 from app.modules.runtime_policy.infra.repository import RuntimePolicyRepository
+from app.modules.runtime_policy.web.schemas import RuntimePolicyProfileRequest
 from app.modules.provider.api.facade import ProviderModelFacade
 from app.modules.workflow.domain.service import WorkflowService
 from app.modules.workflow.infra.chatflow_state_repository import ChatflowStateRepository
@@ -61,7 +63,7 @@ def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeL
     faq_answer_gate = _runtime_lab_faq_answer_gate(settings, session)
     faq_semantic_gate = _runtime_lab_faq_semantic_gate(settings, session)
     rag_answer_gate = _runtime_lab_rag_answer_gate(settings, session)
-    fallback_agent = build_fallback_agent_from_snapshot(policy_snapshot)
+    fallback_agent = build_fallback_agent_from_snapshot(policy_snapshot, session=session)
     agent_output_policy = build_agent_output_policy_from_snapshot(policy_snapshot)
     if not bindings:
         return RuntimeLabService(
@@ -175,6 +177,15 @@ def get_config(
     return success(_runtime_lab_config(settings, session, context))
 
 
+@router.put("/fallback-agent")
+def update_fallback_agent(
+    request: RuntimeLabFallbackAgentRequest,
+    session: Session = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> dict[str, Any]:
+    return success(_update_runtime_lab_fallback_agent(session, settings, request))
+
+
 def _runtime_lab_chatflow_bindings(raw: str | None) -> dict[str, int]:
     text = (raw or "").strip()
     if not text:
@@ -205,6 +216,11 @@ def _runtime_lab_config(
     effective = RuntimePolicyResolver(RuntimePolicyRepository(session), settings).resolve(context)
     snapshot = effective["policySnapshot"]
     classifier = snapshot["classifier"]
+    fallback_agent = dict(snapshot.get("fallbackAgent") or {})
+    fallback_agent_options = _runtime_lab_fallback_agent_options(session)
+    fallback_agent_by_id = {int(agent["id"]): agent for agent in fallback_agent_options}
+    fallback_agent_id = _optional_int_value(fallback_agent.get("agentId"))
+    fallback_agent_row = fallback_agent_by_id.get(fallback_agent_id or 0)
     base_url = str(classifier.get("baseUrl") or "").strip()
     fallback_model = str(classifier.get("fallbackModel") or "").strip()
     api_key_configured = bool(str(classifier.get("apiKeyRef") or "").strip())
@@ -243,7 +259,140 @@ def _runtime_lab_config(
         "rag": {
             "knowledgeBaseIds": list(snapshot["rag"].get("knowledgeBaseIds") or []),
         },
+        "fallbackAgent": {
+            "enabled": bool(fallback_agent.get("enabled")),
+            "type": str(fallback_agent.get("type") or "fake"),
+            "agentId": fallback_agent_id,
+            "agentName": str(fallback_agent_row.get("name") or "") if fallback_agent_row else "",
+            "available": _runtime_lab_fallback_agent_available(fallback_agent, fallback_agent_row),
+        },
+        "fallbackAgentOptions": fallback_agent_options,
     }
+
+
+def _update_runtime_lab_fallback_agent(
+    session: Session,
+    settings: Settings,
+    request: RuntimeLabFallbackAgentRequest,
+) -> dict[str, Any]:
+    repository = RuntimePolicyRepository(session)
+    if request.enabled:
+        if request.agent_id is None:
+            raise BizError(ErrorCode.BAD_REQUEST, "fallback Agent requires agentId")
+        agent = AgentRepository(session).get(int(request.agent_id))
+        if agent is None or not bool(agent.get("enabled")):
+            raise BizError(ErrorCode.NOT_FOUND, "Fallback Agent not found or disabled")
+    effective = RuntimePolicyResolver(repository, settings).resolve()
+    snapshot = effective["policySnapshot"]
+    fallback_agent = dict(snapshot.get("fallbackAgent") or {})
+    if request.enabled:
+        fallback_agent.update({"enabled": True, "type": "existing_agent", "agentId": int(request.agent_id)})
+    else:
+        fallback_agent.update({"enabled": False, "type": "fake", "agentId": None})
+
+    service = RuntimePolicyProfileService(repository)
+    if effective.get("source") == "profile" and effective.get("profileId"):
+        row = repository.get_profile(int(effective["profileId"]))
+        if row is None:
+            raise BizError(ErrorCode.NOT_FOUND, "Runtime policy profile not found")
+        payload = _runtime_policy_payload_from_row(row)
+        payload["fallbackAgent"] = fallback_agent
+        profile = service.update_profile(
+            int(effective["profileId"]),
+            RuntimePolicyProfileRequest.model_validate(payload),
+        )
+    else:
+        payload = _runtime_policy_payload_from_snapshot(snapshot, fallback_agent)
+        profile = service.create_profile(RuntimePolicyProfileRequest.model_validate(payload))
+    selected_config = _runtime_lab_config(settings, session)
+    selected_config["updatedProfile"] = {
+        "profileId": profile["id"],
+        "profileVersion": profile["version"],
+    }
+    return selected_config
+
+
+def _runtime_lab_fallback_agent_options(session: Session) -> list[dict[str, Any]]:
+    rows, _total = AgentRepository(session).list_page(1, 100, enabled=True)
+    return [
+        {
+            "id": int(row["id"]),
+            "name": str(row.get("name") or ""),
+            "description": str(row.get("description") or ""),
+            "enabled": bool(row.get("enabled")),
+        }
+        for row in rows
+    ]
+
+
+def _runtime_lab_fallback_agent_available(
+    fallback_agent: Mapping[str, Any],
+    agent_row: Mapping[str, Any] | None,
+) -> bool:
+    if not bool(fallback_agent.get("enabled")):
+        return False
+    fallback_type = str(fallback_agent.get("type") or "fake")
+    if fallback_type == "fake":
+        return True
+    if fallback_type == "existing_agent":
+        return agent_row is not None and bool(agent_row.get("enabled"))
+    return False
+
+
+def _runtime_policy_payload_from_row(row: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "name": str(row.get("name") or "RuntimeLab routing policy"),
+        "description": str(row.get("description") or ""),
+        "status": str(row.get("status") or "active"),
+        "mode": str(row.get("mode") or "balanced"),
+        "bindings": dict(row.get("bindings") or {}),
+        "thresholds": dict(row.get("thresholds") or {}),
+        "classifier": dict(row.get("classifier") or {}),
+        "faq": dict(row.get("faq") or {}),
+        "rag": dict(row.get("rag") or {}),
+        "fallbackAgent": dict(row.get("fallback_agent") or {}),
+        "handoff": dict(row.get("handoff") or {}),
+        "audit": dict(row.get("audit") or {}),
+    }
+
+
+def _runtime_policy_payload_from_snapshot(
+    snapshot: Mapping[str, Any],
+    fallback_agent: Mapping[str, Any],
+) -> dict[str, Any]:
+    return {
+        "name": "034 RuntimeLab routing policy",
+        "description": "RuntimeLab generated policy for unified routing fallback Agent selection",
+        "status": "active",
+        "mode": str(snapshot.get("mode") or "balanced"),
+        "bindings": dict(snapshot.get("bindings") or {}),
+        "thresholds": dict(snapshot.get("thresholds") or {}),
+        "classifier": _runtime_policy_schema_safe_classifier(snapshot.get("classifier")),
+        "faq": dict(snapshot.get("faq") or {}),
+        "rag": dict(snapshot.get("rag") or {}),
+        "fallbackAgent": dict(fallback_agent),
+        "handoff": dict(snapshot.get("handoff") or {}),
+        "audit": {
+            "createdBy": "runtime-lab",
+            "updatedBy": "runtime-lab",
+            "changeReason": "Select RuntimeLab fallback Agent",
+        },
+    }
+
+
+def _runtime_policy_schema_safe_classifier(value: Any) -> dict[str, Any]:
+    classifier = dict(value or {})
+    if str(classifier.get("mode") or "").lower() != "llm":
+        return classifier
+    required = (
+        str(classifier.get("baseUrl") or "").strip(),
+        str(classifier.get("apiKeyRef") or "").strip(),
+        str(classifier.get("model") or "").strip(),
+    )
+    if all(required):
+        return classifier
+    classifier["enabled"] = False
+    return classifier
 
 
 def _runtime_lab_faq_answer_gate(settings: Settings, session: Session) -> FaqAnswerGate | None:

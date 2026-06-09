@@ -7,3 +7,10 @@ class RuntimeLabMessageRequest(BaseModel):
     message: str
     idempotency_key: str | None = Field(default=None, alias="idempotencyKey")
     enabled_sop_ids: list[str] | None = Field(default=None, alias="enabledSopIds")
+
+
+class RuntimeLabFallbackAgentRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    enabled: bool = True
+    agent_id: int | None = Field(default=None, alias="agentId")
