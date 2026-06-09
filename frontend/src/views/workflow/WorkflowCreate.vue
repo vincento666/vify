@@ -2311,7 +2311,7 @@
                     >
                       {{ group.name }}
                     </button>
-                    <span class="variable-type-badge aggregation-group-type">{{ variableListTypeLabel(group.type) }}</span>
+                    <span class="variable-type-badge aggregation-group-type">{{ variableListTypeLabel(aggregationGroupResolvedType(group)) }}</span>
                     <span v-if="group.variables.some((item) => item.valueMode === 'reference' || String(item.value || '').trim())" class="aggregation-group-info" aria-label="变量聚合分组说明">i</span>
                   </span>
                   <button
@@ -6061,10 +6061,25 @@ function aggregationGroupRows(): AggregationGroup[] {
   return selectedNode.value ? normalizeAggregationGroups(selectedNode.value.config) : []
 }
 
+function aggregationOutputTypeFromVariableType(type: VariableCatalogType | null | undefined): OutputParameterType {
+  return outputParameterTypeOptions.includes(type as OutputParameterType) ? type as OutputParameterType : 'string'
+}
+
+function aggregationGroupResolvedType(group: AggregationGroup): OutputParameterType {
+  const selectedVariableType = group.variables
+    .map((variable) => inputReferenceSelection(String(variable.value || ''))?.item.type)
+    .find((type): type is VariableCatalogType => Boolean(type))
+  return aggregationOutputTypeFromVariableType(selectedVariableType || group.type)
+}
+
+function aggregationGroupsForPersist(groups: AggregationGroup[]) {
+  return groups.map((group) => ({ ...group, type: aggregationGroupResolvedType(group) }))
+}
+
 function aggregationOutputParameters(groups: AggregationGroup[]) {
   return groups.map((group) => ({
     name: group.name || 'Group1',
-    type: group.type || 'string',
+    type: aggregationGroupResolvedType(group),
   }))
 }
 
@@ -6073,11 +6088,12 @@ function aggregationOutputSummaryRows() {
 }
 
 function persistAggregationGroups(groups: AggregationGroup[]) {
+  const typedGroups = aggregationGroupsForPersist(groups)
   updateSelectedNode({
     config: {
       strategy: 'first_non_empty',
-      groups,
-      outputParameters: aggregationOutputParameters(groups),
+      groups: typedGroups,
+      outputParameters: aggregationOutputParameters(typedGroups),
     },
   })
 }

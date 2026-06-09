@@ -426,6 +426,19 @@ describe('workflow node config schema', () => {
       ],
     })
 
+    expect(normalizeAggregationGroups({
+      groups: [
+        {
+          name: 'Score',
+          type: 'number',
+          variables: [{ value: '{{start.score}}' }, { value: '' }],
+        },
+      ],
+    })[0].variables).toEqual([
+      { valueMode: 'reference', value: '{{start.score}}' },
+      { valueMode: 'literal', value: '' },
+    ])
+
     expect(normalizeHumanInputSchema({
       inputSchema: '[{"name":"approved","type":"boolean","required":true,"description":"是否通过"}]',
     })).toEqual([

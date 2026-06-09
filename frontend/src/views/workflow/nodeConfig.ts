@@ -739,9 +739,10 @@ export function normalizeAggregationGroups(config: Record<string, any> = {}): Ag
         .map((item) => {
           const value = typeof item === 'string' ? item : (item as any)?.value ?? ''
           const valueMode = inferInputValueMode(value, typeof item === 'string' ? undefined : (item as any)?.valueMode)
+          const isEmptyLiteral = valueMode !== 'reference' && String(value ?? '').trim() === ''
           return {
             valueMode,
-            value: normalizeInputValue(value, type, valueMode),
+            value: isEmptyLiteral ? '' : normalizeInputValue(value, type, valueMode),
           }
         })
       return {
