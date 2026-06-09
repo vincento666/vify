@@ -2612,6 +2612,8 @@ def _truthy_condition_value(value: Any) -> bool:
 def _llm_options(config: dict[str, Any]) -> dict[str, Any]:
     keys = {
         "model",
+        "modelConfigId",
+        "model_config_id",
         "systemPrompt",
         "temperature",
         "maxTokens",

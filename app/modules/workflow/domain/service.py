@@ -809,6 +809,7 @@ class WorkflowService:
         return _AgentBackedWorkflowLlmCompleter(
             agent=agent,
             model_config=model_config,
+            model_facade=self._model_facade,
             request_builder=self._request_builder,
             parser=self._parser,
             llm_client_factory=self._llm_client_factory,
@@ -915,12 +916,14 @@ class _AgentBackedWorkflowLlmCompleter:
         self,
         agent: dict[str, Any],
         model_config: ModelConfigDto,
+        model_facade: ProviderModelFacade | None,
         request_builder: OpenAIChatRequestBuilder,
         parser: OpenAIAdapterParser,
         llm_client_factory: LlmClientFactory,
     ) -> None:
         self._agent = agent
         self._model_config = model_config
+        self._model_facade = model_facade
         self._request_builder = request_builder
         self._parser = parser
         self._llm_client_factory = llm_client_factory
@@ -928,19 +931,20 @@ class _AgentBackedWorkflowLlmCompleter:
 
     def complete_prompt(self, prompt: str, options: dict[str, Any] | None = None) -> str:
         options = options or {}
+        model_config = self._active_model_config(options)
         payload = self._request_builder.build(
-            model=str(options.get("model") or self._model_config.model_id),
+            model=str(options.get("model") or model_config.model_id),
             messages=self._messages(prompt, str(options.get("systemPrompt") or "")),
             temperature=_optional_float(options.get("temperature"), float(self._agent["temperature"])),
             max_tokens=_optional_int(options.get("maxTokens") or options.get("max_tokens"), int(self._agent["max_tokens"])),
-            extra_params=self._extra_params(options),
+            extra_params=self._extra_params(options, model_config),
         )
         started_at = perf_counter()
-        response = self._complete_with_fallback(payload)
+        response = self._complete_with_fallback(payload, model_config)
         elapsed_ms = int((perf_counter() - started_at) * 1000)
         result = self._parser.parse_chat_response(response)
         self._last_call_debug = {
-            "model": str(response.get("model") or payload.get("model") or self._model_config.model_id),
+            "model": str(response.get("model") or payload.get("model") or model_config.model_id),
             "elapsedMs": elapsed_ms,
             "input": _redact_llm_payload(payload),
             "output": {
@@ -965,23 +969,24 @@ class _AgentBackedWorkflowLlmCompleter:
         if not self.supports_tool_calls():
             raise WorkflowExecutionError("Selected Workflow LLM provider/model does not support tool calls")
         options = options or {}
+        model_config = self._active_model_config(options)
         result = ChatOrchestrator(
             request_builder=self._request_builder,
             parser=self._parser,
         ).run(
-            model=str(options.get("model") or self._model_config.model_id),
+            model=str(options.get("model") or model_config.model_id),
             messages=self._messages(prompt, str(options.get("systemPrompt") or "")),
             tools=tools,
             tool_ids=tool_ids,
             mcp_facade=mcp_facade,
-            llm_client=self._llm_client(),
+            llm_client=self._llm_client(model_config),
             temperature=_optional_float(options.get("temperature"), float(self._agent["temperature"])),
             max_tokens=_optional_int(options.get("maxTokens") or options.get("max_tokens"), int(self._agent["max_tokens"])),
-            extra_params=self._extra_params(options),
+            extra_params=self._extra_params(options, model_config),
         )
         prompt_text = "\n".join(message.content for message in self._messages(prompt, str(options.get("systemPrompt") or "")))
         self._last_call_debug = {
-            "model": str(options.get("model") or self._model_config.model_id),
+            "model": str(options.get("model") or model_config.model_id),
             "elapsedMs": 0,
             "input": {"messages": [{"role": "user", "content": prompt_text}], "tools": [tool.name for tool in tools]},
             "output": {"content": result.final_content},
@@ -1008,8 +1013,20 @@ class _AgentBackedWorkflowLlmCompleter:
         messages.append(ChatRequestMessage(role="user", content=prompt))
         return messages
 
-    def _extra_params(self, options: dict[str, Any]) -> dict[str, Any]:
-        extra_params = dict(self._model_config.extra_params or {})
+    def _active_model_config(self, options: Mapping[str, Any]) -> ModelConfigDto:
+        raw_model_config_id = options.get("modelConfigId") or options.get("model_config_id")
+        if raw_model_config_id in (None, "") or self._model_facade is None:
+            return self._model_config
+        try:
+            model_config_id = int(raw_model_config_id)
+        except (TypeError, ValueError) as exc:
+            raise WorkflowExecutionError("LLM node modelConfigId is invalid") from exc
+        if model_config_id == int(self._model_config.id):
+            return self._model_config
+        return self._model_facade.get_enabled_model_config(model_config_id)
+
+    def _extra_params(self, options: dict[str, Any], model_config: ModelConfigDto) -> dict[str, Any]:
+        extra_params = dict(model_config.extra_params or {})
         mapped = {
             "top_p": options.get("topP") or options.get("top_p"),
             "frequency_penalty": options.get("frequencyPenalty") or options.get("frequency_penalty"),
@@ -1034,21 +1051,21 @@ class _AgentBackedWorkflowLlmCompleter:
             extra_params["tool_choice"] = tool_choice
         return extra_params
 
-    def _llm_client(self) -> Any:
+    def _llm_client(self, model_config: ModelConfigDto) -> Any:
         return self._llm_client_factory(
             ProviderChatConfig(
-                provider_type=self._model_config.provider_type,
-                base_url=self._model_config.provider_base_url,
-                auth_config=self._model_config.provider_auth_config,
+                provider_type=model_config.provider_type,
+                base_url=model_config.provider_base_url,
+                auth_config=model_config.provider_auth_config,
             )
         )
 
-    def _complete_with_fallback(self, payload: dict[str, Any]) -> dict[str, Any]:
-        client = self._llm_client()
+    def _complete_with_fallback(self, payload: dict[str, Any], model_config: ModelConfigDto) -> dict[str, Any]:
+        client = self._llm_client(model_config)
         try:
             return client.complete(payload)
         except Exception as exc:
-            fallback_model = self._fallback_model()
+            fallback_model = self._fallback_model(model_config)
             if not fallback_model or fallback_model == payload.get("model"):
                 raise WorkflowExecutionError(f"LLM provider request failed: {exc}") from exc
             fallback_payload = dict(payload)
@@ -1058,8 +1075,8 @@ class _AgentBackedWorkflowLlmCompleter:
             except Exception as fallback_exc:
                 raise WorkflowExecutionError(f"LLM provider request failed: {fallback_exc}") from fallback_exc
 
-    def _fallback_model(self) -> str:
-        extra_params = dict(self._model_config.extra_params or {})
+    def _fallback_model(self, model_config: ModelConfigDto) -> str:
+        extra_params = dict(model_config.extra_params or {})
         return str(extra_params.get("fallbackModel") or extra_params.get("fallback_model") or "").strip()
 
     def consume_last_call_debug(self) -> dict[str, Any]:

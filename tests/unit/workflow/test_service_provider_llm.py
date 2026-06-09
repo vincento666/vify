@@ -172,6 +172,33 @@ class WorkflowServiceProviderLlmTest(unittest.TestCase):
         self.assertEqual(result["input"], {"userMessage": "node fixture"})
         self.assertEqual(fake_client.captured_payload["messages"][-1]["content"], "Canvas prompt: node fixture")
 
+    def test_run_node_prefers_llm_node_model_config_over_default_agent(self) -> None:
+        repository = _WorkflowRepositoryStub(
+            llm_config={
+                "modelConfigId": 777,
+                "prompt": "Canvas prompt: {{start.userMessage}}",
+                "outputVariable": "answer",
+            }
+        )
+        model_facade = _NodeOverrideModelFacadeStub()
+        captured_configs: list[Any] = []
+        fake_client = FakeOpenAIChatClient(response_payload=_assistant_payload("NODE_MODEL_RESPONSE"))
+        service = WorkflowService(
+            repository,
+            flow_type="WORKFLOW",
+            agent_repository=_AgentRepositoryStub(),
+            model_facade=model_facade,
+            llm_client_factory=lambda config: captured_configs.append(config) or fake_client,
+        )
+
+        result = service.run_node(123, "llm", WorkflowNodeRunRequest(input={"userMessage": "node fixture"}))
+
+        self.assertEqual(result["status"], "SUCCEEDED")
+        self.assertEqual(result["output"]["answer"], "NODE_MODEL_RESPONSE")
+        self.assertEqual(model_facade.requested_ids, [601, 777])
+        self.assertEqual(fake_client.captured_payload["model"], "node-selected-model")
+        self.assertEqual(captured_configs[-1].base_url, "mock://success")
+
     def test_run_node_rejects_missing_node(self) -> None:
         service = WorkflowService(
             _WorkflowRepositoryStub(),
@@ -334,6 +361,37 @@ class _FallbackModelFacadeStub:
             model_id="qwen/qwen3.5-9b",
             context_size=8192,
             extra_params={"fallbackModel": "deepseek/deepseek-v4-flash"},
+        )
+
+
+class _NodeOverrideModelFacadeStub:
+    def __init__(self) -> None:
+        self.requested_ids: list[int] = []
+
+    def get_enabled_model_config(self, model_config_id: int) -> ModelConfigDto:
+        self.requested_ids.append(model_config_id)
+        if model_config_id == 777:
+            return ModelConfigDto(
+                id=model_config_id,
+                provider_id=7770,
+                provider_type="OPENAI",
+                provider_base_url="mock://success",
+                provider_auth_config={},
+                name="Node selected model",
+                model_id="node-selected-model",
+                context_size=8192,
+                extra_params={},
+            )
+        return ModelConfigDto(
+            id=model_config_id,
+            provider_id=701,
+            provider_type="OPENAI",
+            provider_base_url="https://openrouter.ai/api/v1",
+            provider_auth_config={"api_key": "unit-test-key"},
+            name="Default agent model",
+            model_id="default-agent-model",
+            context_size=128000,
+            extra_params={},
         )
 
 

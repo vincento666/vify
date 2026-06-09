@@ -1,0 +1,101 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/vincento/work/develop/hify
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 8 items
+
+tests/unit/workflow/test_service_provider_llm.py ....FF                  [ 75%]
+tests/integration/workflow/test_workflow_node_run.py FF                  [100%]
+
+=================================== FAILURES ===================================
+_ WorkflowServiceProviderLlmTest.test_run_node_executes_only_selected_llm_node_with_fixture_context _
+
+self = <tests.unit.workflow.test_service_provider_llm.WorkflowServiceProviderLlmTest testMethod=test_run_node_executes_only_selected_llm_node_with_fixture_context>
+
+    def test_run_node_executes_only_selected_llm_node_with_fixture_context(self) -> None:
+        repository = _WorkflowRepositoryStub()
+        fake_client = FakeOpenAIChatClient(response_payload=_assistant_payload("NODE_ONLY_RESPONSE"))
+        service = WorkflowService(
+            repository,
+            flow_type="WORKFLOW",
+            agent_repository=_AgentRepositoryStub(),
+            model_facade=_ModelFacadeStub(),
+            llm_client_factory=lambda _config: fake_client,
+        )
+    
+>       result = service.run_node(123, "llm", WorkflowNodeRunRequest(input={"userMessage": "node fixture"}))
+                 ^^^^^^^^^^^^^^^^
+E       AttributeError: 'WorkflowService' object has no attribute 'run_node'
+
+tests/unit/workflow/test_service_provider_llm.py:128: AttributeError
+______ WorkflowServiceProviderLlmTest.test_run_node_rejects_missing_node _______
+
+self = <tests.unit.workflow.test_service_provider_llm.WorkflowServiceProviderLlmTest testMethod=test_run_node_rejects_missing_node>
+
+    def test_run_node_rejects_missing_node(self) -> None:
+        service = WorkflowService(
+            _WorkflowRepositoryStub(),
+            flow_type="WORKFLOW",
+            agent_repository=_AgentRepositoryStub(),
+            model_facade=_ModelFacadeStub(),
+        )
+    
+        with self.assertRaises(BizError) as error:
+>           service.run_node(123, "missing", WorkflowNodeRunRequest(input={"userMessage": "node fixture"}))
+            ^^^^^^^^^^^^^^^^
+E           AttributeError: 'WorkflowService' object has no attribute 'run_node'
+
+tests/unit/workflow/test_service_provider_llm.py:145: AttributeError
+_ WorkflowNodeRunIntegrationTest.test_selected_llm_node_run_does_not_continue_downstream _
+
+self = <tests.integration.workflow.test_workflow_node_run.WorkflowNodeRunIntegrationTest testMethod=test_selected_llm_node_run_does_not_continue_downstream>
+
+    def test_selected_llm_node_run_does_not_continue_downstream(self) -> None:
+        fake_client = FakeOpenAIChatClient(response_payload=_assistant_payload("NODE_ONLY_RESPONSE"))
+        app.dependency_overrides[get_workflow_service] = _service_override(fake_client)
+    
+        with TestClient(app) as client:
+            workflow = _create_node_run_workflow(client)
+            response = client.post(
+                f"/api/v1/workflows/{workflow['id']}/nodes/llm/runs",
+                json={"input": {"userMessage": "node fixture"}},
+            )
+    
+>       self.assertEqual(response.status_code, 200)
+E       AssertionError: 404 != 200
+
+tests/integration/workflow/test_workflow_node_run.py:40: AssertionError
+__ WorkflowNodeRunIntegrationTest.test_selected_node_run_rejects_missing_node __
+
+self = <tests.integration.workflow.test_workflow_node_run.WorkflowNodeRunIntegrationTest testMethod=test_selected_node_run_rejects_missing_node>
+
+    def test_selected_node_run_rejects_missing_node(self) -> None:
+        fake_client = FakeOpenAIChatClient(response_payload=_assistant_payload("NODE_ONLY_RESPONSE"))
+        app.dependency_overrides[get_workflow_service] = _service_override(fake_client)
+    
+        with TestClient(app) as client:
+            workflow = _create_node_run_workflow(client)
+            response = client.post(
+                f"/api/v1/workflows/{workflow['id']}/nodes/missing/runs",
+                json={"input": {"userMessage": "node fixture"}},
+            )
+    
+        self.assertEqual(response.status_code, 404)
+>       self.assertIn("Workflow node not found", response.json()["message"])
+E       AssertionError: 'Workflow node not found' not found in 'Not Found'
+
+tests/integration/workflow/test_workflow_node_run.py:59: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/vincento/work/develop/hify/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/unit/workflow/test_service_provider_llm.py::WorkflowServiceProviderLlmTest::test_run_node_executes_only_selected_llm_node_with_fixture_context
+FAILED tests/unit/workflow/test_service_provider_llm.py::WorkflowServiceProviderLlmTest::test_run_node_rejects_missing_node
+FAILED tests/integration/workflow/test_workflow_node_run.py::WorkflowNodeRunIntegrationTest::test_selected_llm_node_run_does_not_continue_downstream
+FAILED tests/integration/workflow/test_workflow_node_run.py::WorkflowNodeRunIntegrationTest::test_selected_node_run_rejects_missing_node
+==================== 4 failed, 4 passed, 1 warning in 0.64s ====================
