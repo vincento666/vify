@@ -35,6 +35,8 @@ class ChatflowSopRuntimeAdapter:
             run = self._workflow_service.execute(chatflow_id, WorkflowRunRequest(input=_runtime_input(request)))
         except BizError as exc:
             return _failure(request, "CHATFLOW_START_FAILED", str(exc))
+        except Exception as exc:
+            return _failure(request, "CHATFLOW_START_FAILED", str(exc))
         return self._result_from_run(request, chatflow_id, run)
 
     def continue_sop(self, request: SopExecutionRequest) -> SopExecutionResult:
@@ -97,6 +99,8 @@ class ChatflowSopRuntimeAdapter:
                     WorkflowRunRequest(input=_runtime_input(request, resume_node=request.checkpoint.current_node_id)),
                 )
         except BizError as exc:
+            return _failure(request, "CHATFLOW_RESUME_FAILED", str(exc))
+        except Exception as exc:
             return _failure(request, "CHATFLOW_RESUME_FAILED", str(exc))
         return self._result_from_run(request, chatflow_id, run)
 
@@ -172,6 +176,21 @@ def _runtime_input(request: SopExecutionRequest, resume_node: str | None = None)
         "sys.user_id": str(request.metadata.get("userId") or request.metadata.get("user_id") or ""),
         "sys.channel": str(request.metadata.get("channel") or "runtime-lab"),
     }
+    history = request.metadata.get("history") or request.metadata.get("conversationHistory")
+    if isinstance(history, list):
+        runtime_input["history"] = history
+    inherited_context = request.metadata.get("inheritedContext") or request.metadata.get("inherited_context")
+    if isinstance(inherited_context, Mapping):
+        runtime_input["inherited_context"] = dict(inherited_context)
+        for key, value in inherited_context.items():
+            runtime_input[f"inherited_context.{key}"] = value
+    inherited = dict(request.collected)
+    inherited.update(_business_values_from_message(request.message))
+    if inherited:
+        runtime_input["collected"] = inherited
+        runtime_input["conversation"] = inherited
+        for key, value in inherited.items():
+            runtime_input[f"conversation.{key}"] = value
     if resume_node:
         resume: dict[str, Any] = {resume_node: _resume_data(request)}
         for collected_node_id in _collected_node_ids(request.checkpoint):
@@ -224,7 +243,8 @@ def _collected(
     session_variables: Mapping[str, Any],
 ) -> dict[str, Any]:
     collected = dict(request.checkpoint.collected) if request.checkpoint is not None else dict(request.collected)
-    collected.update(_business_values_from_message(request.message))
+    current_turn_values = _business_values_from_message(request.message)
+    collected.update(current_turn_values)
     conversation_variables = session_variables.get("conversation")
     if isinstance(conversation_variables, Mapping):
         collected.update(dict(conversation_variables))
@@ -241,26 +261,176 @@ def _collected(
         collected.update(dict(raw_collected))
     final = output.get("final")
     if isinstance(final, str):
+        for key, value in _business_values_from_text(final).items():
+            if key not in collected:
+                collected[key] = value
         for part in final.replace("|", " ").split():
             if part.startswith("order=") and "order_no" not in collected:
                 collected["order_no"] = part.split("=", 1)[1]
             if part.startswith("phone=") and "phone" not in collected:
                 collected["phone"] = part.split("=", 1)[1]
+    collected.update(current_turn_values)
     return collected
 
 
 def _business_values_from_message(text: str) -> dict[str, str]:
+    return _business_values_from_text(text)
+
+
+def _business_values_from_text(text: str) -> dict[str, str]:
     values: dict[str, str] = {}
-    order_match = re.search(r"(?:订单号|order_no|order)\s*[:：]?\s*([A-Za-z]{1,4}[-_]?\d{3,12})", text, re.IGNORECASE)
+    order_match = re.search(
+        r"(?:订单编号|订单号|预订编号|order_no|order)\s*[:：]?\s*"
+        r"([A-Za-z]{1,4}\d{2,8}(?:[-_]\d{3,12}){0,3}|[A-Za-z]{1,4}[-_]?\d{3,20})",
+        text,
+        re.IGNORECASE,
+    )
     if order_match:
         values["order_no"] = order_match.group(1)
     phone_match = re.search(r"(?<!\d)(1[3-9]\d{9})(?!\d)", text)
     if phone_match:
         values["phone"] = phone_match.group(1)
-    passenger_match = re.search(r"乘机人\s*[:：]?\s*([A-Za-z\u4e00-\u9fff][A-Za-z0-9_\-\u4e00-\u9fff]{0,20})", text)
+    passenger_match = re.search(
+        r"乘机人\s*[:：]?\s*"
+        r"(?!和|及|与|、|还有|手机号|电话|信息|姓名|等下|稍后|后面|再给)"
+        r"([A-Za-z\u4e00-\u9fff][A-Za-z0-9_\-\u4e00-\u9fff]{0,20})",
+        text,
+    )
     if passenger_match:
-        values["passenger_name"] = passenger_match.group(1)
+        passenger_name = _clean_passenger_name(passenger_match.group(1))
+        if passenger_name:
+            values["passenger_name"] = passenger_name
+    values.update(_route_values_from_text(text))
+    travel_time = _travel_time_from_text(text)
+    if travel_time:
+        values["travel_time"] = travel_time
+    target_time_match = re.search(
+        r"(?:改签|改到|改成|调整到|换到)[^，。,.]{0,20}?"
+        r"((?:今天|明天|后天|大后天|周[一二三四五六日天]|星期[一二三四五六日天])"
+        r"(?:上午|下午|晚上|中午|早上|晚间)?(?:\d{1,2}点(?:半)?(?:左右)?)?)",
+        text,
+    )
+    if target_time_match:
+        values["target_time"] = target_time_match.group(1)
     return values
+
+
+AIRLINE_CITY_NAMES = (
+    "北京",
+    "上海",
+    "广州",
+    "深圳",
+    "成都",
+    "重庆",
+    "杭州",
+    "南京",
+    "昆明",
+    "武汉",
+    "西安",
+    "厦门",
+    "青岛",
+    "长沙",
+    "郑州",
+    "天津",
+    "三亚",
+    "海口",
+    "大连",
+    "沈阳",
+    "哈尔滨",
+    "乌鲁木齐",
+    "贵阳",
+    "南宁",
+    "福州",
+    "合肥",
+    "济南",
+    "宁波",
+    "温州",
+    "太原",
+    "兰州",
+    "银川",
+    "呼和浩特",
+    "拉萨",
+    "西宁",
+)
+
+
+def _route_values_from_text(text: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    from_route = re.search(
+        r"从([\u4e00-\u9fffA-Za-z]{2,16})(?:出发)?(?:到|去|飞)([\u4e00-\u9fffA-Za-z]{2,16}?)"
+        r"(?:的?机票|的?航班|航班|，|,|。|$)",
+        text,
+    )
+    if from_route is not None:
+        origin = _clean_city(from_route.group(1))
+        destination = _clean_city(from_route.group(2))
+        if origin and not destination:
+            destination = _contextual_destination_city(text, origin)
+        if origin and destination:
+            values["origin"] = origin
+            values["destination"] = destination
+            values["route"] = f"{origin}到{destination}"
+            return values
+    for origin in AIRLINE_CITY_NAMES:
+        for destination in AIRLINE_CITY_NAMES:
+            if origin == destination:
+                continue
+            if re.search(f"{re.escape(origin)}(?:到|去|飞){re.escape(destination)}", text):
+                values["origin"] = origin
+                values["destination"] = destination
+                values["route"] = f"{origin}到{destination}"
+                return values
+    return values
+
+
+def _contextual_destination_city(text: str, origin: str) -> str:
+    for destination in AIRLINE_CITY_NAMES:
+        if destination == origin:
+            continue
+        if re.search(f"(?:去|到|飞往|飞去){re.escape(destination)}", text):
+            return destination
+    return ""
+
+
+def _travel_time_from_text(text: str) -> str:
+    time_match = re.search(
+        r"((?:今天|明天|后天|大后天|下?周[一二三四五六日天]|下?星期[一二三四五六日天])?"
+        r"(?:早上|上午|中午|下午|晚上|夜里)?\s*\d{1,2}点(?:\d{1,2}分|半)?(?:左右)?)",
+        text,
+    )
+    if time_match is not None:
+        return time_match.group(1).replace(" ", "")
+    date_period_match = re.search(
+        r"((?:今天|明天|后天|大后天|下?周[一二三四五六日天]|下?星期[一二三四五六日天])"
+        r"(?:早上|上午|中午|下午|晚上|夜里|晚间))",
+        text,
+    )
+    if date_period_match is not None:
+        return date_period_match.group(1)
+    date_match = re.search(r"(今天|明天|后天|大后天|下?周[一二三四五六日天]|下?星期[一二三四五六日天])", text)
+    return date_match.group(1) if date_match is not None else ""
+
+
+def _clean_city(value: str) -> str:
+    cleaned = value.strip()
+    prefixes = ("我要订", "我要定", "我想订", "我想定", "帮我订", "帮我定", "订", "定", "买")
+    for prefix in prefixes:
+        if cleaned.startswith(prefix):
+            cleaned = cleaned.removeprefix(prefix)
+    cleaned = cleaned.strip()
+    if cleaned in {"过去", "那边", "那里", "这边", "这里", "目的地"}:
+        return ""
+    return cleaned
+
+
+def _clean_passenger_name(value: str) -> str:
+    cleaned = value.strip()
+    for prefix in ("是", "叫", "为"):
+        if cleaned.startswith(prefix) and len(cleaned) > len(prefix):
+            cleaned = cleaned.removeprefix(prefix).strip()
+    if any(term in cleaned for term in ("手机号", "电话", "等下", "稍后", "后面", "再给", "信息")):
+        return ""
+    return cleaned
 
 
 def _checkpoint(
