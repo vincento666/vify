@@ -19,7 +19,6 @@ from app.modules.chat.domain.llm_request import (
     ProviderChatConfig,
 )
 from app.modules.knowledge.api.facade import KnowledgeFacade
-from app.modules.runtime_lab.domain.agent_fallback import AgentOutputPolicy, FakeFallbackAgent
 from app.modules.runtime_lab.domain.classifier import LlmConstrainedIntentClassifier
 from app.modules.runtime_lab.domain.chatflow_adapter import ChatflowSopRuntimeAdapter
 from app.modules.runtime_lab.domain.faq_gate import (
@@ -35,6 +34,11 @@ from app.modules.runtime_lab.domain.service import RuntimeLabService
 from app.modules.runtime_lab.domain.sop_adapter import FakeSopRuntimeAdapter
 from app.modules.runtime_lab.infra.repository import RuntimeLabRepository
 from app.modules.runtime_lab.web.schemas import RuntimeLabMessageRequest
+from app.modules.runtime_policy.domain.factories import (
+    build_agent_output_policy_from_snapshot,
+    build_classifier_from_snapshot,
+    build_fallback_agent_from_snapshot,
+)
 from app.modules.runtime_policy.domain.resolver import RuntimePolicyResolveContext, RuntimePolicyResolver
 from app.modules.runtime_policy.infra.repository import RuntimePolicyRepository
 from app.modules.provider.api.facade import ProviderModelFacade
@@ -49,13 +53,15 @@ RUNTIME_LAB_AIRLINE_LLM_AGENT_NAME = "034 RuntimeLab Airline Chatflow LLM Agent"
 
 def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeLabService:
     settings = get_settings()
+    effective_policy = RuntimePolicyResolver(RuntimePolicyRepository(session), settings).resolve()
+    policy_snapshot = effective_policy["policySnapshot"]
     bindings = _runtime_lab_chatflow_bindings(settings.runtime_lab_sop_chatflow_ids)
-    classifier = _runtime_lab_intent_classifier(settings)
+    classifier = build_classifier_from_snapshot(policy_snapshot, settings)
     faq_answer_gate = _runtime_lab_faq_answer_gate(settings, session)
     faq_semantic_gate = _runtime_lab_faq_semantic_gate(settings, session)
     rag_answer_gate = _runtime_lab_rag_answer_gate(settings, session)
-    fallback_agent = FakeFallbackAgent()
-    agent_output_policy = AgentOutputPolicy()
+    fallback_agent = build_fallback_agent_from_snapshot(policy_snapshot)
+    agent_output_policy = build_agent_output_policy_from_snapshot(policy_snapshot)
     if not bindings:
         return RuntimeLabService(
             RuntimeLabRepository(session),

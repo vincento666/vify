@@ -1,0 +1,9 @@
+{
+  "createdCode": 200,
+  "profileId": 1,
+  "sessionCode": 200,
+  "messageCode": 200,
+  "decisionAction": "CLARIFY",
+  "agentAnswer": null,
+  "policyStage": "no_signal_clarify"
+}

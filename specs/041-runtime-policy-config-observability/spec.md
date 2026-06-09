@@ -264,3 +264,6 @@ implement release activation, rollback, or frontend configuration UI.
   effective-profile API, and runtime-lab config consumption of profile
   classifier/FAQ/RAG sections are recorded under
   `artifacts/slices/041-runtime-policy-config-observability/041.2/`.
+- 041.3 complete: profile-driven classifier factory, fallback Agent factory,
+  fallback output policy, and runtime-lab service wiring are recorded under
+  `artifacts/slices/041-runtime-policy-config-observability/041.3/`.

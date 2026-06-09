@@ -83,6 +83,9 @@ decision logging all pass backend gates with no frontend changes.
 - 041.2 complete: effective policy resolution by binding, env fallback, and
   runtime-lab config sourcing from profile passed RED, unit, contract, backend
   E2E, and browser UAT gates.
+- 041.3 complete: profile-driven LLM classifier construction, fallback Agent
+  selection, disabled unsupported live fallback adapters, and runtime-lab
+  service wiring passed RED, unit, contract, backend E2E, and browser UAT gates.
 
 ## Non-Goals
 

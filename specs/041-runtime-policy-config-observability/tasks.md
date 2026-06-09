@@ -32,15 +32,15 @@
 
 ## 041.3 Classifier and fallback Agent config factories
 
-- [ ] RED: LLM classifier prompt/model/runtime params cannot come from profile.
-- [ ] RED: runtime API always instantiates `FakeFallbackAgent`.
-- [ ] Add profile-driven classifier factory.
-- [ ] Add profile-driven fallback Agent factory for `fake`, `llm_agent`,
+- [x] RED: LLM classifier prompt/model/runtime params cannot come from profile.
+- [x] RED: runtime API always instantiates `FakeFallbackAgent`.
+- [x] Add profile-driven classifier factory.
+- [x] Add profile-driven fallback Agent factory for `fake`, `llm_agent`,
   `existing_agent`, and `external_webhook` config shapes.
-- [ ] Keep unsupported live adapters safely disabled until configured.
-- [ ] Save evidence under
+- [x] Keep unsupported live adapters safely disabled until configured.
+- [x] Save evidence under
   `artifacts/slices/041-runtime-policy-config-observability/041.3/`.
-- [ ] Commit 041.3 only.
+- [x] Commit 041.3 only.
 
 ## 041.4 Decision log persistence and query API
 

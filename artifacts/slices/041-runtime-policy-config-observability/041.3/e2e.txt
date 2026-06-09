@@ -1,0 +1,18 @@
+041.3 E2E Gate
+
+Scope: backend-only profile-driven runtime factories for classifier and
+fallback Agent.
+Runner: local FastAPI on http://127.0.0.1:8043 with isolated SQLite DB
+  artifacts/slices/041-runtime-policy-config-observability/041.3/uat.db
+
+Commands/evidence:
+- rtk env HIFY_DATABASE_URL=sqlite:///artifacts/slices/041-runtime-policy-config-observability/041.3/uat.db uv run uvicorn app.main:app --host 127.0.0.1 --port 8043
+- Live HTTP API output saved in e2e-api.txt:
+  createdCode=200
+  sessionCode=200
+  messageCode=200
+  decisionAction=CLARIFY
+  agentAnswer=null
+  policyStage=no_signal_clarify
+
+Verdict: PASS

@@ -1,0 +1,77 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/vincento/work/develop/hify
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 2 items
+
+tests/unit/runtime_policy/test_runtime_factories.py FF                   [100%]
+
+=================================== FAILURES ===================================
+_ RuntimePolicyRuntimeFactoryTest.test_classifier_factory_uses_profile_prompt_model_and_runtime_params _
+
+self = <tests.unit.runtime_policy.test_runtime_factories.RuntimePolicyRuntimeFactoryTest testMethod=test_classifier_factory_uses_profile_prompt_model_and_runtime_params>
+
+    def test_classifier_factory_uses_profile_prompt_model_and_runtime_params(self) -> None:
+        snapshot = _snapshot()
+        snapshot["classifier"] = {
+            **snapshot["classifier"],
+            "enabled": True,
+            "mode": "llm",
+            "baseUrl": "https://llm.example.test/v1",
+            "apiKeyRef": "secret/runtime/classifier",
+            "model": "profile-classifier-model",
+            "fallbackModel": "profile-fallback-model",
+            "promptTemplate": "PROFILE PROMPT {{message}}",
+            "temperature": 0.35,
+            "maxTokens": 123,
+            "timeoutSeconds": 7,
+            "maxAttempts": 2,
+            "retrySleepSeconds": 0.1,
+        }
+    
+        with patch("app.modules.runtime_policy.domain.factories.ProviderBackedOpenAIChatClient", _CapturingClient):
+            classifier = build_classifier_from_snapshot(snapshot, Settings(_env_file=None))
+>           self.assertIsInstance(classifier, LlmConstrainedIntentClassifier)
+E           AssertionError: None is not an instance of <class 'app.modules.runtime_lab.domain.classifier.LlmConstrainedIntentClassifier'>
+
+tests/unit/runtime_policy/test_runtime_factories.py:37: AssertionError
+_ RuntimePolicyRuntimeFactoryTest.test_fallback_factory_honors_fake_disabled_and_policy_attempts _
+
+self = <tests.unit.runtime_policy.test_runtime_factories.RuntimePolicyRuntimeFactoryTest testMethod=test_fallback_factory_honors_fake_disabled_and_policy_attempts>
+
+    def test_fallback_factory_honors_fake_disabled_and_policy_attempts(self) -> None:
+        snapshot = _snapshot()
+    
+        fake_agent = build_fallback_agent_from_snapshot(snapshot)
+        policy = build_agent_output_policy_from_snapshot(snapshot)
+    
+        disabled_snapshot = _snapshot()
+        disabled_snapshot["fallbackAgent"] = {
+            **disabled_snapshot["fallbackAgent"],
+            "enabled": False,
+        }
+        existing_agent_snapshot = _snapshot()
+        existing_agent_snapshot["fallbackAgent"] = {
+            **existing_agent_snapshot["fallbackAgent"],
+            "type": "existing_agent",
+            "agentId": 42,
+        }
+    
+        self.assertIsInstance(fake_agent, FakeFallbackAgent)
+        self.assertEqual(policy.max_clarification_attempts, 2)
+>       self.assertIsNone(build_fallback_agent_from_snapshot(disabled_snapshot))
+E       AssertionError: <app.modules.runtime_lab.domain.agent_fallback.FakeFallbackAgent object at 0x10dfbb260> is not None
+
+tests/unit/runtime_policy/test_runtime_factories.py:78: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/vincento/work/develop/hify/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/unit/runtime_policy/test_runtime_factories.py::RuntimePolicyRuntimeFactoryTest::test_classifier_factory_uses_profile_prompt_model_and_runtime_params
+FAILED tests/unit/runtime_policy/test_runtime_factories.py::RuntimePolicyRuntimeFactoryTest::test_fallback_factory_honors_fake_disabled_and_policy_attempts
+========================= 2 failed, 1 warning in 1.60s =========================
