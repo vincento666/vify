@@ -1,0 +1,21 @@
+Slice: endpoint hover restore
+
+Problem:
+- Node endpoint hover had been enlarged too aggressively.
+- User asked to restore both hover phases to the original visual size.
+
+Fix:
+- Node-card hover endpoint scale restored to `1.2x`.
+- Endpoint hover / connecting / valid / preview scale restored to `1.5x`.
+- Static dot size and anchor fix are unchanged.
+- Hover hit area remains `3x` via `::before` so magnetic connection remains usable without making the visible endpoint oversized.
+
+Gates:
+- `rtk npm --prefix frontend run test:unit -- src/views/workflow/canvasControls.test.ts src/views/workflow/workflowCanvasRemGovernance.test.ts` PASS
+- `rtk npm --prefix frontend run test:unit -- src/remScaleClosure.test.ts` PASS
+- `rtk node frontend/e2e/chatflow-endpoint-affordances.mjs` PASS, chatflow=8179
+- `rtk node frontend/e2e/chatflow-endpoint-connection-radius.mjs` PASS, chatflow=8180
+
+Browser note:
+- Current in-app browser page reloaded successfully at `http://127.0.0.1:5173/workflows/6217/canvas`.
+- In-app browser CUA move did not trigger CSS `:hover`; the Playwright e2e above is the hover-state acceptance evidence.

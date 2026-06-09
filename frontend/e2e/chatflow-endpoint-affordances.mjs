@@ -131,7 +131,7 @@ try {
   await page.waitForTimeout(160)
   const nodeHoverSource = await portBox(page, sourceSelector)
   assert(closeToRatio(nodeHoverSource.width, defaultSource.width, 0.5), `Expected node hover hit box to keep the original 1x size, got default=${JSON.stringify(defaultSource)} hover=${JSON.stringify(nodeHoverSource)}`)
-  assert(closeToRatio(nodeHoverSource.dotScale, 2), `Expected node hover port dot scale 2x, got ${JSON.stringify(nodeHoverSource)}`)
+  assert(closeToRatio(nodeHoverSource.dotScale, 1.2), `Expected node hover port dot scale 1.2x, got ${JSON.stringify(nodeHoverSource)}`)
   await maybeScreenshot(page, 'node-hover')
 
   const sourcePort = page.locator(sourceSelector)
@@ -139,7 +139,7 @@ try {
   await page.waitForTimeout(160)
   const endpointHoverSource = await portBox(page, sourceSelector)
   assert(closeToRatio(endpointHoverSource.width, defaultSource.width, 0.5), `Expected endpoint hover hit box to keep the original 1x size, got default=${JSON.stringify(defaultSource)} hover=${JSON.stringify(endpointHoverSource)}`)
-  assert(closeToRatio(endpointHoverSource.dotScale, 3), `Expected endpoint hover dot scale 3x, got ${JSON.stringify(endpointHoverSource)}`)
+  assert(closeToRatio(endpointHoverSource.dotScale, 1.5), `Expected endpoint hover dot scale 1.5x, got ${JSON.stringify(endpointHoverSource)}`)
   await maybeScreenshot(page, 'endpoint-hover')
 
   const screenHitRadius = (Number.parseFloat(defaultSource.hitWidth || '0') * defaultSource.paneScale) / 2
@@ -147,8 +147,8 @@ try {
   await page.waitForTimeout(160)
   const radiusHoverSource = await portBox(page, sourceSelector)
   assert(
-    closeToRatio(radiusHoverSource.dotScale, 3),
-    `Expected endpoint hover radius to trigger 3x scale inside the 3x original diameter, got ${JSON.stringify(radiusHoverSource)}`,
+    closeToRatio(radiusHoverSource.dotScale, 1.5),
+    `Expected endpoint hover radius to trigger 1.5x scale inside the 3x original diameter, got ${JSON.stringify(radiusHoverSource)}`,
   )
   await maybeScreenshot(page, 'endpoint-radius-hover')
 
@@ -156,8 +156,8 @@ try {
   await page.waitForTimeout(160)
   const outsideRadiusSource = await portBox(page, sourceSelector)
   assert(
-    closeToRatio(outsideRadiusSource.dotScale, 2),
-    `Expected endpoint hover to fall back to node-hover 2x outside the 3x original diameter, got ${JSON.stringify(outsideRadiusSource)}`,
+    closeToRatio(outsideRadiusSource.dotScale, 1.2),
+    `Expected endpoint hover to fall back to node-hover 1.2x outside the 3x original diameter, got ${JSON.stringify(outsideRadiusSource)}`,
   )
 
   await node.click()

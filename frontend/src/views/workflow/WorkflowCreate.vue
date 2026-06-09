@@ -9419,7 +9419,7 @@ onUnmounted(() => {
 }
 
 .coze-node:hover .node-port {
-  --node-port-scale: 2;
+  --node-port-scale: 1.2;
   --node-port-shadow: 0 0 0 0.25rem rgba(107, 111, 247, 0.12);
 }
 
@@ -9434,7 +9434,7 @@ onUnmounted(() => {
 .coze-node .node-port.connection-preview,
 .coze-node .node-port.vue-flow__handle-connecting,
 .coze-node .node-port.vue-flow__handle-valid {
-  --node-port-scale: 3;
+  --node-port-scale: 1.5;
   --node-port-bg: #5558f6;
   --node-port-shadow: 0 0 0 0.3125rem rgba(85, 88, 246, 0.16);
   z-index: 4;
