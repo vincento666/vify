@@ -36,7 +36,13 @@ switch, resume, or clarify another task;
 - a small NLP/LLM classifier should see only a finite candidate set, not every
 SOP and document in the product;
 - high-confidence shallow signals should exit early, while low-confidence or
-conflicting signals should be escalated to constrained arbitration.
+  conflicting signals should be escalated to constrained arbitration.
+
+Architecture note updated on 2026-06-09: this 030 statement describes the
+isolated mock-SOP stage before FAQ/RAG/Agent/handoff were added. In the latest
+033 and 036-042 architecture, non-hard-stop shallow signals are candidate
+evidence for central constrained arbitration. Only explicit handoff/safety hard
+stops may finish before classifier arbitration.
 
 This spec adds that funnel inside the isolated lab with deterministic mock
 recall and mock classifier behavior.
@@ -53,8 +59,9 @@ In scope:
   - mock SOP start;
   - explicit clarify/no-match outcomes;
 - constrained classifier interface with deterministic fake implementation;
-- policy gate that decides early exit, classifier escalation, clarify, or
-  reject behavior;
+- policy gate that decides mock-stage early exit, classifier escalation,
+  clarify, or reject behavior. Later 036-042 production-facing fallback specs
+  narrow pre-classifier final exits to hard stops only;
 - API debug evidence showing candidates, scores, classifier input/output, and
   policy decision;
 - active-SOP sensitive behavior:

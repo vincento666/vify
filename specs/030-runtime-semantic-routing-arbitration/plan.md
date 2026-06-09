@@ -21,7 +21,9 @@ edit, but the concepts must stay separate:
 
 - recall produces candidates;
 - classifier arbitrates finite candidates;
-- policy gate controls early exit and final decision;
+- policy gate controls 030 mock-stage early exit and final decision. The
+  later 033 and 036-042 architecture narrows pre-classifier final exits to
+  explicit handoff/safety hard stops only;
 - mock SOP adapter executes selected SOP actions.
 
 ## Routing Pipeline
@@ -86,6 +88,11 @@ plugged in without changing runtime service behavior.
 
 Policy gate is the router controller.
 
+Architecture note updated on 2026-06-09: the following pre-classifier decisions
+are retained as 030 historical/mock-stage proof points. The current
+production-facing runtime stack uses these signals as candidate evidence except
+for explicit handoff/safety hard stops.
+
 Pre-classifier decisions:
 
 - direct start when no active task and one strong unambiguous SOP candidate;
@@ -110,7 +117,7 @@ Unit tests:
 - mock semantic candidate recall;
 - finite candidate merging and top-k selection;
 - fake classifier membership enforcement;
-- policy gate early exit rules;
+- policy gate mock-stage early exit rules;
 - policy gate post-classifier rules.
 
 Integration tests:
