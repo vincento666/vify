@@ -1,0 +1,25 @@
+{
+  "workflowId": 8306,
+  "url": "http://127.0.0.1:5173/workflows/8306/canvas",
+  "note": "Switched nodes by closing the right config panel before selecting the next canvas card.",
+  "shots": [
+    {
+      "key": "router",
+      "label": "hify-condition-panel",
+      "screenshot": "/Users/vincento/work/develop/hify/artifacts/research/workflow-chatflow-product-reference-2026-06-09/screenshots/hify-condition-panel.png",
+      "panelText": "选择器\n连接多个下游分支，若设定的条件成立则仅运行对应的分支，若均不成立则只运行“否则”分支\n›\n条件分支\n⋮⋮\n如果\n优先级 1\n已匹配\nUSER_INPUT\nstr.\n×\n包含\n添加条件\n否则\n默认分支"
+    },
+    {
+      "key": "variable_aggregation_1",
+      "label": "hify-variable-aggregation-panel",
+      "screenshot": "/Users/vincento/work/develop/hify/artifacts/research/workflow-chatflow-product-reference-2026-06-09/screenshots/hify-variable-aggregation-panel.png",
+      "panelText": "变量聚合\nvariable_aggregation_1\n›\n聚合策略\n聚合策略\n返回每个分组中第一个非空的值\n›\n变量分组\nselected\nString\n⋮⋮\n新增分组\n›\n输出\nselected\nString"
+    },
+    {
+      "key": "variable_assign_1",
+      "label": "hify-variable-assign-panel",
+      "screenshot": "/Users/vincento/work/develop/hify/artifacts/research/workflow-chatflow-product-reference-2026-06-09/screenshots/hify-variable-assign-panel.png",
+      "panelText": "变量赋值\nvariable_assign_1\n›\n输入\n变量名称\n值\n›\n输出\n输出格式\n文本\n输出变量\n变量类型\nstr."
+    }
+  ]
+}

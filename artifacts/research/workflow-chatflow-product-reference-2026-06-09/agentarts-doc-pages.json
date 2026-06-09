@@ -1,0 +1,18 @@
+[
+  {
+    "name": "agentarts-variable-assignment",
+    "screenshot": "/Users/vincento/work/develop/hify/artifacts/research/workflow-chatflow-product-reference-2026-06-09/screenshots/agentarts-variable-assignment.png",
+    "title": "Security Verification",
+    "url": "https://support.huaweicloud.com/usermanual-agentarts0/agentarts_05_0084.html",
+    "textSample": "support.huaweicloud.com\n\nVerifying the safety of the connection. Please check the box below.\n\nYou will be redirected to support.huaweicloud.com, once the verification is complete.\n\nuuid: 16091716941596369514\n\nProtected by Tencent Cloud EdgeOne",
+    "links": []
+  },
+  {
+    "name": "agentarts-manual-index",
+    "screenshot": "/Users/vincento/work/develop/hify/artifacts/research/workflow-chatflow-product-reference-2026-06-09/screenshots/agentarts-manual-index.png",
+    "title": "Security Verification",
+    "url": "https://support.huaweicloud.com/usermanual-agentarts0/",
+    "textSample": "support.huaweicloud.com\n\nVerifying the safety of the connection. Please check the box below.\n\nYou will be redirected to support.huaweicloud.com, once the verification is complete.\n\nuuid: 11442343194873600355\n\nProtected by Tencent Cloud EdgeOne",
+    "links": []
+  }
+]
