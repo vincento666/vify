@@ -64,6 +64,16 @@ class PolicyGate:
                 active_task_id=int(top.target_id),
                 reason="Only active continuation candidate recalled",
             )
+        if (
+            active_task is not None
+            and _candidate_type(top) == CandidateType.ACTIVE_TASK_CONTINUE
+            and top.score >= STRONG_ACCEPT_THRESHOLD
+        ):
+            return RouteDecision(
+                action="CONTINUE_ACTIVE_SOP",
+                active_task_id=int(top.target_id),
+                reason="Strong active collection detail accepted before classifier",
+            )
         return None
 
     def classifier_decision(
@@ -86,6 +96,12 @@ class PolicyGate:
                 reason=result.rationale,
             )
         if candidate_type == CandidateType.SUSPENDED_TASK_RESUME:
+            if active_task is not None:
+                return RouteDecision(
+                    action="REJECT_SWITCH_SUSPENDED_LIMIT",
+                    active_task_id=_active_task_id(active_task),
+                    reason="Cannot resume suspended task while another task is active",
+                )
             return RouteDecision(
                 action="RESUME_TASK",
                 active_task_id=int(candidate.target_id),

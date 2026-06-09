@@ -235,6 +235,23 @@ class RuntimeLabService:
                 {"candidateCount": len(candidates), "candidates": [candidate.to_dict() for candidate in candidates]},
             )
         )
+        duplicate_confirmation = self._recent_completed_confirmation_decision(session_id, message, active_task, suspended_tasks)
+        if duplicate_confirmation is not None:
+            route_steps.append(
+                _route_step(
+                    "recent_completed_guard",
+                    perf_counter(),
+                    {"message": message},
+                    {"decision": _decision_payload(duplicate_confirmation)},
+                )
+            )
+            return _with_evidence(
+                duplicate_confirmation,
+                candidates,
+                "recent_completed_guard",
+                route_steps=route_steps,
+                route_elapsed_ms=_elapsed_ms(route_started_at),
+            )
         hard_stop_decision = self._policy_gate.pre_classifier_decision(candidates, active_task, len(suspended_tasks))
         if hard_stop_decision is not None and hard_stop_decision.action == "HANDOFF_TO_HUMAN":
             route_steps.append(
@@ -298,8 +315,9 @@ class RuntimeLabService:
             )
             low_confidence_rag = _is_low_confidence_rag(rag_decision)
             defer_low_rag_to_sop = candidates and low_confidence_rag and _looks_like_sop_request(message)
+            defer_high_rag_to_sop = candidates and _is_answer_rag(rag_decision) and _looks_like_strong_sop_request(message)
             defer_low_rag_to_agent = low_confidence_rag and self._fallback_agent is not None
-            if not (defer_low_rag_to_sop or defer_low_rag_to_agent):
+            if not (defer_low_rag_to_sop or defer_high_rag_to_sop or defer_low_rag_to_agent):
                 return _with_evidence(
                     rag_decision,
                     candidates,
@@ -310,6 +328,31 @@ class RuntimeLabService:
         if not candidates:
             step_started_at = perf_counter()
             if enabled_sop_ids is not None and not enabled_sop_ids:
+                route_steps.append(
+                    _route_step(
+                        "enabled_scope",
+                        step_started_at,
+                        {"message": message, "enabledSopIds": []},
+                        {"reason": "No enabled SOP candidate matched"},
+                    )
+                )
+                agent_decision = self._agent_fallback_decision(session_id, message, active_task, suspended_tasks)
+                if agent_decision is not None:
+                    route_steps.append(
+                        _route_step(
+                            "agent_policy",
+                            perf_counter(),
+                            {"message": message, "activeTask": active_task is not None},
+                            {"decision": _decision_payload(agent_decision)},
+                        )
+                    )
+                    return _with_evidence(
+                        agent_decision,
+                        (),
+                        "agent_policy",
+                        route_steps=route_steps,
+                        route_elapsed_ms=_elapsed_ms(route_started_at),
+                    )
                 return _with_evidence(
                     RouteDecision(action="NO_MATCH", reason="No enabled SOP candidate matched"),
                     (),
@@ -424,7 +467,7 @@ class RuntimeLabService:
         try:
             classifier_result = self._classifier.classify(classifier_input)
         except Exception as exc:
-            classifier_result = _classifier_failure_result(exc, self._classifier)
+            classifier_result = _classifier_failure_result(exc, self._classifier, classifier_input)
         route_steps.append(
             _route_step(
                 "llm_intent_arbitration",
@@ -834,6 +877,45 @@ class RuntimeLabService:
         events = self._repository.list_events(session_id)
         return events[-limit:]
 
+    def _recent_completed_confirmation_decision(
+        self,
+        session_id: int,
+        message: str,
+        active_task: dict[str, Any] | None,
+        suspended_tasks: list[dict[str, Any]],
+    ) -> RouteDecision | None:
+        if active_task is not None or suspended_tasks:
+            return None
+        text = message.strip()
+        if not _looks_like_duplicate_confirmation(text):
+            return None
+        completed_tasks = self._repository.list_tasks(session_id, statuses={"COMPLETED"})
+        if not completed_tasks:
+            return None
+        task = completed_tasks[-1]
+        sop_id = str(task.get("sop_id") or "")
+        manifest = self._manifests.get(sop_id)
+        if manifest is None or not _message_confirms_completed_sop(text, manifest.display_name, sop_id):
+            return None
+        return RouteDecision(
+            action="AGENT_FALLBACK",
+            reason="Recent completed SOP duplicate confirmation ignored",
+            agent_answer={
+                "sourceLayer": "state_policy",
+                "reasonCode": "RECENT_TASK_ALREADY_COMPLETED",
+                "responseType": "answer",
+                "answer": f"刚才的{manifest.display_name}流程已完成，无需重复确认。",
+                "clarificationQuestion": "",
+                "handoffReason": "",
+                "confidence": 1.0,
+                "citations": [],
+                "safetyFlags": [],
+                "proposedActions": [],
+                "mutatesSopState": False,
+                "policyEvidence": {"accepted": True, "taskId": task.get("id"), "sopId": sop_id},
+            },
+        )
+
     def _agent_clarification_attempts(self, session_id: int) -> int:
         return sum(1 for event in self._repository.list_events(session_id) if event["event_type"] == "AGENT_CLARIFICATION_ASKED")
 
@@ -941,19 +1023,20 @@ class RuntimeLabService:
         inherited_context = dict(collected or {})
         sop_context = _context_for_sop(sop_id, inherited_context)
         context_reference = _references_session_context(message)
-        saved = sop_context if context_reference else {}
+        business_context_reference = context_reference and not _is_resume_only_reference(message)
+        saved = sop_context if business_context_reference else {}
         if checkpoint is not None:
-            saved = dict(sop_context) if context_reference else {}
+            saved = dict(sop_context) if business_context_reference else {}
             saved.update(dict(checkpoint.collected))
             checkpoint = _checkpoint_with_collected(checkpoint, saved)
         metadata: dict[str, Any] = {
             "runtime": "runtime_lab",
-            "contextReference": context_reference,
+            "contextReference": business_context_reference,
         }
         if sop_context:
             metadata["inheritedContext"] = sop_context
         history = self._session_user_history(session_id, current_message=message)
-        if history and (checkpoint is not None or context_reference):
+        if history and business_context_reference:
             metadata["history"] = history
         return SopExecutionRequest(
             runtime_session_id=session_id,
@@ -1073,6 +1156,13 @@ def _is_low_confidence_rag(decision: RouteDecision) -> bool:
     )
 
 
+def _is_answer_rag(decision: RouteDecision) -> bool:
+    return (
+        decision.action == "ANSWER_RAG"
+        and (decision.rag_answer or {}).get("reasonCode") == "RAG_HIGH_CONFIDENCE"
+    )
+
+
 _SOP_ARBITRATION_ACTIONS = {
     "CONTINUE_ACTIVE_SOP",
     "START_SOP",
@@ -1084,9 +1174,26 @@ _SOP_ARBITRATION_ACTIONS = {
 }
 
 
-def _classifier_failure_result(exc: Exception, classifier: Any) -> ClassifierResult:
+def _classifier_failure_result(exc: Exception, classifier: Any, classifier_input: ClassifierInput) -> ClassifierResult:
     class_name = classifier.__class__.__name__
     mode = "llm_error" if "Llm" in class_name or "LLM" in class_name else "classifier_error"
+    if mode == "llm_error":
+        try:
+            fallback = FakeConstrainedIntentClassifier().classify(classifier_input)
+        except Exception:
+            fallback = None
+        if fallback is not None and fallback.selected_action != "CLARIFY":
+            return ClassifierResult(
+                selected_action=fallback.selected_action,
+                selected_candidate_id=fallback.selected_candidate_id,
+                confidence=fallback.confidence,
+                rationale=f"LLM classifier failed; deterministic finite-candidate fallback selected ({exc.__class__.__name__})",
+                needs_clarification=False,
+                clarification_question=None,
+                arbitrator_mode="llm_error_fallback",
+                used_real_llm=False,
+                debug={"error": exc.__class__.__name__},
+            )
     return ClassifierResult(
         selected_action="CLARIFY",
         selected_candidate_id=None,
@@ -1125,6 +1232,7 @@ def _route_step_label(name: str) -> str:
         "faq_semantic": "FAQ语义回答",
         "rag_policy": "RAG知识兜底",
         "agent_policy": "受控Agent兜底",
+        "recent_completed_guard": "重复确认保护",
         "pre_classifier_policy": "轻量策略闸门",
         "llm_intent_arbitration": "LLM有限意图仲裁",
         "post_classifier_policy": "仲裁后策略闸门",
@@ -1165,6 +1273,13 @@ def _references_session_context(message: str) -> bool:
         "这个订单",
         "那个订单",
         "同一个",
+        "同一趟",
+        "同航班",
+        "这趟",
+        "这次",
+        "这次行程",
+        "本次行程",
+        "一起走",
         "一样",
         "照旧",
         "继续刚才",
@@ -1173,6 +1288,32 @@ def _references_session_context(message: str) -> bool:
         "原订单",
     )
     return any(term in normalized for term in reference_terms)
+
+
+def _is_resume_only_reference(message: str) -> bool:
+    normalized = message.strip().lower()
+    if "继续" not in normalized and "resume" not in normalized:
+        return False
+    explicit_business_reference_terms = (
+        "那张",
+        "这张",
+        "这个订单",
+        "那个订单",
+        "订单",
+        "同一个",
+        "同一趟",
+        "同航班",
+        "这趟",
+        "这次",
+        "本次行程",
+        "一起走",
+        "一样",
+        "照旧",
+        "刚订",
+        "刚出票",
+        "原订单",
+    )
+    return not any(term in normalized for term in explicit_business_reference_terms)
 
 
 def _is_ambiguous_active_faq_input(message: str) -> bool:
@@ -1241,10 +1382,44 @@ def _fallback_hint_terms(sop_id: str, message: str) -> tuple[str, ...]:
     text = message.strip()
     if not text:
         return ()
+    if _looks_like_airport_facility_question(text):
+        return ()
     terms = [term for term in FALLBACK_HINTS.get(sop_id, ()) if term in text]
     if sop_id == "flight_booking" and terms and not any(term in text for term in ("航班", "机票", "飞机票", "票")):
         return ()
     return tuple(dict.fromkeys(terms))
+
+
+def _looks_like_airport_facility_question(text: str) -> bool:
+    facility_terms = ("机场", "候机楼", "柜台", "停车", "酒店", "打印店", "寄存", "WiFi", "wifi", "大巴", "贵宾楼")
+    question_terms = ("吗", "么", "怎么", "哪里", "几点", "收费", "旁边", "附近", "有没有")
+    return any(term in text for term in facility_terms) and any(term in text for term in question_terms)
+
+
+def _looks_like_duplicate_confirmation(text: str) -> bool:
+    return any(term in text for term in ("确认", "好的", "可以", "按这个")) and len(text) <= 24
+
+
+def _message_confirms_completed_sop(text: str, display_name: str, sop_id: str) -> bool:
+    terms_by_sop = {
+        "flight_booking": ("出票", "预订", "订票", "机票"),
+        "fare_quote": ("票价", "报价"),
+        "group_booking": ("团队", "团体票"),
+        "ancillary_sales": ("加购", "增值", "餐食", "保险", "贵宾厅"),
+        "refund_ticket": ("退票", "退款"),
+        "change_flight": ("改签", "改航班", "换航班"),
+        "passenger_info_change": ("资料", "信息", "证件", "姓名"),
+        "invoice_apply": ("发票", "开票"),
+        "baggage_service": ("行李", "加购"),
+        "seat_checkin": ("选座", "值机"),
+        "flight_status": ("航班动态", "航班状态", "继续关注"),
+        "special_assistance": ("特殊协助", "轮椅"),
+        "pet_cabin": ("宠物", "托运"),
+        "irregular_flight": ("异常航班", "签转"),
+        "membership_service": ("会员", "里程"),
+    }
+    terms = (display_name, *terms_by_sop.get(sop_id, ()))
+    return any(term and term in text for term in terms)
 
 
 def _looks_like_sop_request(message: str) -> bool:
@@ -1263,6 +1438,75 @@ def _looks_like_sop_request(message: str) -> bool:
         "托运",
     )
     return any(marker in message for marker in request_markers)
+
+
+def _looks_like_strong_sop_request(message: str) -> bool:
+    text = message.strip()
+    if _explicitly_denies_sop_transaction(text):
+        return False
+    phrase_terms = (
+        "帮我改签",
+        "我要改签",
+        "我想改签",
+        "办理改签",
+        "改签到",
+        "改签到",
+        "帮我退票",
+        "我要退票",
+        "我想退票",
+        "办理退票",
+        "帮我订",
+        "我要订",
+        "我想订",
+        "我要买票",
+        "帮我买票",
+        "给这张票加购",
+        "帮我加购",
+        "我要加购",
+        "我想加购",
+        "我要开发票",
+        "我想开发票",
+        "帮我开发票",
+        "帮我值机",
+        "我要值机",
+        "我要选座",
+        "帮我选座",
+        "办理宠物",
+        "帮我办理宠物",
+    )
+    if any(term in text for term in phrase_terms):
+        return True
+    action_terms = ("帮我", "我要", "我想", "办理", "申请", "提交", "现在就")
+    sop_terms = (
+        "退票",
+        "改签",
+        "订票",
+        "买票",
+        "机票",
+        "加购",
+        "行李",
+        "开发票",
+        "开票",
+        "值机",
+        "选座",
+        "宠物乘机",
+        "宠物托运",
+    )
+    return any(term in text for term in action_terms) and any(term in text for term in sop_terms)
+
+
+def _explicitly_denies_sop_transaction(message: str) -> bool:
+    denial_terms = (
+        "不是要办理",
+        "不是办理",
+        "不办理",
+        "不是要办",
+        "不办",
+        "先不",
+        "现在不",
+    )
+    consultation_terms = ("只是问", "只想问", "就想问", "想问", "咨询", "了解")
+    return any(term in message for term in denial_terms) and any(term in message for term in consultation_terms)
 
 
 def _should_agent_fallback_before_active_continue(

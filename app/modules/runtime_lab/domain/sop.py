@@ -64,21 +64,22 @@ class MockSopAdapter:
     def __init__(self, manifests: dict[str, SopManifest] | None = None) -> None:
         self._manifests = manifests or mock_sop_manifests()
 
-    def start(self, sop_id: str, message: str = "") -> SopTurnResult:
+    def start(self, sop_id: str, message: str = "", collected: dict[str, Any] | None = None) -> SopTurnResult:
         manifest = self._manifest(sop_id)
         prompt = self._step(manifest, "collect_order_no").prompt
-        collected: dict[str, Any] = {}
+        saved: dict[str, Any] = dict(collected or {})
         if manifest.sop_id == "flight_booking":
             text = message.strip()
-            collected = _parse_collection_variables(manifest, text)
+            saved.update(_parse_collection_variables(manifest, text))
             if text:
-                collected["last_user_message"] = text
-                collected["node_trace"] = _node_trace(manifest)
-            prompt = _booking_collect_prompt(collected)
-            reply = f"已开始{manifest.display_name}，{_booking_ack(collected)}{prompt}"
-            return self._result(manifest, "collect_order_no", reply, prompt, collected, completed=False)
+                saved["last_user_message"] = text
+                saved["node_trace"] = _node_trace(manifest)
+            prompt = _booking_collect_prompt(saved)
+            reply = f"已开始{manifest.display_name}，{_booking_ack(saved)}{prompt}"
+            return self._result(manifest, "collect_order_no", reply, prompt, saved, completed=False)
+        saved.update(_parse_collection_variables(manifest, message.strip()))
         reply = f"已开始{manifest.display_name}，{prompt}"
-        return self._result(manifest, "collect_order_no", reply, prompt, collected, completed=False)
+        return self._result(manifest, "collect_order_no", reply, prompt, saved, completed=False)
 
     def continue_task(
         self,
@@ -228,7 +229,7 @@ def mock_sop_manifests() -> dict[str, SopManifest]:
                 _phrase_template("fare_quote:phrase", "票价", "报价", "查价格", "机票价格", "多少钱"),
                 _all_terms_template("fare_quote:route_price", "飞", "价格"),
                 _all_terms_template("fare_quote:not_issue", "不出票", "票价"),
-                _regex_template("fare_quote:regex", r"(票价|报价|价格).{0,12}(多少|怎么样|趋势)?"),
+                _regex_template("fare_quote:regex", r"(票价|报价|查价格|机票价格|多少钱|价格.{0,8}(多少|怎么样|趋势))"),
             ),
             branch_step_id="fare_branch",
             resume_prompt="是否继续刚才的票价咨询流程？",

@@ -94,7 +94,7 @@ class FakeSopRuntimeAdapter:
 
     def start_sop(self, request: SopExecutionRequest) -> SopExecutionResult:
         try:
-            result = self._mock_adapter.start(request.sop_id, message=request.message)
+            result = self._mock_adapter.start(request.sop_id, message=request.message, collected=request.collected)
         except KeyError:
             return self._failure(request)
         return self._execution_result(request, result, "SOP_STARTED")
