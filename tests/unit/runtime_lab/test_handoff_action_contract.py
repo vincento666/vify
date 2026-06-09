@@ -46,6 +46,15 @@ class HandoffActionContractTest(unittest.TestCase):
         self.assertEqual(decision.handoff["reasonCode"], "USER_REQUEST")
         self.assertEqual(decision.handoff["matchedTerms"], ["人工客服", "转人工"])
 
+    def test_policy_gate_uses_configured_strong_accept_threshold(self) -> None:
+        decision = PolicyGate(_Interruptible(), strong_accept_threshold=0.99).pre_classifier_decision(
+            [_handoff_candidate(score=0.95)],
+            active_task=None,
+            suspended_count=0,
+        )
+
+        self.assertIsNone(decision)
+
     def test_route_decision_payload_exposes_normalized_handoff_evidence(self) -> None:
         payload = format_route_decision(
             RouteDecision(
@@ -67,15 +76,15 @@ class HandoffActionContractTest(unittest.TestCase):
         self.assertEqual(payload["finalDecision"]["action"], "HANDOFF_TO_HUMAN")
 
 
-def _handoff_candidate(matched_terms: tuple[str, ...] = ("人工客服",)) -> RouteCandidate:
+def _handoff_candidate(matched_terms: tuple[str, ...] = ("人工客服",), score: float = 1.0) -> RouteCandidate:
     return RouteCandidate(
         candidate_id="handoff:USER_REQUEST",
         candidate_type=CandidateType.HANDOFF_TO_HUMAN,
         target_id="USER_REQUEST",
         display_name="转人工",
         source="explicit_signal",
-        score=1.0,
-        score_breakdown=ScoreBreakdown(keyword=1.0, alias=0.0, semantic=0.0),
+        score=score,
+        score_breakdown=ScoreBreakdown(keyword=score, alias=0.0, semantic=0.0),
         matched_terms=matched_terms,
         risk_level="HIGH",
         requires_classifier=False,

@@ -15,8 +15,14 @@ STRONG_ACCEPT_THRESHOLD = 0.9
 
 
 class PolicyGate:
-    def __init__(self, adapter: InterruptibilityPolicy) -> None:
+    def __init__(
+        self,
+        adapter: InterruptibilityPolicy,
+        *,
+        strong_accept_threshold: float = STRONG_ACCEPT_THRESHOLD,
+    ) -> None:
         self._adapter = adapter
+        self._strong_accept_threshold = max(0.0, min(1.0, strong_accept_threshold))
 
     def pre_classifier_decision(
         self,
@@ -28,7 +34,7 @@ class PolicyGate:
             return None
         ordered = select_top_candidates(list(candidates), top_k=len(candidates))
         top = ordered[0]
-        if _candidate_type(top) == CandidateType.HANDOFF_TO_HUMAN and top.score >= STRONG_ACCEPT_THRESHOLD:
+        if _candidate_type(top) == CandidateType.HANDOFF_TO_HUMAN and top.score >= self._strong_accept_threshold:
             return _handoff_decision(top, "Explicit handoff candidate accepted before classifier")
         return None
 

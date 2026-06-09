@@ -300,3 +300,12 @@ implement release activation, rollback, or frontend configuration UI.
   - Runtime-lab regression:
     `artifacts/slices/041-runtime-policy-config-observability/041.R1/runtime-lab-unit-contract-integration-after-invariant.txt`,
     `artifacts/slices/041-runtime-policy-config-observability/041.R1/runtime-lab-e2e-policy-gate-after-invariant.txt`
+- 041.R2 complete: hard-stop `strongAcceptThreshold` is now consumed by
+  `PolicyGate` through `RuntimeLabService`, so the only remaining
+  pre-classifier exit is also profile-controlled. Evidence:
+  - RED/GREEN:
+    `artifacts/slices/041-runtime-policy-config-observability/041.R2/red-strong-accept-threshold.txt`,
+    `artifacts/slices/041-runtime-policy-config-observability/041.R2/green-strong-accept-threshold.txt`
+  - Gate:
+    `artifacts/slices/041-runtime-policy-config-observability/041.R2/policy-gate-runtime-threshold-gate.txt`,
+    `artifacts/slices/041-runtime-policy-config-observability/041.R2/final-combined-policy-runtime-lab-gate.txt`

@@ -71,14 +71,17 @@ class RuntimeLabService:
         self._explicit_signals = ExplicitSignalDetector(self._manifests)
         self._semantic_recall = MockSemanticCandidateRecall(self._manifests)
         self._classifier = classifier or FakeConstrainedIntentClassifier()
-        self._policy_gate = PolicyGate(self._adapter)
+        self._policy_thresholds = dict(policy_thresholds or {})
+        self._policy_gate = PolicyGate(
+            self._adapter,
+            strong_accept_threshold=self._strong_accept_threshold(),
+        )
         self._handoff_service = handoff_service
         self._faq_answer_gate = faq_answer_gate
         self._faq_semantic_gate = faq_semantic_gate
         self._rag_answer_gate = rag_answer_gate
         self._fallback_agent = fallback_agent
         self._agent_output_policy = agent_output_policy or AgentOutputPolicy()
-        self._policy_thresholds = dict(policy_thresholds or {})
 
     def create_session(self) -> dict[str, Any]:
         runtime_session = self._repository.create_session()
@@ -211,6 +214,14 @@ class RuntimeLabService:
             parsed = float(value)
         except (TypeError, ValueError):
             return 0.6
+        return max(0.0, min(1.0, parsed))
+
+    def _strong_accept_threshold(self) -> float:
+        value = self._policy_thresholds.get("strongAcceptThreshold", 0.9)
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            return 0.9
         return max(0.0, min(1.0, parsed))
 
     def _candidate_top_k(self) -> int:

@@ -1,0 +1,19 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ HandoffActionContractTest.test_policy_gate_uses_configured_strong_accept_threshold _
+
+self = <test_handoff_action_contract.HandoffActionContractTest testMethod=test_policy_gate_uses_configured_strong_accept_threshold>
+
+    def test_policy_gate_uses_configured_strong_accept_threshold(self) -> None:
+>       decision = PolicyGate(_Interruptible(), strong_accept_threshold=0.99).pre_classifier_decision(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            [_handoff_candidate(score=0.95)],
+            active_task=None,
+            suspended_count=0,
+        )
+E       TypeError: PolicyGate.__init__() got an unexpected keyword argument 'strong_accept_threshold'
+
+tests/unit/runtime_lab/test_handoff_action_contract.py:50: TypeError
+=========================== short test summary info ============================
+FAILED tests/unit/runtime_lab/test_handoff_action_contract.py::HandoffActionContractTest::test_policy_gate_uses_configured_strong_accept_threshold
+1 failed in 0.02s

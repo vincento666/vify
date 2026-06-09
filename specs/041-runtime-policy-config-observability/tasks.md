@@ -74,3 +74,15 @@
   `llmArbitrationRequiredForNonHardStop`.
 - [x] Save evidence under
   `artifacts/slices/041-runtime-policy-config-observability/041.R1/`.
+
+## 041.R2 Hard-stop threshold wiring
+
+- [x] RED: `PolicyGate` uses a hardcoded strong accept threshold instead of the
+  active profile's `strongAcceptThreshold`.
+- [x] Add configurable `strong_accept_threshold` to `PolicyGate`.
+- [x] Pass `strongAcceptThreshold` from `RuntimePolicyProfile` through
+  `RuntimeLabService`.
+- [x] Prove low-confidence hard-stop candidates below the configured threshold
+  are not accepted before classifier arbitration.
+- [x] Save RED/GREEN, ruff, and combined runtime-lab/policy gate evidence under
+  `artifacts/slices/041-runtime-policy-config-observability/041.R2/`.
