@@ -61,6 +61,57 @@ class RuntimePolicyReleaseServiceTest(unittest.TestCase):
             self.assertEqual(repository.get_profile(int(candidate["id"]))["status"], "active")
             self.assertEqual(repository.get_profile(int(baseline["id"]))["status"], "archived")
 
+    def test_rollback_restores_previous_active_profile_and_records_audit(self) -> None:
+        with self._factory() as session:
+            repository = RuntimePolicyRepository(session)
+            baseline = repository.create_profile(_profile_values("042.4 previous", status="active"))
+            candidate = repository.create_profile(_profile_values("042.4 candidate"))
+            _create_passed_runs(repository, candidate)
+            service = RuntimePolicyReleaseService(repository)
+            service.approve_profile(int(candidate["id"]), approved_by="ops")
+            activated = service.activate_profile(int(candidate["id"]), activated_by="ops")
+
+            rolled_back = service.rollback_release(
+                int(activated["id"]),
+                rolled_back_by="ops",
+                reason="bad route mix",
+            )
+
+            self.assertEqual(rolled_back["status"], "rolled_back")
+            self.assertEqual(rolled_back["rolledBackBy"], "ops")
+            self.assertEqual(rolled_back["rollbackReason"], "bad route mix")
+            self.assertEqual(repository.get_profile(int(baseline["id"]))["status"], "active")
+            self.assertEqual(repository.get_profile(int(candidate["id"]))["status"], "archived")
+            self.assertEqual(
+                [event["eventType"] for event in rolled_back["auditEvents"]],
+                ["release_approved", "release_activated", "release_rolled_back"],
+            )
+
+    def test_release_transitions_emit_audit_events(self) -> None:
+        with self._factory() as session:
+            repository = RuntimePolicyRepository(session)
+            repository.create_profile(_profile_values("042.4 active", status="active"))
+            candidate = repository.create_profile(_profile_values("042.4 candidate"))
+            _create_passed_runs(repository, candidate)
+            service = RuntimePolicyReleaseService(repository)
+
+            approved = service.approve_profile(int(candidate["id"]), approved_by="ops")
+            canary = service.canary_profile(int(candidate["id"]), canary_percent=15)
+            activated = service.activate_profile(int(candidate["id"]), activated_by="ops")
+
+            self.assertEqual(
+                [event["eventType"] for event in approved["auditEvents"]],
+                ["release_approved"],
+            )
+            self.assertEqual(
+                [event["eventType"] for event in canary["auditEvents"]],
+                ["release_approved", "release_canary"],
+            )
+            self.assertEqual(
+                [event["eventType"] for event in activated["auditEvents"]],
+                ["release_approved", "release_canary", "release_activated"],
+            )
+
 
 def _profile_values(name: str, *, status: str = "draft") -> dict[str, object]:
     payload = _profile_payload(name)

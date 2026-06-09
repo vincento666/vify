@@ -93,6 +93,10 @@ validation/replay/approval gates, and rollback is proven through backend tests.
   state, enforce validation/replay/approval/version gates before activation,
   archive the previous active profile on activation, and preserve runtime-lab
   route boundaries in focused backend E2E gates plus browser UAT.
+- 042.4 complete: rollback API restores the previous active profile, archives
+  the rolled-back candidate, persists audit events for evaluation and release
+  transitions, and exposes audit evidence in detail APIs with focused backend
+  E2E gates plus browser UAT.
 
 ## Non-Goals
 

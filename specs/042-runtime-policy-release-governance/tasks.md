@@ -44,12 +44,12 @@
 
 ## 042.4 Rollback and audit
 
-- [ ] RED: rollback cannot restore previous active profile.
-- [ ] RED: release transitions do not emit audit events.
-- [ ] Add rollback API.
-- [ ] Add audit event table/service.
-- [ ] Prove active profile switches back to previous release.
-- [ ] Prove release and evaluation APIs expose audit/evidence.
-- [ ] Save evidence under
+- [x] RED: rollback cannot restore previous active profile.
+- [x] RED: release transitions do not emit audit events.
+- [x] Add rollback API.
+- [x] Add audit event table/service.
+- [x] Prove active profile switches back to previous release.
+- [x] Prove release and evaluation APIs expose audit/evidence.
+- [x] Save evidence under
   `artifacts/slices/042-runtime-policy-release-governance/042.4/`.
-- [ ] Commit 042.4 only.
+- [x] Commit 042.4 only.

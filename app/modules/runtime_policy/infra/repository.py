@@ -20,6 +20,7 @@ class RuntimePolicyRepository:
         self._decision_log = Base.metadata.tables["runtime_decision_log"]
         self._evaluation_run = Base.metadata.tables["runtime_policy_evaluation_run"]
         self._release = Base.metadata.tables["runtime_policy_release"]
+        self._audit_event = Base.metadata.tables["runtime_policy_audit_event"]
         self._ensure_tables()
 
     @property
@@ -300,7 +301,9 @@ class RuntimePolicyRepository:
             conditions.append(self._release.c.profile_id == profile_id)
         if status:
             conditions.append(self._release.c.status == status)
-        total = self._session.execute(sa.select(sa.func.count()).select_from(self._release).where(*conditions)).scalar_one()
+        total = self._session.execute(
+            sa.select(sa.func.count()).select_from(self._release).where(*conditions)
+        ).scalar_one()
         rows = self._session.execute(
             sa.select(self._release)
             .where(*conditions)
@@ -320,6 +323,53 @@ class RuntimePolicyRepository:
             .order_by(self._release.c.id.desc())
         ).mappings().all()
         return [dict(row) for row in rows]
+
+    def create_audit_event(self, values: dict[str, Any]) -> dict[str, Any]:
+        now = datetime.now()
+        result = self._session.execute(
+            self._audit_event.insert()
+            .values(
+                **values,
+                deleted=False,
+                created_at=now,
+                updated_at=now,
+            )
+            .returning(self._audit_event)
+        )
+        row = dict(result.mappings().one())
+        self._session.commit()
+        return row
+
+    def list_audit_events(
+        self,
+        page: int,
+        page_size: int,
+        *,
+        release_id: int | None = None,
+        evaluation_run_id: int | None = None,
+        profile_id: int | None = None,
+        event_type: str | None = None,
+    ) -> tuple[list[dict[str, Any]], int]:
+        conditions: list[ColumnElement[bool]] = [self._audit_event.c.deleted.is_(False)]
+        if release_id is not None:
+            conditions.append(self._audit_event.c.release_id == release_id)
+        if evaluation_run_id is not None:
+            conditions.append(self._audit_event.c.evaluation_run_id == evaluation_run_id)
+        if profile_id is not None:
+            conditions.append(self._audit_event.c.profile_id == profile_id)
+        if event_type:
+            conditions.append(self._audit_event.c.event_type == event_type)
+        total = self._session.execute(
+            sa.select(sa.func.count()).select_from(self._audit_event).where(*conditions)
+        ).scalar_one()
+        rows = self._session.execute(
+            sa.select(self._audit_event)
+            .where(*conditions)
+            .order_by(self._audit_event.c.id.asc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        ).mappings().all()
+        return [dict(row) for row in rows], int(total)
 
     def _ensure_tables(self) -> None:
         bind = self._session.get_bind()

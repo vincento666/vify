@@ -1,0 +1,68 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/vincento/work/develop/hify
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 4 items
+
+tests/unit/runtime_policy/test_release_service.py ..FF                   [100%]
+
+=================================== FAILURES ===================================
+__ RuntimePolicyReleaseServiceTest.test_release_transitions_emit_audit_events __
+
+self = <tests.unit.runtime_policy.test_release_service.RuntimePolicyReleaseServiceTest testMethod=test_release_transitions_emit_audit_events>
+
+    def test_release_transitions_emit_audit_events(self) -> None:
+        with self._factory() as session:
+            repository = RuntimePolicyRepository(session)
+            repository.create_profile(_profile_values("042.4 active", status="active"))
+            candidate = repository.create_profile(_profile_values("042.4 candidate"))
+            _create_passed_runs(repository, candidate)
+            service = RuntimePolicyReleaseService(repository)
+    
+            approved = service.approve_profile(int(candidate["id"]), approved_by="ops")
+            canary = service.canary_profile(int(candidate["id"]), canary_percent=15)
+            activated = service.activate_profile(int(candidate["id"]), activated_by="ops")
+    
+            self.assertEqual(
+>               [event["eventType"] for event in approved["auditEvents"]],
+                                                 ^^^^^^^^^^^^^^^^^^^^^^^
+                ["release_approved"],
+            )
+E           KeyError: 'auditEvents'
+
+tests/unit/runtime_policy/test_release_service.py:103: KeyError
+_ RuntimePolicyReleaseServiceTest.test_rollback_restores_previous_active_profile_and_records_audit _
+
+self = <tests.unit.runtime_policy.test_release_service.RuntimePolicyReleaseServiceTest testMethod=test_rollback_restores_previous_active_profile_and_records_audit>
+
+    def test_rollback_restores_previous_active_profile_and_records_audit(self) -> None:
+        with self._factory() as session:
+            repository = RuntimePolicyRepository(session)
+            baseline = repository.create_profile(_profile_values("042.4 previous", status="active"))
+            candidate = repository.create_profile(_profile_values("042.4 candidate"))
+            _create_passed_runs(repository, candidate)
+            service = RuntimePolicyReleaseService(repository)
+            service.approve_profile(int(candidate["id"]), approved_by="ops")
+            activated = service.activate_profile(int(candidate["id"]), activated_by="ops")
+    
+>           rolled_back = service.rollback_release(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^
+                int(activated["id"]),
+                rolled_back_by="ops",
+                reason="bad route mix",
+            )
+E           AttributeError: 'RuntimePolicyReleaseService' object has no attribute 'rollback_release'
+
+tests/unit/runtime_policy/test_release_service.py:74: AttributeError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/vincento/work/develop/hify/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/unit/runtime_policy/test_release_service.py::RuntimePolicyReleaseServiceTest::test_release_transitions_emit_audit_events
+FAILED tests/unit/runtime_policy/test_release_service.py::RuntimePolicyReleaseServiceTest::test_rollback_restores_previous_active_profile_and_records_audit
+==================== 2 failed, 2 passed, 1 warning in 1.00s ====================

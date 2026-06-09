@@ -241,7 +241,8 @@ class RuntimePolicyEvaluationRunService:
             raise BizError(ErrorCode.NOT_FOUND, "Runtime policy profile not found")
         result = self._validator.validate_profile_row(profile)
         row = self._repository.create_evaluation_run(_evaluation_run_values(result))
-        return _evaluation_run_response(row)
+        self._record_evaluation_audit(row, "profile_validated", "system", "", result)
+        return self._evaluation_run_response_with_audit(row)
 
     def replay_golden_matrix(self, profile_id: int) -> dict[str, Any]:
         profile = self._repository.get_profile(profile_id)
@@ -249,7 +250,8 @@ class RuntimePolicyEvaluationRunService:
             raise BizError(ErrorCode.NOT_FOUND, "Runtime policy profile not found")
         result = self._replay.replay_golden_matrix(profile)
         row = self._repository.create_evaluation_run(_evaluation_run_values(result))
-        return _evaluation_run_response(row)
+        self._record_evaluation_audit(row, "golden_matrix_replayed", "system", "", result)
+        return self._evaluation_run_response_with_audit(row)
 
     def replay_decision_logs(self, profile_id: int, filters: dict[str, Any]) -> dict[str, Any]:
         profile = self._repository.get_profile(profile_id)
@@ -271,13 +273,14 @@ class RuntimePolicyEvaluationRunService:
             result["passed"] = False
             result["failureReasons"] = ["decision_log_replay.no_logs"]
         row = self._repository.create_evaluation_run(_evaluation_run_values(result))
-        return _evaluation_run_response(row)
+        self._record_evaluation_audit(row, "decision_logs_replayed", "system", "", result)
+        return self._evaluation_run_response_with_audit(row)
 
     def get(self, run_id: int) -> dict[str, Any]:
         row = self._repository.get_evaluation_run(run_id)
         if row is None:
             raise BizError(ErrorCode.NOT_FOUND, "Runtime policy evaluation run not found")
-        return _evaluation_run_response(row)
+        return self._evaluation_run_response_with_audit(row)
 
     def list_runs(
         self,
@@ -301,6 +304,33 @@ class RuntimePolicyEvaluationRunService:
             "page": page,
             "pageSize": page_size,
         }
+
+    def _record_evaluation_audit(
+        self,
+        row: dict[str, Any],
+        event_type: str,
+        actor: str,
+        reason: str,
+        snapshot: dict[str, Any],
+    ) -> dict[str, Any]:
+        return self._repository.create_audit_event(
+            {
+                "release_id": None,
+                "evaluation_run_id": row["id"],
+                "profile_id": row["profile_id"],
+                "profile_version": row["profile_version"],
+                "event_type": event_type,
+                "actor": actor,
+                "reason": reason,
+                "snapshot": snapshot,
+            }
+        )
+
+    def _evaluation_run_response_with_audit(self, row: dict[str, Any]) -> dict[str, Any]:
+        response = _evaluation_run_response(row)
+        events, _total = self._repository.list_audit_events(1, 100, evaluation_run_id=int(row["id"]))
+        response["auditEvents"] = [_audit_event_response(event) for event in events]
+        return response
 
 
 class RuntimePolicyReleaseService:
@@ -333,7 +363,8 @@ class RuntimePolicyReleaseService:
             if existing
             else self._repository.create_release(values)
         )
-        return _release_response(row)
+        self._record_release_audit(row, "release_approved", approved_by, "", {"approvedBy": approved_by})
+        return self._release_response_with_audit(row)
 
     def canary_profile(self, profile_id: int, *, canary_percent: int) -> dict[str, Any]:
         if canary_percent < 0 or canary_percent > 100:
@@ -348,7 +379,8 @@ class RuntimePolicyReleaseService:
                 "audit_snapshot": {**(release.get("audit_snapshot") or {}), "canaryPercent": canary_percent},
             },
         )
-        return _release_response(row)
+        self._record_release_audit(row, "release_canary", "system", "", {"canaryPercent": canary_percent})
+        return self._release_response_with_audit(row)
 
     def activate_profile(self, profile_id: int, *, activated_by: str) -> dict[str, Any]:
         profile = self._profile_or_404(profile_id)
@@ -373,13 +405,53 @@ class RuntimePolicyReleaseService:
                 "audit_snapshot": {**(release.get("audit_snapshot") or {}), "activatedBy": activated_by},
             },
         )
-        return _release_response(row)
+        self._record_release_audit(row, "release_activated", activated_by, "", {"activatedBy": activated_by})
+        return self._release_response_with_audit(row)
+
+    def rollback_release(self, release_id: int, *, rolled_back_by: str, reason: str) -> dict[str, Any]:
+        release = self._repository.get_release(release_id)
+        if release is None:
+            raise BizError(ErrorCode.NOT_FOUND, "Runtime policy release not found")
+        previous_profile_id = release.get("previous_active_profile_id")
+        if previous_profile_id is None:
+            raise BizError(ErrorCode.BAD_REQUEST, "rollback target required")
+        previous = self._profile_or_404(int(previous_profile_id))
+        current = self._profile_or_404(int(release["profile_id"]))
+        self._repository.set_profile_status(int(current["id"]), "archived")
+        self._repository.set_profile_status(int(previous["id"]), "active")
+        row = self._repository.update_release(
+            release_id,
+            {
+                "status": "rolled_back",
+                "rolled_back_by": rolled_back_by,
+                "rolled_back_at": datetime.now(),
+                "rollback_reason": reason,
+                "audit_snapshot": {
+                    **(release.get("audit_snapshot") or {}),
+                    "rolledBackBy": rolled_back_by,
+                    "rollbackReason": reason,
+                },
+            },
+        )
+        self._record_release_audit(
+            row,
+            "release_rolled_back",
+            rolled_back_by,
+            reason,
+            {
+                "rolledBackBy": rolled_back_by,
+                "rollbackReason": reason,
+                "restoredProfileId": previous["id"],
+                "archivedProfileId": current["id"],
+            },
+        )
+        return self._release_response_with_audit(row)
 
     def get(self, release_id: int) -> dict[str, Any]:
         row = self._repository.get_release(release_id)
         if row is None:
             raise BizError(ErrorCode.NOT_FOUND, "Runtime policy release not found")
-        return _release_response(row)
+        return self._release_response_with_audit(row)
 
     def list_releases(
         self,
@@ -396,6 +468,34 @@ class RuntimePolicyReleaseService:
             "page": page,
             "pageSize": page_size,
         }
+
+    def _record_release_audit(
+        self,
+        row: dict[str, Any] | None,
+        event_type: str,
+        actor: str,
+        reason: str,
+        snapshot: dict[str, Any],
+    ) -> dict[str, Any]:
+        release = _release_response(row)
+        return self._repository.create_audit_event(
+            {
+                "release_id": release["id"],
+                "evaluation_run_id": None,
+                "profile_id": release["profileId"],
+                "profile_version": release["profileVersion"],
+                "event_type": event_type,
+                "actor": actor,
+                "reason": reason,
+                "snapshot": snapshot,
+            }
+        )
+
+    def _release_response_with_audit(self, row: dict[str, Any] | None) -> dict[str, Any]:
+        response = _release_response(row)
+        events, _total = self._repository.list_audit_events(1, 100, release_id=response["id"])
+        response["auditEvents"] = [_audit_event_response(event) for event in events]
+        return response
 
     def _profile_or_404(self, profile_id: int) -> dict[str, Any]:
         profile = self._repository.get_profile(profile_id)
@@ -502,6 +602,21 @@ def _release_response(row: dict[str, Any] | None) -> dict[str, Any]:
         "auditSnapshot": row.get("audit_snapshot") or {},
         "createdAt": _iso(row["created_at"]),
         "updatedAt": _iso(row["updated_at"]),
+    }
+
+
+def _audit_event_response(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": int(row["id"]),
+        "releaseId": row.get("release_id"),
+        "evaluationRunId": row.get("evaluation_run_id"),
+        "profileId": row.get("profile_id"),
+        "profileVersion": row.get("profile_version"),
+        "eventType": str(row["event_type"]),
+        "actor": str(row.get("actor") or ""),
+        "reason": str(row.get("reason") or ""),
+        "snapshot": row.get("snapshot") or {},
+        "createdAt": _iso(row["created_at"]),
     }
 
 

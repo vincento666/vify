@@ -114,6 +114,27 @@ def register_runtime_policy_tables(metadata: sa.MetaData | None = None) -> None:
             sa.Index("idx_runtime_policy_release_status", "status"),
         )
 
+    if "runtime_policy_audit_event" not in target.tables:
+        sa.Table(
+            "runtime_policy_audit_event",
+            target,
+            id_column(),
+            sa.Column("release_id", BIGINT, nullable=True),
+            sa.Column("evaluation_run_id", BIGINT, nullable=True),
+            sa.Column("profile_id", BIGINT, nullable=True),
+            sa.Column("profile_version", sa.Integer(), nullable=True),
+            sa.Column("event_type", sa.String(80), nullable=False),
+            sa.Column("actor", sa.String(120), nullable=False, server_default=""),
+            sa.Column("reason", sa.String(500), nullable=False, server_default=""),
+            sa.Column("snapshot", sa.JSON(), nullable=False),
+            deleted_column(),
+            *timestamps(),
+            sa.Index("idx_runtime_policy_audit_release", "release_id"),
+            sa.Index("idx_runtime_policy_audit_eval", "evaluation_run_id"),
+            sa.Index("idx_runtime_policy_audit_profile", "profile_id", "profile_version"),
+            sa.Index("idx_runtime_policy_audit_type", "event_type"),
+        )
+
 
 def runtime_policy_tables() -> list[sa.Table]:
     register_runtime_policy_tables()
@@ -122,5 +143,6 @@ def runtime_policy_tables() -> list[sa.Table]:
         "runtime_decision_log",
         "runtime_policy_evaluation_run",
         "runtime_policy_release",
+        "runtime_policy_audit_event",
     ]
     return [Base.metadata.tables[name] for name in names]

@@ -165,6 +165,21 @@ def get_release(
     return success(service.get(release_id))
 
 
+@router.post("/releases/{release_id}/rollback")
+def rollback_release(
+    release_id: int,
+    request: dict[str, Any] | None = None,
+    service: RuntimePolicyReleaseService = Depends(get_runtime_release_service),
+) -> dict[str, Any]:
+    return success(
+        service.rollback_release(
+            release_id,
+            rolled_back_by=str((request or {}).get("rolledBackBy") or "system"),
+            reason=str((request or {}).get("reason") or ""),
+        )
+    )
+
+
 @router.get("/profiles")
 def list_profiles(
     page: int = Query(1, ge=1),

@@ -102,6 +102,52 @@ class RuntimePolicyReleaseApiContractTest(unittest.TestCase):
         self.assertEqual(active_profile.json()["data"]["status"], "active")
         self.assertEqual(archived_baseline.json()["data"]["status"], "archived")
 
+    def test_rollback_endpoint_restores_previous_active_profile_and_exposes_audit(self) -> None:
+        with TestClient(app) as client:
+            baseline = _profile_payload("042.4 baseline")
+            baseline["status"] = "active"
+            baseline_id = client.post("/api/v1/runtime-policy/profiles", json=baseline).json()["data"]["id"]
+            profile_id = _create_candidate_with_gates(client, create_replay_source=False)
+            client.post(f"/api/v1/runtime-policy/profiles/{profile_id}/approve", json={"approvedBy": "ops"})
+            activated = client.post(
+                f"/api/v1/runtime-policy/profiles/{profile_id}/activate",
+                json={"activatedBy": "ops"},
+            )
+            release_id = activated.json()["data"]["id"]
+            rolled_back = client.post(
+                f"/api/v1/runtime-policy/releases/{release_id}/rollback",
+                json={"rolledBackBy": "ops", "reason": "bad route mix"},
+            )
+            release_detail = client.get(f"/api/v1/runtime-policy/releases/{release_id}")
+            restored_baseline = client.get(f"/api/v1/runtime-policy/profiles/{baseline_id}")
+            archived_candidate = client.get(f"/api/v1/runtime-policy/profiles/{profile_id}")
+
+        self.assertEqual(rolled_back.status_code, 200)
+        self.assertEqual(rolled_back.json()["data"]["status"], "rolled_back")
+        self.assertEqual(rolled_back.json()["data"]["rollbackReason"], "bad route mix")
+        self.assertEqual(restored_baseline.json()["data"]["status"], "active")
+        self.assertEqual(archived_candidate.json()["data"]["status"], "archived")
+        self.assertEqual(
+            [event["eventType"] for event in release_detail.json()["data"]["auditEvents"]],
+            ["release_approved", "release_activated", "release_rolled_back"],
+        )
+
+    def test_evaluation_run_detail_exposes_audit_and_evidence(self) -> None:
+        with TestClient(app) as client:
+            profile_id = client.post(
+                "/api/v1/runtime-policy/profiles",
+                json=_profile_payload("042.4 audited validation"),
+            ).json()["data"]["id"]
+            validated = client.post(f"/api/v1/runtime-policy/profiles/{profile_id}/validate")
+            run_id = validated.json()["data"]["id"]
+            detail = client.get(f"/api/v1/runtime-policy/evaluation-runs/{run_id}")
+
+        self.assertEqual(validated.status_code, 200)
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.json()["data"]["auditEvents"][0]["eventType"], "profile_validated")
+        self.assertEqual(detail.json()["data"]["result"]["passed"], True)
+        self.assertEqual(detail.json()["data"]["inputSnapshot"]["profileId"], profile_id)
+
     def _session_override(self) -> Generator[Session]:
         with self._factory() as session:
             yield session

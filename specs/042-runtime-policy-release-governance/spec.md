@@ -199,3 +199,10 @@ allow direct activation without evaluation gates.
   profile-version drift rejection, backend E2E regression, runtime-lab
   confusion matrix regression, and browser UAT evidence are recorded under
   `artifacts/slices/042-runtime-policy-release-governance/042.3/`.
+- 042.4 complete: rollback restores the previous active profile, archives the
+  rolled-back candidate, audit events are persisted for validation and release
+  transitions, release/evaluation detail APIs expose audit evidence, backend
+  E2E regression and browser UAT evidence are recorded under
+  `artifacts/slices/042-runtime-policy-release-governance/042.4/`.
+
+Status: complete.
