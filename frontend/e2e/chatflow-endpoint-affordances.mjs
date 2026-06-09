@@ -30,6 +30,8 @@ async function portBox(page, selector) {
       height: box.height,
       cssWidth: Number.parseFloat(handleStyle.width),
       cssHeight: Number.parseFloat(handleStyle.height),
+      dotWidth: dotStyle.width,
+      dotHeight: dotStyle.height,
       centerX: box.left + box.width / 2,
       centerY: box.top + box.height / 2,
       handleScale: matrixScale(handleStyle.transform),
@@ -104,8 +106,12 @@ try {
   const defaultNode = await nodeBox(page, nodeSelector)
   const defaultSource = await portBox(page, sourceSelector)
   const defaultTarget = await portBox(page, targetSelector)
-  const expectedHitDiameter = 2.25 * await rootFontSize(page)
+  const rem = await rootFontSize(page)
+  const expectedBaseDiameter = 0.75 * rem
+  const expectedHitDiameter = 2.25 * rem
   assert(defaultNode && defaultSource && defaultTarget, 'Expected node source and target ports to render')
+  assertClose(Number.parseFloat(defaultSource.dotWidth || '0'), expectedBaseDiameter, 1, `Expected endpoint 1x dot to keep the original size, got ${JSON.stringify(defaultSource)}`)
+  assertClose(Number.parseFloat(defaultTarget.dotWidth || '0'), expectedBaseDiameter, 1, `Expected target endpoint 1x dot to keep the original size, got ${JSON.stringify(defaultTarget)}`)
   assertClose(defaultSource.cssWidth, expectedHitDiameter, 1, `Expected endpoint hitbox CSS to use the 3x original dot diameter, got ${JSON.stringify(defaultSource)}`)
   assertClose(defaultTarget.cssWidth, expectedHitDiameter, 1, `Expected target endpoint hitbox CSS to use the 3x original dot diameter, got ${JSON.stringify(defaultTarget)}`)
   assert(Math.abs(defaultSource.centerX - defaultNode.right) <= 1, `Expected source port center to align with node right edge, got node=${JSON.stringify(defaultNode)} source=${JSON.stringify(defaultSource)}`)

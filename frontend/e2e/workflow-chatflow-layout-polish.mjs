@@ -48,6 +48,9 @@ async function assertLayout(page, path) {
   const toolbarCenter = geometry.toolbar.left + geometry.toolbar.width / 2
   assert(Math.abs(toolbarCenter - visibleCenter) <= 3, `Toolbar center ${toolbarCenter} must match visible center ${visibleCenter}`)
   assert(geometry.debug.right <= geometry.config.left - 8, `Debug dock overlaps config panel ${JSON.stringify(geometry)}`)
+  assert(Math.abs((geometry.config.top - geometry.canvas.top) - geometry.debug.left) <= 2, `Config panel top gap must align with debug dock side gap inside the canvas stage ${JSON.stringify(geometry)}`)
+  assert(Math.abs((page.viewportSize().width - geometry.config.right) - geometry.debug.left) <= 2, `Config panel right gap must align with debug dock side gap ${JSON.stringify(geometry)}`)
+  assert(Math.abs((page.viewportSize().height - geometry.config.bottom) - geometry.debug.left) <= 2, `Config panel bottom gap must align with debug dock bottom gap ${JSON.stringify(geometry)}`)
 
   await page.getByRole('button', { name: /试运行|对话试运行/ }).first().click()
   await page.getByTestId('test-run-panel').waitFor({ state: 'visible', timeout: 5000 })
@@ -55,6 +58,8 @@ async function assertLayout(page, path) {
   assert(geometry.canvas && geometry.toolbar && geometry.testRun && geometry.debug, `Missing trial geometry ${JSON.stringify(geometry)}`)
   assert(geometry.debug.right <= geometry.testRun.left - 8, `Debug dock overlaps trial panel ${JSON.stringify(geometry)}`)
   assert(Math.abs(geometry.debug.bottom - geometry.testRun.bottom) <= 2, `Trial bottom must align with debug dock ${JSON.stringify(geometry)}`)
+  assert(Math.abs((geometry.testRun.top - geometry.canvas.top) - geometry.debug.left) <= 2, `Trial panel top gap must align with debug dock side gap inside the canvas stage ${JSON.stringify(geometry)}`)
+  assert(Math.abs((page.viewportSize().width - geometry.testRun.right) - geometry.debug.left) <= 2, `Trial panel right gap must align with debug dock side gap ${JSON.stringify(geometry)}`)
 }
 
 const browser = await chromium.launch()

@@ -1,0 +1,10 @@
+file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-chatflow-layout-polish.mjs:7
+  if (!condition) throw new Error(message)
+                        ^
+
+Error: Config panel top gap must align with debug dock side gap {"canvas":{"left":0,"right":1440,"top":67.0625,"bottom":900,"width":1440,"height":832.9375},"toolbar":{"left":233.234375,"right":688.359375,"top":506.671875,"bottom":546.546875,"width":455.125,"height":39.875},"config":{"left":930.671875,"right":1423.6875,"top":83.375,"bottom":831.125,"width":493.015625,"height":747.75},"testRun":null,"debug":{"left":9.0625,"right":921.609375,"top":557.421875,"bottom":890.9375,"width":912.546875,"height":333.515625}}
+    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-chatflow-layout-polish.mjs:7:25)
+    at assertLayout (file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-chatflow-layout-polish.mjs:51:3)
+    at async file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-chatflow-layout-polish.mjs:69:3
+
+Node.js v23.11.0

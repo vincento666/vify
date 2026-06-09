@@ -151,9 +151,13 @@ try {
   assert(!panelText.includes('目标变量'), 'Assignment editor must not expose raw target variable as a primary field')
   assert(!panelText.includes('写入模式'), 'Assignment editor must not expose raw write mode as a primary field')
   assert(!panelText.includes('赋值来源值模式'), 'Assignment editor must not expose reference/literal mode selector')
-  assert(panelText.includes('变量赋值'), 'Assignment editor must use a task-first variable assignment section')
+  assert(
+    !panelText.includes('用于向变量赋值，实现数据的动态更新和传递'),
+    'Assignment editor input section must not repeat task description copy',
+  )
   assert(!panelText.includes('赋值类型'), 'Assignment editor must not expose write mode as an assignment type column')
   assert(await panel.locator('[data-testid="variable-assignment-editor"]').count() === 1, 'Expected structured assignment editor')
+  assert(await panel.locator('.variable-assignment-task').count() === 0, 'Assignment editor must not render the redundant task intro block inside the input section')
   const assignmentHeaderText = await panel.locator('.variable-assignment-header').innerText()
   assert(assignmentHeaderText.includes('变量名称'), 'Assignment editor must show a target variable column')
   assert(!assignmentHeaderText.includes('类型'), 'Assignment editor must not show a redundant source type column')
@@ -186,8 +190,8 @@ try {
     'Assignment source must keep a persistent variable picker button',
   )
   assert(
-    await assignmentEditor.getByRole('button', { name: '切换为运算赋值', exact: true }).count() === 1,
-    'Assignment source must expose operation assignment as a first-class mode',
+    await assignmentEditor.getByRole('button', { name: '切换为运算赋值', exact: true }).count() === 0,
+    'Assignment source must not expose the unused fx operation toggle in the compact input section',
   )
   assert(
     await assignmentEditor.getByRole('button', { name: '清除赋值内容变量引用', exact: true }).count() === 1,
@@ -195,15 +199,10 @@ try {
   )
   await assignmentEditor.getByRole('button', { name: '清除赋值内容变量引用', exact: true }).click()
   assert(await assignmentEditor.getByTestId('assignment-variable-literal-input').inputValue() === '', 'Clearing assignment source must restore literal input mode')
-  await assignmentEditor.getByRole('button', { name: '切换为运算赋值', exact: true }).click()
-  assert(await assignmentEditor.getByTestId('assignment-operation-control').count() === 1, 'Operation assignment mode must render compact controls')
-  assert(await assignmentEditor.getByLabel('运算赋值操作', { exact: true }).count() === 1, 'Operation assignment mode must expose an operator control')
-  assert(await assignmentEditor.getByLabel('运算赋值操作数', { exact: true }).count() === 1, 'Operation assignment mode must expose an operand input')
+  assert(await assignmentEditor.getByTestId('assignment-operation-control').count() === 0, 'Operation assignment controls must not render in the compact assignment editor')
   if (screenshotPath) {
     await page.screenshot({ path: screenshotPath, fullPage: true })
   }
-  await assignmentEditor.getByRole('button', { name: '切回输入或引用赋值', exact: true }).click()
-  assert(await assignmentEditor.getByTestId('assignment-variable-literal-input').count() === 1, 'Assignment operation mode must switch back to literal/reference mode')
 
   console.log('PASS workflow/chatflow variable aggregation assignment e2e')
 } finally {
