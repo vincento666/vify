@@ -4,7 +4,7 @@
 
 Checked on 2026-06-09.
 
-The local `specs/` directory currently contains `000` through `040`.
+The local `specs/` directory currently contains `000` through `042`.
 The newest relevant runtime/knowledge sequence is:
 
 - `033-runtime-fallback-policy`: runtime handoff and fallback control-plane
@@ -20,11 +20,15 @@ The newest relevant runtime/knowledge sequence is:
 - `038-runtime-rag-answer-gate`: runtime RAG answer gate.
 - `039-runtime-controlled-agent-fallback`: policy-controlled fallback Agent.
 - `040-runtime-fallback-e2e-lab-acceptance`: full end-to-end and lab acceptance.
+- `041-runtime-policy-config-observability`: backend policy profile, route
+  parameter APIs, and decision-log observability.
+- `042-runtime-policy-release-governance`: backend evaluation, release gate,
+  canary, activation, and rollback governance.
 
 `035` is already occupied by knowledge retrieval productization. Therefore the
 remaining runtime fallback specs intentionally start at `036` and continue
-through `040`. These specs depend on `035` as a provider of retrieval capability
-and must not duplicate 035's knowledge module implementation work.
+through `040`. `041-042` then productize those runtime parameters for host
+production-system operations without adding frontend UI.
 
 ## Implementation Order
 
@@ -34,6 +38,8 @@ and must not duplicate 035's knowledge module implementation work.
 4. Implement `038-runtime-rag-answer-gate`.
 5. Implement `039-runtime-controlled-agent-fallback`.
 6. Implement `040-runtime-fallback-e2e-lab-acceptance`.
+7. Implement `041-runtime-policy-config-observability`.
+8. Implement `042-runtime-policy-release-governance`.
 
 This order preserves the agreed routing architecture:
 
@@ -45,6 +51,8 @@ explicit safety/handoff triggers
   -> RAG answer
   -> controlled fallback Agent
   -> human handoff
+  -> policy profile config and decision logs
+  -> evaluation-gated release and rollback
 ```
 
 ## SDD Boundary
@@ -56,6 +64,10 @@ module internals while implementing 033 and 036-040.
 
 `035` remains the knowledge provider boundary. `036-040` consume retrieval
 results and policy evidence through runtime-lab contracts.
+
+`041-042` are backend-only production embedding specs. They add operational
+configuration, observability, evaluation, release, and rollback APIs for a host
+system. They must not require Hify frontend configuration UI.
 
 ## TDD Rule
 
@@ -110,6 +122,18 @@ Use these goals one by one.
 请严格按照 specs/040-runtime-fallback-e2e-lab-acceptance 的 spec.md、plan.md、tasks.md 完成最终验收。构建覆盖 handoff、exact FAQ、semantic FAQ、RAG、controlled Agent、clarification、active_sop safe answer、SOP continue/resume/switch、non-interruptible rejection 的真实 API + 后端高规格验收矩阵；必要时补 runtime-lab 前端证据，但不做新前端产品功能。必须输出预期/实际对比、完整 artifacts、最终能力审计，并提交 git。
 ```
 
+### Goal 041
+
+```text
+请严格按照 specs/041-runtime-policy-config-observability 的 spec.md、plan.md、tasks.md 完成 041.1-041.4。目标是把 runtime-lab 路由参数从 env/demo wiring 提升为后端可配置的 RuntimePolicyProfile，并沉淀每次对话决策日志和当次使用的完整 policy snapshot。必须提供后端 API 支持宿主系统配置 classifier、FAQ/RAG 阈值、fallback Agent、handoff 等参数；不做前端；必须 TDD+SDD，保存 artifacts，更新 spec/plan/tasks，并按 slice 提交 git。
+```
+
+### Goal 042
+
+```text
+请严格按照 specs/042-runtime-policy-release-governance 的 spec.md、plan.md、tasks.md 完成 042.1-042.4。目标是为 RuntimePolicyProfile 建立后端评测、发布门禁、灰度、激活和回滚治理：activate 必须经过 profile validation、040 golden matrix replay、历史 decision logs replay、风险评估、审批和 rollback target 检查；不做前端；必须 TDD+SDD，保存 artifacts，更新 spec/plan/tasks，并按 slice 提交 git。
+```
+
 ## Final Capability After 040
 
 After all specs are complete, the runtime will support a controlled enterprise
@@ -130,3 +154,25 @@ customer-service dialogue stack:
   policy, not through free-form Agent authority;
 - final acceptance proves these behaviors through API, integration, E2E, and
   runtime-lab evidence.
+
+## Final Capability After 042
+
+After 041-042 are complete, the demo runtime can be embedded into a host
+production system with backend-operable route governance:
+
+- host systems can configure route parameters through backend APIs;
+- classifier model, prompt, timeout, retry, fallback model, and minimum
+  confidence can come from `RuntimePolicyProfile`;
+- fallback Agent type, model/agent binding, prompt, knowledge bases, allowed
+  response types, and max clarification attempts can come from
+  `RuntimePolicyProfile`;
+- FAQ/RAG thresholds and knowledge bindings are backend configurable;
+- env remains bootstrap/default fallback only;
+- every runtime decision stores final action, confidence signals, route
+  evidence, and the exact policy snapshot used;
+- candidate profiles can be evaluated against the 040 golden matrix and
+  historical decision logs;
+- activation is blocked unless validation, replay, risk, approval, and rollback
+  gates pass;
+- canary/active/rollback release records are auditable;
+- host production systems can build their own operator frontend on these APIs.
