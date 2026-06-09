@@ -31,6 +31,13 @@ def score_chunk(chunk: ChunkRecord, query: str) -> int:
     return sum(1 for term in terms if term in content)
 
 
+def keyword_confidence(chunk: ChunkRecord, query: str) -> float:
+    terms = set(_query_terms(query))
+    if not terms:
+        return 0.0
+    return score_chunk(chunk, query) / len(terms)
+
+
 def _query_terms(query: str) -> list[str]:
     return re.findall(r"[0-9a-zA-Z_\u4e00-\u9fff]+", query.lower())
 

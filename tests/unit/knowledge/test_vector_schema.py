@@ -53,6 +53,23 @@ class KnowledgeVectorSchemaTest(unittest.TestCase):
         self.assertIn("USING ivfflat", compiled)
         self.assertIn("vector_cosine_ops", compiled)
 
+    def test_faq_embedding_table_uses_pgvector_cosine_index(self) -> None:
+        table = Base.metadata.tables["knowledge_faq_embedding"]
+        embedding_type = table.c.embedding.type
+
+        self.assertIsInstance(embedding_type, Vector)
+        self.assertEqual(1536, embedding_type.dim)
+        self.assertIn("idx_knowledge_faq_embedding_faq_id", {index.name for index in table.indexes})
+
+        vector_index = next(
+            index for index in table.indexes if index.name == "idx_knowledge_faq_embedding_vector_cosine"
+        )
+        self.assertEqual("ivfflat", vector_index.dialect_options["postgresql"]["using"])
+        self.assertEqual(
+            {"embedding": "vector_cosine_ops"},
+            vector_index.dialect_options["postgresql"]["ops"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

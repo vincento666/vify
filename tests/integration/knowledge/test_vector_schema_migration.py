@@ -25,19 +25,30 @@ class KnowledgeVectorMigrationTest(unittest.TestCase):
             embedding_columns = {
                 column["name"] for column in inspector.get_columns("document_embedding")
             }
+            faq_embedding_columns = {
+                column["name"] for column in inspector.get_columns("knowledge_faq_embedding")
+            }
             chunk_indexes = {index["name"] for index in inspector.get_indexes("document_chunk")}
             embedding_indexes = {
                 index["name"] for index in inspector.get_indexes("document_embedding")
             }
+            faq_embedding_indexes = {
+                index["name"] for index in inspector.get_indexes("knowledge_faq_embedding")
+            }
 
             self.assertIn("document_chunk", table_names)
             self.assertIn("document_embedding", table_names)
+            self.assertIn("knowledge_faq_embedding", table_names)
             self.assertIn("document_id", chunk_columns)
             self.assertIn("chunk_id", embedding_columns)
             self.assertIn("embedding", embedding_columns)
+            self.assertIn("faq_id", faq_embedding_columns)
+            self.assertIn("embedding", faq_embedding_columns)
             self.assertIn("idx_document_chunk_document_id", chunk_indexes)
             self.assertIn("idx_document_embedding_chunk_id", embedding_indexes)
             self.assertIn("idx_document_embedding_vector_cosine", embedding_indexes)
+            self.assertIn("idx_knowledge_faq_embedding_faq_id", faq_embedding_indexes)
+            self.assertIn("idx_knowledge_faq_embedding_vector_cosine", faq_embedding_indexes)
 
 
 if __name__ == "__main__":

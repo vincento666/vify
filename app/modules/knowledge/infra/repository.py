@@ -13,7 +13,9 @@ from app.core.schema import register_baseline_tables
 from app.modules.knowledge.domain.chunks import ChunkRecord, estimate_token_count
 from app.modules.knowledge.domain.vector_search import (
     EmbeddedChunk,
+    SimilarFaq,
     SimilarChunk,
+    cosine_similarity,
     rank_embedded_chunks,
 )
 
@@ -27,6 +29,8 @@ class KnowledgeBaseRepository:
         self._document = Base.metadata.tables["document"]
         self._document_chunk = Base.metadata.tables["document_chunk"]
         self._document_embedding = Base.metadata.tables["document_embedding"]
+        self._knowledge_faq = Base.metadata.tables["knowledge_faq"]
+        self._knowledge_faq_embedding = Base.metadata.tables["knowledge_faq_embedding"]
 
     def list_page(
         self,
@@ -277,6 +281,72 @@ class KnowledgeBaseRepository:
             top_k,
         )
 
+    def replace_faq_embeddings(
+        self,
+        faqs: Sequence[dict[str, Any]],
+        embeddings: Sequence[Sequence[float]],
+        model_name: str,
+        dimensions: int,
+    ) -> list[dict[str, Any]]:
+        if len(faqs) != len(embeddings):
+            raise ValueError("faqs and embeddings length mismatch")
+        faq_ids = [int(faq["id"]) for faq in faqs]
+        if not faq_ids:
+            return []
+        now = datetime.now()
+        self._session.execute(
+            self._knowledge_faq_embedding.delete().where(
+                self._knowledge_faq_embedding.c.faq_id.in_(faq_ids)
+            )
+        )
+        rows: list[dict[str, Any]] = []
+        for faq, embedding in zip(faqs, embeddings, strict=True):
+            row = dict(
+                self._session.execute(
+                    self._knowledge_faq_embedding.insert()
+                    .values(
+                        faq_id=int(faq["id"]),
+                        embedding_model=model_name,
+                        embedding=list(embedding),
+                        dimension=dimensions,
+                        metadata={},
+                        deleted=False,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                    .returning(self._knowledge_faq_embedding)
+                )
+                .mappings()
+                .one()
+            )
+            rows.append(row)
+        self._session.commit()
+        return rows
+
+    def search_similar_faqs(
+        self,
+        knowledge_base_id: int,
+        query_embedding: Sequence[float],
+        model_name: str,
+        top_k: int,
+    ) -> list[SimilarFaq]:
+        if top_k <= 0:
+            return []
+        bind = self._session.get_bind()
+        if bind.dialect.name == "postgresql":
+            return self._search_similar_faqs_postgresql(
+                knowledge_base_id,
+                query_embedding,
+                model_name,
+                top_k,
+            )
+        return self._search_similar_faqs_in_memory(
+            knowledge_base_id,
+            query_embedding,
+            model_name,
+            top_k,
+        )
+
     def list_document_chunks(self, document_id: int) -> list[ChunkRecord]:
         rows = self._session.execute(
             sa.select(self._document_chunk)
@@ -305,6 +375,104 @@ class KnowledgeBaseRepository:
         self._session.commit()
         return isinstance(result, CursorResult) and result.rowcount > 0
 
+    def create_faq(self, values: dict[str, Any]) -> dict[str, Any]:
+        now = datetime.now()
+        row_values = {
+            **values,
+            "alternative_questions": values.get("alternative_questions") or [],
+            "keywords": values.get("keywords") or [],
+            "category": values.get("category") or "",
+            "priority": int(values.get("priority") or 0),
+            "enabled": bool(values.get("enabled", True)),
+            "metadata": values.get("metadata") or {},
+            "source": values.get("source") or "manual",
+            "deleted": False,
+            "created_at": now,
+            "updated_at": now,
+        }
+        result = self._session.execute(
+            self._knowledge_faq.insert()
+            .values(row_values)
+            .returning(self._knowledge_faq)
+        )
+        row = dict(result.mappings().one())
+        self._session.commit()
+        return row
+
+    def list_faqs(
+        self,
+        knowledge_base_id: int,
+        page: int,
+        page_size: int,
+        include_disabled: bool = True,
+    ) -> tuple[list[dict[str, Any]], int]:
+        conditions: list[ColumnElement[bool]] = [
+            self._knowledge_faq.c.knowledge_base_id == knowledge_base_id,
+            self._knowledge_faq.c.deleted.is_(False),
+        ]
+        if not include_disabled:
+            conditions.append(self._knowledge_faq.c.enabled.is_(True))
+        total = self._session.execute(
+            sa.select(sa.func.count()).select_from(self._knowledge_faq).where(*conditions)
+        ).scalar_one()
+        rows = self._session.execute(
+            sa.select(self._knowledge_faq)
+            .where(*conditions)
+            .order_by(self._knowledge_faq.c.priority.desc(), self._knowledge_faq.c.id.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        ).mappings().all()
+        return [dict(row) for row in rows], int(total)
+
+    def list_enabled_faqs(self, knowledge_base_id: int) -> list[dict[str, Any]]:
+        rows = self._session.execute(
+            sa.select(self._knowledge_faq)
+            .where(
+                self._knowledge_faq.c.knowledge_base_id == knowledge_base_id,
+                self._knowledge_faq.c.enabled.is_(True),
+                self._knowledge_faq.c.deleted.is_(False),
+            )
+            .order_by(self._knowledge_faq.c.priority.desc(), self._knowledge_faq.c.id.asc())
+        ).mappings().all()
+        return [dict(row) for row in rows]
+
+    def get_faq(self, faq_id: int) -> dict[str, Any] | None:
+        row = self._session.execute(
+            sa.select(self._knowledge_faq).where(
+                self._knowledge_faq.c.id == faq_id,
+                self._knowledge_faq.c.deleted.is_(False),
+            )
+        ).mappings().one_or_none()
+        return dict(row) if row else None
+
+    def update_faq(self, faq_id: int, values: dict[str, Any]) -> dict[str, Any] | None:
+        values["updated_at"] = datetime.now()
+        result = self._session.execute(
+            self._knowledge_faq.update()
+            .where(
+                self._knowledge_faq.c.id == faq_id,
+                self._knowledge_faq.c.deleted.is_(False),
+            )
+            .values(**values)
+        )
+        self._session.commit()
+        if not isinstance(result, CursorResult) or result.rowcount <= 0:
+            return None
+        return self.get_faq(faq_id)
+
+    def delete_faq(self, faq_id: int) -> bool:
+        self._clear_faq_embeddings(faq_id)
+        result = self._session.execute(
+            self._knowledge_faq.update()
+            .where(
+                self._knowledge_faq.c.id == faq_id,
+                self._knowledge_faq.c.deleted.is_(False),
+            )
+            .values(deleted=True, updated_at=datetime.now())
+        )
+        self._session.commit()
+        return isinstance(result, CursorResult) and result.rowcount > 0
+
     def _chunk_record(self, row: dict[str, Any]) -> ChunkRecord:
         return ChunkRecord(
             id=int(row["id"]),
@@ -322,6 +490,13 @@ class KnowledgeBaseRepository:
             return
         self._session.execute(
             self._document_embedding.delete().where(self._document_embedding.c.chunk_id.in_(chunk_ids))
+        )
+
+    def _clear_faq_embeddings(self, faq_id: int) -> None:
+        self._session.execute(
+            self._knowledge_faq_embedding.delete().where(
+                self._knowledge_faq_embedding.c.faq_id == faq_id
+            )
         )
 
     def _search_similar_chunks_in_memory(
@@ -405,6 +580,96 @@ class KnowledgeBaseRepository:
         return [
             SimilarChunk(
                 chunk=self._chunk_record(dict(row)),
+                score=float(row["score"] or 0.0),
+            )
+            for row in rows
+        ]
+
+    def _search_similar_faqs_in_memory(
+        self,
+        knowledge_base_id: int,
+        query_embedding: Sequence[float],
+        model_name: str,
+        top_k: int,
+    ) -> list[SimilarFaq]:
+        rows = self._session.execute(
+            sa.select(
+                self._knowledge_faq,
+                self._knowledge_faq_embedding.c.embedding,
+            )
+            .join(
+                self._knowledge_faq_embedding,
+                self._knowledge_faq_embedding.c.faq_id == self._knowledge_faq.c.id,
+            )
+            .where(
+                self._knowledge_faq.c.knowledge_base_id == knowledge_base_id,
+                self._knowledge_faq.c.enabled.is_(True),
+                self._knowledge_faq.c.deleted.is_(False),
+                self._knowledge_faq_embedding.c.deleted.is_(False),
+                self._knowledge_faq_embedding.c.embedding_model == model_name,
+            )
+            .order_by(self._knowledge_faq.c.priority.desc(), self._knowledge_faq.c.id.asc())
+        ).mappings().all()
+        ranked = sorted(
+            (
+                SimilarFaq(
+                    faq={key: value for key, value in dict(row).items() if key != "embedding"},
+                    score=cosine_similarity(
+                        [float(value) for value in row["embedding"]],
+                        query_embedding,
+                    ),
+                )
+                for row in rows
+            ),
+            key=lambda result: (-result.score, -int(result.faq.get("priority") or 0), int(result.faq["id"])),
+        )
+        return ranked[:top_k]
+
+    def _search_similar_faqs_postgresql(
+        self,
+        knowledge_base_id: int,
+        query_embedding: Sequence[float],
+        model_name: str,
+        top_k: int,
+    ) -> list[SimilarFaq]:
+        vector_literal = "[" + ",".join(str(float(value)) for value in query_embedding) + "]"
+        rows = self._session.execute(
+            sa.text(
+                """
+                SELECT
+                    faq.id,
+                    faq.knowledge_base_id,
+                    faq.question,
+                    faq.answer,
+                    faq.alternative_questions,
+                    faq.keywords,
+                    faq.category,
+                    faq.priority,
+                    faq.enabled,
+                    faq.metadata,
+                    faq.source,
+                    1 - (fe.embedding <=> CAST(:query_embedding AS vector)) AS score
+                FROM knowledge_faq faq
+                JOIN knowledge_faq_embedding fe ON fe.faq_id = faq.id
+                WHERE faq.knowledge_base_id = :knowledge_base_id
+                  AND faq.enabled = true
+                  AND faq.deleted = false
+                  AND fe.deleted = false
+                  AND fe.embedding_model = :model_name
+                ORDER BY fe.embedding <=> CAST(:query_embedding AS vector), faq.priority DESC, faq.id ASC
+                LIMIT :top_k
+                """
+            ),
+            {
+                "knowledge_base_id": knowledge_base_id,
+                "query_embedding": vector_literal,
+                "model_name": model_name,
+                "top_k": top_k,
+            },
+        ).mappings().all()
+        return [
+            SimilarFaq(
+                faq={key: value for key, value in dict(row).items() if key != "score"},
                 score=float(row["score"] or 0.0),
             )
             for row in rows

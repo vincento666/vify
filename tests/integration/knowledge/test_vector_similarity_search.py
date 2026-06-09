@@ -4,7 +4,9 @@ import unittest
 
 from app.core.database import Base, get_session_factory, initialise_database
 from app.core.schema import DEFAULT_EMBEDDING_DIMENSIONS, register_baseline_tables
+from app.modules.knowledge.api.facade import KnowledgeFacade
 from app.modules.knowledge.domain.embeddings import FAKE_EMBEDDING_MODEL
+from app.modules.knowledge.domain.embeddings import FakeEmbeddingProvider
 from app.modules.knowledge.domain.service import KnowledgeBaseService
 from app.modules.knowledge.infra.repository import KnowledgeBaseRepository
 
@@ -37,6 +39,54 @@ class VectorSimilaritySearchTest(unittest.TestCase):
         self.assertEqual(1, len(results))
         self.assertEqual("Beta billing", results[0].chunk.content)
         self.assertAlmostEqual(1.0, results[0].score)
+
+    def test_facade_keyword_faq_match_overrides_unrelated_vector_neighbor(self) -> None:
+        kb_id = _seed_knowledge_base()
+        content = b"Shipping status\n\nRefund FAQ: refund window is 7 days"
+        query = "refund FAQ"
+
+        with get_session_factory()() as session:
+            repository = KnowledgeBaseRepository(session)
+            service = KnowledgeBaseService(repository)
+            document = service.upload_document(kb_id, "faq.txt", content)
+            service.process_document(document["id"], content)
+            chunks = repository.list_document_chunks(document["id"])
+            query_embedding = FakeEmbeddingProvider().embed([query])[0]
+            repository.replace_document_embeddings(
+                chunks,
+                [query_embedding, [-value for value in query_embedding]],
+                FAKE_EMBEDDING_MODEL,
+                DEFAULT_EMBEDDING_DIMENSIONS,
+            )
+
+            results = KnowledgeFacade(session).search_chunks(kb_id, query, top_k=1)
+
+        self.assertEqual(1, len(results))
+        self.assertIn("Refund FAQ", results[0].content)
+
+    def test_facade_uses_vector_neighbor_when_keyword_confidence_is_low(self) -> None:
+        kb_id = _seed_knowledge_base()
+        content = b"Shipping status\n\nRefund FAQ: refund window is 7 days"
+        query = "refund warranty"
+
+        with get_session_factory()() as session:
+            repository = KnowledgeBaseRepository(session)
+            service = KnowledgeBaseService(repository)
+            document = service.upload_document(kb_id, "low-confidence-faq.txt", content)
+            service.process_document(document["id"], content)
+            chunks = repository.list_document_chunks(document["id"])
+            query_embedding = FakeEmbeddingProvider().embed([query])[0]
+            repository.replace_document_embeddings(
+                chunks,
+                [query_embedding, [-value for value in query_embedding]],
+                FAKE_EMBEDDING_MODEL,
+                DEFAULT_EMBEDDING_DIMENSIONS,
+            )
+
+            results = KnowledgeFacade(session).search_chunks(kb_id, query, top_k=1)
+
+        self.assertEqual(1, len(results))
+        self.assertEqual("Shipping status", results[0].content)
 
 
 def _seed_knowledge_base() -> int:

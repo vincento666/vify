@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
 import math
 
 from app.modules.knowledge.domain.chunks import ChunkRecord
@@ -16,6 +17,12 @@ class EmbeddedChunk:
 @dataclass(frozen=True)
 class SimilarChunk:
     chunk: ChunkRecord
+    score: float
+
+
+@dataclass(frozen=True)
+class SimilarFaq:
+    faq: dict[str, Any]
     score: float
 
 

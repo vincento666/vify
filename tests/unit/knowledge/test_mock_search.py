@@ -2,10 +2,11 @@ import unittest
 
 try:
     from app.modules.knowledge.domain.chunks import ChunkRecord
-    from app.modules.knowledge.domain.search import rank_chunks
+    from app.modules.knowledge.domain.search import keyword_confidence, rank_chunks
 except ModuleNotFoundError:
     ChunkRecord = None  # type: ignore[assignment]
     rank_chunks = None  # type: ignore[assignment]
+    keyword_confidence = None  # type: ignore[assignment]
 
 
 class MockSearchTest(unittest.TestCase):
@@ -36,6 +37,14 @@ class MockSearchTest(unittest.TestCase):
 
         self.assertEqual(first, second)
         self.assertEqual(len(first), 2)
+
+    def test_keyword_confidence_is_match_ratio(self) -> None:
+        self.assertIsNotNone(ChunkRecord)
+        self.assertIsNotNone(keyword_confidence)
+        chunk = ChunkRecord(1, 10, 0, "Refund FAQ policy", 3)
+
+        self.assertEqual(1.0, keyword_confidence(chunk, "refund FAQ"))
+        self.assertEqual(0.5, keyword_confidence(chunk, "refund warranty"))
 
 
 if __name__ == "__main__":
