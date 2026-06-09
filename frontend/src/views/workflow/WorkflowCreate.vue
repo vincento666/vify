@@ -4632,8 +4632,10 @@ function edgeInsertButtonStyle(path: ReturnType<typeof getBezierPath>) {
 
 function edgeInsertPaletteStyle(path: ReturnType<typeof getBezierPath>) {
   const [, labelX, labelY] = path
+  const inverseZoom = 1 / Math.max(CANVAS_ZOOM_MIN, canvasZoom.value || 1)
   return {
-    transform: `translate(0, -50%) translate(${labelX}px, ${labelY}px)`,
+    transform: `translate(0, -50%) translate(${labelX}px, ${labelY}px) scale(${inverseZoom})`,
+    transformOrigin: '0 50%',
   }
 }
 
@@ -8839,53 +8841,58 @@ onUnmounted(() => {
 .edge-insert-palette {
   position: absolute;
   z-index: 110;
-  width: min(38rem, calc(100vw - 2rem));
-  max-height: min(34rem, calc(100vh - 4rem));
-  padding: 1rem;
+  width: min(19rem, calc(100vw - 2rem));
+  max-height: min(27rem, calc(100vh - 4rem));
+  padding: 0.625rem;
   border: 1px solid #dfe3ee;
-  border-radius: 0.875rem;
+  border-radius: 0.75rem;
   background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 1.25rem 3rem rgba(34, 41, 63, 0.18);
+  box-shadow: 0 0.875rem 2rem rgba(34, 41, 63, 0.18);
   overflow-y: auto;
   pointer-events: all;
 }
 
 .edge-insert-palette :deep(.el-input__wrapper) {
-  min-height: 2.75rem;
-  border-radius: 0.75rem;
+  min-height: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.625rem;
   background: #fbfcff;
 }
 
+.edge-insert-palette :deep(.el-input__inner) {
+  font-size: 0.875rem;
+}
+
 .edge-insert-palette-group {
-  margin-top: 0.875rem;
+  margin-top: 0.625rem;
 }
 
 .edge-insert-palette-group > strong {
   display: block;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.375rem;
   color: #8b93a7;
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
 }
 
 .edge-insert-palette-group > div {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.25rem 1rem;
+  gap: 0.125rem 0.375rem;
 }
 
 .edge-insert-palette button {
   min-width: 0;
-  height: 2.75rem;
+  height: 2.25rem;
   display: inline-flex;
   align-items: center;
-  gap: 0.625rem;
-  padding: 0 0.625rem;
+  gap: 0.5rem;
+  padding: 0 0.5rem;
   border: 0;
-  border-radius: 0.625rem;
+  border-radius: 0.5rem;
   background: transparent;
   color: #2f3648;
-  font-size: 0.9375rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 650;
   text-align: left;
   cursor: pointer;
 }
@@ -9445,21 +9452,26 @@ onUnmounted(() => {
   left: 50%;
   bottom: 4.5rem;
   z-index: 10;
-  width: min(38rem, calc(100vw - 2rem));
-  max-height: calc(100vh - 8rem);
-  padding: 1rem;
+  width: min(19rem, calc(100vw - 2rem));
+  max-height: min(27rem, calc(100vh - 8rem));
+  padding: 0.625rem;
   border: 0.0625rem solid #dfe3ee;
-  border-radius: 0.875rem;
+  border-radius: 0.75rem;
   background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 1.25rem 3rem rgba(34, 41, 63, 0.18);
+  box-shadow: 0 0.875rem 2rem rgba(34, 41, 63, 0.18);
   overflow-y: auto;
   transform: translateX(-50%);
 }
 
 .node-palette :deep(.el-input__wrapper) {
-  min-height: 2.75rem;
-  border-radius: 0.75rem;
+  min-height: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.625rem;
   background: #fbfcff;
+}
+
+.node-palette :deep(.el-input__inner) {
+  font-size: 0.875rem;
 }
 
 .workflow-debug-dock {
@@ -13086,35 +13098,35 @@ onUnmounted(() => {
 }
 
 .node-palette-group {
-  margin-top: 0.875rem;
+  margin-top: 0.625rem;
 }
 
 .node-palette-group strong {
   display: block;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.375rem;
   color: #8b93a7;
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
 }
 
 .node-palette-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.25rem 1rem;
+  gap: 0.125rem 0.375rem;
 }
 
 .node-palette button {
   min-width: 0;
-  height: 2.75rem;
+  height: 2.25rem;
   display: inline-flex;
   align-items: center;
-  gap: 0.625rem;
-  padding: 0 0.625rem;
+  gap: 0.5rem;
+  padding: 0 0.5rem;
   border: 0;
-  border-radius: 0.625rem;
+  border-radius: 0.5rem;
   background: transparent;
   color: #2f3648;
-  font-size: 0.9375rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 650;
   text-align: left;
   cursor: pointer;
 }
@@ -13124,8 +13136,8 @@ onUnmounted(() => {
 }
 
 .palette-icon {
-  width: 1.625rem;
-  height: 1.625rem;
+  width: 1.375rem;
+  height: 1.375rem;
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
@@ -13135,8 +13147,8 @@ onUnmounted(() => {
 }
 
 .palette-icon svg {
-  width: 1rem;
-  height: 1rem;
+  width: 0.875rem;
+  height: 0.875rem;
 }
 
 .canvas-toolbar {

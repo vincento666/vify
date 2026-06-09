@@ -1,0 +1,9 @@
+Command: rtk node frontend/e2e/workflow-add-node-palette-coze.mjs
+Date: 2026-06-09
+Expected: FAIL before compacting add-node palettes.
+
+Failure:
+Error: bottom palette width should be compact, got {"widthRem":37.99898109069844,"buttonHeightRem":2.749848284232594,"buttonFontRem":0.9375,"inputHeightRem":2.749848284232594}
+
+Meaning:
+The bottom toolbar add-node palette still uses the old large 38rem surface with 2.75rem rows and 0.9375rem labels, while the requested behavior is a unified compact palette across entrypoints.

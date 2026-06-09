@@ -26,6 +26,24 @@ async function paletteSummary(palette, groupSelector = '.node-palette-group') {
   }, groupSelector)
 }
 
+async function paletteMetrics(palette) {
+  return palette.evaluate((element) => {
+    const root = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
+    const rect = element.getBoundingClientRect()
+    const button = element.querySelector('button')
+    const buttonRect = button?.getBoundingClientRect()
+    const buttonStyle = button ? getComputedStyle(button) : null
+    const inputWrapper = element.querySelector('.el-input__wrapper')
+    const inputRect = inputWrapper?.getBoundingClientRect()
+    return {
+      widthRem: rect.width / root,
+      buttonHeightRem: buttonRect ? buttonRect.height / root : 0,
+      buttonFontRem: buttonStyle ? Number.parseFloat(buttonStyle.fontSize) / root : 0,
+      inputHeightRem: inputRect ? inputRect.height / root : 0,
+    }
+  })
+}
+
 function assertCozePalette(summary, label) {
   const titles = summary.groups.map((group) => group.title)
   assert(JSON.stringify(titles) === JSON.stringify(['资源', '业务逻辑', '输入&输出', '知识库']), `${label} group order mismatch: ${JSON.stringify(summary)}`)
@@ -40,6 +58,13 @@ function assertCozePalette(summary, label) {
   }
 }
 
+function assertCompactPalette(metrics, label) {
+  assert(metrics.widthRem <= 20, `${label} width should be compact, got ${JSON.stringify(metrics)}`)
+  assert(metrics.buttonHeightRem <= 2.4, `${label} row height should be compact, got ${JSON.stringify(metrics)}`)
+  assert(metrics.buttonFontRem <= 0.875, `${label} font should be one step smaller, got ${JSON.stringify(metrics)}`)
+  assert(metrics.inputHeightRem <= 2.4, `${label} search input should be compact, got ${JSON.stringify(metrics)}`)
+}
+
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 
@@ -52,6 +77,8 @@ try {
   const bottomPalette = page.getByTestId('bottom-node-palette')
   await bottomPalette.waitFor({ state: 'visible', timeout: 5000 })
   assertCozePalette(await paletteSummary(bottomPalette), 'bottom palette')
+  const bottomMetrics = await paletteMetrics(bottomPalette)
+  assertCompactPalette(bottomMetrics, 'bottom palette')
 
   await toolbar.getByRole('button', { name: '添加节点', exact: true }).click()
   const edge = page.locator('.vue-flow__edge').first()
@@ -63,6 +90,9 @@ try {
   const edgePalette = page.getByTestId('edge-insert-palette')
   await edgePalette.waitFor({ state: 'visible', timeout: 5000 })
   assertCozePalette(await paletteSummary(edgePalette, '.edge-insert-palette-group'), 'edge insert palette')
+  const edgeMetrics = await paletteMetrics(edgePalette)
+  assertCompactPalette(edgeMetrics, 'edge insert palette')
+  assert(Math.abs(bottomMetrics.widthRem - edgeMetrics.widthRem) <= 1, `palette widths should match across entrypoints: ${JSON.stringify({ bottomMetrics, edgeMetrics })}`)
 
   if (screenshotPath) {
     await page.screenshot({ path: screenshotPath, fullPage: true })
