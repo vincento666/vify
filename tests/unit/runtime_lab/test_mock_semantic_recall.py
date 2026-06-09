@@ -43,6 +43,38 @@ class MockSemanticCandidateRecallTest(unittest.TestCase):
         self.assertEqual(candidates[0].target_id, "3")
         self.assertEqual(candidates[0].score_breakdown.semantic, 0.55)
 
+    def test_active_confirmation_prefers_continuing_current_sop(self) -> None:
+        candidates = MockSemanticCandidateRecall(mock_sop_manifests()).recall(
+            "确认加购",
+            active_task={"id": 3, "sop_id": "baggage_service", "current_step": "confirm"},
+            suspended_tasks=(),
+        )
+
+        self.assertEqual(candidates[0].candidate_type, CandidateType.ACTIVE_TASK_CONTINUE)
+        self.assertEqual(candidates[0].target_id, "3")
+        self.assertGreaterEqual(candidates[0].score, 0.9)
+
+    def test_refund_words_with_ticket_object_create_refund_candidate(self) -> None:
+        candidates = MockSemanticCandidateRecall(mock_sop_manifests()).recall(
+            "我要退另一张票，订单号CA9999-20240601-1234",
+            active_task={"id": 3, "sop_id": "flight_booking", "current_step": "collect"},
+            suspended_tasks=(),
+        )
+
+        self.assertEqual(candidates[0].candidate_type, CandidateType.SOP_INTENT)
+        self.assertEqual(candidates[0].target_id, "refund_ticket")
+        active_candidates = [candidate for candidate in candidates if candidate.candidate_type == CandidateType.ACTIVE_TASK_CONTINUE]
+        self.assertEqual(active_candidates[0].score, 0.55)
+
+    def test_airport_facility_questions_do_not_create_semantic_sop_candidates(self) -> None:
+        recall = MockSemanticCandidateRecall(mock_sop_manifests())
+
+        for message in ("机场附近能寄存行李吗", "值机柜台旁边有打印店吗"):
+            with self.subTest(message=message):
+                candidates = recall.recall(message, active_task=None, suspended_tasks=())
+
+                self.assertEqual(candidates, [])
+
     def test_conflicting_semantic_candidates_keep_evidence_for_later_arbitration(self) -> None:
         candidates = MockSemanticCandidateRecall(mock_sop_manifests()).recall(
             "我想退费并开发票",
