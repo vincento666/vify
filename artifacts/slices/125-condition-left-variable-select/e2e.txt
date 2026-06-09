@@ -1,0 +1,22 @@
+PASS
+
+Command:
+- rtk node frontend/e2e/workflow-condition-branch-values.mjs
+
+Result:
+- PASS workflow condition branch values e2e
+
+Regression:
+- rtk node frontend/e2e/workflow-condition-branch-endpoints.mjs
+  - PASS workflow condition branch endpoints e2e workflow=8363
+
+Layout probe:
+- Right operand grid resolved to three columns: `39.875px 250.016px 32.625px`.
+- Literal input retained `vip` in the middle input column.
+
+Covered behavior:
+- Condition left operand is a selection-only variable dropdown.
+- Condition left operand renders a down arrow.
+- Condition left operand does not expose a manual editable input.
+- Condition right operand keeps the literal/reference value input.
+- Condition right operand displays a read-only type prefix derived from the selected left variable.

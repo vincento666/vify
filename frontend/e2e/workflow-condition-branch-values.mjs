@@ -119,7 +119,15 @@ try {
   const rightOperand = operandControls.nth(1)
   assert(
     await leftOperand.getByRole('button', { name: '选择左值变量', exact: true }).count() === 1,
-    'Condition left operand must keep a persistent variable picker button',
+    'Condition left operand must be a selection-only dropdown button',
+  )
+  assert(
+    await leftOperand.getByTestId('condition-variable-select-arrow').count() === 1,
+    'Condition left operand must render a dropdown arrow instead of the shared link picker trigger',
+  )
+  assert(
+    await leftOperand.locator('input:not([readonly]), textarea, select').count() === 0,
+    'Condition left operand must not expose a manual editable input',
   )
   assert(
     await leftOperand.getByRole('button', { name: '清除左值变量引用', exact: true }).count() === 1,
@@ -128,6 +136,16 @@ try {
   assert(
     await rightOperand.getByRole('button', { name: '选择右值变量', exact: true }).count() === 1,
     'Condition right operand must keep a persistent variable picker button before a value is selected',
+  )
+  const rightTypePrefix = rightOperand.getByTestId('condition-right-type-prefix')
+  assert(
+    await rightTypePrefix.count() === 1,
+    'Condition right operand must display a read-only type prefix derived from the selected left variable',
+  )
+  assert((await rightTypePrefix.innerText()).trim() === 'str.', 'Condition right type prefix must reflect the selected left variable type')
+  assert(
+    await rightTypePrefix.locator('input,textarea,select').count() === 0,
+    'Condition right type prefix must be display-only and not editable',
   )
 
   const rightValue = row.getByLabel('条件右值')

@@ -1,0 +1,10 @@
+FAIL as expected.
+
+Command:
+- rtk node frontend/e2e/workflow-condition-branch-values.mjs
+
+Failure:
+- Error: Condition left operand must render a dropdown arrow instead of the shared link picker trigger
+
+Reason:
+- The condition branch left operand still reused the shared input/reference combo. Coze-like selector semantics require the left operand to be a selection-only variable dropdown with a down arrow.
