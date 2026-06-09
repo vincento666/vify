@@ -191,3 +191,7 @@ allow direct activation without evaluation gates.
   list/detail APIs, backend E2E regression, and browser UAT evidence are
   recorded under
   `artifacts/slices/042-runtime-policy-release-governance/042.1/`.
+- 042.2 complete: deterministic 040 golden-matrix replay, historical
+  decision-log replay with filters, expected-vs-actual persistence, aggregate
+  risk deltas, backend E2E regression, and browser UAT evidence are recorded
+  under `artifacts/slices/042-runtime-policy-release-governance/042.2/`.

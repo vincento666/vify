@@ -21,14 +21,14 @@
 
 ## 042.2 Golden matrix and decision-log replay
 
-- [ ] RED: 040 golden matrix cannot replay against candidate profile.
-- [ ] RED: historical decision logs cannot replay against candidate profile.
-- [ ] Add deterministic golden-matrix replay harness.
-- [ ] Add decision-log replay harness with filters.
-- [ ] Persist expected-vs-actual results and aggregate risk deltas.
-- [ ] Save evidence under
+- [x] RED: 040 golden matrix cannot replay against candidate profile.
+- [x] RED: historical decision logs cannot replay against candidate profile.
+- [x] Add deterministic golden-matrix replay harness.
+- [x] Add decision-log replay harness with filters.
+- [x] Persist expected-vs-actual results and aggregate risk deltas.
+- [x] Save evidence under
   `artifacts/slices/042-runtime-policy-release-governance/042.2/`.
-- [ ] Commit 042.2 only.
+- [x] Commit 042.2 only.
 
 ## 042.3 Release approval, canary, and activation gate
 

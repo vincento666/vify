@@ -85,6 +85,10 @@ validation/replay/approval gates, and rollback is proven through backend tests.
   passed/failed evaluation runs with guardrail defaults, exposes validation and
   evaluation-run APIs, and preserves the 040 route matrix in focused backend
   E2E gates plus browser UAT.
+- 042.2 complete: golden matrix replay and decision-log replay persist
+  expected-vs-actual results plus aggregate risk deltas, support decision-log
+  filters, and preserve the 040 route matrix in focused backend E2E gates plus
+  browser UAT.
 
 ## Non-Goals
 

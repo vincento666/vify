@@ -169,6 +169,23 @@ def validate_profile(
     return success(service.validate_profile(profile_id))
 
 
+@router.post("/profiles/{profile_id}/replay/golden-matrix")
+def replay_golden_matrix(
+    profile_id: int,
+    service: RuntimePolicyEvaluationRunService = Depends(get_runtime_evaluation_run_service),
+) -> dict[str, Any]:
+    return success(service.replay_golden_matrix(profile_id))
+
+
+@router.post("/profiles/{profile_id}/replay/decision-logs")
+def replay_decision_logs(
+    profile_id: int,
+    filters: dict[str, Any] | None = None,
+    service: RuntimePolicyEvaluationRunService = Depends(get_runtime_evaluation_run_service),
+) -> dict[str, Any]:
+    return success(service.replay_decision_logs(profile_id, filters or {}))
+
+
 @router.get("/profiles/{profile_id}")
 def get_profile(
     profile_id: int,
