@@ -32,6 +32,10 @@
             <strong>{{ configSummary.arbitratorLabel }}</strong>
           </div>
           <div class="runtime-config-row">
+            <span>兜底</span>
+            <strong>{{ configSummary.fallbackAgentLabel }}</strong>
+          </div>
+          <div class="runtime-config-row">
             <span>密钥</span>
             <strong>{{ configSummary.secretLabel }}</strong>
           </div>
@@ -46,6 +50,31 @@
               {{ row }}
             </div>
           </details>
+          <div class="fallback-agent-picker">
+            <el-select
+              v-model="selectedFallbackAgentId"
+              size="small"
+              clearable
+              filterable
+              placeholder="选择兜底 Agent"
+              data-testid="fallback-agent-select"
+            >
+              <el-option
+                v-for="agent in fallbackAgentOptions"
+                :key="agent.id"
+                :label="agent.name"
+                :value="agent.id"
+              />
+            </el-select>
+            <el-button
+              size="small"
+              :loading="savingFallbackAgent"
+              data-testid="fallback-agent-save"
+              @click="saveFallbackAgent"
+            >
+              保存
+            </el-button>
+          </div>
         </div>
       </section>
 
@@ -172,16 +201,35 @@
         >
           <div class="message-avatar">{{ message.role === 'user' ? '我' : 'AI' }}</div>
           <div class="message-body">
-            <div v-if="message.pending" class="typing-indicator" data-testid="runtime-lab-typing">
-              <span></span>
-              <span></span>
-              <span></span>
+            <div
+              v-if="message.pending"
+              class="typing-indicator"
+              data-testid="runtime-lab-typing"
+              aria-live="polite"
+            >
+              <span class="typing-label">正在生成回复</span>
+              <span class="typing-dots" aria-hidden="true">
+                <span></span>
+                <span></span>
+                <span></span>
+              </span>
             </div>
             <div v-else class="message-content">{{ message.content }}</div>
-            <div v-if="message.routeAction" class="message-meta">
-              <el-tag size="small" effect="plain">{{ message.routeAction }}</el-tag>
+            <div v-if="message.routeAction || message.usage || message.elapsedMs !== undefined" class="message-meta">
+              <el-tag v-if="message.routeAction" size="small" effect="plain">{{ message.routeAction }}</el-tag>
               <span v-if="message.targetSopId">{{ message.targetSopId }}</span>
               <span v-if="message.taskSummary">{{ message.taskSummary }}</span>
+              <span v-if="message.usage">{{ formatRuntimeLabUsage(message.usage) }}</span>
+              <span v-if="message.elapsedMs !== undefined">{{ formatRuntimeLabElapsed(message.elapsedMs) }}</span>
+              <button
+                v-if="message.debugDetail"
+                type="button"
+                class="debug-link"
+                data-testid="runtime-lab-message-debug"
+                @click="openDebugPanel(message.debugDetail)"
+              >
+                详情
+              </button>
             </div>
             <div v-if="message.resumePrompt" class="resume-prompt">
               {{ message.resumePrompt }}
@@ -243,6 +291,15 @@
             <dd>{{ latestTurn?.routeDecision.reason ?? '-' }}</dd>
           </div>
         </dl>
+        <div
+          v-if="routeOutcome"
+          class="route-outcome"
+          :class="`route-outcome-${routeOutcome.tone}`"
+          data-testid="runtime-lab-route-outcome"
+        >
+          <strong>{{ routeOutcome.title }}</strong>
+          <span>{{ routeOutcome.detail }}</span>
+        </div>
       </section>
 
       <section class="lab-panel" data-testid="chatflow-trace-panel">
@@ -273,11 +330,14 @@
             当前节点：<span>{{ card.currentNodeLabel }}</span>
           </div>
           <div class="trace-node-list">
-            <div
+            <button
               v-for="node in card.nodes"
               :key="node.nodeKey"
+              type="button"
               class="trace-node"
               :class="[`trace-node-${node.status.toLowerCase()}`, { current: node.current }]"
+              data-testid="runtime-lab-trace-node"
+              @click="openNodeDebug(card, node)"
             >
               <span class="trace-node-icon" aria-hidden="true">
                 <span v-if="node.current && ['RUNNING', 'WAITING', 'INTERRUPTED'].includes(node.status)" class="mini-spinner"></span>
@@ -288,7 +348,7 @@
                 <span>{{ node.nodeKey }} · {{ node.name }}</span>
                 <small>{{ node.nodeType }} · {{ node.status }} · {{ node.elapsedMs }}ms</small>
               </span>
-            </div>
+            </button>
           </div>
           <div class="slot-list">
             <div v-if="card.slotRows.length === 0" class="muted-line">暂无槽值</div>
@@ -374,6 +434,50 @@
         </div>
       </div>
     </el-dialog>
+
+    <aside
+      v-if="debugPanel"
+      class="runtime-debug-panel"
+      data-testid="runtime-lab-debug-panel"
+      aria-label="运行调试详情"
+    >
+      <header class="debug-panel-header">
+        <div>
+          <strong>{{ debugPanel.title }}</strong>
+          <span>{{ debugPanel.subtitle }}</span>
+        </div>
+        <button type="button" class="debug-close" aria-label="关闭调试详情" @click="closeDebugPanel">
+          <Close />
+        </button>
+      </header>
+      <div class="debug-metrics">
+        <span>{{ formatRuntimeLabUsage(debugPanel.usage) }}</span>
+        <span>{{ formatRuntimeLabElapsed(debugPanel.elapsedMs) }}</span>
+      </div>
+      <section class="debug-section">
+        <h2>步骤耗时</h2>
+        <div v-if="debugPanel.steps.length === 0" class="muted-line">暂无步骤</div>
+        <button
+          v-for="step in debugPanel.steps"
+          :key="step.id"
+          type="button"
+          class="debug-step-row"
+          @click="focusDebugStep(step)"
+        >
+          <span>{{ step.label }}</span>
+          <strong>{{ formatRuntimeLabElapsed(step.elapsedMs) }}</strong>
+          <small>{{ formatRuntimeLabUsage(step.usage) }}</small>
+        </button>
+      </section>
+      <section class="debug-section">
+        <h2>输入</h2>
+        <pre>{{ formatDebugValue(debugPanel.input) }}</pre>
+      </section>
+      <section class="debug-section">
+        <h2>输出</h2>
+        <pre>{{ formatDebugValue(debugPanel.output) }}</pre>
+      </section>
+    </aside>
   </div>
 </template>
 
@@ -384,6 +488,7 @@ import { ElMessage } from 'element-plus'
 import {
   ChatDotRound,
   ChatLineRound,
+  Close,
   Connection,
   Refresh,
   Setting,
@@ -395,24 +500,37 @@ import {
   listRuntimeLabEvents,
   listRuntimeLabTasks,
   postRuntimeLabMessage,
+  updateRuntimeLabFallbackAgent,
 } from '@/api/runtimeLab'
 import type {
   RuntimeLabChatflowTrace,
   RuntimeLabConfig,
   RuntimeLabEvent,
+  RuntimeLabTraceNode,
   RuntimeLabTask,
   RuntimeLabTurn,
+  RuntimeLabUsage,
 } from '@/api/runtimeLab'
 import {
   AIRLINE_SOP_SCENARIOS,
+  buildRuntimeLabNodeDebugDetail,
   buildRuntimeLabBoundScenarios,
   buildRuntimeLabConfigSummary,
   buildRuntimeLabFunnelSummary,
+  buildRuntimeLabRouteOutcome,
   buildRuntimeLabTraceCards,
   buildRuntimeLabTranscriptRow,
   buildUserTranscriptRow,
+  formatRuntimeLabElapsed,
+  formatRuntimeLabUsage,
+  runtimeLabPendingDelayMs,
 } from './unifiedRoutingChatLab'
-import type { RuntimeLabTranscriptRow } from './unifiedRoutingChatLab'
+import type {
+  RuntimeLabDebugDetail,
+  RuntimeLabDebugStep,
+  RuntimeLabTraceCard,
+  RuntimeLabTranscriptRow,
+} from './unifiedRoutingChatLab'
 
 const router = useRouter()
 const showIntentSamples = ref(true)
@@ -423,13 +541,16 @@ const sending = ref(false)
 const creatingSession = ref(false)
 const traceLoading = ref(false)
 const runtimeConfigLoading = ref(false)
+const savingFallbackAgent = ref(false)
 const sessionId = ref<number | null>(null)
+const selectedFallbackAgentId = ref<number | null>(null)
 const runtimeConfig = ref<RuntimeLabConfig | null>(null)
 const chatflowTrace = ref<RuntimeLabChatflowTrace | null>(null)
 const transcript = ref<RuntimeLabTranscriptRow[]>([])
 const tasks = ref<RuntimeLabTask[]>([])
 const events = ref<RuntimeLabEvent[]>([])
 const latestTurn = ref<RuntimeLabTurn | null>(null)
+const debugPanel = ref<RuntimeLabDebugDetail | null>(null)
 const messagesEl = ref<HTMLElement>()
 
 const boundScenarios = computed(() => buildRuntimeLabBoundScenarios(runtimeConfig.value))
@@ -459,7 +580,9 @@ const replySamples = computed(() =>
 const routeScopeLabel = computed(() => `已接通 ${enabledScenarioIds.value.length}/${boundScenarios.value.length || AIRLINE_SOP_SCENARIOS.length} 个意图`)
 const lastRouteAction = computed(() => latestTurn.value?.routeDecision.action ?? '待开始')
 const configSummary = computed(() => buildRuntimeLabConfigSummary(runtimeConfig.value))
+const fallbackAgentOptions = computed(() => runtimeConfig.value?.fallbackAgentOptions ?? [])
 const funnelSummary = computed(() => buildRuntimeLabFunnelSummary(latestTurn.value?.routeDecision))
+const routeOutcome = computed(() => buildRuntimeLabRouteOutcome(latestTurn.value?.routeDecision))
 const chatflowTraceCards = computed(() => buildRuntimeLabTraceCards(chatflowTrace.value))
 
 onMounted(() => {
@@ -521,11 +644,29 @@ async function loadRuntimeLabConfig() {
   try {
     runtimeConfig.value = await getRuntimeLabConfig()
     syncEnabledScenarioIdsWithBindings()
+    syncFallbackAgentSelection()
   } catch (error) {
     runtimeConfig.value = null
     ElMessage.error(error instanceof Error ? error.message : '加载路由配置失败')
   } finally {
     runtimeConfigLoading.value = false
+  }
+}
+
+async function saveFallbackAgent() {
+  savingFallbackAgent.value = true
+  try {
+    runtimeConfig.value = await updateRuntimeLabFallbackAgent({
+      enabled: selectedFallbackAgentId.value !== null,
+      agentId: selectedFallbackAgentId.value,
+    })
+    syncEnabledScenarioIdsWithBindings()
+    syncFallbackAgentSelection()
+    ElMessage.success('兜底 Agent 已更新')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '保存兜底 Agent 失败')
+  } finally {
+    savingFallbackAgent.value = false
   }
 }
 
@@ -544,6 +685,7 @@ async function sendMessage(content: string) {
   sending.value = true
   transcript.value.push(buildUserTranscriptRow(uid('user'), content))
   const pendingId = uid('assistant-pending')
+  const pendingStartedAt = Date.now()
   transcript.value.push({
     id: pendingId,
     role: 'assistant',
@@ -559,9 +701,14 @@ async function sendMessage(content: string) {
       enabledSopIds: [...enabledScenarioIds.value],
     })
     latestTurn.value = turn
-    replacePendingAssistant(pendingId, buildRuntimeLabTranscriptRow(turn))
+    const turnElapsedMs = Date.now() - pendingStartedAt
+    await waitForPendingAnimation(pendingStartedAt)
+    const assistantRow = buildRuntimeLabTranscriptRow(turn, turnElapsedMs)
+    replacePendingAssistant(pendingId, assistantRow)
     await refreshLedger(currentSessionId, turn)
+    enrichAssistantDebugFromTrace(assistantRow.id)
   } catch (error) {
+    await waitForPendingAnimation(pendingStartedAt)
     replacePendingAssistant(pendingId, {
       id: uid('assistant-error'),
       role: 'assistant',
@@ -609,6 +756,10 @@ function syncEnabledScenarioIdsWithBindings() {
   enabledScenarioIds.value = retained.length ? retained : ids
 }
 
+function syncFallbackAgentSelection() {
+  selectedFallbackAgentId.value = runtimeConfig.value?.fallbackAgent?.agentId ?? null
+}
+
 function replacePendingAssistant(pendingId: string, row: RuntimeLabTranscriptRow) {
   const index = transcript.value.findIndex((message) => message.id === pendingId)
   if (index >= 0) {
@@ -627,6 +778,87 @@ function openChatflowCanvas(path: string) {
 function openChatflowDebug(path: string) {
   if (!path) return
   router.push(path)
+}
+
+function openDebugPanel(detail: RuntimeLabDebugDetail) {
+  debugPanel.value = detail
+}
+
+function openNodeDebug(card: RuntimeLabTraceCard, node: RuntimeLabTraceNode) {
+  debugPanel.value = buildRuntimeLabNodeDebugDetail(card, node)
+}
+
+function closeDebugPanel() {
+  debugPanel.value = null
+}
+
+function focusDebugStep(step: RuntimeLabDebugStep) {
+  if (!debugPanel.value) return
+  debugPanel.value = {
+    ...debugPanel.value,
+    title: step.label,
+    elapsedMs: step.elapsedMs,
+    input: step.input,
+    output: step.output,
+    usage: step.usage,
+  }
+}
+
+function enrichAssistantDebugFromTrace(rowId: string) {
+  const row = transcript.value.find((message) => message.id === rowId)
+  if (!row?.debugDetail) return
+  const nodeSteps = chatflowTraceCards.value.flatMap((card) =>
+    card.nodes.map((node) => {
+      const detail = buildRuntimeLabNodeDebugDetail(card, node)
+      return {
+        id: `${card.taskId}:${node.nodeKey}`,
+        label: `${card.sopId} / ${node.nodeKey} · ${node.name || node.nodeType}`,
+        elapsedMs: detail.elapsedMs,
+        input: detail.input,
+        output: detail.output,
+        usage: detail.usage,
+      }
+    }),
+  )
+  if (nodeSteps.length === 0) return
+  const usage = sumUsage([row.debugDetail.usage, ...nodeSteps.map((step) => step.usage)])
+  row.usage = usage
+  row.debugDetail = {
+    ...row.debugDetail,
+    usage,
+    steps: [...row.debugDetail.steps, ...nodeSteps],
+    output: {
+      route: row.debugDetail.output,
+      chatflowTrace: chatflowTrace.value,
+    },
+  }
+}
+
+function sumUsage(usages: RuntimeLabUsage[]): RuntimeLabUsage {
+  return usages.reduce<RuntimeLabUsage>(
+    (total, usage) => ({
+      inputTokens: total.inputTokens + usage.inputTokens,
+      outputTokens: total.outputTokens + usage.outputTokens,
+      totalTokens: total.totalTokens + usage.totalTokens,
+      estimated: Boolean(total.estimated || usage.estimated),
+    }),
+    { inputTokens: 0, outputTokens: 0, totalTokens: 0, estimated: false },
+  )
+}
+
+function formatDebugValue(value: unknown) {
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return String(value)
+  }
+}
+
+async function waitForPendingAnimation(startedAt: number) {
+  const delay = runtimeLabPendingDelayMs(startedAt)
+  if (delay > 0) {
+    await new Promise((resolve) => window.setTimeout(resolve, delay))
+  }
 }
 
 async function scrollToBottom() {
@@ -814,6 +1046,13 @@ function uid(prefix: string) {
 .runtime-binding-row {
   overflow-wrap: anywhere;
   line-height: 1.5;
+}
+
+.fallback-agent-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: center;
 }
 
 .session-id,
@@ -1057,24 +1296,36 @@ function uid(prefix: string) {
 .typing-indicator {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  min-width: 2.5rem;
-  min-height: 1.4rem;
+  gap: 0.5rem;
+  min-width: 7rem;
+  min-height: 1.5rem;
+  color: var(--color-text-secondary);
 }
 
-.typing-indicator span {
+.typing-label {
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.typing-dots span {
   width: 0.375rem;
   height: 0.375rem;
-  border-radius: 50%;
+  border-radius: 999rem;
   background: var(--color-primary);
   animation: runtimeTyping 0.8s infinite ease-in-out;
 }
 
-.typing-indicator span:nth-child(2) {
+.typing-dots span:nth-child(2) {
   animation-delay: 0.12s;
 }
 
-.typing-indicator span:nth-child(3) {
+.typing-dots span:nth-child(3) {
   animation-delay: 0.24s;
 }
 
@@ -1086,6 +1337,16 @@ function uid(prefix: string) {
   margin-top: 0.625rem;
   font-size: 0.75rem;
   color: var(--color-text-tertiary);
+}
+
+.debug-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-primary);
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 700;
 }
 
 .resume-prompt,
@@ -1136,6 +1397,42 @@ function uid(prefix: string) {
   text-align: right;
   font-size: 0.75rem;
   color: var(--color-text-primary);
+}
+
+.route-outcome {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.625rem;
+  border: 0.0625rem solid var(--color-border-default);
+  border-radius: 0.5rem;
+  background: var(--color-bg-page);
+  font-size: 0.75rem;
+}
+
+.route-outcome strong {
+  font-size: 0.8125rem;
+  color: var(--color-text-primary);
+}
+
+.route-outcome span {
+  overflow-wrap: anywhere;
+  color: var(--color-text-secondary);
+}
+
+.route-outcome-danger {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.route-outcome-warning {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.route-outcome-success {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
 }
 
 .task-row,
@@ -1224,6 +1521,10 @@ function uid(prefix: string) {
   border: 0.0625rem solid transparent;
   border-radius: 0.375rem;
   background: #fff;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
 }
 
 .trace-node.current {
@@ -1283,6 +1584,142 @@ function uid(prefix: string) {
   overflow-wrap: anywhere;
   text-align: right;
   font-weight: 600;
+}
+
+.runtime-debug-panel {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 40;
+  display: flex;
+  width: min(32rem, calc(100% - 2rem));
+  max-height: calc(100% - 2rem);
+  flex-direction: column;
+  gap: 0.875rem;
+  overflow-y: auto;
+  padding: 1rem;
+  border: 0.0625rem solid var(--color-border-default);
+  border-radius: 0.5rem;
+  background: #fff;
+  box-shadow: 0 1rem 2.5rem rgba(15, 23, 42, 0.18);
+}
+
+.debug-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 0.0625rem solid var(--color-border-default);
+}
+
+.debug-panel-header div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.debug-panel-header strong {
+  overflow-wrap: anywhere;
+  font-size: 0.9375rem;
+}
+
+.debug-panel-header span {
+  overflow-wrap: anywhere;
+  color: var(--color-text-tertiary);
+  font-size: 0.75rem;
+}
+
+.debug-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+  border: 0.0625rem solid var(--color-border-default);
+  border-radius: 0.375rem;
+  background: var(--color-bg-page);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.debug-close svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.debug-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.debug-metrics span {
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  background: #eef2ff;
+  color: var(--color-primary);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.debug-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.debug-section h2 {
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+.debug-step-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.25rem 0.75rem;
+  padding: 0.625rem;
+  border: 0.0625rem solid var(--color-border-default);
+  border-radius: 0.375rem;
+  background: var(--color-bg-page);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.debug-step-row span {
+  overflow-wrap: anywhere;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.debug-step-row strong {
+  font-size: 0.75rem;
+}
+
+.debug-step-row small {
+  grid-column: 1 / -1;
+  color: var(--color-text-tertiary);
+  font-size: 0.6875rem;
+}
+
+.debug-section pre {
+  max-height: 18rem;
+  overflow: auto;
+  margin: 0;
+  padding: 0.75rem;
+  border: 0.0625rem solid var(--color-border-default);
+  border-radius: 0.375rem;
+  background: #0f172a;
+  color: #e5e7eb;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 @keyframes runtimeTyping {

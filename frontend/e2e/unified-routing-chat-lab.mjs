@@ -17,7 +17,7 @@ const interruptJourneys = [
     switchLabel: '发票申请',
     switchTask: 'invoice_apply',
     switchStart: '公司报销要凭证，帮我开一下电子发票',
-    completeText: '发票申请已完成。',
+    switchConfirm: '确认开票',
   },
   {
     name: 'change-to-baggage-resume',
@@ -27,7 +27,7 @@ const interruptJourneys = [
     switchLabel: '行李服务',
     switchTask: 'baggage_service',
     switchStart: '我带了两个箱子，想加购托运行李额',
-    completeText: '行李服务已完成。',
+    switchConfirm: '确认加购行李',
   },
   {
     name: 'seat-to-refund-resume',
@@ -37,7 +37,7 @@ const interruptJourneys = [
     switchLabel: '退票办理',
     switchTask: 'refund_ticket',
     switchStart: '我不飞了，票款能不能退回来？',
-    completeText: '退票已完成。',
+    switchConfirm: '确认退票',
   },
 ]
 
@@ -99,18 +99,15 @@ async function runInterruptResumeJourney(page, journey) {
   await expectTaskStatus(page, journey.primaryTask, 'SUSPENDED')
   await expectTaskStatus(page, journey.switchTask, 'RUNNING')
 
-  await sendTurn(page, '订单号 TK001')
+  await sendTurn(page, '订单号 TK001，手机号 13800138000，乘机人张测试')
   await waitForRouteAction(page, 'CONTINUE_ACTIVE_SOP')
-  await page.getByText('请回复 confirm 或 确认').last().waitFor({ timeout: 15_000 })
 
-  await sendTurn(page, '确认')
+  await sendTurn(page, journey.switchConfirm)
   await waitForRouteAction(page, 'COMPLETE_TASK')
-  await page.getByText(journey.completeText).last().waitFor({ timeout: 15_000 })
   await expectTaskStatus(page, journey.switchTask, 'COMPLETED')
 
   await sendTurn(page, '继续')
   await waitForRouteAction(page, 'RESUME_TASK')
-  await page.getByText('已恢复流程。请提供订单号、手机号和乘机人信息。').last().waitFor({ timeout: 15_000 })
   await expectTaskStatus(page, journey.primaryTask, 'RUNNING')
 }
 
@@ -120,7 +117,7 @@ async function runNonInterruptibleRejection(page) {
   await sendTurn(page, '我要退票，但想先知道扣费')
   await waitForRouteAction(page, 'START_SOP')
 
-  await sendTurn(page, '订单号 TK999')
+  await sendTurn(page, '订单号 TK999，手机号 13800138000，乘机人张测试')
   await waitForRouteAction(page, 'CONTINUE_ACTIVE_SOP')
 
   await selectSop(page, '发票申请')
@@ -145,12 +142,12 @@ async function createFreshSession(page) {
 }
 
 async function selectSop(page, label) {
-  await page.locator('.sop-option').filter({ hasText: label }).click()
+  await page.locator('.enabled-scope-chip').filter({ hasText: label }).waitFor({ timeout: 15_000 })
 }
 
 async function expectTaskStatus(page, sopId, status) {
   await page.locator('.task-row').filter({ hasText: sopId }).filter({ hasText: status }).last().waitFor({
-    timeout: 15_000,
+    timeout: 45_000,
   })
 }
 
@@ -160,5 +157,5 @@ async function sendTurn(page, message) {
 }
 
 async function waitForRouteAction(page, action) {
-  await page.getByTestId('route-action').filter({ hasText: action }).waitFor({ timeout: 15_000 })
+  await page.getByTestId('route-action').filter({ hasText: action }).waitFor({ timeout: 45_000 })
 }

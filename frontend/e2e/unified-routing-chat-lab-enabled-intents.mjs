@@ -50,7 +50,9 @@ page.on('request', (request) => {
 try {
   await page.goto(baseUrl, { waitUntil: 'networkidle' })
   await page.getByTestId('runtime-lab-chat').waitFor({ timeout: 15_000 })
-  await page.locator('.sop-option').last().waitFor({ timeout: 15_000 })
+  await page.locator('.enabled-scope-chip').last().waitFor({ timeout: 15_000 })
+  await page.getByTestId('scope-config-open').click()
+  await page.getByTestId('scope-dialog').waitFor({ timeout: 15_000 })
 
   for (const sopId of enabledSopIds) {
     await expectChecked(page, sopId, true)
@@ -59,9 +61,11 @@ try {
     await page.getByTestId(`sop-toggle-${sopId}`).click()
     await expectChecked(page, sopId, false)
   }
+  await page.keyboard.press('Escape')
+  await page.getByTestId('scope-dialog').waitFor({ state: 'hidden', timeout: 15_000 })
 
   await sendTurn(page, '我要退票')
-  await waitForRouteAction(page, 'NO_MATCH')
+  await waitForRouteAction(page, 'AGENT_FALLBACK')
   assert((await page.locator('.task-row').filter({ hasText: 'refund_ticket' }).count()) === 0, 'refund_ticket was started')
 
   await sendTurn(page, '我想买一张明天去上海的机票')
@@ -83,7 +87,7 @@ try {
     '',
     `- URL: ${baseUrl}`,
     `- Enabled SOP ids: ${enabledSopIds.join(', ')}`,
-    '- Disabled refund utterance: NO_MATCH',
+    '- Disabled refund utterance: AGENT_FALLBACK without starting refund_ticket',
     '- Enabled booking utterance: START_SOP flight_booking',
     '- Enabled invoice utterance: SUSPEND_AND_START invoice_apply',
     `- Scoped message requests observed: ${sentScopes.length}`,

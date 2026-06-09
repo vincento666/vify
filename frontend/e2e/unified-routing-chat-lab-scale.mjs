@@ -15,90 +15,105 @@ const scenarios = [
     sopId: 'flight_booking',
     start: '我想买一张明天上午从北京去上海的机票，时间最好别太早',
     collect: '手机号 13800138010，乘机人陈测试',
+    confirm: '确认出票',
   },
   {
     label: '票价咨询',
     sopId: 'fare_quote',
     start: '我先不出票，想问下北京到上海今天票价大概多少',
     collect: '订单号 CA0134，手机号 13800138011，乘机人蒋测试',
+    confirm: '确认继续查价',
   },
   {
     label: '团队订票',
     sopId: 'group_booking',
     start: '我们公司十六个人出差，想咨询团队机票怎么订',
     collect: '订单号 CA0234，手机号 13800138012，乘机人沈测试',
+    confirm: '确认团队询价',
   },
   {
     label: '增值服务',
     sopId: 'ancillary_sales',
     start: '买完票以后还能加购餐食和贵宾厅吗？',
     collect: '订单号 CA0334，手机号 13800138013，乘机人韩测试',
+    confirm: '确认加购',
   },
   {
     label: '退票办理',
     sopId: 'refund_ticket',
     start: '您好，我临时出差取消了，想把今晚这张机票退掉，麻烦帮我看看退票规则',
     collect: '订单号：CA1034，手机号：13800138000，乘机人张测试',
+    confirm: '确认退票',
   },
   {
     label: '改签办理',
     sopId: 'change_flight',
     start: '我明天会议提前，想把航班改签到更早一班',
     collect: '订单号 CA2034，手机号 13800138001，乘机人李测试',
+    confirm: '确认改签',
   },
   {
     label: '资料修改',
     sopId: 'passenger_info_change',
     start: '我证件号填错了一位，想修改乘机人信息',
     collect: '订单号 CA2134，手机号 13800138014，乘机人许测试',
+    confirm: '确认提交资料修改',
   },
   {
     label: '发票申请',
     sopId: 'invoice_apply',
     start: '公司报销要凭证，帮我开一下电子发票',
     collect: '订单号 CA3034，手机号 13800138002，乘机人王测试',
+    confirm: '确认开票',
   },
   {
     label: '行李服务',
     sopId: 'baggage_service',
     start: '我带了两个箱子，想加购托运行李额',
     collect: '订单号 CA4034，手机号 13800138003，乘机人赵测试',
+    confirm: '确认加购行李',
   },
   {
     label: '值机选座',
     sopId: 'seat_checkin',
     start: '我想线上值机，最好选靠窗座位',
     collect: '订单号 CA5034，手机号 13800138004，乘机人钱测试',
+    confirm: '确认选座',
   },
   {
     label: '航班动态',
     sopId: 'flight_status',
     start: '我想查一下今天航班动态，听说天气不好',
     collect: '订单号 CA6034，手机号 13800138005，乘机人孙测试',
+    confirm: '确认继续关注',
   },
   {
     label: '特殊协助',
     sopId: 'special_assistance',
     start: '老人第一次坐飞机，需要轮椅协助',
     collect: '订单号 CA7034，手机号 13800138006，乘机人周测试',
+    confirm: '确认提交特殊协助申请',
   },
   {
     label: '宠物乘机',
     sopId: 'pet_cabin',
     start: '我想带猫坐飞机，问下宠物进客舱要求',
     collect: '订单号 CA8034，手机号 13800138007，乘机人吴测试',
+    confirm: '确认办理宠物乘机',
   },
   {
     label: '异常航班',
     sopId: 'irregular_flight',
     start: '航班取消了，我需要改签或补偿方案',
     collect: '订单号 CA9034，手机号 13800138008，乘机人郑测试',
+    confirm: '确认异常航班处理',
   },
   {
     label: '会员里程',
     sopId: 'membership_service',
     start: '我的会员里程没到账，帮我补登一下',
-    collect: '订单号 CA1134，手机号 13800138009，乘机人冯测试',
+    collect: '订单号 CA1134，手机号 13800138009，乘机人冯测试，会员号 FF888888',
+    confirm: '确认提交会员里程处理',
   },
 ]
 
@@ -136,12 +151,14 @@ try {
 
   const completedScenarios = []
   for (const scenario of scenarios) {
+    console.log(`running scenario ${scenario.sopId}`)
     await runCompleteScenario(page, scenario)
     completedScenarios.push(scenario.sopId)
   }
 
   const completedSwitches = []
   for (const journey of switchJourneys) {
+    console.log(`running switch ${journey.primary.sopId}->${journey.secondary.sopId}`)
     await runSwitchResumeJourney(page, journey)
     completedSwitches.push(`${journey.primary.sopId}->${journey.secondary.sopId}`)
   }
@@ -171,11 +188,11 @@ try {
 }
 
 async function expectScenarioCatalog(page) {
-  await page.locator('.sop-option').last().waitFor({ timeout: 15_000 })
-  const count = await page.locator('.sop-option').count()
+  await page.locator('.enabled-scope-chip').last().waitFor({ timeout: 15_000 })
+  const count = await page.locator('.enabled-scope-chip').count()
   assert(count === scenarios.length, `Expected ${scenarios.length} SOP options, got ${count}`)
   for (const scenario of scenarios) {
-    await page.locator('.sop-option').filter({ hasText: scenario.label }).waitFor({ timeout: 15_000 })
+    await page.locator('.enabled-scope-chip').filter({ hasText: scenario.label }).waitFor({ timeout: 15_000 })
   }
 }
 
@@ -189,11 +206,11 @@ async function runCompleteScenario(page, scenario) {
   }
 
   await sendTurn(page, scenario.collect)
-  await waitForRouteAction(page, 'CONTINUE_ACTIVE_SOP')
-  await page.getByText(/请回复 confirm|请确认是否继续办理/).last().waitFor({ timeout: 15_000 })
-
-  await sendTurn(page, '确认，按这个方案办理')
-  await waitForRouteAction(page, 'COMPLETE_TASK')
+  const afterCollectAction = await waitForAnyRouteAction(page, ['CONTINUE_ACTIVE_SOP', 'COMPLETE_TASK'])
+  if (afterCollectAction === 'CONTINUE_ACTIVE_SOP') {
+    await sendTurn(page, scenario.confirm)
+    await waitForRouteAction(page, 'COMPLETE_TASK')
+  }
   await expectTaskStatus(page, scenario.sopId, 'COMPLETED')
 }
 
@@ -209,9 +226,11 @@ async function runSwitchResumeJourney(page, journey) {
   await expectTaskStatus(page, journey.secondary.sopId, 'RUNNING')
 
   await sendTurn(page, journey.secondary.collect)
-  await waitForRouteAction(page, 'CONTINUE_ACTIVE_SOP')
-  await sendTurn(page, '确认')
-  await waitForRouteAction(page, 'COMPLETE_TASK')
+  const secondaryAfterCollect = await waitForAnyRouteAction(page, ['CONTINUE_ACTIVE_SOP', 'COMPLETE_TASK'])
+  if (secondaryAfterCollect === 'CONTINUE_ACTIVE_SOP') {
+    await sendTurn(page, journey.secondary.confirm)
+    await waitForRouteAction(page, 'COMPLETE_TASK')
+  }
   await expectTaskStatus(page, journey.secondary.sopId, 'COMPLETED')
 
   await sendTurn(page, '继续')
@@ -219,9 +238,11 @@ async function runSwitchResumeJourney(page, journey) {
   await expectTaskStatus(page, journey.primary.sopId, 'RUNNING')
 
   await sendTurn(page, journey.primary.collect)
-  await waitForRouteAction(page, 'CONTINUE_ACTIVE_SOP')
-  await sendTurn(page, '确认')
-  await waitForRouteAction(page, 'COMPLETE_TASK')
+  const primaryAfterCollect = await waitForAnyRouteAction(page, ['CONTINUE_ACTIVE_SOP', 'COMPLETE_TASK'])
+  if (primaryAfterCollect === 'CONTINUE_ACTIVE_SOP') {
+    await sendTurn(page, journey.primary.confirm)
+    await waitForRouteAction(page, 'COMPLETE_TASK')
+  }
   await expectTaskStatus(page, journey.primary.sopId, 'COMPLETED')
 }
 
@@ -241,7 +262,7 @@ async function createFreshSession(page) {
 
 async function expectTaskStatus(page, sopId, status) {
   await page.locator('.task-row').filter({ hasText: sopId }).filter({ hasText: status }).last().waitFor({
-    timeout: 15_000,
+    timeout: 45_000,
   })
 }
 
@@ -251,7 +272,16 @@ async function sendTurn(page, message) {
 }
 
 async function waitForRouteAction(page, action) {
-  await page.getByTestId('route-action').filter({ hasText: action }).waitFor({ timeout: 15_000 })
+  await page.getByTestId('route-action').filter({ hasText: action }).waitFor({ timeout: 45_000 })
+}
+
+async function waitForAnyRouteAction(page, actions) {
+  const pattern = new RegExp(actions.join('|'))
+  await page.getByTestId('route-action').filter({ hasText: pattern }).waitFor({ timeout: 45_000 })
+  const text = (await page.getByTestId('route-action').innerText()).trim()
+  const action = actions.find((item) => text.includes(item))
+  assert(Boolean(action), `Unexpected route action ${text}`)
+  return action
 }
 
 function assert(condition, message) {

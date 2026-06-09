@@ -28,14 +28,14 @@ page.on('response', (response) => {
 try {
   await page.goto(baseUrl, { waitUntil: 'networkidle' })
   await page.getByTestId('runtime-lab-chat').waitFor({ timeout: 15_000 })
-  await page.locator('.sop-option').last().waitFor({ timeout: 15_000 })
-  const initialCount = await page.locator('.sop-option').count()
+  await page.locator('.enabled-scope-chip').last().waitFor({ timeout: 15_000 })
+  const initialCount = await page.locator('.enabled-scope-chip').count()
   assert(initialCount === 15, `Expected 15 SOP samples before hiding, got ${initialCount}`)
 
   const toggle = page.getByTestId('intent-samples-toggle')
   await toggle.waitFor({ timeout: 15_000 })
   await toggle.click()
-  await page.locator('.sop-option').first().waitFor({ state: 'detached', timeout: 15_000 })
+  await page.locator('.enabled-scope-chip').first().waitFor({ state: 'detached', timeout: 15_000 })
   assert((await page.locator('.sample-chip').count()) === 0, 'Expected trigger/reply samples to be hidden')
 
   await sendTurn(page, '您好，我想退票，确认一下票款规则')
@@ -46,8 +46,8 @@ try {
   await page.screenshot({ path: hiddenScreenshotPath, fullPage: true })
 
   await toggle.click()
-  await page.locator('.sop-option').last().waitFor({ timeout: 15_000 })
-  const restoredCount = await page.locator('.sop-option').count()
+  await page.locator('.enabled-scope-chip').last().waitFor({ timeout: 15_000 })
+  const restoredCount = await page.locator('.enabled-scope-chip').count()
   assert(restoredCount === 15, `Expected 15 SOP samples after showing, got ${restoredCount}`)
 
   await page.screenshot({ path: screenshotPath, fullPage: true })
