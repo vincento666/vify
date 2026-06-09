@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.core.database import get_session
 from app.core.responses import success
+from app.modules.runtime_policy.domain.governance import RuntimePolicyEvaluationRunService
 from app.modules.runtime_policy.domain.resolver import RuntimePolicyResolveContext, RuntimePolicyResolver
 from app.modules.runtime_policy.domain.service import RuntimeDecisionLogService, RuntimePolicyProfileService
 from app.modules.runtime_policy.infra.repository import RuntimePolicyRepository
@@ -27,6 +28,10 @@ def get_runtime_policy_resolver(
 
 def get_runtime_decision_log_service(session: Session = Depends(get_session)) -> RuntimeDecisionLogService:
     return RuntimeDecisionLogService(RuntimePolicyRepository(session))
+
+
+def get_runtime_evaluation_run_service(session: Session = Depends(get_session)) -> RuntimePolicyEvaluationRunService:
+    return RuntimePolicyEvaluationRunService(RuntimePolicyRepository(session))
 
 
 @router.get("/effective-profile")
@@ -109,6 +114,34 @@ def list_session_decision_logs(
     )
 
 
+@router.get("/evaluation-runs")
+def list_evaluation_runs(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100, alias="pageSize"),
+    profile_id: int | None = Query(default=None, alias="profileId"),
+    run_type: str | None = Query(default=None, alias="runType"),
+    status: str | None = None,
+    service: RuntimePolicyEvaluationRunService = Depends(get_runtime_evaluation_run_service),
+) -> dict[str, Any]:
+    return success(
+        service.list_runs(
+            page,
+            page_size,
+            profile_id=profile_id,
+            run_type=run_type,
+            status=status,
+        )
+    )
+
+
+@router.get("/evaluation-runs/{run_id}")
+def get_evaluation_run(
+    run_id: int,
+    service: RuntimePolicyEvaluationRunService = Depends(get_runtime_evaluation_run_service),
+) -> dict[str, Any]:
+    return success(service.get(run_id))
+
+
 @router.get("/profiles")
 def list_profiles(
     page: int = Query(1, ge=1),
@@ -126,6 +159,14 @@ def create_profile(
     service: RuntimePolicyProfileService = Depends(get_runtime_policy_service),
 ) -> dict[str, Any]:
     return success(service.create_profile(request))
+
+
+@router.post("/profiles/{profile_id}/validate")
+def validate_profile(
+    profile_id: int,
+    service: RuntimePolicyEvaluationRunService = Depends(get_runtime_evaluation_run_service),
+) -> dict[str, Any]:
+    return success(service.validate_profile(profile_id))
 
 
 @router.get("/profiles/{profile_id}")

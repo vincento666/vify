@@ -183,3 +183,11 @@ Status: ready for implementation.
 
 042 is a backend-only release-governance spec. It must not add frontend UI or
 allow direct activation without evaluation gates.
+
+## Implementation Status
+
+- 042.1 complete: profile validation service, guardrail defaults,
+  `RuntimePolicyEvaluationRun` persistence, validation API, evaluation-run
+  list/detail APIs, backend E2E regression, and browser UAT evidence are
+  recorded under
+  `artifacts/slices/042-runtime-policy-release-governance/042.1/`.

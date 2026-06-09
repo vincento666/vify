@@ -67,11 +67,34 @@ def register_runtime_policy_tables(metadata: sa.MetaData | None = None) -> None:
             sa.Index("idx_runtime_decision_log_created", "created_at"),
         )
 
+    if "runtime_policy_evaluation_run" not in target.tables:
+        sa.Table(
+            "runtime_policy_evaluation_run",
+            target,
+            id_column(),
+            sa.Column("profile_id", BIGINT, nullable=False),
+            sa.Column("profile_version", sa.Integer(), nullable=False),
+            sa.Column("run_type", sa.String(60), nullable=False),
+            sa.Column("status", sa.String(40), nullable=False),
+            sa.Column("input_snapshot", sa.JSON(), nullable=False),
+            sa.Column("result", sa.JSON(), nullable=False),
+            sa.Column("metrics", sa.JSON(), nullable=False),
+            sa.Column("risk_deltas", sa.JSON(), nullable=False),
+            sa.Column("failure_reasons", sa.JSON(), nullable=False),
+            sa.Column("guardrails", sa.JSON(), nullable=False),
+            deleted_column(),
+            *timestamps(),
+            sa.Index("idx_runtime_policy_eval_profile", "profile_id", "profile_version"),
+            sa.Index("idx_runtime_policy_eval_type", "run_type"),
+            sa.Index("idx_runtime_policy_eval_status", "status"),
+        )
+
 
 def runtime_policy_tables() -> list[sa.Table]:
     register_runtime_policy_tables()
     names = [
         "runtime_policy_profile",
         "runtime_decision_log",
+        "runtime_policy_evaluation_run",
     ]
     return [Base.metadata.tables[name] for name in names]

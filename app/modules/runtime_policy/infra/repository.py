@@ -18,6 +18,7 @@ class RuntimePolicyRepository:
         self._session = session
         self._profile = Base.metadata.tables["runtime_policy_profile"]
         self._decision_log = Base.metadata.tables["runtime_decision_log"]
+        self._evaluation_run = Base.metadata.tables["runtime_policy_evaluation_run"]
         self._ensure_tables()
 
     @property
@@ -175,6 +176,59 @@ class RuntimePolicyRepository:
             sa.select(self._decision_log)
             .where(*conditions)
             .order_by(self._decision_log.c.id.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        ).mappings().all()
+        return [dict(row) for row in rows], int(total)
+
+    def create_evaluation_run(self, values: dict[str, Any]) -> dict[str, Any]:
+        now = datetime.now()
+        result = self._session.execute(
+            self._evaluation_run.insert()
+            .values(
+                **values,
+                deleted=False,
+                created_at=now,
+                updated_at=now,
+            )
+            .returning(self._evaluation_run)
+        )
+        row = dict(result.mappings().one())
+        self._session.commit()
+        return row
+
+    def get_evaluation_run(self, run_id: int) -> dict[str, Any] | None:
+        row = self._session.execute(
+            sa.select(self._evaluation_run).where(
+                self._evaluation_run.c.id == run_id,
+                self._evaluation_run.c.deleted.is_(False),
+            )
+        ).mappings().one_or_none()
+        return dict(row) if row else None
+
+    def list_evaluation_runs(
+        self,
+        page: int,
+        page_size: int,
+        *,
+        profile_id: int | None = None,
+        run_type: str | None = None,
+        status: str | None = None,
+    ) -> tuple[list[dict[str, Any]], int]:
+        conditions: list[ColumnElement[bool]] = [self._evaluation_run.c.deleted.is_(False)]
+        if profile_id is not None:
+            conditions.append(self._evaluation_run.c.profile_id == profile_id)
+        if run_type:
+            conditions.append(self._evaluation_run.c.run_type == run_type)
+        if status:
+            conditions.append(self._evaluation_run.c.status == status)
+        total = self._session.execute(
+            sa.select(sa.func.count()).select_from(self._evaluation_run).where(*conditions)
+        ).scalar_one()
+        rows = self._session.execute(
+            sa.select(self._evaluation_run)
+            .where(*conditions)
+            .order_by(self._evaluation_run.c.id.desc())
             .offset((page - 1) * page_size)
             .limit(page_size)
         ).mappings().all()

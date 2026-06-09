@@ -79,6 +79,13 @@ artifacts/slices/042-runtime-policy-release-governance/
 042 is complete only when activation is impossible without successful
 validation/replay/approval gates, and rollback is proven through backend tests.
 
+## Slice Progress
+
+- 042.1 complete: validation catches malformed persisted profiles, stores
+  passed/failed evaluation runs with guardrail defaults, exposes validation and
+  evaluation-run APIs, and preserves the 040 route matrix in focused backend
+  E2E gates plus browser UAT.
+
 ## Non-Goals
 
 - no frontend management UI;

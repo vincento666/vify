@@ -9,15 +9,15 @@
 
 ## 042.1 Validation and evaluation run model
 
-- [ ] RED: malformed profile can be validated successfully.
-- [ ] RED: evaluation run table/API does not exist.
-- [ ] Add validation service for profile schema, thresholds, classifier config,
+- [x] RED: malformed profile can be validated successfully.
+- [x] RED: evaluation run table/API does not exist.
+- [x] Add validation service for profile schema, thresholds, classifier config,
   fallback Agent config, and guardrail defaults.
-- [ ] Add `RuntimePolicyEvaluationRun` table/repository/service.
-- [ ] Add validation API.
-- [ ] Save evidence under
+- [x] Add `RuntimePolicyEvaluationRun` table/repository/service.
+- [x] Add validation API.
+- [x] Save evidence under
   `artifacts/slices/042-runtime-policy-release-governance/042.1/`.
-- [ ] Commit 042.1 only.
+- [x] Commit 042.1 only.
 
 ## 042.2 Golden matrix and decision-log replay
 
