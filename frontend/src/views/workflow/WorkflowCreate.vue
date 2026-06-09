@@ -4010,6 +4010,7 @@ const chatflowHistorySliderStyle = computed(() => {
 let requestedCanvasZoom = 1
 let programmaticZoomSerial = 0
 let canvasLayoutRefitTimer = 0
+let canvasLayoutSettledRefitTimer = 0
 
 const nodePaletteGroups = computed<Array<{ title: string; items: PaletteEntry[] }>>(() =>
   buildNodePaletteGroups(isChatflowMode.value ? 'chatflow' : 'workflow'),
@@ -4820,14 +4821,22 @@ function handleViewportChange(viewport: { zoom?: number }) {
 function requestCanvasLayoutRefit() {
   if (typeof window === 'undefined' || canvasTab.value !== 'compose') return
   window.clearTimeout(canvasLayoutRefitTimer)
+  window.clearTimeout(canvasLayoutSettledRefitTimer)
+  const refitCanvas = async () => {
+    if (canvasTab.value !== 'compose' || flowNodes.value.length === 0) return
+    await fitView({ padding: 0.18, duration: CANVAS_ZOOM_ANIMATION_MS })
+    requestedCanvasZoom = clampCanvasZoom(getViewport().zoom || requestedCanvasZoom)
+    canvasZoom.value = requestedCanvasZoom
+  }
   void nextTick(() => {
     window.clearTimeout(canvasLayoutRefitTimer)
-    canvasLayoutRefitTimer = window.setTimeout(async () => {
-      if (canvasTab.value !== 'compose' || flowNodes.value.length === 0) return
-      await fitView({ padding: 0.18, duration: CANVAS_ZOOM_ANIMATION_MS })
-      requestedCanvasZoom = clampCanvasZoom(getViewport().zoom || requestedCanvasZoom)
-      canvasZoom.value = requestedCanvasZoom
-    }, 40)
+    window.clearTimeout(canvasLayoutSettledRefitTimer)
+    canvasLayoutRefitTimer = window.setTimeout(() => {
+      void refitCanvas()
+    }, 60)
+    canvasLayoutSettledRefitTimer = window.setTimeout(() => {
+      void refitCanvas()
+    }, 260)
   })
 }
 
@@ -7896,7 +7905,7 @@ watch(() => [route.query.runId, route.query.executeId, route.query.debug], () =>
   void applyChatflowRunDebugRoute()
 })
 watch(
-  () => [resourcePanelCollapsed.value, canvasTab.value],
+  () => [resourcePanelCollapsed.value, canvasTab.value, rightSidePanelOpen.value, nodeTestDrawerOpen.value],
   requestCanvasLayoutRefit,
 )
 onMounted(() => {
@@ -7909,6 +7918,7 @@ onMounted(() => {
 })
 onUnmounted(() => {
   window.clearTimeout(canvasLayoutRefitTimer)
+  window.clearTimeout(canvasLayoutSettledRefitTimer)
   window.removeEventListener('keydown', handleGlobalVariableKeydown)
   document.removeEventListener('pointerdown', handleGlobalVariablePointerDown, true)
   document.removeEventListener('pointerdown', handleGlobalEdgePointerDown, true)
@@ -8754,10 +8764,10 @@ onUnmounted(() => {
 .canvas-stage-shell {
   grid-column: 2;
   position: relative;
+  width: 100%;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  transition: margin-right 0.18s ease;
 }
 
 .canvas-stage-shell:focus {
@@ -8765,11 +8775,11 @@ onUnmounted(() => {
 }
 
 .workflow-canvas-page.has-right-panel .canvas-stage-shell {
-  margin-right: 0;
+  width: 100%;
 }
 
 .workflow-canvas-page.has-node-test-drawer .canvas-stage-shell {
-  margin-right: 0;
+  width: 100%;
 }
 
 .coze-flow {
@@ -8778,6 +8788,15 @@ onUnmounted(() => {
   background-color: #f8f9fc;
   background-image: radial-gradient(#bac0ce 0.075rem, transparent 0.075rem);
   background-size: 1.5rem 1.5rem;
+  transition: width 0.18s ease;
+}
+
+.workflow-canvas-page.has-right-panel .coze-flow {
+  width: calc(100% - var(--workflow-right-panel-reserve));
+}
+
+.workflow-canvas-page.has-node-test-drawer .coze-flow {
+  width: calc(100% - var(--workflow-node-test-reserve));
 }
 
 .coze-flow :deep(.vue-flow__node) {
@@ -10330,7 +10349,7 @@ onUnmounted(() => {
 
 .node-config-panel {
   position: absolute;
-  grid-column: 2;
+  grid-column: 1 / -1;
   justify-self: end;
   top: var(--debug-dock-gap);
   right: var(--debug-dock-gap);
@@ -10350,7 +10369,7 @@ onUnmounted(() => {
 .test-run-panel,
 .ops-panel {
   position: absolute;
-  grid-column: 2;
+  grid-column: 1 / -1;
   justify-self: end;
   top: var(--debug-dock-gap);
   right: var(--debug-dock-gap);
