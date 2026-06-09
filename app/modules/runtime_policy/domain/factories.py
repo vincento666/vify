@@ -3,14 +3,28 @@ from time import perf_counter
 from typing import Any
 
 from app.core.config import Settings
+from app.modules.chat.domain.service import ChatService
+from app.modules.chat.infra.repository import ChatRepository
+from app.modules.chat.web.schemas import ChatMessageCreateRequest, ChatSessionCreateRequest
+from app.modules.knowledge.api.facade import KnowledgeFacade
+from app.modules.mcp.api.facade import McpFacade
+from app.modules.provider.api.facade import ProviderModelFacade
 from app.modules.chat.domain.llm_request import (
     ChatRequestMessage,
     OpenAIChatRequestBuilder,
     ProviderBackedOpenAIChatClient,
     ProviderChatConfig,
 )
-from app.modules.runtime_lab.domain.agent_fallback import AgentOutputPolicy, FakeFallbackAgent, FallbackAgentPort
+from app.modules.runtime_lab.domain.agent_fallback import (
+    AgentOutputPolicy,
+    FakeFallbackAgent,
+    FallbackAgentOutput,
+    FallbackAgentPort,
+    FallbackAgentRequest,
+)
 from app.modules.runtime_lab.domain.classifier import LlmConstrainedIntentClassifier
+from app.modules.workflow.api.facade import WorkflowFacade
+from sqlalchemy.orm import Session
 
 DEFAULT_CLASSIFIER_PROMPT = (
     "你是民航客服路由仲裁器。只能从用户给定的 candidates 和 allowedActions 中选择，"
@@ -88,7 +102,11 @@ def build_classifier_from_snapshot(snapshot: dict[str, Any], _settings: Settings
     return LlmConstrainedIntentClassifier(complete)
 
 
-def build_fallback_agent_from_snapshot(snapshot: dict[str, Any]) -> FallbackAgentPort | None:
+def build_fallback_agent_from_snapshot(
+    snapshot: dict[str, Any],
+    *,
+    session: Session | None = None,
+) -> FallbackAgentPort | None:
     fallback_agent = snapshot.get("fallbackAgent")
     if not isinstance(fallback_agent, dict):
         return FakeFallbackAgent()
@@ -96,7 +114,68 @@ def build_fallback_agent_from_snapshot(snapshot: dict[str, Any]) -> FallbackAgen
         return None
     if str(fallback_agent.get("type") or "fake") == "fake":
         return FakeFallbackAgent()
+    if str(fallback_agent.get("type") or "") == "existing_agent":
+        agent_id = _optional_int(fallback_agent.get("agentId"))
+        if session is None or agent_id is None:
+            return None
+        return ExistingAgentFallbackAgent(session, agent_id)
     return None
+
+
+class ExistingAgentFallbackAgent:
+    def __init__(self, session: Session, agent_id: int) -> None:
+        self._session = session
+        self._agent_id = agent_id
+
+    def run(self, request: FallbackAgentRequest) -> FallbackAgentOutput:
+        started_at = perf_counter()
+        try:
+            chat_service = ChatService(
+                ChatRepository(self._session),
+                knowledge_facade=KnowledgeFacade(self._session),
+                workflow_facade=WorkflowFacade(self._session),
+                mcp_facade=McpFacade(self._session),
+                model_facade=ProviderModelFacade(self._session),
+            )
+            chat_session = chat_service.create_session(ChatSessionCreateRequest(agentId=self._agent_id))
+            turn = chat_service.send_message(
+                int(chat_session["id"]),
+                ChatMessageCreateRequest(
+                    content=request.message,
+                    stream=False,
+                    variables={},
+                ),
+            )
+        except Exception as exc:
+            return FallbackAgentOutput(
+                response_type="clarification",
+                clarification_question="兜底智能体暂时不可用，请补充问题背景或稍后重试。",
+                confidence=0.35,
+                safety_flags=[f"fallback_agent_error:{type(exc).__name__}"],
+            )
+        assistant = dict(turn.get("assistantMessage") or {})
+        answer = str(assistant.get("content") or "").strip()
+        if not answer:
+            return FallbackAgentOutput(
+                response_type="clarification",
+                clarification_question="兜底智能体未生成有效回复，请补充问题背景。",
+                confidence=0.4,
+                safety_flags=["fallback_agent_empty_answer"],
+            )
+        return FallbackAgentOutput(
+            response_type="answer",
+            answer=answer,
+            confidence=0.72,
+            citations=[
+                {
+                    "source": "agent",
+                    "agentId": self._agent_id,
+                    "sessionId": chat_session.get("id"),
+                    "elapsedMs": int((perf_counter() - started_at) * 1000),
+                    "runtimeContext": _fallback_agent_context(request),
+                }
+            ],
+        )
 
 
 def build_agent_output_policy_from_snapshot(snapshot: dict[str, Any]) -> AgentOutputPolicy:
@@ -149,3 +228,20 @@ def _usage_from_response(
         "promptChars": len(json.dumps(llm_payload, ensure_ascii=False)),
         "completionChars": len(json.dumps(parsed_output, ensure_ascii=False)),
     }
+
+
+def _fallback_agent_context(request: FallbackAgentRequest) -> dict[str, Any]:
+    context = {
+        "activeTask": request.active_task,
+        "suspendedTasks": request.suspended_tasks,
+        "recentEvents": request.recent_events[-6:],
+    }
+    return json.loads(json.dumps(context, ensure_ascii=False, default=str))
+
+
+def _optional_int(value: Any) -> int | None:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
