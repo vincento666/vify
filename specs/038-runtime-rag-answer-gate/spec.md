@@ -25,6 +25,8 @@ In scope:
 - answer generator port with deterministic fake/local implementation for CI;
 - evidence payload: retrieval mode, top chunks, scores, citations, generation
   model/mode, safety result;
+- profile-configurable RAG acceptance thresholds, including raw retrieval score
+  and lexical-overlap acceptance threshold through 041 `RuntimePolicyProfile`;
 - active-SOP safe RAG answer and ambiguity clarification.
 
 Out of scope:
@@ -55,6 +57,8 @@ SOP targets and must not be represented as `SOP_INTENT`.
 
 - long-tail document question creates `ANSWER_RAG` candidate with citations;
 - low retrieval confidence returns clarification or handoff according to policy;
+- `ragMinScore` and `ragLexicalAcceptThreshold` from the active runtime policy
+  profile change RAG accept/clarify behavior and appear in retrieval evidence;
 - active SOP RAG answer preserves task state;
 - RAG snippets enter classifier evidence only as `ANSWER_RAG` candidates, never
   as `SOP_INTENT`;
@@ -81,6 +85,10 @@ R1 evidence:
   `artifacts/slices/038-runtime-rag-answer-gate/038.R1/red.txt`
 - Integration:
   `artifacts/slices/038-runtime-rag-answer-gate/038.R1/integration.txt`
+- 041 profile wiring regression:
+  `artifacts/slices/041-runtime-policy-config-observability/041.R1/red-rag-lexical-threshold.txt`
+  and
+  `artifacts/slices/041-runtime-policy-config-observability/041.R1/green-rag-lexical-threshold.txt`
 
 ## Completion Evidence
 

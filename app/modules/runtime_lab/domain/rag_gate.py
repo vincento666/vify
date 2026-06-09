@@ -77,6 +77,7 @@ class RagAnswerGate:
         retrieval_mode: str = "hybrid",
         rerank: bool = True,
         min_score: float = 0.7,
+        lexical_accept_threshold: float = 0.6,
     ) -> None:
         self._knowledge_facade = knowledge_facade
         self._knowledge_base_ids = tuple(int(knowledge_base_id) for knowledge_base_id in knowledge_base_ids)
@@ -85,6 +86,7 @@ class RagAnswerGate:
         self._retrieval_mode = retrieval_mode
         self._rerank = rerank
         self._min_score = min_score
+        self._lexical_accept_threshold = lexical_accept_threshold
 
     def decide(
         self,
@@ -102,15 +104,20 @@ class RagAnswerGate:
         best_context = contexts[0]
         best_score = best_context.score
         lexical_confidence = _lexical_confidence(message, best_context.content)
-        policy_confidence = _policy_confidence(best_score, lexical_confidence, self._min_score)
+        policy_confidence = _policy_confidence(
+            best_score,
+            lexical_confidence,
+            self._min_score,
+            self._lexical_accept_threshold,
+        )
         retrieval_evidence = self._retrieval_evidence(contexts)
         retrieval_evidence["confidenceSignals"] = {
             "topRawScore": best_score,
             "lexicalOverlap": lexical_confidence,
             "minScore": self._min_score,
-            "lexicalAcceptThreshold": _LEXICAL_ACCEPT_THRESHOLD,
+            "lexicalAcceptThreshold": self._lexical_accept_threshold,
         }
-        if best_score < self._min_score and lexical_confidence < _LEXICAL_ACCEPT_THRESHOLD:
+        if best_score < self._min_score and lexical_confidence < self._lexical_accept_threshold:
             return RouteDecision(
                 action="CLARIFY",
                 reason="RAG retrieval confidence is too low to answer safely",
@@ -274,11 +281,16 @@ def _lexical_confidence(question: str, content: str) -> float:
     return hits / len(terms)
 
 
-def _policy_confidence(raw_score: float, lexical_confidence: float, min_score: float) -> float:
+def _policy_confidence(
+    raw_score: float,
+    lexical_confidence: float,
+    min_score: float,
+    lexical_accept_threshold: float,
+) -> float:
     if raw_score >= min_score:
         return raw_score
-    if lexical_confidence >= _LEXICAL_ACCEPT_THRESHOLD:
-        scaled = 0.7 + (lexical_confidence - _LEXICAL_ACCEPT_THRESHOLD) * 0.625
+    if lexical_confidence >= lexical_accept_threshold:
+        scaled = 0.7 + (lexical_confidence - lexical_accept_threshold) * 0.625
         return max(raw_score, min(0.95, scaled))
     return max(raw_score, lexical_confidence)
 

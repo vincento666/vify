@@ -26,9 +26,9 @@ After the 2026-06-09 architecture revision, 041 configures unified candidate
 recall, central arbitration, and PolicyGate parameters rather than independent
 per-layer early-exit gates.
 
-## Current Baseline
+## Baseline Before 041 Implementation
 
-Available today:
+Available before 041:
 
 - LLM intent classifier can be configured through env:
   - `HIFY_RUNTIME_LAB_INTENT_ARBITRATOR_MODE`;
@@ -43,7 +43,7 @@ Available today:
   candidate/gate code.
 - Route evidence is returned per response.
 
-Missing today:
+Missing before 041:
 
 - no DB-backed policy profile;
 - no host-facing API for route parameters;
@@ -103,7 +103,6 @@ bindings:
 thresholds:
   strong_accept_threshold
   classifier_min_confidence
-  candidate_min_score
   candidate_top_k
   candidate_source_weights
   faq_keyword_min_score
@@ -266,7 +265,7 @@ configuration that produced it.
 
 ## Specification Sign-off
 
-Status: ready for implementation.
+Status: complete.
 
 041 is a backend-only configuration and observability spec. It must not
 implement release activation, rollback, or frontend configuration UI.
@@ -287,3 +286,17 @@ implement release activation, rollback, or frontend configuration UI.
   query/filter APIs, 040 matrix compatibility, and browser UAT evidence are
   recorded under
   `artifacts/slices/041-runtime-policy-config-observability/041.4/`.
+- 041.R1 complete: latest routing architecture profile wiring now proves that
+  `classifierMinConfidence`, `candidateTopK`, `candidateSourceWeights`,
+  FAQ enable switches, `ragMinScore`, and `ragLexicalAcceptThreshold` are
+  consumed by runtime-lab rather than only persisted. Evidence:
+  - RED:
+    `artifacts/slices/041-runtime-policy-config-observability/041.R1/red-profile-runtime-wiring.txt`,
+    `artifacts/slices/041-runtime-policy-config-observability/041.R1/red-rag-lexical-threshold.txt`,
+    `artifacts/slices/041-runtime-policy-config-observability/041.R1/red-candidate-top-k.txt`
+  - GREEN/runtime policy:
+    `artifacts/slices/041-runtime-policy-config-observability/041.R1/green-runtime-policy-runtime-api-full.txt`,
+    `artifacts/slices/041-runtime-policy-config-observability/041.R1/runtime-policy-041-042-gate-after-invariant.txt`
+  - Runtime-lab regression:
+    `artifacts/slices/041-runtime-policy-config-observability/041.R1/runtime-lab-unit-contract-integration-after-invariant.txt`,
+    `artifacts/slices/041-runtime-policy-config-observability/041.R1/runtime-lab-e2e-policy-gate-after-invariant.txt`

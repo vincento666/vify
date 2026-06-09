@@ -28,7 +28,7 @@
 - [x] Add effective-profile API.
 - [x] Save evidence under
   `artifacts/slices/041-runtime-policy-config-observability/041.2/`.
-- [ ] Commit 041.2 only. Historical note: 041.2 changes landed in mixed
+- [x] Commit 041.2 only. Historical note: 041.2 changes landed in mixed
   commit `e1525ec8`; history was not rewritten.
 
 ## 041.3 Classifier and fallback Agent config factories
@@ -55,3 +55,22 @@
 - [x] Save evidence under
   `artifacts/slices/041-runtime-policy-config-observability/041.4/`.
 - [x] Commit 041.4 only.
+
+## 041.R1 Latest unified-arbitration profile wiring
+
+- [x] RED: active profile `classifierMinConfidence` is persisted but
+  runtime-lab classifier input still uses hardcoded threshold.
+- [x] RED: active profile FAQ switches are persisted but runtime-lab still
+  recalls FAQ candidates when FAQ is disabled.
+- [x] RED: active profile `ragLexicalAcceptThreshold` is persisted but RAG
+  answer acceptance still uses a module constant.
+- [x] RED: active profile `candidateTopK` is persisted but classifier input
+  still receives the hardcoded unified candidate pool size.
+- [x] Add runtime-lab consumption for classifier threshold, candidate Top-K,
+  candidate source weights, FAQ exact/semantic switches, FAQ thresholds, RAG
+  score threshold, and RAG lexical threshold.
+- [x] Add schema/default/profile helper support for `candidateTopK`,
+  `candidateSourceWeights`, and
+  `llmArbitrationRequiredForNonHardStop`.
+- [x] Save evidence under
+  `artifacts/slices/041-runtime-policy-config-observability/041.R1/`.

@@ -210,5 +210,15 @@ allow direct activation without evaluation gates.
   transitions, release/evaluation detail APIs expose audit evidence, backend
   E2E regression and browser UAT evidence are recorded under
   `artifacts/slices/042-runtime-policy-release-governance/042.4/`.
+- 042.R1 complete: release validation now treats central arbitration for all
+  non-hard-stop decisions as a hard invariant through
+  `llmArbitrationRequiredForNonHardStop`. Validation also covers
+  `candidateTopK` and `candidateSourceWeights`, so runtime policy tuning cannot
+  bypass the latest unified-arbitration architecture. Evidence:
+  - RED:
+    `artifacts/slices/042-runtime-policy-release-governance/042.R1/red-central-arbitration-invariant.txt`
+  - GREEN:
+    `artifacts/slices/042-runtime-policy-release-governance/042.R1/green-central-arbitration-invariant.txt`,
+    `artifacts/slices/042-runtime-policy-release-governance/042.R1/runtime-policy-041-042-gate.txt`
 
 Status: complete.

@@ -18,12 +18,29 @@ class RuntimePolicyThresholds(BaseModel):
 
     strong_accept_threshold: float = Field(alias="strongAcceptThreshold", ge=0, le=1)
     classifier_min_confidence: float = Field(alias="classifierMinConfidence", ge=0, le=1)
+    candidate_top_k: int = Field(default=5, alias="candidateTopK", ge=1, le=20)
+    candidate_source_weights: dict[str, float] = Field(default_factory=dict, alias="candidateSourceWeights")
+    llm_arbitration_required_for_non_hard_stop: bool = Field(
+        default=True,
+        alias="llmArbitrationRequiredForNonHardStop",
+    )
     faq_keyword_min_score: float = Field(alias="faqKeywordMinScore", ge=0, le=1)
     faq_keyword_min_margin: float = Field(alias="faqKeywordMinMargin", ge=0, le=1)
     faq_semantic_min_score: float = Field(alias="faqSemanticMinScore", ge=0, le=1)
     faq_semantic_min_margin: float = Field(alias="faqSemanticMinMargin", ge=0, le=1)
     rag_min_score: float = Field(alias="ragMinScore", ge=0, le=1)
     rag_lexical_accept_threshold: float = Field(alias="ragLexicalAcceptThreshold", ge=0, le=1)
+
+    @model_validator(mode="after")
+    def validate_candidate_source_weights(self) -> Self:
+        invalid = [
+            key
+            for key, value in self.candidate_source_weights.items()
+            if not key.strip() or value < 0 or value > 5
+        ]
+        if invalid:
+            raise ValueError("candidateSourceWeights keys must be non-empty and weights must be between 0 and 5")
+        return self
 
 
 class RuntimePolicyClassifier(BaseModel):

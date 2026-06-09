@@ -1,7 +1,7 @@
 import hashlib
 import re
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from time import perf_counter
 from typing import Any, Protocol
 
@@ -62,6 +62,7 @@ class RuntimeLabService:
         rag_answer_gate: RagAnswerGate | None = None,
         fallback_agent: FallbackAgentPort | None = None,
         agent_output_policy: AgentOutputPolicy | None = None,
+        policy_thresholds: dict[str, Any] | None = None,
     ) -> None:
         self._repository = repository
         self._manifests = mock_sop_manifests()
@@ -77,6 +78,7 @@ class RuntimeLabService:
         self._rag_answer_gate = rag_answer_gate
         self._fallback_agent = fallback_agent
         self._agent_output_policy = agent_output_policy or AgentOutputPolicy()
+        self._policy_thresholds = dict(policy_thresholds or {})
 
     def create_session(self) -> dict[str, Any]:
         runtime_session = self._repository.create_session()
@@ -202,6 +204,71 @@ class RuntimeLabService:
 
     def list_events(self, session_id: int) -> list[dict[str, Any]]:
         return self._repository.list_events(session_id)
+
+    def _classifier_min_confidence(self) -> float:
+        value = self._policy_thresholds.get("classifierMinConfidence", 0.6)
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            return 0.6
+        return max(0.0, min(1.0, parsed))
+
+    def _candidate_top_k(self) -> int:
+        value = self._policy_thresholds.get("candidateTopK", 5)
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return 5
+        return max(1, min(20, parsed))
+
+    def _candidate_source_weights(self) -> dict[str, float]:
+        raw = self._policy_thresholds.get("candidateSourceWeights")
+        if not isinstance(raw, dict):
+            return {}
+        weights: dict[str, float] = {}
+        for key, value in raw.items():
+            text = str(key).strip()
+            if not text:
+                continue
+            try:
+                weights[text] = max(0.0, min(5.0, float(value)))
+            except (TypeError, ValueError):
+                continue
+        return weights
+
+    def _select_top_candidates(
+        self,
+        candidates: list[RouteCandidate],
+        *,
+        top_k: int | None = None,
+    ) -> list[RouteCandidate]:
+        weighted = self._apply_candidate_source_weights(candidates)
+        return select_top_candidates(weighted, top_k=top_k or self._candidate_top_k())
+
+    def _apply_candidate_source_weights(self, candidates: list[RouteCandidate]) -> list[RouteCandidate]:
+        weights = self._candidate_source_weights()
+        if not weights:
+            return candidates
+        weighted: list[RouteCandidate] = []
+        for candidate in candidates:
+            weight = weights.get(str(candidate.candidate_type), weights.get(str(candidate.source), weights.get("*", 1.0)))
+            if weight == 1.0:
+                weighted.append(candidate)
+                continue
+            payload = dict(candidate.payload or {})
+            payload["policyWeight"] = {
+                "rawScore": candidate.score,
+                "sourceWeight": weight,
+                "weightedScore": max(0.0, min(1.0, candidate.score * weight)),
+            }
+            weighted.append(
+                replace(
+                    candidate,
+                    score=max(0.0, min(1.0, candidate.score * weight)),
+                    payload=payload,
+                )
+            )
+        return weighted
 
     def get_command_response(self, session_id: int, idempotency_key: str) -> dict[str, Any] | None:
         return self._repository.get_command_response(session_id, idempotency_key)
@@ -379,7 +446,7 @@ class RuntimeLabService:
                 reason="Fallback Agent candidate added for non-SOP question during active task",
             )
             if agent_candidates:
-                candidates = select_top_candidates([*candidates, *agent_candidates], top_k=5)
+                candidates = self._select_top_candidates([*candidates, *agent_candidates])
                 route_steps.append(
                     _route_step(
                         "agent_candidate_recall",
@@ -425,7 +492,7 @@ class RuntimeLabService:
                 "ANSWER_RAG",
                 "AGENT_FALLBACK",
             ),
-            thresholds={"classifierMinConfidence": 0.6},
+            thresholds={"classifierMinConfidence": self._classifier_min_confidence()},
         )
         step_started_at = perf_counter()
         try:
@@ -503,7 +570,7 @@ class RuntimeLabService:
                     reason="Fallback Agent candidate added to unresolved answer candidate pool",
                 )
             )
-        return select_top_candidates(candidates, top_k=5)
+        return self._select_top_candidates(candidates)
 
     def _faq_answer_candidates(
         self,
@@ -724,7 +791,7 @@ class RuntimeLabService:
                     reason="Scoped finite fallback after shallow recall returned empty",
                 )
             )
-        return select_top_candidates(candidates, top_k=5)
+        return self._select_top_candidates(candidates)
 
     def _finite_sop_fallback_candidates(
         self,

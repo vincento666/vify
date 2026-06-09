@@ -1,0 +1,38 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ RuntimeLabRagPolicyTest.test_lexical_accept_threshold_can_be_tightened_by_policy _
+
+self = <test_runtime_lab_rag_policy.RuntimeLabRagPolicyTest testMethod=test_lexical_accept_threshold_can_be_tightened_by_policy>
+
+    def test_lexical_accept_threshold_can_be_tightened_by_policy(self) -> None:
+        with _session() as session:
+            facade = _RecordingKnowledgeFacade(
+                [
+                    _KnowledgeHit(
+                        source_type="DOCUMENT_CHUNK",
+                        match_type="VECTOR",
+                        score=0.016,
+                        title="航班延误险条款",
+                        content="航班 延误 超过 4 小时 保险 理赔：旅客可提交延误证明、登机牌、保单和身份证明材料申请赔付。",
+                        document_id=7,
+                        chunk_id=70,
+                        chunk_index=0,
+                    )
+                ]
+            )
+            service = RuntimeLabService(
+                RuntimeLabRepository(session),
+>               rag_answer_gate=RagAnswerGate(
+                    facade,
+                    knowledge_base_ids=[33],
+                    generator=FakeRagAnswerGenerator(),
+                    rerank=True,
+                    lexical_accept_threshold=1.0,
+                ),
+            )
+E           TypeError: RagAnswerGate.__init__() got an unexpected keyword argument 'lexical_accept_threshold'
+
+tests/integration/runtime_lab/test_runtime_lab_rag_policy.py:219: TypeError
+=========================== short test summary info ============================
+FAILED tests/integration/runtime_lab/test_runtime_lab_rag_policy.py::RuntimeLabRagPolicyTest::test_lexical_accept_threshold_can_be_tightened_by_policy
+1 failed in 0.26s

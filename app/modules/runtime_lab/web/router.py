@@ -60,11 +60,12 @@ def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeL
     policy_snapshot = effective_policy["policySnapshot"]
     bindings = _runtime_lab_chatflow_bindings(settings.runtime_lab_sop_chatflow_ids)
     classifier = build_classifier_from_snapshot(policy_snapshot, settings)
-    faq_answer_gate = _runtime_lab_faq_answer_gate(settings, session)
-    faq_semantic_gate = _runtime_lab_faq_semantic_gate(settings, session)
-    rag_answer_gate = _runtime_lab_rag_answer_gate(settings, session)
+    faq_answer_gate = _runtime_lab_faq_answer_gate(settings, session, policy_snapshot)
+    faq_semantic_gate = _runtime_lab_faq_semantic_gate(settings, session, policy_snapshot)
+    rag_answer_gate = _runtime_lab_rag_answer_gate(settings, session, policy_snapshot)
     fallback_agent = build_fallback_agent_from_snapshot(policy_snapshot, session=session)
     agent_output_policy = build_agent_output_policy_from_snapshot(policy_snapshot)
+    policy_thresholds = dict(policy_snapshot.get("thresholds") or {})
     if not bindings:
         return RuntimeLabService(
             RuntimeLabRepository(session),
@@ -74,6 +75,7 @@ def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeL
             rag_answer_gate=rag_answer_gate,
             fallback_agent=fallback_agent,
             agent_output_policy=agent_output_policy,
+            policy_thresholds=policy_thresholds,
         )
     workflow_service = WorkflowService(
         WorkflowRepository(session),
@@ -97,6 +99,7 @@ def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeL
         rag_answer_gate=rag_answer_gate,
         fallback_agent=fallback_agent,
         agent_output_policy=agent_output_policy,
+        policy_thresholds=policy_thresholds,
     )
 
 
@@ -395,47 +398,125 @@ def _runtime_policy_schema_safe_classifier(value: Any) -> dict[str, Any]:
     return classifier
 
 
-def _runtime_lab_faq_answer_gate(settings: Settings, session: Session) -> FaqAnswerGate | None:
+def _runtime_lab_faq_answer_gate(
+    settings: Settings,
+    session: Session,
+    policy_snapshot: Mapping[str, Any] | None = None,
+) -> FaqAnswerGate | None:
+    faq_config = _runtime_policy_faq_config(settings, policy_snapshot)
+    if not bool(faq_config.get("exactEnabled", True)):
+        return None
     runtime_faq_gate = RuntimeAirlineFaqGate()
-    knowledge_base_ids = _runtime_lab_id_list(settings.runtime_lab_faq_knowledge_base_ids)
+    knowledge_base_ids = _runtime_lab_id_list(faq_config.get("knowledgeBaseIds"))
     if not knowledge_base_ids:
         return runtime_faq_gate
+    thresholds = dict((policy_snapshot or {}).get("thresholds") or {})
     return CompositeFaqAnswerGate(
         (
             runtime_faq_gate,
-            FaqExactAnswerGate(KnowledgeFacade(session), knowledge_base_ids=knowledge_base_ids),
+            FaqExactAnswerGate(
+                KnowledgeFacade(session),
+                knowledge_base_ids=knowledge_base_ids,
+                top_k=int(faq_config.get("topK") or 3),
+                keyword_min_score=_runtime_lab_threshold(thresholds, "faqKeywordMinScore", 0.0),
+                keyword_min_margin=_runtime_lab_threshold(thresholds, "faqKeywordMinMargin", 0.0),
+            ),
         )
     )
 
 
-def _runtime_lab_faq_semantic_gate(settings: Settings, session: Session) -> FaqSemanticAnswerGate | None:
-    knowledge_base_ids = _runtime_lab_id_list(settings.runtime_lab_faq_knowledge_base_ids)
+def _runtime_lab_faq_semantic_gate(
+    settings: Settings,
+    session: Session,
+    policy_snapshot: Mapping[str, Any] | None = None,
+) -> FaqSemanticAnswerGate | None:
+    faq_config = _runtime_policy_faq_config(settings, policy_snapshot)
+    if not bool(faq_config.get("semanticEnabled", True)):
+        return None
+    knowledge_base_ids = _runtime_lab_id_list(faq_config.get("knowledgeBaseIds"))
     if not knowledge_base_ids:
         return None
-    return FaqSemanticAnswerGate(KnowledgeFacade(session), knowledge_base_ids=knowledge_base_ids)
+    thresholds = dict((policy_snapshot or {}).get("thresholds") or {})
+    return FaqSemanticAnswerGate(
+        KnowledgeFacade(session),
+        knowledge_base_ids=knowledge_base_ids,
+        top_k=int(faq_config.get("topK") or 5),
+        rerank=bool(faq_config.get("rerank", True)),
+        min_score=_runtime_lab_threshold(thresholds, "faqSemanticMinScore", 0.85),
+        min_margin=_runtime_lab_threshold(thresholds, "faqSemanticMinMargin", 0.12),
+    )
 
 
-def _runtime_lab_rag_answer_gate(settings: Settings, session: Session) -> RagAnswerGate | None:
-    knowledge_base_ids = _runtime_lab_id_list(settings.runtime_lab_rag_knowledge_base_ids)
+def _runtime_lab_rag_answer_gate(
+    settings: Settings,
+    session: Session,
+    policy_snapshot: Mapping[str, Any] | None = None,
+) -> RagAnswerGate | None:
+    rag_config = _runtime_policy_rag_config(settings, policy_snapshot)
+    if not bool(rag_config.get("enabled", True)):
+        return None
+    knowledge_base_ids = _runtime_lab_id_list(rag_config.get("knowledgeBaseIds"))
     if not knowledge_base_ids:
         return None
-    return RagAnswerGate(KnowledgeFacade(session), knowledge_base_ids=knowledge_base_ids)
+    thresholds = dict((policy_snapshot or {}).get("thresholds") or {})
+    return RagAnswerGate(
+        KnowledgeFacade(session),
+        knowledge_base_ids=knowledge_base_ids,
+        top_k=int(rag_config.get("topK") or 3),
+        retrieval_mode=str(rag_config.get("retrievalMode") or "hybrid"),
+        rerank=bool(rag_config.get("rerank", True)),
+        min_score=_runtime_lab_threshold(thresholds, "ragMinScore", 0.7),
+        lexical_accept_threshold=_runtime_lab_threshold(thresholds, "ragLexicalAcceptThreshold", 0.6),
+    )
 
 
-def _runtime_lab_id_list(raw: str | None) -> list[int]:
-    text = (raw or "").strip()
-    if not text:
-        return []
+def _runtime_policy_faq_config(settings: Settings, policy_snapshot: Mapping[str, Any] | None) -> dict[str, Any]:
+    if policy_snapshot and isinstance(policy_snapshot.get("faq"), Mapping):
+        return dict(policy_snapshot["faq"])
+    return {
+        "knowledgeBaseIds": _runtime_lab_id_list(settings.runtime_lab_faq_knowledge_base_ids),
+        "exactEnabled": True,
+        "semanticEnabled": True,
+        "topK": 3,
+        "rerank": False,
+    }
+
+
+def _runtime_policy_rag_config(settings: Settings, policy_snapshot: Mapping[str, Any] | None) -> dict[str, Any]:
+    if policy_snapshot and isinstance(policy_snapshot.get("rag"), Mapping):
+        return dict(policy_snapshot["rag"])
+    return {
+        "enabled": True,
+        "knowledgeBaseIds": _runtime_lab_id_list(settings.runtime_lab_rag_knowledge_base_ids),
+        "retrievalMode": "hybrid",
+        "topK": 3,
+        "rerank": True,
+    }
+
+
+def _runtime_lab_id_list(raw: Any) -> list[int]:
+    if isinstance(raw, (list, tuple)):
+        values = raw
+    else:
+        text = (raw or "").strip()
+        if not text:
+            return []
+        values = text.split(",")
     ids: list[int] = []
-    for item in text.split(","):
-        item = item.strip()
-        if not item:
-            continue
+    for item in values:
         try:
-            ids.append(int(item))
+            ids.append(int(str(item).strip()))
         except ValueError:
             continue
     return ids
+
+
+def _runtime_lab_threshold(thresholds: Mapping[str, Any], key: str, default: float) -> float:
+    raw = thresholds.get(key, default)
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return default
 
 
 def _chatflow_names(session: Session, chatflow_ids: Any) -> dict[int, str]:

@@ -17,6 +17,15 @@ class RuntimePolicyProfileSchemaTest(unittest.TestCase):
         with self.assertRaises(ValidationError):
             RuntimePolicyProfileRequest.model_validate(payload)
 
+        weighted_payload = _profile_payload(name="unit candidate weights")
+        weighted_payload["thresholds"] = {
+            **weighted_payload["thresholds"],
+            "candidateSourceWeights": {"": 1.0, "ANSWER_FAQ": 6.0},
+        }
+
+        with self.assertRaises(ValidationError):
+            RuntimePolicyProfileRequest.model_validate(weighted_payload)
+
         live_payload = _profile_payload(name="unit live schema")
         live_payload["classifier"] = {
             **live_payload["classifier"],

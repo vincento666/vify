@@ -1,0 +1,46 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ RuntimePolicyRuntimeApiContractTest.test_runtime_message_uses_profile_candidate_top_k _
+
+self = <tests.contract.test_runtime_policy_runtime_api.RuntimePolicyRuntimeApiContractTest testMethod=test_runtime_message_uses_profile_candidate_top_k>
+
+    def test_runtime_message_uses_profile_candidate_top_k(self) -> None:
+        profile_payload = _profile_payload("041.R1 candidate top k")
+        profile_payload["status"] = "active"
+        profile_payload["bindings"] = {
+            **profile_payload["bindings"],
+            "tenantId": "",
+            "botId": "",
+            "channel": "",
+            "sopGroup": "",
+        }
+        profile_payload["thresholds"] = {
+            **profile_payload["thresholds"],
+            "candidateTopK": 1,
+        }
+    
+        with TestClient(app) as client:
+            created = client.post("/api/v1/runtime-policy/profiles", json=profile_payload)
+            self.assertEqual(created.status_code, 200)
+            session = client.post("/api/v1/runtime-lab/sessions")
+            session_id = session.json()["data"]["id"]
+            message = client.post(
+                f"/api/v1/runtime-lab/sessions/{session_id}/messages",
+                json={"message": "我要退票，也想改签", "idempotencyKey": "candidate-top-k"},
+            )
+    
+        self.assertEqual(message.status_code, 200)
+        decision = message.json()["data"]["routeDecision"]
+>       self.assertLessEqual(len(decision["classifierRequest"]["candidates"]), 1)
+E       AssertionError: 3 not less than or equal to 1
+
+tests/contract/test_runtime_policy_runtime_api.py:158: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/vincento/work/develop/hify/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/contract/test_runtime_policy_runtime_api.py::RuntimePolicyRuntimeApiContractTest::test_runtime_message_uses_profile_candidate_top_k
+1 failed, 1 warning in 0.80s

@@ -107,6 +107,9 @@ def _profile_payload(name: str) -> dict[str, object]:
         "thresholds": {
             "strongAcceptThreshold": 0.82,
             "classifierMinConfidence": 0.65,
+            "candidateTopK": 5,
+            "candidateSourceWeights": {},
+            "llmArbitrationRequiredForNonHardStop": True,
             "faqKeywordMinScore": 0.76,
             "faqKeywordMinMargin": 0.08,
             "faqSemanticMinScore": 0.78,

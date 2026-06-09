@@ -175,8 +175,10 @@
   10 per business area.
 - [x] Keep utterances realistic and varied instead of direct fixed commands like
   `我要退票`.
-- [x] Verify strong explicit/keyword routing with all 40 natural scenarios
-  completing their primary SOP.
+- [x] Verify strong explicit/keyword candidate recall with all 40 natural
+  scenarios completing their primary SOP. Historical 034 evidence used the old
+  direct strong-routing path; 036-040 R1 is the current non-hard-stop central
+  arbitration proof.
 - [x] Verify qwen LLM arbitration with representative active-task switch
   journeys, not every scenario.
 - [x] Verify the supported single-suspended-task journey:

@@ -53,3 +53,16 @@
 - [x] Save evidence under
   `artifacts/slices/042-runtime-policy-release-governance/042.4/`.
 - [x] Commit 042.4 only.
+
+## 042.R1 Latest unified-arbitration governance invariant
+
+- [x] RED: validation does not fail when a profile disables central
+  arbitration for non-hard-stop route decisions.
+- [x] Add `llmArbitrationRequiredForNonHardStop` to policy thresholds as an
+  auditable invariant recorded in profile snapshots.
+- [x] Validate that `llmArbitrationRequiredForNonHardStop` is true before a
+  profile can pass release validation.
+- [x] Validate `candidateTopK` and `candidateSourceWeights` in governance, not
+  only in API schema.
+- [x] Save RED/GREEN and 041/042 regression evidence under
+  `artifacts/slices/042-runtime-policy-release-governance/042.R1/`.

@@ -9,6 +9,9 @@ ALLOWED_FALLBACK_RESPONSE_TYPES = {"answer", "clarify", "handoff"}
 THRESHOLD_KEYS = (
     "strongAcceptThreshold",
     "classifierMinConfidence",
+)
+UNIT_THRESHOLD_KEYS = (
+    *THRESHOLD_KEYS,
     "faqKeywordMinScore",
     "faqKeywordMinMargin",
     "faqSemanticMinScore",
@@ -107,12 +110,27 @@ class RuntimePolicyValidationService:
         if not isinstance(thresholds, dict):
             failure_reasons.append("thresholds.required")
             return
-        for key in THRESHOLD_KEYS:
+        for key in UNIT_THRESHOLD_KEYS:
             value = thresholds.get(key)
             if not isinstance(value, int | float):
                 failure_reasons.append(f"thresholds.{key}.required")
             elif value < 0 or value > 1:
                 failure_reasons.append(f"thresholds.{key}.out_of_range")
+        candidate_top_k = thresholds.get("candidateTopK")
+        if not isinstance(candidate_top_k, int):
+            failure_reasons.append("thresholds.candidateTopK.required")
+        elif candidate_top_k < 1 or candidate_top_k > 20:
+            failure_reasons.append("thresholds.candidateTopK.out_of_range")
+        source_weights = thresholds.get("candidateSourceWeights")
+        if not isinstance(source_weights, dict):
+            failure_reasons.append("thresholds.candidateSourceWeights.required")
+        else:
+            for key, value in source_weights.items():
+                if not str(key).strip() or not isinstance(value, int | float) or value < 0 or value > 5:
+                    failure_reasons.append("thresholds.candidateSourceWeights.invalid")
+                    break
+        if thresholds.get("llmArbitrationRequiredForNonHardStop") is not True:
+            failure_reasons.append("thresholds.llmArbitrationRequiredForNonHardStop.required_true")
 
     def _validate_classifier(self, classifier: Any, failure_reasons: list[str]) -> None:
         if not isinstance(classifier, dict):

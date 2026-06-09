@@ -103,6 +103,9 @@ def _env_effective_profile(settings: Settings) -> dict[str, Any]:
             "thresholds": {
                 "strongAcceptThreshold": 0.9,
                 "classifierMinConfidence": 0.0,
+                "candidateTopK": 5,
+                "candidateSourceWeights": {},
+                "llmArbitrationRequiredForNonHardStop": True,
                 "faqKeywordMinScore": 0.0,
                 "faqKeywordMinMargin": 0.0,
                 "faqSemanticMinScore": 0.0,

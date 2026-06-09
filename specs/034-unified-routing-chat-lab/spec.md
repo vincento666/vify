@@ -241,6 +241,13 @@ and follow-up reply samples.
 
 Status: complete.
 
+Architecture note updated on 2026-06-09: 034.6 completed the original strong
+trigger template capability. In the latest 036-042 routing architecture, those
+templates and keyword hits are treated as candidate-recall signals for SOP
+intent candidates. They are not final non-hard-stop exits. Only explicit
+handoff/safety hard stops may finish before central constrained LLM
+arbitration.
+
 034.6 answers two routing-readiness questions:
 
 - Strong SOP triggering can be configured with keyword templates, not only exact
@@ -537,7 +544,9 @@ correct production behavior.
 034.12 final behavior:
 
 - all 40 natural scenarios complete their primary SOP through strong
-  explicit/keyword routing;
+  explicit/keyword candidate recall plus arbitration. Historical 034 evidence
+  used the older strong-routing path; 036-040 R1 proves the current central
+  arbitration path for non-hard-stop decisions;
 - qwen LLM arbitration is exercised by representative active-task switch
   journeys, not forced for every scenario;
 - representative live journeys follow the supported single-suspended-task

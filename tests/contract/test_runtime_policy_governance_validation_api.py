@@ -44,6 +44,7 @@ class RuntimePolicyGovernanceValidationApiContractTest(unittest.TestCase):
         payload["classifier"]["mode"] = "llm"
         payload["classifier"]["model"] = ""
         payload["fallbackAgent"]["allowedResponseTypes"] = ["answer", "teleport"]
+        payload["thresholds"]["llmArbitrationRequiredForNonHardStop"] = False
         profile_id = self._insert_profile(payload)
 
         with TestClient(app) as client:
@@ -60,6 +61,7 @@ class RuntimePolicyGovernanceValidationApiContractTest(unittest.TestCase):
         self.assertEqual(data["status"], "failed")
         self.assertFalse(data["passed"])
         self.assertIn("thresholds.strongAcceptThreshold.out_of_range", data["failureReasons"])
+        self.assertIn("thresholds.llmArbitrationRequiredForNonHardStop.required_true", data["failureReasons"])
         self.assertIn("classifier.model.required", data["failureReasons"])
         self.assertIn("fallbackAgent.allowedResponseTypes.unsupported", data["failureReasons"])
         self.assertEqual(listed.status_code, 200)

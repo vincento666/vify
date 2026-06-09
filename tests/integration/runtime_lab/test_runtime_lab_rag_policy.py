@@ -198,6 +198,43 @@ class RuntimeLabRagPolicyTest(unittest.TestCase):
                 0.016,
             )
 
+    def test_lexical_accept_threshold_can_be_tightened_by_policy(self) -> None:
+        with _session() as session:
+            facade = _RecordingKnowledgeFacade(
+                [
+                    _KnowledgeHit(
+                        source_type="DOCUMENT_CHUNK",
+                        match_type="VECTOR",
+                        score=0.016,
+                        title="航班延误险条款",
+                        content="航班 延误 超过 4 小时 保险 理赔：旅客可提交延误证明、登机牌、保单和身份证明材料申请赔付。",
+                        document_id=7,
+                        chunk_id=70,
+                        chunk_index=0,
+                    )
+                ]
+            )
+            service = RuntimeLabService(
+                RuntimeLabRepository(session),
+                rag_answer_gate=RagAnswerGate(
+                    facade,
+                    knowledge_base_ids=[33],
+                    generator=FakeRagAnswerGenerator(),
+                    rerank=True,
+                    lexical_accept_threshold=1.0,
+                ),
+            )
+            runtime_session = service.create_session()
+
+            turn = service.handle_message(int(runtime_session["id"]), "航班延误超过4小时保险怎么赔？")
+
+            self.assertEqual(turn.route_decision.action, "CLARIFY")
+            self.assertEqual(turn.route_decision.rag_answer["reasonCode"], "RAG_LOW_CONFIDENCE")
+            self.assertEqual(
+                turn.route_decision.rag_answer["retrievalEvidence"]["confidenceSignals"]["lexicalAcceptThreshold"],
+                1.0,
+            )
+
     def test_active_sop_slot_payload_bypasses_low_confidence_rag(self) -> None:
         with _session() as session:
             facade = _RecordingKnowledgeFacade(
