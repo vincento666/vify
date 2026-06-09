@@ -1,0 +1,19 @@
+Build gate for 015.2 Variable aggregation and assignment
+
+Command:
+rtk npm run build
+
+Result:
+PASS
+
+Summary:
+- vue-tsc completed.
+- vite production build completed.
+- Existing chunk-size warning remains; no build failure.
+
+RERUN 2026-06-09:
+Command:
+rtk npm --prefix frontend run build
+
+Result:
+PASS. Existing Vite chunk-size warning remains; no build failure.

@@ -1,0 +1,23 @@
+RED gate for 015.2 Variable aggregation and assignment
+
+Command:
+rtk .venv/bin/pytest tests/integration/workflow/test_variable_aggregation_assignment.py
+
+Result:
+3 failed
+
+Failures:
+- Workflow VARIABLE_AGGREGATION run returned 400 Unknown node type: VARIABLE_AGGREGATION.
+- Workflow VARIABLE_ASSIGN run returned 400 Unknown node type: VARIABLE_ASSIGN.
+- Chatflow VARIABLE_ASSIGN run returned 400 Unknown node type: VARIABLE_ASSIGN.
+
+Command:
+rtk ./node_modules/.bin/vitest run src/views/workflow/flowGraph.test.ts src/views/workflow/nodeConfig.test.ts
+
+Result:
+2 failed files, 3 failed tests
+
+Failures:
+- VARIABLE_AGGREGATION and VARIABLE_ASSIGN labels are undefined in addWorkflowNode.
+- getNodeConfigSchema('VARIABLE_AGGREGATION') returned undefined.
+- getNodeConfigSchema('VARIABLE_ASSIGN') returned undefined.
