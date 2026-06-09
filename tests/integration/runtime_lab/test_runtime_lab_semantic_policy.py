@@ -14,7 +14,7 @@ from app.modules.runtime_lab.infra.schema import register_runtime_lab_tables
 
 
 class RuntimeLabSemanticPolicyTest(unittest.TestCase):
-    def test_no_active_strong_start_exits_before_classifier(self) -> None:
+    def test_no_active_strong_start_enters_central_arbitration(self) -> None:
         with _session() as session:
             classifier = _RecordingClassifier()
             service = RuntimeLabService(RuntimeLabRepository(session), classifier=classifier)
@@ -24,7 +24,8 @@ class RuntimeLabSemanticPolicyTest(unittest.TestCase):
 
             self.assertEqual(turn.route_decision.action, "START_SOP")
             self.assertEqual(turn.active_task["sop_id"], "refund_ticket")
-            self.assertEqual(classifier.calls, 0)
+            self.assertEqual(classifier.calls, 1)
+            self.assertEqual(turn.route_decision.policy_gate["stage"], "post_classifier")
 
     def test_no_active_conflict_calls_classifier_once_and_starts_selected_sop(self) -> None:
         with _session() as session:
@@ -49,7 +50,7 @@ class RuntimeLabSemanticPolicyTest(unittest.TestCase):
             turn = service.handle_message(int(runtime_session["id"]), "我想退费并开发票")
             tasks = repository.list_tasks(int(runtime_session["id"]))
 
-            self.assertEqual(classifier.calls, 1)
+            self.assertEqual(classifier.calls, 2)
             self.assertEqual(turn.route_decision.action, "SUSPEND_AND_START")
             self.assertEqual(turn.active_task["sop_id"], "invoice_apply")
             self.assertEqual(tasks[0]["sop_id"], "refund_ticket")
@@ -226,7 +227,7 @@ class RuntimeLabSemanticPolicyTest(unittest.TestCase):
 
             self.assertEqual(turn.route_decision.action, "START_SOP")
             self.assertEqual(turn.active_task["sop_id"], "refund_ticket")
-            self.assertEqual(classifier.calls, 0)
+            self.assertEqual(classifier.calls, 1)
             self.assertNotIn("flight_booking", {candidate["target_id"] for candidate in turn.route_decision.candidates or []})
 
     def test_classifier_failure_degrades_to_clarify_with_evidence(self) -> None:

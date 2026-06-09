@@ -1,10 +1,14 @@
 from dataclasses import dataclass
 from collections.abc import Callable, Mapping
+import re
 from typing import Any
 
 from app.modules.runtime_lab.domain.candidates import CandidateType, RouteCandidate, select_top_candidates
 
 ALLOWED_ACTIONS = {
+    "ANSWER_FAQ",
+    "ANSWER_RAG",
+    "AGENT_FALLBACK",
     "HANDOFF_TO_HUMAN",
     "CONTINUE_ACTIVE_SOP",
     "START_SOP",
@@ -84,14 +88,19 @@ class FakeConstrainedIntentClassifier:
             result = self._scripted_result
             _validate_result(result, classifier_input)
             return result
-        top = select_top_candidates(list(classifier_input.candidates), top_k=1)
+        candidates = list(classifier_input.candidates)
+        top = select_top_candidates(candidates, top_k=1)
         if not top:
             result = _clarify_result("No finite candidates")
             _validate_result(result, classifier_input)
             return result
-        candidate = top[0]
         min_confidence = classifier_input.thresholds.get("classifierMinConfidence", 0.6)
-        if candidate.score < min_confidence:
+        candidate = _preferred_fake_candidate(classifier_input.message, candidates, min_confidence) or top[0]
+        candidate_type = CandidateType(str(candidate.candidate_type))
+        if candidate.score < min_confidence and candidate_type not in {
+            CandidateType.CLARIFY,
+            CandidateType.ACTIVE_TASK_CONTINUE,
+        }:
             result = _clarify_result("Top candidate below classifier minimum confidence")
             _validate_result(result, classifier_input)
             return result
@@ -207,6 +216,91 @@ def _compact_text(value: str, *, max_chars: int) -> str:
     return f"{text[: max_chars - 1]}…"
 
 
+def _preferred_fake_candidate(
+    message: str,
+    candidates: list[RouteCandidate],
+    min_confidence: float,
+) -> RouteCandidate | None:
+    resume_candidates = [
+        candidate
+        for candidate in candidates
+        if CandidateType(str(candidate.candidate_type)) == CandidateType.SUSPENDED_TASK_RESUME
+        and candidate.score >= min_confidence
+    ]
+    if resume_candidates and _looks_like_resume_request(message):
+        return select_top_candidates(resume_candidates, top_k=1)[0]
+    active_continue = next(
+        (candidate for candidate in candidates if CandidateType(str(candidate.candidate_type)) == CandidateType.ACTIVE_TASK_CONTINUE),
+        None,
+    )
+    if _looks_like_consultation(message):
+        answer_candidates = [
+            candidate
+            for candidate in candidates
+            if CandidateType(str(candidate.candidate_type)) in {CandidateType.ANSWER_FAQ, CandidateType.ANSWER_RAG}
+            and candidate.score >= min_confidence
+        ]
+        if answer_candidates:
+            return select_top_candidates(answer_candidates, top_k=1)[0]
+        clarify_answer_candidates = [
+            candidate
+            for candidate in candidates
+            if CandidateType(str(candidate.candidate_type)) == CandidateType.CLARIFY
+            and _has_answer_payload(candidate)
+        ]
+        if clarify_answer_candidates:
+            return select_top_candidates(clarify_answer_candidates, top_k=1)[0]
+    if active_continue is not None and _looks_like_active_collection_detail(message):
+        sop_candidates = [
+            candidate
+            for candidate in candidates
+            if CandidateType(str(candidate.candidate_type)) == CandidateType.SOP_INTENT
+            and candidate.score >= min_confidence
+        ]
+        if sop_candidates and _looks_like_sop_transaction(message):
+            return select_top_candidates(sop_candidates, top_k=1)[0]
+        return active_continue
+    return None
+
+
+def _looks_like_consultation(message: str) -> bool:
+    return any(term in message for term in ("?", "？", "吗", "怎么", "如何", "赔", "规则", "手续费", "多少", "能不能"))
+
+
+def _looks_like_resume_request(message: str) -> bool:
+    return any(term in message for term in ("继续", "恢复", "接着", "刚才", "之前", "刚订", "刚出票", "就查"))
+
+
+def _looks_like_sop_transaction(message: str) -> bool:
+    action_terms = ("我要", "我想", "帮我", "办理", "申请", "提交", "先帮我", "先不")
+    sop_terms = (
+        "退票",
+        "退款",
+        "退费",
+        "改签",
+        "订票",
+        "机票",
+        "开发票",
+        "开票",
+        "加购",
+        "行李",
+        "值机",
+        "选座",
+    )
+    return any(term in message for term in action_terms) and any(term in message for term in sop_terms)
+
+
+def _looks_like_active_collection_detail(message: str) -> bool:
+    return bool(re.search(r"[A-Za-z]{2,}-?\d{2,}|\d{6,}|1[3-9]\d{9}", message)) or any(
+        term in message for term in ("订单", "票号", "手机号", "证件", "身份证", "护照", "乘机人", "确认")
+    )
+
+
+def _has_answer_payload(candidate: RouteCandidate) -> bool:
+    payload = candidate.payload or {}
+    return bool(payload.get("faq_answer") or payload.get("rag_answer"))
+
+
 def _action_for_candidate(candidate: RouteCandidate) -> str:
     candidate_type = CandidateType(str(candidate.candidate_type))
     if candidate_type == CandidateType.ACTIVE_TASK_CONTINUE:
@@ -215,6 +309,12 @@ def _action_for_candidate(candidate: RouteCandidate) -> str:
         return "RESUME_TASK"
     if candidate_type == CandidateType.SOP_INTENT:
         return "START_SOP"
+    if candidate_type == CandidateType.ANSWER_FAQ:
+        return "ANSWER_FAQ"
+    if candidate_type == CandidateType.ANSWER_RAG:
+        return "ANSWER_RAG"
+    if candidate_type == CandidateType.AGENT_FALLBACK:
+        return "AGENT_FALLBACK"
     if candidate_type == CandidateType.HANDOFF_TO_HUMAN:
         return "HANDOFF_TO_HUMAN"
     if candidate_type == CandidateType.REJECT_SWITCH_CONTINUE_ACTIVE:

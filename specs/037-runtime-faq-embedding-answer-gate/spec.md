@@ -77,11 +77,18 @@ auditable retrieval evidence.
 
 ## Unified Arbitration Refactor Gate
 
-Status: pending implementation.
+Status: completed on 2026-06-09.
 
 The previous 037 evidence proves the old semantic FAQ answer gate. The current
 architecture requires semantic FAQ to become typed candidate evidence for
 central arbitration.
+
+R1 evidence:
+
+- RED/shared conflict regression:
+  `artifacts/slices/037-runtime-faq-embedding-answer-gate/037.R1/red-shared-faq-sop-conflict.txt`
+- Integration:
+  `artifacts/slices/037-runtime-faq-embedding-answer-gate/037.R1/integration.txt`
 
 ## Specification Sign-off
 

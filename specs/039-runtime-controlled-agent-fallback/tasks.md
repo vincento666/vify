@@ -55,13 +55,20 @@
 
 ## 039.R1 Unified arbitration refactor
 
-- [ ] RED: fallback Agent can still run as a separate post-gate answer layer.
-- [ ] RED: unresolved user input lacks `AGENT_FALLBACK` candidate evidence.
-- [ ] Add typed Agent fallback/clarify/handoff candidate generation or selected
+- [x] RED: fallback Agent can still run as a separate post-gate answer layer.
+- [x] RED: unresolved user input lacks `AGENT_FALLBACK` candidate evidence.
+- [x] Add typed Agent fallback/clarify/handoff candidate generation or selected
   executor path.
-- [ ] Ensure Agent execution happens only after central arbitration selects
+- [x] Ensure Agent execution happens only after central arbitration selects
   Agent fallback or no finite answer/task candidate survives recall.
-- [ ] Preserve clarification counter and handoff escalation behavior.
-- [ ] Save evidence under
+- [x] Preserve clarification counter and handoff escalation behavior.
+- [x] Save evidence under
   `artifacts/slices/039-runtime-controlled-agent-fallback/039.R1/`.
-- [ ] Commit 039.R1 only.
+- [x] Commit 039.R1 only.
+
+## 039.R1 Evidence
+
+- RED:
+  `artifacts/slices/039-runtime-controlled-agent-fallback/039.R1/red.txt`
+- Integration:
+  `artifacts/slices/039-runtime-controlled-agent-fallback/039.R1/integration.txt`

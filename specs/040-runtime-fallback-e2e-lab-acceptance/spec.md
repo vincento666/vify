@@ -89,11 +89,22 @@ After 040, the system is a complete controlled customer-service routing runtime:
 
 ## Unified Arbitration Refactor Gate
 
-Status: pending implementation.
+Status: completed on 2026-06-09.
 
 040 must be rerun for the 2026-06-09 architecture revision. The new final gate
 must prove the system no longer uses independent FAQ/RAG early-exit answer gates
 for non-hard-stop messages.
+
+R1 evidence:
+
+- RED:
+  `artifacts/slices/040-runtime-fallback-e2e-lab-acceptance/040.R1/red.txt`
+- Runtime-lab integration:
+  `artifacts/slices/040-runtime-fallback-e2e-lab-acceptance/040.R1/runtime-lab-integration.txt`
+- Runtime-lab unit/contract:
+  `artifacts/slices/040-runtime-fallback-e2e-lab-acceptance/040.R1/unit-contract.txt`
+- Runtime-lab API/E2E:
+  `artifacts/slices/040-runtime-fallback-e2e-lab-acceptance/040.R1/runtime-lab-e2e.txt`
 
 ## Completion Evidence
 

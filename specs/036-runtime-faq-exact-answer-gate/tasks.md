@@ -53,16 +53,16 @@
 
 ## 036.R1 Unified arbitration refactor
 
-- [ ] RED: exact FAQ currently exits before central classifier arbitration.
-- [ ] RED: FAQ/SOP conflict lacks one combined candidate pool.
-- [ ] Convert exact/keyword FAQ answer gate into `ANSWER_FAQ` candidate
+- [x] RED: exact FAQ currently exits before central classifier arbitration.
+- [x] RED: FAQ/SOP conflict lacks one combined candidate pool.
+- [x] Convert exact/keyword FAQ answer gate into `ANSWER_FAQ` candidate
   generator.
-- [ ] Ensure `ANSWER_FAQ` candidates enter constrained classifier input with
+- [x] Ensure `ANSWER_FAQ` candidates enter constrained classifier input with
   FAQ evidence.
-- [ ] Ensure selected FAQ candidate executes answer without task mutation.
-- [ ] Save evidence under
+- [x] Ensure selected FAQ candidate executes answer without task mutation.
+- [x] Save evidence under
   `artifacts/slices/036-runtime-faq-exact-answer-gate/036.R1/`.
-- [ ] Commit 036.R1 only.
+- [x] Commit 036.R1 only.
 
 ## Evidence
 
@@ -88,5 +88,11 @@
   `artifacts/slices/036-runtime-faq-exact-answer-gate/036.3/browser-uat-result.json`
 - Browser screenshot:
   `artifacts/slices/036-runtime-faq-exact-answer-gate/036.3/screenshots/browser-uat-faq.png`
+- 036.R1 RED:
+  `artifacts/slices/036-runtime-faq-exact-answer-gate/036.R1/red.txt`
+- 036.R1 integration:
+  `artifacts/slices/036-runtime-faq-exact-answer-gate/036.R1/integration.txt`
+- 036.R1 unified arbitration regression:
+  `artifacts/slices/036-runtime-faq-exact-answer-gate/036.R1/unified-arbitration-regression.txt`
 - Full backend attempt:
   `artifacts/slices/036-runtime-faq-exact-answer-gate/036.3/full-backend.txt`

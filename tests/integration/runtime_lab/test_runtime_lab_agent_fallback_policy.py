@@ -11,6 +11,7 @@ from app.modules.runtime_lab.domain.agent_fallback import (
     FallbackAgentOutput,
     FallbackAgentRequest,
 )
+from app.modules.runtime_lab.domain.classifier import ClassifierInput, ClassifierResult
 from app.modules.runtime_lab.domain.rag_gate import FakeRagAnswerGenerator, RagAnswerGate
 from app.modules.runtime_lab.domain.service import RuntimeLabService
 from app.modules.runtime_lab.infra.repository import RuntimeLabRepository
@@ -18,6 +19,36 @@ from app.modules.runtime_lab.infra.schema import register_runtime_lab_tables
 
 
 class RuntimeLabAgentFallbackPolicyTest(unittest.TestCase):
+    def test_agent_fallback_enters_central_arbitration_pool_before_running_agent(self) -> None:
+        with _session() as session:
+            classifier = _AgentFirstClassifier()
+            agent = _ScriptedFallbackAgent(
+                [
+                    FallbackAgentOutput(
+                        response_type="answer",
+                        answer="我先帮您整理机场交通诉求，建议再核对机场官方班次。",
+                        confidence=0.74,
+                    )
+                ]
+            )
+            repository = RuntimeLabRepository(session)
+            service = RuntimeLabService(
+                repository,
+                fallback_agent=agent,
+                agent_output_policy=AgentOutputPolicy(),
+                classifier=classifier,
+            )
+            runtime_session = service.create_session()
+
+            turn = service.handle_message(int(runtime_session["id"]), "机场大巴末班车几点")
+
+            self.assertEqual(turn.route_decision.action, "AGENT_FALLBACK")
+            self.assertTrue(classifier.inputs, "Agent fallback must be selected by central arbitration")
+            candidate_types = {str(candidate.candidate_type) for candidate in classifier.inputs[-1].candidates}
+            self.assertIn("AGENT_FALLBACK", candidate_types)
+            self.assertEqual(turn.route_decision.policy_gate["stage"], "post_classifier")
+            self.assertEqual(len(agent.requests), 1)
+
     def test_unresolved_query_reaches_agent_fallback_without_task_mutation(self) -> None:
         with _session() as session:
             agent = _ScriptedFallbackAgent(
@@ -215,6 +246,27 @@ class _ScriptedFallbackAgent:
             response_type="answer",
             answer=f"已收到：{request.message}",
             confidence=0.6,
+        )
+
+
+class _AgentFirstClassifier:
+    def __init__(self) -> None:
+        self.inputs: list[ClassifierInput] = []
+
+    def classify(self, classifier_input: ClassifierInput) -> ClassifierResult:
+        self.inputs.append(classifier_input)
+        candidate = next(
+            (item for item in classifier_input.candidates if str(item.candidate_type) == "AGENT_FALLBACK"),
+            classifier_input.candidates[0],
+        )
+        action = "AGENT_FALLBACK" if str(candidate.candidate_type) == "AGENT_FALLBACK" else "CLARIFY"
+        return ClassifierResult(
+            selected_action=action,
+            selected_candidate_id=candidate.candidate_id if action != "CLARIFY" else None,
+            confidence=candidate.score,
+            rationale="agent-first fallback test classifier",
+            needs_clarification=False,
+            clarification_question=None,
         )
 
 

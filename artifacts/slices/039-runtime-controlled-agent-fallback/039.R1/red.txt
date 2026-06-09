@@ -1,0 +1,37 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ RuntimeLabAgentFallbackPolicyTest.test_agent_fallback_enters_central_arbitration_pool_before_running_agent _
+
+self = <test_runtime_lab_agent_fallback_policy.RuntimeLabAgentFallbackPolicyTest testMethod=test_agent_fallback_enters_central_arbitration_pool_before_running_agent>
+
+    def test_agent_fallback_enters_central_arbitration_pool_before_running_agent(self) -> None:
+        with _session() as session:
+            classifier = _AgentFirstClassifier()
+            agent = _ScriptedFallbackAgent(
+                [
+                    FallbackAgentOutput(
+                        response_type="answer",
+                        answer="我先帮您整理机场交通诉求，建议再核对机场官方班次。",
+                        confidence=0.74,
+                    )
+                ]
+            )
+            repository = RuntimeLabRepository(session)
+            service = RuntimeLabService(
+                repository,
+                fallback_agent=agent,
+                agent_output_policy=AgentOutputPolicy(),
+                classifier=classifier,
+            )
+            runtime_session = service.create_session()
+    
+            turn = service.handle_message(int(runtime_session["id"]), "机场大巴末班车几点")
+    
+            self.assertEqual(turn.route_decision.action, "AGENT_FALLBACK")
+>           self.assertTrue(classifier.inputs, "Agent fallback must be selected by central arbitration")
+E           AssertionError: [] is not true : Agent fallback must be selected by central arbitration
+
+tests/integration/runtime_lab/test_runtime_lab_agent_fallback_policy.py:46: AssertionError
+=========================== short test summary info ============================
+FAILED tests/integration/runtime_lab/test_runtime_lab_agent_fallback_policy.py::RuntimeLabAgentFallbackPolicyTest::test_agent_fallback_enters_central_arbitration_pool_before_running_agent
+1 failed in 0.35s

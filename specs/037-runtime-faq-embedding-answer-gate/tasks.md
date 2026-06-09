@@ -47,16 +47,16 @@
 
 ## 037.R1 Unified arbitration refactor
 
-- [ ] RED: semantic FAQ currently exits before central classifier arbitration.
-- [ ] RED: semantic FAQ/SOP conflict lacks one combined candidate pool.
-- [ ] Convert semantic FAQ gate into `ANSWER_FAQ` candidate generator.
-- [ ] Include score, margin, retrieval mode, rerank, and top FAQ evidence in
+- [x] RED: semantic FAQ currently exits before central classifier arbitration.
+- [x] RED: semantic FAQ/SOP conflict lacks one combined candidate pool.
+- [x] Convert semantic FAQ gate into `ANSWER_FAQ` candidate generator.
+- [x] Include score, margin, retrieval mode, rerank, and top FAQ evidence in
   classifier payload.
-- [ ] Ensure selected semantic FAQ candidate executes answer without task
+- [x] Ensure selected semantic FAQ candidate executes answer without task
   mutation.
-- [ ] Save evidence under
+- [x] Save evidence under
   `artifacts/slices/037-runtime-faq-embedding-answer-gate/037.R1/`.
-- [ ] Commit 037.R1 only.
+- [x] Commit 037.R1 only.
 
 ## Evidence
 
@@ -82,3 +82,7 @@
   `artifacts/slices/037-runtime-faq-embedding-answer-gate/037.3/screenshots/browser-uat-semantic-faq.png`
 - Full backend attempt:
   `artifacts/slices/037-runtime-faq-embedding-answer-gate/037.3/full-backend.txt`
+- 037.R1 shared RED:
+  `artifacts/slices/037-runtime-faq-embedding-answer-gate/037.R1/red-shared-faq-sop-conflict.txt`
+- 037.R1 integration:
+  `artifacts/slices/037-runtime-faq-embedding-answer-gate/037.R1/integration.txt`

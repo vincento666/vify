@@ -80,7 +80,8 @@ class RuntimeLabFallbackMatrixE2ETest(unittest.TestCase):
 
         self.assertEqual(exact_faq["routeDecision"]["action"], "ANSWER_FAQ")
         self.assertEqual(exact_faq["routeDecision"]["finalDecision"]["sourceLayer"], "faq_exact")
-        self.assertIsNone(exact_faq["routeDecision"]["classifierRequest"])
+        self.assertIsNotNone(exact_faq["routeDecision"]["classifierRequest"])
+        self.assertEqual(exact_faq["routeDecision"]["policyGate"]["stage"], "post_classifier")
 
         self.assertEqual(active_faq["routeDecision"]["action"], "ANSWER_FAQ")
         self.assertEqual(active_faq["activeTask"]["id"], active_faq_started["activeTask"]["id"])
@@ -94,7 +95,8 @@ class RuntimeLabFallbackMatrixE2ETest(unittest.TestCase):
         self.assertEqual(rag["routeDecision"]["action"], "ANSWER_RAG")
         self.assertEqual(rag["routeDecision"]["finalDecision"]["sourceLayer"], "rag_policy")
         self.assertEqual(rag["routeDecision"]["ragAnswer"]["citations"][0]["sourceId"], "chunk:70")
-        self.assertIsNone(rag["routeDecision"]["classifierRequest"])
+        self.assertIsNotNone(rag["routeDecision"]["classifierRequest"])
+        self.assertEqual(rag["routeDecision"]["policyGate"]["stage"], "post_classifier")
 
         self.assertEqual(ambiguous["routeDecision"]["action"], "CLARIFY")
         self.assertEqual(ambiguous["routeDecision"]["finalDecision"]["sourceLayer"], "agent_policy")

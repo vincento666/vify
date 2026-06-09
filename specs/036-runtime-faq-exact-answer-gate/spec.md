@@ -83,11 +83,20 @@ answer was returned and prove the answer came from a structured FAQ source.
 
 ## Unified Arbitration Refactor Gate
 
-Status: pending implementation.
+Status: completed on 2026-06-09.
 
 The previous 036 evidence proves the old early-exit FAQ gate. The current
 architecture requires exact/keyword FAQ results to become candidate evidence for
 central arbitration rather than independent final judges.
+
+R1 evidence:
+
+- RED:
+  `artifacts/slices/036-runtime-faq-exact-answer-gate/036.R1/red.txt`
+- Integration:
+  `artifacts/slices/036-runtime-faq-exact-answer-gate/036.R1/integration.txt`
+- Unified arbitration regression:
+  `artifacts/slices/036-runtime-faq-exact-answer-gate/036.R1/unified-arbitration-regression.txt`
 
 ## Specification Sign-off
 

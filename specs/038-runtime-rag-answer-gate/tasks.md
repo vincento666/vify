@@ -46,13 +46,20 @@
 
 ## 038.R1 Unified arbitration refactor
 
-- [ ] RED: RAG currently runs as independent answer gate before central
+- [x] RED: RAG currently runs as independent answer gate before central
   arbitration in some scenarios.
-- [ ] RED: RAG/SOP conflict lacks one combined candidate pool.
-- [ ] Convert RAG answer gate into `ANSWER_RAG` candidate generator.
-- [ ] Include citations, retrieval evidence, and generation readiness in
+- [x] RED: RAG/SOP conflict lacks one combined candidate pool.
+- [x] Convert RAG answer gate into `ANSWER_RAG` candidate generator.
+- [x] Include citations, retrieval evidence, and generation readiness in
   classifier payload.
-- [ ] Ensure selected RAG candidate executes generator without task mutation.
-- [ ] Save evidence under
+- [x] Ensure selected RAG candidate executes generator without task mutation.
+- [x] Save evidence under
   `artifacts/slices/038-runtime-rag-answer-gate/038.R1/`.
-- [ ] Commit 038.R1 only.
+- [x] Commit 038.R1 only.
+
+## 038.R1 Evidence
+
+- RED:
+  `artifacts/slices/038-runtime-rag-answer-gate/038.R1/red.txt`
+- Integration:
+  `artifacts/slices/038-runtime-rag-answer-gate/038.R1/integration.txt`

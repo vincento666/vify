@@ -30,50 +30,6 @@ class PolicyGate:
         top = ordered[0]
         if _candidate_type(top) == CandidateType.HANDOFF_TO_HUMAN and top.score >= STRONG_ACCEPT_THRESHOLD:
             return _handoff_decision(top, "Explicit handoff candidate accepted before classifier")
-        distinct_targets = {(str(candidate.candidate_type), candidate.target_id) for candidate in ordered}
-        resume_candidate = next(
-            (
-                candidate
-                for candidate in ordered
-                if _candidate_type(candidate) == CandidateType.SUSPENDED_TASK_RESUME
-                and candidate.score >= STRONG_ACCEPT_THRESHOLD
-            ),
-            None,
-        )
-        if active_task is None and resume_candidate is not None:
-            return RouteDecision(
-                action="RESUME_TASK",
-                active_task_id=int(resume_candidate.target_id),
-                reason="Explicit resume accepted before classifier",
-            )
-        if (
-            active_task is None
-            and _candidate_type(top) == CandidateType.SOP_INTENT
-            and top.score >= STRONG_ACCEPT_THRESHOLD
-            and len(distinct_targets) == 1
-        ):
-            return RouteDecision(
-                action="START_SOP",
-                target_sop_id=top.target_id,
-                matched_keyword=_matched_term(top),
-                reason="Unambiguous strong SOP candidate accepted before classifier",
-            )
-        if active_task is not None and len(distinct_targets) == 1 and _candidate_type(top) == CandidateType.ACTIVE_TASK_CONTINUE:
-            return RouteDecision(
-                action="CONTINUE_ACTIVE_SOP",
-                active_task_id=int(top.target_id),
-                reason="Only active continuation candidate recalled",
-            )
-        if (
-            active_task is not None
-            and _candidate_type(top) == CandidateType.ACTIVE_TASK_CONTINUE
-            and top.score >= STRONG_ACCEPT_THRESHOLD
-        ):
-            return RouteDecision(
-                action="CONTINUE_ACTIVE_SOP",
-                active_task_id=int(top.target_id),
-                reason="Strong active collection detail accepted before classifier",
-            )
         return None
 
     def classifier_decision(
@@ -84,11 +40,37 @@ class PolicyGate:
         suspended_count: int,
     ) -> RouteDecision:
         if result.selected_action == "CLARIFY":
-            return RouteDecision(action="CLARIFY", reason=result.rationale)
+            candidate = _optional_candidate_by_id(candidates, result.selected_candidate_id)
+            payload = dict(candidate.payload or {}) if candidate is not None else {}
+            return RouteDecision(
+                action="CLARIFY",
+                reason=result.rationale,
+                faq_answer=dict(payload.get("faq_answer") or {}),
+                rag_answer=dict(payload.get("rag_answer") or {}),
+                agent_answer=dict(payload.get("agent_answer") or {}),
+            )
         candidate = _candidate_by_id(candidates, result.selected_candidate_id)
         candidate_type = _candidate_type(candidate)
         if candidate_type == CandidateType.HANDOFF_TO_HUMAN:
             return _handoff_decision(candidate, result.rationale)
+        if candidate_type == CandidateType.ANSWER_FAQ:
+            return RouteDecision(
+                action="ANSWER_FAQ",
+                reason=result.rationale,
+                faq_answer=dict((candidate.payload or {}).get("faq_answer") or {}),
+            )
+        if candidate_type == CandidateType.ANSWER_RAG:
+            return RouteDecision(
+                action="ANSWER_RAG",
+                reason=result.rationale,
+                rag_answer=dict((candidate.payload or {}).get("rag_answer") or {}),
+            )
+        if candidate_type == CandidateType.AGENT_FALLBACK:
+            return RouteDecision(
+                action="AGENT_FALLBACK",
+                reason=result.rationale,
+                agent_answer=dict((candidate.payload or {}).get("agent_answer") or {}),
+            )
         if candidate_type == CandidateType.ACTIVE_TASK_CONTINUE:
             return RouteDecision(
                 action="CONTINUE_ACTIVE_SOP",
@@ -165,6 +147,15 @@ def _candidate_by_id(candidates: Sequence[RouteCandidate], candidate_id: str | N
         if candidate.candidate_id == candidate_id:
             return candidate
     raise ValueError("Policy selected candidate outside finite candidate set")
+
+
+def _optional_candidate_by_id(candidates: Sequence[RouteCandidate], candidate_id: str | None) -> RouteCandidate | None:
+    if candidate_id is None:
+        return None
+    for candidate in candidates:
+        if candidate.candidate_id == candidate_id:
+            return candidate
+    return None
 
 
 def _candidate_type(candidate: RouteCandidate) -> CandidateType:

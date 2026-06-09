@@ -28,7 +28,8 @@ class RuntimeLabFaqExactPolicyTest(unittest.TestCase):
             self.assertEqual(turn.route_decision.faq_answer["evidence"]["faqId"], 12)
             self.assertIsNone(turn.active_task)
             self.assertEqual(turn.suspended_tasks, [])
-            self.assertIsNone(turn.route_decision.classifier_request)
+            self.assertIsNotNone(turn.route_decision.classifier_request)
+            self.assertEqual(turn.route_decision.policy_gate["stage"], "post_classifier")
             event_types = [event["event_type"] for event in turn.events]
             self.assertIn("FAQ_ANSWERED", event_types)
             self.assertEqual(faq_gate.messages, ["儿童票可以退吗？"])

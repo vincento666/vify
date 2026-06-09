@@ -70,12 +70,19 @@ state discipline.
 
 ## Unified Arbitration Refactor Gate
 
-Status: pending implementation.
+Status: completed on 2026-06-09.
 
 The previous 039 evidence proves the old post-gate Agent fallback. The current
 architecture requires Agent fallback to be represented as typed candidate
 evidence and/or a selected executor path, not as an independent answer layer
 that competes outside central arbitration.
+
+R1 evidence:
+
+- RED:
+  `artifacts/slices/039-runtime-controlled-agent-fallback/039.R1/red.txt`
+- Integration:
+  `artifacts/slices/039-runtime-controlled-agent-fallback/039.R1/integration.txt`
 
 ## Completion Evidence
 

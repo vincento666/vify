@@ -7,6 +7,9 @@ class CandidateType(StrEnum):
     ACTIVE_TASK_CONTINUE = "ACTIVE_TASK_CONTINUE"
     SUSPENDED_TASK_RESUME = "SUSPENDED_TASK_RESUME"
     SOP_INTENT = "SOP_INTENT"
+    ANSWER_FAQ = "ANSWER_FAQ"
+    ANSWER_RAG = "ANSWER_RAG"
+    AGENT_FALLBACK = "AGENT_FALLBACK"
     HANDOFF_TO_HUMAN = "HANDOFF_TO_HUMAN"
     CLARIFY = "CLARIFY"
     REJECT_SWITCH_CONTINUE_ACTIVE = "REJECT_SWITCH_CONTINUE_ACTIVE"
@@ -39,6 +42,7 @@ class RouteCandidate:
     risk_level: str
     requires_classifier: bool
     reason: str
+    payload: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.candidate_type, CandidateType):
@@ -46,7 +50,7 @@ class RouteCandidate:
 
     def to_dict(self) -> dict[str, Any]:
         candidate_type = _candidate_type(self.candidate_type)
-        return {
+        payload = {
             "candidate_id": self.candidate_id,
             "candidate_type": candidate_type.value,
             "target_id": self.target_id,
@@ -59,6 +63,9 @@ class RouteCandidate:
             "requires_classifier": self.requires_classifier,
             "reason": self.reason,
         }
+        if self.payload:
+            payload["payload"] = dict(self.payload)
+        return payload
 
 
 def select_top_candidates(candidates: list[RouteCandidate], top_k: int) -> list[RouteCandidate]:

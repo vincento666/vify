@@ -6,6 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.database import Base
+from app.modules.runtime_lab.domain.classifier import ClassifierInput, ClassifierResult
 from app.modules.runtime_lab.domain.rag_gate import FakeRagAnswerGenerator, RagAnswerGate
 from app.modules.runtime_lab.domain.service import RuntimeLabService
 from app.modules.runtime_lab.infra.repository import RuntimeLabRepository
@@ -13,6 +14,44 @@ from app.modules.runtime_lab.infra.schema import register_runtime_lab_tables
 
 
 class RuntimeLabRagPolicyTest(unittest.TestCase):
+    def test_rag_sop_conflict_enters_one_central_arbitration_pool(self) -> None:
+        with _session() as session:
+            classifier = _RagFirstClassifier()
+            facade = _RecordingKnowledgeFacade(
+                [
+                    _KnowledgeHit(
+                        source_type="DOCUMENT_CHUNK",
+                        match_type="VECTOR",
+                        score=0.94,
+                        title="航班延误险条款",
+                        content="航班延误超过 4 小时，可提交保险理赔申请。",
+                        document_id=7,
+                        chunk_id=70,
+                        chunk_index=0,
+                    )
+                ]
+            )
+            service = RuntimeLabService(
+                RuntimeLabRepository(session),
+                rag_answer_gate=RagAnswerGate(
+                    facade,
+                    knowledge_base_ids=[33],
+                    generator=FakeRagAnswerGenerator(),
+                    rerank=True,
+                ),
+                classifier=classifier,
+            )
+            runtime_session = service.create_session()
+
+            turn = service.handle_message(int(runtime_session["id"]), "我要退票，航班延误超过 4 小时保险怎么赔？")
+
+            self.assertEqual(turn.route_decision.action, "ANSWER_RAG")
+            self.assertTrue(classifier.inputs, "RAG/SOP conflict must reach central arbitration")
+            candidate_types = {str(candidate.candidate_type) for candidate in classifier.inputs[-1].candidates}
+            self.assertIn("ANSWER_RAG", candidate_types)
+            self.assertIn("SOP_INTENT", candidate_types)
+            self.assertEqual(turn.route_decision.policy_gate["stage"], "post_classifier")
+
     def test_long_tail_document_question_returns_cited_rag_answer(self) -> None:
         with _session() as session:
             facade = _RecordingKnowledgeFacade(
@@ -51,7 +90,8 @@ class RuntimeLabRagPolicyTest(unittest.TestCase):
             self.assertEqual(rag_answer["citations"][0]["sourceId"], "chunk:70")
             self.assertEqual(rag_answer["retrievalEvidence"]["retrievalMode"], "hybrid")
             self.assertTrue(rag_answer["retrievalEvidence"]["rerankUsed"])
-            self.assertIsNone(turn.route_decision.classifier_request)
+            self.assertIsNotNone(turn.route_decision.classifier_request)
+            self.assertEqual(turn.route_decision.policy_gate["stage"], "post_classifier")
             self.assertEqual(facade.calls[0]["retrieval_mode"], "hybrid")
 
     def test_low_confidence_rag_retrieval_clarifies_without_generation(self) -> None:
@@ -310,3 +350,24 @@ class _RecordingKnowledgeFacade:
         if isinstance(self._hits, dict):
             return self._hits.get(query, [])
         return self._hits
+
+
+class _RagFirstClassifier:
+    def __init__(self) -> None:
+        self.inputs: list[ClassifierInput] = []
+
+    def classify(self, classifier_input: ClassifierInput) -> ClassifierResult:
+        self.inputs.append(classifier_input)
+        candidate = next(
+            (item for item in classifier_input.candidates if str(item.candidate_type) == "ANSWER_RAG"),
+            classifier_input.candidates[0],
+        )
+        action = "ANSWER_RAG" if str(candidate.candidate_type) == "ANSWER_RAG" else "START_SOP"
+        return ClassifierResult(
+            selected_action=action,
+            selected_candidate_id=candidate.candidate_id,
+            confidence=candidate.score,
+            rationale="rag-first conflict test classifier",
+            needs_clarification=False,
+            clarification_question=None,
+        )

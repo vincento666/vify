@@ -107,7 +107,7 @@ class RuntimeLabService:
             return self._rag_turn(session_id, decision)
 
         if decision.action == "AGENT_FALLBACK":
-            return self._agent_fallback_turn(session_id, decision)
+            return self._agent_fallback_turn(session_id, message, active_task, suspended_tasks, decision)
 
         if decision.action == "START_SOP" and decision.target_sop_id is not None:
             result = self._adapter.start_sop(
@@ -226,6 +226,34 @@ class RuntimeLabService:
         route_started_at = perf_counter()
         route_steps: list[dict[str, Any]] = []
         step_started_at = perf_counter()
+        hard_stop_candidates = self._explicit_signals.detect(
+            message,
+            active_task=active_task,
+            suspended_tasks=suspended_tasks,
+            enabled_sop_ids=enabled_sop_ids,
+        )
+        hard_stop_decision = self._policy_gate.pre_classifier_decision(
+            hard_stop_candidates,
+            active_task,
+            len(suspended_tasks),
+        )
+        if hard_stop_decision is not None and hard_stop_decision.action == "HANDOFF_TO_HUMAN":
+            route_steps.append(
+                _route_step(
+                    "hard_stop_policy",
+                    step_started_at,
+                    {"message": message, "activeTask": active_task is not None},
+                    {"decision": _decision_payload(hard_stop_decision)},
+                )
+            )
+            return _with_evidence(
+                hard_stop_decision,
+                hard_stop_candidates,
+                "explicit_signal",
+                route_steps=route_steps,
+                route_elapsed_ms=_elapsed_ms(route_started_at),
+            )
+        step_started_at = perf_counter()
         candidates = self._route_candidates(message, active_task, suspended_tasks, enabled_sop_ids)
         route_steps.append(
             _route_step(
@@ -269,163 +297,96 @@ class RuntimeLabService:
                 route_steps=route_steps,
                 route_elapsed_ms=_elapsed_ms(route_started_at),
             )
-        faq_decision = self._faq_answer_decision(message, active_task, suspended_tasks)
-        if faq_decision is not None:
-            route_steps.append(
-                _route_step(
-                    "faq_exact",
-                    perf_counter(),
-                    {"message": message, "activeTask": active_task is not None},
-                    {"decision": _decision_payload(faq_decision)},
-                )
-            )
-            return _with_evidence(
-                faq_decision,
-                candidates,
-                "faq_exact",
-                route_steps=route_steps,
-                route_elapsed_ms=_elapsed_ms(route_started_at),
-            )
-        semantic_faq_decision = self._faq_semantic_decision(message, active_task, suspended_tasks)
-        if semantic_faq_decision is not None:
-            route_steps.append(
-                _route_step(
-                    "faq_semantic",
-                    perf_counter(),
-                    {"message": message, "activeTask": active_task is not None},
-                    {"decision": _decision_payload(semantic_faq_decision)},
-                )
-            )
-            return _with_evidence(
-                semantic_faq_decision,
-                candidates,
-                "faq_semantic",
-                route_steps=route_steps,
-                route_elapsed_ms=_elapsed_ms(route_started_at),
-            )
-        rag_decision = self._rag_answer_decision(message, active_task, suspended_tasks)
-        if rag_decision is not None:
-            route_steps.append(
-                _route_step(
-                    "rag_policy",
-                    perf_counter(),
-                    {"message": message, "activeTask": active_task is not None},
-                    {"decision": _decision_payload(rag_decision)},
-                )
-            )
-            low_confidence_rag = _is_low_confidence_rag(rag_decision)
-            defer_low_rag_to_sop = candidates and low_confidence_rag and _looks_like_sop_request(message)
-            defer_high_rag_to_sop = candidates and _is_answer_rag(rag_decision) and _looks_like_strong_sop_request(message)
-            defer_low_rag_to_agent = low_confidence_rag and self._fallback_agent is not None
-            if not (defer_low_rag_to_sop or defer_high_rag_to_sop or defer_low_rag_to_agent):
-                return _with_evidence(
-                    rag_decision,
-                    candidates,
-                    "rag_policy",
-                    route_steps=route_steps,
-                    route_elapsed_ms=_elapsed_ms(route_started_at),
-                )
         if not candidates:
             step_started_at = perf_counter()
             if enabled_sop_ids is not None and not enabled_sop_ids:
-                route_steps.append(
-                    _route_step(
+                candidates = self._agent_fallback_candidates(message, reason="No enabled SOP candidate matched")
+                if candidates:
+                    route_steps.append(
+                        _route_step(
+                            "agent_candidate_recall",
+                            step_started_at,
+                            {"message": message, "enabledSopIds": []},
+                            {"candidateCount": len(candidates), "candidates": [candidate.to_dict() for candidate in candidates]},
+                        )
+                    )
+                else:
+                    route_steps.append(
+                        _route_step(
+                            "enabled_scope",
+                            step_started_at,
+                            {"message": message, "enabledSopIds": []},
+                            {"reason": "No enabled SOP candidate matched"},
+                        )
+                    )
+                    return _with_evidence(
+                        RouteDecision(action="NO_MATCH", reason="No enabled SOP candidate matched"),
+                        (),
                         "enabled_scope",
-                        step_started_at,
-                        {"message": message, "enabledSopIds": []},
-                        {"reason": "No enabled SOP candidate matched"},
-                    )
-                )
-                agent_decision = self._agent_fallback_decision(session_id, message, active_task, suspended_tasks)
-                if agent_decision is not None:
-                    route_steps.append(
-                        _route_step(
-                            "agent_policy",
-                            perf_counter(),
-                            {"message": message, "activeTask": active_task is not None},
-                            {"decision": _decision_payload(agent_decision)},
-                        )
-                    )
-                    return _with_evidence(
-                        agent_decision,
-                        (),
-                        "agent_policy",
                         route_steps=route_steps,
                         route_elapsed_ms=_elapsed_ms(route_started_at),
                     )
-                return _with_evidence(
-                    RouteDecision(action="NO_MATCH", reason="No enabled SOP candidate matched"),
-                    (),
-                    "enabled_scope",
-                    route_steps=route_steps,
-                    route_elapsed_ms=_elapsed_ms(route_started_at),
-                )
-            candidates = self._scoped_finite_fallback_candidates(message, enabled_sop_ids)
-            if candidates:
-                route_steps.append(
-                    _route_step(
-                        "scoped_finite_fallback",
-                        step_started_at,
-                        {
-                            "message": message,
-                            "enabledSopIds": sorted(enabled_sop_ids) if enabled_sop_ids is not None else None,
-                        },
-                        {"candidateCount": len(candidates), "candidates": [candidate.to_dict() for candidate in candidates]},
-                    )
-                )
             else:
-                route_steps.append(
-                    _route_step(
-                        "no_signal_clarify",
-                        step_started_at,
-                        {
-                            "message": message,
-                            "enabledSopIds": sorted(enabled_sop_ids) if enabled_sop_ids is not None else None,
-                        },
-                        {"reason": "No shallow or scoped finite route signal"},
-                    )
-                )
-                agent_decision = self._agent_fallback_decision(session_id, message, active_task, suspended_tasks)
-                if agent_decision is not None:
+                candidates = self._scoped_finite_fallback_candidates(message, enabled_sop_ids)
+                if candidates:
                     route_steps.append(
                         _route_step(
-                            "agent_policy",
-                            perf_counter(),
-                            {"message": message, "activeTask": active_task is not None},
-                            {"decision": _decision_payload(agent_decision)},
+                            "scoped_finite_fallback",
+                            step_started_at,
+                            {
+                                "message": message,
+                                "enabledSopIds": sorted(enabled_sop_ids) if enabled_sop_ids is not None else None,
+                            },
+                            {"candidateCount": len(candidates), "candidates": [candidate.to_dict() for candidate in candidates]},
                         )
                     )
-                    return _with_evidence(
-                        agent_decision,
-                        (),
-                        "agent_policy",
-                        route_steps=route_steps,
-                        route_elapsed_ms=_elapsed_ms(route_started_at),
-                    )
-                return _with_evidence(
-                    RouteDecision(action="CLARIFY", reason="No shallow or scoped finite route signal"),
-                    (),
-                    "no_signal_clarify",
-                    route_steps=route_steps,
-                    route_elapsed_ms=_elapsed_ms(route_started_at),
-                )
+                else:
+                    candidates = self._agent_fallback_candidates(message, reason="No shallow or scoped finite route signal")
+                    if candidates:
+                        route_steps.append(
+                            _route_step(
+                                "agent_candidate_recall",
+                                step_started_at,
+                                {
+                                    "message": message,
+                                    "enabledSopIds": sorted(enabled_sop_ids) if enabled_sop_ids is not None else None,
+                                },
+                                {"candidateCount": len(candidates), "candidates": [candidate.to_dict() for candidate in candidates]},
+                            )
+                        )
+                    else:
+                        route_steps.append(
+                            _route_step(
+                                "no_signal_clarify",
+                                step_started_at,
+                                {
+                                    "message": message,
+                                    "enabledSopIds": sorted(enabled_sop_ids) if enabled_sop_ids is not None else None,
+                                },
+                                {"reason": "No shallow or scoped finite route signal"},
+                            )
+                        )
+                        return _with_evidence(
+                            RouteDecision(action="CLARIFY", reason="No shallow or scoped finite route signal"),
+                            (),
+                            "no_signal_clarify",
+                            route_steps=route_steps,
+                            route_elapsed_ms=_elapsed_ms(route_started_at),
+                        )
         if _should_agent_fallback_before_active_continue(candidates, active_task, message):
-            agent_decision = self._agent_fallback_decision(session_id, message, active_task, suspended_tasks)
-            if agent_decision is not None:
+            agent_candidates = self._agent_fallback_candidates(
+                message,
+                reason="Fallback Agent candidate added for non-SOP question during active task",
+            )
+            if agent_candidates:
+                candidates = select_top_candidates([*candidates, *agent_candidates], top_k=5)
                 route_steps.append(
                     _route_step(
-                        "agent_policy",
+                        "agent_candidate_recall",
                         perf_counter(),
                         {"message": message, "activeTask": active_task is not None},
-                        {"decision": _decision_payload(agent_decision)},
+                        {"candidateCount": len(candidates), "candidates": [candidate.to_dict() for candidate in candidates]},
                     )
-                )
-                return _with_evidence(
-                    agent_decision,
-                    candidates,
-                    "agent_policy",
-                    route_steps=route_steps,
-                    route_elapsed_ms=_elapsed_ms(route_started_at),
                 )
         step_started_at = perf_counter()
         pre_decision = self._policy_gate.pre_classifier_decision(candidates, active_task, len(suspended_tasks))
@@ -460,6 +421,9 @@ class RuntimeLabService:
                 "RESUME_TASK",
                 "CLARIFY",
                 "REJECT_SWITCH_CONTINUE_ACTIVE",
+                "ANSWER_FAQ",
+                "ANSWER_RAG",
+                "AGENT_FALLBACK",
             ),
             thresholds={"classifierMinConfidence": 0.6},
         )
@@ -486,26 +450,6 @@ class RuntimeLabService:
                 _decision_payload(decision),
             )
         )
-        if decision.action == "CLARIFY":
-            agent_decision = self._agent_fallback_decision(session_id, message, active_task, suspended_tasks)
-            if agent_decision is not None:
-                route_steps.append(
-                    _route_step(
-                        "agent_policy",
-                        perf_counter(),
-                        {"message": message, "activeTask": active_task is not None},
-                        {"decision": _decision_payload(agent_decision)},
-                    )
-                )
-                return _with_evidence(
-                    agent_decision,
-                    candidates,
-                    "agent_policy",
-                    classifier_input,
-                    classifier_result,
-                    route_steps=route_steps,
-                    route_elapsed_ms=_elapsed_ms(route_started_at),
-                )
         return _with_evidence(
             decision,
             candidates,
@@ -536,8 +480,139 @@ class RuntimeLabService:
                 suspended_tasks=suspended_tasks,
                 enabled_sop_ids=enabled_sop_ids,
             ),
+            *self._faq_answer_candidates(
+                message,
+                active_task=active_task,
+                suspended_tasks=suspended_tasks,
+            ),
+            *self._faq_semantic_candidates(
+                message,
+                active_task=active_task,
+                suspended_tasks=suspended_tasks,
+            ),
+            *self._rag_answer_candidates(
+                message,
+                active_task=active_task,
+                suspended_tasks=suspended_tasks,
+            ),
         ]
+        if _should_add_agent_fallback_candidate(candidates, active_task, message):
+            candidates.extend(
+                self._agent_fallback_candidates(
+                    message,
+                    reason="Fallback Agent candidate added to unresolved answer candidate pool",
+                )
+            )
         return select_top_candidates(candidates, top_k=5)
+
+    def _faq_answer_candidates(
+        self,
+        message: str,
+        *,
+        active_task: dict[str, Any] | None,
+        suspended_tasks: list[dict[str, Any]],
+    ) -> list[RouteCandidate]:
+        if self._faq_answer_gate is None:
+            return []
+        proposal = self._faq_answer_gate.propose(
+            message,
+            active_task=active_task,
+            suspended_tasks=suspended_tasks,
+        )
+        if proposal is None:
+            return []
+        decision = proposal.to_route_decision()
+        faq_answer = dict(decision.faq_answer or {})
+        if active_task is not None and _is_ambiguous_active_faq_input(message):
+            faq_answer["reasonCode"] = "AMBIGUOUS_ACTIVE_SOP"
+            return [
+                RouteCandidate(
+                    candidate_id="clarify:faq_active_ambiguous",
+                    candidate_type="CLARIFY",
+                    target_id="FAQ_ACTIVE_AMBIGUOUS",
+                    display_name="Clarify FAQ versus active SOP",
+                    source="faq_exact",
+                    score=max(0.0, min(1.0, float(proposal.confidence))),
+                    score_breakdown=ScoreBreakdown(keyword=float(proposal.confidence), alias=0.0, semantic=0.0),
+                    matched_terms=tuple(proposal.evidence.matched_terms),
+                    risk_level="LOW",
+                    requires_classifier=True,
+                    reason="Active SOP input is ambiguous between FAQ answer and slot collection",
+                    payload={"faq_answer": faq_answer},
+                )
+            ]
+        faq_id = faq_answer.get("evidence", {}).get("faqId") if isinstance(faq_answer.get("evidence"), dict) else None
+        return [
+            RouteCandidate(
+                candidate_id=f"faq:{faq_id or proposal.evidence.faq_id}",
+                candidate_type="ANSWER_FAQ",
+                target_id=f"faq:{faq_id or proposal.evidence.faq_id}",
+                display_name=str(proposal.evidence.question or "FAQ answer"),
+                source=str(faq_answer.get("sourceLayer") or "faq_exact"),
+                score=max(0.0, min(1.0, float(proposal.confidence))),
+                score_breakdown=ScoreBreakdown(keyword=float(proposal.confidence), alias=0.0, semantic=0.0),
+                matched_terms=tuple(proposal.evidence.matched_terms),
+                risk_level="LOW",
+                requires_classifier=True,
+                reason=str(decision.reason or "FAQ candidate recalled for central arbitration"),
+                payload={"faq_answer": faq_answer},
+            )
+        ]
+
+    def _faq_semantic_candidates(
+        self,
+        message: str,
+        *,
+        active_task: dict[str, Any] | None,
+        suspended_tasks: list[dict[str, Any]],
+    ) -> list[RouteCandidate]:
+        decision = self._faq_semantic_decision(message, active_task, suspended_tasks)
+        if decision is None:
+            return []
+        return _answer_decision_candidates(
+            decision,
+            candidate_prefix="faq_semantic",
+            answer_key="faq_answer",
+            answer_payload=decision.faq_answer or {},
+        )
+
+    def _rag_answer_candidates(
+        self,
+        message: str,
+        *,
+        active_task: dict[str, Any] | None,
+        suspended_tasks: list[dict[str, Any]],
+    ) -> list[RouteCandidate]:
+        decision = self._rag_answer_decision(message, active_task, suspended_tasks)
+        if decision is None:
+            return []
+        return _answer_decision_candidates(
+            decision,
+            candidate_prefix="rag",
+            answer_key="rag_answer",
+            answer_payload=decision.rag_answer or {},
+        )
+
+    def _agent_fallback_candidates(self, message: str, *, reason: str) -> list[RouteCandidate]:
+        if self._fallback_agent is None:
+            return []
+        score = 0.72 if _looks_like_airport_facility_question(message) else 0.66
+        return [
+            RouteCandidate(
+                candidate_id="agent:fallback",
+                candidate_type="AGENT_FALLBACK",
+                target_id="fallback_agent",
+                display_name="Controlled fallback Agent",
+                source="agent_candidate_recall",
+                score=score,
+                score_breakdown=ScoreBreakdown(keyword=0.0, alias=0.0, semantic=score),
+                matched_terms=(),
+                risk_level="MEDIUM",
+                requires_classifier=True,
+                reason=reason,
+                payload={"deferred_agent": True},
+            )
+        ]
 
     def _faq_answer_decision(
         self,
@@ -973,7 +1048,25 @@ class RuntimeLabService:
         self._repository.append_event(session_id, "RAG_ANSWERED", rag_answer)
         return self._turn(session_id, str(rag_answer.get("answer") or ""), decision)
 
-    def _agent_fallback_turn(self, session_id: int, decision: RouteDecision) -> RuntimeLabTurn:
+    def _agent_fallback_turn(
+        self,
+        session_id: int,
+        message: str,
+        active_task: dict[str, Any] | None,
+        suspended_tasks: list[dict[str, Any]],
+        decision: RouteDecision,
+    ) -> RuntimeLabTurn:
+        if not decision.agent_answer:
+            agent_decision = self._agent_fallback_decision(session_id, message, active_task, suspended_tasks)
+            if agent_decision is None:
+                return self._turn(session_id, "请补充更多信息，我再继续为您处理。", RouteDecision(action="CLARIFY", reason=decision.reason))
+            agent_decision = _copy_route_evidence(agent_decision, decision)
+            self._repository.append_event(session_id, "AGENT_POLICY_DECISION", _decision_payload(agent_decision))
+            if agent_decision.action == "HANDOFF_TO_HUMAN":
+                return self._handoff_turn(session_id, message, agent_decision)
+            if agent_decision.action == "CLARIFY":
+                return self._agent_clarify_turn(session_id, agent_decision)
+            decision = agent_decision
         agent_answer = decision.agent_answer or {}
         self._repository.append_event(session_id, "AGENT_FALLBACK_ANSWERED", agent_answer)
         return self._turn(session_id, str(agent_answer.get("answer") or ""), decision)
@@ -1110,6 +1203,92 @@ def _decision_payload(decision: RouteDecision) -> dict[str, Any]:
         "ragAnswer": decision.rag_answer,
         "agentAnswer": decision.agent_answer,
     }
+
+
+def _copy_route_evidence(decision: RouteDecision, evidence_source: RouteDecision) -> RouteDecision:
+    return RouteDecision(
+        action=decision.action,
+        reason=decision.reason,
+        target_sop_id=decision.target_sop_id,
+        active_task_id=decision.active_task_id,
+        matched_keyword=decision.matched_keyword,
+        candidates=evidence_source.candidates,
+        candidate_sources=evidence_source.candidate_sources,
+        policy_gate=evidence_source.policy_gate,
+        classifier_request=evidence_source.classifier_request,
+        classifier_result=evidence_source.classifier_result,
+        final_decision=decision.final_decision,
+        handoff=decision.handoff,
+        faq_answer=decision.faq_answer,
+        rag_answer=decision.rag_answer,
+        agent_answer=decision.agent_answer,
+    )
+
+
+def _answer_decision_candidates(
+    decision: RouteDecision,
+    *,
+    candidate_prefix: str,
+    answer_key: str,
+    answer_payload: dict[str, Any],
+) -> list[RouteCandidate]:
+    if not answer_payload:
+        return []
+    confidence = max(0.0, min(1.0, float(answer_payload.get("confidence") or 0.0)))
+    source_layer = str(answer_payload.get("sourceLayer") or candidate_prefix)
+    reason_code = str(answer_payload.get("reasonCode") or decision.action)
+    evidence = answer_payload.get("evidence") if isinstance(answer_payload.get("evidence"), dict) else {}
+    retrieval = answer_payload.get("retrievalEvidence") if isinstance(answer_payload.get("retrievalEvidence"), dict) else {}
+    target_suffix = _answer_candidate_target_suffix(evidence, retrieval, reason_code)
+    matched_terms = tuple(str(term) for term in evidence.get("matchedTerms") or ())
+    candidate_type = decision.action if decision.action in {"ANSWER_FAQ", "ANSWER_RAG"} else "CLARIFY"
+    payload = {answer_key: dict(answer_payload)}
+    return [
+        RouteCandidate(
+            candidate_id=f"{candidate_prefix}:{target_suffix}",
+            candidate_type=candidate_type,
+            target_id=f"{candidate_prefix}:{target_suffix}",
+            display_name=_answer_candidate_display_name(answer_payload, evidence, retrieval, reason_code),
+            source=source_layer,
+            score=confidence,
+            score_breakdown=ScoreBreakdown(keyword=0.0, alias=0.0, semantic=confidence),
+            matched_terms=matched_terms,
+            risk_level="LOW" if candidate_type != "CLARIFY" else "MEDIUM",
+            requires_classifier=True,
+            reason=str(decision.reason or f"{source_layer} candidate recalled for central arbitration"),
+            payload=payload,
+        )
+    ]
+
+
+def _answer_candidate_target_suffix(
+    evidence: dict[str, Any],
+    retrieval: dict[str, Any],
+    reason_code: str,
+) -> str:
+    faq_id = evidence.get("faqId")
+    if faq_id is not None:
+        return f"faq:{faq_id}"
+    top_chunks = retrieval.get("topChunks") if isinstance(retrieval.get("topChunks"), list) else []
+    if top_chunks and isinstance(top_chunks[0], dict) and top_chunks[0].get("sourceId"):
+        return str(top_chunks[0]["sourceId"]).replace(":", "_")
+    return reason_code
+
+
+def _answer_candidate_display_name(
+    answer_payload: dict[str, Any],
+    evidence: dict[str, Any],
+    retrieval: dict[str, Any],
+    reason_code: str,
+) -> str:
+    question = evidence.get("question")
+    if question:
+        return str(question)
+    top_chunks = retrieval.get("topChunks") if isinstance(retrieval.get("topChunks"), list) else []
+    if top_chunks and isinstance(top_chunks[0], dict) and top_chunks[0].get("title"):
+        return str(top_chunks[0]["title"])
+    answer = str(answer_payload.get("answer") or "").strip()
+    return answer[:48] if answer else reason_code
 
 
 def _task_summary(task: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -1520,6 +1699,29 @@ def _should_agent_fallback_before_active_continue(
     if str(candidate.candidate_type) != "ACTIVE_TASK_CONTINUE" or candidate.score >= 0.6:
         return False
     return not _looks_like_active_sop_continuation_detail(message)
+
+
+def _should_add_agent_fallback_candidate(
+    candidates: Sequence[RouteCandidate],
+    active_task: dict[str, Any] | None,
+    message: str,
+) -> bool:
+    del active_task
+    if not candidates:
+        return False
+    if _looks_like_airport_facility_question(message):
+        return True
+    has_sop_candidate = any(
+        str(candidate.candidate_type) in {"SOP_INTENT", "ACTIVE_TASK_CONTINUE", "SUSPENDED_TASK_RESUME"}
+        for candidate in candidates
+    )
+    has_low_confidence_answer_clarify = any(
+        str(candidate.candidate_type) == "CLARIFY"
+        and isinstance(candidate.payload, dict)
+        and bool(candidate.payload.get("rag_answer") or candidate.payload.get("faq_answer"))
+        for candidate in candidates
+    )
+    return has_low_confidence_answer_clarify and not has_sop_candidate
 
 
 def _looks_like_active_sop_continuation_detail(message: str) -> bool:

@@ -48,7 +48,8 @@ class RuntimeLabFaqSemanticPolicyTest(unittest.TestCase):
             self.assertEqual(turn.route_decision.faq_answer["sourceLayer"], "faq_semantic")
             self.assertEqual(turn.route_decision.faq_answer["reasonCode"], "SEMANTIC_HIGH_CONFIDENCE")
             self.assertIsNone(turn.active_task)
-            self.assertIsNone(turn.route_decision.classifier_request)
+            self.assertIsNotNone(turn.route_decision.classifier_request)
+            self.assertEqual(turn.route_decision.policy_gate["stage"], "post_classifier")
             self.assertEqual(facade.calls[0]["retrieval_mode"], "faq")
             self.assertTrue(facade.calls[0]["rerank"])
 
@@ -86,7 +87,8 @@ class RuntimeLabFaqSemanticPolicyTest(unittest.TestCase):
             self.assertEqual(turn.route_decision.faq_answer["sourceLayer"], "faq_semantic")
             self.assertEqual(turn.route_decision.faq_answer["reasonCode"], "SEMANTIC_LOW_MARGIN")
             self.assertFalse(turn.route_decision.faq_answer["mutatesSopState"])
-            self.assertIsNone(turn.route_decision.classifier_request)
+            self.assertIsNotNone(turn.route_decision.classifier_request)
+            self.assertEqual(turn.route_decision.policy_gate["stage"], "post_classifier")
 
     def test_active_sop_semantic_faq_with_slot_payload_clarifies_without_task_mutation(self) -> None:
         with _session() as session:

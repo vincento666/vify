@@ -69,11 +69,18 @@ evidence while keeping SOP routing deterministic and auditable.
 
 ## Unified Arbitration Refactor Gate
 
-Status: pending implementation.
+Status: completed on 2026-06-09.
 
 The previous 038 evidence proves the old post-SOP RAG answer gate. The current
 architecture requires RAG to become typed candidate evidence for central
 arbitration.
+
+R1 evidence:
+
+- RED:
+  `artifacts/slices/038-runtime-rag-answer-gate/038.R1/red.txt`
+- Integration:
+  `artifacts/slices/038-runtime-rag-answer-gate/038.R1/integration.txt`
 
 ## Completion Evidence
 
