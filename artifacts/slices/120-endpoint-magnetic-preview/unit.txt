@@ -1,0 +1,8 @@
+Command: rtk npm --prefix frontend run test:unit -- src/views/workflow/canvasControls.test.ts
+Date: 2026-06-09
+Result: PASS
+
+Summary:
+- src/views/workflow/canvasControls.test.ts: 5 passed
+- Confirms `CANVAS_ENDPOINT_PREVIEW_RADIUS === CANVAS_CONNECTION_RADIUS === 18`.
+- Confirms endpoint hover/connected scales and hit diameter constants remain aligned.
