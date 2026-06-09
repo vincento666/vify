@@ -40,6 +40,53 @@ class ChatflowVariableRoundtripTest(unittest.TestCase):
         end_node = next(node for node in detail["nodes"] if node["nodeKey"] == "end")
         self.assertEqual(end_node["config"]["output"], "收到 {{sys.query}}")
 
+    def test_end_output_parameter_reference_mapping_runs_through_chatflow(self) -> None:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/v1/chatflows",
+                json={
+                    "name": f"Chatflow end mapping {time.time_ns()}",
+                    "description": "",
+                    "nodes": [
+                        {
+                            "nodeKey": "start",
+                            "type": "START",
+                            "name": "Start",
+                            "config": {"outputVariables": ["sys.query"]},
+                        },
+                        {
+                            "nodeKey": "end",
+                            "type": "END",
+                            "name": "End",
+                            "config": {
+                                "outputVariable": "output",
+                                "output": "收到 {{output}}",
+                                "outputParameters": [
+                                    {
+                                        "name": "output",
+                                        "type": "string",
+                                        "valueMode": "reference",
+                                        "value": "{{start.sys.query}}",
+                                    }
+                                ],
+                            },
+                        },
+                    ],
+                    "edges": [{"sourceNodeKey": "start", "targetNodeKey": "end", "condition": None}],
+                },
+            )
+            chatflow = response.json()["data"]
+            run_response = client.post(
+                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                json={"input": {"userMessage": "查订单", "sys.query": "查订单"}},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(run_response.status_code, 200)
+        data = run_response.json()["data"]
+        self.assertEqual(data["status"], "SUCCEEDED")
+        self.assertEqual(data["output"], {"output": "收到 查订单"})
+
 
 if __name__ == "__main__":
     unittest.main()

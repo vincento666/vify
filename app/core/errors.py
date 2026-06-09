@@ -3,6 +3,7 @@ from enum import IntEnum
 
 class ErrorCode(IntEnum):
     BAD_REQUEST = 400
+    FORBIDDEN = 403
     NOT_FOUND = 404
     VALIDATION_ERROR = 422
     INTERNAL_ERROR = 500

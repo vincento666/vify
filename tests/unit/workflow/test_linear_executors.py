@@ -24,7 +24,8 @@ class LinearExecutorTest(unittest.TestCase):
             context,
         )
 
-        self.assertEqual(output, {"answer": "LLM mock: User: reset password"})
+        self.assertEqual(output["answer"], "LLM mock: User: reset password")
+        self.assertEqual([event["type"] for event in output["events"]], ["llm_delta", "message_done"])
 
     def test_end_executor_returns_named_output_from_previous_node(self) -> None:
         self.assertIsNotNone(EndNodeExecutor)

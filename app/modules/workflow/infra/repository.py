@@ -20,6 +20,11 @@ class WorkflowRepository:
         self._workflow_edge = Base.metadata.tables["workflow_edge"]
         self._workflow_run = Base.metadata.tables["workflow_run"]
         self._workflow_node_run = Base.metadata.tables["workflow_node_run"]
+        self._ensure_node_run_inputs_column()
+
+    @property
+    def session(self) -> Session:
+        return self._session
 
     def list_page(
         self,
@@ -219,7 +224,13 @@ class WorkflowRepository:
         )
         self._session.commit()
 
-    def create_node_run(self, workflow_run_id: int, node_key: str, node_type: str) -> int:
+    def create_node_run(
+        self,
+        workflow_run_id: int,
+        node_key: str,
+        node_type: str,
+        inputs: dict[str, Any] | None = None,
+    ) -> int:
         now = datetime.now()
         result = self._session.execute(
             self._workflow_node_run.insert()
@@ -228,6 +239,7 @@ class WorkflowRepository:
                 node_key=node_key,
                 node_type=node_type,
                 status="RUNNING",
+                inputs=inputs or {},
                 outputs={},
                 error="",
                 elapsed_ms=0,
@@ -263,6 +275,34 @@ class WorkflowRepository:
                 updated_at=now,
             )
         )
+        self._session.commit()
+
+    def list_node_runs(self, workflow_run_id: int) -> list[dict[str, Any]]:
+        rows = self._session.execute(
+            sa.select(self._workflow_node_run)
+            .where(
+                self._workflow_node_run.c.workflow_run_id == workflow_run_id,
+                self._workflow_node_run.c.deleted.is_(False),
+            )
+            .order_by(self._workflow_node_run.c.id.asc())
+        ).mappings().all()
+        return [dict(row) for row in rows]
+
+    def _ensure_node_run_inputs_column(self) -> None:
+        bind = self._session.get_bind()
+        if bind is None:
+            return
+        inspector = sa.inspect(bind)
+        if "workflow_node_run" not in inspector.get_table_names():
+            return
+        column_names = {column["name"] for column in inspector.get_columns("workflow_node_run")}
+        if "inputs" in column_names:
+            return
+        column_type = self._workflow_node_run.c.inputs.type.compile(dialect=bind.dialect)
+        self._session.execute(
+            sa.text(f"ALTER TABLE workflow_node_run ADD COLUMN inputs {column_type}")  # noqa: S608
+        )
+        self._session.execute(sa.text("UPDATE workflow_node_run SET inputs = '{}' WHERE inputs IS NULL"))
         self._session.commit()
 
     def _insert_nodes(self, workflow_id: int, nodes: list[dict[str, Any]], now: datetime) -> None:
