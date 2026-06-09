@@ -1,0 +1,33 @@
+Command: rtk node frontend/e2e/workflow-condition-branch-endpoints.mjs
+Date: 2026-06-09
+Result: PASS
+
+Coverage:
+- Condition node card renders semantic branch blocks for `如果` and `否则`.
+- Condition node card does not render generic input/output rows.
+- Branch names are not duplicated as separate visible endpoint labels on the card.
+- Right-side source endpoints are vertically centered with their corresponding branch blocks.
+- Config panel explains selector branch priority.
+- Config panel does not expose generic input/output parameter sections or all/any logic selectors.
+- Add-branch action is in the condition section header with no duplicate bottom add button.
+- Editing a branch header updates the config panel, node card branch block, and matching endpoint label.
+
+Command: rtk node frontend/e2e/workflow-condition-branch-values.mjs
+Date: 2026-06-09
+Result: PASS
+
+Coverage:
+- Condition row uses operator + left variable selector + right value/reference cell layout.
+- Condition operand controls do not expose explicit `引用/字面量` mode copy.
+- Variable picker shows connected upstream START variables and hides unused static source groups.
+- Right operand supports `{{}}` completion, variable chip selection, clear action, and returning to literal input.
+- String operators expose length and empty checks while hiding bare numeric operators.
+- Empty-check operators clear and disable the right operand.
+- Add-condition and add-branch controls use lightweight icon buttons.
+
+Screenshot commands:
+- HIFY_E2E_SCREENSHOT=artifacts/slices/122-condition-node-parity/uat-condition-branch-endpoints.png rtk node frontend/e2e/workflow-condition-branch-endpoints.mjs
+- HIFY_E2E_SCREENSHOT=artifacts/slices/122-condition-node-parity/uat-condition-branch-values.png rtk node frontend/e2e/workflow-condition-branch-values.mjs
+
+Screenshot result: PASS
+Note: PNG screenshots are ignored by repository policy (`artifacts/**/*.png`) but remain available locally for UAT.

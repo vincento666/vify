@@ -1,0 +1,14 @@
+Command: rtk .venv/bin/python -m pytest tests/integration/workflow/test_workflow_condition_run.py tests/unit/workflow/test_runtime_parity.py -q
+Date: 2026-06-09
+Result: PASS
+
+Summary:
+- 5 passed, 1 warning.
+
+Coverage:
+- Workflow condition node selects matching branches and default branch.
+- Matching branch can execute real API_CALL downstream behavior.
+- Debug detail exposes selected downstream node resource/cost/timing metadata.
+- Condition right operand supports variable reference compared with literal value.
+- Runtime supports length and empty-check operators.
+- Unit runtime parity covers Coze-like multi-condition `AND`/`OR` branch evaluation.
