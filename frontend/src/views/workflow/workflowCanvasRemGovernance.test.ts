@@ -62,8 +62,8 @@ describe('workflow canvas rem governance', () => {
 
     expect(content).toContain('--node-port-dot-size: 1rem;')
     expect(content).toContain('--node-port-hit-size: 3rem;')
+    expect(content).toContain('--node-port-scale: 1;')
     expect(content).toContain('--node-port-scale: 1.2;')
-    expect(content).toContain('--node-port-scale: 1.5;')
     expect(content).toContain('width: var(--node-port-dot-size);')
     expect(content).toContain('height: var(--node-port-dot-size);')
     expect(content).toContain('width: var(--node-port-hit-size);')

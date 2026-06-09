@@ -1,0 +1,34 @@
+GREEN: endpoint hover visible size restored
+
+Code change:
+- Static endpoint dot keeps the restored base size: --node-port-dot-size: 1rem.
+- Node-card hover / selected no longer enlarges endpoint dots: scale 1x.
+- Direct endpoint hover / connecting / valid / preview uses light scale 1.2x.
+- Invisible hit area remains 3rem so magnetic connection affordance is preserved.
+
+Unit:
+rtk npm --prefix frontend run test:unit -- src/views/workflow/canvasControls.test.ts src/views/workflow/workflowCanvasRemGovernance.test.ts
+Result: PASS, 8 tests.
+
+Frontend rem:
+rtk npm --prefix frontend run test:unit -- src/remScaleClosure.test.ts
+Result: PASS, 1 test.
+
+Build:
+rtk npm --prefix frontend run build
+Result: PASS.
+
+E2E:
+rtk node frontend/e2e/chatflow-endpoint-affordances.mjs
+Result: PASS 025.6 endpoint affordances e2e chatflow=8188
+
+rtk node frontend/e2e/chatflow-endpoint-connection-radius.mjs
+Result: PASS chatflow endpoint connection radius e2e chatflow=8189
+
+Browser UAT:
+Current in-app browser page: http://127.0.0.1:5173/workflows/6217/canvas
+Observed endpoint CSS variables after reload:
+- --node-port-dot-size: 1rem
+- --node-port-hit-size: 3rem
+- --node-port-scale: 1
+- ::after transform: matrix(1, 0, 0, 1, -7, -7)

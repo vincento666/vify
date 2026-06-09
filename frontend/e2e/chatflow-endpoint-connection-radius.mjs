@@ -74,8 +74,8 @@ try {
   const nearTarget = await portMetrics(page, targetSelector)
   assert(nearTarget, 'Expected target port after connection drag')
   assert(
-    closeToRatio(nearTarget.dotScale, 1.5),
-    `Expected target endpoint dot to scale to 1.5x inside the original-hitbox hover radius, distance=${magneticEdgeDistance}, got metrics=${JSON.stringify(nearTarget)}`,
+    closeToRatio(nearTarget.dotScale, 1.2),
+    `Expected target endpoint dot to scale to 1.2x inside the original-hitbox hover radius, distance=${magneticEdgeDistance}, got metrics=${JSON.stringify(nearTarget)}`,
   )
 
   if (screenshotPath) {
