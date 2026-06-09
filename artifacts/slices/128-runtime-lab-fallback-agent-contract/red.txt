@@ -1,0 +1,2 @@
+> vue-tsc && vite build
+src/api/runtimeLab.test.ts(109,12): error TS18048: 'result.fallbackAgent' is possibly 'undefined'.

@@ -1,4 +1,4 @@
-import { get, post } from '@/utils/request'
+import { get, post, put } from '@/utils/request'
 
 export interface RuntimeLabSession {
   id: number
@@ -46,6 +46,17 @@ export interface RuntimeLabRouteDecision {
   classifierRequest?: Record<string, unknown> | null
   classifierResult?: Record<string, unknown> | null
   finalDecision?: Record<string, unknown> | null
+  handoff?: Record<string, unknown> | null
+  faqAnswer?: Record<string, unknown> | null
+  ragAnswer?: Record<string, unknown> | null
+  agentAnswer?: Record<string, unknown> | null
+}
+
+export interface RuntimeLabUsage {
+  inputTokens: number
+  outputTokens: number
+  totalTokens: number
+  estimated?: boolean
 }
 
 export interface RuntimeLabResumeOffer {
@@ -69,6 +80,115 @@ export interface RuntimeLabListResult<T> {
   total: number
 }
 
+export interface RuntimeLabSopBinding {
+  sopId: string
+  chatflowId: number
+  chatflowName: string
+  exists: boolean
+  canvasPath: string
+}
+
+export interface RuntimeLabArbitratorConfig {
+  mode: string
+  model: string
+  fallbackModel?: string
+  baseUrl: string
+  apiKeyConfigured: boolean
+  available: boolean
+}
+
+export interface RuntimeLabFallbackAgentConfig {
+  enabled: boolean
+  type: string
+  agentId: number | null
+  agentName: string
+  available: boolean
+}
+
+export interface RuntimeLabFallbackAgentOption {
+  id: number
+  name: string
+  description: string
+  enabled: boolean
+}
+
+export interface RuntimeLabConfig {
+  sopBindings: RuntimeLabSopBinding[]
+  arbitrator: RuntimeLabArbitratorConfig
+  fallbackAgent?: RuntimeLabFallbackAgentConfig
+  fallbackAgentOptions?: RuntimeLabFallbackAgentOption[]
+}
+
+export interface RuntimeLabFallbackAgentUpdateResult extends Omit<RuntimeLabConfig, 'fallbackAgent'> {
+  fallbackAgent: RuntimeLabFallbackAgentConfig
+}
+
+export interface RuntimeLabChatflowTrace {
+  tasks: RuntimeLabChatflowTaskTrace[]
+  total: number
+}
+
+export interface RuntimeLabChatflowTaskTrace {
+  taskId: number
+  sopId: string
+  status: string
+  currentStep: string
+  chatflow: RuntimeLabTraceChatflow
+  nodes: RuntimeLabTraceNode[]
+  edges: RuntimeLabTraceEdge[]
+  events: RuntimeLabTraceEvent[]
+  variables: RuntimeLabTraceVariables
+}
+
+export interface RuntimeLabTraceChatflow {
+  chatflowId: number | null
+  chatflowName: string
+  exists: boolean
+  runId: number | null
+  eventId: number | null
+  checkpointId: number | null
+  sessionId: string
+  canvasPath: string
+  debugPath: string
+}
+
+export interface RuntimeLabTraceNode {
+  nodeKey: string
+  nodeType: string
+  name: string
+  status: string
+  current: boolean
+  elapsedMs: number
+  inputs: Record<string, unknown>
+  outputs: Record<string, unknown>
+  usage: RuntimeLabUsage
+  error: string
+}
+
+export interface RuntimeLabTraceEdge {
+  sourceNodeKey: string
+  targetNodeKey: string
+  condition: string | null
+}
+
+export interface RuntimeLabTraceEvent {
+  id: number
+  type: string
+  runId: number
+  sequence: number
+  nodeKey: string
+  payload: Record<string, unknown>
+  checkpointId: number | null
+  createdAt: string | null
+}
+
+export interface RuntimeLabTraceVariables {
+  businessRefs: Record<string, unknown>
+  collected: Record<string, unknown>
+  scoped: Record<string, unknown>
+  session: Record<string, unknown>
+}
+
 export const createRuntimeLabSession = () =>
   post<RuntimeLabSession>('/v1/runtime-lab/sessions')
 
@@ -82,3 +202,12 @@ export const listRuntimeLabTasks = (sessionId: number) =>
 
 export const listRuntimeLabEvents = (sessionId: number) =>
   get<RuntimeLabListResult<RuntimeLabEvent>>(`/v1/runtime-lab/sessions/${sessionId}/events`)
+
+export const getRuntimeLabConfig = () =>
+  get<RuntimeLabConfig>('/v1/runtime-lab/config')
+
+export const updateRuntimeLabFallbackAgent = (payload: { enabled: boolean; agentId?: number | null }) =>
+  put<RuntimeLabFallbackAgentUpdateResult>('/v1/runtime-lab/fallback-agent', payload)
+
+export const getRuntimeLabChatflowTrace = (sessionId: number) =>
+  get<RuntimeLabChatflowTrace>(`/v1/runtime-lab/sessions/${sessionId}/chatflow-trace`)

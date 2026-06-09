@@ -5,6 +5,7 @@ import type {
   RuntimeLabTask,
   RuntimeLabTraceNode,
   RuntimeLabTurn,
+  RuntimeLabUsage,
 } from '@/api/runtimeLab'
 
 export interface AirlineSopScenario {
@@ -20,15 +21,38 @@ export interface RuntimeLabTranscriptRow {
   role: 'user' | 'assistant'
   content: string
   pending?: boolean
+  elapsedMs?: number
+  usage?: RuntimeLabUsage
+  debugDetail?: RuntimeLabDebugDetail
   routeAction?: string
   targetSopId?: string | null
   taskSummary?: string
   resumePrompt?: string
 }
 
+export interface RuntimeLabDebugStep {
+  id: string
+  label: string
+  elapsedMs: number
+  input: unknown
+  output: unknown
+  usage: RuntimeLabUsage
+}
+
+export interface RuntimeLabDebugDetail {
+  title: string
+  subtitle: string
+  elapsedMs: number
+  input: unknown
+  output: unknown
+  usage: RuntimeLabUsage
+  steps: RuntimeLabDebugStep[]
+}
+
 export interface RuntimeLabConfigSummary {
   bindingLabel: string
   arbitratorLabel: string
+  fallbackAgentLabel: string
   secretLabel: string
   availableLabel: string
   bindingRows: string[]
@@ -38,6 +62,12 @@ export interface RuntimeLabFunnelSummary {
   stageLabel: string
   sourceLabel: string
   arbitratorLabel: string
+}
+
+export interface RuntimeLabRouteOutcome {
+  tone: 'neutral' | 'success' | 'warning' | 'danger'
+  title: string
+  detail: string
 }
 
 export interface RuntimeLabBoundScenarioRow {
@@ -65,6 +95,8 @@ export interface RuntimeLabTraceCard {
   events: Array<{ id: number; type: string; nodeKey: string }>
   slotRows: Array<{ key: string; value: unknown }>
 }
+
+export const RUNTIME_LAB_MIN_PENDING_MS = 520
 
 export const AIRLINE_SOP_SCENARIOS: AirlineSopScenario[] = [
   {
@@ -246,11 +278,15 @@ export function buildUserTranscriptRow(id: string, content: string): RuntimeLabT
   }
 }
 
-export function buildRuntimeLabTranscriptRow(turn: RuntimeLabTurn): RuntimeLabTranscriptRow {
+export function buildRuntimeLabTranscriptRow(turn: RuntimeLabTurn, elapsedMs = 0): RuntimeLabTranscriptRow {
+  const debugDetail = buildRouteDebugDetail(turn, elapsedMs)
   return {
     id: `assistant-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     role: 'assistant',
     content: turn.reply,
+    elapsedMs,
+    usage: debugDetail.usage,
+    debugDetail,
     routeAction: turn.routeDecision.action,
     targetSopId: turn.routeDecision.targetSopId,
     taskSummary: summarizeTasks(turn.activeTask, turn.suspendedTasks),
@@ -270,6 +306,7 @@ export function buildRuntimeLabConfigSummary(config: RuntimeLabConfig | null): R
     return {
       bindingLabel: '配置加载中',
       arbitratorLabel: '-',
+      fallbackAgentLabel: '-',
       secretLabel: '-',
       availableLabel: '-',
       bindingRows: [],
@@ -277,9 +314,15 @@ export function buildRuntimeLabConfigSummary(config: RuntimeLabConfig | null): R
   }
   const mode = config.arbitrator.mode || 'fake'
   const model = config.arbitrator.model || '-'
+  const fallbackModel = config.arbitrator.fallbackModel || ''
+  const fallbackAgent = config.fallbackAgent
+  const fallbackAgentLabel = fallbackAgent?.enabled
+    ? `${fallbackAgent.type || 'fake'} · ${fallbackAgent.agentName || fallbackAgent.agentId || '未绑定'}`
+    : '未启用'
   return {
     bindingLabel: `已绑定 ${config.sopBindings.length} 个 Chatflow SOP`,
-    arbitratorLabel: `${mode} · ${model}`,
+    arbitratorLabel: fallbackModel ? `${mode} · ${model} / fallback ${fallbackModel}` : `${mode} · ${model}`,
+    fallbackAgentLabel,
     secretLabel: config.arbitrator.apiKeyConfigured ? 'API Key 已配置' : 'API Key 未配置',
     availableLabel: config.arbitrator.available ? '可用' : '不可用',
     bindingRows: config.sopBindings.map((binding) => {
@@ -339,6 +382,31 @@ export function buildRuntimeLabTraceCards(input: RuntimeLabChatflowTrace | null 
   })
 }
 
+export function buildRuntimeLabNodeDebugDetail(
+  card: RuntimeLabTraceCard,
+  node: RuntimeLabTraceNode,
+): RuntimeLabDebugDetail {
+  const usage = normalizeUsage(node.usage || (node.outputs?.__usage as Record<string, unknown> | undefined))
+  return {
+    title: `${node.nodeKey} · ${node.name || node.nodeType}`,
+    subtitle: `${card.chatflowName || card.sopId} · ${node.nodeType} · ${node.status}`,
+    elapsedMs: numberValue(node.elapsedMs),
+    input: node.inputs || {},
+    output: node.outputs || {},
+    usage,
+    steps: [
+      {
+        id: node.nodeKey,
+        label: node.name || node.nodeType,
+        elapsedMs: numberValue(node.elapsedMs),
+        input: node.inputs || {},
+        output: node.outputs || {},
+        usage,
+      },
+    ],
+  }
+}
+
 export function buildRuntimeLabFunnelSummary(decision: RuntimeLabRouteDecision | null | undefined): RuntimeLabFunnelSummary {
   if (!decision) {
     return {
@@ -359,8 +427,144 @@ export function buildRuntimeLabFunnelSummary(decision: RuntimeLabRouteDecision |
   }
 }
 
+export function buildRuntimeLabRouteOutcome(decision: RuntimeLabRouteDecision | null | undefined): RuntimeLabRouteOutcome | null {
+  if (!decision) return null
+  const finalDecision = objectValue(decision.finalDecision)
+  if (decision.action === 'HANDOFF_TO_HUMAN') {
+    return {
+      tone: 'danger',
+      title: '转人工',
+      detail: routeReasonDetail(decision.handoff, finalDecision, decision.reason),
+    }
+  }
+  if (decision.action === 'ANSWER_FAQ') {
+    return {
+      tone: 'success',
+      title: 'FAQ命中',
+      detail: routeReasonDetail(decision.faqAnswer, finalDecision, decision.reason),
+    }
+  }
+  if (decision.action === 'ANSWER_RAG') {
+    return {
+      tone: 'success',
+      title: 'RAG命中',
+      detail: routeReasonDetail(decision.ragAnswer, finalDecision, decision.reason),
+    }
+  }
+  if (decision.action === 'AGENT_FALLBACK') {
+    return {
+      tone: 'neutral',
+      title: '兜底回答',
+      detail: routeReasonDetail(decision.agentAnswer, finalDecision, decision.reason),
+    }
+  }
+  if (decision.action === 'CLARIFY') {
+    return {
+      tone: 'warning',
+      title: '需要澄清',
+      detail: routeReasonDetail(decision.faqAnswer || decision.ragAnswer || decision.agentAnswer, finalDecision, decision.reason),
+    }
+  }
+  return null
+}
+
+function routeReasonDetail(
+  payload: Record<string, unknown> | null | undefined,
+  finalDecision: Record<string, unknown> | null,
+  fallbackReason: unknown,
+) {
+  const reasonCode = stringValue(payload?.reasonCode) || stringValue(finalDecision?.reasonCode)
+  const sourceLayer = stringValue(payload?.sourceLayer) || stringValue(finalDecision?.sourceLayer)
+  if (reasonCode && sourceLayer) return `${reasonCode} · ${sourceLayer}`
+  if (reasonCode) return reasonCode
+  if (sourceLayer) return sourceLayer
+  return stringValue(fallbackReason) || '-'
+}
+
+export function runtimeLabPendingDelayMs(startedAt: number, now: number = Date.now()) {
+  return Math.max(0, RUNTIME_LAB_MIN_PENDING_MS - Math.max(0, now - startedAt))
+}
+
+export function formatRuntimeLabUsage(usage: RuntimeLabUsage | undefined) {
+  if (!usage) return 'in 0 / out 0 / total 0'
+  const suffix = usage.estimated ? ' · est' : ''
+  return `in ${usage.inputTokens} / out ${usage.outputTokens} / total ${usage.totalTokens}${suffix}`
+}
+
+export function formatRuntimeLabElapsed(elapsedMs: number | undefined) {
+  const value = numberValue(elapsedMs)
+  if (value >= 1000) return `${(value / 1000).toFixed(2)}s`
+  return `${value}ms`
+}
+
+function buildRouteDebugDetail(turn: RuntimeLabTurn, elapsedMs: number): RuntimeLabDebugDetail {
+  const classifierDebug = objectValue(turn.routeDecision.classifierResult?._debug)
+  const routeUsage = normalizeUsage(classifierDebug?.usage)
+  const steps = routeSteps(turn.routeDecision)
+  const llmStep = classifierDebug
+    ? [
+        {
+          id: 'llm_arbitrator_call',
+          label: `LLM仲裁 · ${stringValue(classifierDebug.model) || 'model'}`,
+          elapsedMs: numberValue(classifierDebug.elapsedMs),
+          input: classifierDebug.input || {},
+          output: classifierDebug.output || {},
+          usage: routeUsage,
+        },
+      ]
+    : []
+  return {
+    title: 'AI回复 · 路由调试',
+    subtitle: `${turn.routeDecision.action}${turn.routeDecision.targetSopId ? ` · ${turn.routeDecision.targetSopId}` : ''}`,
+    elapsedMs,
+    input: turn.routeDecision.classifierRequest || classifierDebug?.input || {},
+    output: classifierDebug?.output || turn.routeDecision.finalDecision || turn.routeDecision,
+    usage: routeUsage,
+    steps: [...steps, ...llmStep],
+  }
+}
+
+function routeSteps(decision: RuntimeLabRouteDecision): RuntimeLabDebugStep[] {
+  const policyGate = objectValue(decision.policyGate)
+  const rawSteps = Array.isArray(policyGate?.steps) ? policyGate.steps : []
+  return rawSteps.filter(isRecord).map((step, index) => ({
+    id: stringValue(step.id) || stringValue(step.name) || `route_step_${index + 1}`,
+    label: stringValue(step.label) || stringValue(step.name) || stringValue(step.stage) || `路由步骤 ${index + 1}`,
+    elapsedMs: numberValue(step.elapsedMs),
+    input: step.input || {},
+    output: step.output || {},
+    usage: normalizeUsage(step.usage),
+  }))
+}
+
+function normalizeUsage(value: unknown): RuntimeLabUsage {
+  const raw = objectValue(value)
+  const inputTokens = numberValue(raw?.inputTokens)
+  const outputTokens = numberValue(raw?.outputTokens)
+  const totalTokens = numberValue(raw?.totalTokens) || inputTokens + outputTokens
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens,
+    estimated: raw?.estimated === true,
+  }
+}
+
 function stringValue(value: unknown): string {
   return typeof value === 'string' ? value : ''
+}
+
+function numberValue(value: unknown): number {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
+}
+
+function objectValue(value: unknown): Record<string, unknown> | null {
+  return isRecord(value) ? value : null
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }
 
 function isCompletedNode(status: string) {

@@ -91,10 +91,21 @@ describe('unified routing chat lab model', () => {
         apiKeyConfigured: true,
         available: true,
       },
+      fallbackAgent: {
+        enabled: true,
+        type: 'existing_agent',
+        agentId: 7,
+        agentName: '航空 FAQ 兜底智能体',
+        available: true,
+      },
+      fallbackAgentOptions: [
+        { id: 7, name: '航空 FAQ 兜底智能体', description: '', enabled: true },
+      ],
     })
 
     expect(summary.bindingLabel).toBe('已绑定 2 个 Chatflow SOP')
     expect(summary.arbitratorLabel).toBe('llm · qwen/qwen3.5-9b / fallback deepseek/deepseek-v4-flash')
+    expect(summary.fallbackAgentLabel).toBe('existing_agent · 航空 FAQ 兜底智能体')
     expect(summary.secretLabel).toBe('API Key 已配置')
     expect(summary.bindingRows[0]).toContain('flight_booking')
     expect(summary.bindingRows[0]).toContain('#12')
