@@ -118,6 +118,68 @@ class RuntimePolicyRepository:
         self._session.commit()
         return isinstance(result, CursorResult) and result.rowcount > 0
 
+    def create_decision_log(self, values: dict[str, Any]) -> dict[str, Any]:
+        now = datetime.now()
+        result = self._session.execute(
+            self._decision_log.insert()
+            .values(
+                **values,
+                deleted=False,
+                created_at=now,
+                updated_at=now,
+            )
+            .returning(self._decision_log)
+        )
+        row = dict(result.mappings().one())
+        self._session.commit()
+        return row
+
+    def get_decision_log(self, log_id: int) -> dict[str, Any] | None:
+        row = self._session.execute(
+            sa.select(self._decision_log).where(
+                self._decision_log.c.id == log_id,
+                self._decision_log.c.deleted.is_(False),
+            )
+        ).mappings().one_or_none()
+        return dict(row) if row else None
+
+    def list_decision_logs(
+        self,
+        page: int,
+        page_size: int,
+        *,
+        session_id: int | None = None,
+        profile_id: int | None = None,
+        action: str | None = None,
+        source_layer: str | None = None,
+        created_from: datetime | None = None,
+        created_to: datetime | None = None,
+    ) -> tuple[list[dict[str, Any]], int]:
+        conditions: list[ColumnElement[bool]] = [self._decision_log.c.deleted.is_(False)]
+        if session_id is not None:
+            conditions.append(self._decision_log.c.session_id == session_id)
+        if profile_id is not None:
+            conditions.append(self._decision_log.c.policy_profile_id == profile_id)
+        if action:
+            conditions.append(self._decision_log.c.final_action == action)
+        if source_layer:
+            conditions.append(self._decision_log.c.source_layer == source_layer)
+        if created_from is not None:
+            conditions.append(self._decision_log.c.created_at >= created_from)
+        if created_to is not None:
+            conditions.append(self._decision_log.c.created_at <= created_to)
+        total = self._session.execute(
+            sa.select(sa.func.count()).select_from(self._decision_log).where(*conditions)
+        ).scalar_one()
+        rows = self._session.execute(
+            sa.select(self._decision_log)
+            .where(*conditions)
+            .order_by(self._decision_log.c.id.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        ).mappings().all()
+        return [dict(row) for row in rows], int(total)
+
     def _ensure_tables(self) -> None:
         bind = self._session.get_bind()
         if bind is None:

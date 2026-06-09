@@ -267,3 +267,7 @@ implement release activation, rollback, or frontend configuration UI.
 - 041.3 complete: profile-driven classifier factory, fallback Agent factory,
   fallback output policy, and runtime-lab service wiring are recorded under
   `artifacts/slices/041-runtime-policy-config-observability/041.3/`.
+- 041.4 complete: decision-log persistence, policy snapshot capture,
+  query/filter APIs, 040 matrix compatibility, and browser UAT evidence are
+  recorded under
+  `artifacts/slices/041-runtime-policy-config-observability/041.4/`.

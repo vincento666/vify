@@ -17,7 +17,7 @@
 - [x] Add profile CRUD API.
 - [x] Save RED/GREEN evidence under
   `artifacts/slices/041-runtime-policy-config-observability/041.1/`.
-- [ ] Commit 041.1 only.
+- [x] Commit 041.1 only.
 
 ## 041.2 Effective policy resolver
 
@@ -28,7 +28,8 @@
 - [x] Add effective-profile API.
 - [x] Save evidence under
   `artifacts/slices/041-runtime-policy-config-observability/041.2/`.
-- [ ] Commit 041.2 only.
+- [ ] Commit 041.2 only. Historical note: 041.2 changes landed in mixed
+  commit `e1525ec8`; history was not rewritten.
 
 ## 041.3 Classifier and fallback Agent config factories
 
@@ -44,13 +45,13 @@
 
 ## 041.4 Decision log persistence and query API
 
-- [ ] RED: route decision log lacks policy snapshot.
-- [ ] RED: decision-log API cannot filter by session/profile/action/source/time.
-- [ ] Add `RuntimeDecisionLog` table/repository/service.
-- [ ] Persist effective policy snapshot for each runtime-lab message.
-- [ ] Persist route evidence and layer-level confidence signals.
-- [ ] Add decision-log query APIs.
-- [ ] Prove default 040 route matrix remains compatible.
-- [ ] Save evidence under
+- [x] RED: route decision log lacks policy snapshot.
+- [x] RED: decision-log API cannot filter by session/profile/action/source/time.
+- [x] Add `RuntimeDecisionLog` table/repository/service.
+- [x] Persist effective policy snapshot for each runtime-lab message.
+- [x] Persist route evidence and layer-level confidence signals.
+- [x] Add decision-log query APIs.
+- [x] Prove default 040 route matrix remains compatible.
+- [x] Save evidence under
   `artifacts/slices/041-runtime-policy-config-observability/041.4/`.
-- [ ] Commit 041.4 only.
+- [x] Commit 041.4 only.

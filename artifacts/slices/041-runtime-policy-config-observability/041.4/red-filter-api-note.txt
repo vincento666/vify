@@ -1,0 +1,11 @@
+041.4 RED filter note
+
+The missing decision-log API was captured in red-decision-log.txt:
+
+- GET /api/v1/runtime-policy/sessions/{session_id}/decision-logs returned 404.
+- Because the decision-log query surface did not exist yet, filtering by
+  session/profile/action/source/time was impossible at the same red point.
+
+The filter behavior was then covered by the green contract test:
+
+- tests/contract/test_runtime_policy_decision_log_api.py::RuntimePolicyDecisionLogApiContractTest::test_decision_logs_filter_by_profile_action_source_and_time_range

@@ -1,0 +1,22 @@
+{
+  "profileStatus": 200,
+  "sessionStatus": 200,
+  "messageStatus": 200,
+  "sessionLogsStatus": 200,
+  "filteredStatus": 200,
+  "emptyStatus": 200,
+  "profileId": 1,
+  "sessionId": 1,
+  "logId": 1,
+  "sessionLogTotal": 1,
+  "filteredTotal": 1,
+  "emptyTotal": 0,
+  "messageAction": "AGENT_FALLBACK",
+  "finalAction": "AGENT_FALLBACK",
+  "sourceLayer": "agent_policy",
+  "reasonCode": "AGENT_ANSWER",
+  "hasPolicySnapshot": true,
+  "hasRouteEvidence": true,
+  "snapshotClassifierModel": "fake-runtime-classifier",
+  "snapshotHasDirectApiKey": false
+}

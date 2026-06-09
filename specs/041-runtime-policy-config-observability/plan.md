@@ -86,6 +86,10 @@ decision logging all pass backend gates with no frontend changes.
 - 041.3 complete: profile-driven LLM classifier construction, fallback Agent
   selection, disabled unsupported live fallback adapters, and runtime-lab
   service wiring passed RED, unit, contract, backend E2E, and browser UAT gates.
+- 041.4 complete: runtime decision logs persist effective policy snapshots,
+  route evidence, confidence signals, and query filters, while the default 040
+  route matrix remains compatible across focused backend E2E gates and browser
+  UAT.
 
 ## Non-Goals
 

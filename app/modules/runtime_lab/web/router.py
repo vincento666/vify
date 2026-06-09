@@ -40,6 +40,7 @@ from app.modules.runtime_policy.domain.factories import (
     build_fallback_agent_from_snapshot,
 )
 from app.modules.runtime_policy.domain.resolver import RuntimePolicyResolveContext, RuntimePolicyResolver
+from app.modules.runtime_policy.domain.service import RuntimeDecisionLogService
 from app.modules.runtime_policy.infra.repository import RuntimePolicyRepository
 from app.modules.provider.api.facade import ProviderModelFacade
 from app.modules.workflow.domain.service import WorkflowService
@@ -107,13 +108,24 @@ def post_message(
     session_id: int,
     request: RuntimeLabMessageRequest,
     service: RuntimeLabService = Depends(get_runtime_lab_service),
+    session: Session = Depends(get_session),
+    settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
+    effective_policy = RuntimePolicyResolver(RuntimePolicyRepository(session), settings).resolve()
     result = service.handle_command(
         session_id,
         request.message,
         request.idempotency_key,
         enabled_sop_ids=request.enabled_sop_ids,
     )
+    if not result.replayed:
+        RuntimeDecisionLogService(RuntimePolicyRepository(session)).record_message_decision(
+            session_id=session_id,
+            message_id=request.idempotency_key or "",
+            user_message=request.message,
+            command_payload=result.payload,
+            effective_policy=effective_policy,
+        )
     return success(result.payload)
 
 
