@@ -9363,8 +9363,8 @@ onUnmounted(() => {
   --node-port-shadow: none;
   --node-port-dot-size: 1rem;
   --node-port-hit-size: 3rem;
-  width: var(--node-port-hit-size);
-  height: var(--node-port-hit-size);
+  width: var(--node-port-dot-size);
+  height: var(--node-port-dot-size);
   border: 0;
   background: transparent;
   transform-origin: center;
@@ -9376,8 +9376,12 @@ onUnmounted(() => {
 .node-port::before {
   content: '';
   position: absolute;
-  inset: 0;
+  left: 50%;
+  top: 50%;
+  width: var(--node-port-hit-size);
+  height: var(--node-port-hit-size);
   border-radius: 999rem;
+  transform: translate(-50%, -50%);
 }
 
 .node-port::after {
@@ -9401,12 +9405,12 @@ onUnmounted(() => {
 }
 
 .source-port {
-  right: calc(var(--node-port-hit-size) / -2);
+  right: calc(var(--node-port-dot-size) / -2);
   transform: translateY(-50%);
 }
 
 .target-port {
-  left: calc(var(--node-port-hit-size) / -2);
+  left: calc(var(--node-port-dot-size) / -2);
   transform: translateY(-50%);
 }
 

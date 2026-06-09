@@ -18,13 +18,18 @@ async function portBox(page, selector) {
   return page.evaluate((portSelector) => {
     const element = document.querySelector(portSelector)
     if (!element) return null
+    const pane = document.querySelector('.vue-flow__transformationpane')
     const box = element.getBoundingClientRect()
     const matrixScale = (value) => {
       const matrix = String(value || '').match(/matrix\(([^,]+)/)
       return matrix ? Number.parseFloat(matrix[1]) : 1
     }
     const handleStyle = getComputedStyle(element)
+    const hitStyle = getComputedStyle(element, '::before')
     const dotStyle = getComputedStyle(element, '::after')
+    const paneScale = matrixScale(pane ? getComputedStyle(pane).transform : '')
+    const dotWidth = Number.parseFloat(dotStyle.width || '0')
+    const dotScale = matrixScale(dotStyle.transform)
     return {
       width: box.width,
       height: box.height,
@@ -32,10 +37,14 @@ async function portBox(page, selector) {
       cssHeight: Number.parseFloat(handleStyle.height),
       dotWidth: dotStyle.width,
       dotHeight: dotStyle.height,
+      hitWidth: hitStyle.width,
+      hitHeight: hitStyle.height,
       centerX: box.left + box.width / 2,
       centerY: box.top + box.height / 2,
       handleScale: matrixScale(handleStyle.transform),
-      dotScale: matrixScale(dotStyle.transform),
+      dotScale,
+      paneScale,
+      screenDotWidth: dotWidth * paneScale * dotScale,
     }
   }, selector)
 }
@@ -110,10 +119,10 @@ try {
   const expectedBaseDiameter = 1 * rem
   const expectedHitDiameter = 3 * rem
   assert(defaultNode && defaultSource && defaultTarget, 'Expected node source and target ports to render')
-  assertClose(Number.parseFloat(defaultSource.dotWidth || '0'), expectedBaseDiameter, 1, `Expected endpoint 1x dot to keep the original size, got ${JSON.stringify(defaultSource)}`)
-  assertClose(Number.parseFloat(defaultTarget.dotWidth || '0'), expectedBaseDiameter, 1, `Expected target endpoint 1x dot to keep the original size, got ${JSON.stringify(defaultTarget)}`)
-  assertClose(defaultSource.cssWidth, expectedHitDiameter, 1, `Expected endpoint hitbox CSS to use the 3x original dot diameter, got ${JSON.stringify(defaultSource)}`)
-  assertClose(defaultTarget.cssWidth, expectedHitDiameter, 1, `Expected target endpoint hitbox CSS to use the 3x original dot diameter, got ${JSON.stringify(defaultTarget)}`)
+  assertClose(defaultSource.cssWidth, expectedBaseDiameter, 1, `Expected endpoint handle box to match the visible dot so edges anchor to the dot, got ${JSON.stringify(defaultSource)}`)
+  assertClose(defaultTarget.cssWidth, expectedBaseDiameter, 1, `Expected target handle box to match the visible dot so edges anchor to the dot, got ${JSON.stringify(defaultTarget)}`)
+  assertClose(Number.parseFloat(defaultSource.hitWidth || '0'), expectedHitDiameter, 1, `Expected endpoint hover hit area to keep the 3x radius without changing edge anchors, got ${JSON.stringify(defaultSource)}`)
+  assertClose(Number.parseFloat(defaultTarget.hitWidth || '0'), expectedHitDiameter, 1, `Expected target hover hit area to keep the 3x radius without changing edge anchors, got ${JSON.stringify(defaultTarget)}`)
   assert(Math.abs(defaultSource.centerX - defaultNode.right) <= 1, `Expected source port center to align with node right edge, got node=${JSON.stringify(defaultNode)} source=${JSON.stringify(defaultSource)}`)
   assert(Math.abs(defaultTarget.centerX - defaultNode.left) <= 1, `Expected target port center to align with node left edge, got node=${JSON.stringify(defaultNode)} target=${JSON.stringify(defaultTarget)}`)
   await maybeScreenshot(page, 'default')
@@ -133,7 +142,8 @@ try {
   assert(closeToRatio(endpointHoverSource.dotScale, 3), `Expected endpoint hover dot scale 3x, got ${JSON.stringify(endpointHoverSource)}`)
   await maybeScreenshot(page, 'endpoint-hover')
 
-  await page.mouse.move(defaultSource.centerX + defaultSource.width / 2 - 1, defaultSource.centerY)
+  const screenHitRadius = (Number.parseFloat(defaultSource.hitWidth || '0') * defaultSource.paneScale) / 2
+  await page.mouse.move(defaultSource.centerX + screenHitRadius - 1, defaultSource.centerY)
   await page.waitForTimeout(160)
   const radiusHoverSource = await portBox(page, sourceSelector)
   assert(
@@ -142,7 +152,7 @@ try {
   )
   await maybeScreenshot(page, 'endpoint-radius-hover')
 
-  await page.mouse.move(defaultSource.centerX - defaultSource.width / 2 - 6, defaultSource.centerY)
+  await page.mouse.move(defaultSource.centerX - screenHitRadius - 6, defaultSource.centerY)
   await page.waitForTimeout(160)
   const outsideRadiusSource = await portBox(page, sourceSelector)
   assert(
