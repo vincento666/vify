@@ -427,6 +427,45 @@
                   <small v-if="nodeProps.data.runElapsedLabel">{{ nodeProps.data.runElapsedLabel }}</small>
                 </span>
               </div>
+              <div v-if="!isFixedNode(nodeProps.data)" class="node-card-actions" @click.stop @pointerdown.stop>
+                <button
+                  v-if="canRunSingleNodeTest(nodeProps.data)"
+                  type="button"
+                  aria-label="试运行当前节点"
+                  title="试运行当前节点"
+                  @click="openNodeCardTest(nodeProps.data.nodeKey)"
+                >
+                  <PlayIcon aria-hidden="true" />
+                </button>
+                <div class="node-card-menu-wrap">
+                  <button
+                    type="button"
+                    aria-label="更多操作"
+                    title="更多操作"
+                    :aria-expanded="nodeCardMenuKey === nodeProps.data.nodeKey"
+                    @click="toggleNodeCardMenu(nodeProps.data.nodeKey)"
+                  >
+                    <MoreHorizontalIcon aria-hidden="true" />
+                  </button>
+                  <div
+                    v-if="nodeCardMenuKey === nodeProps.data.nodeKey"
+                    class="node-card-menu"
+                    data-testid="node-card-menu"
+                    role="menu"
+                  >
+                    <button type="button" role="menuitem" :disabled="!canRenameNode(nodeProps.data)" @click="startNodeRename(nodeProps.data.nodeKey)">重命名</button>
+                    <button type="button" role="menuitem" :disabled="isFixedNode(nodeProps.data)" @click="duplicateNode(nodeProps.data.nodeKey)">
+                      <CopyIcon aria-hidden="true" />
+                      创建副本
+                    </button>
+                    <button type="button" role="menuitem" :disabled="isFixedNode(nodeProps.data)" @click="removeNodeFromMenu(nodeProps.data.nodeKey)">
+                      <Trash2 aria-hidden="true" />
+                      删除
+                    </button>
+                    <button type="button" role="menuitem" @click="openNodeHelp(nodeProps.data.type)">帮助文档</button>
+                  </div>
+                </div>
+              </div>
             </div>
             <div
               v-if="isBranchNodeType(nodeProps.data.type)"
@@ -636,8 +675,34 @@
           <div class="node-type-icon" :class="`icon-${selectedNode.type.toLowerCase()}`">
             <component :is="nodeIcon(selectedNode.type)" />
           </div>
-          <div>
-            <h3>{{ selectedConfigPanelTitle() }}</h3>
+          <div class="config-title-block">
+            <div v-if="nodeTitleEditing" class="config-title-editor">
+              <input
+                ref="nodeTitleEditInputRef"
+                v-model="nodeTitleDraft"
+                aria-label="节点名称"
+                maxlength="80"
+                @blur="commitNodeTitleEdit"
+                @keydown.enter.prevent="commitNodeTitleEdit"
+                @keydown.esc.prevent="cancelNodeTitleEdit"
+              />
+              <button type="button" aria-label="确认节点名称" @mousedown.prevent @click="commitNodeTitleEdit">
+                <CheckIcon aria-hidden="true" />
+              </button>
+              <button type="button" aria-label="取消节点名称" @mousedown.prevent @click="cancelNodeTitleEdit">
+                <XIcon aria-hidden="true" />
+              </button>
+            </div>
+            <button
+              v-else-if="canRenameSelectedNode"
+              type="button"
+              class="config-title-button"
+              aria-label="编辑节点名称"
+              @click="startSelectedNodeTitleEdit"
+            >
+              <span class="config-title-heading">{{ selectedConfigPanelTitle() }}</span>
+            </button>
+            <h3 v-else>{{ selectedConfigPanelTitle() }}</h3>
             <span v-if="selectedConfigPanelSubtitle()">{{ selectedConfigPanelSubtitle() }}</span>
           </div>
           <div v-if="canTestSelectedNode" class="config-header-actions">
@@ -3626,11 +3691,14 @@ import {
   User,
 } from '@element-plus/icons-vue'
 import {
+  Check as CheckIcon,
   ChevronDown as ChevronDownIcon,
   ChevronRight as ChevronRightIcon,
+  Copy as CopyIcon,
   Hand as HandIcon,
   LayoutDashboard as LayoutDashboardIcon,
   Minus as LucideMinus,
+  MoreHorizontal as MoreHorizontalIcon,
   MousePointer2 as MousePointerIcon,
   Play as PlayIcon,
   Plus as LucidePlus,
@@ -3728,6 +3796,7 @@ import {
   hydrateWorkflowGraph,
   insertWorkflowNodeOnEdge,
   moveWorkflowNode,
+  renameWorkflowNode,
   serializeWorkflowGraph,
   type WorkflowCanvasGraph,
   type WorkflowCanvasNode,
@@ -4182,6 +4251,10 @@ const saveState = computed(() => {
 
 const selectedNode = computed(() => graph.value.nodes.find((node) => node.nodeKey === selectedNodeKey.value))
 const selectedSchema = computed(() => selectedNode.value ? getNodeConfigSchema(selectedNode.value.type) : null)
+const nodeCardMenuKey = ref('')
+const nodeTitleEditing = ref(false)
+const nodeTitleDraft = ref('')
+const nodeTitleEditInputRef = ref<HTMLInputElement | null>(null)
 const visibleConfigSections = computed(() => {
   const sections = selectedSchema.value?.sections || []
   if (selectedNode.value?.type === 'END' && endReturnMode() === 'variables') {
@@ -4192,13 +4265,14 @@ const visibleConfigSections = computed(() => {
 })
 const rightSidePanelOpen = computed(() => Boolean((selectedNode.value && selectedSchema.value) || testPanelOpen.value))
 const canTestSelectedNode = computed(() => canRunSingleNodeTest(selectedNode.value))
+const canRenameSelectedNode = computed(() => canRenameNode(selectedNode.value))
 const nodeTestTarget = computed(() => graph.value.nodes.find((node) => node.nodeKey === nodeTestTargetKey.value))
 function isBranchNodeType(type: string) {
   return type === 'CONDITION' || type === 'INTENT_RECOGNITION'
 }
 function selectedConfigPanelTitle() {
   if (!selectedNode.value || !selectedSchema.value) return ''
-  return selectedNode.value.type === 'CONDITION' ? selectedNode.value.name : selectedSchema.value.title
+  return selectedNode.value.name || selectedSchema.value.title
 }
 function selectedConfigPanelSubtitle() {
   if (!selectedNode.value) return ''
@@ -4946,6 +5020,77 @@ function addNode(type: Exclude<WorkflowCanvasNodeType, 'START' | 'END'>) {
   markGraphDirty()
 }
 
+function cloneNodeConfig(config: Record<string, any> = {}) {
+  return JSON.parse(JSON.stringify(config)) as Record<string, any>
+}
+
+function isFixedNode(node?: WorkflowCanvasNode | null) {
+  return node?.type === 'START' || node?.type === 'END' || node?.nodeKey === 'start' || node?.nodeKey === 'end'
+}
+
+function canRenameNode(node?: WorkflowCanvasNode | null) {
+  return Boolean(node && !isFixedNode(node))
+}
+
+function toggleNodeCardMenu(nodeKey: string) {
+  nodeCardMenuKey.value = nodeCardMenuKey.value === nodeKey ? '' : nodeKey
+  paletteOpen.value = false
+  edgeInsertPaletteId.value = ''
+}
+
+function startSelectedNodeTitleEdit() {
+  if (!selectedNode.value || !canRenameNode(selectedNode.value)) return
+  nodeTitleDraft.value = selectedNode.value.name || selectedConfigPanelTitle()
+  nodeTitleEditing.value = true
+  void nextTick(() => nodeTitleEditInputRef.value?.focus())
+}
+
+function startNodeRename(nodeKey: string) {
+  const node = graph.value.nodes.find((item) => item.nodeKey === nodeKey)
+  if (!canRenameNode(node)) return
+  selectedNodeKey.value = nodeKey
+  nodeCardMenuKey.value = ''
+  void nextTick(startSelectedNodeTitleEdit)
+}
+
+function commitNodeTitleEdit() {
+  if (!selectedNode.value || !nodeTitleEditing.value) return
+  const nextName = nodeTitleDraft.value.trim()
+  nodeTitleEditing.value = false
+  if (!nextName || nextName === selectedNode.value.name) return
+  graph.value = renameWorkflowNode(graph.value, selectedNode.value.nodeKey, nextName)
+  markGraphDirty()
+}
+
+function cancelNodeTitleEdit() {
+  nodeTitleEditing.value = false
+  nodeTitleDraft.value = selectedNode.value?.name || ''
+}
+
+function duplicateNode(nodeKey: string) {
+  const source = graph.value.nodes.find((node) => node.nodeKey === nodeKey)
+  if (!source || isFixedNode(source)) return
+  const position = { x: source.position.x + 64, y: source.position.y + 64 }
+  const graphWithNode = addWorkflowNode(graph.value, source.type as Exclude<WorkflowCanvasNodeType, 'START' | 'END'>, position)
+  const inserted = graphWithNode.nodes[graphWithNode.nodes.length - 1]
+  const config = cloneNodeConfig(source.config)
+  config.ui = {
+    ...(config.ui || {}),
+    position,
+  }
+  graph.value = {
+    nodes: graphWithNode.nodes.map((node) =>
+      node.nodeKey === inserted.nodeKey
+        ? { ...inserted, name: `${source.name || inserted.name} 副本`, config, position }
+        : node,
+    ),
+    edges: graphWithNode.edges,
+  }
+  selectedNodeKey.value = inserted.nodeKey
+  nodeCardMenuKey.value = ''
+  markGraphDirty()
+}
+
 function insertNodeOnEdge(
   type: Exclude<WorkflowCanvasNodeType, 'START' | 'END'>,
   edgeId: string,
@@ -4993,7 +5138,18 @@ function toggleOperationMode() {
 function removeNode(nodeKey: string) {
   graph.value = deleteWorkflowNode(graph.value, nodeKey)
   if (selectedNodeKey.value === nodeKey) selectedNodeKey.value = ''
+  if (nodeCardMenuKey.value === nodeKey) nodeCardMenuKey.value = ''
   markGraphDirty()
+}
+
+function removeNodeFromMenu(nodeKey: string) {
+  removeNode(nodeKey)
+  nodeCardMenuKey.value = ''
+}
+
+function openNodeHelp(type: WorkflowCanvasNodeType) {
+  nodeCardMenuKey.value = ''
+  ElMessage.info(`${getNodeConfigSchema(type).title}帮助文档待接入`)
 }
 
 function canKeyboardDeleteNode() {
@@ -7529,6 +7685,17 @@ async function saveCanvas() {
 }
 
 function openTestPanel() {
+  const validation = validateWorkflowGraph(graph.value)
+  validationErrors.value = validation.errors
+  if (!validation.valid) {
+    testPanelOpen.value = false
+    nodeTestDrawerOpen.value = false
+    publishDialogOpen.value = false
+    selectedNodeKey.value = ''
+    debugDockOpen.value = true
+    debugDockTab.value = 'errors'
+    return
+  }
   applyComposerSurfaceAction('compose')
   testPanelOpen.value = true
   nodeTestDrawerOpen.value = false
@@ -7536,12 +7703,23 @@ function openTestPanel() {
   selectedNodeKey.value = ''
   testResult.value = null
   resetChatflowDebugState()
-  validationErrors.value = validateWorkflowGraph(graph.value).errors
 }
 
 function openSelectedNodeTest() {
   const node = selectedNode.value
   if (!node || !canRunSingleNodeTest(node)) return
+  openNodeTest(node)
+}
+
+function openNodeCardTest(nodeKey: string) {
+  const node = graph.value.nodes.find((item) => item.nodeKey === nodeKey)
+  if (!node || !canRunSingleNodeTest(node)) return
+  selectedNodeKey.value = nodeKey
+  nodeCardMenuKey.value = ''
+  openNodeTest(node)
+}
+
+function openNodeTest(node: WorkflowCanvasNode) {
   applyComposerSurfaceAction('compose')
   nodeTestTargetKey.value = node.nodeKey
   nodeTestDrawerOpen.value = true
@@ -9054,6 +9232,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.75rem;
   margin-bottom: 1.125rem;
+  position: relative;
 }
 
 .node-type-icon {
@@ -9193,6 +9372,91 @@ onUnmounted(() => {
   line-height: 2rem;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.node-card-actions {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease;
+}
+
+.coze-node:hover .node-card-actions,
+.coze-node.selected .node-card-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.node-card-actions button {
+  width: 1.75rem;
+  height: 1.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: #252b3d;
+  cursor: pointer;
+}
+
+.node-card-actions button:hover {
+  color: #5558e8;
+}
+
+.node-card-actions button:disabled {
+  color: #c1c7d4;
+  cursor: not-allowed;
+}
+
+.node-card-actions svg {
+  width: 1rem;
+  height: 1rem;
+  stroke-width: 2;
+}
+
+.node-card-menu-wrap {
+  position: relative;
+}
+
+.node-card-menu {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 20;
+  min-width: 9rem;
+  padding: 0.5rem;
+  border: 0.0625rem solid #e4e8f4;
+  border-radius: 0.75rem;
+  background: #fff;
+  box-shadow: 0 1rem 2.5rem rgba(37, 43, 61, 0.14);
+}
+
+.node-card-menu button {
+  width: 100%;
+  height: 2.25rem;
+  justify-content: flex-start;
+  gap: 0.5rem;
+  padding: 0 0.75rem;
+  border-radius: 0.5rem;
+  color: #252b3d;
+  font-size: 0.875rem;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.node-card-menu button:hover:not(:disabled) {
+  background: #f3f5fb;
+  color: #5558e8;
+}
+
+.node-card-menu button svg {
+  width: 0.875rem;
+  height: 0.875rem;
 }
 
 .node-run-status {
@@ -10644,6 +10908,53 @@ onUnmounted(() => {
   font-size: 1.0625rem;
   line-height: 1.3;
   color: #252b3d;
+}
+
+.config-title-block {
+  flex: 1;
+  min-width: 0;
+}
+
+.config-title-button {
+  width: auto !important;
+  height: auto !important;
+  margin-left: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: #252b3d !important;
+  justify-content: flex-start !important;
+}
+
+.config-title-heading {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #252b3d;
+}
+
+.config-title-editor {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.config-title-editor input {
+  width: min(16rem, 100%);
+  height: 2rem;
+  padding: 0 0.625rem;
+  border: 0.0625rem solid #5558e8;
+  border-radius: 0.5rem;
+  color: #252b3d;
+  font-size: 1rem;
+  font-weight: 700;
+  outline: none;
+}
+
+.config-header .config-title-editor button {
+  width: 1.75rem;
+  height: 1.75rem;
+  margin-left: 0;
 }
 
 .config-header span {

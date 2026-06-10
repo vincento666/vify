@@ -196,7 +196,10 @@ const SCHEMAS: Record<WorkflowCanvasNodeType, NodeConfigSchema> = {
       },
       {
         title: '输出',
-        fields: [{ key: 'outputParameters', label: '输出参数', type: 'output-parameters' }],
+        fields: [
+          { key: 'streamOutput', label: '流式输出', type: 'switch' },
+          { key: 'outputParameters', label: '输出参数', type: 'output-parameters' },
+        ],
       },
       {
         title: '技能调用',
@@ -341,7 +344,13 @@ const SCHEMAS: Record<WorkflowCanvasNodeType, NodeConfigSchema> = {
           { key: 'historyMode', label: '会话历史', type: 'select', options: ['none', 'include', 'recent'] },
         ],
       },
-      OUTPUT_SECTION,
+      {
+        title: '输出',
+        fields: [
+          { key: 'streamOutput', label: '流式输出', type: 'switch' },
+          { key: 'outputParameters', label: '输出参数', type: 'output-parameters' },
+        ],
+      },
     ],
   },
   TRANSFER_TO_HUMAN: {

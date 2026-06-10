@@ -1,0 +1,45 @@
+> vitest run src/views/workflow/nodeConfig.test.ts
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ ❯ src/views/workflow/nodeConfig.test.ts (21 tests | 1 failed) 10ms
+   ✓ workflow node config schema > does not expose node-name editing fields on any node panel 1ms
+   × workflow node config schema > uses switch controls for stream-output fields instead of select rows 3ms
+     → expected undefined to be 'switch' // Object.is equality
+   ✓ workflow node config schema > uses registry-backed selector for TOOL_CALL resources 0ms
+   ✓ workflow node config schema > uses compact variable type labels in selectors and parameter rows 0ms
+   ✓ workflow node config schema > provides runtime-backed editable fields for each canvas node type 1ms
+   ✓ workflow node config schema > models END output variables as a normal output section and keeps return mode panel-level 0ms
+   ✓ workflow node config schema > puts LLM core sections in Coze-like order before advanced settings 0ms
+   ✓ workflow node config schema > uses structured Coze-like editors for secondary Chatflow panels 1ms
+   ✓ workflow node config schema > normalizes secondary Chatflow row editors without raw JSON strings 0ms
+   ✓ workflow node config schema > keeps resource-node raw ids and JSON mappings out of basic panels 0ms
+   ✓ workflow node config schema > does not expose advanced compatibility sections in node config panels 0ms
+   ✓ workflow node config schema > hides legacy resource technical fields from node panels 0ms
+   ✓ workflow node config schema > uses structured editors for data and structured nodes instead of raw JSON in basic panels 0ms
+   ✓ workflow node config schema > normalizes structured data node rows from legacy JSON-compatible config 1ms
+   ✓ workflow node config schema > normalizes START variables into Coze-like input rows while preserving legacy outputVariables 0ms
+   ✓ workflow node config schema > adds a shared input parameter editor field to runnable middle node schemas 0ms
+   ✓ workflow node config schema > updates node name and config without dropping ui position metadata 0ms
+   ✓ workflow node config schema > normalizes Coze-like output format and output parameter rows 0ms
+   ✓ workflow node config schema > keeps END-style output variable mappings for upstream references 0ms
+   ✓ workflow node config schema > keeps legacy outputVariable compatible while validating duplicate and illegal names 0ms
+   ✓ workflow node config schema > normalizes and validates typed input parameter rows 0ms
+ Test Files  1 failed (1)
+      Tests  1 failed | 20 passed (21)
+   Start at  14:23:28
+   Duration  285ms (transform 43ms, setup 0ms, collect 38ms, tests 10ms, environment 0ms, prepare 46ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/views/workflow/nodeConfig.test.ts > workflow node config schema > uses switch controls for stream-output fields instead of select rows
+AssertionError: expected undefined to be 'switch' // Object.is equality
+- Expected:
+"switch"
++ Received:
+undefined
+ ❯ src/views/workflow/nodeConfig.test.ts:44:29
+     42|     expect(messageStream?.type).toBe('switch')
+     43|     expect(collectionStream?.type).toBe('switch')
+     44|     expect(llmStream?.type).toBe('switch')
+       |                             ^
+     45|     expect(agentStream?.type).toBe('switch')
+     46|   })
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯

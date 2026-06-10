@@ -32,9 +32,17 @@ describe('workflow node config schema', () => {
     const collectionStream = getNodeConfigSchema('INFORMATION_COLLECTION')
       .sections.flatMap((section) => section.fields)
       .find((field) => field.key === 'streamOutput')
+    const llmStream = getNodeConfigSchema('LLM')
+      .sections.flatMap((section) => section.fields)
+      .find((field) => field.key === 'streamOutput')
+    const agentStream = getNodeConfigSchema('AGENT_CALL')
+      .sections.flatMap((section) => section.fields)
+      .find((field) => field.key === 'streamOutput')
 
     expect(messageStream?.type).toBe('switch')
     expect(collectionStream?.type).toBe('switch')
+    expect(llmStream?.type).toBe('switch')
+    expect(agentStream?.type).toBe('switch')
   })
 
   it('uses registry-backed selector for TOOL_CALL resources', () => {

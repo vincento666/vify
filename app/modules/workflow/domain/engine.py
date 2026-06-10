@@ -587,7 +587,9 @@ class AgentCallNodeExecutor:
                 "error": "",
             }
         )
-        return _declared_output_or_all(output, config)
+        declared_output = _declared_output_or_all(output, config)
+        declared_output["events"] = _agent_stream_events(config, str(node["node_key"]), str(result.content or ""))
+        return declared_output
 
 
 class CodeNodeExecutor:
@@ -1717,6 +1719,15 @@ def _llm_stream_events(config: dict[str, Any], node_key: str, content: str) -> l
     events: list[dict[str, Any]] = []
     if stream_output in {"enabled", "true", "1", "inherit"}:
         events.append({"type": "llm_delta", "nodeKey": node_key, "content": content})
+    events.append({"type": "message_done", "nodeKey": node_key, "content": content})
+    return events
+
+
+def _agent_stream_events(config: dict[str, Any], node_key: str, content: str) -> list[dict[str, Any]]:
+    stream_output = str(config.get("streamOutput") or "inherit").lower()
+    events: list[dict[str, Any]] = []
+    if stream_output in {"enabled", "true", "1", "inherit"}:
+        events.append({"type": "agent_delta", "nodeKey": node_key, "content": content})
     events.append({"type": "message_done", "nodeKey": node_key, "content": content})
     return events
 

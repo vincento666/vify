@@ -61,11 +61,12 @@ def _flamegraph(node_details: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _node_detail(node: dict[str, Any]) -> dict[str, Any]:
+    inputs = node.get("inputs") if isinstance(node.get("inputs"), dict) else {}
     outputs = node.get("outputs") if isinstance(node.get("outputs"), dict) else {}
     node_type = str(node.get("nodeType") or "")
     elapsed_ms = int(node.get("elapsedMs") or 0)
     events = _node_events(node_type, str(node.get("nodeKey") or ""), outputs)
-    input_summary = _summary(node.get("inputs") or node.get("input") or {})
+    input_summary = _summary(inputs)
     output_summary = _summary(_summary_outputs(outputs))
     usage = _usage_projection(events, input_summary, output_summary)
     evidence = outputs.get("evidence") if isinstance(outputs.get("evidence"), dict) else {}
@@ -78,6 +79,7 @@ def _node_detail(node: dict[str, Any]) -> dict[str, Any]:
         "status": node.get("status", ""),
         "elapsedMs": elapsed_ms,
         "latencyMs": elapsed_ms,
+        "inputs": inputs,
         "outputs": outputs,
         "error": error,
         "inputSummary": input_summary,
@@ -187,7 +189,7 @@ def _stream_event(raw_event: Any, fallback_node_key: str) -> dict[str, Any] | No
     if not isinstance(raw_event, dict):
         return None
     event_type = str(raw_event.get("type") or "")
-    if event_type not in {"message_delta", "message_done", "llm_delta", "stream_error", "node_usage"}:
+    if event_type not in {"message_delta", "message_done", "llm_delta", "agent_delta", "stream_error", "node_usage"}:
         return None
     event = {
         "type": event_type,

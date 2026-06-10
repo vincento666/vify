@@ -1388,7 +1388,7 @@ def _stream_event_from_raw(raw_event: Any, fallback_node_key: str) -> dict[str, 
     if not isinstance(raw_event, Mapping):
         return None
     event_type = str(raw_event.get("type") or "")
-    if event_type not in {"message_delta", "message_done", "llm_delta", "stream_error", "node_usage"}:
+    if event_type not in {"message_delta", "message_done", "llm_delta", "agent_delta", "stream_error", "node_usage"}:
         return None
     event = {
         "type": event_type,

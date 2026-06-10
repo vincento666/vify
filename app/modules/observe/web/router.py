@@ -152,6 +152,7 @@ class ObserveService:
             "nodeKey": row["node_key"],
             "nodeType": row["node_type"],
             "status": row["status"],
+            "inputs": sanitize_value(row["inputs"] or {}),
             "outputs": sanitize_value(row["outputs"] or {}),
             "error": row["error"] or "",
             "elapsedMs": int(row["elapsed_ms"] or 0),
