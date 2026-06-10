@@ -1,0 +1,75 @@
+> vitest run src/views/workflow/nodeConfig.test.ts
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ ❯ src/views/workflow/nodeConfig.test.ts (21 tests | 1 failed) 14ms
+   ✓ workflow node config schema > does not expose node-name editing fields on any node panel 2ms
+   ✓ workflow node config schema > uses switch controls for stream-output fields instead of select rows 0ms
+   ✓ workflow node config schema > uses registry-backed selector for TOOL_CALL resources 0ms
+   ✓ workflow node config schema > uses compact variable type labels in selectors and parameter rows 0ms
+   × workflow node config schema > provides runtime-backed editable fields for each canvas node type 6ms
+     → expected [ 'python' ] to deeply equal [ 'python', 'javascript' ]
+   ✓ workflow node config schema > models END output variables as a normal output section and keeps return mode panel-level 0ms
+   ✓ workflow node config schema > puts LLM core sections in Coze-like order before advanced settings 0ms
+   ✓ workflow node config schema > uses structured Coze-like editors for secondary Chatflow panels 1ms
+   ✓ workflow node config schema > normalizes secondary Chatflow row editors without raw JSON strings 0ms
+   ✓ workflow node config schema > keeps resource-node raw ids and JSON mappings out of basic panels 0ms
+   ✓ workflow node config schema > does not expose advanced compatibility sections in node config panels 0ms
+   ✓ workflow node config schema > hides legacy resource technical fields from node panels 0ms
+   ✓ workflow node config schema > uses structured editors for data and structured nodes instead of raw JSON in basic panels 0ms
+   ✓ workflow node config schema > normalizes structured data node rows from legacy JSON-compatible config 0ms
+   ✓ workflow node config schema > normalizes START variables into Coze-like input rows while preserving legacy outputVariables 0ms
+   ✓ workflow node config schema > adds a shared input parameter editor field to runnable middle node schemas 0ms
+   ✓ workflow node config schema > updates node name and config without dropping ui position metadata 0ms
+   ✓ workflow node config schema > normalizes Coze-like output format and output parameter rows 0ms
+   ✓ workflow node config schema > keeps END-style output variable mappings for upstream references 0ms
+   ✓ workflow node config schema > keeps legacy outputVariable compatible while validating duplicate and illegal names 0ms
+   ✓ workflow node config schema > normalizes and validates typed input parameter rows 0ms
+ Test Files  1 failed (1)
+      Tests  1 failed | 20 passed (21)
+   Start at  13:02:33
+   Duration  322ms (transform 46ms, setup 0ms, collect 44ms, tests 14ms, environment 0ms, prepare 45ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/views/workflow/nodeConfig.test.ts > workflow node config schema > provides runtime-backed editable fields for each canvas node type
+AssertionError: expected [ 'python' ] to deeply equal [ 'python', 'javascript' ]
+- Expected
++ Received
+  [
+    "python",
+-   "javascript",
+  ]
+ ❯ src/views/workflow/nodeConfig.test.ts:96:75
+     94|     )
+     95|     const codeFields = getNodeConfigSchema('CODE').sections.flatMap((s…
+     96|     expect(codeFields.find((field) => field.key === 'language')?.optio…
+       |                                                                           ^
+     97|     expect(codeFields.find((field) => field.key === 'code')?.type).toB…
+     98|     expect(getNodeConfigSchema('TEXT_PROCESS').sections.flatMap((secti…
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+rtk: Failed to run pytest: Failed to spawn process: No such file or directory (os error 2)
+....F                                                                    [100%]
+=================================== FAILURES ===================================
+_ WorkflowTransformNodesIntegrationTest.test_workflow_runs_javascript_code_node_main_function _
+
+self = <tests.integration.workflow.test_transform_nodes.WorkflowTransformNodesIntegrationTest testMethod=test_workflow_runs_javascript_code_node_main_function>
+
+    def test_workflow_runs_javascript_code_node_main_function(self) -> None:
+        with TestClient(app) as client:
+            workflow = _create_javascript_code_workflow(client)
+            response = client.post(
+                f"/api/v1/workflows/{workflow['id']}/runs",
+                json={"input": {"first": "Ada", "last": "Lovelace"}},
+            )
+
+>       self.assertEqual(response.status_code, 200, response.text)
+E       AssertionError: 400 != 200 : {"code":400,"message":"Unsupported CODE language: javascript","data":null}
+
+tests/integration/workflow/test_transform_nodes.py:34: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/vincento/work/develop/hify/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/integration/workflow/test_transform_nodes.py::WorkflowTransformNodesIntegrationTest::test_workflow_runs_javascript_code_node_main_function
+1 failed, 4 passed, 1 warning in 0.81s

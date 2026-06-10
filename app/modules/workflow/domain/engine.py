@@ -5,6 +5,7 @@ from collections.abc import Mapping
 import ast
 import json
 import re
+import subprocess
 from time import perf_counter
 from typing import Any, Protocol
 
@@ -614,13 +615,15 @@ class CodeNodeExecutor:
     def execute(self, node: dict[str, Any], context: ExecutionContext) -> dict[str, Any]:
         config = _config(node)
         language = str(config.get("language") or "python").lower()
-        if language not in {"python", "python3"}:
-            raise WorkflowExecutionError(f"Unsupported CODE language: {language}")
         code = str(config.get("code") or config.get("body") or "").strip()
         if not code:
             raise WorkflowExecutionError("CODE node requires code")
-        tree = _validated_code_tree(code)
         inputs = _node_inputs(config, context)
+        if language in {"javascript", "js"}:
+            return self._execute_javascript(code, inputs, config)
+        if language not in {"python", "python3"}:
+            raise WorkflowExecutionError(f"Unsupported CODE language: {language}")
+        tree = _validated_code_tree(code)
         local_vars: dict[str, Any] = {"inputs": inputs, "result": None}
         exec(  # noqa: S102 - deliberate restricted workflow node sandbox.
             compile(tree, "<workflow-code-node>", "exec"),
@@ -630,6 +633,72 @@ class CodeNodeExecutor:
         result = local_vars.get("result")
         if result is None:
             result = local_vars.get("output")
+        if not isinstance(result, Mapping):
+            output_variable = str(config.get("outputVariable") or "output")
+            return {output_variable: result}
+        return _declared_output(dict(result), config)
+
+    def _execute_javascript(self, code: str, inputs: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
+        timeout_seconds = _code_timeout_seconds(config)
+        runner = """
+const fs = require('node:fs');
+const vm = require('node:vm');
+
+(async () => {
+  const payload = JSON.parse(fs.readFileSync(0, 'utf8'));
+  const sandbox = {
+    params: payload.inputs,
+    inputs: payload.inputs,
+    result: undefined,
+    output: undefined,
+    console: { log() {}, warn() {}, error() {} },
+    URL,
+    URLSearchParams,
+    TextEncoder,
+    TextDecoder,
+    structuredClone,
+    atob,
+    btoa,
+  };
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  const source = `${payload.code}
+;(async () => {
+  if (typeof main === 'function') return await main({ params, inputs });
+  if (typeof result !== 'undefined') return result;
+  if (typeof output !== 'undefined') return output;
+  return undefined;
+})()`;
+  const script = new vm.Script(source, { filename: 'workflow-code-node.js' });
+  const value = await script.runInContext(sandbox, { timeout: payload.timeoutMs });
+  process.stdout.write(JSON.stringify({ ok: true, value }));
+})().catch((error) => {
+  process.stdout.write(JSON.stringify({ ok: false, error: String(error && error.message ? error.message : error) }));
+  process.exitCode = 1;
+});
+"""
+        payload = {"code": code, "inputs": inputs, "timeoutMs": int(timeout_seconds * 1000)}
+        try:
+            completed = subprocess.run(  # noqa: S603 - fixed executable and no shell.
+                ["node", "-e", runner],
+                input=json.dumps(payload),
+                capture_output=True,
+                text=True,
+                timeout=timeout_seconds + 1,
+                check=False,
+            )
+        except FileNotFoundError as exc:
+            raise WorkflowExecutionError("CODE JavaScript runtime is not available") from exc
+        except subprocess.TimeoutExpired as exc:
+            raise WorkflowExecutionError("CODE node timed out") from exc
+        try:
+            response = json.loads(completed.stdout or "{}")
+        except json.JSONDecodeError as exc:
+            raise WorkflowExecutionError("CODE JavaScript runtime returned invalid output") from exc
+        if completed.returncode != 0 or response.get("ok") is not True:
+            message = response.get("error") or completed.stderr.strip() or "CODE JavaScript execution failed"
+            raise WorkflowExecutionError(str(message))
+        result = response.get("value")
         if not isinstance(result, Mapping):
             output_variable = str(config.get("outputVariable") or "output")
             return {output_variable: result}
@@ -1461,6 +1530,15 @@ def _validated_code_tree(code: str) -> ast.Module:
         if isinstance(node, ast.Name) and node.id.startswith("__"):
             raise WorkflowExecutionError("CODE node cannot access dunder names")
     return tree
+
+
+def _code_timeout_seconds(config: Mapping[str, Any]) -> float:
+    raw_timeout = config.get("timeout", 60)
+    try:
+        timeout = float(raw_timeout)
+    except (TypeError, ValueError):
+        timeout = 60.0
+    return min(max(timeout, 0.1), 60.0)
 
 
 def _node_inputs(config: dict[str, Any], context: ExecutionContext) -> dict[str, Any]:

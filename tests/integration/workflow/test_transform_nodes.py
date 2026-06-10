@@ -23,6 +23,20 @@ class WorkflowTransformNodesIntegrationTest(unittest.TestCase):
             {"final": "Ada Lovelace scored 97 with grade A"},
         )
 
+    def test_workflow_runs_javascript_code_node_main_function(self) -> None:
+        with TestClient(app) as client:
+            workflow = _create_javascript_code_workflow(client)
+            response = client.post(
+                f"/api/v1/workflows/{workflow['id']}/runs",
+                json={"input": {"first": "Ada", "last": "Lovelace"}},
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(
+            response.json()["data"]["output"],
+            {"final": "Ada Lovelace"},
+        )
+
     def test_json_parse_strict_failure_returns_status_and_error_in_workflow_output(self) -> None:
         with TestClient(app) as client:
             workflow = _create_json_parse_node_workflow(client)
@@ -111,6 +125,45 @@ def _create_transform_workflow(client: TestClient) -> dict[str, object]:
                 {"sourceNodeKey": "code_1", "targetNodeKey": "text_process_1", "condition": None},
                 {"sourceNodeKey": "text_process_1", "targetNodeKey": "json_parse_1", "condition": None},
                 {"sourceNodeKey": "json_parse_1", "targetNodeKey": "end", "condition": None},
+            ],
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["data"]
+
+
+def _create_javascript_code_workflow(client: TestClient) -> dict[str, object]:
+    response = client.post(
+        "/api/v1/workflows",
+        json={
+            "name": f"JavaScript Code Workflow {datetime.now().timestamp()}",
+            "description": "",
+            "nodes": [
+                {"nodeKey": "start", "type": "START", "name": "Start", "config": {}},
+                {
+                    "nodeKey": "code_1",
+                    "type": "CODE",
+                    "name": "Code",
+                    "config": {
+                        "language": "javascript",
+                        "inputParameters": [
+                            {"name": "first", "type": "string", "valueMode": "reference", "value": "{{start.first}}"},
+                            {"name": "last", "type": "string", "valueMode": "reference", "value": "{{start.last}}"},
+                        ],
+                        "code": "async function main({ params }) { return { fullName: `${params.first} ${params.last}` } }",
+                        "outputParameters": [{"name": "fullName", "type": "string"}],
+                    },
+                },
+                {
+                    "nodeKey": "end",
+                    "type": "END",
+                    "name": "End",
+                    "config": {"outputVariable": "final", "output": "{{code_1.fullName}}"},
+                },
+            ],
+            "edges": [
+                {"sourceNodeKey": "start", "targetNodeKey": "code_1", "condition": None},
+                {"sourceNodeKey": "code_1", "targetNodeKey": "end", "condition": None},
             ],
         },
     )

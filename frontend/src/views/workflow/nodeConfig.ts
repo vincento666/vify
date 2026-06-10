@@ -1,6 +1,7 @@
 import type { WorkflowCanvasNode, WorkflowCanvasNodeType } from './flowGraph'
 
 export type NodeConfigFieldType = 'text' | 'textarea' | 'number' | 'select' | 'readonly'
+  | 'code-editor'
   | 'switch'
   | 'resource-select'
   | 'output-parameters'
@@ -369,9 +370,9 @@ const SCHEMAS: Record<WorkflowCanvasNodeType, NodeConfigSchema> = {
       {
         title: '代码配置',
         fields: [
-          { key: 'language', label: '语言', type: 'select', options: ['python'] },
-          { key: 'code', label: '代码', type: 'textarea', placeholder: "result = {'output': inputs.get('USER_INPUT', '')}" },
-          { key: 'timeout', label: '超时秒数', type: 'number', min: 1, max: 30, step: 1, placeholder: '5' },
+          { key: 'language', label: '语言', type: 'select', options: ['python', 'javascript'] },
+          { key: 'code', label: '代码', type: 'code-editor', placeholder: "result = {'output': inputs.get('USER_INPUT', '')}" },
+          { key: 'timeout', label: '超时秒数', type: 'number', min: 1, max: 60, step: 1, placeholder: '60' },
         ],
       },
       OUTPUT_SECTION,

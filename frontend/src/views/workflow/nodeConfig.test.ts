@@ -92,6 +92,9 @@ describe('workflow node config schema', () => {
     expect(getNodeConfigSchema('CODE').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual(
       expect.arrayContaining(['language', 'code', 'timeout', 'outputParameters']),
     )
+    const codeFields = getNodeConfigSchema('CODE').sections.flatMap((section) => section.fields)
+    expect(codeFields.find((field) => field.key === 'language')?.options).toEqual(['python', 'javascript'])
+    expect(codeFields.find((field) => field.key === 'code')?.type).toBe('code-editor')
     expect(getNodeConfigSchema('TEXT_PROCESS').sections.flatMap((section) => section.fields.map((field) => field.key))).toEqual(
       expect.arrayContaining(['operation', 'template', 'pattern', 'replacement', 'outputParameters']),
     )

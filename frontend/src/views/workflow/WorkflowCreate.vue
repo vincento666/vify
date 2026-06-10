@@ -2037,6 +2037,26 @@
               :rows="5"
               @update:model-value="handleVariableFieldInput(field.key, $event)"
             />
+            <div
+              v-else-if="field.type === 'code-editor'"
+              class="code-editor-field"
+              data-testid="code-editor-field"
+            >
+              <div class="code-editor-toolbar">
+                <span>{{ codeTemplateLanguageLabel() }}</span>
+                <button type="button" class="soft-icon-button" @click="insertCodeTemplate">
+                  插入基础模板
+                </button>
+              </div>
+              <el-input
+                class="code-editor-input"
+                :model-value="fieldValue(field.key)"
+                :placeholder="field.placeholder"
+                type="textarea"
+                :rows="12"
+                @update:model-value="setFieldValue(field.key, $event)"
+              />
+            </div>
             <el-input-number
               v-else-if="field.type === 'number'"
               :model-value="Number(fieldValue(field.key) || 0)"
@@ -5780,6 +5800,28 @@ function setFieldValue(key: string, value: string | number | null | undefined) {
   updateSelectedNode({ config: { [key]: parseStructuredFieldValue(key, value ?? '') } })
 }
 
+function codeTemplateLanguageLabel() {
+  return String(fieldValue('language') || 'python') === 'javascript' ? 'JavaScript' : 'Python'
+}
+
+function insertCodeTemplate() {
+  const language = String(fieldValue('language') || 'python')
+  const template = language === 'javascript'
+    ? [
+        'async function main({ params }) {',
+        '  return {',
+        "    output: params.input ?? ''",
+        '  }',
+        '}',
+      ].join('\n')
+    : [
+        "result = {",
+        "    'output': inputs.get('input', '')",
+        "}",
+      ].join('\n')
+  setFieldValue('code', template)
+}
+
 function switchFieldValue(key: string) {
   const value = fieldValue(key)
   return value === true || value === 'true' || value === 'enabled'
@@ -7090,6 +7132,13 @@ function variableTypeLabel(type: VariableCatalogType) {
 
 function selectOptionLabel(key: string, option: string) {
   if (key === 'strategy' && option === 'first_non_empty') return '返回每个分组中第一个非空的值'
+  if (key === 'language') {
+    const labels: Record<string, string> = {
+      python: 'Python',
+      javascript: 'JavaScript',
+    }
+    return labels[option] ?? option
+  }
   if (key === 'retrievalMode') {
     const labels: Record<string, string> = {
       auto: '智能推荐',
@@ -12207,6 +12256,53 @@ onUnmounted(() => {
   color: #8b93a7;
   font-size: 0.75rem;
   font-weight: 800;
+}
+
+.code-editor-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.code-editor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: #687287;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.soft-icon-button {
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.75rem;
+  border: 0.0625rem solid #dfe3ee;
+  border-radius: 0.5rem;
+  background: #f7f8fc;
+  color: #565bf6;
+  font-size: 0.75rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.soft-icon-button:hover {
+  border-color: #cfd5e6;
+  background: #eef1ff;
+}
+
+.code-editor-input :deep(.el-textarea__inner) {
+  min-height: 12rem !important;
+  resize: none;
+  border-radius: 0.625rem;
+  background: #111827;
+  color: #e5e7eb;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: 0.8125rem;
+  line-height: 1.55;
 }
 
 .assignment-target-cell,
