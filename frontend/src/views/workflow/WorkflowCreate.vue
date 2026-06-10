@@ -638,7 +638,7 @@
           </div>
           <div>
             <h3>{{ selectedConfigPanelTitle() }}</h3>
-            <span>{{ selectedConfigPanelSubtitle() }}</span>
+            <span v-if="selectedConfigPanelSubtitle()">{{ selectedConfigPanelSubtitle() }}</span>
           </div>
           <div v-if="canTestSelectedNode" class="config-header-actions">
             <button type="button" aria-label="试运行当前节点" title="试运行当前节点" @click="openSelectedNodeTest">
@@ -4206,7 +4206,7 @@ function selectedConfigPanelSubtitle() {
   if (selectedNode.value.type === 'CONDITION') {
     return '连接多个下游分支，若设定的条件成立则仅运行对应的分支，若均不成立则只运行“否则”分支'
   }
-  return selectedNode.value.nodeKey
+  return ''
 }
 const variableGroups = computed(() => selectedNode.value
   ? buildVariableCatalog(graph.value, selectedNode.value.nodeKey, { flowType: isChatflowMode.value ? 'CHATFLOW' : 'WORKFLOW' })
@@ -5808,15 +5808,16 @@ function insertCodeTemplate() {
   const language = String(fieldValue('language') || 'python')
   const template = language === 'javascript'
     ? [
-        'async function main({ params }) {',
+        'exports.main = async (args) => {',
         '  return {',
-        "    output: params.input ?? ''",
+        "    output: args.input ?? ''",
         '  }',
         '}',
       ].join('\n')
     : [
-        "result = {",
-        "    'output': inputs.get('input', '')",
+        'def main(args):',
+        '    return {',
+        "        'output': args.get('input', '')",
         "}",
       ].join('\n')
   setFieldValue('code', template)
@@ -12696,6 +12697,7 @@ onUnmounted(() => {
   grid-template-columns: minmax(0, 1fr) 2.25rem;
 }
 
+.config-field .switch-field-row,
 .switch-field-row {
   min-height: 2rem;
   display: flex;
@@ -12709,6 +12711,10 @@ onUnmounted(() => {
   color: #687189;
   font-size: 0.8125rem;
   font-weight: 800;
+}
+
+.switch-field-row :deep(.el-switch) {
+  margin-left: auto;
 }
 
 .tool-resource-option {

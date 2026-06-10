@@ -7,6 +7,13 @@ function assert(condition, message) {
   if (!condition) throw new Error(message)
 }
 
+async function unwrap(response, label) {
+  assert(response.ok(), `${label} HTTP ${response.status()}`)
+  const payload = await response.json()
+  assert(payload.code === 200, `${label} API ${payload.message}`)
+  return payload.data
+}
+
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 
@@ -43,14 +50,45 @@ try {
   const textareaResize = await panel.locator('textarea').first().evaluate((el) => getComputedStyle(el).resize)
   assert(textareaResize === 'none', `Expected textarea resize none, got ${textareaResize}`)
 
-  await page.goto(`${baseUrl}/workflows/create`, { waitUntil: 'networkidle' })
-  await toolbar.waitFor({ state: 'visible', timeout: 5000 })
-  await toolbar.getByRole('button', { name: '添加节点', exact: true }).click()
-  await page.getByTestId('bottom-node-palette').getByRole('button', { name: '消息', exact: true }).click()
+  const chatflow = await unwrap(
+    await page.request.post(`${baseUrl}/api/v1/chatflows`, {
+      data: {
+        name: `Config Header Message ${Date.now()}`,
+        description: 'config compact message header e2e',
+        nodes: [
+          { nodeKey: 'start', type: 'START', name: '开始', config: { outputVariables: ['sys.query'], ui: { position: { x: 120, y: 160 } } } },
+          { nodeKey: 'message_1', type: 'MESSAGE', name: '消息', config: { content: 'Hello', outputVariable: 'content', streamOutput: 'enabled', ui: { position: { x: 420, y: 160 } } } },
+          { nodeKey: 'end', type: 'END', name: '结束', config: { outputVariable: 'final', output: '{{message_1.content}}', ui: { position: { x: 720, y: 160 } } } },
+        ],
+        edges: [
+          { sourceNodeKey: 'start', targetNodeKey: 'message_1', condition: null },
+          { sourceNodeKey: 'message_1', targetNodeKey: 'end', condition: null },
+        ],
+      },
+    }),
+    'create chatflow for config compact',
+  )
+  await page.goto(`${baseUrl}/chatflows/${chatflow.id}/canvas`, { waitUntil: 'networkidle' })
   await page.locator('.vue-flow__node[data-id="message_1"]').click()
   const messagePanel = page.locator('[data-testid="node-config-panel"]')
   await messagePanel.waitFor({ state: 'visible', timeout: 5000 })
+  const messageHeaderText = await messagePanel.locator('.config-header').innerText()
+  assert(messageHeaderText.includes('消息'), `Expected config header to keep the node display name, got ${messageHeaderText}`)
+  assert(!messageHeaderText.includes('message_1'), `Config header must not expose node key, got ${messageHeaderText}`)
   assert(await messagePanel.getByRole('switch', { name: '流式输出', exact: true }).count() === 1, 'Expected stream output switch')
+  const switchAlignment = await messagePanel.locator('.switch-field-row').filter({ hasText: '流式输出' }).first().evaluate((row) => {
+    const label = row.querySelector('span')?.getBoundingClientRect()
+    const control = row.querySelector('.el-switch')?.getBoundingClientRect()
+    const bounds = row.getBoundingClientRect()
+    return {
+      labelLeft: label?.left ?? 0,
+      controlRight: control?.right ?? 0,
+      rowLeft: bounds.left,
+      rowRight: bounds.right,
+    }
+  })
+  assert(switchAlignment.labelLeft - switchAlignment.rowLeft < 8, `Switch label must stay left aligned ${JSON.stringify(switchAlignment)}`)
+  assert(Math.abs(switchAlignment.rowRight - switchAlignment.controlRight) < 8, `Switch control must be right aligned ${JSON.stringify(switchAlignment)}`)
 
   if (screenshotPath) {
     await page.screenshot({ path: screenshotPath, fullPage: true })

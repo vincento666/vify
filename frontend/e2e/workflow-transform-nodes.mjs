@@ -120,7 +120,8 @@ try {
   await codeEditor.getByText('Python', { exact: true }).waitFor({ state: 'visible', timeout: 5000 })
   await codePanel.getByText('插入基础模板', { exact: true }).click()
   const pythonTemplate = await codeEditor.locator('textarea').inputValue()
-  assert(pythonTemplate.includes("result = {"), 'Expected Python template insertion to write a result object')
+  assert(pythonTemplate.includes('def main(args):'), 'Expected Python template insertion to use a main(args) entry function')
+  assert(pythonTemplate.includes("args.get('input'"), 'Expected Python template to read node inputs through args.get')
   await codePanel.getByRole('button', { name: '关闭配置', exact: true }).click()
   await codePanel.waitFor({ state: 'hidden', timeout: 5000 })
 

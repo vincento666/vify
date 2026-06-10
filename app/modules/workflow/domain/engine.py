@@ -624,13 +624,30 @@ class CodeNodeExecutor:
         if language not in {"python", "python3"}:
             raise WorkflowExecutionError(f"Unsupported CODE language: {language}")
         tree = _validated_code_tree(code)
-        local_vars: dict[str, Any] = {"inputs": inputs, "result": None}
+        local_vars: dict[str, Any] = {
+            "args": inputs,
+            "inputs": inputs,
+            "params": inputs,
+            "result": None,
+        }
+        sandbox_globals = {
+            "__builtins__": self._safe_builtins,
+            "args": inputs,
+            "inputs": inputs,
+            "json": json,
+            "params": inputs,
+            "re": re,
+        }
         exec(  # noqa: S102 - deliberate restricted workflow node sandbox.
             compile(tree, "<workflow-code-node>", "exec"),
-            {"__builtins__": self._safe_builtins, "json": json, "re": re},
+            sandbox_globals,
             local_vars,
         )
-        result = local_vars.get("result")
+        main_function = local_vars.get("main") or sandbox_globals.get("main")
+        if callable(main_function):
+            result = main_function(inputs)
+        else:
+            result = local_vars.get("result")
         if result is None:
             result = local_vars.get("output")
         if not isinstance(result, Mapping):
@@ -646,11 +663,16 @@ const vm = require('node:vm');
 
 (async () => {
   const payload = JSON.parse(fs.readFileSync(0, 'utf8'));
+  const module = { exports: {} };
+  const args = Object.assign({}, payload.inputs, { params: payload.inputs, inputs: payload.inputs });
   const sandbox = {
+    args,
     params: payload.inputs,
     inputs: payload.inputs,
     result: undefined,
     output: undefined,
+    module,
+    exports: module.exports,
     console: { log() {}, warn() {}, error() {} },
     URL,
     URLSearchParams,
@@ -664,7 +686,10 @@ const vm = require('node:vm');
   vm.createContext(sandbox);
   const source = `${payload.code}
 ;(async () => {
-  if (typeof main === 'function') return await main({ params, inputs });
+  const exportedMain = typeof module.exports === 'function' ? module.exports : module.exports && module.exports.main;
+  if (typeof exportedMain === 'function') return await exportedMain(args);
+  if (typeof exports.main === 'function') return await exports.main(args);
+  if (typeof main === 'function') return await main(args);
   if (typeof result !== 'undefined') return result;
   if (typeof output !== 'undefined') return output;
   return undefined;
