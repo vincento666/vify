@@ -11167,7 +11167,7 @@ onUnmounted(() => {
 
 .config-header h3 {
   margin: 0;
-  font-size: 2rem;
+  font-size: 1.0625rem;
   line-height: 1.3;
   color: #252b3d;
 }
@@ -11189,14 +11189,14 @@ onUnmounted(() => {
 }
 
 .config-title-heading {
-  font-size: 1.5rem;
+  font-size: 1.0625rem;
   font-weight: 700;
   line-height: 1.3;
   color: #252b3d;
 }
 
 .config-header .config-title-heading {
-  font-size: 1.5rem;
+  font-size: 1.0625rem;
   color: #252b3d;
 }
 
@@ -11208,12 +11208,12 @@ onUnmounted(() => {
 
 .config-title-editor input {
   width: min(16rem, 100%);
-  height: 2.5rem;
+  height: 2rem;
   padding: 0 0.625rem;
   border: 0.0625rem solid #5558e8;
   border-radius: 0.5rem;
   color: #252b3d;
-  font-size: 1.5rem;
+  font-size: 1rem;
   font-weight: 700;
   outline: none;
 }

@@ -59,7 +59,7 @@ try {
     return { text: element.textContent?.trim(), fontSize: Number.parseFloat(style.fontSize) }
   })
   assert(titleMetrics.text === '意图识别', `Config header should only show node title, got ${JSON.stringify(titleMetrics)}`)
-  assert(titleMetrics.fontSize >= 20, `Config header title should be prominent, got ${JSON.stringify(titleMetrics)}`)
+  assert(titleMetrics.fontSize >= 14 && titleMetrics.fontSize <= 18, `Config header title should use the original compact size, got ${JSON.stringify(titleMetrics)}`)
   const headerText = await panel.locator('.config-header').innerText()
   assert(!headerText.includes('用于用户输入的意图识别'), `Config header should not render node description, got ${headerText}`)
 
