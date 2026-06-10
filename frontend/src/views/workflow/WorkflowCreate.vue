@@ -10415,7 +10415,7 @@ onUnmounted(() => {
   top: var(--debug-dock-gap);
   right: var(--debug-dock-gap);
   bottom: var(--debug-dock-gap);
-  z-index: 9;
+  z-index: 60;
   width: var(--workflow-side-panel-width);
   display: flex;
   flex-direction: column;

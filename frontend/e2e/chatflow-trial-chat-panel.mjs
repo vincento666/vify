@@ -27,6 +27,19 @@ try {
   await page.getByRole('button', { name: '对话试运行', exact: true }).click()
   const panel = page.locator('[data-testid="test-run-panel"]')
   await panel.waitFor({ state: 'visible', timeout: 5000 })
+  const panelLayer = await page.evaluate(() => {
+    const panelEl = document.querySelector('[data-testid="test-run-panel"]')
+    const toolbarEl = document.querySelector('[data-testid="canvas-bottom-toolbar"]')
+    const zIndex = (element) => Number.parseInt(window.getComputedStyle(element).zIndex || '0', 10) || 0
+    return {
+      panel: panelEl ? zIndex(panelEl) : 0,
+      toolbar: toolbarEl ? zIndex(toolbarEl) : 0,
+    }
+  })
+  assert(
+    panelLayer.panel > panelLayer.toolbar,
+    `Expected chatflow trial panel to layer above toolbar, got ${JSON.stringify(panelLayer)}`,
+  )
 
   await panel.getByTestId('chatflow-run-chat-window').waitFor({ state: 'visible', timeout: 5000 })
   assert((await panel.getByText('保存本次输入').count()) === 0, 'Expected saved-input checkbox removed')
