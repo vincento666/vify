@@ -7905,7 +7905,7 @@ watch(() => [route.query.runId, route.query.executeId, route.query.debug], () =>
   void applyChatflowRunDebugRoute()
 })
 watch(
-  () => [resourcePanelCollapsed.value, canvasTab.value, rightSidePanelOpen.value, nodeTestDrawerOpen.value],
+  () => [resourcePanelCollapsed.value, canvasTab.value],
   requestCanvasLayoutRefit,
 )
 onMounted(() => {
@@ -8789,14 +8789,6 @@ onUnmounted(() => {
   background-image: radial-gradient(#bac0ce 0.075rem, transparent 0.075rem);
   background-size: 1.5rem 1.5rem;
   transition: width 0.18s ease;
-}
-
-.workflow-canvas-page.has-right-panel .coze-flow {
-  width: calc(100% - var(--workflow-right-panel-reserve));
-}
-
-.workflow-canvas-page.has-node-test-drawer .coze-flow {
-  width: calc(100% - var(--workflow-node-test-reserve));
 }
 
 .coze-flow :deep(.vue-flow__node) {
@@ -10391,7 +10383,7 @@ onUnmounted(() => {
   top: var(--debug-dock-gap);
   right: calc(var(--workflow-side-panel-gap) + var(--workflow-side-panel-width) + var(--workflow-node-test-panel-gap));
   bottom: var(--debug-dock-gap);
-  z-index: 10;
+  z-index: 70;
   width: var(--workflow-node-test-panel-width);
   display: flex;
   flex-direction: column;
@@ -10401,6 +10393,10 @@ onUnmounted(() => {
   box-shadow: 0 1rem 2.75rem rgba(34, 41, 63, 0.16);
   overflow-y: auto;
   scrollbar-gutter: stable;
+}
+
+.workflow-canvas-page.has-node-test-drawer:not(.has-right-panel) .node-test-drawer {
+  right: var(--debug-dock-gap);
 }
 
 .node-test-header {
