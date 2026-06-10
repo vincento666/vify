@@ -28,7 +28,7 @@ export interface VariableDefinition {
 
 interface BuildVariableCatalogOptions {
   flowType?: 'WORKFLOW' | 'CHATFLOW'
-  globalVariables?: Partial<Record<'user' | 'app' | 'system', VariableDefinition[]>>
+  globalVariables?: Partial<Record<'user' | 'app' | 'system' | 'conversation', VariableDefinition[]>>
 }
 
 export function formatVariableReference(nodeKey: string, variable: string) {
@@ -106,11 +106,12 @@ function upstreamNodeKeys(graph: WorkflowCanvasGraph, selectedNodeKey: string) {
 function configuredGlobalScopeGroups(options: BuildVariableCatalogOptions): VariableCatalogGroup[] {
   const definitions = options.globalVariables ?? {}
   const groups: Array<{
-    key: 'user' | 'global' | 'sys'
+    key: 'user' | 'global' | 'sys' | 'conversation'
     title: string
     scope: VariableCatalogScope
     variables?: VariableDefinition[]
   }> = [
+    { key: 'conversation', title: '会话变量', scope: 'conversation', variables: definitions.conversation },
     { key: 'user', title: '用户变量', scope: 'user', variables: definitions.user },
     { key: 'global', title: '应用变量', scope: 'global', variables: definitions.app },
     { key: 'sys', title: '系统变量', scope: 'system', variables: definitions.system },

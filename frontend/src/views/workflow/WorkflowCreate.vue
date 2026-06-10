@@ -155,19 +155,38 @@
             <div class="resource-section-heading">
               <h4>记忆</h4>
               <small>
-                会话变量 {{ chatflowConversationVariableCount }} · 用户变量 0
+                会话变量 {{ chatflowConversationVariableCount }} · 用户变量 {{ chatflowUserVariableCount }}
               </small>
             </div>
-            <div v-for="scope in chatflowVariableScopes" :key="scope.title" class="resource-group">
-              <button type="button" :aria-expanded="scope.open" @click="scope.open = !scope.open">
-                <span class="resource-group-title">
+            <div
+              v-for="scope in chatflowVariableScopes"
+              :key="scope.title"
+              class="chatflow-variable-scope"
+              :data-testid="`chatflow-variable-scope-${scope.scope}`"
+            >
+              <div class="chatflow-variable-scope-header">
+                <button
+                  type="button"
+                  class="section-title chatflow-variable-scope-toggle"
+                  :aria-expanded="scope.open"
+                  @click="toggleChatflowVariableScope(scope.scope)"
+                >
                   <ChevronDownIcon v-if="scope.open" aria-hidden="true" />
                   <ChevronRightIcon v-else aria-hidden="true" />
                   <strong>{{ scope.title }}</strong>
-                </span>
-                <small>{{ scope.description }}</small>
-                <em class="resource-group-count">{{ scope.items.length }}</em>
-              </button>
+                  <em>{{ scope.items.length }}</em>
+                </button>
+                <button
+                  v-if="scope.open"
+                  type="button"
+                  class="section-icon-button chatflow-variable-add-button"
+                  :aria-label="`新增${scope.title}`"
+                  @click="addChatflowScopedVariable(scope.scope)"
+                >
+                  <LucidePlus aria-hidden="true" />
+                </button>
+              </div>
+              <p v-if="scope.open" class="chatflow-variable-scope-description">{{ scope.description }}</p>
               <div v-if="scope.open" class="resource-items chatflow-variable-table">
                 <div class="chatflow-variable-table-head" aria-hidden="true">
                   <span>变量 key</span>
@@ -175,38 +194,46 @@
                   <span>操作</span>
                 </div>
                 <div
-                  v-for="item in scope.items"
+                  v-for="(item, itemIndex) in scope.items"
                   :key="item.reference"
                   class="resource-variable-row"
                   data-testid="chatflow-resource-variable"
                 >
-                  <span class="chatflow-variable-key">{{ item.key }}</span>
-                  <span class="chatflow-variable-name">
+                  <span v-if="item.readonly" class="chatflow-variable-key">{{ item.key }}</span>
+                  <input
+                    v-else
+                    class="chatflow-variable-key"
+                    :aria-label="`${scope.title} key`"
+                    :value="item.key"
+                    @input="updateChatflowScopedVariable(scope.scope, itemIndex, 'name', ($event.target as HTMLInputElement).value)"
+                  />
+                  <span v-if="item.readonly" class="chatflow-variable-name">
                     <strong>{{ item.label }}</strong>
                     <code>{{ item.reference }}</code>
                   </span>
-                  <span class="chatflow-variable-actions" aria-label="只读系统变量">
+                  <input
+                    v-else
+                    class="chatflow-variable-name chatflow-variable-label-input"
+                    :aria-label="`${scope.title}显示名`"
+                    :value="item.label"
+                    @input="updateChatflowScopedVariable(scope.scope, itemIndex, 'label', ($event.target as HTMLInputElement).value)"
+                  />
+                  <span class="chatflow-variable-actions" :aria-label="item.readonly ? '只读系统变量' : '自定义变量操作'">
                     <i class="chatflow-variable-switch" aria-hidden="true"></i>
-                    <button type="button" :aria-label="`配置 ${item.key}`" disabled>
+                    <button type="button" :aria-label="`配置 ${item.key}`" :disabled="item.readonly">
                       <SettingsIcon aria-hidden="true" />
                     </button>
-                    <button type="button" :aria-label="`删除 ${item.key}`" disabled>
+                    <button
+                      type="button"
+                      :aria-label="`删除 ${item.key}`"
+                      :disabled="item.readonly"
+                      @click="removeChatflowScopedVariable(scope.scope, itemIndex)"
+                    >
                       <XIcon aria-hidden="true" />
                     </button>
                   </span>
                 </div>
               </div>
-            </div>
-            <div class="chatflow-user-variable-card" data-testid="chatflow-user-variable-summary">
-              <div>
-                <strong>用户变量</strong>
-                <button type="button" aria-label="新增用户变量" disabled>
-                  <LucidePlus aria-hidden="true" />
-                </button>
-              </div>
-              <p>
-                用于存储用户使用项目过程中需要持久化存储和读取的数据，如用户的语言偏好、个性化设置等，并可设置作用范围。
-              </p>
             </div>
           </section>
         </template>
@@ -703,7 +730,6 @@
               <span class="config-title-heading">{{ selectedConfigPanelTitle() }}</span>
             </button>
             <h3 v-else>{{ selectedConfigPanelTitle() }}</h3>
-            <span v-if="selectedConfigPanelSubtitle()">{{ selectedConfigPanelSubtitle() }}</span>
           </div>
           <div v-if="canTestSelectedNode" class="config-header-actions">
             <button type="button" aria-label="试运行当前节点" title="试运行当前节点" @click="openSelectedNodeTest">
@@ -1595,27 +1621,45 @@
                 :key="`${index}-${row.key}-${row.branch}`"
                 class="secondary-row intent-row"
                 data-testid="intent-row"
+                @dragover.prevent
+                @drop="dropIntentRow(index, $event)"
               >
-                <el-input
-                  :model-value="row.name"
-                  aria-label="意图名称"
-                  placeholder="退款"
-                  @update:model-value="setIntentName(index, $event)"
-                />
-                <el-input
-                  :model-value="row.description"
-                  aria-label="意图描述"
-                  placeholder="识别退款相关问题"
-                  @update:model-value="setIntentDescription(index, $event)"
-                />
-                <el-input
-                  :model-value="row.examples.join('\n')"
-                  aria-label="意图示例"
-                  type="textarea"
-                  :rows="2"
-                  placeholder="每行一个例句"
-                  @update:model-value="setIntentExamples(index, $event)"
-                />
+                <button
+                  type="button"
+                  class="intent-drag-handle"
+                  aria-label="拖拽意图排序"
+                  draggable="true"
+                  @dragstart="startIntentRowDrag(index, $event)"
+                  @dragend="endIntentRowDrag"
+                >
+                  ⋮⋮
+                </button>
+                <div class="intent-row-fields">
+                  <el-input
+                    class="intent-name-field"
+                    :model-value="row.name"
+                    aria-label="意图名称"
+                    placeholder="退款"
+                    @update:model-value="setIntentName(index, $event)"
+                  />
+                  <el-input
+                    class="intent-description-field"
+                    :model-value="row.description"
+                    aria-label="意图描述"
+                    placeholder="请输入用户意图的描述，如售后问题等"
+                    @update:model-value="setIntentDescription(index, $event)"
+                  />
+                  <el-input
+                    class="intent-examples-field"
+                    :model-value="row.examples.join('\n')"
+                    aria-label="意图示例"
+                    type="textarea"
+                    :maxlength="300"
+                    :rows="3"
+                    placeholder="每行一个例句"
+                    @update:model-value="setIntentExamples(index, $event)"
+                  />
+                </div>
                 <button type="button" class="output-row-icon" aria-label="删除意图" @click="removeIntentRow(index)">
                   <XIcon aria-hidden="true" />
                 </button>
@@ -3774,7 +3818,7 @@ import {
   summarizeChatflowRunDebug,
   type ChatflowRunDebugDetail,
 } from './chatflowRunDebug'
-import { buildChatflowVariableScopes, type ChatflowVariableScope } from './chatflowVariables'
+import { buildChatflowVariableScopes, type ChatflowVariableDefinition, type ChatflowVariableScope } from './chatflowVariables'
 import {
   buildChatflowChannelRows,
   buildChatflowOpenShell,
@@ -3841,7 +3885,7 @@ import { buildNodePaletteGroups, filterNodePaletteGroups, type NodePaletteEntry 
 import { isResourceSelectable, resourceStatusLabel, type WorkflowResource } from './resourceRegistry'
 import { deriveRunPathEdgeClasses } from './runPathEdges'
 import { completeVariableBraceTrigger, insertInlineVariableReference } from './inlineVariableText'
-import { buildInlineVariableCatalog, buildVariableCatalog, type VariableCatalogGroup, type VariableCatalogType } from './variableCatalog'
+import { buildInlineVariableCatalog, buildVariableCatalog, type VariableCatalogGroup, type VariableCatalogType, type VariableDefinition } from './variableCatalog'
 import { evaluateWorkflowPublishGate } from './workflowPublish'
 import { validateWorkflowGraph } from './workflowValidation'
 import { buildChatflowRunDebugLink, buildWorkflowRunDebugLink } from '@/router/runDebugDeepLinks'
@@ -3859,6 +3903,7 @@ import {
 
 type CanvasTab = ComposerCanvasTab
 type ChatflowScopeState = ChatflowVariableScope & { open: boolean }
+type ChatflowVariableScopeKey = ChatflowVariableScope['scope']
 type ChatflowTrialMessage = {
   id: number
   role: 'user' | 'assistant'
@@ -4037,6 +4082,7 @@ const variableAssignmentTargetSearch = ref('')
 const activeConditionVariableTarget = ref('')
 const activeConditionVariableGroupKey = ref('')
 const conditionVariableSearch = ref('')
+const intentDragSourceIndex = ref<number | null>(null)
 const variableFlyoutPlacement = ref<'left' | 'right'>('left')
 const collapsedConfigSections = ref<Set<string>>(new Set())
 const lastSavedAt = ref('')
@@ -4088,8 +4134,19 @@ const chatflowVariableScopes = ref<ChatflowScopeState[]>(
   buildChatflowVariableScopes().map((scope) => ({ ...scope, open: false })),
 )
 const chatflowConversationVariableCount = computed(() =>
-  chatflowVariableScopes.value.reduce((total, scope) => total + scope.items.length, 0),
+  chatflowVariableScopes.value
+    .filter((scope) => scope.scope === 'conversation')
+    .reduce((total, scope) => total + scope.items.length, 0),
 )
+const chatflowUserVariableCount = computed(() =>
+  chatflowVariableScopes.value
+    .filter((scope) => scope.scope === 'user')
+    .reduce((total, scope) => total + scope.items.length, 0),
+)
+const chatflowCatalogVariableDefinitions = computed<Partial<Record<'conversation' | 'user', VariableDefinition[]>>>(() => ({
+  conversation: chatflowCustomVariableDefinitions('conversation'),
+  user: chatflowCustomVariableDefinitions('user'),
+}))
 const chatflowHistorySliderStyle = computed(() => {
   const percent = Math.round((chatflowHistoryRetentionRounds.value / 20) * 100)
   return {
@@ -4274,19 +4331,17 @@ function selectedConfigPanelTitle() {
   if (!selectedNode.value || !selectedSchema.value) return ''
   return selectedNode.value.name || selectedSchema.value.title
 }
-function selectedConfigPanelSubtitle() {
-  if (!selectedNode.value) return ''
-  if (selectedNode.value.type === 'LLM') return '调用大语言模型，使用变量和提示词生成回复'
-  if (selectedNode.value.type === 'CONDITION') {
-    return '连接多个下游分支，若设定的条件成立则仅运行对应的分支，若均不成立则只运行“否则”分支'
-  }
-  return ''
-}
 const variableGroups = computed(() => selectedNode.value
-  ? buildVariableCatalog(graph.value, selectedNode.value.nodeKey, { flowType: isChatflowMode.value ? 'CHATFLOW' : 'WORKFLOW' })
+  ? buildVariableCatalog(graph.value, selectedNode.value.nodeKey, {
+    flowType: isChatflowMode.value ? 'CHATFLOW' : 'WORKFLOW',
+    globalVariables: isChatflowMode.value ? chatflowCatalogVariableDefinitions.value : undefined,
+  })
   : [])
 const inlineVariableGroups = computed(() => selectedNode.value
-  ? buildInlineVariableCatalog(graph.value, selectedNode.value.nodeKey, { flowType: isChatflowMode.value ? 'CHATFLOW' : 'WORKFLOW' })
+  ? buildInlineVariableCatalog(graph.value, selectedNode.value.nodeKey, {
+    flowType: isChatflowMode.value ? 'CHATFLOW' : 'WORKFLOW',
+    globalVariables: isChatflowMode.value ? chatflowCatalogVariableDefinitions.value : undefined,
+  })
   : [])
 const llmModelDisplayName = computed(() => String(fieldValue('model') || 'xiaomi/mimo-v2-flash'))
 const filteredLlmModelOptions = computed(() => {
@@ -5904,6 +5959,28 @@ function persistIntentRows(rows: IntentRow[]) {
   updateSelectedNode({ config: { intents: rows } })
 }
 
+function startIntentRowDrag(index: number, event: DragEvent) {
+  intentDragSourceIndex.value = index
+  event.dataTransfer?.setData('text/plain', String(index))
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
+}
+
+function endIntentRowDrag() {
+  intentDragSourceIndex.value = null
+}
+
+function dropIntentRow(targetIndex: number, event: DragEvent) {
+  const rawSource = event.dataTransfer?.getData('text/plain')
+  const sourceIndex = Number(rawSource || intentDragSourceIndex.value)
+  intentDragSourceIndex.value = null
+  const rows = intentRows()
+  if (!Number.isInteger(sourceIndex) || sourceIndex < 0 || sourceIndex >= rows.length || sourceIndex === targetIndex) return
+  const nextRows = [...rows]
+  const [moved] = nextRows.splice(sourceIndex, 1)
+  nextRows.splice(targetIndex, 0, moved)
+  persistIntentRows(nextRows)
+}
+
 function addIntentRow() {
   const rows = intentRows()
   persistIntentRows([
@@ -5935,6 +6012,7 @@ function setIntentDescription(index: number, value: string | number) {
 function setIntentExamples(index: number, value: string | number) {
   updateIntentRow(index, {
     examples: String(value)
+      .slice(0, 300)
       .split('\n')
       .map((item) => item.trim())
       .filter((item) => item.length > 0),
@@ -7398,6 +7476,117 @@ function removeGuideQuestion(index: number) {
   markGraphDirty()
 }
 
+function chatflowScopeStateFromConfig(
+  config: Record<string, any> = {},
+  openState: Partial<Record<ChatflowVariableScopeKey, boolean>> = {},
+): ChatflowScopeState[] {
+  return buildChatflowVariableScopes({
+    conversationVariables: chatflowVariableDefinitionsFromConfig(config.conversationVariables),
+    userVariables: chatflowVariableDefinitionsFromConfig(config.userVariables),
+  }).map((scope) => ({ ...scope, open: Boolean(openState[scope.scope]) }))
+}
+
+function chatflowVariableDefinitionsFromConfig(value: unknown): ChatflowVariableDefinition[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((item): ChatflowVariableDefinition | null => {
+      const raw = item && typeof item === 'object' ? item as Record<string, unknown> : {}
+      const name = String(raw.name || raw.key || '').trim()
+      if (!name) return null
+      return {
+        name,
+        label: String(raw.label || name).trim(),
+        type: String(raw.type || 'string').trim() || 'string',
+      }
+    })
+    .filter((item): item is ChatflowVariableDefinition => item !== null)
+}
+
+function chatflowVariableScope(scope: ChatflowVariableScopeKey) {
+  return chatflowVariableScopes.value.find((item) => item.scope === scope)
+}
+
+function toggleChatflowVariableScope(scope: ChatflowVariableScopeKey) {
+  chatflowVariableScopes.value = chatflowVariableScopes.value.map((item) =>
+    item.scope === scope ? { ...item, open: !item.open } : item,
+  )
+}
+
+function chatflowCustomVariableDefinitions(scope: ChatflowVariableScopeKey): VariableDefinition[] {
+  return (chatflowVariableScope(scope)?.items || [])
+    .filter((item) => !item.readonly && item.name.trim())
+    .map((item) => ({ name: item.name.trim(), type: item.type as VariableCatalogType }))
+}
+
+function chatflowCustomVariableConfig(scope: ChatflowVariableScopeKey): ChatflowVariableDefinition[] {
+  return (chatflowVariableScope(scope)?.items || [])
+    .filter((item) => !item.readonly && item.name.trim())
+    .map((item) => ({ name: item.name.trim(), label: item.label.trim() || item.name.trim(), type: item.type || 'string' }))
+}
+
+function nextChatflowVariableName(scope: ChatflowVariableScopeKey) {
+  const prefix = scope === 'conversation' ? 'conversation_var' : 'user_var'
+  const existing = new Set((chatflowVariableScope(scope)?.items || []).map((item) => item.name))
+  let index = 1
+  let name = `${prefix}_${index}`
+  while (existing.has(name)) {
+    index += 1
+    name = `${prefix}_${index}`
+  }
+  return name
+}
+
+function makeChatflowScopedVariable(scope: ChatflowVariableScopeKey, name: string, label = name, type = 'string') {
+  const safeName = String(name || nextChatflowVariableName(scope)).trim() || nextChatflowVariableName(scope)
+  const safeLabel = String(label || safeName).trim() || safeName
+  return {
+    key: safeName,
+    label: safeLabel,
+    name: safeName,
+    type,
+    reference: `{{${scope}.${safeName}}}`,
+    readonly: false,
+  }
+}
+
+function addChatflowScopedVariable(scope: ChatflowVariableScopeKey) {
+  const name = nextChatflowVariableName(scope)
+  chatflowVariableScopes.value = chatflowVariableScopes.value.map((item) =>
+    item.scope === scope
+      ? { ...item, open: true, items: [...item.items, makeChatflowScopedVariable(scope, name)] }
+      : item,
+  )
+  markGraphDirty()
+}
+
+function updateChatflowScopedVariable(
+  scope: ChatflowVariableScopeKey,
+  itemIndex: number,
+  field: 'name' | 'label',
+  value: string,
+) {
+  chatflowVariableScopes.value = chatflowVariableScopes.value.map((item) => {
+    if (item.scope !== scope || !item.items[itemIndex] || item.items[itemIndex].readonly) return item
+    const nextItems = item.items.map((variable, index) => {
+      if (index !== itemIndex) return variable
+      const nextName = field === 'name' ? String(value || '').trim() : variable.name
+      const nextLabel = field === 'label' ? String(value || '').trim() : variable.label
+      return makeChatflowScopedVariable(scope, nextName || variable.name, nextLabel || variable.label, variable.type)
+    })
+    return { ...item, items: nextItems }
+  })
+  markGraphDirty()
+}
+
+function removeChatflowScopedVariable(scope: ChatflowVariableScopeKey, itemIndex: number) {
+  chatflowVariableScopes.value = chatflowVariableScopes.value.map((item) =>
+    item.scope === scope
+      ? { ...item, items: item.items.filter((variable, index) => variable.readonly || index !== itemIndex) }
+      : item,
+  )
+  markGraphDirty()
+}
+
 function setChatflowHistoryRetentionRounds(value: string | number) {
   const numeric = Number(value)
   chatflowHistoryRetentionRounds.value = Math.max(0, Math.min(20, Number.isFinite(numeric) ? Math.round(numeric) : 3))
@@ -7421,6 +7610,7 @@ function resetChatflowConversationSettings() {
   guideQuestions.value = ['查订单进度', '申请退款', '咨询发票']
   chatflowHistoryRetentionRounds.value = 3
   chatflowHistorySettingsOpen.value = false
+  chatflowVariableScopes.value = chatflowScopeStateFromConfig()
 }
 
 function syncChatflowSettingsFromGraph() {
@@ -7432,6 +7622,8 @@ function syncChatflowSettingsFromGraph() {
     : ['查订单进度', '申请退款', '咨询发票']
   const retention = Number(startConfig.historyRetentionRounds ?? 3)
   chatflowHistoryRetentionRounds.value = Math.max(0, Math.min(20, Number.isFinite(retention) ? Math.round(retention) : 3))
+  const openState = Object.fromEntries(chatflowVariableScopes.value.map((scope) => [scope.scope, scope.open]))
+  chatflowVariableScopes.value = chatflowScopeStateFromConfig(startConfig, openState)
 }
 
 function graphForPersistence() {
@@ -7447,6 +7639,8 @@ function graphForPersistence() {
             openingText: openingText.value,
             guideQuestions: guideQuestions.value.map((item) => item.trim()).filter(Boolean),
             historyRetentionRounds: chatflowHistoryRetentionRounds.value,
+            conversationVariables: chatflowCustomVariableConfig('conversation'),
+            userVariables: chatflowCustomVariableConfig('user'),
           },
         }
         : node,
@@ -8596,6 +8790,61 @@ onUnmounted(() => {
   text-align: right;
 }
 
+.chatflow-variable-scope {
+  margin-top: 0.625rem;
+  border-top: 0.0625rem solid #edf0f6;
+  padding-top: 0.625rem;
+}
+
+.chatflow-variable-scope-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.chatflow-variable-scope-toggle {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.chatflow-variable-scope-toggle svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: #6f778a;
+}
+
+.chatflow-variable-scope-toggle strong {
+  font-size: 0.9375rem;
+}
+
+.chatflow-variable-scope-toggle em {
+  margin-left: 0.25rem;
+  padding: 0.0625rem 0.375rem;
+  border-radius: 999rem;
+  background: #f0f2ff;
+  color: #5f61ff;
+  font-size: 0.6875rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.chatflow-variable-add-button {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.chatflow-variable-scope-description {
+  margin: 0.5rem 0 0;
+  color: #70798d;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
 .question-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 1.75rem;
@@ -8781,6 +9030,8 @@ onUnmounted(() => {
 
 .chatflow-variable-key {
   min-width: 0;
+  box-sizing: border-box;
+  width: 100%;
   height: 1.875rem;
   display: inline-flex;
   align-items: center;
@@ -8794,10 +9045,13 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  outline: none;
 }
 
 .chatflow-variable-name {
   min-width: 0;
+  box-sizing: border-box;
+  width: 100%;
   height: 1.875rem;
   display: flex;
   align-items: center;
@@ -8807,6 +9061,14 @@ onUnmounted(() => {
   border: 1px solid #e1e5ef;
   border-radius: 0.4375rem;
   background: #fff;
+}
+
+.chatflow-variable-label-input {
+  display: block;
+  color: #30364a;
+  font-size: 0.75rem;
+  font-weight: 700;
+  outline: none;
 }
 
 .chatflow-variable-name strong {
@@ -10905,7 +11167,7 @@ onUnmounted(() => {
 
 .config-header h3 {
   margin: 0;
-  font-size: 1.0625rem;
+  font-size: 2rem;
   line-height: 1.3;
   color: #252b3d;
 }
@@ -10927,9 +11189,14 @@ onUnmounted(() => {
 }
 
 .config-title-heading {
-  font-size: 1.0625rem;
+  font-size: 1.5rem;
   font-weight: 700;
   line-height: 1.3;
+  color: #252b3d;
+}
+
+.config-header .config-title-heading {
+  font-size: 1.5rem;
   color: #252b3d;
 }
 
@@ -10941,12 +11208,12 @@ onUnmounted(() => {
 
 .config-title-editor input {
   width: min(16rem, 100%);
-  height: 2rem;
+  height: 2.5rem;
   padding: 0 0.625rem;
   border: 0.0625rem solid #5558e8;
   border-radius: 0.5rem;
   color: #252b3d;
-  font-size: 1rem;
+  font-size: 1.5rem;
   font-weight: 700;
   outline: none;
 }
@@ -12234,7 +12501,73 @@ onUnmounted(() => {
 
 .intent-row-header,
 .intent-row {
-  grid-template-columns: minmax(5rem, 0.8fr) minmax(7rem, 1.1fr) minmax(7rem, 1.2fr) 2rem;
+  grid-template-columns: 1.5rem minmax(0, 1fr) minmax(0, 3fr) 2rem;
+}
+
+.intent-row-header span:first-child {
+  grid-column: 2;
+}
+
+.intent-row-header span:nth-child(2),
+.intent-row-header span:nth-child(3) {
+  display: none;
+}
+
+.intent-row {
+  grid-template-areas:
+    'drag name description delete'
+    'drag examples examples delete';
+  align-items: start;
+  padding: 0.625rem;
+  border: 0.0625rem solid #e0e5f1;
+  border-radius: 0.75rem;
+  background: #fff;
+}
+
+.intent-drag-handle {
+  grid-area: drag;
+  align-self: center;
+  width: 1.5rem;
+  min-height: 4rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #a5adbd;
+  font-size: 1rem;
+  line-height: 1;
+  letter-spacing: 0;
+  cursor: grab;
+}
+
+.intent-drag-handle:active {
+  cursor: grabbing;
+}
+
+.intent-row-fields {
+  display: contents;
+}
+
+.intent-name-field {
+  grid-area: name;
+}
+
+.intent-description-field {
+  grid-area: description;
+}
+
+.intent-examples-field {
+  grid-area: examples;
+}
+
+.intent-row > .output-row-icon {
+  grid-area: delete;
+  align-self: start;
+}
+
+.intent-examples-field :deep(.el-textarea__inner) {
+  height: 4.75rem;
+  resize: none;
+  overflow-y: auto;
 }
 
 .collection-target-cell {

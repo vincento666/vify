@@ -1,0 +1,130 @@
+> vitest run src/views/workflow/chatflowVariables.test.ts
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ ❯ src/views/workflow/chatflowVariables.test.ts (3 tests | 2 failed) 7ms
+   × chatflow variables > shows only configured runtime context variables by default 4ms
+     → expected [ '会话变量' ] to deeply equal [ '会话变量', '用户变量' ]
+   × chatflow variables > includes configured conversation and user variables after runtime defaults 2ms
+     → expected [ { key: 'SYS_QUERY', …(5) }, …(9) ] to deeply equal ArrayContaining{…}
+   ✓ chatflow variables > inserts selected variables into a field without dropping existing text 0ms
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed (3)
+   Start at  16:32:58
+   Duration  257ms (transform 25ms, setup 0ms, collect 18ms, tests 7ms, environment 0ms, prepare 68ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/views/workflow/chatflowVariables.test.ts > chatflow variables > shows only configured runtime context variables by default
+AssertionError: expected [ '会话变量' ] to deeply equal [ '会话变量', '用户变量' ]
+- Expected
++ Received
+  [
+    "会话变量",
+-   "用户变量",
+  ]
+ ❯ src/views/workflow/chatflowVariables.test.ts:9:48
+      7|     const scopes = buildChatflowVariableScopes()
+      8|
+      9|     expect(scopes.map((scope) => scope.title)).toEqual(['会话变量', '用户变量'…
+       |                                                ^
+     10|     expect(scopes[0].description).toContain('会话')
+     11|     expect(scopes[0].items[0]).toMatchObject({
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+ FAIL  src/views/workflow/chatflowVariables.test.ts > chatflow variables > includes configured conversation and user variables after runtime defaults
+AssertionError: expected [ { key: 'SYS_QUERY', …(5) }, …(9) ] to deeply equal ArrayContaining{…}
+- Expected
++ Received
+- ArrayContaining [
+-   ObjectContaining {
+-     "key": "customer_level",
+-     "label": "客户等级",
+-     "readonly": false,
+-     "reference": "{{conversation.customer_level}}",
++ [
++   {
++     "key": "SYS_QUERY",
++     "label": "本轮输入",
++     "name": "sys.query",
++     "readonly": true,
++     "reference": "{{sys.query}}",
++     "type": "string",
++   },
++   {
++     "key": "SYS_CONVERSATION_ID",
++     "label": "会话 ID",
++     "name": "sys.conversation_id",
++     "readonly": true,
++     "reference": "{{sys.conversation_id}}",
++     "type": "string",
++   },
++   {
++     "key": "SYS_CONVERSATION_NAME",
++     "label": "会话名称",
++     "name": "sys.conversation_name",
++     "readonly": true,
++     "reference": "{{sys.conversation_name}}",
++     "type": "string",
++   },
++   {
++     "key": "SYS_USER_ID",
++     "label": "用户 ID",
++     "name": "sys.user_id",
++     "readonly": true,
++     "reference": "{{sys.user_id}}",
++     "type": "string",
++   },
++   {
++     "key": "SYS_CHANNEL",
++     "label": "渠道",
++     "name": "sys.channel",
++     "readonly": true,
++     "reference": "{{sys.channel}}",
++     "type": "string",
++   },
++   {
++     "key": "SYS_CHANNEL_ID",
++     "label": "渠道 ID",
++     "name": "sys.channel_id",
++     "readonly": true,
++     "reference": "{{sys.channel_id}}",
++     "type": "string",
++   },
++   {
++     "key": "SYS_NOW",
++     "label": "当前时间",
++     "name": "sys.now",
++     "readonly": true,
++     "reference": "{{sys.now}}",
++     "type": "string",
++   },
++   {
++     "key": "SYS_MESSAGE_ID",
++     "label": "消息 ID",
++     "name": "sys.message_id",
++     "readonly": true,
++     "reference": "{{sys.message_id}}",
++     "type": "string",
++   },
++   {
++     "key": "SYS_ROUND",
++     "label": "对话轮次",
++     "name": "sys.round",
++     "readonly": true,
++     "reference": "{{sys.round}}",
++     "type": "number",
++   },
++   {
++     "key": "SYS_FILES",
++     "label": "上传文件",
++     "name": "sys.files",
++     "readonly": true,
++     "reference": "{{sys.files}}",
++     "type": "array",
+    },
+  ]
+ ❯ src/views/workflow/chatflowVariables.test.ts:37:29
+     35|     })
+     36|
+     37|     expect(scopes[0].items).toEqual(
+       |                             ^
+     38|       expect.arrayContaining([
+     39|         expect.objectContaining({
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
