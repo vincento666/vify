@@ -17,6 +17,8 @@ from app.modules.customer_assistant.infra.repository import CustomerAssistantRep
 from app.modules.customer_assistant.infra.schema import register_customer_assistant_tables
 from app.modules.knowledge.infra.repository import KnowledgeBaseRepository
 from app.modules.runtime_lab.infra.airline_chatflow_seed import (
+    AIRLINE_CHATFLOW_NAME_PREFIX,
+    AIRLINE_CHATFLOW_SOP_IDS,
     DEFAULT_RUNTIME_LAB_ARBITRATOR_MODEL,
     DEFAULT_RUNTIME_LAB_BASE_URL,
     DEFAULT_RUNTIME_LAB_FALLBACK_MODEL,
@@ -223,6 +225,70 @@ def write_mvp_demo_env(path: Path, result: MvpDemoSeedResult) -> None:
     path.write_text("\n".join(next_lines).rstrip() + "\n", encoding="utf-8")
 
 
+def verify_mvp_demo_topology(session: Session, *, env_text: str | None = None) -> dict[str, Any]:
+    _ensure_seed_tables(session)
+    story_rows = _demo_story_sessions(session)
+    story_report = {
+        story_id: _verify_story(session, int(row["id"])) if row is not None else _missing_story_report()
+        for story_id, row in story_rows.items()
+    }
+    missing_stories = [story_id for story_id, row in story_rows.items() if row is None]
+    chatflow_report = _verify_airline_chatflow_bindings(session)
+    knowledge_report = _verify_demo_knowledge(session)
+    security_report = {
+        "secretFreeEnv": _text_is_secret_free(env_text or ""),
+        "envChecked": env_text is not None,
+    }
+    checks = [
+        _check(
+            "demo_story_coverage",
+            not missing_stories and len(story_rows) == len(MVP_DEMO_STORY_IDS),
+            f"{len(MVP_DEMO_STORY_IDS) - len(missing_stories)}/{len(MVP_DEMO_STORY_IDS)} stories covered",
+            {"missing": missing_stories},
+        ),
+        _check(
+            "story_tasks_events_actions",
+            all(story["taskCount"] >= 1 and story["eventCount"] >= 1 for story in story_report.values())
+            and all(story["pendingActionCount"] >= 1 for story in story_report.values()),
+            "Each seeded story has tasks, events, and pending operator action evidence.",
+            {"stories": story_report},
+        ),
+        _check(
+            "airline_chatflow_bindings",
+            chatflow_report["count"] == len(AIRLINE_CHATFLOW_SOP_IDS) and not chatflow_report["missing"],
+            f"{chatflow_report['count']}/{len(AIRLINE_CHATFLOW_SOP_IDS)} SOP Chatflows published",
+            chatflow_report,
+        ),
+        _check(
+            "knowledge_faq_reachability",
+            knowledge_report["faqCount"] >= len(FAQ_ENTRIES)
+            and {"退票", "航班动态", "恢复"}.issubset(set(knowledge_report["keywords"])),
+            f"{knowledge_report['faqCount']} FAQ entries available",
+            knowledge_report,
+        ),
+        _check(
+            "secret_free_env",
+            security_report["secretFreeEnv"],
+            "Generated demo env text does not contain secret-looking values.",
+            security_report,
+        ),
+    ]
+    return {
+        "ok": all(check["status"] == "passed" for check in checks),
+        "checks": checks,
+        "storyIds": list(MVP_DEMO_STORY_IDS),
+        "storyCoverage": {
+            "required": len(MVP_DEMO_STORY_IDS),
+            "covered": len(MVP_DEMO_STORY_IDS) - len(missing_stories),
+            "missing": missing_stories,
+        },
+        "stories": story_report,
+        "chatflowBindings": chatflow_report,
+        "knowledge": knowledge_report,
+        "security": security_report,
+    }
+
+
 def _ensure_seed_tables(session: Session) -> None:
     register_baseline_tables()
     register_customer_assistant_tables()
@@ -280,6 +346,127 @@ def _upsert_faqs(
             repository.create_faq(values)
         else:
             repository.update_faq(int(row["id"]), values)
+
+
+def _demo_story_sessions(session: Session) -> dict[str, dict[str, Any] | None]:
+    table = Base.metadata.tables["customer_assistant_session"]
+    rows = session.execute(
+        sa.select(table).where(table.c.deleted.is_(False)).order_by(table.c.id.asc())
+    ).mappings().all()
+    by_story: dict[str, dict[str, Any] | None] = {story_id: None for story_id in MVP_DEMO_STORY_IDS}
+    for row in rows:
+        context = dict(row.get("context_json") or {})
+        story_id = str(context.get("storyId") or context.get("demoSeedKey") or "")
+        if context.get("demoSeed") == "073" and story_id in by_story and by_story[story_id] is None:
+            by_story[story_id] = dict(row)
+    return by_story
+
+
+def _verify_story(session: Session, session_id: int) -> dict[str, Any]:
+    task_table = Base.metadata.tables["customer_assistant_task"]
+    event_table = Base.metadata.tables["customer_assistant_event"]
+    action_table = Base.metadata.tables["customer_assistant_proposed_action"]
+    task_rows = session.execute(
+        sa.select(task_table).where(task_table.c.session_id == session_id, task_table.c.deleted.is_(False))
+    ).mappings().all()
+    event_rows = session.execute(
+        sa.select(event_table).where(event_table.c.session_id == session_id, event_table.c.deleted.is_(False))
+    ).mappings().all()
+    action_rows = session.execute(
+        sa.select(action_table).where(action_table.c.session_id == session_id, action_table.c.deleted.is_(False))
+    ).mappings().all()
+    return {
+        "sessionId": session_id,
+        "taskCount": len(task_rows),
+        "eventCount": len(event_rows),
+        "pendingActionCount": sum(1 for row in action_rows if row.get("status") == "PENDING"),
+        "taskKeys": [str(row.get("task_key") or "") for row in task_rows],
+        "taskStatuses": sorted({str(row.get("status") or "") for row in task_rows}),
+    }
+
+
+def _missing_story_report() -> dict[str, Any]:
+    return {
+        "sessionId": None,
+        "taskCount": 0,
+        "eventCount": 0,
+        "pendingActionCount": 0,
+        "taskKeys": [],
+        "taskStatuses": [],
+    }
+
+
+def _verify_airline_chatflow_bindings(session: Session) -> dict[str, Any]:
+    workflow = Base.metadata.tables["workflow"]
+    rows = session.execute(
+        sa.select(workflow).where(
+            workflow.c.flow_type == "CHATFLOW",
+            workflow.c.status == "PUBLISHED",
+            workflow.c.deleted.is_(False),
+        )
+    ).mappings().all()
+    by_sop: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        name = str(row.get("name") or "")
+        if not name.startswith(AIRLINE_CHATFLOW_NAME_PREFIX):
+            continue
+        for sop_id in AIRLINE_CHATFLOW_SOP_IDS:
+            if name.endswith(f"({sop_id})"):
+                by_sop[sop_id] = dict(row)
+                break
+    missing = [sop_id for sop_id in AIRLINE_CHATFLOW_SOP_IDS if sop_id not in by_sop]
+    return {
+        "count": len(by_sop),
+        "missing": missing,
+        "ids": {sop_id: int(row["id"]) for sop_id, row in by_sop.items()},
+    }
+
+
+def _verify_demo_knowledge(session: Session) -> dict[str, Any]:
+    knowledge_base = Base.metadata.tables["knowledge_base"]
+    faq_table = Base.metadata.tables["knowledge_faq"]
+    base_row = session.execute(
+        sa.select(knowledge_base).where(
+            knowledge_base.c.name == MVP_DEMO_KNOWLEDGE_NAME,
+            knowledge_base.c.deleted.is_(False),
+        )
+    ).mappings().one_or_none()
+    if base_row is None:
+        return {"knowledgeBaseId": None, "faqCount": 0, "keywords": []}
+    faq_rows = session.execute(
+        sa.select(faq_table).where(
+            faq_table.c.knowledge_base_id == int(base_row["id"]),
+            faq_table.c.enabled.is_(True),
+            faq_table.c.deleted.is_(False),
+        )
+    ).mappings().all()
+    keywords: set[str] = set()
+    for row in faq_rows:
+        for keyword in row.get("keywords") or []:
+            keywords.add(str(keyword))
+    return {
+        "knowledgeBaseId": int(base_row["id"]),
+        "faqCount": len(faq_rows),
+        "keywords": sorted(keywords),
+    }
+
+
+def _check(name: str, passed: bool, summary: str, evidence: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "name": name,
+        "status": "passed" if passed else "failed",
+        "summary": summary,
+        "evidence": evidence,
+    }
+
+
+def _text_is_secret_free(text: str) -> bool:
+    if not text:
+        return True
+    upper = text.upper()
+    if "SK-" in upper:
+        return False
+    return not any(marker in upper for marker in ("API_KEY=", "TOKEN=", "SECRET=", "PASSWORD="))
 
 
 def _seed_customer_story(
