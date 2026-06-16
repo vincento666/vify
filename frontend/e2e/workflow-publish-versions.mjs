@@ -42,6 +42,26 @@ try {
     data: { input: {} },
   }), 'run active v2')
   assert(activeV2.output.final === 'v2', `Expected active v2 output, got ${JSON.stringify(activeV2)}`)
+  assert(activeV2.versionId === publishV2.id, `Expected active v2 versionId ${publishV2.id}, got ${activeV2.versionId}`)
+
+  const targetedV1 = await unwrap(await page.request.post(`${baseUrl}/api/v1/workflows/${workflow.id}/published-runs`, {
+    data: { input: {}, versionId: publishV1.id },
+  }), 'run targeted v1')
+  assert(targetedV1.output.final === 'v1', `Expected targeted v1 output, got ${JSON.stringify(targetedV1)}`)
+  assert(targetedV1.versionId === publishV1.id, `Expected targeted v1 versionId ${publishV1.id}, got ${targetedV1.versionId}`)
+  assert(targetedV1.version === 1, `Expected targeted v1 version=1, got ${targetedV1.version}`)
+
+  const targetedV2 = await unwrap(await page.request.post(`${baseUrl}/api/v1/workflows/${workflow.id}/published-runs`, {
+    data: { input: {}, versionId: publishV2.id },
+  }), 'run targeted v2')
+  assert(targetedV2.output.final === 'v2', `Expected targeted v2 output, got ${JSON.stringify(targetedV2)}`)
+  assert(targetedV2.versionId === publishV2.id, `Expected targeted v2 versionId ${publishV2.id}, got ${targetedV2.versionId}`)
+
+  const activeAfterTarget = await unwrap(await page.request.post(`${baseUrl}/api/v1/workflows/${workflow.id}/published-runs`, {
+    data: { input: {} },
+  }), 'run active after targeted v1')
+  assert(activeAfterTarget.output.final === 'v2', `Expected active v2 after targeted v1, got ${JSON.stringify(activeAfterTarget)}`)
+  assert(activeAfterTarget.versionId === publishV2.id, 'Targeted historical run should not change active version')
 
   await unwrap(await page.request.post(`${baseUrl}/api/v1/workflows/${workflow.id}/versions/${publishV1.id}/rollback`), 'rollback v1')
   const activeV1 = await unwrap(await page.request.post(`${baseUrl}/api/v1/workflows/${workflow.id}/published-runs`, {
@@ -57,6 +77,13 @@ try {
   await versions.getByText('v1', { exact: true }).waitFor({ state: 'visible', timeout: 10000 })
   await versions.getByText('当前版本', { exact: true }).waitFor({ state: 'visible', timeout: 10000 })
   await versions.getByText('可回滚', { exact: true }).waitFor({ state: 'visible', timeout: 10000 })
+  const versionTwoRow = versions.locator('.version-row').filter({ hasText: 'v2' }).first()
+  await versionTwoRow.getByTestId('workflow-version-run').click()
+  const targetedRunResult = versions.locator('.targeted-published-run-result')
+  await targetedRunResult.waitFor({ state: 'visible', timeout: 10000 })
+  const targetedRunText = await targetedRunResult.textContent()
+  assert(targetedRunText?.includes('运行版本 v2'), `Expected targeted UI run v2, got ${targetedRunText}`)
+  assert(targetedRunText?.includes(`versionId ${publishV2.id}`), `Expected targeted UI versionId ${publishV2.id}, got ${targetedRunText}`)
 
   if (screenshotPath) {
     await page.screenshot({ path: screenshotPath, fullPage: true })

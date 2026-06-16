@@ -35,6 +35,64 @@ class WorkflowPublishVersionsTest(unittest.TestCase):
         self.assertTrue(rollback_response.json()["data"]["active"])
         self.assertEqual(active_v1_run.json()["data"]["output"]["final"], "v1")
 
+    def test_workflow_published_run_targets_historical_version_without_rollback(self) -> None:
+        with TestClient(app) as client:
+            workflow = self._create_workflow(client, "v1-targeted")
+            publish_v1 = client.post(f"/api/v1/workflows/{workflow['id']}/publish").json()["data"]
+
+            self._update_workflow_output(client, workflow["id"], "v2-active")
+            publish_v2 = client.post(f"/api/v1/workflows/{workflow['id']}/publish").json()["data"]
+            targeted_v1 = client.post(
+                f"/api/v1/workflows/{workflow['id']}/published-runs",
+                json={"input": {}, "versionId": publish_v1["id"]},
+            )
+            active_after_target = client.post(
+                f"/api/v1/workflows/{workflow['id']}/published-runs",
+                json={"input": {}},
+            )
+
+        self.assertEqual(targeted_v1.status_code, 200, targeted_v1.text)
+        self.assertEqual(targeted_v1.json()["data"]["output"]["final"], "v1-targeted")
+        self.assertEqual(targeted_v1.json()["data"]["versionId"], publish_v1["id"])
+        self.assertEqual(targeted_v1.json()["data"]["version"], 1)
+        self.assertEqual(active_after_target.json()["data"]["output"]["final"], "v2-active")
+        self.assertEqual(active_after_target.json()["data"]["versionId"], publish_v2["id"])
+        self.assertEqual(active_after_target.json()["data"]["version"], 2)
+
+    def test_workflow_published_run_rejects_unknown_version_id(self) -> None:
+        with TestClient(app) as client:
+            workflow = self._create_workflow(client, "v1")
+            client.post(f"/api/v1/workflows/{workflow['id']}/publish")
+            response = client.post(
+                f"/api/v1/workflows/{workflow['id']}/published-runs",
+                json={"input": {}, "versionId": 999999999},
+            )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("Published version not found", response.json()["message"])
+
+    def test_chatflow_published_run_targets_historical_version_without_rollback(self) -> None:
+        with TestClient(app) as client:
+            chatflow = self._create_chatflow(client, "chatflow-v1")
+            publish_v1 = client.post(f"/api/v1/chatflows/{chatflow['id']}/publish").json()["data"]
+
+            self._update_chatflow_output(client, chatflow["id"], "chatflow-v2")
+            publish_v2 = client.post(f"/api/v1/chatflows/{chatflow['id']}/publish").json()["data"]
+            targeted_v1 = client.post(
+                f"/api/v1/chatflows/{chatflow['id']}/published-runs",
+                json={"input": {}, "versionId": publish_v1["id"]},
+            )
+            active_after_target = client.post(
+                f"/api/v1/chatflows/{chatflow['id']}/published-runs",
+                json={"input": {}},
+            )
+
+        self.assertEqual(targeted_v1.status_code, 200, targeted_v1.text)
+        self.assertEqual(targeted_v1.json()["data"]["output"]["final"], "chatflow-v1")
+        self.assertEqual(targeted_v1.json()["data"]["versionId"], publish_v1["id"])
+        self.assertEqual(active_after_target.json()["data"]["output"]["final"], "chatflow-v2")
+        self.assertEqual(active_after_target.json()["data"]["versionId"], publish_v2["id"])
+
     def test_chatflow_publish_requires_channel_config_and_valid_graph(self) -> None:
         with TestClient(app) as client:
             chatflow = self._create_chatflow(client)
@@ -104,7 +162,7 @@ class WorkflowPublishVersionsTest(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
 
-    def _create_chatflow(self, client: TestClient) -> dict:
+    def _create_chatflow(self, client: TestClient, output: str = "ok") -> dict:
         response = client.post(
             "/api/v1/chatflows",
             json={
@@ -112,13 +170,26 @@ class WorkflowPublishVersionsTest(unittest.TestCase):
                 "description": "",
                 "nodes": [
                     {"nodeKey": "start", "type": "START", "name": "Start", "config": {}},
-                    {"nodeKey": "end", "type": "END", "name": "End", "config": {"outputVariable": "final", "output": "ok"}},
+                    {"nodeKey": "end", "type": "END", "name": "End", "config": {"outputVariable": "final", "output": output}},
                 ],
                 "edges": [{"sourceNodeKey": "start", "targetNodeKey": "end", "condition": None}],
             },
         )
         self.assertEqual(response.status_code, 200)
         return response.json()["data"]
+
+    def _update_chatflow_output(self, client: TestClient, chatflow_id: int, output: str) -> None:
+        response = client.put(
+            f"/api/v1/chatflows/{chatflow_id}",
+            json={
+                "nodes": [
+                    {"nodeKey": "start", "type": "START", "name": "Start", "config": {}},
+                    {"nodeKey": "end", "type": "END", "name": "End", "config": {"outputVariable": "final", "output": output}},
+                ],
+                "edges": [{"sourceNodeKey": "start", "targetNodeKey": "end", "condition": None}],
+            },
+        )
+        self.assertEqual(response.status_code, 200)
 
 
 if __name__ == "__main__":

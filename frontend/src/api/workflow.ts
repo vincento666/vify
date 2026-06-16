@@ -74,8 +74,11 @@ export function getWorkflowRunDebug(id: number, runId: number) {
   return get<any>(`/v1/workflows/${id}/runs/${runId}/debug`)
 }
 
-export function runPublishedWorkflow(id: number, input: Record<string, any>) {
-  return post<any>(`/v1/workflows/${id}/published-runs`, { input })
+export function runPublishedWorkflow(id: number, input: Record<string, any>, versionId?: number) {
+  return post<any>(`/v1/workflows/${id}/published-runs`, {
+    input,
+    ...(typeof versionId === 'number' ? { versionId } : {}),
+  })
 }
 
 export function publishWorkflowVersion(id: number) {
@@ -129,8 +132,11 @@ export function getChatflowRunDebug(id: number, runId: number) {
   return get<any>(`/v1/chatflows/${id}/runs/${runId}/debug`)
 }
 
-export function runPublishedChatflow(id: number, input: Record<string, any>) {
-  return post<any>(`/v1/chatflows/${id}/published-runs`, { input })
+export function runPublishedChatflow(id: number, input: Record<string, any>, versionId?: number) {
+  return post<any>(`/v1/chatflows/${id}/published-runs`, {
+    input,
+    ...(typeof versionId === 'number' ? { versionId } : {}),
+  })
 }
 
 export function publishChatflowVersion(id: number) {

@@ -44,6 +44,7 @@ class WorkflowRunRequest(BaseModel):
 
     input: dict[str, object] = Field(default_factory=dict)
     idempotency_key: str | None = Field(default=None, alias="idempotencyKey")
+    version_id: int | None = Field(default=None, alias="versionId")
 
 
 class ChatflowChannelUpdateRequest(BaseModel):

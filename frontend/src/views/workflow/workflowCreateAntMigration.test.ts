@@ -37,4 +37,16 @@ describe('workflow create Ant migration', () => {
     expect(main).not.toContain('requiresLegacyElementPlus')
     expect(main).not.toContain('installLegacyElementPlus')
   })
+
+  it('exposes targeted test run controls for published versions', () => {
+    const content = readSource('src/views/workflow/WorkflowCreate.vue')
+    const versionListStart = content.indexOf('data-testid="workflow-version-list"')
+    const versionListEnd = content.indexOf('</section>', versionListStart)
+    const versionList = content.slice(versionListStart, versionListEnd)
+
+    expect(versionList).toContain('data-testid="workflow-version-run"')
+    expect(versionList).toContain('runPublishedVersion(version.id)')
+    expect(content).toContain('targetedPublishedRunResult')
+    expect(content).toContain('versionId')
+  })
 })

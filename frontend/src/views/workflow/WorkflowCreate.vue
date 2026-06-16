@@ -3821,6 +3821,14 @@
               </div>
               <em>{{ version.status }}</em>
               <button
+                type="button"
+                data-testid="workflow-version-run"
+                :disabled="targetedPublishedRunLoadingId === version.id"
+                @click="runPublishedVersion(version.id)"
+              >
+                测试运行
+              </button>
+              <button
                 v-if="version.canRollback"
                 type="button"
                 :disabled="rollingBackVersionId === version.id"
@@ -3830,6 +3838,12 @@
               </button>
             </article>
           </template>
+          <p v-if="targetedPublishedRunResult" class="targeted-published-run-result">
+            运行版本 v{{ targetedPublishedRunResult.version }}
+            · Run #{{ targetedPublishedRunResult.runId }}
+            · {{ targetedPublishedRunResult.status }}
+            · versionId {{ targetedPublishedRunResult.versionId }}
+          </p>
         </section>
 
         <div class="publish-actions">
@@ -3911,6 +3925,8 @@ import {
   runChatflow,
   runChatflowV2,
   runChatflowNode,
+  runPublishedChatflow,
+  runPublishedWorkflow,
   runWorkflow,
   runWorkflowV2,
   runWorkflowNode,
@@ -4281,6 +4297,8 @@ const chatflowChannels = ref<ChatflowChannelShell[]>([])
 const workflowVersionsLoading = ref(false)
 const workflowVersions = ref<WorkflowVersionLike[]>([])
 const rollingBackVersionId = ref(0)
+const targetedPublishedRunLoadingId = ref(0)
+const targetedPublishedRunResult = ref<Record<string, any> | null>(null)
 const workflowStatus = ref('DRAFT')
 const lastTestRunStatus = ref('')
 const lastTestRunId = ref(0)
@@ -8897,6 +8915,35 @@ async function rollbackVersion(versionId: number) {
     message.error(e?.message || '回滚失败')
   } finally {
     rollingBackVersionId.value = 0
+  }
+}
+
+async function runPublishedVersion(versionId: number) {
+  if (!workflowId.value) return
+  targetedPublishedRunLoadingId.value = versionId
+  targetedPublishedRunResult.value = null
+  try {
+    const runner = isChatflowMode.value ? runPublishedChatflow : runPublishedWorkflow
+    targetedPublishedRunResult.value = await runner(workflowId.value, publishedVersionRunInput(), versionId) as Record<string, any>
+    message.success('已运行发布版本')
+  } catch (e: any) {
+    message.error(e?.message || '运行发布版本失败')
+  } finally {
+    targetedPublishedRunLoadingId.value = 0
+  }
+}
+
+function publishedVersionRunInput() {
+  if (isChatflowMode.value) {
+    return buildChatflowRunInput({
+      message: testInput.value.trim() || 'hello',
+      ...testProfile.value,
+      historyRetentionRounds: chatflowHistoryRetentionRounds.value,
+    })
+  }
+  return {
+    userMessage: testInput.value,
+    USER_INPUT: testInput.value,
   }
 }
 
@@ -15131,11 +15178,11 @@ onUnmounted(() => {
 
 .version-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: 0.75rem;
   padding: 0.625rem 0;
-  border-top: 1px solid #edf1f7;
+  border-top: 0.0625rem solid #edf1f7;
 }
 
 .version-row strong,
@@ -15159,6 +15206,17 @@ onUnmounted(() => {
   background: transparent;
   color: #5d5ff6;
   cursor: pointer;
+}
+
+.targeted-published-run-result {
+  margin: 0.5rem 0 0;
+  padding: 0.5rem;
+  border: 0.0625rem solid #dbe8ff;
+  border-radius: 0.375rem;
+  background: #f7fbff;
+  color: #42526e;
+  font-size: 0.8125rem;
+  line-height: 1.5;
 }
 
 .node-palette-group {

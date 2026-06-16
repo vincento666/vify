@@ -361,10 +361,10 @@ class WorkflowService:
     def execute_published(self, workflow_id: int, request: WorkflowRunRequest) -> dict[str, Any]:
         self._ensure_publish_repo(workflow_id)
         assert self._publish_repository is not None
-        active = self._publish_repository.active_version(workflow_id, self._flow_type)
-        if active is None:
+        published_version = self._published_version_for_run(workflow_id, request.version_id)
+        if published_version is None:
             raise BizError(ErrorCode.BAD_REQUEST, "No active published version")
-        snapshot = active.get("snapshot") if isinstance(active.get("snapshot"), dict) else {}
+        snapshot = published_version.get("snapshot") if isinstance(published_version.get("snapshot"), dict) else {}
         snapshot_repository = _SnapshotWorkflowRepository(self._repository, snapshot)
         input_data = dict(request.input)
         if self._flow_type == "CHATFLOW":
@@ -386,8 +386,8 @@ class WorkflowService:
         if self._flow_type == "CHATFLOW" and self._chatflow_state_repository is not None:
             data.update(self._record_chatflow_state(workflow_id, input_data, result))
         data.update(self._debug_url_fields(workflow_id, result.run_id))
-        data["versionId"] = int(active["id"])
-        data["version"] = int(active["version"])
+        data["versionId"] = int(published_version["id"])
+        data["version"] = int(published_version["version"])
         self._audit(
             f"{self._flow_type}_RUN",
             f"{self._flow_type}_RUN",
@@ -395,11 +395,20 @@ class WorkflowService:
             metadata={
                 "workflowId": workflow_id,
                 "status": result.status,
-                "versionId": int(active["id"]),
-                "version": int(active["version"]),
+                "versionId": int(published_version["id"]),
+                "version": int(published_version["version"]),
             },
         )
         return data
+
+    def _published_version_for_run(self, workflow_id: int, version_id: int | None) -> dict[str, Any] | None:
+        assert self._publish_repository is not None
+        if version_id is None:
+            return self._publish_repository.active_version(workflow_id, self._flow_type)
+        row = self._publish_repository.get_version(workflow_id, self._flow_type, version_id)
+        if row is None:
+            raise BizError(ErrorCode.NOT_FOUND, "Published version not found")
+        return row
 
     def _debug_url_fields(self, workflow_id: int, run_id: int) -> dict[str, str]:
         prefix = "chatflows" if self._flow_type == "CHATFLOW" else "workflows"
