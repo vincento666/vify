@@ -856,17 +856,37 @@ class CustomerAssistantService:
         command = _task_command_from_proposed_payload(dict(payload.get("taskCommand") or {}))
         session_id = int(action["session_id"])
         run_id = int(action["run_id"])
-        self._ledger.apply_commands(
+        mutation = self._ledger.apply_commands(
             session_id,
             run_id,
             str(payload.get("message") or ""),
             [command],
             actor="operator",
         )
+        worker_results: list[WorkerResult] = []
+        updated_tasks: tuple[TaskItem, ...] = ()
+        if command.type == TaskCommandType.RESUME_TASK:
+            worker_results, updated_tasks = self._dispatch_ready_tasks(
+                session_id,
+                run_id,
+                str(payload.get("message") or payload.get("reason") or command.reason or ""),
+                mutation.ready_tasks,
+                actor="operator",
+            )
+        result_payload: dict[str, Any] = {
+            "applied": True,
+            "taskCommand": _command_payload(command),
+        }
+        if worker_results or updated_tasks:
+            result_payload["workerResultCount"] = len(worker_results)
+            result_payload["updatedTaskIds"] = [task.id for task in updated_tasks]
+            worker_run_ids = [result.worker_run_id for result in worker_results if result.worker_run_id]
+            if worker_run_ids:
+                result_payload["workerRunIds"] = worker_run_ids
         updated = self._repository.update_proposed_action_status(
             int(action["id"]),
             "CONFIRMED",
-            result={"applied": True, "taskCommand": _command_payload(command)},
+            result=result_payload,
         )
         self._repository.append_event(
             session_id,
@@ -967,8 +987,32 @@ class CustomerAssistantService:
             )
         self._record_task_recognition_shadow(session_id, run_id, message, commands, actor)
         mutation = self._ledger.apply_commands(session_id, run_id, message, commands, actor=actor)
+        worker_results, updated_tasks = self._dispatch_ready_tasks(
+            session_id,
+            run_id,
+            message,
+            mutation.ready_tasks,
+            actor,
+        )
+        return {
+            "commands": commands,
+            "workerResults": worker_results,
+            "updatedTasks": updated_tasks,
+        }
+
+    def _dispatch_ready_tasks(
+        self,
+        session_id: int,
+        run_id: int,
+        message: str,
+        ready_tasks: tuple[TaskItem, ...],
+        actor: str,
+    ) -> tuple[list[WorkerResult], tuple[TaskItem, ...]]:
+        if not ready_tasks:
+            return [], ()
         worker_spans: dict[int, str] = {}
-        for task in mutation.ready_tasks:
+        ready_task_list = list(ready_tasks)
+        for task in ready_task_list:
             span_id = f"run-{run_id}:task-{task.id}:worker"
             if task.id is not None:
                 worker_spans[int(task.id)] = span_id
@@ -1006,7 +1050,7 @@ class CustomerAssistantService:
                 actor=actor,
                 span_id=span_id,
             )
-        worker_results = self._run_ready_tasks(session_id, run_id, list(mutation.ready_tasks), message, actor)
+        worker_results = self._run_ready_tasks(session_id, run_id, ready_task_list, message, actor)
         for result in worker_results:
             parent_span_id = worker_spans.get(result.task_id)
             for index, event in enumerate(result.events, start=1):
@@ -1042,11 +1086,7 @@ class CustomerAssistantService:
                     span_id=f"{parent_span_id}:proposed-action" if parent_span_id else None,
                 )
         updated_tasks = self._ledger.apply_worker_results(session_id, run_id, worker_results, actor=actor)
-        return {
-            "commands": commands,
-            "workerResults": worker_results,
-            "updatedTasks": updated_tasks,
-        }
+        return worker_results, updated_tasks
 
     def _run_ready_tasks(
         self,
