@@ -671,6 +671,42 @@ class CustomerAssistantService:
         rows = self._repository.list_proposed_actions(session_id)
         return {"list": [_format_action(row) for row in rows], "total": len(rows)}
 
+    def update_action(
+        self,
+        action_id: int,
+        *,
+        title: str | None = None,
+        payload: dict[str, Any] | None = None,
+        actor: CustomerAssistantActor = "operator",
+    ) -> dict[str, Any]:
+        action = self._repository.get_proposed_action(action_id)
+        if action is None:
+            raise BizError(ErrorCode.NOT_FOUND, "Proposed action not found")
+        if action["status"] != "PENDING":
+            raise BizError(ErrorCode.BAD_REQUEST, "Only pending proposed actions can be modified")
+        if title is None and payload is None:
+            raise BizError(ErrorCode.BAD_REQUEST, "No proposed action changes supplied")
+        changed_fields: list[str] = []
+        if title is not None and title != action.get("title"):
+            changed_fields.append("title")
+        if payload is not None and payload != (action.get("payload") or {}):
+            changed_fields.append("payload")
+        updated = self._repository.update_proposed_action(action_id, title=title, payload=payload)
+        self._repository.append_event(
+            int(updated["session_id"]),
+            "proposed_action_modified",
+            {
+                "actionId": action_id,
+                "actionType": updated["action_type"],
+                "changedFields": changed_fields,
+            },
+            run_id=int(updated["run_id"]),
+            task_id=updated.get("task_id"),
+            source="operator_advisory",
+            actor=actor,
+        )
+        return _format_action(updated)
+
     def propose_task_control(
         self,
         session_id: int,

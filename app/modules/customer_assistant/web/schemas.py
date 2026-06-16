@@ -26,6 +26,12 @@ class CustomerAssistantTaskControlRequest(BaseModel):
     actor: CustomerAssistantActor = "operator"
 
 
+class CustomerAssistantProposedActionUpdateRequest(BaseModel):
+    title: str | None = None
+    payload: dict[str, Any] | None = None
+    actor: CustomerAssistantActor = "operator"
+
+
 class CustomerAssistantSubAgentInput(BaseModel):
     message: str
     actor: CustomerAssistantActor = DEFAULT_CUSTOMER_ASSISTANT_ACTOR

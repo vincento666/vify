@@ -34,6 +34,7 @@ from app.modules.customer_assistant.domain.worker_runtime import CustomerAssista
 from app.modules.customer_assistant.domain.worker_profiles import CustomerAssistantWorkerProfileCatalog
 from app.modules.customer_assistant.infra.repository import CustomerAssistantRepository
 from app.modules.customer_assistant.web.schemas import (
+    CustomerAssistantProposedActionUpdateRequest,
     CustomerAssistantSessionCreateRequest,
     CustomerAssistantSpawnSubAgentRequest,
     CustomerAssistantTaskControlRequest,
@@ -370,6 +371,22 @@ def list_proposed_actions(
     service: CustomerAssistantService = Depends(get_customer_assistant_service),
 ) -> dict[str, Any]:
     return success(service.list_proposed_actions(session_id))
+
+
+@router.patch("/proposed-actions/{action_id}")
+def update_action(
+    action_id: int,
+    request: CustomerAssistantProposedActionUpdateRequest,
+    service: CustomerAssistantService = Depends(get_customer_assistant_service),
+) -> dict[str, Any]:
+    return success(
+        service.update_action(
+            action_id,
+            title=request.title,
+            payload=request.payload,
+            actor=request.actor,
+        )
+    )
 
 
 @router.get("/sessions/{session_id}/events/stream")
