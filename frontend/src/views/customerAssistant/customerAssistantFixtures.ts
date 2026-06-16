@@ -80,6 +80,26 @@ export const mockCustomerAssistantEvents: CustomerAssistantListResult<CustomerAs
   total: mockCustomerAssistantTurnResult.events.length,
 }
 
+export const mockCustomerAssistantOperatorAudit = {
+  sessionId: 12,
+  list: [
+    {
+      id: 701,
+      sequence: 7,
+      eventType: 'proposed_action_confirmed',
+      title: '拟议动作已确认',
+      actor: 'operator',
+      source: 'operator_advisory',
+      status: 'CONFIRMED',
+      targetType: 'action',
+      targetId: 9,
+      summary: 'submit_refund CONFIRMED',
+      createdAt: '2026-06-17T05:30:00',
+    },
+  ],
+  total: 1,
+}
+
 export const mockCustomerAssistantMetrics: CustomerAssistantSessionMetrics = {
   sessionId: 12,
   taskStatusCounts: { WAITING: 1 },

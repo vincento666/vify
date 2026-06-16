@@ -14,6 +14,7 @@ import {
   formatCustomerAssistantActionReceipt,
   formatCustomerAssistantEvents,
   formatCustomerAssistantMetrics,
+  formatCustomerAssistantOperatorAudit,
   formatOperatorAdvisoryEvidence,
   formatTaskRecognitionEvidence,
   summarizeCustomerAssistantTasks,
@@ -229,6 +230,41 @@ describe('customer assistant view model', () => {
       visibilityLabel: 'normal',
       payloadPreview: '{"message":"我要退票"}',
     })
+  })
+
+  it('formats operator audit rows without raw payload details', () => {
+    const rows = formatCustomerAssistantOperatorAudit({
+      sessionId: 12,
+      list: [
+        {
+          id: 701,
+          sequence: 7,
+          eventType: 'proposed_action_confirmed',
+          title: '拟议动作已确认',
+          actor: 'operator',
+          source: 'operator_advisory',
+          status: 'CONFIRMED',
+          targetType: 'action',
+          targetId: 9,
+          summary: 'submit_refund CONFIRMED',
+          createdAt: '2026-06-17T05:30:00',
+        },
+      ],
+      total: 1,
+    })
+
+    expect(rows[0]).toEqual({
+      key: 'audit-701',
+      sequenceLabel: '#7',
+      title: '拟议动作已确认',
+      status: 'CONFIRMED',
+      actorLabel: 'operator',
+      sourceLabel: 'operator_advisory',
+      targetLabel: 'action #9',
+      summary: 'submit_refund CONFIRMED',
+      createdAt: '2026-06-17T05:30:00',
+    })
+    expect(JSON.stringify(rows)).not.toContain('payload')
   })
 
   it('formats task recognition evidence without exposing raw customer text', () => {

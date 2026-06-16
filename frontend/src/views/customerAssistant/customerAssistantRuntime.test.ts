@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   mockCustomerAssistantEvents,
   mockCustomerAssistantMetrics,
+  mockCustomerAssistantOperatorAudit,
   mockCustomerAssistantTasks,
   mockCustomerAssistantTurnResult,
 } from './customerAssistantFixtures'
@@ -14,6 +15,7 @@ const apiMocks = vi.hoisted(() => ({
   getCustomerAssistantSessionMetrics: vi.fn(),
   listCustomerAssistantDemoStories: vi.fn(),
   listCustomerAssistantEvents: vi.fn(),
+  listCustomerAssistantOperatorAudit: vi.fn(),
   listCustomerAssistantProposedActions: vi.fn(),
   listCustomerAssistantTasks: vi.fn(),
   proposeCustomerAssistantTaskControl: vi.fn(),
@@ -35,6 +37,7 @@ describe('customer assistant runtime integration', () => {
   beforeEach(() => {
     Object.values(apiMocks).forEach((mock) => mock.mockReset())
     apiMocks.getCustomerAssistantSessionMetrics.mockResolvedValue(mockCustomerAssistantMetrics)
+    apiMocks.listCustomerAssistantOperatorAudit.mockResolvedValue(mockCustomerAssistantOperatorAudit)
     streamMocks.openCustomerAssistantEventStream.mockReset()
   })
 
@@ -68,8 +71,10 @@ describe('customer assistant runtime integration', () => {
     expect(apiMocks.listCustomerAssistantEvents).toHaveBeenCalledWith(12)
     expect(apiMocks.listCustomerAssistantProposedActions).toHaveBeenCalledWith(12)
     expect(apiMocks.getCustomerAssistantSessionMetrics).toHaveBeenCalledWith(12)
+    expect(apiMocks.listCustomerAssistantOperatorAudit).toHaveBeenCalledWith(12)
     expect(state.session?.id).toBe(12)
     expect(state.metrics?.humanConfirmation.pending).toBe(1)
+    expect(state.operatorAudit.list[0].eventType).toBe('proposed_action_confirmed')
     expect(state.taskSummary.items[0].taskKey).toBe('refund_ticket')
     expect(state.eventTimeline[0].title).toBe('run_started')
   })

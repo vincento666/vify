@@ -226,6 +226,10 @@ class CustomerAssistantApiContractTest(unittest.TestCase):
                     headers=HOST_B_READ_HEADERS,
                 ),
                 client.get(f"/api/v1/customer-assistant/sessions/{session_id}/metrics", headers=HOST_B_READ_HEADERS),
+                client.get(
+                    f"/api/v1/customer-assistant/sessions/{session_id}/operator-audit",
+                    headers=HOST_B_READ_HEADERS,
+                ),
             ]
 
         for response in denied:

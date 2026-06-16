@@ -38,6 +38,7 @@ describe('CustomerAssistantPanel UI contract', () => {
       'operator-task-ledger',
       'operator-recommendation-panel',
       'operator-advisory-evidence-panel',
+      'operator-audit-panel',
       'operator-draft-panel',
       'operator-proposed-actions-panel',
       'operator-event-timeline',
@@ -185,6 +186,16 @@ describe('CustomerAssistantPanel UI contract', () => {
     expect(evidencePanel).toContain('advisory.warnings')
     expect(evidencePanel).toContain('operator-advisory-empty-state')
     expect(section(content, 'operator-event-timeline')).not.toContain('advisory.knowledgeSnippetCount')
+  })
+
+  it('renders operator audit rows as a compact read-only panel', () => {
+    const auditPanel = section(content, 'operator-audit-panel')
+
+    expect(auditPanel).toContain('workspace.operatorAuditRows')
+    expect(auditPanel).toContain('audit.summary')
+    expect(auditPanel).toContain('audit.targetLabel')
+    expect(auditPanel).toContain('operator-audit-empty-state')
+    expect(auditPanel).not.toContain('compactPayload')
   })
 
   it('deep-links and auto-opens seeded demo stories through the route query', () => {

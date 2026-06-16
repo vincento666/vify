@@ -450,6 +450,36 @@
           </div>
         </section>
 
+        <section class="workspace-panel compact-panel" data-testid="operator-audit-panel">
+          <div class="panel-heading">
+            <span class="panel-heading-title">
+              <HistoryOutlined />
+              操作审计
+            </span>
+            <span class="panel-count">{{ workspace.operatorAuditRows.length }}</span>
+          </div>
+          <div class="audit-list">
+            <div
+              v-if="workspace.operatorAuditRows.length === 0"
+              class="empty-compact"
+              data-testid="operator-audit-empty-state"
+            >
+              暂无操作审计
+            </div>
+            <div v-for="audit in workspace.operatorAuditRows" :key="audit.key" class="audit-row">
+              <div class="audit-main">
+                <strong>{{ audit.sequenceLabel }} {{ audit.title }}</strong>
+                <span>{{ audit.actorLabel }} · {{ audit.sourceLabel }}</span>
+              </div>
+              <div class="audit-meta">
+                <a-tag>{{ audit.status }}</a-tag>
+                <a-tag color="blue">{{ audit.targetLabel }}</a-tag>
+              </div>
+              <p>{{ audit.summary }}</p>
+            </div>
+          </div>
+        </section>
+
         <section class="workspace-panel compact-panel" data-testid="operator-draft-panel">
           <div class="panel-heading">
             <span class="panel-heading-title">
@@ -1411,6 +1441,7 @@ async function executeAction(actionId: number) {
 .task-list,
 .action-list,
 .progress-list,
+.audit-list,
 .recognition-evidence-list,
 .advisory-evidence-list {
   display: grid;
@@ -1444,6 +1475,7 @@ async function executeAction(actionId: number) {
 
 .task-row,
 .action-row,
+.audit-row,
 .recognition-evidence-row,
 .advisory-evidence-row {
   display: grid;
@@ -1456,6 +1488,7 @@ async function executeAction(actionId: number) {
 
 .task-row > div:first-child,
 .action-row > div:first-child,
+.audit-main,
 .recognition-main,
 .advisory-main {
   display: flex;
@@ -1465,6 +1498,7 @@ async function executeAction(actionId: number) {
 
 .task-row span,
 .action-row span,
+.audit-row span,
 .recognition-evidence-row span,
 .advisory-evidence-row span {
   color: #667085;
@@ -1472,6 +1506,7 @@ async function executeAction(actionId: number) {
 }
 
 .task-row p,
+.audit-row p,
 .advisory-evidence-row p {
   margin: 0;
   color: #8a5a00;
@@ -1533,6 +1568,12 @@ async function executeAction(actionId: number) {
 }
 
 .advisory-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.audit-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;

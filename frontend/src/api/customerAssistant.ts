@@ -69,6 +69,26 @@ export interface CustomerAssistantSessionMetrics extends CustomerAssistantObserv
   sessionId: number
 }
 
+export interface CustomerAssistantOperatorAuditRow {
+  id: number
+  sequence: number
+  eventType: string
+  title: string
+  actor: string
+  source: string
+  status: string
+  targetType: string
+  targetId?: number | null
+  summary: string
+  createdAt?: string | null
+}
+
+export interface CustomerAssistantOperatorAudit {
+  sessionId: number
+  list: CustomerAssistantOperatorAuditRow[]
+  total: number
+}
+
 export interface CustomerAssistantObservabilityMetrics {
   taskStatusCounts: Record<string, number>
   proposedActionStatusCounts: Record<string, number>
@@ -221,6 +241,9 @@ export const listCustomerAssistantProposedActions = (sessionId: number) =>
 
 export const getCustomerAssistantSessionMetrics = (sessionId: number) =>
   get<CustomerAssistantSessionMetrics>(`/v1/customer-assistant/sessions/${sessionId}/metrics`)
+
+export const listCustomerAssistantOperatorAudit = (sessionId: number) =>
+  get<CustomerAssistantOperatorAudit>(`/v1/customer-assistant/sessions/${sessionId}/operator-audit`)
 
 export const refreshCustomerAssistantWorkerResults = (sessionId: number) =>
   post<{ consumed: number }>(`/v1/customer-assistant/sessions/${sessionId}/worker-results/refresh`)

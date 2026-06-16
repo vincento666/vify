@@ -5,6 +5,7 @@ import {
   getCustomerAssistantSessionMetrics,
   listCustomerAssistantDemoStories,
   listCustomerAssistantEvents,
+  listCustomerAssistantOperatorAudit,
   listCustomerAssistantProposedActions,
   listCustomerAssistantTasks,
   proposeCustomerAssistantTaskControl,
@@ -16,6 +17,7 @@ import {
   type CustomerAssistantDemoStory,
   type CustomerAssistantEvent,
   type CustomerAssistantListResult,
+  type CustomerAssistantOperatorAudit,
   type CustomerAssistantProposedAction,
   type CustomerAssistantSession,
   type CustomerAssistantSessionMetrics,
@@ -29,6 +31,7 @@ import { openCustomerAssistantEventStream, type CustomerAssistantEventStream } f
 import {
   applyCustomerAssistantActionState,
   buildCustomerAssistantState,
+  formatCustomerAssistantOperatorAudit,
   type BuildCustomerAssistantStateInput,
   type CustomerAssistantState,
 } from './customerAssistantViewModel'
@@ -38,6 +41,7 @@ export interface CustomerAssistantRuntimeState extends CustomerAssistantState {
   tasks: CustomerAssistantTask[]
   events: CustomerAssistantEvent[]
   metrics: CustomerAssistantSessionMetrics | null
+  operatorAudit: CustomerAssistantOperatorAudit
   loading: boolean
   error: string | null
 }
@@ -45,6 +49,7 @@ export interface CustomerAssistantRuntimeState extends CustomerAssistantState {
 export interface CreateCustomerAssistantRuntimeStateInput extends BuildCustomerAssistantStateInput {
   session?: CustomerAssistantSession | null
   metrics?: CustomerAssistantSessionMetrics | null
+  operatorAudit?: CustomerAssistantOperatorAudit | null
 }
 
 export interface SendCustomerAssistantRuntimeTurnOptions {
@@ -59,11 +64,13 @@ export function createCustomerAssistantRuntimeState(
     ...buildCustomerAssistantState({
       ...input,
       sessionId: input.sessionId ?? session?.id ?? input.turnResult?.sessionId ?? null,
+      operatorAudit: input.operatorAudit ?? null,
     }),
     session,
     tasks: input.tasks ?? input.turnResult?.taskSummaries ?? [],
     events: input.events ?? input.turnResult?.events ?? [],
     metrics: input.metrics ?? null,
+    operatorAudit: input.operatorAudit ?? emptyCustomerAssistantOperatorAudit(session?.id ?? input.sessionId ?? null),
     loading: false,
     error: null,
   }
@@ -96,21 +103,22 @@ export async function sendCustomerAssistantRuntimeTurn(
   })
   try {
     const turnResult = await sendCustomerAssistantTurn(session.id, payload)
-    const { tasks, events, proposedActions, metrics } = await refreshCustomerAssistantRuntimeLedgers(session.id)
-    return fromTurnResult(session, payload, turnResult, tasks.list, events.list, proposedActions.list, metrics)
+    const { tasks, events, proposedActions, metrics, operatorAudit } = await refreshCustomerAssistantRuntimeLedgers(session.id)
+    return fromTurnResult(session, payload, turnResult, tasks.list, events.list, proposedActions.list, metrics, operatorAudit)
   } finally {
     stream?.close()
   }
 }
 
 export async function refreshCustomerAssistantRuntimeLedgers(sessionId: number) {
-  const [tasks, events, proposedActions] = await Promise.all([
+  const [tasks, events, proposedActions, operatorAudit] = await Promise.all([
     listCustomerAssistantTasks(sessionId),
     listCustomerAssistantEvents(sessionId),
     listCustomerAssistantProposedActions(sessionId),
+    listCustomerAssistantOperatorAudit(sessionId),
   ])
   const metrics = await getCustomerAssistantSessionMetrics(sessionId)
-  return { tasks, events, proposedActions, metrics }
+  return { tasks, events, proposedActions, metrics, operatorAudit }
 }
 
 export async function loadCustomerAssistantDemoStory(storyId: string): Promise<CustomerAssistantRuntimeState> {
@@ -119,7 +127,9 @@ export async function loadCustomerAssistantDemoStory(storyId: string): Promise<C
   if (!story) {
     throw new Error(`Demo story not found: ${storyId}`)
   }
-  const { tasks, events, proposedActions, metrics } = await refreshCustomerAssistantRuntimeLedgers(story.sessionId)
+  const { tasks, events, proposedActions, metrics, operatorAudit } = await refreshCustomerAssistantRuntimeLedgers(
+    story.sessionId,
+  )
   const session = demoStorySession(story)
   return {
     ...buildCustomerAssistantState({
@@ -128,11 +138,13 @@ export async function loadCustomerAssistantDemoStory(storyId: string): Promise<C
       tasks: tasks.list,
       events: events.list,
       proposedActions: proposedActions.list,
+      operatorAudit,
     }),
     session,
     tasks: tasks.list,
     events: events.list,
     metrics,
+    operatorAudit,
     loading: false,
     error: null,
   }
@@ -157,6 +169,7 @@ export async function rejectCustomerAssistantRuntimeAction(
     tasks: current.tasks,
     events: current.events,
     metrics: current.metrics,
+    operatorAudit: current.operatorAudit,
     loading: false,
     error: null,
   })
@@ -173,6 +186,7 @@ export async function executeCustomerAssistantRuntimeAction(
     tasks: current.tasks,
     events: current.events,
     metrics: current.metrics,
+    operatorAudit: current.operatorAudit,
     loading: false,
     error: null,
   })
@@ -190,6 +204,7 @@ export async function updateCustomerAssistantRuntimeAction(
     tasks: current.tasks,
     events: current.events,
     metrics: current.metrics,
+    operatorAudit: current.operatorAudit,
     loading: false,
     error: null,
   })
@@ -205,12 +220,15 @@ export async function proposeCustomerAssistantRuntimeTaskControl(
     throw new Error('Customer assistant session is required before proposing a task control')
   }
   await proposeCustomerAssistantTaskControl(current.session.id, taskId, { controlType, reason })
-  const { tasks, events, proposedActions, metrics } = await refreshCustomerAssistantRuntimeLedgers(current.session.id)
+  const { tasks, events, proposedActions, metrics, operatorAudit } = await refreshCustomerAssistantRuntimeLedgers(
+    current.session.id,
+  )
   const rebuilt = buildCustomerAssistantState({
     sessionId: current.session.id,
     tasks: tasks.list,
     events: events.list,
     proposedActions: proposedActions.list,
+    operatorAudit,
   })
   return {
     ...rebuilt,
@@ -218,6 +236,7 @@ export async function proposeCustomerAssistantRuntimeTaskControl(
     tasks: tasks.list,
     events: events.list,
     metrics,
+    operatorAudit,
     loading: false,
     error: null,
   }
@@ -230,12 +249,15 @@ export async function refreshCustomerAssistantRuntimeWorkerResults(
     throw new Error('Customer assistant session is required before refreshing worker results')
   }
   await refreshCustomerAssistantWorkerResults(current.session.id)
-  const { tasks, events, proposedActions, metrics } = await refreshCustomerAssistantRuntimeLedgers(current.session.id)
+  const { tasks, events, proposedActions, metrics, operatorAudit } = await refreshCustomerAssistantRuntimeLedgers(
+    current.session.id,
+  )
   const rebuilt = buildCustomerAssistantState({
     sessionId: current.session.id,
     tasks: tasks.list,
     events: events.list,
     proposedActions: proposedActions.list,
+    operatorAudit,
   })
   return {
     ...rebuilt,
@@ -243,6 +265,7 @@ export async function refreshCustomerAssistantRuntimeWorkerResults(
     tasks: tasks.list,
     events: events.list,
     metrics,
+    operatorAudit,
     loading: false,
     error: null,
   }
@@ -256,6 +279,7 @@ function fromTurnResult(
   events: CustomerAssistantListResult<CustomerAssistantEvent>['list'],
   proposedActions: CustomerAssistantListResult<CustomerAssistantProposedAction>['list'],
   metrics: CustomerAssistantSessionMetrics,
+  operatorAudit: CustomerAssistantOperatorAudit,
 ): CustomerAssistantRuntimeState {
   return {
     ...buildCustomerAssistantState({
@@ -266,11 +290,13 @@ function fromTurnResult(
       tasks,
       events,
       proposedActions,
+      operatorAudit,
     }),
     session,
     tasks,
     events,
     metrics,
+    operatorAudit,
     loading: false,
     error: null,
   }
@@ -306,11 +332,13 @@ export function mergeCustomerAssistantLiveEvent(
       sessionId: current.session?.id ?? current.sessionId,
       tasks,
       events,
+      operatorAudit: current.operatorAudit,
     }),
     session: current.session,
     tasks,
     events,
     metrics: current.metrics,
+    operatorAudit: current.operatorAudit,
     loading: current.loading,
     error: current.error,
   }
@@ -390,27 +418,33 @@ async function applyRuntimeActionResult(
     tasks: current.tasks,
     events: current.events,
     metrics: current.metrics,
+    operatorAudit: current.operatorAudit,
     loading: false,
     error: null,
   }
   if (!current.session?.id) return updated
   if (action.actionType !== 'PROPOSED_TASK_COMMAND') return withCustomerAssistantMetrics(current, updated)
-  const { tasks, events, proposedActions, metrics } = await refreshCustomerAssistantRuntimeLedgers(current.session.id)
+  const { tasks, events, proposedActions, metrics, operatorAudit } = await refreshCustomerAssistantRuntimeLedgers(
+    current.session.id,
+  )
   const rebuilt = buildCustomerAssistantState({
     sessionId: current.session.id,
     tasks: tasks.list,
     events: events.list,
     proposedActions: proposedActions.list,
+    operatorAudit,
   })
   return {
     ...updated,
     taskSummary: rebuilt.taskSummary,
     eventTimeline: rebuilt.eventTimeline,
     progressStages: rebuilt.progressStages,
+    operatorAuditRows: rebuilt.operatorAuditRows,
     proposedActions: rebuilt.proposedActions,
     tasks: tasks.list,
     events: events.list,
     metrics,
+    operatorAudit,
   }
 }
 
@@ -419,6 +453,18 @@ async function withCustomerAssistantMetrics(
   state: CustomerAssistantRuntimeState,
 ): Promise<CustomerAssistantRuntimeState> {
   if (!current.session?.id) return state
-  const metrics = await getCustomerAssistantSessionMetrics(current.session.id)
-  return { ...state, metrics }
+  const [metrics, operatorAudit] = await Promise.all([
+    getCustomerAssistantSessionMetrics(current.session.id),
+    listCustomerAssistantOperatorAudit(current.session.id),
+  ])
+  return {
+    ...state,
+    metrics,
+    operatorAudit,
+    operatorAuditRows: formatCustomerAssistantOperatorAudit(operatorAudit),
+  }
+}
+
+function emptyCustomerAssistantOperatorAudit(sessionId: number | null): CustomerAssistantOperatorAudit {
+  return { sessionId: sessionId ?? 0, list: [], total: 0 }
 }

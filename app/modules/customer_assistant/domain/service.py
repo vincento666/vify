@@ -768,6 +768,12 @@ class CustomerAssistantService:
         events = self._repository.list_events(session_id)
         return _session_metrics_payload(session_id, tasks, actions, events)
 
+    def list_operator_audit(self, session_id: int) -> dict[str, Any]:
+        self._ensure_session(session_id)
+        rows = self._repository.list_events(session_id)
+        items = [item for row in rows if (item := _operator_audit_row(row)) is not None]
+        return {"sessionId": session_id, "list": items, "total": len(items)}
+
     def update_action(
         self,
         action_id: int,
@@ -2021,6 +2027,113 @@ def _format_event(row: dict[str, Any]) -> dict[str, Any]:
     }
     formatted["observability"] = _event_observability(formatted)
     return formatted
+
+
+_OPERATOR_AUDIT_EVENT_TITLES = {
+    "task_control_proposed": "任务控制已提出",
+    "proposed_task_command_confirmed": "任务控制已确认",
+    "proposed_action_modified": "拟议动作已修改",
+    "proposed_action_confirmed": "拟议动作已确认",
+    "proposed_action_rejected": "拟议动作已拒绝",
+    "proposed_action_executing": "拟议动作执行中",
+    "proposed_action_executed": "拟议动作已执行",
+    "proposed_action_failed": "拟议动作执行失败",
+    "task_started": "任务已启动",
+    "worker_started": "Worker 已启动",
+    "worker_proposed_action": "Worker 产生拟议动作",
+    "task_completed": "任务已完成",
+    "task_failed": "任务失败",
+    "worker_failed": "Worker 失败",
+    "operator_advisory_context_packed": "坐席追问上下文已打包",
+}
+
+_OPERATOR_AUDIT_STATUS_BY_EVENT = {
+    "task_control_proposed": "PENDING_CONFIRMATION",
+    "proposed_task_command_confirmed": "CONFIRMED",
+    "proposed_action_modified": "PENDING",
+    "proposed_action_confirmed": "CONFIRMED",
+    "proposed_action_rejected": "REJECTED",
+    "proposed_action_executing": "EXECUTING",
+    "proposed_action_executed": "EXECUTED",
+    "proposed_action_failed": "FAILED",
+    "task_started": "RUNNING",
+    "worker_started": "RUNNING",
+    "worker_proposed_action": "PENDING_CONFIRMATION",
+    "task_completed": "COMPLETED",
+    "task_failed": "FAILED",
+    "worker_failed": "FAILED",
+    "operator_advisory_context_packed": "PACKED",
+}
+
+
+def _operator_audit_row(row: dict[str, Any]) -> dict[str, Any] | None:
+    event_type = str(row["type"])
+    title = _OPERATOR_AUDIT_EVENT_TITLES.get(event_type)
+    if title is None:
+        return None
+    payload = sanitize_value(row.get("payload") or {})
+    if not isinstance(payload, dict):
+        payload = {}
+    target_type, target_id = _operator_audit_target(row, payload)
+    return {
+        "id": int(row["id"]),
+        "sequence": int(row["sequence"]),
+        "eventType": event_type,
+        "title": title,
+        "actor": sanitize_text(str(row.get("actor") or payload.get("actor") or "system")),
+        "source": sanitize_text(str(row.get("source") or "customer_assistant")),
+        "status": str(payload.get("status") or _OPERATOR_AUDIT_STATUS_BY_EVENT[event_type]),
+        "targetType": target_type,
+        "targetId": target_id,
+        "summary": _operator_audit_summary(event_type, row, payload),
+        "createdAt": _iso(row.get("created_at")),
+    }
+
+
+def _operator_audit_target(row: dict[str, Any], payload: dict[str, Any]) -> tuple[str, int | None]:
+    if payload.get("actionId") is not None:
+        return "action", _optional_audit_int(payload.get("actionId"))
+    task_id = row.get("task_id") or payload.get("taskId")
+    if task_id is not None:
+        return "task", _optional_audit_int(task_id)
+    if payload.get("workerRunId") is not None:
+        return "worker", None
+    return "session", int(row["session_id"])
+
+
+def _operator_audit_summary(event_type: str, row: dict[str, Any], payload: dict[str, Any]) -> str:
+    if event_type == "task_control_proposed":
+        return sanitize_text(
+            f"{payload.get('controlType') or 'control'} requested for "
+            f"{payload.get('taskKey') or row.get('task_id') or 'task'}"
+        )
+    if event_type == "proposed_action_modified":
+        changed = payload.get("changedFields")
+        changed_text = ", ".join(map(str, changed)) if isinstance(changed, list) else "unknown"
+        return sanitize_text(f"changed fields: {changed_text}")
+    if event_type.startswith("proposed_action") or event_type == "proposed_task_command_confirmed":
+        task_command = payload.get("taskCommand") if isinstance(payload.get("taskCommand"), dict) else {}
+        action_type = payload.get("actionType") or task_command.get("type") or "action"
+        return sanitize_text(f"{action_type} {payload.get('status') or _OPERATOR_AUDIT_STATUS_BY_EVENT[event_type]}")
+    if event_type in {"task_started", "task_completed", "task_failed"}:
+        return sanitize_text(
+            f"{payload.get('taskKey') or row.get('task_id') or 'task'} {_OPERATOR_AUDIT_STATUS_BY_EVENT[event_type]}"
+        )
+    if event_type in {"worker_started", "worker_failed", "worker_proposed_action"}:
+        worker_ref = payload.get("workerRunId") or payload.get("workerType") or row.get("source") or "worker"
+        return sanitize_text(f"{worker_ref} {_OPERATOR_AUDIT_STATUS_BY_EVENT[event_type]}")
+    if event_type == "operator_advisory_context_packed":
+        return sanitize_text(
+            f"{payload.get('taskCount') or 0} tasks, {payload.get('knowledgeSnippetCount') or 0} knowledge snippets"
+        )
+    return sanitize_text(event_type)
+
+
+def _optional_audit_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _format_worker_run(row: dict[str, Any]) -> dict[str, Any]:

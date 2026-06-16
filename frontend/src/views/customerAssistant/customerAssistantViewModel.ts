@@ -1,6 +1,8 @@
 import type {
   CustomerAssistantEvent,
   CustomerAssistantObservabilityMetrics,
+  CustomerAssistantOperatorAudit,
+  CustomerAssistantOperatorAuditRow as CustomerAssistantOperatorAuditApiRow,
   CustomerAssistantProposedAction,
   CustomerAssistantTask,
   CustomerAssistantTaskControlType,
@@ -57,6 +59,18 @@ export interface CustomerAssistantEventRow {
   payloadPreview: string
   debug: boolean
   defaultCollapsed: boolean
+}
+
+export interface CustomerAssistantOperatorAuditRow {
+  key: string
+  sequenceLabel: string
+  title: string
+  status: string
+  actorLabel: string
+  sourceLabel: string
+  targetLabel: string
+  summary: string
+  createdAt: string
 }
 
 export interface CustomerAssistantRecognitionEvidenceRow {
@@ -158,6 +172,7 @@ export interface CustomerAssistantState {
   recommendation: CustomerAssistantRecommendationState
   proposedActions: CustomerAssistantProposedAction[]
   eventTimeline: CustomerAssistantEventRow[]
+  operatorAuditRows: CustomerAssistantOperatorAuditRow[]
   recognitionEvidence: CustomerAssistantRecognitionEvidenceRow[]
   operatorAdvisoryEvidence: CustomerAssistantOperatorAdvisoryEvidenceRow[]
   progressStages: CustomerAssistantProgressStage[]
@@ -173,6 +188,7 @@ export interface BuildCustomerAssistantStateInput {
   events?: CustomerAssistantEvent[]
   proposedActions?: CustomerAssistantProposedAction[]
   workerProfiles?: CustomerAssistantWorkerProfile[]
+  operatorAudit?: CustomerAssistantOperatorAudit | null
 }
 
 export function buildCustomerAssistantState(input: BuildCustomerAssistantStateInput = {}): CustomerAssistantState {
@@ -210,6 +226,7 @@ export function buildCustomerAssistantState(input: BuildCustomerAssistantStateIn
     },
     proposedActions: [...(input.proposedActions ?? turn?.proposedActions ?? [])],
     eventTimeline: formatCustomerAssistantEvents(events),
+    operatorAuditRows: formatCustomerAssistantOperatorAudit(input.operatorAudit),
     recognitionEvidence: formatTaskRecognitionEvidence(events),
     operatorAdvisoryEvidence: formatOperatorAdvisoryEvidence(events),
     progressStages: deriveCustomerAssistantProgressStages(events),
@@ -348,6 +365,22 @@ export function formatCustomerAssistantEvents(events: CustomerAssistantEvent[]):
     payloadPreview: JSON.stringify(event.payload ?? {}),
     debug: event.visibility === 'debug',
     defaultCollapsed: event.visibility === 'debug',
+  }))
+}
+
+export function formatCustomerAssistantOperatorAudit(
+  audit: CustomerAssistantOperatorAudit | null | undefined,
+): CustomerAssistantOperatorAuditRow[] {
+  return (audit?.list ?? []).map((row) => ({
+    key: `audit-${row.id}`,
+    sequenceLabel: `#${row.sequence}`,
+    title: row.title,
+    status: row.status,
+    actorLabel: row.actor || 'system',
+    sourceLabel: row.source || 'customer_assistant',
+    targetLabel: auditTargetLabel(row),
+    summary: row.summary,
+    createdAt: row.createdAt ?? '',
   }))
 }
 
@@ -590,6 +623,11 @@ function stringListField(value: unknown): string[] {
 function receiptValue(value: unknown): string {
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value)
   return JSON.stringify(value)
+}
+
+function auditTargetLabel(row: CustomerAssistantOperatorAuditApiRow): string {
+  const targetType = row.targetType || 'session'
+  return row.targetId === null || row.targetId === undefined ? targetType : `${targetType} #${row.targetId}`
 }
 
 function numberField(value: unknown): number {

@@ -98,6 +98,22 @@ describe('customer-assistant frontend API client', () => {
     expect(requestMocks.get).toHaveBeenCalledWith('/v1/customer-assistant/sessions/7/metrics')
   })
 
+  it('lists session-scoped operator audit rows', async () => {
+    requestMocks.get.mockResolvedValueOnce({
+      sessionId: 7,
+      list: [{ eventType: 'proposed_action_confirmed', summary: 'submit_refund CONFIRMED' }],
+      total: 1,
+    })
+
+    const { listCustomerAssistantOperatorAudit } = await import('./customerAssistant')
+
+    await expect(listCustomerAssistantOperatorAudit(7)).resolves.toMatchObject({
+      total: 1,
+      list: [{ eventType: 'proposed_action_confirmed' }],
+    })
+    expect(requestMocks.get).toHaveBeenCalledWith('/v1/customer-assistant/sessions/7/operator-audit')
+  })
+
   it('lists seeded demo stories', async () => {
     requestMocks.get.mockResolvedValueOnce({ list: [{ storyId: 'refund_baggage_parallel' }], total: 1 })
 
