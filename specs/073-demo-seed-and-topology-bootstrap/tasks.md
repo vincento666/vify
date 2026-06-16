@@ -22,4 +22,4 @@
   `artifacts/slices/073-demo-seed-and-topology-bootstrap/073.1/e2e.txt`.
 - [x] Run browser UAT and save notes/screenshots under
   `artifacts/slices/073-demo-seed-and-topology-bootstrap/073.1/`.
-- [ ] Commit completed 073.1 slice.
+- [x] Commit completed 073.1 slice.
