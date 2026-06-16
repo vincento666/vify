@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./hify.db"
     redis_url: str | None = None
     log_level: str = "INFO"
+    persistence_mode: str = "local"
     runtime_lab_sop_chatflow_ids: str | None = None
     runtime_lab_intent_arbitrator_mode: str = "fake"
     runtime_lab_intent_arbitrator_base_url: str | None = None

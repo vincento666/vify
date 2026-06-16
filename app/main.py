@@ -40,8 +40,14 @@ configure_logging(settings.log_level)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    initialise_database()
+    if should_initialise_database_on_startup(settings):
+        initialise_database()
     yield
+
+
+def should_initialise_database_on_startup(current_settings: object) -> bool:
+    mode = str(getattr(current_settings, "persistence_mode", "local") or "local").strip().lower()
+    return mode in {"local", "test"}
 
 
 app = FastAPI(title=settings.app_name, version="0.0.1", lifespan=lifespan)
