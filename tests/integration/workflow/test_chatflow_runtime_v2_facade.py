@@ -1,0 +1,114 @@
+import unittest
+from datetime import datetime
+import time
+
+from fastapi.testclient import TestClient
+
+from app.main import app
+
+
+class ChatflowRuntimeV2FacadeTest(unittest.TestCase):
+    def test_unsupported_chatflow_graph_is_rejected_without_live_v2_refs(self) -> None:
+        with TestClient(app) as client:
+            chatflow = _create_unsupported_chatflow(client)
+            response = client.post(
+                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                json={"input": {"sys.query": "Ada"}},
+            )
+
+        self.assertEqual(response.status_code, 400)
+        payload = response.json()
+        self.assertEqual(payload["code"], 400)
+        self.assertIn("unsupportedNodes", payload["message"])
+        self.assertNotIn("eventStreamRef", payload)
+
+    def test_resume_is_idempotent_for_same_checkpoint_and_input(self) -> None:
+        with TestClient(app) as client:
+            chatflow = _create_question_chatflow(client)
+            started = client.post(
+                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                json={"input": {"sys.query": "start"}},
+            ).json()["data"]
+            interrupted = _wait_for_result(client, started["resultRef"], "INTERRUPTED")
+            first_resume = client.post(
+                f"/api/v1/runtime-runs/{started['runId']}/resume",
+                json={"resumeData": {"answer": "yes"}, "idempotencyKey": "resume-1"},
+            )
+            second_resume = client.post(
+                f"/api/v1/runtime-runs/{started['runId']}/resume",
+                json={"resumeData": {"answer": "yes"}, "idempotencyKey": "resume-1"},
+            )
+            events = client.get(started["eventsRef"]).json()["data"]["list"]
+
+        self.assertEqual(interrupted["status"], "INTERRUPTED")
+        self.assertEqual(first_resume.status_code, 200)
+        self.assertEqual(second_resume.status_code, 200)
+        self.assertEqual(first_resume.json()["data"]["output"], second_resume.json()["data"]["output"])
+        self.assertEqual([event["type"] for event in events].count("workflow_run_completed"), 1)
+
+
+def _create_unsupported_chatflow(client: TestClient) -> dict[str, object]:
+    response = client.post(
+        "/api/v1/chatflows",
+        json={
+            "name": f"Chatflow V2 Facade Unsupported {datetime.now().timestamp()}",
+            "description": "",
+            "nodes": [
+                {"nodeKey": "start", "type": "START", "name": "Start", "config": {}},
+                {"nodeKey": "llm_1", "type": "LLM", "name": "LLM", "config": {}},
+                {"nodeKey": "end", "type": "END", "name": "End", "config": {"outputVariable": "final", "output": "done"}},
+            ],
+            "edges": [
+                {"sourceNodeKey": "start", "targetNodeKey": "llm_1", "condition": None},
+                {"sourceNodeKey": "llm_1", "targetNodeKey": "end", "condition": None},
+            ],
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["data"]
+
+
+def _wait_for_result(client: TestClient, result_ref: str, wanted_status: str, timeout: float = 5.0) -> dict[str, object]:
+    deadline = time.monotonic() + timeout
+    latest: dict[str, object] = {}
+    while time.monotonic() < deadline:
+        latest = client.get(result_ref).json()["data"]
+        if latest["status"] == wanted_status:
+            return latest
+        time.sleep(0.1)
+    raise AssertionError(f"Timed out waiting for {wanted_status}; latest={latest}")
+
+
+def _create_question_chatflow(client: TestClient) -> dict[str, object]:
+    response = client.post(
+        "/api/v1/chatflows",
+        json={
+            "name": f"Chatflow V2 Facade Question {datetime.now().timestamp()}",
+            "description": "",
+            "nodes": [
+                {"nodeKey": "start", "type": "START", "name": "Start", "config": {}},
+                {
+                    "nodeKey": "question_1",
+                    "type": "QUESTION",
+                    "name": "Question",
+                    "config": {"question": "Continue?", "outputVariable": "answer", "answerType": "text"},
+                },
+                {
+                    "nodeKey": "end",
+                    "type": "END",
+                    "name": "End",
+                    "config": {"outputVariable": "final", "output": "answer={{question_1.answer}}"},
+                },
+            ],
+            "edges": [
+                {"sourceNodeKey": "start", "targetNodeKey": "question_1", "condition": None},
+                {"sourceNodeKey": "question_1", "targetNodeKey": "end", "condition": None},
+            ],
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["data"]
+
+
+if __name__ == "__main__":
+    unittest.main()

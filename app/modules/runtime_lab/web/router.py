@@ -1,6 +1,9 @@
+from dataclasses import dataclass
 from datetime import datetime
+import hashlib
 import json
 from json import JSONDecodeError
+import re
 from time import perf_counter
 from typing import Any, Mapping
 
@@ -19,7 +22,7 @@ from app.modules.chat.domain.llm_request import (
     ProviderChatConfig,
 )
 from app.modules.knowledge.api.facade import KnowledgeFacade
-from app.modules.runtime_lab.domain.classifier import LlmConstrainedIntentClassifier
+from app.modules.runtime_lab.domain.classifier import FakeConstrainedIntentClassifier, LlmConstrainedIntentClassifier
 from app.modules.runtime_lab.domain.chatflow_adapter import ChatflowSopRuntimeAdapter
 from app.modules.runtime_lab.domain.faq_gate import (
     CompositeFaqAnswerGate,
@@ -33,7 +36,11 @@ from app.modules.runtime_lab.domain.rag_gate import RagAnswerGate
 from app.modules.runtime_lab.domain.service import RuntimeLabService
 from app.modules.runtime_lab.domain.sop_adapter import FakeSopRuntimeAdapter
 from app.modules.runtime_lab.infra.repository import RuntimeLabRepository
-from app.modules.runtime_lab.web.schemas import RuntimeLabFallbackAgentRequest, RuntimeLabMessageRequest
+from app.modules.runtime_lab.web.schemas import (
+    RuntimeLabFallbackAgentRequest,
+    RuntimeLabMessageRequest,
+    RuntimeLabTemporaryModelTestRequest,
+)
 from app.modules.runtime_policy.domain.factories import (
     build_agent_output_policy_from_snapshot,
     build_classifier_from_snapshot,
@@ -52,6 +59,19 @@ from app.modules.workflow.infra.repository import WorkflowRepository
 router = APIRouter(prefix="/api/v1/runtime-lab", tags=["runtime-lab"])
 
 RUNTIME_LAB_AIRLINE_LLM_AGENT_NAME = "034 RuntimeLab Airline Chatflow LLM Agent"
+
+
+@dataclass(frozen=True)
+class RuntimeLabRouteClassifierModel:
+    model_id: str
+    provider_type: str
+    base_url: str
+    auth_config: dict[str, Any]
+    source: str
+    model_config_id: int | None = None
+    temperature: float | None = 0.0
+    max_tokens: int | None = 360
+    top_p: float | None = None
 
 
 def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeLabService:
@@ -77,11 +97,12 @@ def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeL
             agent_output_policy=agent_output_policy,
             policy_thresholds=policy_thresholds,
         )
+    use_mock_workflow_llm = settings.runtime_lab_intent_arbitrator_mode.strip().lower() == "fake"
     workflow_service = WorkflowService(
         WorkflowRepository(session),
         flow_type="CHATFLOW",
-        agent_repository=AgentRepository(session),
-        model_facade=ProviderModelFacade(session),
+        agent_repository=None if use_mock_workflow_llm else AgentRepository(session),
+        model_facade=None if use_mock_workflow_llm else ProviderModelFacade(session),
         chatflow_state_repository=ChatflowStateRepository(session),
         preferred_llm_agent_name=RUNTIME_LAB_AIRLINE_LLM_AGENT_NAME,
     )
@@ -117,11 +138,15 @@ def post_message(
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     effective_policy = RuntimePolicyResolver(RuntimePolicyRepository(session), settings).resolve()
+    route_settings_signature = _runtime_lab_route_settings_signature(request.route_settings)
     result = service.handle_command(
         session_id,
         request.message,
         request.idempotency_key,
         enabled_sop_ids=request.enabled_sop_ids,
+        policy_thresholds_override=_runtime_lab_route_settings_thresholds(request.route_settings),
+        classifier_override=_runtime_lab_route_settings_classifier(request.route_settings, session),
+        route_settings_signature=route_settings_signature,
     )
     if not result.replayed:
         RuntimeDecisionLogService(RuntimePolicyRepository(session)).record_message_decision(
@@ -132,6 +157,54 @@ def post_message(
             effective_policy=effective_policy,
         )
     return success(result.payload)
+
+
+@router.post("/route-model/connectivity")
+def test_route_model_connectivity(request: RuntimeLabTemporaryModelTestRequest) -> dict[str, Any]:
+    started_at = perf_counter()
+    model = _temporary_route_model(
+        {
+            "enabled": True,
+            "model": request.model,
+            "baseUrl": request.base_url,
+            "apiKey": request.api_key,
+            "temperature": request.temperature,
+            "maxTokens": request.max_tokens,
+            "topP": request.top_p,
+            "providerType": request.provider_type,
+        },
+        source="runtime_lab_connectivity_test",
+    )
+    if model is None:
+        raise BizError(ErrorCode.BAD_REQUEST, "Temporary route model config is required")
+    builder = OpenAIChatRequestBuilder()
+    payload = builder.build(
+        model=model.model_id,
+        messages=[ChatRequestMessage(role="user", content="1")],
+        temperature=model.temperature,
+        max_tokens=model.max_tokens,
+        extra_params={"top_p": model.top_p} if model.top_p is not None else None,
+    )
+    try:
+        response = _provider_client_from_model_config(model).complete(payload)
+    except Exception as exc:  # noqa: BLE001 - returned to the lab UI as a diagnostic.
+        return success(
+            {
+                "ok": False,
+                "model": model.model_id,
+                "elapsedMs": int((perf_counter() - started_at) * 1000),
+                "error": _safe_connectivity_error(exc),
+            }
+        )
+    return success(
+        {
+            "ok": True,
+            "model": model.model_id,
+            "elapsedMs": int((perf_counter() - started_at) * 1000),
+            "usage": _usage_from_response(response, payload, {}),
+            "replyPreview": _connectivity_reply_preview(response),
+        }
+    )
 
 
 @router.get("/sessions/{session_id}/tasks")
@@ -219,6 +292,7 @@ def _runtime_lab_config(
     effective = RuntimePolicyResolver(RuntimePolicyRepository(session), settings).resolve(context)
     snapshot = effective["policySnapshot"]
     classifier = snapshot["classifier"]
+    thresholds = dict(snapshot.get("thresholds") or {})
     fallback_agent = dict(snapshot.get("fallbackAgent") or {})
     fallback_agent_options = _runtime_lab_fallback_agent_options(session)
     fallback_agent_by_id = {int(agent["id"]): agent for agent in fallback_agent_options}
@@ -256,11 +330,24 @@ def _runtime_lab_config(
                 or bool(base_url and model and api_key_configured)
             ),
         },
+        "thresholds": thresholds,
         "faq": {
             "knowledgeBaseIds": list(snapshot["faq"].get("knowledgeBaseIds") or []),
+            "exactEnabled": bool(snapshot["faq"].get("exactEnabled", True)),
+            "semanticEnabled": bool(snapshot["faq"].get("semanticEnabled", True)),
+            "topK": int(snapshot["faq"].get("topK") or 3),
+            "rerank": bool(snapshot["faq"].get("rerank", False)),
         },
         "rag": {
             "knowledgeBaseIds": list(snapshot["rag"].get("knowledgeBaseIds") or []),
+            "enabled": bool(snapshot["rag"].get("enabled", True)),
+            "retrievalMode": str(snapshot["rag"].get("retrievalMode") or "hybrid"),
+            "topK": int(snapshot["rag"].get("topK") or 5),
+            "rerank": bool(snapshot["rag"].get("rerank", False)),
+        },
+        "handoff": {
+            "enabled": bool(snapshot.get("handoff", {}).get("enabled", True)),
+            "queue": str(snapshot.get("handoff", {}).get("queue") or "general"),
         },
         "fallbackAgent": {
             "enabled": bool(fallback_agent.get("enabled")),
@@ -340,6 +427,221 @@ def _runtime_lab_fallback_agent_available(
     if fallback_type == "existing_agent":
         return agent_row is not None and bool(agent_row.get("enabled"))
     return False
+
+
+def _runtime_lab_route_settings_thresholds(route_settings: Mapping[str, Any] | None) -> dict[str, Any]:
+    if not route_settings:
+        return {}
+    thresholds = route_settings.get("thresholds")
+    return dict(thresholds) if isinstance(thresholds, Mapping) else {}
+
+
+def _runtime_lab_route_settings_signature(route_settings: Mapping[str, Any] | None) -> dict[str, Any]:
+    if not route_settings:
+        return {}
+    signature: dict[str, Any] = {}
+    thresholds = _runtime_lab_route_settings_thresholds(route_settings)
+    if thresholds:
+        signature["thresholds"] = thresholds
+    arbitrator = route_settings.get("arbitrator")
+    if isinstance(arbitrator, Mapping):
+        signature["arbitrator"] = {
+            "mode": str(arbitrator.get("mode") or "").strip().lower(),
+            "modelConfigId": _optional_int_value(arbitrator.get("modelConfigId")),
+            "fallbackModelConfigId": _optional_int_value(arbitrator.get("fallbackModelConfigId")),
+            "temporaryModel": _temporary_model_signature(arbitrator.get("temporaryModel")),
+            "temporaryFallbackModel": _temporary_model_signature(arbitrator.get("temporaryFallbackModel")),
+        }
+    return signature
+
+
+def _runtime_lab_route_settings_classifier(
+    route_settings: Mapping[str, Any] | None,
+    session: Session,
+) -> Any | None:
+    if not route_settings:
+        return None
+    arbitrator = route_settings.get("arbitrator")
+    if not isinstance(arbitrator, Mapping):
+        return None
+    mode = str(arbitrator.get("mode") or "").strip().lower()
+    if mode == "fake":
+        return FakeConstrainedIntentClassifier()
+    if mode != "llm":
+        return None
+    primary_model = _temporary_route_model(arbitrator.get("temporaryModel"), source="runtime_lab_route_settings_temporary")
+    model_facade = ProviderModelFacade(session)
+    if primary_model is None:
+        model_config_id = _optional_int_value(arbitrator.get("modelConfigId"))
+        if model_config_id is None:
+            return None
+        primary_model = _route_model_from_model_config(model_facade.get_enabled_model_config(model_config_id))
+
+    fallback_model = _temporary_route_model(
+        arbitrator.get("temporaryFallbackModel"),
+        source="runtime_lab_route_settings_temporary_fallback",
+    )
+    fallback_model_config_id = _optional_int_value(arbitrator.get("fallbackModelConfigId"))
+    if fallback_model is None and fallback_model_config_id is not None and fallback_model_config_id != primary_model.model_config_id:
+        fallback_model = _route_model_from_model_config(model_facade.get_enabled_model_config(fallback_model_config_id))
+    return _runtime_lab_classifier_from_route_model(primary_model, fallback_model=fallback_model)
+
+
+def _runtime_lab_classifier_from_route_model(
+    model_config: RuntimeLabRouteClassifierModel,
+    *,
+    fallback_model: RuntimeLabRouteClassifierModel | None = None,
+) -> LlmConstrainedIntentClassifier:
+    builder = OpenAIChatRequestBuilder()
+    client = _provider_client_from_model_config(model_config)
+    fallback_client = _provider_client_from_model_config(fallback_model) if fallback_model is not None else None
+
+    def complete(classifier_payload: dict[str, Any]) -> dict[str, Any]:
+        llm_payload = _route_classifier_payload(builder, model_config, classifier_payload)
+        started_at = perf_counter()
+        actual_model = model_config
+        try:
+            response = client.complete(llm_payload)
+        except Exception:
+            if fallback_model is None or fallback_client is None:
+                raise
+            fallback_payload = _route_classifier_payload(builder, fallback_model, classifier_payload)
+            actual_model = fallback_model
+            llm_payload = fallback_payload
+            response = fallback_client.complete(fallback_payload)
+        parsed = _parse_llm_classifier_response(response)
+        parsed_output = dict(parsed)
+        parsed["_debug"] = {
+            "model": actual_model.model_id,
+            "elapsedMs": int((perf_counter() - started_at) * 1000),
+            "input": _redact_llm_payload(llm_payload),
+            "output": parsed_output,
+            "usage": _usage_from_response(response, llm_payload, parsed_output),
+            "source": actual_model.source,
+            "modelConfigId": actual_model.model_config_id,
+            "fallbackModelConfigId": fallback_model.model_config_id if fallback_model is not None else None,
+        }
+        return parsed
+
+    return LlmConstrainedIntentClassifier(complete)
+
+
+def _route_classifier_payload(
+    builder: OpenAIChatRequestBuilder,
+    model_config: RuntimeLabRouteClassifierModel,
+    classifier_payload: dict[str, Any],
+) -> dict[str, Any]:
+    extra_params: dict[str, Any] = {
+        "response_format": {"type": "json_object"},
+        "reasoning": {"effort": "none", "exclude": True},
+    }
+    if model_config.top_p is not None:
+        extra_params["top_p"] = model_config.top_p
+    return builder.build(
+        model=str(model_config.model_id),
+        messages=[
+            ChatRequestMessage(
+                role="system",
+                content=(
+                    "你是民航客服路由仲裁器。只能从用户给定的 candidates 和 allowedActions 中选择，"
+                    "返回 JSON 对象：selected_action, selected_candidate_id, confidence, rationale, "
+                    "needs_clarification, clarification_question。不要创造候选。"
+                ),
+            ),
+            ChatRequestMessage(role="user", content=json.dumps(classifier_payload, ensure_ascii=False)),
+        ],
+        temperature=model_config.temperature,
+        max_tokens=model_config.max_tokens,
+        extra_params=extra_params,
+    )
+
+
+def _route_model_from_model_config(model_config: Any) -> RuntimeLabRouteClassifierModel:
+    return RuntimeLabRouteClassifierModel(
+        model_id=str(model_config.model_id),
+        provider_type=str(model_config.provider_type),
+        base_url=str(model_config.provider_base_url),
+        auth_config=dict(model_config.provider_auth_config or {}),
+        model_config_id=int(model_config.id),
+        source="runtime_lab_route_settings",
+    )
+
+
+def _temporary_route_model(value: Any, *, source: str) -> RuntimeLabRouteClassifierModel | None:
+    if not isinstance(value, Mapping):
+        return None
+    if value.get("enabled") is False:
+        return None
+    model_id = str(value.get("model") or value.get("modelId") or "").strip()
+    base_url = str(value.get("baseUrl") or value.get("base_url") or "").strip()
+    api_key = str(value.get("apiKey") or value.get("api_key") or "").strip()
+    if not model_id and not base_url and not api_key:
+        return None
+    if not model_id:
+        raise BizError(ErrorCode.BAD_REQUEST, "Temporary route model requires model")
+    if not base_url:
+        raise BizError(ErrorCode.BAD_REQUEST, "Temporary route model requires baseUrl")
+    if not api_key and not base_url.startswith("mock://"):
+        raise BizError(ErrorCode.BAD_REQUEST, "Temporary route model requires apiKey")
+    return RuntimeLabRouteClassifierModel(
+        model_id=model_id,
+        provider_type=str(value.get("providerType") or "OPENAI_COMPATIBLE"),
+        base_url=base_url,
+        auth_config={"api_key": api_key} if api_key else {},
+        source=source,
+        temperature=_optional_float_value(value.get("temperature"), default=0.0, minimum=0.0, maximum=2.0),
+        max_tokens=_optional_int_range(value.get("maxTokens") or value.get("max_tokens"), default=360, minimum=1, maximum=8192),
+        top_p=_optional_float_value(value.get("topP") or value.get("top_p"), default=None, minimum=0.0, maximum=1.0),
+    )
+
+
+def _temporary_model_signature(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, Mapping):
+        return None
+    api_key = str(value.get("apiKey") or value.get("api_key") or "").strip()
+    return {
+        "enabled": value.get("enabled") is not False,
+        "model": str(value.get("model") or value.get("modelId") or "").strip(),
+        "baseUrl": str(value.get("baseUrl") or value.get("base_url") or "").strip(),
+        "apiKeyHash": hashlib.sha256(api_key.encode("utf-8")).hexdigest() if api_key else "",
+        "temperature": value.get("temperature"),
+        "maxTokens": value.get("maxTokens") or value.get("max_tokens"),
+        "topP": value.get("topP") or value.get("top_p"),
+    }
+
+
+def _connectivity_reply_preview(response: Mapping[str, Any]) -> str:
+    choices = response.get("choices")
+    if isinstance(choices, list) and choices:
+        first = choices[0]
+        if isinstance(first, Mapping):
+            message = first.get("message")
+            if isinstance(message, Mapping):
+                return str(message.get("content") or "")[:200]
+            return str(first.get("text") or "")[:200]
+    return ""
+
+
+def _safe_connectivity_error(exc: Exception) -> str:
+    text = str(exc) or exc.__class__.__name__
+    text = re.sub(r"sk-[A-Za-z0-9_\\-]{8,}", "sk-***", text)
+    text = re.sub(r"sk-or-[A-Za-z0-9_\\-]{8,}", "sk-or-***", text)
+    return text[:500]
+
+
+def _provider_client_from_model_config(model_config: RuntimeLabRouteClassifierModel | None) -> ProviderBackedOpenAIChatClient:
+    if model_config is None:
+        raise BizError(ErrorCode.BAD_REQUEST, "Runtime route model config is required")
+    return ProviderBackedOpenAIChatClient(
+        ProviderChatConfig(
+            provider_type=model_config.provider_type,
+            base_url=model_config.base_url,
+            auth_config=dict(model_config.auth_config),
+        ),
+        timeout=90.0,
+        max_attempts=3,
+        retry_sleep=2.0,
+    )
 
 
 def _runtime_policy_payload_from_row(row: Mapping[str, Any]) -> dict[str, Any]:
@@ -729,6 +1031,30 @@ def _int_value(value: Any) -> int:
 def _optional_int_value(value: Any) -> int | None:
     parsed = _int_value(value)
     return parsed if parsed > 0 else None
+
+
+def _optional_int_range(value: Any, *, default: int, minimum: int, maximum: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(minimum, min(maximum, parsed))
+
+
+def _optional_float_value(
+    value: Any,
+    *,
+    default: float | None,
+    minimum: float,
+    maximum: float,
+) -> float | None:
+    if value is None or value == "":
+        return default
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return default
+    return max(minimum, min(maximum, parsed))
 
 
 def _format_datetime(value: Any) -> str | None:

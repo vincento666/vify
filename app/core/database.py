@@ -2,7 +2,8 @@ from collections.abc import Generator
 
 import sqlalchemy as sa
 from sqlalchemy import MetaData, create_engine
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Connection, Engine
+from sqlalchemy.engine.reflection import Inspector
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.core.config import get_settings
@@ -38,12 +39,12 @@ def get_session_factory() -> sessionmaker[Session]:
 
 
 def initialise_database() -> None:
-    from app.core.schema import ensure_pgvector_extension, register_baseline_tables
+    from app.core.schema import ensure_pgvector_extension, register_baseline_tables, tables_for_bind
 
     register_baseline_tables()
     engine = get_engine()
     ensure_pgvector_extension(engine)
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=engine, tables=tables_for_bind(engine))
     _ensure_compatible_schema(engine)
 
 
@@ -75,15 +76,20 @@ def _ensure_compatible_schema(engine: Engine) -> None:
         if "evaluation_case_result" in table_names
         else set()
     )
+    customer_assistant_event_columns = (
+        {column["name"] for column in inspector.get_columns("customer_assistant_event")}
+        if "customer_assistant_event" in table_names
+        else set()
+    )
 
     with engine.begin() as connection:
         if "flow_type" not in workflow_columns:
             connection.execute(
                 sa.text("ALTER TABLE workflow ADD COLUMN flow_type VARCHAR(20) NOT NULL DEFAULT 'WORKFLOW'")
             )
-            connection.execute(sa.text("CREATE INDEX IF NOT EXISTS idx_workflow_flow_type ON workflow (flow_type)"))
+            _create_index_if_missing(connection, inspector, "workflow", "idx_workflow_flow_type", "flow_type")
         if "agent" in table_names and "opening_message" not in agent_columns:
-            connection.execute(sa.text("ALTER TABLE agent ADD COLUMN opening_message TEXT DEFAULT ''"))
+            connection.execute(sa.text("ALTER TABLE agent ADD COLUMN opening_message TEXT"))
         if "agent" in table_names and "suggested_questions" not in agent_columns:
             connection.execute(sa.text("ALTER TABLE agent ADD COLUMN suggested_questions JSON"))
         if "agent" in table_names and "variables" not in agent_columns:
@@ -107,11 +113,12 @@ def _ensure_compatible_schema(engine: Engine) -> None:
             connection.execute(sa.text("ALTER TABLE chat_message ADD COLUMN tool_calls JSON"))
         if "evaluation_experiment" in table_names and "eval_set_version_id" not in experiment_columns:
             connection.execute(sa.text("ALTER TABLE evaluation_experiment ADD COLUMN eval_set_version_id BIGINT"))
-            connection.execute(
-                sa.text(
-                    "CREATE INDEX IF NOT EXISTS idx_evaluation_experiment_eval_set "
-                    "ON evaluation_experiment (eval_set_id, eval_set_version_id)"
-                )
+            _create_index_if_missing(
+                connection,
+                inspector,
+                "evaluation_experiment",
+                "idx_evaluation_experiment_eval_set",
+                "eval_set_id, eval_set_version_id",
             )
         if "evaluation_experiment" in table_names and "target_field_mapping" not in experiment_columns:
             connection.execute(sa.text("ALTER TABLE evaluation_experiment ADD COLUMN target_field_mapping JSON"))
@@ -133,6 +140,26 @@ def _ensure_compatible_schema(engine: Engine) -> None:
             connection.execute(sa.text("ALTER TABLE evaluation_case_result ADD COLUMN target_debug_url VARCHAR(500)"))
         if "evaluation_case_result" in table_names and "target_evidence_summary" not in case_result_columns:
             connection.execute(sa.text("ALTER TABLE evaluation_case_result ADD COLUMN target_evidence_summary JSON"))
+        if "customer_assistant_event" in table_names and "actor" not in customer_assistant_event_columns:
+            connection.execute(
+                sa.text(
+                    "ALTER TABLE customer_assistant_event "
+                    "ADD COLUMN actor VARCHAR(30) NOT NULL DEFAULT 'customer'"
+                )
+            )
+
+
+def _create_index_if_missing(
+    connection: Connection,
+    inspector: Inspector,
+    table_name: str,
+    index_name: str,
+    column_sql: str,
+) -> None:
+    existing = {index["name"] for index in inspector.get_indexes(table_name)}
+    if index_name in existing:
+        return
+    connection.execute(sa.text(f"CREATE INDEX {index_name} ON {table_name} ({column_sql})"))
 
 
 def get_session() -> Generator[Session]:

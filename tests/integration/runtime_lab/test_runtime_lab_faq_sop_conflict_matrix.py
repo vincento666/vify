@@ -41,6 +41,7 @@ class RuntimeLabFaqSopConflictMatrixTest(unittest.TestCase):
             ("行李可能超重，能不能提前买一点额度，订单号CA1002", "START_SOP", "baggage_service"),
             ("改签手续费怎么算？", "ANSWER_FAQ", None),
             ("我要改签刚才那张票到明天上午，手续费也一起看下", "START_SOP", "change_flight"),
+            ("我只是想问团队票如果临时有人不飞，退票手续费怎么算？现在不办理", "ANSWER_FAQ", None),
         )
         for message, action, sop_id in cases:
             with self.subTest(message=message):
@@ -100,6 +101,59 @@ class RuntimeLabFaqSopConflictMatrixTest(unittest.TestCase):
                         self.assertNotEqual(after["id"], before["id"])
                         self.assertIsNone(turn.route_decision.faq_answer)
 
+    def test_llm_clarify_on_active_faq_is_recovered_without_mutating_task(self) -> None:
+        with _session() as session:
+            repository = RuntimeLabRepository(session)
+            start_service = RuntimeLabService(
+                repository,
+                faq_answer_gate=RuntimeAirlineFaqGate(),
+                classifier=_SwitchAwareClassifier(selected_target_id="baggage_service"),
+            )
+            service = RuntimeLabService(
+                repository,
+                faq_answer_gate=RuntimeAirlineFaqGate(),
+                classifier=_ClarifyClassifier(),
+            )
+            runtime_session = start_service.create_session()
+            session_id = int(runtime_session["id"])
+
+            start_service.handle_message(session_id, "我出差可能两个箱子超重，先帮我看下能不能加行李，订单号等会给")
+            before = dict(repository.get_active_task(session_id))
+            turn = service.handle_message(session_id, "随身行李和托运行李额度怎么算？先问问规则")
+            after = repository.get_active_task(session_id)
+
+            self.assertEqual(turn.route_decision.action, "ANSWER_FAQ")
+            self.assertEqual(turn.route_decision.classifier_result["selected_action"], "ANSWER_FAQ")
+            self.assertEqual(turn.route_decision.classifier_result["_debug"]["clarifyRecovery"]["from"], "CLARIFY")
+            self.assertEqual(after["id"], before["id"])
+            self.assertEqual(after["checkpoint_id"], before["checkpoint_id"])
+
+    def test_pet_material_comparison_faq_is_not_blocked_as_document_comparison(self) -> None:
+        with _session() as session:
+            repository = RuntimeLabRepository(session)
+            start_service = RuntimeLabService(
+                repository,
+                faq_answer_gate=RuntimeAirlineFaqGate(),
+                classifier=_SwitchAwareClassifier(selected_target_id="pet_cabin"),
+            )
+            service = RuntimeLabService(
+                repository,
+                faq_answer_gate=RuntimeAirlineFaqGate(),
+                classifier=_ClarifyClassifier(),
+            )
+            runtime_session = start_service.create_session()
+            session_id = int(runtime_session["id"])
+
+            start_service.handle_message(session_id, "我下个月想带猫去成都，先办理宠物乘机，航班和证件材料还没定")
+            before = dict(repository.get_active_task(session_id))
+            turn = service.handle_message(session_id, "宠物进客舱和托运材料有什么区别？只是问清楚")
+            after = repository.get_active_task(session_id)
+
+            self.assertEqual(turn.route_decision.action, "ANSWER_FAQ")
+            self.assertEqual(turn.route_decision.faq_answer["reasonCode"], "PET_CABIN_DOCS")
+            self.assertEqual(after["id"], before["id"])
+            self.assertEqual(after["checkpoint_id"], before["checkpoint_id"])
+
 
 class _SwitchAwareClassifier:
     def __init__(self, selected_target_id: str | None = None) -> None:
@@ -136,6 +190,21 @@ class _SwitchAwareClassifier:
             rationale="switch-aware test classifier",
             needs_clarification=False,
             clarification_question=None,
+        )
+
+
+class _ClarifyClassifier:
+    def classify(self, classifier_input: ClassifierInput) -> ClassifierResult:
+        return ClassifierResult(
+            selected_action="CLARIFY",
+            selected_candidate_id=None,
+            confidence=0.95,
+            rationale="test llm returned clarify despite finite answer candidate",
+            needs_clarification=True,
+            clarification_question="需要澄清",
+            arbitrator_mode="llm",
+            used_real_llm=True,
+            debug={"model": "test-llm"},
         )
 
 

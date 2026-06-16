@@ -59,6 +59,16 @@ class ExplicitSignalDetectorTest(unittest.TestCase):
 
         self.assertEqual(candidates, [])
 
+    def test_no_issue_wording_does_not_suppress_price_quote_consultation(self) -> None:
+        candidates = ExplicitSignalDetector(mock_sop_manifests()).detect(
+            "我先不出票，想问下北京到上海今天票价大概多少",
+            active_task=None,
+            suspended_tasks=(),
+        )
+
+        self.assertEqual(candidates[0].candidate_type, CandidateType.SOP_INTENT)
+        self.assertEqual(candidates[0].target_id, "fare_quote")
+
     def test_colloquial_handoff_phrases_win_as_explicit_handoff_candidates(self) -> None:
         detector = ExplicitSignalDetector(mock_sop_manifests())
 

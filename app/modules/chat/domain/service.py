@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 from app.core.errors import BizError, ErrorCode
@@ -15,7 +16,7 @@ from app.modules.chat.domain.mode import ChatModeRouter
 from app.modules.chat.domain.orchestrator import ChatOrchestrator
 from app.modules.chat.domain.prompt import PromptBuilder
 from app.modules.chat.domain.sse import SseEventEncoder
-from app.modules.chat.domain.tool_runner import ToolCallRunner
+from app.modules.chat.domain.tool_runner import ToolCallRunner, normalize_tool_execution_results
 from app.modules.chat.infra.repository import ChatRepository
 from app.modules.chat.web.schemas import (
     ChatMessageCreateRequest,
@@ -36,6 +37,12 @@ from app.modules.workflow.domain.engine import WorkflowExecutionError
 
 _CONTEXT_CACHE: dict[str, list[MessageContext]] = {}
 LlmClientFactory = Callable[[ProviderChatConfig], Any]
+
+
+@dataclass(frozen=True)
+class AssistantGeneration:
+    content: str
+    tool_calls: list[dict[str, Any]]
 
 
 class ChatService:
@@ -112,10 +119,10 @@ class ChatService:
     def send_message(self, session_id: int, request: ChatMessageCreateRequest) -> dict[str, Any]:
         if request.stream:
             raise BizError(ErrorCode.BAD_REQUEST, "Streaming chat is not implemented in this slice")
-        return self._create_turn(session_id, request.content).model_dump(by_alias=True)
+        return self._create_turn(session_id, request.content, request.variables).model_dump(by_alias=True)
 
     def stream_message_events(self, session_id: int, request: ChatMessageCreateRequest) -> list[str]:
-        turn = self._create_turn(session_id, request.content)
+        turn = self._create_turn(session_id, request.content, request.variables)
         content = turn.assistant_message.content
         events = [
             self._event_encoder.encode({"type": "delta", "content": chunk})
@@ -132,7 +139,12 @@ class ChatService:
         )
         return events
 
-    def _create_turn(self, session_id: int, content: str) -> ChatTurnResponse:
+    def _create_turn(
+        self,
+        session_id: int,
+        content: str,
+        variables: dict[str, Any] | None = None,
+    ) -> ChatTurnResponse:
         chat_session = self._repository.get_session(session_id)
         if chat_session is None:
             raise BizError(ErrorCode.NOT_FOUND, "Chat session not found")
@@ -149,7 +161,8 @@ class ChatService:
             tokens=self._count_tokens(content),
         )
         tool_ids = self._repository.list_agent_tool_ids(int(agent["id"]))
-        assistant_content = self._assistant_content(agent, tool_ids, content, history)
+        assistant_generation = self._assistant_generation(agent, tool_ids, content, history, variables or {})
+        assistant_content = assistant_generation.content
         assistant_row = self._repository.insert_message(
             session_id=session_id,
             role="assistant",
@@ -157,6 +170,7 @@ class ChatService:
             tokens=self._count_tokens(assistant_content),
             finish_reason="stop",
             latency_ms=0,
+            tool_calls=assistant_generation.tool_calls,
         )
         self._repository.rename_session_if_default(session_id, content[:30] or "新对话")
         response = ChatTurnResponse(
@@ -191,6 +205,7 @@ class ChatService:
             tokens=int(row["tokens"] or 0),
             finishReason=row["finish_reason"] or "",
             latencyMs=int(row["latency_ms"] or 0),
+            toolCalls=row.get("tool_calls") if isinstance(row.get("tool_calls"), list) else [],
             createdAt=row["created_at"].isoformat(),
         )
 
@@ -205,41 +220,49 @@ class ChatService:
             chunks.append(f"{part}{suffix}")
         return chunks
 
-    def _assistant_content(
+    def _assistant_generation(
         self,
         agent: dict[str, Any],
         tool_ids: list[int],
         content: str,
         history: list[MessageContext],
+        variables: dict[str, Any],
     ) -> str:
         model_config = self._model_config(agent)
         mode = self._mode_router.resolve(agent)
         if mode == "workflow":
-            return self._workflow_content(agent, model_config, content, history)
+            return AssistantGeneration(self._workflow_content(agent, model_config, content, history, variables), [])
         if mode == "rag":
-            return self._rag_content(agent, model_config, content, history)
-        tool_content = self._real_tool_content(agent, model_config, tool_ids, content, history)
-        if tool_content is not None:
-            return tool_content
-        return self._llm_content(agent, model_config, self._base_messages(agent, history, content))
+            return AssistantGeneration(self._rag_content(agent, model_config, content, history, variables), [])
+        tool_generation = self._real_tool_generation(agent, model_config, tool_ids, content, history, variables)
+        if tool_generation is not None:
+            return tool_generation
+        return AssistantGeneration(self._llm_content(agent, model_config, self._base_messages(agent, history, content, variables)), [])
 
-    def _real_tool_content(
+    def _real_tool_generation(
         self,
         agent: dict[str, Any],
         model_config: ModelConfigDto,
         tool_ids: list[int],
         content: str,
         history: list[MessageContext],
+        variables: dict[str, Any],
     ) -> str | None:
         if not tool_ids or self._mcp_facade is None:
             return None
-        tools = self._mcp_facade.tool_definitions_for_servers(tool_ids)
+        tool_policies = self._tool_policies(agent)
+        tools = list(self._mcp_facade.tool_definitions_for_servers(tool_ids))
         if not tools:
             return None
+        if not self._model_supports_tool_calling(model_config):
+            raise BizError(
+                ErrorCode.BAD_REQUEST,
+                f"Model {model_config.model_id} does not support tool calling",
+            )
         client = self._llm_client(model_config)
         result = self._tool_orchestrator.run(
             model=model_config.model_id,
-            messages=self._base_messages(agent, history, content),
+            messages=self._base_messages(agent, history, content, variables),
             tools=tools,
             tool_ids=tool_ids,
             mcp_facade=self._mcp_facade,
@@ -247,8 +270,12 @@ class ChatService:
             temperature=self._temperature(agent),
             max_tokens=self._max_tokens(agent),
             extra_params=model_config.extra_params,
+            tool_policies=tool_policies,
         )
-        return result.final_content or None
+        return AssistantGeneration(
+            result.final_content or "",
+            normalize_tool_execution_results(result.tool_results),
+        )
 
     def _rag_content(
         self,
@@ -256,20 +283,77 @@ class ChatService:
         model_config: ModelConfigDto,
         content: str,
         history: list[MessageContext],
+        variables: dict[str, Any],
     ) -> str:
-        knowledge_base_id = agent.get("knowledge_base_id")
-        if self._knowledge_facade is None or knowledge_base_id is None:
-            return self._llm_content(agent, model_config, self._base_messages(agent, history, content))
-        references = self._knowledge_facade.search_chunks(int(knowledge_base_id), content, top_k=3)
+        knowledge_base_ids = self._knowledge_base_ids(agent)
+        retrieval_settings = self._retrieval_settings(agent)
+        if self._knowledge_facade is None or not knowledge_base_ids:
+            return self._llm_content(agent, model_config, self._base_messages(agent, history, content, variables))
+        references = self._search_references(knowledge_base_ids, content, retrieval_settings)
         if not references:
-            return self._llm_content(agent, model_config, self._base_messages(agent, history, content))
+            return self._llm_content(agent, model_config, self._base_messages(agent, history, content, variables))
         rag_prompt = (
             "Answer the user using the retrieved knowledge context.\n\n"
             f"Knowledge context:\n{self._format_references(references)}\n\n"
             f"User question: {content}"
         )
-        answer = self._llm_content(agent, model_config, self._base_messages(agent, history, rag_prompt))
+        answer = self._llm_content(agent, model_config, self._base_messages(agent, history, rag_prompt, variables))
         return f"{answer}\nReferences:\n{self._format_references(references)}"
+
+    def _knowledge_base_ids(self, agent: dict[str, Any]) -> list[int]:
+        raw_ids = agent.get("knowledge_base_ids")
+        ids: list[Any] = raw_ids if isinstance(raw_ids, list) else []
+        if not ids and agent.get("knowledge_base_id") is not None:
+            ids = [agent.get("knowledge_base_id")]
+        normalized: list[int] = []
+        seen: set[int] = set()
+        for raw_id in ids:
+            try:
+                value = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            if value <= 0 or value in seen:
+                continue
+            seen.add(value)
+            normalized.append(value)
+        return normalized
+
+    def _retrieval_settings(self, agent: dict[str, Any]) -> dict[str, Any]:
+        raw_settings = agent.get("retrieval_settings")
+        settings = raw_settings if isinstance(raw_settings, dict) else {}
+        return {
+            "topK": max(1, int(settings.get("topK") or 3)),
+            "scoreThreshold": max(0.0, float(settings.get("scoreThreshold") or 0)),
+            "retrievalMode": _normalize_retrieval_mode(settings.get("retrievalMode")),
+            "rerank": bool(settings.get("rerank", False)),
+            "citationStyle": str(settings.get("citationStyle") or "numbered"),
+        }
+
+    def _search_references(
+        self,
+        knowledge_base_ids: list[int],
+        content: str,
+        retrieval_settings: dict[str, Any],
+    ) -> list[KnowledgeSearchResult]:
+        top_k = int(retrieval_settings["topK"])
+        threshold = float(retrieval_settings["scoreThreshold"])
+        references: list[KnowledgeSearchResult] = []
+        if self._knowledge_facade is None:
+            return []
+        for knowledge_base_id in knowledge_base_ids:
+            references.extend(
+                self._knowledge_facade.search_chunks(
+                    knowledge_base_id,
+                    content,
+                    top_k=top_k,
+                    retrieval_mode=str(retrieval_settings["retrievalMode"]),
+                    score_threshold=threshold,
+                    rerank=bool(retrieval_settings["rerank"]),
+                )
+            )
+        filtered = [reference for reference in references if float(reference.score) >= threshold]
+        filtered.sort(key=lambda reference: reference.score, reverse=True)
+        return filtered[:top_k]
 
     def _format_references(self, references: list[KnowledgeSearchResult]) -> str:
         return "\n".join(f"- [{index + 1}] {reference.content}" for index, reference in enumerate(references))
@@ -280,6 +364,7 @@ class ChatService:
         model_config: ModelConfigDto,
         content: str,
         history: list[MessageContext],
+        variables: dict[str, Any],
     ) -> str:
         workflow_id = agent.get("workflow_id")
         workflow_output: str | None = None
@@ -292,7 +377,7 @@ class ChatService:
                         lambda prompt: self._llm_content(
                             agent,
                             model_config,
-                            self._base_messages(agent, history, prompt),
+                            self._base_messages(agent, history, prompt, variables),
                         )
                     ),
                 )
@@ -305,7 +390,7 @@ class ChatService:
                 f"Workflow result:\n{workflow_output}\n\n"
                 f"User message: {content}"
             )
-        return self._llm_content(agent, model_config, self._base_messages(agent, history, prompt))
+        return self._llm_content(agent, model_config, self._base_messages(agent, history, prompt, variables))
 
     def _model_config(self, agent: dict[str, Any]) -> ModelConfigDto:
         if self._model_facade is None:
@@ -333,6 +418,7 @@ class ChatService:
         agent: dict[str, Any],
         history: list[MessageContext],
         content: str,
+        variables: dict[str, Any] | None = None,
     ) -> list[ChatRequestMessage]:
         self._prompt_builder.build(
             system_prompt=agent["system_prompt"] or "",
@@ -347,7 +433,7 @@ class ChatService:
             for message in history
             if message["role"] in {"user", "assistant", "system"}
         )
-        messages.append(ChatRequestMessage(role="user", content=content))
+        messages.append(ChatRequestMessage(role="user", content=self._runtime_user_message(agent, content, variables or {})))
         return messages
 
     def _llm_client(self, model_config: ModelConfigDto) -> Any:
@@ -365,10 +451,99 @@ class ChatService:
     def _max_tokens(self, agent: dict[str, Any]) -> int:
         return int(agent["max_tokens"])
 
+    def _tool_policies(self, agent: dict[str, Any]) -> dict[str, dict[str, Any]]:
+        policies = agent.get("tool_policies")
+        if not isinstance(policies, dict):
+            return {}
+        normalized: dict[str, dict[str, Any]] = {}
+        for name, policy in policies.items():
+            if isinstance(policy, dict):
+                normalized[str(name)] = policy
+        return normalized
+
+    def _model_supports_tool_calling(self, model_config: ModelConfigDto) -> bool:
+        raw = model_config.extra_params.get("supportsToolCalling")
+        if raw is None:
+            raw = model_config.extra_params.get("supports_tool_calling")
+        if isinstance(raw, bool):
+            return raw
+        if isinstance(raw, str) and raw.strip().lower() in {"true", "false"}:
+            return raw.strip().lower() == "true"
+        return model_config.provider_type.upper() in {"OPENAI", "OPENAI_COMPATIBLE"}
+
+    def _runtime_user_message(
+        self,
+        agent: dict[str, Any],
+        content: str,
+        variable_overrides: dict[str, Any],
+    ) -> str:
+        variable_lines = self._runtime_variable_lines(agent.get("variables"), variable_overrides)
+        memory_lines = self._runtime_memory_lines(agent.get("memory"))
+        if not variable_lines and not memory_lines:
+            return content
+        parts = ["Runtime context:"]
+        if variable_lines:
+            parts.append("Agent variables:")
+            parts.extend(variable_lines)
+        if memory_lines:
+            parts.append("Agent memory:")
+            parts.extend(memory_lines)
+        parts.append("")
+        parts.append(f"User message:\n{content}")
+        return "\n".join(parts)
+
+    def _runtime_variable_lines(self, variables: Any, overrides: dict[str, Any]) -> list[str]:
+        if not isinstance(variables, list):
+            return []
+        lines: list[str] = []
+        for variable in variables:
+            if not isinstance(variable, dict):
+                continue
+            name = str(variable.get("name") or "").strip()
+            if not name:
+                continue
+            value = overrides.get(name, variable.get("defaultValue"))
+            if not self._has_runtime_value(value):
+                if variable.get("required"):
+                    raise BizError(ErrorCode.BAD_REQUEST, f"Missing required Agent variable: {name}")
+                continue
+            lines.append(f"{name}={self._format_runtime_value(value)}")
+        return lines
+
+    def _runtime_memory_lines(self, memory: Any) -> list[str]:
+        if not isinstance(memory, dict):
+            return []
+        lines: list[str] = []
+        for raw_key, raw_value in memory.items():
+            key = str(raw_key or "").strip()
+            if not key or not self._has_runtime_value(raw_value):
+                continue
+            lines.append(f"{key}={self._format_runtime_value(raw_value)}")
+        return lines
+
+    def _has_runtime_value(self, value: Any) -> bool:
+        if value is None:
+            return False
+        if isinstance(value, str):
+            return bool(value.strip())
+        return True
+
+    def _format_runtime_value(self, value: Any) -> str:
+        if isinstance(value, str):
+            return value.strip()
+        return str(value)
+
+
+def _normalize_retrieval_mode(value: Any) -> str:
+    normalized = str(value or "auto").strip().lower()
+    if normalized in {"auto", "hybrid", "semantic", "keyword", "faq"}:
+        return normalized
+    return "auto"
+
 
 class _ChatWorkflowLlmCompleter:
     def __init__(self, complete_prompt: Callable[[str], str]) -> None:
         self._complete_prompt = complete_prompt
 
-    def complete_prompt(self, prompt: str) -> str:
+    def complete_prompt(self, prompt: str, _options: dict[str, Any] | None = None) -> str:
         return self._complete_prompt(prompt)

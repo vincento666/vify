@@ -1,4 +1,5 @@
 from collections.abc import Mapping, Sequence, Set as AbstractSet
+import math
 import re
 from typing import Any
 
@@ -12,11 +13,53 @@ SEMANTIC_FIXTURES: dict[str, tuple[str, ...]] = {
     "invoice_apply": ("报销", "凭证", "电子票据", "开票资料", "发票"),
     "baggage_service": ("托运", "行李额", "超重", "随身行李", "运动器材"),
     "seat_checkin": ("登机牌", "座位", "靠窗", "过道", "线上值机"),
-    "flight_status": ("航班动态", "航班状态", "起飞时间", "到达时间", "登机口", "接人", "是不是延误"),
+    "flight_status": (
+        "航班动态",
+        "航班状态",
+        "起飞时间",
+        "到达时间",
+        "登机口",
+        "接人",
+        "是不是延误",
+        "查航班",
+        "航班现在",
+        "到哪了",
+        "到哪",
+    ),
     "special_assistance": ("轮椅", "无障碍", "行动不便", "特殊协助", "优先登机"),
     "pet_cabin": ("宠物", "航空箱", "疫苗证明", "猫咪", "小型犬"),
     "irregular_flight": ("异常航班", "不正常航班", "备降", "保障方案", "签转", "非自愿", "延误四小时"),
     "membership_service": ("里程", "积分", "常旅客", "补登", "升舱券"),
+}
+
+HYBRID_SOP_PROFILES: dict[str, tuple[str, ...]] = {
+    "flight_booking": (
+        "航班",
+        "机票",
+        "飞机票",
+        "出行",
+        "合适航班",
+        "可飞",
+        "开会",
+        "出差",
+        "乘机人",
+        "手机号",
+        "联系方式",
+    ),
+    "fare_quote": ("票价", "价格", "多少钱", "报价", "预算", "贵", "便宜", "比价", "看看", "合适"),
+    "group_booking": ("团队", "团体", "多人", "集体", "公司", "统一出票", "一起出行", "十个人", "二十个人"),
+    "ancillary_sales": ("加购", "附加", "增值", "保险", "餐食", "贵宾厅", "接送机", "升舱"),
+    "refund_ticket": ("退", "退回", "扣费", "手续费", "不飞", "取消", "退掉"),
+    "change_flight": ("改", "换", "提前", "延后", "来不及", "改时间", "调整"),
+    "passenger_info_change": ("填错", "写错", "更正", "改资料", "改信息", "证件", "姓名", "联系人"),
+    "invoice_apply": ("报销", "凭证", "发票", "票据", "抬头", "税号", "行程单"),
+    "baggage_service": ("箱子", "行李", "托运", "超重", "额度", "婴儿车", "运动器材"),
+    "seat_checkin": ("座位", "坐一起", "靠窗", "过道", "登机牌", "线上办", "值机"),
+    "flight_status": ("动态", "状态", "延误", "取消", "起飞", "到达", "登机口", "接人", "查航班", "到哪"),
+    "special_assistance": ("老人", "孕妇", "轮椅", "受伤", "无障碍", "协助", "特殊服务"),
+    "pet_cabin": ("宠物", "猫", "狗", "航空箱", "疫苗", "托运", "进客舱"),
+    "irregular_flight": ("不正常", "异常", "延误", "取消", "备降", "非自愿", "保障", "补偿"),
+    "membership_service": ("会员", "里程", "积分", "常旅客", "补登", "权益", "等级"),
 }
 
 
@@ -115,6 +158,8 @@ class MockSemanticCandidateRecall:
     ) -> list[RouteCandidate]:
         if _looks_like_airport_facility_question(message):
             return []
+        if _explicitly_denies_transaction(message):
+            return []
         candidates: list[RouteCandidate] = []
         active_sop_id = str(active_task.get("sop_id") or "") if active_task is not None else ""
         for sop_id, manifest in self._manifests.items():
@@ -124,27 +169,211 @@ class MockSemanticCandidateRecall:
                 continue
             matched = tuple(term for term in SEMANTIC_FIXTURES.get(sop_id, ()) if term in message)
             weak_matched = _weak_sop_terms(sop_id, message) if not matched else ()
-            if not matched:
-                if not weak_matched:
-                    continue
-                matched = weak_matched
-            score = 0.78
-            candidates.append(
-                RouteCandidate(
-                    candidate_id=f"sop:{sop_id}",
-                    candidate_type=CandidateType.SOP_INTENT,
-                    target_id=sop_id,
-                    display_name=manifest.display_name,
-                    source="mock_semantic_recall",
-                    score=score,
-                    score_breakdown=ScoreBreakdown(keyword=0.0, alias=0.0, semantic=score),
-                    matched_terms=matched,
-                    risk_level="LOW",
-                    requires_classifier=True,
-                    reason="Mock semantic fixture matched SOP intent",
+            if matched or weak_matched:
+                matched = matched or weak_matched
+                score = 0.78
+                candidates.append(
+                    RouteCandidate(
+                        candidate_id=f"sop:{sop_id}",
+                        candidate_type=CandidateType.SOP_INTENT,
+                        target_id=sop_id,
+                        display_name=manifest.display_name,
+                        source="mock_semantic_recall",
+                        score=score,
+                        score_breakdown=ScoreBreakdown(keyword=0.0, alias=0.0, semantic=score),
+                        matched_terms=matched,
+                        risk_level="LOW",
+                        requires_classifier=True,
+                        reason="Mock semantic fixture matched SOP intent",
+                    )
                 )
-            )
+                continue
+            hybrid = _hybrid_sop_candidate(sop_id, manifest, message)
+            if hybrid is not None:
+                candidates.append(hybrid)
         return candidates
+
+
+def _hybrid_sop_candidate(sop_id: str, manifest: SopManifest, text: str) -> RouteCandidate | None:
+    terms = _hybrid_profile_terms(sop_id, manifest)
+    keyword_hits = tuple(term for term in terms if term and term in text)
+    bm25_score = _bm25_lite_score(text, terms)
+    vector_score = _char_vector_score(text, _hybrid_document(sop_id, manifest, terms))
+    business_score, business_terms = _business_reference_score(sop_id, text)
+    if not keyword_hits and business_score <= 0 and vector_score < 0.08:
+        return None
+    score = min(
+        0.88,
+        0.48
+        + bm25_score * 0.16
+        + vector_score * 0.22
+        + business_score * 0.36
+        + min(len(keyword_hits), 3) * 0.015,
+    )
+    if score < 0.62:
+        return None
+    matched_terms = tuple(dict.fromkeys((*business_terms, *keyword_hits[:4])))
+    return RouteCandidate(
+        candidate_id=f"sop:{sop_id}",
+        candidate_type=CandidateType.SOP_INTENT,
+        target_id=sop_id,
+        display_name=manifest.display_name,
+        source="sop_hybrid_recall",
+        score=score,
+        score_breakdown=ScoreBreakdown(
+            keyword=round(bm25_score, 3),
+            alias=round(business_score, 3),
+            semantic=round(vector_score, 3),
+        ),
+        matched_terms=matched_terms,
+        risk_level="MEDIUM",
+        requires_classifier=True,
+        reason="Hybrid SOP recall using keyword, BM25-lite, char-vector and business-reference signals",
+        payload={
+            "retrieval": {
+                "mode": "keyword_bm25_char_vector_business_ref",
+                "keywordScore": round(bm25_score, 4),
+                "vectorScore": round(vector_score, 4),
+                "businessReferenceScore": round(business_score, 4),
+                "pool": "enabled_sop_manifests",
+            }
+        },
+    )
+
+
+def _hybrid_profile_terms(sop_id: str, manifest: SopManifest) -> tuple[str, ...]:
+    return tuple(
+        dict.fromkeys(
+            (
+                manifest.display_name,
+                manifest.business_area,
+                *manifest.trigger_keywords,
+                *manifest.strong_trigger_keywords,
+                *SEMANTIC_FIXTURES.get(sop_id, ()),
+                *HYBRID_SOP_PROFILES.get(sop_id, ()),
+            )
+        )
+    )
+
+
+def _hybrid_document(sop_id: str, manifest: SopManifest, terms: Sequence[str]) -> str:
+    return " ".join((sop_id, manifest.display_name, manifest.business_area, *terms))
+
+
+def _bm25_lite_score(text: str, terms: Sequence[str]) -> float:
+    if not text or not terms:
+        return 0.0
+    hits = [term for term in terms if term and term in text]
+    if not hits:
+        return 0.0
+    normalizer = max(3, min(8, len(terms) // 4 or 3))
+    return min(1.0, len(set(hits)) / normalizer)
+
+
+def _char_vector_score(text: str, document: str) -> float:
+    query = _char_ngram_counts(text)
+    doc = _char_ngram_counts(document)
+    if not query or not doc:
+        return 0.0
+    dot = sum(value * doc.get(key, 0) for key, value in query.items())
+    query_norm = math.sqrt(sum(value * value for value in query.values()))
+    doc_norm = math.sqrt(sum(value * value for value in doc.values()))
+    if query_norm == 0 or doc_norm == 0:
+        return 0.0
+    return min(1.0, dot / (query_norm * doc_norm))
+
+
+def _char_ngram_counts(text: str, n: int = 2) -> dict[str, int]:
+    normalized = "".join(re.findall(r"[\w\u4e00-\u9fff]+", text.lower()))
+    if len(normalized) < n:
+        return {}
+    counts: dict[str, int] = {}
+    for index in range(0, len(normalized) - n + 1):
+        gram = normalized[index : index + n]
+        counts[gram] = counts.get(gram, 0) + 1
+    return counts
+
+
+def _business_reference_score(sop_id: str, text: str) -> tuple[float, tuple[str, ...]]:
+    terms: list[str] = []
+    score = 0.0
+
+    has_route = _has_route_reference(text)
+    has_time = _has_travel_time_reference(text)
+    has_contact = _has_contact_or_passenger_reference(text)
+    has_order = _has_order_reference(text)
+    has_flight_object = any(term in text for term in ("航班", "机票", "飞机票"))
+
+    def add(amount: float, term: str) -> None:
+        nonlocal score
+        score += amount
+        terms.append(term)
+
+    if sop_id == "flight_booking":
+        if has_route:
+            add(0.18, "business_ref:route")
+        if has_time:
+            add(0.10, "business_ref:travel_time")
+        if has_contact:
+            add(0.22, "business_ref:contact")
+        if has_flight_object:
+            add(0.10, "business_ref:flight_object")
+        if any(term in text for term in ("出差", "开会", "旅行", "回家", "出行")):
+            add(0.08, "business_ref:travel_purpose")
+        if any(term in text for term in ("合适的航班", "有没有合适", "看下航班", "看看航班")):
+            add(0.08, "business_ref:availability")
+    elif sop_id == "fare_quote":
+        if has_route:
+            add(0.12, "business_ref:route")
+        if has_time:
+            add(0.06, "business_ref:travel_time")
+        if any(term in text for term in ("票价", "价格", "多少钱", "预算", "贵", "便宜", "报价", "比价")):
+            add(0.34, "business_ref:price")
+    elif sop_id == "group_booking":
+        if has_route:
+            add(0.10, "business_ref:route")
+        if has_time:
+            add(0.06, "business_ref:travel_time")
+        if re.search(r"(?:\d+|[一二三四五六七八九十两]{1,3})个?人", text) or any(
+            term in text for term in ("团队", "团体", "多人", "集体", "公司")
+        ):
+            add(0.34, "business_ref:party_size")
+    elif sop_id in {"refund_ticket", "change_flight", "invoice_apply", "baggage_service", "seat_checkin"}:
+        if has_order:
+            add(0.18, "business_ref:order")
+        if has_contact:
+            add(0.08, "business_ref:contact")
+    elif sop_id == "flight_status":
+        if any(term in text for term in ("延误", "取消", "到达", "起飞", "登机口", "动态", "状态", "晚点", "到哪", "查航班")):
+            add(0.32, "business_ref:flight_status")
+        if "航班现在" in text:
+            add(0.14, "business_ref:flight_tracking")
+        if has_route:
+            add(0.08, "business_ref:route")
+    elif sop_id == "special_assistance" and has_contact:
+        add(0.06, "business_ref:passenger")
+    elif sop_id == "pet_cabin" and has_flight_object:
+        add(0.06, "business_ref:flight_object")
+    return min(1.0, score), tuple(dict.fromkeys(terms))
+
+
+def _has_route_reference(text: str) -> bool:
+    city = r"[\u4e00-\u9fff]{2,8}"
+    return bool(re.search(rf"{city}(?:飞|到|去|至){city}", text))
+
+
+def _has_travel_time_reference(text: str) -> bool:
+    return bool(
+        re.search(r"(今天|明天|后天|大后天|下周|周[一二三四五六日天]|星期[一二三四五六日天]|上午|下午|晚上|早上|中午|凌晨)", text)
+    )
+
+
+def _has_contact_or_passenger_reference(text: str) -> bool:
+    return bool(re.search(r"(?<!\d)1[3-9]\d{9}(?!\d)", text)) or any(term in text for term in ("乘机人", "旅客", "手机号", "联系人"))
+
+
+def _has_order_reference(text: str) -> bool:
+    return bool(re.search(r"[A-Z]{2}\d{3,}[-\d]*", text.upper())) or any(term in text for term in ("订单", "票号", "刚才那张票", "刚订"))
 
 
 def _weak_sop_terms(sop_id: str, message: str) -> tuple[str, ...]:
@@ -255,3 +484,15 @@ def _looks_like_airport_facility_question(text: str) -> bool:
     facility_terms = ("机场", "候机楼", "柜台", "停车", "酒店", "打印店", "寄存", "WiFi", "wifi", "大巴", "贵宾楼")
     question_terms = ("吗", "么", "怎么", "哪里", "几点", "收费", "旁边", "附近", "有没有")
     return any(term in text for term in facility_terms) and any(term in text for term in question_terms)
+
+
+def _explicitly_denies_transaction(text: str) -> bool:
+    if _looks_like_price_quote_request(text):
+        return False
+    denial_terms = ("不是要办理", "不是办理", "不办理", "不是要办", "不办", "先不", "现在不")
+    consultation_terms = ("只是问", "只想问", "就想问", "想问", "咨询", "了解")
+    return any(term in text for term in denial_terms) and any(term in text for term in consultation_terms)
+
+
+def _looks_like_price_quote_request(text: str) -> bool:
+    return any(term in text for term in ("票价", "价格", "多少钱", "报价", "预算", "贵不贵", "便宜"))

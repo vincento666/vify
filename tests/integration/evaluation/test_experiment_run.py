@@ -96,6 +96,24 @@ class EvaluationExperimentRunTest(unittest.TestCase):
             self.assertEqual(run["status"], "COMPLETED")
             self.assertEqual(run["passedCases"], 1)
             self.assertEqual(run["caseResults"][0]["targetOutput"], "LLM mock: Workflow says refund policy")
+            case_result = run["caseResults"][0]
+            self.assertEqual(case_result["targetType"], "WORKFLOW")
+            self.assertEqual(case_result["targetStatus"], "SUCCEEDED")
+            self.assertIsInstance(case_result["targetRunId"], int)
+            self.assertEqual(
+                case_result["targetDebugUrl"],
+                f"/workflows/{workflow['id']}/canvas?runId={case_result['targetRunId']}&debug=1",
+            )
+            self.assertEqual(
+                case_result["targetEvidenceSummary"],
+                {
+                    "targetType": "WORKFLOW",
+                    "targetId": workflow["id"],
+                    "runId": case_result["targetRunId"],
+                    "status": "SUCCEEDED",
+                    "debugUrl": case_result["targetDebugUrl"],
+                },
+            )
 
     def test_create_chatflow_experiment_and_run_cases_synchronously(self) -> None:
         with TestClient(app) as client:
@@ -137,6 +155,24 @@ class EvaluationExperimentRunTest(unittest.TestCase):
             self.assertEqual(run["status"], "COMPLETED")
             self.assertEqual(run["passedCases"], 1)
             self.assertEqual(run["caseResults"][0]["targetOutput"], "LLM mock: Chatflow says shipping fee")
+            case_result = run["caseResults"][0]
+            self.assertEqual(case_result["targetType"], "CHATFLOW")
+            self.assertEqual(case_result["targetStatus"], "SUCCEEDED")
+            self.assertIsInstance(case_result["targetRunId"], int)
+            self.assertEqual(
+                case_result["targetDebugUrl"],
+                f"/chatflows/{chatflow['id']}/canvas?runId={case_result['targetRunId']}&debug=1",
+            )
+            self.assertEqual(
+                case_result["targetEvidenceSummary"],
+                {
+                    "targetType": "CHATFLOW",
+                    "targetId": chatflow["id"],
+                    "runId": case_result["targetRunId"],
+                    "status": "SUCCEEDED",
+                    "debugUrl": case_result["targetDebugUrl"],
+                },
+            )
 
     def test_rejects_unknown_target_and_missing_evaluator(self) -> None:
         with TestClient(app) as client:
@@ -163,6 +199,45 @@ class EvaluationExperimentRunTest(unittest.TestCase):
                 },
             )
             self.assertEqual(missing_evaluator_response.status_code, 404)
+
+    def test_host_target_run_requires_evaluation_run_permission(self) -> None:
+        denied_headers = {
+            "X-Hify-Actor-Id": "host-eval-denied",
+            "X-Hify-Source": "host-shell",
+            "X-Hify-Permissions": "workflow:run",
+        }
+        with TestClient(app) as client:
+            workflow = _create_flow(client, "/api/v1/workflows", "Denied Workflow target")
+            eval_set = client.post(
+                "/api/v1/eval-sets",
+                json={"name": f"Denied Eval Set {time.time_ns()}", "description": "permission"},
+            ).json()["data"]
+            client.post(
+                f"/api/v1/eval-sets/{eval_set['id']}/cases",
+                json={"input": "refund", "expectedOutput": "refund", "tags": []},
+            )
+            evaluator = client.post(
+                "/api/v1/evaluators",
+                json={"name": f"Denied Exact {time.time_ns()}", "type": "EXACT_MATCH", "config": {}},
+            ).json()["data"]
+            experiment = client.post(
+                "/api/v1/evaluation-experiments",
+                json={
+                    "name": f"Denied Experiment {time.time_ns()}",
+                    "targetType": "WORKFLOW",
+                    "targetId": workflow["id"],
+                    "evalSetId": eval_set["id"],
+                    "evaluatorIds": [evaluator["id"]],
+                },
+            ).json()["data"]
+
+            response = client.post(
+                f"/api/v1/evaluation-experiments/{experiment['id']}/runs",
+                headers=denied_headers,
+            )
+
+        self.assertEqual(response.status_code, 403, response.text)
+        self.assertIn("evaluation:run", response.json()["message"])
 
 
 def _seed_mock_agent() -> int:

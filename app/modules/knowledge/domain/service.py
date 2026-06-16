@@ -145,6 +145,11 @@ class KnowledgeBaseService:
             )
         except Exception as exc:
             error_message = str(exc)[:500]
+            self._get_vector_store().delete_document_embeddings(
+                int(row["knowledge_base_id"]),
+                document_id,
+                self._embedding_provider.model_name,
+            )
             self._repository.clear_document_chunks(document_id)
             self._repository.update_document_processing_state(
                 document_id,
@@ -185,6 +190,14 @@ class KnowledgeBaseService:
         ]
 
     def delete_document(self, document_id: int) -> None:
+        row = self._repository.get_document(document_id)
+        if row is None:
+            raise BizError(ErrorCode.NOT_FOUND, "Document not found")
+        self._get_vector_store().delete_document_embeddings(
+            int(row["knowledge_base_id"]),
+            document_id,
+            self._embedding_provider.model_name,
+        )
         if not self._repository.delete_document(document_id):
             raise BizError(ErrorCode.NOT_FOUND, "Document not found")
 
@@ -217,7 +230,8 @@ class KnowledgeBaseService:
                 "source": request.source,
             }
         )
-        self._replace_faq_embedding(row)
+        if row.get("enabled"):
+            self._replace_faq_embedding(row)
         return self._faq_response(row).model_dump(by_alias=True)
 
     def update_faq(self, faq_id: int, request: FaqUpdateRequest) -> dict[str, Any]:
@@ -227,10 +241,25 @@ class KnowledgeBaseService:
         row = self._repository.update_faq(faq_id, values)
         if row is None:
             raise BizError(ErrorCode.NOT_FOUND, "FAQ not found")
-        self._replace_faq_embedding(row)
+        if row.get("enabled"):
+            self._replace_faq_embedding(row)
+        else:
+            self._get_vector_store().delete_faq_embeddings(
+                int(row["knowledge_base_id"]),
+                faq_id,
+                self._embedding_provider.model_name,
+            )
         return self._faq_response(row).model_dump(by_alias=True)
 
     def delete_faq(self, faq_id: int) -> None:
+        row = self._repository.get_faq(faq_id)
+        if row is None:
+            raise BizError(ErrorCode.NOT_FOUND, "FAQ not found")
+        self._get_vector_store().delete_faq_embeddings(
+            int(row["knowledge_base_id"]),
+            faq_id,
+            self._embedding_provider.model_name,
+        )
         if not self._repository.delete_faq(faq_id):
             raise BizError(ErrorCode.NOT_FOUND, "FAQ not found")
 
@@ -259,7 +288,8 @@ class KnowledgeBaseService:
                     "source": str(row.get("source") or "csv"),
                 }
             )
-            self._replace_faq_embedding(row)
+            if row.get("enabled"):
+                self._replace_faq_embedding(row)
             imported += 1
         return FaqImportResponse(imported=imported).model_dump(by_alias=True)
 

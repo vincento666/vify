@@ -3,6 +3,7 @@ from collections.abc import Mapping
 from typing import Any, cast
 
 from app.core.errors import BizError
+from app.modules.workflow.domain.runtime_v2 import ChatflowRuntimeV2Service
 from app.modules.runtime_lab.domain.sop_adapter import (
     SopRuntimeAdapter,
     SopCheckpoint,
@@ -20,10 +21,12 @@ class ChatflowSopRuntimeAdapter:
         workflow_service: WorkflowService,
         sop_chatflow_ids: dict[str, int],
         fallback_adapter: SopRuntimeAdapter | None = None,
+        runtime_v2_service: ChatflowRuntimeV2Service | None = None,
     ) -> None:
         self._workflow_service = workflow_service
         self._sop_chatflow_ids = dict(sop_chatflow_ids)
         self._fallback_adapter = fallback_adapter
+        self._runtime_v2_service = runtime_v2_service
 
     def start_sop(self, request: SopExecutionRequest) -> SopExecutionResult:
         chatflow_id = self._chatflow_id(request.sop_id)
@@ -31,13 +34,53 @@ class ChatflowSopRuntimeAdapter:
             if self._fallback_adapter is not None:
                 return self._fallback_adapter.start_sop(request)
             return _failure(request, "SOP_CHATFLOW_NOT_BOUND", f"SOP is not bound to Chatflow: {request.sop_id}")
+        if self._runtime_v2_service is not None:
+            v2_result = self._start_sop_v2(request, chatflow_id)
+            if v2_result is not None:
+                return v2_result
+        return self._start_sop_v1(request, chatflow_id, fallback_events=[])
+
+    def _start_sop_v1(
+        self,
+        request: SopExecutionRequest,
+        chatflow_id: int,
+        *,
+        fallback_events: list[dict[str, Any]],
+    ) -> SopExecutionResult:
         try:
             run = self._workflow_service.execute(chatflow_id, WorkflowRunRequest(input=_runtime_input(request)))
         except BizError as exc:
             return _failure(request, "CHATFLOW_START_FAILED", str(exc))
         except Exception as exc:
             return _failure(request, "CHATFLOW_START_FAILED", str(exc))
-        return self._result_from_run(request, chatflow_id, run)
+        result = self._result_from_run(request, chatflow_id, run)
+        if fallback_events:
+            return _with_prefixed_events(result, fallback_events)
+        return result
+
+    def _start_sop_v2(self, request: SopExecutionRequest, chatflow_id: int) -> SopExecutionResult | None:
+        assert self._runtime_v2_service is not None
+        try:
+            started = self._runtime_v2_service.start_run(
+                chatflow_id,
+                _runtime_input(request),
+                idempotency_key=_v2_idempotency_key(request),
+            )
+            self._runtime_v2_service.complete_run(int(started["runId"]))
+            run = self._runtime_v2_service.get_result(int(started["runId"]))
+            run["events"] = self._runtime_v2_service.list_events(int(started["runId"]))["list"]
+            run["checkpointId"] = _checkpoint_id_from_result(run)
+            run["runtimeRefs"] = _runtime_refs(started)
+            result = self._result_from_run(request, chatflow_id, run, runtime_version=2)
+            return _with_prefixed_events(result, [{"type": "chatflow_v2_selected", "chatflowId": chatflow_id}])
+        except BizError as exc:
+            message = str(exc)
+            if "Unsupported runtime v2 graph" in message:
+                fallback = {"type": "chatflow_v2_fallback", "chatflowId": chatflow_id, "reason": message}
+                return self._start_sop_v1(request, chatflow_id, fallback_events=[fallback])
+            return _failure(request, "CHATFLOW_V2_START_FAILED", message)
+        except Exception as exc:
+            return _failure(request, "CHATFLOW_V2_START_FAILED", str(exc))
 
     def continue_sop(self, request: SopExecutionRequest) -> SopExecutionResult:
         return self._resume_or_run(request, fallback_operation="continue")
@@ -83,6 +126,16 @@ class ChatflowSopRuntimeAdapter:
         event_id = _optional_int(meta.get("eventId"))
         resume_mode = str(meta.get("resumeMode") or "event")
         try:
+            if _int(meta.get("runtimeVersion")) == 2 and self._runtime_v2_service is not None and run_id > 0:
+                run = self._runtime_v2_service.resume_run(
+                    run_id,
+                    _resume_data(request),
+                    str(request.metadata.get("idempotencyKey") or _v2_idempotency_key(request)),
+                )
+                run["events"] = self._runtime_v2_service.list_events(run_id)["list"]
+                run["checkpointId"] = _checkpoint_id_from_result(run)
+                run["runtimeRefs"] = dict(meta.get("runtimeRefs") or {})
+                return self._result_from_run(request, chatflow_id, run, runtime_version=2)
             if resume_mode == "event" and run_id > 0 and event_id is not None:
                 run = self._workflow_service.resume_run(
                     chatflow_id,
@@ -109,6 +162,7 @@ class ChatflowSopRuntimeAdapter:
         request: SopExecutionRequest,
         chatflow_id: int,
         run: Mapping[str, Any],
+        runtime_version: int = 1,
     ) -> SopExecutionResult:
         raw_status = str(run.get("status") or "")
         output = _as_mapping(run.get("output"))
@@ -123,7 +177,12 @@ class ChatflowSopRuntimeAdapter:
         else:
             return _failure(request, "CHATFLOW_RUN_FAILED", f"Chatflow run failed: {raw_status}")
 
-        collected = _collected(request, output, self._session_variables(chatflow_id, run))
+        collected = _sanitize_collected(request.sop_id, _collected(request, output, self._session_variables(chatflow_id, run)))
+        missing_required = _missing_required_fields(request.sop_id, collected)
+        if missing_required and current_step in {"confirm", "confirm_1", "completed"}:
+            status = SopExecutionStatus.WAITING
+            current_step = "collect"
+            pending_prompt = _missing_required_prompt(missing_required)
         event_checkpoint_id = _event_checkpoint_id(run)
         checkpoint = _checkpoint(
             request,
@@ -136,6 +195,8 @@ class ChatflowSopRuntimeAdapter:
             pending_prompt=pending_prompt,
             collected=collected,
             resume_mode=_resume_mode(status, run),
+            runtime_version=runtime_version,
+            runtime_refs=dict(run.get("runtimeRefs") or {}),
         )
         return SopExecutionResult(
             status=status,
@@ -145,7 +206,11 @@ class ChatflowSopRuntimeAdapter:
             checkpoint=checkpoint,
             collected=collected,
             business_refs=collected,
-            events=[dict(event) for event in _as_list(run.get("events")) if isinstance(event, Mapping)],
+            events=(
+                _project_events(run)
+                if runtime_version == 2
+                else [dict(event) for event in _as_list(run.get("events")) if isinstance(event, Mapping)]
+            ),
             error=None,
         )
 
@@ -175,6 +240,7 @@ def _runtime_input(request: SopExecutionRequest, resume_node: str | None = None)
         "sys.conversation_id": conversation_id,
         "sys.user_id": str(request.metadata.get("userId") or request.metadata.get("user_id") or ""),
         "sys.channel": str(request.metadata.get("channel") or "runtime-lab"),
+        "callerContext": _caller_context(request),
     }
     history = request.metadata.get("history") or request.metadata.get("conversationHistory")
     if isinstance(history, list):
@@ -201,6 +267,17 @@ def _runtime_input(request: SopExecutionRequest, resume_node: str | None = None)
                 }
         runtime_input["resume"] = resume
     return runtime_input
+
+
+def _caller_context(request: SopExecutionRequest) -> dict[str, str]:
+    keys = ("sop_key", "route_id", "route_turn_id", "intent_key", "task_id", "session_id", "actor", "source")
+    context = {key: str(request.metadata.get(key) or "") for key in keys}
+    context["sop_key"] = context["sop_key"] or request.sop_id
+    context["task_id"] = context["task_id"] or str(request.runtime_task_id or "")
+    context["session_id"] = context["session_id"] or str(request.runtime_session_id)
+    context["actor"] = context["actor"] or "operator"
+    context["source"] = context["source"] or str(request.metadata.get("channel") or "runtime-lab")
+    return context
 
 
 def _resume_data(request: SopExecutionRequest) -> dict[str, Any]:
@@ -290,6 +367,9 @@ def _business_values_from_text(text: str) -> dict[str, str]:
     phone_match = re.search(r"(?<!\d)(1[3-9]\d{9})(?!\d)", text)
     if phone_match:
         values["phone"] = phone_match.group(1)
+    passenger_count_match = re.search(r"(\d+|[一二三四五六七八九十两]{1,3}|十几|二十几|三十几)个?人", text)
+    if passenger_count_match and _looks_like_group_passenger_count_context(text):
+        values["passenger_count"] = passenger_count_match.group(1)
     passenger_match = re.search(
         r"乘机人\s*[:：]?\s*"
         r"(?!和|及|与|、|还有|手机号|电话|信息|姓名|等下|稍后|后面|再给)"
@@ -433,6 +513,65 @@ def _clean_passenger_name(value: str) -> str:
     return cleaned
 
 
+def _looks_like_group_passenger_count_context(text: str) -> bool:
+    group_terms = ("团队", "团体", "公司", "集体", "多人", "一起", "一行", "参会", "团建")
+    return any(term in text for term in group_terms)
+
+
+REQUIRED_SOP_FIELDS: dict[str, dict[str, str]] = {
+    "group_booking": {
+        "route": "出发到达城市",
+        "travel_time": "出行时间",
+        "passenger_count": "出行人数",
+    },
+}
+
+
+def _sanitize_collected(sop_id: str, collected: Mapping[str, Any]) -> dict[str, Any]:
+    sanitized: dict[str, Any] = {}
+    for key, value in collected.items():
+        if _slot_value_is_unknown(value):
+            continue
+        if sop_id == "group_booking" and key == "route" and not _looks_like_complete_route(value):
+            continue
+        sanitized[str(key)] = value
+    return sanitized
+
+
+def _missing_required_fields(sop_id: str, collected: Mapping[str, Any]) -> tuple[str, ...]:
+    labels = REQUIRED_SOP_FIELDS.get(sop_id)
+    if not labels:
+        return ()
+    missing: list[str] = []
+    for key, label in labels.items():
+        value = collected.get(key)
+        if _slot_value_is_unknown(value):
+            missing.append(label)
+            continue
+        if key == "route" and not _looks_like_complete_route(value):
+            missing.append(label)
+    return tuple(missing)
+
+
+def _missing_required_prompt(missing: tuple[str, ...]) -> str:
+    return f"请补充 {', '.join(missing)}"
+
+
+def _slot_value_is_unknown(value: Any) -> bool:
+    if value is None:
+        return True
+    text = str(value).strip()
+    if not text:
+        return True
+    unknown_terms = ("未定", "没定", "还没定", "待定", "等会", "稍后", "不确定", "再给", "未知")
+    return any(term in text for term in unknown_terms)
+
+
+def _looks_like_complete_route(value: Any) -> bool:
+    text = str(value or "").strip()
+    return bool(text) and any(separator in text for separator in ("到", "飞", "至", "去"))
+
+
 def _checkpoint(
     request: SopExecutionRequest,
     *,
@@ -445,6 +584,9 @@ def _checkpoint(
     pending_prompt: str,
     collected: dict[str, Any],
     resume_mode: str,
+    runtime_version: int = 1,
+    runtime_refs: dict[str, Any] | None = None,
+    fallback_reason: str = "",
 ) -> SopCheckpoint:
     scoped_variables: dict[str, Any] = {f"conversation.{key}": value for key, value in collected.items()}
     scoped_variables["__chatflow"] = {
@@ -455,6 +597,9 @@ def _checkpoint(
         "sessionId": session_id,
         "resumeMode": resume_mode,
         "collectedNodeIds": _next_collected_node_ids(request, current_step, collected),
+        "runtimeVersion": runtime_version,
+        "runtimeRefs": dict(runtime_refs or {}),
+        "fallbackReason": fallback_reason,
     }
     return SopCheckpoint(
         sop_runtime_id=f"chatflow:{chatflow_id}:{run_id}:{checkpoint_id or event_id or 0}",
@@ -548,6 +693,76 @@ def _failure(request: SopExecutionRequest, code: str, message: str) -> SopExecut
         business_refs={},
         events=[],
         error={"code": code, "message": message},
+    )
+
+
+def _with_prefixed_events(result: SopExecutionResult, events: list[dict[str, Any]]) -> SopExecutionResult:
+    return SopExecutionResult(
+        status=result.status,
+        current_step=result.current_step,
+        reply=result.reply,
+        pending_prompt=result.pending_prompt,
+        checkpoint=result.checkpoint,
+        collected=dict(result.collected),
+        business_refs=dict(result.business_refs),
+        events=[*events, *[dict(event) for event in result.events]],
+        error=result.error,
+    )
+
+
+def _project_events(run: Mapping[str, Any]) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    for event in _as_list(run.get("events")):
+        if not isinstance(event, Mapping):
+            continue
+        payload = _as_mapping(event.get("payload"))
+        projected = {
+            "type": str(event.get("type") or ""),
+            "source": "chatflow_runtime_v2",
+            "runtimeRunId": _int(event.get("runId")),
+            "sourceEventId": _int(event.get("id")),
+            "sourceSequence": _int(event.get("sequence")),
+            "nodeKey": str(event.get("nodeId") or event.get("nodeKey") or ""),
+            "callerContext": dict(payload.get("callerContext") or {}),
+        }
+        checkpoint_id = event.get("checkpointId")
+        if checkpoint_id is not None:
+            projected["checkpointId"] = checkpoint_id
+        events.append(projected)
+    return events
+
+
+def _runtime_refs(started: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "runId": started.get("runId"),
+        "statusRef": f"/api/v1/runtime-runs/{started.get('runId')}",
+        "eventsRef": started.get("eventsRef"),
+        "eventStreamRef": started.get("eventStreamRef"),
+        "nodesRef": started.get("nodesRef"),
+        "resultRef": started.get("resultRef"),
+    }
+
+
+def _checkpoint_id_from_result(run: Mapping[str, Any]) -> int | None:
+    checkpoint = run.get("checkpoint")
+    if isinstance(checkpoint, Mapping):
+        return _optional_int(checkpoint.get("id"))
+    return None
+
+
+def _v2_idempotency_key(request: SopExecutionRequest) -> str:
+    checkpoint_id = ""
+    if request.checkpoint is not None:
+        checkpoint_id = str(_chatflow_meta(request.checkpoint).get("checkpointId") or request.checkpoint.sop_runtime_id)
+    return ":".join(
+        [
+            "chatflow-sop-v2",
+            str(request.runtime_session_id),
+            str(request.runtime_task_id or ""),
+            request.sop_id,
+            checkpoint_id,
+            str(abs(hash(request.message))),
+        ]
     )
 
 

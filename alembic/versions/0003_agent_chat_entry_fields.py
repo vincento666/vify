@@ -10,7 +10,7 @@ depends_on = None
 def upgrade() -> None:
     columns = _agent_columns()
     if "opening_message" not in columns:
-        op.add_column("agent", sa.Column("opening_message", sa.Text(), server_default="", nullable=True))
+        op.add_column("agent", sa.Column("opening_message", sa.Text(), nullable=True))
     if "suggested_questions" not in columns:
         op.add_column("agent", sa.Column("suggested_questions", sa.JSON(), nullable=True))
 

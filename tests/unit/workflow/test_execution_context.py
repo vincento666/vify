@@ -49,6 +49,16 @@ class ExecutionContextTest(unittest.TestCase):
 
         self.assertEqual(context.render("{{conversation.topic}}"), "refund")
 
+    def test_local_values_are_scoped_to_current_node_render(self) -> None:
+        self.assertIsNotNone(ExecutionContext)
+        context = ExecutionContext()
+
+        context.set_local_values({"input": "refund status"})
+        self.assertEqual(context.render("User asked {{input}}"), "User asked refund status")
+
+        context.clear_local_values()
+        self.assertEqual(context.render("User asked {{input}}"), "User asked {{input}}")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -274,35 +274,39 @@ class RuntimeLabAirlineScaleE2ETest(unittest.TestCase):
         self.assertGreaterEqual(total_case_count, 100)
         self.assertGreaterEqual(average_length, 5)
 
-        with TestClient(app) as client:
-            executed = 0
-            for sop_id, utterances in START_UTTERANCES.items():
-                for index, utterance in enumerate(utterances):
-                    session_id = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
-                    started = _message(client, session_id, utterance)
-                    collected = _message(
-                        client,
-                        session_id,
-                        f"订单号 MU{sop_id[:2].upper()}{index:03d}，手机号 1380013{index:04d}，"
-                        f"乘机人张测试，明天上午从北京出发，备注希望短信通知",
-                    )
-                    completed = _message(client, session_id, "确认，按这个方案办理")
+        app.dependency_overrides[get_runtime_lab_service] = _fake_runtime_service
+        try:
+            with TestClient(app) as client:
+                executed = 0
+                for sop_id, utterances in START_UTTERANCES.items():
+                    for index, utterance in enumerate(utterances):
+                        session_id = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
+                        started = _message(client, session_id, utterance)
+                        collected = _message(
+                            client,
+                            session_id,
+                            f"订单号 MU{sop_id[:2].upper()}{index:03d}，手机号 1380013{index:04d}，"
+                            f"乘机人张测试，明天上午从北京出发，备注希望短信通知",
+                        )
+                        completed = _message(client, session_id, "确认，按这个方案办理")
 
-                    self.assertEqual(started["routeDecision"]["action"], "START_SOP", utterance)
-                    self.assertEqual(started["activeTask"]["sopId"], sop_id)
-                    self.assertEqual(started["activeTask"]["currentStep"], "collect_order_no")
-                    self.assertEqual(collected["routeDecision"]["action"], "CONTINUE_ACTIVE_SOP")
-                    self.assertEqual(collected["activeTask"]["currentStep"], "confirm")
-                    self.assertEqual(collected["activeTask"]["businessRefs"]["phone"], f"1380013{index:04d}")
-                    if sop_id == "flight_booking":
-                        self.assertNotIn("order_no", collected["activeTask"]["businessRefs"])
-                    else:
-                        self.assertTrue(collected["activeTask"]["businessRefs"]["order_no"].startswith("MU"))
-                    self.assertEqual(completed["routeDecision"]["action"], "COMPLETE_TASK")
-                    self.assertIsNone(completed["activeTask"])
-                    executed += 1
+                        self.assertEqual(started["routeDecision"]["action"], "START_SOP", utterance)
+                        self.assertEqual(started["activeTask"]["sopId"], sop_id)
+                        self.assertEqual(started["activeTask"]["currentStep"], "collect_order_no")
+                        self.assertEqual(collected["routeDecision"]["action"], "CONTINUE_ACTIVE_SOP")
+                        self.assertEqual(collected["activeTask"]["currentStep"], "confirm")
+                        self.assertEqual(collected["activeTask"]["businessRefs"]["phone"], f"1380013{index:04d}")
+                        if sop_id == "flight_booking":
+                            self.assertNotIn("order_no", collected["activeTask"]["businessRefs"])
+                        else:
+                            self.assertTrue(collected["activeTask"]["businessRefs"]["order_no"].startswith("MU"))
+                        self.assertEqual(completed["routeDecision"]["action"], "COMPLETE_TASK")
+                        self.assertIsNone(completed["activeTask"])
+                        executed += 1
 
             self.assertGreaterEqual(executed, 100)
+        finally:
+            app.dependency_overrides.pop(get_runtime_lab_service, None)
 
     def test_switch_resume_matrix_covers_five_airline_jumps_with_single_suspended_boundary(self) -> None:
         jump_pairs = (
@@ -312,34 +316,42 @@ class RuntimeLabAirlineScaleE2ETest(unittest.TestCase):
             ("baggage_service", "pet_cabin"),
             ("seat_checkin", "irregular_flight"),
         )
-        with TestClient(app) as client:
-            for primary, secondary in jump_pairs:
-                session_id = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
-                primary_started = _message(client, session_id, START_UTTERANCES[primary][0])
-                secondary_started = _message(client, session_id, START_UTTERANCES[secondary][0])
-                _message(client, session_id, "订单号 CA8888，手机号 13800138888，乘机人李测试")
-                secondary_done = _message(client, session_id, "确认办理")
-                resumed = _message(client, session_id, f"继续处理{primary_started['activeTask']['sopId']}")
-                tasks = client.get(f"/api/v1/runtime-lab/sessions/{session_id}/tasks").json()["data"]["list"]
+        app.dependency_overrides[get_runtime_lab_service] = _fake_runtime_service
+        try:
+            with TestClient(app) as client:
+                for primary, secondary in jump_pairs:
+                    session_id = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
+                    primary_started = _message(client, session_id, START_UTTERANCES[primary][0])
+                    secondary_started = _message(client, session_id, START_UTTERANCES[secondary][0])
+                    _message(client, session_id, "订单号 CA8888，手机号 13800138888，乘机人李测试")
+                    secondary_done = _message(client, session_id, "确认办理")
+                    resumed = _message(client, session_id, f"继续处理{primary_started['activeTask']['sopId']}")
+                    tasks = client.get(f"/api/v1/runtime-lab/sessions/{session_id}/tasks").json()["data"]["list"]
 
-                self.assertEqual(secondary_started["routeDecision"]["action"], "SUSPEND_AND_START")
-                self.assertEqual(secondary_started["activeTask"]["sopId"], secondary)
-                self.assertEqual(secondary_done["resumeOffer"]["sopId"], primary)
-                self.assertEqual(resumed["routeDecision"]["action"], "RESUME_TASK")
-                self.assertEqual(resumed["activeTask"]["sopId"], primary)
-                self.assertLessEqual(len([task for task in tasks if task["status"] == "SUSPENDED"]), 1)
+                    self.assertEqual(secondary_started["routeDecision"]["action"], "SUSPEND_AND_START")
+                    self.assertEqual(secondary_started["activeTask"]["sopId"], secondary)
+                    self.assertEqual(secondary_done["resumeOffer"]["sopId"], primary)
+                    self.assertEqual(resumed["routeDecision"]["action"], "RESUME_TASK")
+                    self.assertEqual(resumed["activeTask"]["sopId"], primary)
+                    self.assertLessEqual(len([task for task in tasks if task["status"] == "SUSPENDED"]), 1)
+        finally:
+            app.dependency_overrides.pop(get_runtime_lab_service, None)
 
     def test_enabled_sop_ids_scope_new_intent_routing_without_breaking_active_continuation(self) -> None:
-        with TestClient(app) as client:
-            session_id = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
-            enabled = ("flight_booking", "invoice_apply")
+        app.dependency_overrides[get_runtime_lab_service] = _fake_runtime_service
+        try:
+            with TestClient(app) as client:
+                session_id = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
+                enabled = ("flight_booking", "invoice_apply")
 
-            disabled_refund = _message(client, session_id, "我要退票", enabled_sop_ids=enabled)
-            booking_started = _message(client, session_id, "我想买一张明天去上海的机票", enabled_sop_ids=enabled)
-            invoice_started = _message(client, session_id, "公司报销要凭证，帮我开一下电子发票", enabled_sop_ids=enabled)
-            disabled_refund_during_invoice = _message(client, session_id, "我要退票", enabled_sop_ids=enabled)
+                disabled_refund = _message(client, session_id, "我要退票", enabled_sop_ids=enabled)
+                booking_started = _message(client, session_id, "我想买一张明天去上海的机票", enabled_sop_ids=enabled)
+                invoice_started = _message(client, session_id, "公司报销要凭证，帮我开一下电子发票", enabled_sop_ids=enabled)
+                disabled_refund_during_invoice = _message(client, session_id, "我要退票", enabled_sop_ids=enabled)
+        finally:
+            app.dependency_overrides.pop(get_runtime_lab_service, None)
 
-        self.assertEqual(disabled_refund["routeDecision"]["action"], "NO_MATCH")
+        self.assertEqual(disabled_refund["routeDecision"]["action"], "CLARIFY")
         self.assertIsNone(disabled_refund["activeTask"])
         self.assertEqual(booking_started["routeDecision"]["action"], "START_SOP")
         self.assertEqual(booking_started["activeTask"]["sopId"], "flight_booking")
@@ -349,16 +361,20 @@ class RuntimeLabAirlineScaleE2ETest(unittest.TestCase):
         self.assertEqual(disabled_refund_during_invoice["activeTask"]["sopId"], "invoice_apply")
 
     def test_booking_uses_sales_collection_language_for_natural_reservation_turns(self) -> None:
-        with TestClient(app) as client:
-            short_session_id = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
-            detailed_session_id = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
+        app.dependency_overrides[get_runtime_lab_service] = _fake_runtime_service
+        try:
+            with TestClient(app) as client:
+                short_session_id = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
+                detailed_session_id = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
 
-            short_started = _message(client, short_session_id, "我要定航班")
-            detailed_started = _message(
-                client,
-                detailed_session_id,
-                "我要订一张明天上午9点从北京到广州的机票",
-            )
+                short_started = _message(client, short_session_id, "我要定航班")
+                detailed_started = _message(
+                    client,
+                    detailed_session_id,
+                    "我要订一张明天上午9点从北京到广州的机票",
+                )
+        finally:
+            app.dependency_overrides.pop(get_runtime_lab_service, None)
 
         self.assertEqual(short_started["routeDecision"]["action"], "START_SOP")
         self.assertEqual(short_started["activeTask"]["sopId"], "flight_booking")
@@ -422,6 +438,10 @@ def _runtime_service_override(chatflow_id: int) -> Callable[[Session], RuntimeLa
         return RuntimeLabService(RuntimeLabRepository(session), adapter=adapter)
 
     return override
+
+
+def _fake_runtime_service(session: Session = Depends(get_session)) -> RuntimeLabService:
+    return RuntimeLabService(RuntimeLabRepository(session))
 
 
 def _message(

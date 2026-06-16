@@ -7,6 +7,7 @@ import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from app.core.database import Base
+from app.core.db_write import insert_and_fetch
 from app.core.schema import register_baseline_tables
 
 register_baseline_tables()
@@ -33,26 +34,25 @@ class ChatflowStateRepository:
         variables: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         now = datetime.now()
-        result = self._session.execute(
-            self._session_table.insert()
-            .values(
-                session_id=session_id,
-                chatflow_id=chatflow_id,
-                conversation_id=conversation_id,
-                user_id=user_id,
-                channel=channel,
-                channel_id=channel_id,
-                status=status,
-                current_run_id=current_run_id,
-                variables=variables or {},
-                expires_at=now + timedelta(days=1),
-                deleted=False,
-                created_at=now,
-                updated_at=now,
-            )
-            .returning(self._session_table)
+        row = insert_and_fetch(
+            self._session,
+            self._session_table,
+            {
+                "session_id": session_id,
+                "chatflow_id": chatflow_id,
+                "conversation_id": conversation_id,
+                "user_id": user_id,
+                "channel": channel,
+                "channel_id": channel_id,
+                "status": status,
+                "current_run_id": current_run_id,
+                "variables": variables or {},
+                "expires_at": now + timedelta(days=1),
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
         )
-        row = dict(result.mappings().one())
         self._session.commit()
         return row
 
@@ -69,24 +69,23 @@ class ChatflowStateRepository:
     ) -> dict[str, Any]:
         now = datetime.now()
         sequence = self._next_sequence(run_id)
-        result = self._session.execute(
-            self._event_table.insert()
-            .values(
-                session_id=session_id,
-                chatflow_id=chatflow_id,
-                run_id=run_id,
-                sequence=sequence,
-                event_type=event_type,
-                node_key=node_key,
-                payload=payload or {},
-                checkpoint_id=checkpoint_id,
-                deleted=False,
-                created_at=now,
-                updated_at=now,
-            )
-            .returning(self._event_table)
+        row = insert_and_fetch(
+            self._session,
+            self._event_table,
+            {
+                "session_id": session_id,
+                "chatflow_id": chatflow_id,
+                "run_id": run_id,
+                "sequence": sequence,
+                "event_type": event_type,
+                "node_key": node_key,
+                "payload": payload or {},
+                "checkpoint_id": checkpoint_id,
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
         )
-        row = dict(result.mappings().one())
         self._session.commit()
         return row
 
@@ -103,28 +102,27 @@ class ChatflowStateRepository:
         resume_schema: dict[str, Any],
     ) -> dict[str, Any]:
         now = datetime.now()
-        result = self._session.execute(
-            self._checkpoint_table.insert()
-            .values(
-                session_id=session_id,
-                chatflow_id=chatflow_id,
-                run_id=run_id,
-                event_id=None,
-                pending_node_key=pending_node_key,
-                next_edge_hint="",
-                execution_context=execution_context,
-                node_outputs=node_outputs,
-                variable_scopes=variable_scopes,
-                resume_schema=resume_schema,
-                status="waiting",
-                expires_at=now + timedelta(days=7),
-                deleted=False,
-                created_at=now,
-                updated_at=now,
-            )
-            .returning(self._checkpoint_table)
+        row = insert_and_fetch(
+            self._session,
+            self._checkpoint_table,
+            {
+                "session_id": session_id,
+                "chatflow_id": chatflow_id,
+                "run_id": run_id,
+                "event_id": None,
+                "pending_node_key": pending_node_key,
+                "next_edge_hint": "",
+                "execution_context": execution_context,
+                "node_outputs": node_outputs,
+                "variable_scopes": variable_scopes,
+                "resume_schema": resume_schema,
+                "status": "waiting",
+                "expires_at": now + timedelta(days=7),
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
         )
-        row = dict(result.mappings().one())
         self._session.commit()
         return row
 
@@ -253,7 +251,27 @@ class ChatflowStateRepository:
             .where(
                 self._event_table.c.chatflow_id == chatflow_id,
                 self._event_table.c.run_id == run_id,
-                self._event_table.c.event_type == "resume",
+                self._event_table.c.event_type.in_(("resume", "workflow_run_resumed")),
+                self._event_table.c.deleted.is_(False),
+            )
+            .order_by(self._event_table.c.sequence.asc(), self._event_table.c.id.asc())
+        ).mappings().all()
+        for row in rows:
+            payload = row["payload"] if isinstance(row["payload"], dict) else {}
+            if str(payload.get("idempotencyKey") or "") == idempotency_key:
+                return dict(row)
+        return None
+
+    def find_started_run_by_idempotency_key(
+        self,
+        chatflow_id: int,
+        idempotency_key: str,
+    ) -> dict[str, Any] | None:
+        rows = self._session.execute(
+            sa.select(self._event_table)
+            .where(
+                self._event_table.c.chatflow_id == chatflow_id,
+                self._event_table.c.event_type == "workflow_run_started",
                 self._event_table.c.deleted.is_(False),
             )
             .order_by(self._event_table.c.sequence.asc(), self._event_table.c.id.asc())

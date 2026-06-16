@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.database import Base
+from app.core.db_write import insert_and_fetch
 from app.modules.runtime_policy.infra.schema import register_runtime_policy_tables, runtime_policy_tables
 
 register_runtime_policy_tables()
@@ -29,18 +30,17 @@ class RuntimePolicyRepository:
 
     def create_profile(self, values: dict[str, Any]) -> dict[str, Any]:
         now = datetime.now()
-        result = self._session.execute(
-            self._profile.insert()
-            .values(
+        row = insert_and_fetch(
+            self._session,
+            self._profile,
+            {
                 **values,
-                version=1,
-                deleted=False,
-                created_at=now,
-                updated_at=now,
-            )
-            .returning(self._profile)
+                "version": 1,
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
         )
-        row = dict(result.mappings().one())
         self._session.commit()
         return row
 
@@ -135,17 +135,11 @@ class RuntimePolicyRepository:
 
     def create_decision_log(self, values: dict[str, Any]) -> dict[str, Any]:
         now = datetime.now()
-        result = self._session.execute(
-            self._decision_log.insert()
-            .values(
-                **values,
-                deleted=False,
-                created_at=now,
-                updated_at=now,
-            )
-            .returning(self._decision_log)
+        row = insert_and_fetch(
+            self._session,
+            self._decision_log,
+            {**values, "deleted": False, "created_at": now, "updated_at": now},
         )
-        row = dict(result.mappings().one())
         self._session.commit()
         return row
 
@@ -197,17 +191,11 @@ class RuntimePolicyRepository:
 
     def create_evaluation_run(self, values: dict[str, Any]) -> dict[str, Any]:
         now = datetime.now()
-        result = self._session.execute(
-            self._evaluation_run.insert()
-            .values(
-                **values,
-                deleted=False,
-                created_at=now,
-                updated_at=now,
-            )
-            .returning(self._evaluation_run)
+        row = insert_and_fetch(
+            self._session,
+            self._evaluation_run,
+            {**values, "deleted": False, "created_at": now, "updated_at": now},
         )
-        row = dict(result.mappings().one())
         self._session.commit()
         return row
 
@@ -250,17 +238,11 @@ class RuntimePolicyRepository:
 
     def create_release(self, values: dict[str, Any]) -> dict[str, Any]:
         now = datetime.now()
-        result = self._session.execute(
-            self._release.insert()
-            .values(
-                **values,
-                deleted=False,
-                created_at=now,
-                updated_at=now,
-            )
-            .returning(self._release)
+        row = insert_and_fetch(
+            self._session,
+            self._release,
+            {**values, "deleted": False, "created_at": now, "updated_at": now},
         )
-        row = dict(result.mappings().one())
         self._session.commit()
         return row
 
@@ -326,17 +308,11 @@ class RuntimePolicyRepository:
 
     def create_audit_event(self, values: dict[str, Any]) -> dict[str, Any]:
         now = datetime.now()
-        result = self._session.execute(
-            self._audit_event.insert()
-            .values(
-                **values,
-                deleted=False,
-                created_at=now,
-                updated_at=now,
-            )
-            .returning(self._audit_event)
+        row = insert_and_fetch(
+            self._session,
+            self._audit_event,
+            {**values, "deleted": False, "created_at": now, "updated_at": now},
         )
-        row = dict(result.mappings().one())
         self._session.commit()
         return row
 

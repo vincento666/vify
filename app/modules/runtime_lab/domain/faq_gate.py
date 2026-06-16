@@ -209,7 +209,13 @@ class RuntimeAirlineFaqGate:
         scored.sort(key=lambda item: (-item[0], item[1].faq_id))
         best_score, best = scored[0]
         competing_score = next(
-            (score for score, entry in scored[1:] if entry.reason_code != best.reason_code),
+            (
+                score
+                for score, entry in scored[1:]
+                if entry.reason_code != best.reason_code
+                and not _runtime_faq_more_specific_than(best, entry)
+                and not _runtime_faq_same_topic_family(best, entry)
+            ),
             0.0,
         )
         margin = max(0.0, best_score - competing_score)
@@ -350,6 +356,22 @@ _BASE_RUNTIME_AIRLINE_FAQ_ENTRIES: tuple[RuntimeAirlineFaqEntry, ...] = (
         "宠物乘机通常需要提前申请，并准备检疫证明、疫苗证明、合规航空箱等材料。",
         ("宠物", "材料"),
         ("猫", "狗", "托运", "客舱", "证明"),
+    ),
+    RuntimeAirlineFaqEntry(
+        34012,
+        "IRREGULAR_DELAY_COMPENSATION",
+        "延误四小时通常怎么赔？",
+        "延误补偿需按航司不正常航班政策、延误原因和航线规则判断。",
+        ("延误", "赔"),
+        ("四小时", "规则", "通常"),
+    ),
+    RuntimeAirlineFaqEntry(
+        34013,
+        "GROUP_TICKET_PARTIAL_CHANGE_FEE",
+        "团队票临时少一个人手续费怎么算？",
+        "团队票临时减少人数需看团队协议、出票状态和剩余人数是否影响整体报价，手续费或补差以协议为准。",
+        ("团队票", "少一个人"),
+        ("手续费", "规则", "人数", "临时"),
     ),
 )
 
@@ -587,6 +609,20 @@ def _runtime_faq_looks_like_question(message: str) -> bool:
     )
 
 
+def _runtime_faq_more_specific_than(best: RuntimeAirlineFaqEntry, competing: RuntimeAirlineFaqEntry) -> bool:
+    best_terms = set(best.required_terms)
+    competing_terms = set(competing.required_terms)
+    return competing_terms < best_terms
+
+
+def _runtime_faq_same_topic_family(best: RuntimeAirlineFaqEntry, competing: RuntimeAirlineFaqEntry) -> bool:
+    if set(best.required_terms) != set(competing.required_terms):
+        return False
+    if best.answer == competing.answer:
+        return True
+    return bool(set(best.optional_terms) & set(competing.optional_terms))
+
+
 def _runtime_faq_looks_like_transaction_request(message: str) -> bool:
     text = message.strip()
     if _runtime_faq_explicitly_denies_transaction(text):
@@ -674,6 +710,8 @@ def _runtime_faq_explicitly_denies_transaction(message: str) -> bool:
 def _runtime_faq_looks_like_document_comparison(message: str) -> bool:
     comparison_terms = ("区别", "差别", "不同", "差异")
     long_tail_terms = ("理赔", "赔付", "补偿", "条款", "保险", "凭证")
+    if any(term in message for term in ("宠物", "托运", "客舱", "行李")):
+        return False
     return any(term in message for term in comparison_terms) and any(term in message for term in long_tail_terms)
 
 

@@ -39,6 +39,30 @@ class RuntimeLabSemanticPolicyTest(unittest.TestCase):
             self.assertEqual(turn.route_decision.action, "START_SOP")
             self.assertEqual(turn.active_task["sop_id"], "invoice_apply")
 
+    def test_message_command_can_override_route_thresholds_for_current_turn_only(self) -> None:
+        with _session() as session:
+            classifier = _RecordingClassifier(selected_target_id="invoice_apply")
+            service = RuntimeLabService(
+                RuntimeLabRepository(session),
+                classifier=classifier,
+                policy_thresholds={"classifierMinConfidence": 0.61, "candidateTopK": 5},
+            )
+            runtime_session = service.create_session()
+
+            service.handle_command(
+                int(runtime_session["id"]),
+                "我想退费并开发票",
+                idempotency_key="local-thresholds-1",
+                policy_thresholds_override={
+                    "classifierMinConfidence": 0.77,
+                    "candidateTopK": 3,
+                },
+            )
+
+            self.assertEqual(classifier.inputs[0].thresholds["classifierMinConfidence"], 0.77)
+            self.assertEqual(len(classifier.inputs[0].candidates), 3)
+            self.assertEqual(service._classifier_min_confidence(), 0.61)
+
     def test_active_conflict_uses_classifier_before_sop_mutation(self) -> None:
         with _session() as session:
             classifier = _RecordingClassifier(selected_target_id="invoice_apply")
@@ -121,6 +145,56 @@ class RuntimeLabSemanticPolicyTest(unittest.TestCase):
             self.assertEqual(turn.route_decision.action, "SUSPEND_AND_START")
             self.assertEqual(turn.active_task["sop_id"], "flight_booking")
             self.assertEqual(turn.suspended_tasks[0]["sop_id"], "refund_ticket")
+
+    def test_active_collection_detail_overrides_weak_llm_switch_candidate(self) -> None:
+        with _session() as session:
+            repository = RuntimeLabRepository(session)
+            start_service = RuntimeLabService(
+                repository,
+                classifier=_RecordingClassifier(selected_target_id="irregular_flight"),
+            )
+            service = RuntimeLabService(
+                repository,
+                classifier=_RecordingClassifier(selected_target_id="change_flight"),
+            )
+            runtime_session = start_service.create_session()
+            session_id = int(runtime_session["id"])
+
+            start_service.handle_message(session_id, "刚收到通知航班取消了，先转异常航班处理")
+            turn = service.handle_message(session_id, "航班号CA1234，手机号13900139000，乘机人赵六，希望改到明天上午")
+
+            self.assertEqual(turn.route_decision.action, "CONTINUE_ACTIVE_SOP")
+            self.assertEqual(turn.active_task["sop_id"], "irregular_flight")
+            self.assertEqual(turn.route_decision.active_task_id, turn.active_task["id"])
+
+    def test_active_collection_detail_overrides_erroneous_suspended_resume_candidate(self) -> None:
+        with _session() as session:
+            repository = RuntimeLabRepository(session)
+            start_status_service = RuntimeLabService(
+                repository,
+                classifier=_RecordingClassifier(selected_target_id="flight_status"),
+            )
+            switch_service = RuntimeLabService(
+                repository,
+                classifier=_RecordingClassifier(selected_target_id="irregular_flight"),
+            )
+            resume_biased_service = RuntimeLabService(
+                repository,
+                classifier=_RecordingClassifier(select_candidate_type="SUSPENDED_TASK_RESUME"),
+            )
+            runtime_session = start_status_service.create_session()
+            session_id = int(runtime_session["id"])
+
+            start_status_service.handle_message(session_id, "司机在机场等我，我想查一下航班现在到哪了，航班号等会发")
+            switch_service.handle_message(session_id, "刚收到通知航班取消了，先转异常航班处理")
+            turn = resume_biased_service.handle_message(
+                session_id,
+                "航班号CA1234，手机号13900139000，乘机人赵六，希望改到明天上午",
+            )
+
+            self.assertEqual(turn.route_decision.action, "CONTINUE_ACTIVE_SOP")
+            self.assertEqual(turn.active_task["sop_id"], "irregular_flight")
+            self.assertEqual(turn.suspended_tasks[0]["sop_id"], "flight_status")
 
     def test_enabled_scope_weak_booking_signal_limits_llm_candidates(self) -> None:
         with _session() as session:
@@ -215,6 +289,23 @@ class RuntimeLabSemanticPolicyTest(unittest.TestCase):
             self.assertIn("flight_booking", {candidate.target_id for candidate in classifier.inputs[0].candidates})
             self.assertEqual(turn.route_decision.action, "START_SOP")
             self.assertEqual(turn.active_task["sop_id"], "flight_booking")
+
+    def test_llm_clarify_on_single_flight_status_candidate_recovers_to_start_sop(self) -> None:
+        with _session() as session:
+            classifier = _ClarifyClassifier()
+            service = RuntimeLabService(RuntimeLabRepository(session), classifier=classifier)
+            runtime_session = service.create_session()
+            session_id = int(runtime_session["id"])
+
+            turn = service.handle_message(session_id, "司机在机场等我，我想查一下航班现在到哪了，航班号等会发")
+
+            self.assertEqual(classifier.calls, 1)
+            self.assertEqual(turn.route_decision.action, "START_SOP")
+            self.assertEqual(turn.active_task["sop_id"], "flight_status")
+            self.assertLessEqual(len(classifier.inputs[0].candidates), 5)
+            self.assertIn("flight_status", {candidate.target_id for candidate in classifier.inputs[0].candidates})
+            self.assertEqual(turn.route_decision.classifier_result["selected_action"], "START_SOP")
+            self.assertEqual(turn.route_decision.classifier_result["_debug"]["clarifyRecovery"]["from"], "CLARIFY")
 
     def test_uncertain_to_fly_phrase_does_not_match_booking_from_single_ding_character(self) -> None:
         with _session() as session:
@@ -326,6 +417,27 @@ class _RecordingClassifier:
             rationale="recording classifier",
             needs_clarification=False,
             clarification_question=None,
+        )
+
+
+class _ClarifyClassifier:
+    def __init__(self) -> None:
+        self.calls = 0
+        self.inputs: list[ClassifierInput] = []
+
+    def classify(self, classifier_input: ClassifierInput) -> ClassifierResult:
+        self.calls += 1
+        self.inputs.append(classifier_input)
+        return ClassifierResult(
+            selected_action="CLARIFY",
+            selected_candidate_id=None,
+            confidence=0.88,
+            rationale="test llm returned clarify despite finite candidate",
+            needs_clarification=True,
+            clarification_question="需要澄清",
+            arbitrator_mode="llm",
+            used_real_llm=True,
+            debug={"model": "test-llm"},
         )
 
 

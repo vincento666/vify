@@ -223,11 +223,39 @@ def _usage_from_response(
 ) -> dict[str, Any]:
     usage = response.get("usage")
     if isinstance(usage, dict):
-        return dict(usage)
+        input_tokens = _usage_int(usage, "inputTokens", "input_tokens", "prompt_tokens", "promptTokens")
+        output_tokens = _usage_int(usage, "outputTokens", "output_tokens", "completion_tokens", "completionTokens")
+        total_tokens = _usage_int(usage, "totalTokens", "total_tokens", "totalTokens")
+        return {
+            "inputTokens": input_tokens,
+            "outputTokens": output_tokens,
+            "totalTokens": total_tokens or input_tokens + output_tokens,
+            "estimated": False,
+        }
+    input_tokens = _estimate_tokens(llm_payload)
+    output_tokens = _estimate_tokens(parsed_output)
     return {
-        "promptChars": len(json.dumps(llm_payload, ensure_ascii=False)),
-        "completionChars": len(json.dumps(parsed_output, ensure_ascii=False)),
+        "inputTokens": input_tokens,
+        "outputTokens": output_tokens,
+        "totalTokens": input_tokens + output_tokens,
+        "estimated": True,
     }
+
+
+def _usage_int(usage: dict[str, Any], *keys: str) -> int:
+    for key in keys:
+        try:
+            value = int(usage.get(key))
+        except (TypeError, ValueError):
+            continue
+        if value >= 0:
+            return value
+    return 0
+
+
+def _estimate_tokens(payload: Any) -> int:
+    text = json.dumps(payload, ensure_ascii=False, default=str)
+    return max(1, len(text) // 4)
 
 
 def _fallback_agent_context(request: FallbackAgentRequest) -> dict[str, Any]:

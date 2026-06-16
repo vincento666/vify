@@ -17,6 +17,16 @@ class Settings(BaseSettings):
     runtime_lab_intent_arbitrator_fallback_model: str | None = "deepseek/deepseek-v4-flash"
     runtime_lab_faq_knowledge_base_ids: str | None = None
     runtime_lab_rag_knowledge_base_ids: str | None = None
+    customer_assistant_llm_shadow_mode: str = "off"
+    customer_assistant_llm_shadow_model_config_id: int | None = None
+    customer_assistant_llm_shadow_task_recognition: bool = True
+    customer_assistant_llm_shadow_recommendation: bool = True
+    customer_assistant_llm_runtime_mode: str = "llm_primary_with_fallback"
+    customer_assistant_llm_primary_model_config_id: int | None = None
+    customer_assistant_llm_primary_min_confidence: float = 0.70
+    customer_assistant_worker_wait_deadline_seconds: float | None = None
+    customer_assistant_worker_timeout_seconds: float = 5.0
+    customer_assistant_stub_qa_delay_seconds: float = 0.0
 
     model_config = SettingsConfigDict(env_prefix="HIFY_", env_file=".env", extra="ignore")
 

@@ -1,8 +1,11 @@
 from datetime import datetime
+import os
 import time
 import unittest
 
+import httpx
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 from app.core.database import Base, get_session_factory, initialise_database
 from app.core.schema import register_baseline_tables
@@ -78,6 +81,9 @@ def _embedding_count(document_id: int) -> int:
     document_chunk = Base.metadata.tables["document_chunk"]
     document_embedding = Base.metadata.tables["document_embedding"]
     with get_session_factory()() as session:
+        bind = session.get_bind()
+        if not inspect(bind).has_table("document_embedding"):
+            return _weaviate_document_count(document_id)
         return int(
             session.execute(
                 sa.select(sa.func.count())
@@ -86,6 +92,34 @@ def _embedding_count(document_id: int) -> int:
                 .where(document_chunk.c.document_id == document_id)
             ).scalar_one()
         )
+
+
+def _weaviate_document_count(document_id: int) -> int:
+    base_url = os.getenv("HIFY_WEAVIATE_URL")
+    if not base_url:
+        return 0
+    response = httpx.post(
+        f"{base_url.rstrip('/')}/v1/graphql",
+        json={
+            "query": f"""
+            {{
+              Aggregate {{
+                HifyDocumentChunk(
+                  where: {{ path: [\"document_id\"], operator: Equal, valueInt: {int(document_id)} }}
+                ) {{
+                  meta {{ count }}
+                }}
+              }}
+            }}
+            """
+        },
+        timeout=10.0,
+    )
+    response.raise_for_status()
+    rows = response.json().get("data", {}).get("Aggregate", {}).get("HifyDocumentChunk", [])
+    if not rows:
+        return 0
+    return int(rows[0].get("meta", {}).get("count") or 0)
 
 
 if __name__ == "__main__":

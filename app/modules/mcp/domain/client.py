@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from urllib.parse import parse_qs, urlparse
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,9 @@ class McpCallResult:
 
 
 class FakeMcpClient:
+    def __init__(self) -> None:
+        self._call_attempts: dict[tuple[str, str, str], int] = {}
+
     def test_connection(self, endpoint: str) -> McpConnectionResult:
         if endpoint.startswith("mock://tools"):
             tools = [tool.name for tool in self.list_tools(endpoint)]
@@ -83,15 +87,41 @@ class FakeMcpClient:
                 elapsed_ms=0,
                 error_message=f"Unsupported MCP endpoint: {endpoint}",
             )
+        elapsed_ms = _query_int(endpoint, "elapsed", default=1)
+        if _query_bool(endpoint, "fail_once"):
+            key = (endpoint, tool_name, repr(sorted(arguments.items())))
+            attempts = self._call_attempts.get(key, 0)
+            self._call_attempts[key] = attempts + 1
+            if attempts == 0:
+                return McpCallResult(False, None, elapsed_ms, f"Transient tool failure: {tool_name}")
         if tool_name == "lookup_order":
             order_id = arguments.get("orderId")
             if not order_id:
-                return McpCallResult(False, None, 1, "orderId is required")
-            return McpCallResult(True, f"Order {order_id} status: SHIPPED", 1)
+                return McpCallResult(False, None, elapsed_ms, "orderId is required")
+            return McpCallResult(True, f"Order {order_id} status: SHIPPED", elapsed_ms)
         if tool_name == "refund_order":
             order_id = arguments.get("orderId")
             if not order_id:
-                return McpCallResult(False, None, 1, "orderId is required")
+                return McpCallResult(False, None, elapsed_ms, "orderId is required")
             reason = arguments.get("reason") or "not specified"
-            return McpCallResult(True, f"Refund request created for {order_id}: {reason}", 1)
-        return McpCallResult(False, None, 1, f"Unknown tool: {tool_name}")
+            return McpCallResult(True, f"Refund request created for {order_id}: {reason}", elapsed_ms)
+        return McpCallResult(False, None, elapsed_ms, f"Unknown tool: {tool_name}")
+
+
+def _query(endpoint: str) -> dict[str, list[str]]:
+    return parse_qs(urlparse(endpoint).query)
+
+
+def _query_bool(endpoint: str, key: str) -> bool:
+    values = _query(endpoint).get(key, [])
+    return any(value.lower() in {"1", "true", "yes", "on"} for value in values)
+
+
+def _query_int(endpoint: str, key: str, default: int) -> int:
+    values = _query(endpoint).get(key, [])
+    if not values:
+        return default
+    try:
+        return int(values[0])
+    except ValueError:
+        return default

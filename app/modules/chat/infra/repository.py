@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.database import Base
+from app.core.db_write import insert_and_fetch
 from app.core.schema import register_baseline_tables
 
 register_baseline_tables()
@@ -33,19 +34,18 @@ class ChatRepository:
 
     def create_session(self, agent_id: int) -> dict[str, Any]:
         now = datetime.now()
-        result = self._session.execute(
-            self._chat_session.insert()
-            .values(
-                agent_id=agent_id,
-                title="新对话",
-                status="ACTIVE",
-                deleted=False,
-                created_at=now,
-                updated_at=now,
-            )
-            .returning(self._chat_session)
+        row = insert_and_fetch(
+            self._session,
+            self._chat_session,
+            {
+                "agent_id": agent_id,
+                "title": "新对话",
+                "status": "ACTIVE",
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
         )
-        row = dict(result.mappings().one())
         self._session.commit()
         return row
 
@@ -147,23 +147,24 @@ class ChatRepository:
         tokens: int = 0,
         finish_reason: str = "",
         latency_ms: int = 0,
+        tool_calls: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         now = datetime.now()
-        result = self._session.execute(
-            self._chat_message.insert()
-            .values(
-                session_id=session_id,
-                role=role,
-                content=content,
-                tokens=tokens,
-                finish_reason=finish_reason,
-                latency_ms=latency_ms,
-                deleted=False,
-                created_at=now,
-                updated_at=now,
-            )
-            .returning(self._chat_message)
+        row = insert_and_fetch(
+            self._session,
+            self._chat_message,
+            {
+                "session_id": session_id,
+                "role": role,
+                "content": content,
+                "tokens": tokens,
+                "finish_reason": finish_reason,
+                "latency_ms": latency_ms,
+                "tool_calls": tool_calls or [],
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
         )
-        row = dict(result.mappings().one())
         self._session.commit()
         return row

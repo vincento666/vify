@@ -66,6 +66,22 @@ class MockSemanticCandidateRecallTest(unittest.TestCase):
         active_candidates = [candidate for candidate in candidates if candidate.candidate_type == CandidateType.ACTIVE_TASK_CONTINUE]
         self.assertEqual(active_candidates[0].score, 0.55)
 
+    def test_hybrid_recall_recalls_natural_booking_request_with_business_refs(self) -> None:
+        candidates = MockSemanticCandidateRecall(mock_sop_manifests()).recall(
+            "我下周要去北京开会，想看看广州飞北京周二上午有没有合适的航班，乘机人李雷，手机13800138000",
+            active_task=None,
+            suspended_tasks=(),
+        )
+
+        self.assertGreaterEqual(len(candidates), 1)
+        self.assertEqual(candidates[0].candidate_type, CandidateType.SOP_INTENT)
+        self.assertEqual(candidates[0].target_id, "flight_booking")
+        self.assertEqual(candidates[0].source, "sop_hybrid_recall")
+        self.assertGreater(candidates[0].score, 0.66)
+        self.assertLessEqual(len(candidates), 5)
+        self.assertIn("business_ref:route", candidates[0].matched_terms)
+        self.assertIn("business_ref:contact", candidates[0].matched_terms)
+
     def test_airport_facility_questions_do_not_create_semantic_sop_candidates(self) -> None:
         recall = MockSemanticCandidateRecall(mock_sop_manifests())
 

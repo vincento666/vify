@@ -1,0 +1,37 @@
+from typing import Any
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.modules.customer_assistant.domain.actor import DEFAULT_CUSTOMER_ASSISTANT_ACTOR, CustomerAssistantActor
+
+
+class CustomerAssistantSessionCreateRequest(BaseModel):
+    context: dict[str, Any] = Field(default_factory=dict)
+
+
+class CustomerAssistantTurnRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    message: str
+    idempotency_key: str | None = Field(default=None, alias="idempotencyKey")
+    actor: CustomerAssistantActor = DEFAULT_CUSTOMER_ASSISTANT_ACTOR
+
+
+class CustomerAssistantSubAgentInput(BaseModel):
+    message: str
+    actor: CustomerAssistantActor = DEFAULT_CUSTOMER_ASSISTANT_ACTOR
+
+
+class CustomerAssistantSpawnSubAgentArguments(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    agent_type: Literal["customer_assistant"] = Field(alias="agentType")
+    session_id: int | None = Field(default=None, alias="sessionId")
+    input: CustomerAssistantSubAgentInput
+    event_level: Literal["L1"] = Field(default="L1", alias="eventLevel")
+
+
+class CustomerAssistantSpawnSubAgentRequest(BaseModel):
+    tool: Literal["spawn_sub_agent"]
+    arguments: CustomerAssistantSpawnSubAgentArguments

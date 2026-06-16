@@ -55,6 +55,30 @@ class LlmJudgeEvaluatorTest(unittest.TestCase):
             )
             self.assertEqual(response.status_code, 400)
 
+    def test_llm_debug_endpoint_returns_score_reason_and_raw_output(self) -> None:
+        model_config_id = _seed_mock_model()
+
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/v1/evaluators/llm-debug",
+                json={
+                    "modelConfigId": model_config_id,
+                    "prompt": "Pass when actual output preserves the expected answer.",
+                    "expectedOutput": "refund policy",
+                    "actualOutput": "refund policy",
+                    "passingScore": 0.7,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        result = response.json()["data"]
+        self.assertTrue(result["passed"])
+        self.assertEqual(result["score"], 1.0)
+        self.assertIn("mock judge", result["reason"])
+        self.assertIn('"score": 1.0', result["rawOutput"])
+        self.assertIn("LLM_JUDGE_EVALUATION", result["debugPrompt"])
+        self.assertEqual(result["modelConfigId"], model_config_id)
+
 
 def _seed_mock_model() -> int:
     initialise_database()

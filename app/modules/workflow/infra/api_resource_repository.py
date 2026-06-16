@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.database import Base
+from app.core.db_write import insert_and_fetch
 from app.core.schema import register_baseline_tables
 
 register_baseline_tables()
@@ -43,12 +44,11 @@ class ApiResourceRepository:
 
     def create_resource(self, values: dict[str, Any]) -> dict[str, Any]:
         now = datetime.now()
-        result = self._session.execute(
-            self._api_resource.insert()
-            .values(**values, deleted=False, created_at=now, updated_at=now)
-            .returning(self._api_resource)
+        row = insert_and_fetch(
+            self._session,
+            self._api_resource,
+            {**values, "deleted": False, "created_at": now, "updated_at": now},
         )
-        row = dict(result.mappings().one())
         self._session.commit()
         return row
 
@@ -109,12 +109,11 @@ class ApiResourceRepository:
 
     def create_tool(self, values: dict[str, Any]) -> dict[str, Any]:
         now = datetime.now()
-        result = self._session.execute(
-            self._api_tool.insert()
-            .values(**values, deleted=False, created_at=now, updated_at=now)
-            .returning(self._api_tool)
+        row = insert_and_fetch(
+            self._session,
+            self._api_tool,
+            {**values, "deleted": False, "created_at": now, "updated_at": now},
         )
-        row = dict(result.mappings().one())
         self._session.commit()
         return row
 

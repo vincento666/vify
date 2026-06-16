@@ -182,6 +182,26 @@ class ChatflowSopRuntimeAdapterIntegrationTest(unittest.TestCase):
         self.assertNotIn("conversation", runtime_input)
         self.assertEqual(runtime_input["inherited_context"]["passenger_name"], "张三")
 
+    def test_group_booking_confirm_with_missing_required_slots_stays_interruptible_collect(self) -> None:
+        adapter = ChatflowSopRuntimeAdapter(
+            _InterruptedConfirmWorkflowService(),
+            sop_chatflow_ids={"group_booking": 1},
+        )
+
+        result = adapter.start_sop(
+            _request(
+                sop_id="group_booking",
+                message="我们公司十几个人要去上海参会，先登记团队票，出发城市和时间我还没定",
+            )
+        )
+
+        self.assertEqual(result.status, SopExecutionStatus.WAITING)
+        self.assertEqual(result.current_step, "collect")
+        self.assertIn("出发到达城市", result.pending_prompt)
+        self.assertIn("出行时间", result.pending_prompt)
+        self.assertNotIn("route", result.collected)
+        self.assertNotIn("travel_time", result.collected)
+
 
 def _adapter(chatflow_id: int) -> ChatflowSopRuntimeAdapter:
     session = get_session_factory()()
@@ -196,6 +216,21 @@ def _adapter(chatflow_id: int) -> ChatflowSopRuntimeAdapter:
 class _FailingWorkflowService:
     def execute(self, *_args: object, **_kwargs: object) -> dict[str, object]:
         raise RuntimeError("primary model rate limited")
+
+
+class _InterruptedConfirmWorkflowService:
+    def execute(self, *_args: object, **_kwargs: object) -> dict[str, object]:
+        return {
+            "status": "INTERRUPTED",
+            "runId": 1,
+            "sessionId": "",
+            "output": {
+                "interrupt": {"nodeKey": "confirm", "question": "是否提交团队询价？"},
+                "collected": {"route": "上海", "travel_time": "未定", "passenger_count": "十几"},
+            },
+            "events": [{"type": "interrupt", "payload": {"nodeKey": "confirm"}, "id": 10, "checkpointId": 20}],
+            "checkpointId": 20,
+        }
 
 
 def _request(

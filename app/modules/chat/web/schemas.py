@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -36,6 +38,7 @@ class ChatMessageResponse(BaseModel):
     tokens: int
     finish_reason: str = Field(alias="finishReason")
     latency_ms: int = Field(alias="latencyMs")
+    tool_calls: list[dict[str, Any]] = Field(default_factory=list, alias="toolCalls")
     created_at: str = Field(alias="createdAt")
 
 
@@ -51,6 +54,7 @@ class ChatMessagePageResponse(BaseModel):
 class ChatMessageCreateRequest(BaseModel):
     content: str
     stream: bool = False
+    variables: dict[str, Any] = Field(default_factory=dict)
 
 
 class ChatTurnResponse(BaseModel):

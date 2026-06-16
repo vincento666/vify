@@ -14,3 +14,7 @@ class ProviderModelFacade:
         if row is None:
             raise BizError(ErrorCode.NOT_FOUND, "Model config not found or disabled")
         return ModelConfigDto(**row)
+
+    def find_enabled_model_config_by_model_id(self, model_id: str) -> ModelConfigDto | None:
+        row = self._repository.find_enabled_model_config_by_model_id(model_id)
+        return ModelConfigDto(**row) if row is not None else None

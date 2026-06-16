@@ -25,6 +25,8 @@ class AgentCrudContractTest(unittest.TestCase):
                     "temperature": 0.7,
                     "maxTokens": 2048,
                     "maxContextTurns": 10,
+                    "openingMessage": "你好，我是退款助手。",
+                    "suggestedQuestions": ["如何申请退款？", "多久到账？"],
                     "toolIds": [],
                 },
             )
@@ -32,6 +34,8 @@ class AgentCrudContractTest(unittest.TestCase):
             created = create_response.json()["data"]
             self.assertEqual(created["name"], agent_name)
             self.assertEqual(created["modelConfigId"], model_id)
+            self.assertEqual(created["openingMessage"], "你好，我是退款助手。")
+            self.assertEqual(created["suggestedQuestions"], ["如何申请退款？", "多久到账？"])
             self.assertEqual(created["toolIds"], [])
 
             list_response = client.get("/api/v1/agents", params={"page": 1, "pageSize": 20})
@@ -49,12 +53,16 @@ class AgentCrudContractTest(unittest.TestCase):
                     "temperature": 0.2,
                     "maxTokens": 1024,
                     "maxContextTurns": 4,
+                    "openingMessage": "你好，我是更新后的助手。",
+                    "suggestedQuestions": ["退货政策是什么？"],
                 },
             )
             self.assertEqual(update_response.status_code, 200)
             updated = update_response.json()["data"]
             self.assertEqual(updated["description"], "updated from test")
             self.assertEqual(updated["temperature"], 0.2)
+            self.assertEqual(updated["openingMessage"], "你好，我是更新后的助手。")
+            self.assertEqual(updated["suggestedQuestions"], ["退货政策是什么？"])
 
             delete_response = client.delete(f"/api/v1/agents/{created['id']}")
             self.assertEqual(delete_response.status_code, 200)

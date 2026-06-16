@@ -34,6 +34,19 @@ class AgentSchemaTest(unittest.TestCase):
         self.assertIsNone(getattr(request, "knowledge_base_id", "missing"))
         self.assertEqual(getattr(request, "workflow_id", "missing"), 9)
 
+    def test_create_request_accepts_chat_entry_fields(self) -> None:
+        request = AgentCreateRequest.model_validate(
+            {
+                "name": "Entry Agent",
+                "modelConfigId": 1,
+                "openingMessage": "你好，我可以帮你处理退款。",
+                "suggestedQuestions": ["如何退款？", "订单状态是什么？"],
+            }
+        )
+
+        self.assertEqual(request.opening_message, "你好，我可以帮你处理退款。")
+        self.assertEqual(request.suggested_questions, ["如何退款？", "订单状态是什么？"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -6,6 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.database import Base
+from app.modules.runtime_lab.domain.agent_fallback import FakeFallbackAgent
 from app.modules.runtime_lab.domain.service import RuntimeLabService
 from app.modules.runtime_lab.domain.sop_adapter import (
     SopCheckpoint,
@@ -229,6 +230,28 @@ class RuntimeLabServiceTest(unittest.TestCase):
             assert refund_continue_request.checkpoint is not None
             self.assertEqual(refund_continue_request.checkpoint.collected["order_no"], "CA1301-20231027-8899")
 
+    def test_pause_active_sop_phrase_does_not_swallow_switch_request(self) -> None:
+        with _session() as session:
+            adapter = _RecordingContextAdapter()
+            service = RuntimeLabService(RuntimeLabRepository(session), adapter=adapter)
+            runtime_session = service.create_session()
+            session_id = int(runtime_session["id"])
+
+            service.handle_message(session_id, "我要订机票")
+            service.handle_message(session_id, "确认")
+            service.handle_message(session_id, "我要团队订票")
+            switched = service.handle_message(session_id, "先暂停团队票，我要退刚才订的那张票")
+
+            self.assertEqual(switched.route_decision.action, "SUSPEND_AND_START")
+            self.assertEqual(switched.active_task["sop_id"], "refund_ticket")
+            self.assertEqual(switched.suspended_tasks[0]["sop_id"], "group_booking")
+            refund_request = adapter.start_requests[-1]
+            self.assertEqual(refund_request.sop_id, "refund_ticket")
+            self.assertTrue(refund_request.metadata["contextReference"])
+            self.assertEqual(refund_request.collected["order_no"], "CA1301-20231027-8899")
+            self.assertEqual(refund_request.collected["phone"], "13800138000")
+            self.assertEqual(refund_request.collected["passenger_name"], "张三")
+
     def test_resume_suspended_sop_does_not_default_fill_slots_from_completed_task_context(self) -> None:
         with _session() as session:
             adapter = _RecordingContextAdapter()
@@ -271,6 +294,25 @@ class RuntimeLabServiceTest(unittest.TestCase):
             self.assertEqual(refund_resume_request.collected["order_no"], "CA1301-20231027-8899")
             self.assertEqual(refund_resume_request.collected["phone"], "13800138000")
             self.assertEqual(refund_resume_request.collected["passenger_name"], "张三")
+
+    def test_natural_booking_request_uses_finite_sop_arbitration_before_agent_fallback(self) -> None:
+        with _session() as session:
+            service = RuntimeLabService(
+                RuntimeLabRepository(session),
+                fallback_agent=FakeFallbackAgent(),
+            )
+            runtime_session = service.create_session()
+
+            turn = service.handle_message(
+                int(runtime_session["id"]),
+                "我下周要去北京开会，想看看广州飞北京周二上午有没有合适的航班，乘机人李雷，手机13800138000",
+            )
+
+            self.assertEqual(turn.route_decision.action, "START_SOP")
+            self.assertEqual(turn.route_decision.target_sop_id, "flight_booking")
+            self.assertIn("sop_hybrid_recall", turn.route_decision.candidate_sources or [])
+            self.assertLessEqual(len(turn.route_decision.classifier_request["candidates"]), 5)
+            self.assertNotIn("AGENT_FALLBACK", {candidate["candidate_type"] for candidate in turn.route_decision.classifier_request["candidates"]})
 
 
 def _session() -> Session:

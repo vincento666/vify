@@ -5,6 +5,7 @@ import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from app.core.database import Base
+from app.core.db_write import insert_and_fetch, update_and_fetch
 from app.core.schema import register_baseline_tables
 
 register_baseline_tables()
@@ -48,31 +49,32 @@ class ChatflowChannelRepository:
         now = datetime.now()
         existing = self.get_config(chatflow_id, channel_id)
         if existing is None:
-            row = self._session.execute(
-                self._channel_config.insert()
-                .values(
-                    chatflow_id=chatflow_id,
-                    channel_id=channel_id,
-                    display_name=display_name,
-                    enabled=enabled,
-                    config=config,
-                    deleted=False,
-                    created_at=now,
-                    updated_at=now,
-                )
-                .returning(self._channel_config)
-            ).mappings().one()
+            row = insert_and_fetch(
+                self._session,
+                self._channel_config,
+                {
+                    "chatflow_id": chatflow_id,
+                    "channel_id": channel_id,
+                    "display_name": display_name,
+                    "enabled": enabled,
+                    "config": config,
+                    "deleted": False,
+                    "created_at": now,
+                    "updated_at": now,
+                },
+            )
         else:
-            row = self._session.execute(
-                self._channel_config.update()
-                .where(self._channel_config.c.id == existing["id"])
-                .values(
-                    display_name=display_name,
-                    enabled=enabled,
-                    config=config,
-                    updated_at=now,
-                )
-                .returning(self._channel_config)
-            ).mappings().one()
+            row = update_and_fetch(
+                self._session,
+                self._channel_config,
+                self._channel_config.c.id == existing["id"],
+                {
+                    "display_name": display_name,
+                    "enabled": enabled,
+                    "config": config,
+                    "updated_at": now,
+                },
+                key_value=existing["id"],
+            )
         self._session.commit()
-        return dict(row)
+        return dict(row or {})

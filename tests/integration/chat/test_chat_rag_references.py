@@ -29,6 +29,23 @@ class ChatRagReferencesTest(unittest.TestCase):
         self.assertIn("How to reset password", content)
         self.assertNotIn("RAG mock:", content)
 
+    def test_knowledge_bound_agent_can_cite_structured_faq_answer(self) -> None:
+        kb_id = _seed_knowledge_base_with_faq()
+        agent_id = _seed_agent(knowledge_base_id=kb_id)
+
+        with TestClient(app) as client:
+            session_id = client.post("/api/v1/chat/sessions", json={"agentId": agent_id}).json()["data"]["id"]
+            turn = client.post(
+                f"/api/v1/chat/sessions/{session_id}/messages",
+                json={"content": "refund order", "stream": False},
+            ).json()["data"]
+
+        content = turn["assistantMessage"]["content"]
+        self.assertIn("LLM mock:", content)
+        self.assertIn("References:", content)
+        self.assertIn("Use the structured FAQ refund form within 7 days.", content)
+        self.assertNotIn("RAG mock:", content)
+
 
 def _seed_knowledge_base_with_document() -> int:
     kb_id = _seed_knowledge_base()
@@ -37,6 +54,26 @@ def _seed_knowledge_base_with_document() -> int:
         service = KnowledgeBaseService(KnowledgeBaseRepository(session))
         document = service.upload_document(kb_id, "chat-guide.txt", document_content)
         service.process_document(document["id"], document_content)
+    return kb_id
+
+
+def _seed_knowledge_base_with_faq() -> int:
+    kb_id = _seed_knowledge_base()
+    with get_session_factory()() as session:
+        KnowledgeBaseRepository(session).create_faq(
+            {
+                "knowledge_base_id": kb_id,
+                "question": "How do I request a refund?",
+                "answer": "Use the structured FAQ refund form within 7 days.",
+                "alternative_questions": ["refund order"],
+                "keywords": ["refund"],
+                "category": "billing",
+                "priority": 10,
+                "enabled": True,
+                "metadata": {},
+                "source": "test",
+            }
+        )
     return kb_id
 
 

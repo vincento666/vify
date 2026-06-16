@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.database import Base
+from app.core.db_write import insert_and_fetch, insert_and_get_id
 from app.core.schema import register_baseline_tables
 
 register_baseline_tables()
@@ -60,19 +61,18 @@ class WorkflowRepository:
         insert_values = dict(values)
         flow_type = insert_values.pop("flow_type", "WORKFLOW")
         status = insert_values.pop("status", "DRAFT")
-        result = self._session.execute(
-            self._workflow.insert()
-            .values(
+        row = insert_and_fetch(
+            self._session,
+            self._workflow,
+            {
                 **insert_values,
-                flow_type=flow_type,
-                status=status,
-                deleted=False,
-                created_at=now,
-                updated_at=now,
-            )
-            .returning(self._workflow)
+                "flow_type": flow_type,
+                "status": status,
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
         )
-        row = dict(result.mappings().one())
         workflow_id = int(row["id"])
         self._insert_nodes(workflow_id, nodes, now)
         self._insert_edges(workflow_id, edges, now)
@@ -181,25 +181,33 @@ class WorkflowRepository:
 
     def create_run(self, workflow_id: int, input_values: dict[str, Any]) -> int:
         now = datetime.now()
-        result = self._session.execute(
-            self._workflow_run.insert()
-            .values(
-                workflow_id=workflow_id,
-                status="RUNNING",
-                input=input_values,
-                output={},
-                error="",
-                elapsed_ms=0,
-                finished_at=None,
-                deleted=False,
-                created_at=now,
-                updated_at=now,
-            )
-            .returning(self._workflow_run.c.id)
+        run_id = insert_and_get_id(
+            self._session,
+            self._workflow_run,
+            {
+                "workflow_id": workflow_id,
+                "status": "RUNNING",
+                "input": input_values,
+                "output": {},
+                "error": "",
+                "elapsed_ms": 0,
+                "finished_at": None,
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
         )
-        run_id = int(result.scalar_one())
         self._session.commit()
         return run_id
+
+    def get_run(self, run_id: int) -> dict[str, Any] | None:
+        row = self._session.execute(
+            sa.select(self._workflow_run).where(
+                self._workflow_run.c.id == run_id,
+                self._workflow_run.c.deleted.is_(False),
+            )
+        ).mappings().one_or_none()
+        return dict(row) if row else None
 
     def finish_run(
         self,
@@ -232,25 +240,24 @@ class WorkflowRepository:
         inputs: dict[str, Any] | None = None,
     ) -> int:
         now = datetime.now()
-        result = self._session.execute(
-            self._workflow_node_run.insert()
-            .values(
-                workflow_run_id=workflow_run_id,
-                node_key=node_key,
-                node_type=node_type,
-                status="RUNNING",
-                inputs=inputs or {},
-                outputs={},
-                error="",
-                elapsed_ms=0,
-                finished_at=None,
-                deleted=False,
-                created_at=now,
-                updated_at=now,
-            )
-            .returning(self._workflow_node_run.c.id)
+        node_run_id = insert_and_get_id(
+            self._session,
+            self._workflow_node_run,
+            {
+                "workflow_run_id": workflow_run_id,
+                "node_key": node_key,
+                "node_type": node_type,
+                "status": "RUNNING",
+                "inputs": inputs or {},
+                "outputs": {},
+                "error": "",
+                "elapsed_ms": 0,
+                "finished_at": None,
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
         )
-        node_run_id = int(result.scalar_one())
         self._session.commit()
         return node_run_id
 

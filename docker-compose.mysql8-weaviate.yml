@@ -1,0 +1,45 @@
+services:
+  mysql8:
+    image: mysql:8.0
+    container_name: hify-mysql8
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: hify
+      MYSQL_USER: hify
+      MYSQL_PASSWORD: hify
+    ports:
+      - "3306:3306"
+    volumes:
+      - hify-mysql8-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  weaviate:
+    image: semitechnologies/weaviate:latest
+    container_name: hify-weaviate
+    environment:
+      QUERY_DEFAULTS_LIMIT: "25"
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
+      PERSISTENCE_DATA_PATH: /var/lib/weaviate
+      DEFAULT_VECTORIZER_MODULE: none
+      ENABLE_MODULES: ""
+      CLUSTER_HOSTNAME: node1
+    ports:
+      - "8080:8080"
+    volumes:
+      - hify-weaviate-data:/var/lib/weaviate
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/v1/.well-known/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  hify-mysql8-data:
+  hify-weaviate-data:

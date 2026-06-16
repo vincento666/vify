@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.database import Base
+from app.core.db_write import insert_and_fetch
 from app.core.schema import register_baseline_tables
 from app.modules.knowledge.domain.chunks import ChunkRecord, estimate_token_count
 from app.modules.knowledge.domain.vector_search import (
@@ -55,18 +56,17 @@ class KnowledgeBaseRepository:
 
     def create(self, values: dict[str, Any]) -> dict[str, Any]:
         now = datetime.now()
-        result = self._session.execute(
-            self._knowledge_base.insert()
-            .values(
+        row = insert_and_fetch(
+            self._session,
+            self._knowledge_base,
+            {
                 **values,
-                enabled=True,
-                deleted=False,
-                created_at=now,
-                updated_at=now,
-            )
-            .returning(self._knowledge_base)
+                "enabled": True,
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
         )
-        row = dict(result.mappings().one())
         self._session.commit()
         return row
 
@@ -106,20 +106,19 @@ class KnowledgeBaseRepository:
 
     def create_document(self, values: dict[str, Any]) -> dict[str, Any]:
         now = datetime.now()
-        result = self._session.execute(
-            self._document.insert()
-            .values(
+        row = insert_and_fetch(
+            self._session,
+            self._document,
+            {
                 **values,
-                status="PENDING",
-                error_message="",
-                chunk_count=0,
-                deleted=False,
-                created_at=now,
-                updated_at=now,
-            )
-            .returning(self._document)
+                "status": "PENDING",
+                "error_message": "",
+                "chunk_count": 0,
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
         )
-        row = dict(result.mappings().one())
         self._session.commit()
         return row
 
@@ -194,24 +193,20 @@ class KnowledgeBaseRepository:
         )
         rows: list[dict[str, Any]] = []
         for index, content in enumerate(chunk_texts):
-            row = dict(
-                self._session.execute(
-                    self._document_chunk.insert()
-                    .values(
-                        document_id=document_id,
-                        chunk_index=index,
-                        content=content,
-                        token_count=estimate_token_count(content),
-                        content_hash=hashlib.sha256(content.encode("utf-8")).hexdigest(),
-                        metadata={},
-                        deleted=False,
-                        created_at=now,
-                        updated_at=now,
-                    )
-                    .returning(self._document_chunk)
-                )
-                .mappings()
-                .one()
+            row = insert_and_fetch(
+                self._session,
+                self._document_chunk,
+                {
+                    "document_id": document_id,
+                    "chunk_index": index,
+                    "content": content,
+                    "token_count": estimate_token_count(content),
+                    "content_hash": hashlib.sha256(content.encode("utf-8")).hexdigest(),
+                    "metadata": {},
+                    "deleted": False,
+                    "created_at": now,
+                    "updated_at": now,
+                },
             )
             rows.append(row)
         self._session.commit()
@@ -226,6 +221,8 @@ class KnowledgeBaseRepository:
     ) -> list[dict[str, Any]]:
         if len(chunks) != len(embeddings):
             raise ValueError("chunks and embeddings length mismatch")
+        if not self._uses_relational_vector_tables():
+            return [{"chunk_id": chunk.id, "embedding_model": model_name} for chunk in chunks]
         chunk_ids = [chunk.id for chunk in chunks]
         if not chunk_ids:
             return []
@@ -235,23 +232,19 @@ class KnowledgeBaseRepository:
         )
         rows: list[dict[str, Any]] = []
         for chunk, embedding in zip(chunks, embeddings, strict=True):
-            row = dict(
-                self._session.execute(
-                    self._document_embedding.insert()
-                    .values(
-                        chunk_id=chunk.id,
-                        embedding_model=model_name,
-                        embedding=list(embedding),
-                        dimension=dimensions,
-                        metadata={},
-                        deleted=False,
-                        created_at=now,
-                        updated_at=now,
-                    )
-                    .returning(self._document_embedding)
-                )
-                .mappings()
-                .one()
+            row = insert_and_fetch(
+                self._session,
+                self._document_embedding,
+                {
+                    "chunk_id": chunk.id,
+                    "embedding_model": model_name,
+                    "embedding": list(embedding),
+                    "dimension": dimensions,
+                    "metadata": {},
+                    "deleted": False,
+                    "created_at": now,
+                    "updated_at": now,
+                },
             )
             rows.append(row)
         self._session.commit()
@@ -274,6 +267,8 @@ class KnowledgeBaseRepository:
                 model_name,
                 top_k,
             )
+        if not self._uses_relational_vector_tables():
+            return []
         return self._search_similar_chunks_in_memory(
             knowledge_base_id,
             query_embedding,
@@ -290,6 +285,8 @@ class KnowledgeBaseRepository:
     ) -> list[dict[str, Any]]:
         if len(faqs) != len(embeddings):
             raise ValueError("faqs and embeddings length mismatch")
+        if not self._uses_relational_vector_tables():
+            return [{"faq_id": int(faq["id"]), "embedding_model": model_name} for faq in faqs]
         faq_ids = [int(faq["id"]) for faq in faqs]
         if not faq_ids:
             return []
@@ -301,23 +298,19 @@ class KnowledgeBaseRepository:
         )
         rows: list[dict[str, Any]] = []
         for faq, embedding in zip(faqs, embeddings, strict=True):
-            row = dict(
-                self._session.execute(
-                    self._knowledge_faq_embedding.insert()
-                    .values(
-                        faq_id=int(faq["id"]),
-                        embedding_model=model_name,
-                        embedding=list(embedding),
-                        dimension=dimensions,
-                        metadata={},
-                        deleted=False,
-                        created_at=now,
-                        updated_at=now,
-                    )
-                    .returning(self._knowledge_faq_embedding)
-                )
-                .mappings()
-                .one()
+            row = insert_and_fetch(
+                self._session,
+                self._knowledge_faq_embedding,
+                {
+                    "faq_id": int(faq["id"]),
+                    "embedding_model": model_name,
+                    "embedding": list(embedding),
+                    "dimension": dimensions,
+                    "metadata": {},
+                    "deleted": False,
+                    "created_at": now,
+                    "updated_at": now,
+                },
             )
             rows.append(row)
         self._session.commit()
@@ -340,6 +333,8 @@ class KnowledgeBaseRepository:
                 model_name,
                 top_k,
             )
+        if not self._uses_relational_vector_tables():
+            return []
         return self._search_similar_faqs_in_memory(
             knowledge_base_id,
             query_embedding,
@@ -390,12 +385,7 @@ class KnowledgeBaseRepository:
             "created_at": now,
             "updated_at": now,
         }
-        result = self._session.execute(
-            self._knowledge_faq.insert()
-            .values(row_values)
-            .returning(self._knowledge_faq)
-        )
-        row = dict(result.mappings().one())
+        row = insert_and_fetch(self._session, self._knowledge_faq, row_values)
         self._session.commit()
         return row
 
@@ -483,6 +473,8 @@ class KnowledgeBaseRepository:
         )
 
     def _clear_document_embeddings(self, document_id: int) -> None:
+        if not self._uses_relational_vector_tables():
+            return
         chunk_ids = self._session.execute(
             sa.select(self._document_chunk.c.id).where(self._document_chunk.c.document_id == document_id)
         ).scalars().all()
@@ -493,11 +485,16 @@ class KnowledgeBaseRepository:
         )
 
     def _clear_faq_embeddings(self, faq_id: int) -> None:
+        if not self._uses_relational_vector_tables():
+            return
         self._session.execute(
             self._knowledge_faq_embedding.delete().where(
                 self._knowledge_faq_embedding.c.faq_id == faq_id
             )
         )
+
+    def _uses_relational_vector_tables(self) -> bool:
+        return self._session.get_bind().dialect.name != "mysql"
 
     def _search_similar_chunks_in_memory(
         self,

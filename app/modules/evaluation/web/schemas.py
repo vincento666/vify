@@ -14,6 +14,24 @@ class EvalSetUpdateRequest(BaseModel):
     description: str | None = Field(default=None, max_length=500)
 
 
+class EvalSetVersionCreateRequest(BaseModel):
+    description: str = Field(default="", max_length=500)
+
+
+class EvalSetFieldRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    key: str = Field(min_length=1, max_length=80)
+    label: str = Field(min_length=1, max_length=120)
+    content_type: str = Field(default="TEXT", alias="contentType")
+    required: bool = False
+    display_order: int = Field(default=0, alias="displayOrder")
+
+
+class EvalSetFieldsUpdateRequest(BaseModel):
+    fields: list[EvalSetFieldRequest] = Field(min_length=1)
+
+
 class EvalCaseCreateRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -83,6 +101,10 @@ class EvaluatorUpdateRequest(EvaluatorCreateRequest):
     enabled: int | None = None
 
 
+class EvaluatorVersionCreateRequest(BaseModel):
+    description: str = Field(default="", max_length=500)
+
+
 class EvaluatorResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -122,6 +144,22 @@ class EvaluatorSampleTestResponse(BaseModel):
     reason: str
 
 
+class LlmEvaluatorDebugRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    model_config_id: int = Field(alias="modelConfigId", gt=0)
+    prompt: str = Field(min_length=1)
+    expected_output: str = Field(default="", alias="expectedOutput")
+    actual_output: str = Field(alias="actualOutput", min_length=1)
+    passing_score: float = Field(default=0.7, ge=0, le=1, alias="passingScore")
+
+
+class LlmEvaluatorDebugResponse(EvaluatorSampleTestResponse):
+    model_config_id: int = Field(alias="modelConfigId")
+    debug_prompt: str = Field(alias="debugPrompt")
+    raw_output: str = Field(alias="rawOutput")
+
+
 TargetType = Literal["AGENT", "WORKFLOW", "CHATFLOW"]
 RunStatus = Literal["RUNNING", "COMPLETED", "FAILED"]
 
@@ -133,7 +171,13 @@ class ExperimentCreateRequest(BaseModel):
     target_type: TargetType = Field(alias="targetType")
     target_id: int = Field(alias="targetId")
     eval_set_id: int = Field(alias="evalSetId")
+    eval_set_version_id: int | None = Field(default=None, alias="evalSetVersionId")
     evaluator_ids: list[int] = Field(alias="evaluatorIds", min_length=1)
+    evaluator_version_ids: list[int] = Field(default_factory=list, alias="evaluatorVersionIds")
+    target_field_mapping: dict[str, str] = Field(default_factory=dict, alias="targetFieldMapping")
+    evaluator_field_mapping: dict[str, str] = Field(default_factory=dict, alias="evaluatorFieldMapping")
+    item_concurrency: int = Field(default=1, ge=1, le=20, alias="itemConcurrency")
+    item_retry_count: int = Field(default=0, ge=0, le=5, alias="itemRetryCount")
 
 
 class ExperimentResponse(BaseModel):
@@ -144,7 +188,13 @@ class ExperimentResponse(BaseModel):
     target_type: TargetType = Field(alias="targetType")
     target_id: int = Field(alias="targetId")
     eval_set_id: int = Field(alias="evalSetId")
+    eval_set_version_id: int | None = Field(default=None, alias="evalSetVersionId")
     evaluator_ids: list[int] = Field(alias="evaluatorIds")
+    evaluator_version_ids: list[int] = Field(alias="evaluatorVersionIds")
+    target_field_mapping: dict[str, str] = Field(alias="targetFieldMapping")
+    evaluator_field_mapping: dict[str, str] = Field(alias="evaluatorFieldMapping")
+    item_concurrency: int = Field(alias="itemConcurrency")
+    item_retry_count: int = Field(alias="itemRetryCount")
     status: str
     latest_run_id: int | None = Field(alias="latestRunId")
     created_at: str = Field(alias="createdAt")
@@ -169,6 +219,11 @@ class CaseResultResponse(BaseModel):
     input: str
     expected_output: str = Field(alias="expectedOutput")
     target_output: str = Field(alias="targetOutput")
+    target_type: str = Field(alias="targetType")
+    target_run_id: int | None = Field(alias="targetRunId")
+    target_status: str = Field(alias="targetStatus")
+    target_debug_url: str = Field(alias="targetDebugUrl")
+    target_evidence_summary: dict[str, Any] = Field(alias="targetEvidenceSummary")
     status: str
     score: float
     evaluator_results: list[dict[str, Any]] = Field(alias="evaluatorResults")

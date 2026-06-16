@@ -1,9 +1,12 @@
 from datetime import datetime
+import os
 import time
 import unittest
 
 from fastapi.testclient import TestClient
+import httpx
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 from app.core.database import Base, get_session_factory, initialise_database
 from app.core.schema import DEFAULT_EMBEDDING_DIMENSIONS, register_baseline_tables
@@ -66,6 +69,9 @@ def _list_embeddings(document_id: int) -> list[dict[str, object]]:
     document_chunk = Base.metadata.tables["document_chunk"]
     document_embedding = Base.metadata.tables["document_embedding"]
     with get_session_factory()() as session:
+        bind = session.get_bind()
+        if not inspect(bind).has_table("document_embedding"):
+            return _list_weaviate_embeddings(document_id)
         rows = session.execute(
             sa.select(document_embedding)
             .join(document_chunk, document_embedding.c.chunk_id == document_chunk.c.id)
@@ -73,6 +79,40 @@ def _list_embeddings(document_id: int) -> list[dict[str, object]]:
             .order_by(document_chunk.c.chunk_index.asc())
         ).mappings().all()
     return [dict(row) for row in rows]
+
+
+def _list_weaviate_embeddings(document_id: int) -> list[dict[str, object]]:
+    base_url = os.getenv("HIFY_WEAVIATE_URL")
+    if not base_url:
+        return []
+    response = httpx.post(
+        f"{base_url.rstrip('/')}/v1/graphql",
+        json={
+            "query": f"""
+            {{
+              Get {{
+                HifyDocumentChunk(
+                  where: {{ path: [\"document_id\"], operator: Equal, valueInt: {int(document_id)} }}
+                ) {{
+                  embedding_model
+                  _additional {{ vector }}
+                }}
+              }}
+            }}
+            """
+        },
+        timeout=10.0,
+    )
+    response.raise_for_status()
+    rows = response.json().get("data", {}).get("Get", {}).get("HifyDocumentChunk", [])
+    return [
+        {
+            "embedding_model": row.get("embedding_model"),
+            "dimension": len(row.get("_additional", {}).get("vector") or []),
+            "embedding": row.get("_additional", {}).get("vector") or [],
+        }
+        for row in rows
+    ]
 
 
 if __name__ == "__main__":

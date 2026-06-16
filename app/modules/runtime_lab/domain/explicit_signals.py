@@ -1,4 +1,5 @@
 from collections.abc import Mapping, Sequence, Set as AbstractSet
+import re
 from typing import Any
 
 from app.modules.runtime_lab.domain.candidates import CandidateType, RouteCandidate, ScoreBreakdown, select_top_candidates
@@ -128,9 +129,14 @@ class ExplicitSignalDetector:
     ) -> list[RouteCandidate]:
         if _looks_like_airport_facility_question(text):
             return []
+        if _explicitly_denies_transaction(text):
+            return []
         candidates: list[RouteCandidate] = []
+        active_sop_id = str(active_task.get("sop_id") or "") if active_task is not None else ""
         for manifest in self._manifests.values():
             if enabled_sop_ids is not None and manifest.sop_id not in enabled_sop_ids:
+                continue
+            if manifest.sop_id == active_sop_id and _asks_to_pause_active_and_switch(text, active_sop_id):
                 continue
             strong = match_strong_trigger_template(text, manifest)
             if strong is not None:
@@ -254,6 +260,44 @@ def _message_requests_transaction(text: str) -> bool:
 
 
 def _explicitly_denies_transaction(text: str) -> bool:
+    if _looks_like_price_quote_request(text):
+        return False
     denial_terms = ("不是要办理", "不是办理", "不办理", "不是要办", "不办", "先不", "现在不")
     consultation_terms = ("只是问", "只想问", "就想问", "想问", "咨询", "了解")
     return any(term in text for term in denial_terms) and any(term in text for term in consultation_terms)
+
+
+def _looks_like_price_quote_request(text: str) -> bool:
+    return any(term in text for term in ("票价", "价格", "多少钱", "报价", "预算", "贵不贵", "便宜"))
+
+
+def _asks_to_pause_active_and_switch(text: str, active_sop_id: str) -> bool:
+    if not active_sop_id:
+        return False
+    pause_terms = ("暂停", "先暂停", "先停", "先放一下", "先不处理", "暂时不处理")
+    return any(term in text for term in pause_terms) and _mentions_other_business(text, active_sop_id)
+
+
+def _mentions_other_business(text: str, active_sop_id: str) -> bool:
+    groups = {
+        "flight_booking": ("订票", "订机票", "买机票", "出票", "预订", "定机票"),
+        "group_booking": ("团队", "团队票", "团体票", "团体购票"),
+        "refund_ticket": ("退票", "退款", "退费", "退掉", "不飞了"),
+        "change_flight": ("改签", "改时间", "换个航班", "调整航班"),
+        "invoice_apply": ("发票", "开票", "报销凭证"),
+        "baggage_service": ("行李", "行李额", "超重", "托运"),
+        "seat_checkin": ("值机", "选座", "登机牌"),
+        "pet_cabin": ("宠物", "猫", "狗"),
+        "special_assistance": ("轮椅", "特殊协助", "无障碍"),
+        "membership_service": ("里程", "积分", "会员", "补登"),
+    }
+    for sop_id, terms in groups.items():
+        if sop_id == active_sop_id:
+            continue
+        if any(term in text for term in terms):
+            return True
+    return bool(active_sop_id != "refund_ticket" and _looks_like_refund_request(text))
+
+
+def _looks_like_refund_request(text: str) -> bool:
+    return re.search(r"(?:退|取消)[^，。,.]{0,10}(?:票|机票|航班)|(?:票|机票|航班)[^，。,.]{0,10}退", text) is not None

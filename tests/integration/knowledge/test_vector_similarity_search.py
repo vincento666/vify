@@ -2,12 +2,15 @@ from datetime import datetime
 import time
 import unittest
 
+from sqlalchemy import inspect
+
 from app.core.database import Base, get_session_factory, initialise_database
 from app.core.schema import DEFAULT_EMBEDDING_DIMENSIONS, register_baseline_tables
 from app.modules.knowledge.api.facade import KnowledgeFacade
 from app.modules.knowledge.domain.embeddings import FAKE_EMBEDDING_MODEL
 from app.modules.knowledge.domain.embeddings import FakeEmbeddingProvider
 from app.modules.knowledge.domain.service import KnowledgeBaseService
+from app.modules.knowledge.domain.vector_store import create_vector_store
 from app.modules.knowledge.infra.repository import KnowledgeBaseRepository
 
 
@@ -22,14 +25,17 @@ class VectorSimilaritySearchTest(unittest.TestCase):
             document = service.upload_document(kb_id, "vectors.txt", content)
             service.process_document(document["id"], content)
             chunks = repository.list_document_chunks(document["id"])
-            repository.replace_document_embeddings(
+            _replace_document_embeddings(
+                repository,
+                kb_id,
                 chunks,
                 [_basis_vector(0), _basis_vector(1)],
                 FAKE_EMBEDDING_MODEL,
                 DEFAULT_EMBEDDING_DIMENSIONS,
             )
 
-            results = repository.search_similar_chunks(
+            results = _search_similar_chunks(
+                repository,
                 kb_id,
                 _basis_vector(1),
                 FAKE_EMBEDDING_MODEL,
@@ -52,7 +58,9 @@ class VectorSimilaritySearchTest(unittest.TestCase):
             service.process_document(document["id"], content)
             chunks = repository.list_document_chunks(document["id"])
             query_embedding = FakeEmbeddingProvider().embed([query])[0]
-            repository.replace_document_embeddings(
+            _replace_document_embeddings(
+                repository,
+                kb_id,
                 chunks,
                 [query_embedding, [-value for value in query_embedding]],
                 FAKE_EMBEDDING_MODEL,
@@ -76,7 +84,9 @@ class VectorSimilaritySearchTest(unittest.TestCase):
             service.process_document(document["id"], content)
             chunks = repository.list_document_chunks(document["id"])
             query_embedding = FakeEmbeddingProvider().embed([query])[0]
-            repository.replace_document_embeddings(
+            _replace_document_embeddings(
+                repository,
+                kb_id,
                 chunks,
                 [query_embedding, [-value for value in query_embedding]],
                 FAKE_EMBEDDING_MODEL,
@@ -113,6 +123,47 @@ def _basis_vector(index: int) -> list[float]:
     vector = [0.0] * DEFAULT_EMBEDDING_DIMENSIONS
     vector[index] = 1.0
     return vector
+
+
+def _replace_document_embeddings(
+    repository: KnowledgeBaseRepository,
+    knowledge_base_id: int,
+    chunks: list,
+    embeddings: list[list[float]],
+    model_name: str,
+    dimensions: int,
+) -> None:
+    if _has_relational_vector_table(repository):
+        repository.replace_document_embeddings(chunks, embeddings, model_name, dimensions)
+        return
+    create_vector_store(repository).replace_document_embeddings(
+        knowledge_base_id,
+        chunks,
+        embeddings,
+        model_name,
+        dimensions,
+    )
+
+
+def _search_similar_chunks(
+    repository: KnowledgeBaseRepository,
+    knowledge_base_id: int,
+    query_embedding: list[float],
+    model_name: str,
+    top_k: int,
+):
+    if _has_relational_vector_table(repository):
+        return repository.search_similar_chunks(knowledge_base_id, query_embedding, model_name, top_k)
+    return create_vector_store(repository).search_chunks(
+        knowledge_base_id,
+        query_embedding,
+        model_name,
+        top_k,
+    )
+
+
+def _has_relational_vector_table(repository: KnowledgeBaseRepository) -> bool:
+    return inspect(repository._session.get_bind()).has_table("document_embedding")  # noqa: SLF001
 
 
 if __name__ == "__main__":

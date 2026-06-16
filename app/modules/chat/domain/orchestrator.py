@@ -44,6 +44,7 @@ class ChatOrchestrator:
         temperature: float | None = None,
         max_tokens: int | None = None,
         extra_params: dict[str, Any] | None = None,
+        tool_policies: dict[str, dict[str, Any]] | None = None,
     ) -> ChatOrchestrationResult:
         client = llm_client or self._llm_client
         first_payload = self._request_builder.build(
@@ -58,7 +59,7 @@ class ChatOrchestrator:
         if not first.tool_calls:
             return ChatOrchestrationResult(final_content=first.content, tool_results=[])
 
-        tool_results = self._tool_runner.run_calls(tool_ids, first.tool_calls, mcp_facade)
+        tool_results = self._tool_runner.run_calls(tool_ids, first.tool_calls, mcp_facade, tool_policies=tool_policies)
         second_messages = [
             *messages,
             ChatRequestMessage(

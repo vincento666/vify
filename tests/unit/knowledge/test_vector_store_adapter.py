@@ -237,10 +237,38 @@ class VectorStoreAdapterTest(unittest.TestCase):
         rows = store.replace_document_embeddings(44, chunks, [[0.1, 0.2]], "test-model", 2)
 
         self.assertEqual([{"chunk_id": 11, "embedding_model": "test-model"}], rows)
-        self.assertEqual("DELETE", requests[0][0])
-        self.assertEqual("http://weaviate.local/v1/batch/objects", requests[0][1])
-        self.assertEqual("POST", requests[1][0])
-        self.assertEqual("http://weaviate.local/v1/objects", requests[1][1])
+        self.assertIn(("GET", "http://weaviate.local/v1/schema/HifyDocumentChunk"), requests)
+        self.assertIn(("DELETE", "http://weaviate.local/v1/batch/objects"), requests)
+        self.assertEqual("POST", requests[-1][0])
+        self.assertEqual("http://weaviate.local/v1/objects", requests[-1][1])
+
+    def test_weaviate_store_creates_document_chunk_schema_before_upsert(self) -> None:
+        requests: list[tuple[str, str]] = []
+        payloads: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append((request.method, str(request.url)))
+            payloads.append(request.read().decode("utf-8"))
+            if request.method == "GET" and str(request.url).endswith("/v1/schema/HifyDocumentChunk"):
+                return httpx.Response(404, json={"error": "missing class"})
+            return httpx.Response(200, json={})
+
+        store = WeaviateVectorStore(
+            base_url="http://weaviate.local",
+            http_client=httpx.Client(transport=httpx.MockTransport(handler)),
+        )
+
+        store.replace_document_embeddings(
+            44,
+            [ChunkRecord(11, 22, 0, "indexed document chunk", 3)],
+            [[0.1, 0.2]],
+            "test-model",
+            2,
+        )
+
+        self.assertIn(("GET", "http://weaviate.local/v1/schema/HifyDocumentChunk"), requests)
+        self.assertIn(("POST", "http://weaviate.local/v1/schema"), requests)
+        self.assertTrue(any('"class":"HifyDocumentChunk"' in payload for payload in payloads))
 
     def test_weaviate_store_replaces_faq_embeddings(self) -> None:
         payloads: list[str] = []

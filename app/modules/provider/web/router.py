@@ -67,3 +67,12 @@ def test_provider_connection(
     service: ProviderService = Depends(get_provider_service),
 ) -> dict[str, Any]:
     return success(service.test_connection(provider_id))
+
+
+@router.post("/{provider_id}/models/{model_config_id}/connectivity")
+def test_provider_model_connectivity(
+    provider_id: int,
+    model_config_id: int,
+    service: ProviderService = Depends(get_provider_service),
+) -> dict[str, Any]:
+    return success(service.test_model_connectivity(provider_id, model_config_id))

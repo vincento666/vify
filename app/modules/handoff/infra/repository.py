@@ -7,6 +7,7 @@ import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from app.core.database import Base
+from app.core.db_write import insert_and_fetch, update_and_fetch
 from app.core.schema import register_baseline_tables
 
 register_baseline_tables()
@@ -19,29 +20,28 @@ class HandoffTicketRepository:
 
     def create(self, values: dict[str, Any]) -> dict[str, Any]:
         now = datetime.now()
-        result = self._session.execute(
-            self._ticket.insert()
-            .values(
-                session_id=values["session_id"],
-                conversation_id=values.get("conversation_id") or "",
-                user_id=values.get("user_id") or "",
-                channel=values.get("channel") or "web",
-                queue=values.get("queue") or "general",
-                assignee=values.get("assignee") or "",
-                status=values.get("status") or "queued",
-                reason=values.get("reason") or "",
-                priority=values.get("priority") or "normal",
-                sla_due_at=values.get("sla_due_at"),
-                transcript_snapshot=values.get("transcript_snapshot") or [],
-                context_snapshot=values.get("context_snapshot") or {},
-                closed_at=values.get("closed_at"),
-                deleted=False,
-                created_at=now,
-                updated_at=now,
-            )
-            .returning(self._ticket)
+        row = insert_and_fetch(
+            self._session,
+            self._ticket,
+            {
+                "session_id": values["session_id"],
+                "conversation_id": values.get("conversation_id") or "",
+                "user_id": values.get("user_id") or "",
+                "channel": values.get("channel") or "web",
+                "queue": values.get("queue") or "general",
+                "assignee": values.get("assignee") or "",
+                "status": values.get("status") or "queued",
+                "reason": values.get("reason") or "",
+                "priority": values.get("priority") or "normal",
+                "sla_due_at": values.get("sla_due_at"),
+                "transcript_snapshot": values.get("transcript_snapshot") or [],
+                "context_snapshot": values.get("context_snapshot") or {},
+                "closed_at": values.get("closed_at"),
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
         )
-        row = dict(result.mappings().one())
         self._session.commit()
         return row
 
@@ -68,11 +68,12 @@ class HandoffTicketRepository:
         return dict(row) if row else None
 
     def update(self, ticket_id: int, values: dict[str, Any]) -> dict[str, Any] | None:
-        row = self._session.execute(
-            self._ticket.update()
-            .where(self._ticket.c.id == ticket_id, self._ticket.c.deleted.is_(False))
-            .values(**values, updated_at=datetime.now())
-            .returning(self._ticket)
-        ).mappings().one_or_none()
+        row = update_and_fetch(
+            self._session,
+            self._ticket,
+            [self._ticket.c.id == ticket_id, self._ticket.c.deleted.is_(False)],
+            {**values, "updated_at": datetime.now()},
+            key_value=ticket_id,
+        )
         self._session.commit()
-        return dict(row) if row else None
+        return row

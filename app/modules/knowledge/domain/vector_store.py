@@ -50,6 +50,22 @@ class VectorStore(Protocol):
     ) -> list[dict[str, Any]]:
         ...
 
+    def delete_document_embeddings(
+        self,
+        knowledge_base_id: int,
+        document_id: int,
+        model_name: str,
+    ) -> None:
+        ...
+
+    def delete_faq_embeddings(
+        self,
+        knowledge_base_id: int,
+        faq_id: int,
+        model_name: str,
+    ) -> None:
+        ...
+
 
 class RepositoryVectorStore:
     def __init__(self, repository: object) -> None:
@@ -113,6 +129,22 @@ class RepositoryVectorStore:
             dimensions,
         )
 
+    def delete_document_embeddings(
+        self,
+        knowledge_base_id: int,
+        document_id: int,
+        model_name: str,
+    ) -> None:
+        return None
+
+    def delete_faq_embeddings(
+        self,
+        knowledge_base_id: int,
+        faq_id: int,
+        model_name: str,
+    ) -> None:
+        return None
+
 
 def create_vector_store(repository: object, config: dict[str, Any] | None = None) -> VectorStore:
     values = dict(config or {})
@@ -134,6 +166,7 @@ class WeaviateVectorStore:
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self._client = http_client or httpx.Client(timeout=10.0)
+        self._schema_ready: set[str] = set()
 
     def search_chunks(
         self,
@@ -283,6 +316,44 @@ class WeaviateVectorStore:
             rows.append({"faq_id": faq_id, "embedding_model": model_name})
         return rows
 
+    def delete_document_embeddings(
+        self,
+        knowledge_base_id: int,
+        document_id: int,
+        model_name: str,
+    ) -> None:
+        if not self.base_url:
+            return
+        self._delete_where(
+            class_name="HifyDocumentChunk",
+            where=_and_where(
+                [
+                    _equal_int("knowledge_base_id", knowledge_base_id),
+                    _equal_text("embedding_model", model_name),
+                    _equal_int("document_id", document_id),
+                ]
+            ),
+        )
+
+    def delete_faq_embeddings(
+        self,
+        knowledge_base_id: int,
+        faq_id: int,
+        model_name: str,
+    ) -> None:
+        if not self.base_url:
+            return
+        self._delete_where(
+            class_name="HifyKnowledgeFaq",
+            where=_and_where(
+                [
+                    _equal_int("knowledge_base_id", knowledge_base_id),
+                    _equal_text("embedding_model", model_name),
+                    _equal_int("faq_id", faq_id),
+                ]
+            ),
+        )
+
     def _query(
         self,
         *,
@@ -295,6 +366,7 @@ class WeaviateVectorStore:
     ) -> dict[str, Any]:
         if top_k <= 0:
             return {}
+        self._ensure_class(class_name)
         query = f"""
         {{
           Get {{
@@ -321,6 +393,7 @@ class WeaviateVectorStore:
         return payload if isinstance(payload, dict) else {}
 
     def _delete_where(self, *, class_name: str, where: dict[str, Any]) -> None:
+        self._ensure_class(class_name)
         response = self._client.request(
             "DELETE",
             f"{self.base_url}/v1/batch/objects",
@@ -340,6 +413,7 @@ class WeaviateVectorStore:
         properties: dict[str, Any],
         vector: Sequence[float],
     ) -> None:
+        self._ensure_class(class_name)
         response = self._client.post(
             f"{self.base_url}/v1/objects",
             json={
@@ -350,6 +424,19 @@ class WeaviateVectorStore:
             },
         )
         response.raise_for_status()
+
+    def _ensure_class(self, class_name: str) -> None:
+        if class_name in self._schema_ready:
+            return
+        response = self._client.get(f"{self.base_url}/v1/schema/{class_name}")
+        if response.status_code == 200:
+            self._schema_ready.add(class_name)
+            return
+        if response.status_code != 404:
+            response.raise_for_status()
+        create_response = self._client.post(f"{self.base_url}/v1/schema", json=_class_schema(class_name))
+        create_response.raise_for_status()
+        self._schema_ready.add(class_name)
 
 
 def _weaviate_rows(payload: dict[str, Any], class_name: str) -> list[dict[str, Any]]:
@@ -385,6 +472,36 @@ def _escape_graphql(value: str) -> str:
 
 def _object_id(class_name: str, model_name: str, item_id: int) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"hify:{class_name}:{model_name}:{int(item_id)}"))
+
+
+def _class_schema(class_name: str) -> dict[str, Any]:
+    if class_name == "HifyDocumentChunk":
+        return {
+            "class": class_name,
+            "vectorizer": "none",
+            "properties": [
+                {"name": "knowledge_base_id", "dataType": ["int"]},
+                {"name": "embedding_model", "dataType": ["text"]},
+                {"name": "chunk_id", "dataType": ["int"]},
+                {"name": "document_id", "dataType": ["int"]},
+                {"name": "chunk_index", "dataType": ["int"]},
+                {"name": "content", "dataType": ["text"]},
+                {"name": "token_count", "dataType": ["int"]},
+            ],
+        }
+    if class_name == "HifyKnowledgeFaq":
+        return {
+            "class": class_name,
+            "vectorizer": "none",
+            "properties": [
+                {"name": "knowledge_base_id", "dataType": ["int"]},
+                {"name": "embedding_model", "dataType": ["text"]},
+                {"name": "faq_id", "dataType": ["int"]},
+                {"name": "question", "dataType": ["text"]},
+                {"name": "answer", "dataType": ["text"]},
+            ],
+        }
+    raise ValueError(f"Unsupported Weaviate class: {class_name}")
 
 
 def _equal_int(path: str, value: int) -> dict[str, Any]:

@@ -8,7 +8,7 @@ down_revision = None
 branch_labels = None
 depends_on = None
 
-KNOWLEDGE_VECTOR_TABLES = {"document_chunk", "document_embedding"}
+RELATIONAL_VECTOR_TABLES = {"document_embedding", "knowledge_faq_embedding"}
 
 
 def upgrade() -> None:
@@ -24,4 +24,4 @@ def downgrade() -> None:
 
 
 def _baseline_tables() -> list:
-    return [table for table in Base.metadata.sorted_tables if table.name not in KNOWLEDGE_VECTOR_TABLES]
+    return [table for table in Base.metadata.sorted_tables if table.name not in RELATIONAL_VECTOR_TABLES]

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.database import Base
+from app.core.db_write import insert_and_fetch
 from app.modules.runtime_lab.infra.schema import register_runtime_lab_tables, runtime_lab_tables
 
 ACTIVE_TASK_STATUSES = {"RUNNING", "WAITING"}
@@ -32,19 +33,18 @@ class RuntimeLabRepository:
 
     def create_session(self, status: str = "ACTIVE") -> dict[str, Any]:
         now = datetime.now()
-        result = self._session.execute(
-            self._session_table.insert()
-            .values(
-                status=status,
-                active_task_id=None,
-                version=1,
-                deleted=False,
-                created_at=now,
-                updated_at=now,
-            )
-            .returning(self._session_table)
+        row = insert_and_fetch(
+            self._session,
+            self._session_table,
+            {
+                "status": status,
+                "active_task_id": None,
+                "version": 1,
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
         )
-        row = dict(result.mappings().one())
         self._session.commit()
         return row
 
@@ -60,20 +60,19 @@ class RuntimeLabRepository:
     def append_event(self, session_id: int, event_type: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         now = datetime.now()
         sequence = self._next_event_sequence(session_id)
-        result = self._session.execute(
-            self._event_table.insert()
-            .values(
-                session_id=session_id,
-                sequence=sequence,
-                event_type=event_type,
-                payload=payload or {},
-                deleted=False,
-                created_at=now,
-                updated_at=now,
-            )
-            .returning(self._event_table)
+        row = insert_and_fetch(
+            self._session,
+            self._event_table,
+            {
+                "session_id": session_id,
+                "sequence": sequence,
+                "event_type": event_type,
+                "payload": payload or {},
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
         )
-        row = dict(result.mappings().one())
         self._session.commit()
         return row
 
@@ -90,27 +89,26 @@ class RuntimeLabRepository:
         if status in ACTIVE_TASK_STATUSES:
             self._ensure_no_other_active_task(session_id)
         now = datetime.now()
-        result = self._session.execute(
-            self._task_table.insert()
-            .values(
-                session_id=session_id,
-                sop_id=sop_id,
-                status=status,
-                current_step=current_step,
-                checkpoint_id=None,
-                parent_task_id=parent_task_id,
-                resume_summary=resume_summary,
-                business_refs=business_refs or {},
-                suspended_at=None,
-                completed_at=None,
-                expires_at=None,
-                deleted=False,
-                created_at=now,
-                updated_at=now,
-            )
-            .returning(self._task_table)
+        row = insert_and_fetch(
+            self._session,
+            self._task_table,
+            {
+                "session_id": session_id,
+                "sop_id": sop_id,
+                "status": status,
+                "current_step": current_step,
+                "checkpoint_id": None,
+                "parent_task_id": parent_task_id,
+                "resume_summary": resume_summary,
+                "business_refs": business_refs or {},
+                "suspended_at": None,
+                "completed_at": None,
+                "expires_at": None,
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
         )
-        row = dict(result.mappings().one())
         if status in ACTIVE_TASK_STATUSES:
             self._set_active_task(session_id, int(row["id"]), now)
         self._session.commit()
@@ -201,24 +199,23 @@ class RuntimeLabRepository:
                 .values(status="SUPERSEDED", updated_at=datetime.now())
             )
         now = datetime.now()
-        result = self._session.execute(
-            self._checkpoint_table.insert()
-            .values(
-                session_id=session_id,
-                task_id=task_id,
-                sop_id=sop_id,
-                current_step=current_step,
-                pending_prompt=pending_prompt,
-                collected=collected or {},
-                scoped_variables=scoped_variables or {},
-                status=status,
-                deleted=False,
-                created_at=now,
-                updated_at=now,
-            )
-            .returning(self._checkpoint_table)
+        row = insert_and_fetch(
+            self._session,
+            self._checkpoint_table,
+            {
+                "session_id": session_id,
+                "task_id": task_id,
+                "sop_id": sop_id,
+                "current_step": current_step,
+                "pending_prompt": pending_prompt,
+                "collected": collected or {},
+                "scoped_variables": scoped_variables or {},
+                "status": status,
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
         )
-        row = dict(result.mappings().one())
         self._session.commit()
         return row
 
@@ -281,18 +278,17 @@ class RuntimeLabRepository:
         ).mappings().one_or_none()
         if existing:
             return dict(existing), True
-        result = self._session.execute(
-            self._command_table.insert()
-            .values(
-                session_id=session_id,
-                idempotency_key=idempotency_key,
-                request_hash=request_hash,
-                response_payload=response_payload,
-                created_at=datetime.now(),
-            )
-            .returning(self._command_table)
+        row = insert_and_fetch(
+            self._session,
+            self._command_table,
+            {
+                "session_id": session_id,
+                "idempotency_key": idempotency_key,
+                "request_hash": request_hash,
+                "response_payload": response_payload,
+                "created_at": datetime.now(),
+            },
         )
-        row = dict(result.mappings().one())
         self._session.commit()
         return row, False
 

@@ -79,6 +79,24 @@ class WorkflowTransformNodesIntegrationTest(unittest.TestCase):
             {"final": "status=FAILED; error=Expecting property name enclosed in double quotes"},
         )
 
+    def test_json_parse_supports_bracket_array_paths(self) -> None:
+        with TestClient(app) as client:
+            workflow = _create_json_parse_bracket_path_workflow(client)
+            response = client.post(
+                f"/api/v1/workflows/{workflow['id']}/runs",
+                json={
+                    "input": {
+                        "raw": '{"items":[{"sku":"A1","qty":1},{"sku":"B2","qty":2}],"customer":{"tags":["gold"]}}',
+                    },
+                },
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(
+            response.json()["data"]["output"],
+            {"final": "first=A1; second_qty=2; tier=gold"},
+        )
+
     def test_chatflow_can_run_same_data_transform_nodes(self) -> None:
         with TestClient(app) as client:
             chatflow = _create_chatflow_transform(client)
@@ -305,6 +323,47 @@ def _create_json_parse_node_workflow(client: TestClient) -> dict[str, object]:
                     "config": {
                         "outputVariable": "final",
                         "output": "status={{json_parse_1.parseStatus}}; error={{json_parse_1.errorMessage}}",
+                    },
+                },
+            ],
+            "edges": [
+                {"sourceNodeKey": "start", "targetNodeKey": "json_parse_1", "condition": None},
+                {"sourceNodeKey": "json_parse_1", "targetNodeKey": "end", "condition": None},
+            ],
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["data"]
+
+
+def _create_json_parse_bracket_path_workflow(client: TestClient) -> dict[str, object]:
+    response = client.post(
+        "/api/v1/workflows",
+        json={
+            "name": f"JSON Parse Bracket Path Test {datetime.now().timestamp()}",
+            "description": "",
+            "nodes": [
+                {"nodeKey": "start", "type": "START", "name": "Start", "config": {}},
+                {
+                    "nodeKey": "json_parse_1",
+                    "type": "JSON_PARSE",
+                    "name": "JSON Parse",
+                    "config": {
+                        "source": "{{start.raw}}",
+                        "fieldMap": [
+                            {"name": "firstSku", "path": "$.items[0].sku"},
+                            {"name": "secondQty", "path": "$.items[1].qty"},
+                            {"name": "tier", "path": "$.customer.tags[0]"},
+                        ],
+                    },
+                },
+                {
+                    "nodeKey": "end",
+                    "type": "END",
+                    "name": "End",
+                    "config": {
+                        "outputVariable": "final",
+                        "output": "first={{json_parse_1.firstSku}}; second_qty={{json_parse_1.secondQty}}; tier={{json_parse_1.tier}}",
                     },
                 },
             ],

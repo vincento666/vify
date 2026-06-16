@@ -5,6 +5,7 @@ import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from app.core.database import Base
+from app.core.db_write import insert_and_fetch, update_and_fetch
 from app.core.schema import register_baseline_tables
 
 register_baseline_tables()
@@ -44,21 +45,21 @@ class WorkflowPublishRepository:
             )
             .values(active=False, updated_at=now)
         )
-        row = self._session.execute(
-            self._version.insert()
-            .values(
-                workflow_id=workflow_id,
-                flow_type=flow_type,
-                version=version,
-                snapshot=snapshot,
-                validation=validation,
-                active=True,
-                deleted=False,
-                created_at=now,
-                updated_at=now,
-            )
-            .returning(self._version)
-        ).mappings().one()
+        row = insert_and_fetch(
+            self._session,
+            self._version,
+            {
+                "workflow_id": workflow_id,
+                "flow_type": flow_type,
+                "version": version,
+                "snapshot": snapshot,
+                "validation": validation,
+                "active": True,
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
         self._session.commit()
         return dict(row)
 
@@ -110,11 +111,12 @@ class WorkflowPublishRepository:
             )
             .values(active=False, updated_at=now)
         )
-        activated = self._session.execute(
-            self._version.update()
-            .where(self._version.c.id == version_id)
-            .values(active=True, updated_at=now)
-            .returning(self._version)
-        ).mappings().one()
+        activated = update_and_fetch(
+            self._session,
+            self._version,
+            self._version.c.id == version_id,
+            {"active": True, "updated_at": now},
+            key_value=version_id,
+        )
         self._session.commit()
-        return dict(activated)
+        return activated

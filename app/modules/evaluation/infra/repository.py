@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.database import Base
+from app.core.db_write import insert_and_fetch
 from app.core.schema import register_baseline_tables
 
 register_baseline_tables()
@@ -19,7 +20,10 @@ class EvaluationRepository:
         self._session = session
         self._eval_set = Base.metadata.tables["eval_set"]
         self._eval_case = Base.metadata.tables["eval_case"]
+        self._eval_set_field = Base.metadata.tables["eval_set_field"]
+        self._eval_set_version = Base.metadata.tables["eval_set_version"]
         self._evaluator = Base.metadata.tables["evaluator"]
+        self._evaluator_version = Base.metadata.tables["evaluator_version"]
         self._agent = Base.metadata.tables["agent"]
         self._workflow = Base.metadata.tables["workflow"]
         self._experiment = Base.metadata.tables["evaluation_experiment"]
@@ -54,12 +58,11 @@ class EvaluationRepository:
 
     def create_eval_set(self, values: dict[str, Any]) -> dict[str, Any]:
         now = datetime.now()
-        result = self._session.execute(
-            self._eval_set.insert()
-            .values(**values, deleted=False, created_at=now, updated_at=now)
-            .returning(self._eval_set)
+        row = insert_and_fetch(
+            self._session,
+            self._eval_set,
+            {**values, "deleted": False, "created_at": now, "updated_at": now},
         )
-        row = dict(result.mappings().one())
         self._session.commit()
         row["case_count"] = 0
         return row
@@ -117,12 +120,11 @@ class EvaluationRepository:
 
     def create_case(self, values: dict[str, Any]) -> dict[str, Any]:
         now = datetime.now()
-        result = self._session.execute(
-            self._eval_case.insert()
-            .values(**values, deleted=False, created_at=now, updated_at=now)
-            .returning(self._eval_case)
+        row = insert_and_fetch(
+            self._session,
+            self._eval_case,
+            {**values, "deleted": False, "created_at": now, "updated_at": now},
         )
-        row = dict(result.mappings().one())
         self._session.commit()
         return row
 
@@ -154,6 +156,108 @@ class EvaluationRepository:
         self._session.commit()
         return isinstance(result, CursorResult) and result.rowcount > 0
 
+    def list_eval_set_fields(self, eval_set_id: int) -> list[dict[str, Any]]:
+        rows = self._session.execute(
+            sa.select(self._eval_set_field)
+            .where(
+                self._eval_set_field.c.eval_set_id == eval_set_id,
+                self._eval_set_field.c.deleted.is_(False),
+            )
+            .order_by(self._eval_set_field.c.display_order.asc(), self._eval_set_field.c.id.asc())
+        ).mappings().all()
+        return [dict(row) for row in rows]
+
+    def replace_eval_set_fields(self, eval_set_id: int, fields: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        now = datetime.now()
+        self._session.execute(self._eval_set_field.delete().where(self._eval_set_field.c.eval_set_id == eval_set_id))
+        for field in fields:
+            self._session.execute(
+                self._eval_set_field.insert().values(
+                    eval_set_id=eval_set_id,
+                    key=field["key"],
+                    label=field["label"],
+                    content_type=field["contentType"],
+                    required=bool(field["required"]),
+                    display_order=int(field["displayOrder"]),
+                    deleted=False,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+        self._session.commit()
+        return self.list_eval_set_fields(eval_set_id)
+
+    def count_eval_set_versions(self, eval_set_id: int) -> int:
+        return int(
+            self._session.execute(
+                sa.select(sa.func.count()).select_from(self._eval_set_version).where(
+                    self._eval_set_version.c.eval_set_id == eval_set_id,
+                    self._eval_set_version.c.deleted.is_(False),
+                )
+            ).scalar_one()
+        )
+
+    def create_eval_set_version(
+        self,
+        *,
+        eval_set_id: int,
+        version: str,
+        schema_snapshot: list[dict[str, Any]],
+        case_snapshot: list[dict[str, Any]],
+        description: str,
+    ) -> dict[str, Any]:
+        now = datetime.now()
+        row = insert_and_fetch(
+            self._session,
+            self._eval_set_version,
+            {
+                "eval_set_id": eval_set_id,
+                "version": version,
+                "schema_snapshot": schema_snapshot,
+                "case_snapshot": case_snapshot,
+                "description": description,
+                "created_by": "system",
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        self._session.commit()
+        return row
+
+    def list_eval_set_versions(self, eval_set_id: int) -> list[dict[str, Any]]:
+        rows = self._session.execute(
+            sa.select(self._eval_set_version)
+            .where(
+                self._eval_set_version.c.eval_set_id == eval_set_id,
+                self._eval_set_version.c.deleted.is_(False),
+            )
+            .order_by(self._eval_set_version.c.id.desc())
+        ).mappings().all()
+        return [dict(row) for row in rows]
+
+    def latest_eval_set_version(self, eval_set_id: int) -> dict[str, Any] | None:
+        row = self._session.execute(
+            sa.select(self._eval_set_version)
+            .where(
+                self._eval_set_version.c.eval_set_id == eval_set_id,
+                self._eval_set_version.c.deleted.is_(False),
+            )
+            .order_by(self._eval_set_version.c.id.desc())
+            .limit(1)
+        ).mappings().one_or_none()
+        return dict(row) if row else None
+
+    def get_eval_set_version(self, eval_set_id: int, version_id: int) -> dict[str, Any] | None:
+        row = self._session.execute(
+            sa.select(self._eval_set_version).where(
+                self._eval_set_version.c.id == version_id,
+                self._eval_set_version.c.eval_set_id == eval_set_id,
+                self._eval_set_version.c.deleted.is_(False),
+            )
+        ).mappings().one_or_none()
+        return dict(row) if row else None
+
     def list_evaluators(
         self,
         page: int,
@@ -177,12 +281,17 @@ class EvaluationRepository:
 
     def create_evaluator(self, values: dict[str, Any]) -> dict[str, Any]:
         now = datetime.now()
-        result = self._session.execute(
-            self._evaluator.insert()
-            .values(**values, enabled=True, deleted=False, created_at=now, updated_at=now)
-            .returning(self._evaluator)
+        row = insert_and_fetch(
+            self._session,
+            self._evaluator,
+            {
+                **values,
+                "enabled": True,
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
         )
-        row = dict(result.mappings().one())
         self._session.commit()
         return row
 
@@ -213,6 +322,65 @@ class EvaluationRepository:
         )
         self._session.commit()
         return isinstance(result, CursorResult) and result.rowcount > 0
+
+    def count_evaluator_versions(self, evaluator_id: int) -> int:
+        return int(
+            self._session.execute(
+                sa.select(sa.func.count()).select_from(self._evaluator_version).where(
+                    self._evaluator_version.c.evaluator_id == evaluator_id,
+                    self._evaluator_version.c.deleted.is_(False),
+                )
+            ).scalar_one()
+        )
+
+    def create_evaluator_version(
+        self,
+        *,
+        evaluator_id: int,
+        version: str,
+        evaluator_type: str,
+        config_snapshot: dict[str, Any],
+        input_schema: list[dict[str, Any]],
+        description: str,
+    ) -> dict[str, Any]:
+        now = datetime.now()
+        row = insert_and_fetch(
+            self._session,
+            self._evaluator_version,
+            {
+                "evaluator_id": evaluator_id,
+                "version": version,
+                "evaluator_type": evaluator_type,
+                "config_snapshot": config_snapshot,
+                "input_schema": input_schema,
+                "description": description,
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        self._session.commit()
+        return row
+
+    def list_evaluator_versions(self, evaluator_id: int) -> list[dict[str, Any]]:
+        rows = self._session.execute(
+            sa.select(self._evaluator_version)
+            .where(
+                self._evaluator_version.c.evaluator_id == evaluator_id,
+                self._evaluator_version.c.deleted.is_(False),
+            )
+            .order_by(self._evaluator_version.c.id.desc())
+        ).mappings().all()
+        return [dict(row) for row in rows]
+
+    def get_evaluator_version(self, evaluator_version_id: int) -> dict[str, Any] | None:
+        row = self._session.execute(
+            sa.select(self._evaluator_version).where(
+                self._evaluator_version.c.id == evaluator_version_id,
+                self._evaluator_version.c.deleted.is_(False),
+            )
+        ).mappings().one_or_none()
+        return dict(row) if row else None
 
     def agent_exists(self, agent_id: int) -> bool:
         return (
@@ -259,21 +427,54 @@ class EvaluationRepository:
         ).mappings().all()
         return [dict(row) for row in rows], int(total)
 
+    def list_related_experiments(self, eval_set_id: int) -> list[dict[str, Any]]:
+        version = self._eval_set_version.alias("version")
+        latest_run = self._run.alias("latest_run")
+        rows = self._session.execute(
+            sa.select(
+                self._experiment.c.id,
+                self._experiment.c.name,
+                self._experiment.c.target_type,
+                self._experiment.c.target_id,
+                self._experiment.c.eval_set_id,
+                self._experiment.c.eval_set_version_id,
+                self._experiment.c.status,
+                self._experiment.c.latest_run_id,
+                self._experiment.c.created_at,
+                self._experiment.c.updated_at,
+                version.c.version.label("eval_set_version"),
+                latest_run.c.status.label("latest_run_status"),
+                latest_run.c.aggregate_score.label("latest_run_score"),
+                latest_run.c.pass_rate.label("latest_run_pass_rate"),
+                latest_run.c.finished_at.label("latest_run_finished_at"),
+            )
+            .select_from(
+                self._experiment
+                .outerjoin(version, version.c.id == self._experiment.c.eval_set_version_id)
+                .outerjoin(latest_run, latest_run.c.id == self._experiment.c.latest_run_id)
+            )
+            .where(
+                self._experiment.c.eval_set_id == eval_set_id,
+                self._experiment.c.deleted.is_(False),
+            )
+            .order_by(self._experiment.c.id.desc())
+        ).mappings().all()
+        return [dict(row) for row in rows]
+
     def create_experiment(self, values: dict[str, Any]) -> dict[str, Any]:
         now = datetime.now()
-        result = self._session.execute(
-            self._experiment.insert()
-            .values(
+        row = insert_and_fetch(
+            self._session,
+            self._experiment,
+            {
                 **values,
-                status="READY",
-                latest_run_id=None,
-                deleted=False,
-                created_at=now,
-                updated_at=now,
-            )
-            .returning(self._experiment)
+                "status": "READY",
+                "latest_run_id": None,
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
         )
-        row = dict(result.mappings().one())
         self._session.commit()
         return row
 
@@ -296,25 +497,24 @@ class EvaluationRepository:
 
     def create_run(self, experiment_id: int, total_cases: int) -> dict[str, Any]:
         now = datetime.now()
-        result = self._session.execute(
-            self._run.insert()
-            .values(
-                experiment_id=experiment_id,
-                status="RUNNING",
-                total_cases=total_cases,
-                passed_cases=0,
-                failed_cases=0,
-                aggregate_score=0.0,
-                pass_rate=0.0,
-                started_at=now,
-                finished_at=None,
-                deleted=False,
-                created_at=now,
-                updated_at=now,
-            )
-            .returning(self._run)
+        row = insert_and_fetch(
+            self._session,
+            self._run,
+            {
+                "experiment_id": experiment_id,
+                "status": "RUNNING",
+                "total_cases": total_cases,
+                "passed_cases": 0,
+                "failed_cases": 0,
+                "aggregate_score": 0.0,
+                "pass_rate": 0.0,
+                "started_at": now,
+                "finished_at": None,
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
         )
-        row = dict(result.mappings().one())
         self._session.commit()
         return row
 
@@ -373,12 +573,11 @@ class EvaluationRepository:
 
     def create_case_result(self, values: dict[str, Any]) -> dict[str, Any]:
         now = datetime.now()
-        result = self._session.execute(
-            self._case_result.insert()
-            .values(**values, deleted=False, created_at=now, updated_at=now)
-            .returning(self._case_result)
+        row = insert_and_fetch(
+            self._session,
+            self._case_result,
+            {**values, "deleted": False, "created_at": now, "updated_at": now},
         )
-        row = dict(result.mappings().one())
         self._session.commit()
         return row
 

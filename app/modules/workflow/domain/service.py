@@ -159,7 +159,11 @@ class WorkflowService:
             result = WorkflowExecutionEngine(
                 self._repository,
                 knowledge_facade=self._knowledge_facade_for(workflow_id),
-                llm_completer=self._llm_completer(workflow_id),
+                llm_completer=(
+                    self._llm_completer(workflow_id)
+                    if self._has_start_node(workflow_id)
+                    else None
+                ),
                 mcp_tool_executor=self._mcp_tool_executor,
                 api_tool_executor=self._api_tool_executor,
                 agent_invoker=self._agent_invoker_for(workflow_id),
@@ -791,6 +795,9 @@ class WorkflowService:
             for node in nodes
         )
 
+    def _has_start_node(self, workflow_id: int) -> bool:
+        return any(node["type"] == "START" for node in self._repository.list_nodes(workflow_id))
+
     def _llm_completer(self, workflow_id: int) -> _AgentBackedWorkflowLlmCompleter | None:
         nodes = self._repository.list_nodes(workflow_id)
         if not any(
@@ -1015,7 +1022,14 @@ class _AgentBackedWorkflowLlmCompleter:
 
     def _active_model_config(self, options: Mapping[str, Any]) -> ModelConfigDto:
         raw_model_config_id = options.get("modelConfigId") or options.get("model_config_id")
-        if raw_model_config_id in (None, "") or self._model_facade is None:
+        if self._model_facade is None:
+            return self._model_config
+        if raw_model_config_id in (None, ""):
+            raw_model = str(options.get("model") or "").strip()
+            if raw_model and raw_model != self._model_config.model_id and hasattr(self._model_facade, "find_enabled_model_config_by_model_id"):
+                matched = self._model_facade.find_enabled_model_config_by_model_id(raw_model)  # type: ignore[attr-defined]
+                if matched is not None:
+                    return matched
             return self._model_config
         try:
             model_config_id = int(raw_model_config_id)
@@ -1067,13 +1081,13 @@ class _AgentBackedWorkflowLlmCompleter:
         except Exception as exc:
             fallback_model = self._fallback_model(model_config)
             if not fallback_model or fallback_model == payload.get("model"):
-                raise WorkflowExecutionError(f"LLM provider request failed: {exc}") from exc
+                raise WorkflowExecutionError(f"LLM provider request failed: {_provider_request_error_message(exc)}") from exc
             fallback_payload = dict(payload)
             fallback_payload["model"] = fallback_model
             try:
                 return client.complete(fallback_payload)
             except Exception as fallback_exc:
-                raise WorkflowExecutionError(f"LLM provider request failed: {fallback_exc}") from fallback_exc
+                raise WorkflowExecutionError(f"LLM provider request failed: {_provider_request_error_message(fallback_exc)}") from fallback_exc
 
     def _fallback_model(self, model_config: ModelConfigDto) -> str:
         extra_params = dict(model_config.extra_params or {})
@@ -1094,6 +1108,24 @@ def _redact_llm_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
         else:
             redacted[key_text] = _json_safe(value)
     return redacted
+
+
+def _provider_request_error_message(exc: Exception) -> str:
+    text = str(exc)
+    lowered = text.lower()
+    network_markers = (
+        "nodename nor servname",
+        "name or service not known",
+        "temporary failure in name resolution",
+        "connection refused",
+        "connection reset",
+        "connect error",
+        "timed out",
+        "timeout",
+    )
+    if any(marker in lowered for marker in network_markers):
+        return "模型服务网络不可达，请检查模型服务 Base URL、网络/DNS 或代理配置"
+    return text
 
 
 def _usage_from_llm_response(response: Mapping[str, Any], payload: Mapping[str, Any], content: str) -> dict[str, Any]:

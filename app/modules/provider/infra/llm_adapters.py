@@ -16,6 +16,7 @@ class ChatCompletionResult:
     finish_reason: str | None
     tokens: int | None
     tool_calls: list[ToolCall]
+    usage: dict[str, Any]
 
 
 class OpenAIAdapterParser:
@@ -28,6 +29,7 @@ class OpenAIAdapterParser:
             finish_reason=choice.get("finish_reason"),
             tokens=usage.get("total_tokens"),
             tool_calls=self._parse_tool_calls(message.get("tool_calls", [])),
+            usage=dict(usage) if isinstance(usage, dict) else {},
         )
 
     def _parse_tool_calls(self, raw_calls: Any) -> list[ToolCall]:
@@ -74,6 +76,7 @@ class AnthropicAdapterParser:
             finish_reason=payload.get("stop_reason"),
             tokens=payload.get("usage", {}).get("output_tokens"),
             tool_calls=[],
+            usage=dict(payload.get("usage") or {}) if isinstance(payload.get("usage"), dict) else {},
         )
 
 
@@ -85,6 +88,7 @@ class OllamaAdapterParser:
             finish_reason=payload.get("done_reason"),
             tokens=None,
             tool_calls=[],
+            usage={},
         )
 
 

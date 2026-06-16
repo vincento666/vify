@@ -22,6 +22,8 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     register_baseline_tables()
     bind = op.get_bind()
+    if bind.dialect.name == "mysql":
+        return
     ensure_pgvector_extension(bind)
     table = Base.metadata.tables["knowledge_faq_embedding"]
     table.create(bind=bind, checkfirst=True)
@@ -32,6 +34,8 @@ def upgrade() -> None:
 def downgrade() -> None:
     register_baseline_tables()
     bind = op.get_bind()
+    if bind.dialect.name == "mysql":
+        return
     table = Base.metadata.tables["knowledge_faq_embedding"]
     for index in table.indexes:
         index.drop(bind=bind, checkfirst=True)

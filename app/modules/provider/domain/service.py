@@ -2,6 +2,7 @@ from typing import Any
 
 from app.core.errors import BizError, ErrorCode
 from app.modules.provider.domain.connection import ProviderConnectionTester
+from app.modules.provider.domain.model_connectivity import ProviderModelConnectivityTester
 from app.modules.provider.infra.repository import ProviderRepository
 from app.modules.provider.web.schemas import (
     ModelConfigResponse,
@@ -74,6 +75,12 @@ class ProviderService:
             auth_config=dict(row["auth_config"] or {}),
         )
         return result.to_response()
+
+    def test_model_connectivity(self, provider_id: int, model_config_id: int) -> dict[str, Any]:
+        row = self._repository.get_enabled_provider_model_config(provider_id, model_config_id)
+        if row is None:
+            raise BizError(ErrorCode.NOT_FOUND, "Model config not found")
+        return ProviderModelConnectivityTester().test(row).to_response()
 
     def _to_response(self, row: dict[str, Any]) -> ProviderResponse:
         models = [

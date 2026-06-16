@@ -85,6 +85,16 @@ class PolicyGate:
             )
         if candidate_type == CandidateType.SUSPENDED_TASK_RESUME:
             if active_task is not None:
+                active_collection = _active_collection_candidate(candidates)
+                if active_collection is not None and active_collection.score >= candidate.score:
+                    return RouteDecision(
+                        action="CONTINUE_ACTIVE_SOP",
+                        active_task_id=_active_task_id(active_task),
+                        reason=(
+                            "High-confidence active collection detail preserved over suspended resume; "
+                            f"{result.rationale}"
+                        ),
+                    )
                 return RouteDecision(
                     action="REJECT_SWITCH_SUSPENDED_LIMIT",
                     active_task_id=_active_task_id(active_task),
@@ -96,6 +106,16 @@ class PolicyGate:
                 reason=result.rationale,
             )
         if candidate_type == CandidateType.SOP_INTENT:
+            active_collection = _active_collection_candidate(candidates)
+            if active_task is not None and active_collection is not None and candidate.score < 0.75:
+                return RouteDecision(
+                    action="CONTINUE_ACTIVE_SOP",
+                    active_task_id=_active_task_id(active_task),
+                    reason=(
+                        "High-confidence active collection detail preserved over weak classifier switch; "
+                        f"{result.rationale}"
+                    ),
+                )
             if active_task is None:
                 return RouteDecision(
                     action="START_SOP",
@@ -161,6 +181,14 @@ def _optional_candidate_by_id(candidates: Sequence[RouteCandidate], candidate_id
     for candidate in candidates:
         if candidate.candidate_id == candidate_id:
             return candidate
+    return None
+
+
+def _active_collection_candidate(candidates: Sequence[RouteCandidate]) -> RouteCandidate | None:
+    for candidate in candidates:
+        if _candidate_type(candidate) == CandidateType.ACTIVE_TASK_CONTINUE and candidate.score >= 0.9:
+            if "collection_detail" in candidate.matched_terms:
+                return candidate
     return None
 
 

@@ -7,6 +7,7 @@ from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.orm import Session
 
 from app.core.database import Base
+from app.core.db_write import insert_and_fetch
 from app.core.schema import register_baseline_tables
 from app.modules.provider.domain.connection import ConnectionTestResult
 
@@ -29,10 +30,7 @@ class ProviderRepository:
             "created_at": now,
             "updated_at": now,
         }
-        result = self._session.execute(
-            self._provider.insert().values(**payload).returning(self._provider)
-        )
-        row = dict(result.mappings().one())
+        row = insert_and_fetch(self._session, self._provider, payload)
         self._session.commit()
         return row
 
@@ -132,6 +130,71 @@ class ProviderRepository:
             )
             .where(
                 self._model_config.c.id == model_config_id,
+                self._model_config.c.enabled.is_(True),
+                self._model_config.c.deleted.is_(False),
+                self._provider.c.enabled.is_(True),
+                self._provider.c.deleted.is_(False),
+            )
+        ).mappings().one_or_none()
+        return dict(row) if row else None
+
+    def find_enabled_model_config_by_model_id(self, model_id: str) -> dict[str, Any] | None:
+        row = self._session.execute(
+            sa.select(
+                self._model_config.c.id,
+                self._model_config.c.provider_id,
+                self._provider.c.type.label("provider_type"),
+                self._provider.c.base_url.label("provider_base_url"),
+                self._provider.c.auth_config.label("provider_auth_config"),
+                self._model_config.c.name,
+                self._model_config.c.model_id,
+                self._model_config.c.context_size,
+                self._model_config.c.extra_params,
+            )
+            .select_from(
+                self._model_config.join(
+                    self._provider,
+                    self._provider.c.id == self._model_config.c.provider_id,
+                )
+            )
+            .where(
+                self._model_config.c.model_id == model_id,
+                self._model_config.c.enabled.is_(True),
+                self._model_config.c.deleted.is_(False),
+                self._provider.c.enabled.is_(True),
+                self._provider.c.deleted.is_(False),
+            )
+            .order_by(self._model_config.c.id.desc())
+        ).mappings().first()
+        return dict(row) if row else None
+
+    def get_enabled_provider_model_config(
+        self,
+        provider_id: int,
+        model_config_id: int,
+    ) -> dict[str, Any] | None:
+        row = self._session.execute(
+            sa.select(
+                self._model_config.c.id,
+                self._model_config.c.provider_id,
+                self._provider.c.type.label("provider_type"),
+                self._provider.c.base_url.label("provider_base_url"),
+                self._provider.c.auth_config.label("provider_auth_config"),
+                self._model_config.c.name,
+                self._model_config.c.model_id,
+                self._model_config.c.context_size,
+                self._model_config.c.extra_params,
+            )
+            .select_from(
+                self._model_config.join(
+                    self._provider,
+                    self._provider.c.id == self._model_config.c.provider_id,
+                )
+            )
+            .where(
+                self._provider.c.id == provider_id,
+                self._model_config.c.id == model_config_id,
+                self._model_config.c.provider_id == provider_id,
                 self._model_config.c.enabled.is_(True),
                 self._model_config.c.deleted.is_(False),
                 self._provider.c.enabled.is_(True),

@@ -7,6 +7,7 @@ import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from app.core.database import Base
+from app.core.db_write import insert_and_fetch
 from app.core.host.context import RequestContext
 from app.core.sanitization import sanitize_value
 from app.core.schema import register_baseline_tables
@@ -35,23 +36,23 @@ class AuditRepository:
         if request_context is not None:
             row_metadata["requestContext"] = request_context.audit_metadata()
         row_actor = actor or (request_context.actor_id if request_context is not None else "system")
-        row = self._session.execute(
-            self._audit.insert()
-            .values(
-                actor=row_actor,
-                action=action,
-                resource_type=resource_type,
-                resource_id=str(resource_id),
-                status=status,
-                metadata=sanitize_value(row_metadata),
-                deleted=False,
-                created_at=now,
-                updated_at=now,
-            )
-            .returning(self._audit)
-        ).mappings().one()
+        row = insert_and_fetch(
+            self._session,
+            self._audit,
+            {
+                "actor": row_actor,
+                "action": action,
+                "resource_type": resource_type,
+                "resource_id": str(resource_id),
+                "status": status,
+                "metadata": sanitize_value(row_metadata),
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
         self._session.commit()
-        return dict(row)
+        return row
 
     def list_page(
         self,

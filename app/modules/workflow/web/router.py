@@ -1,8 +1,13 @@
+import json
+import threading
+import time
+from collections.abc import Iterable
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.exc import NoResultFound
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.database import get_session
 from app.core.errors import BizError, ErrorCode
@@ -20,6 +25,7 @@ from app.modules.observe.domain.composer_run_debug import build_composer_run_deb
 from app.modules.observe.web.router import ObserveService
 from app.modules.provider.api.facade import ProviderModelFacade
 from app.modules.workflow.domain.service import WorkflowService
+from app.modules.workflow.domain.runtime_v2 import ChatflowRuntimeV2Service, WorkflowRuntimeV2Service
 from app.modules.workflow.domain.resource_registry import WorkflowResourceRegistry
 from app.modules.workflow.domain.api_resource_service import ApiResourceService
 from app.modules.workflow.infra.api_resource_repository import ApiResourceRepository
@@ -40,6 +46,7 @@ from app.modules.workflow.web.schemas import (
 router = APIRouter(prefix="/api/v1/workflows", tags=["workflows"])
 chatflow_router = APIRouter(prefix="/api/v1/chatflows", tags=["chatflows"])
 resource_router = APIRouter(prefix="/api/v1/workflow-resources", tags=["workflow-resources"])
+runtime_v2_router = APIRouter(prefix="/api/v1/runtime-runs", tags=["runtime-runs"])
 
 
 def get_workflow_service(
@@ -94,6 +101,21 @@ def get_observe_service(session: Session = Depends(get_session)) -> ObserveServi
     return ObserveService(session)
 
 
+def get_chatflow_runtime_v2_service(session: Session = Depends(get_session)) -> ChatflowRuntimeV2Service:
+    return ChatflowRuntimeV2Service(
+        WorkflowRepository(session),
+        ChatflowStateRepository(session),
+    )
+
+
+def get_workflow_runtime_v2_service(session: Session = Depends(get_session)) -> WorkflowRuntimeV2Service:
+    return WorkflowRuntimeV2Service(
+        WorkflowRepository(session),
+        ChatflowStateRepository(session),
+        WorkflowPublishRepository(session),
+    )
+
+
 @resource_router.get("")
 def list_workflow_resources(
     flow_type: str = Query("WORKFLOW", alias="flowType"),
@@ -145,6 +167,19 @@ def run_workflow(
     service: WorkflowService = Depends(get_workflow_service),
 ) -> dict[str, Any]:
     return success(service.execute(workflow_id, request))
+
+
+@router.post("/{workflow_id}/runs-v2")
+def run_workflow_v2(
+    workflow_id: int,
+    request: WorkflowRunRequest,
+    session: Session = Depends(get_session),
+    service: WorkflowRuntimeV2Service = Depends(get_workflow_runtime_v2_service),
+) -> dict[str, Any]:
+    data = service.start_run(workflow_id, dict(request.input), request.idempotency_key)
+    if not data.get("idempotentReplay"):
+        _start_runtime_v2_completion_thread(session, int(data["runId"]), owner_type="WORKFLOW")
+    return success(data)
 
 
 @router.get("/{workflow_id}/runs/{run_id}/debug")
@@ -253,10 +288,27 @@ def update_chatflow(
 @chatflow_router.post("/{chatflow_id}/runs")
 def run_chatflow(
     chatflow_id: int,
+    http_request: Request,
     request: WorkflowRunRequest,
     service: WorkflowService = Depends(get_chatflow_service),
+) -> Any:
+    data = service.execute(chatflow_id, request)
+    if _accepts_event_stream(http_request):
+        return StreamingResponse(_iter_chatflow_run_sse(data), media_type="text/event-stream")
+    return success(data)
+
+
+@chatflow_router.post("/{chatflow_id}/runs-v2")
+def run_chatflow_v2(
+    chatflow_id: int,
+    request: WorkflowRunRequest,
+    session: Session = Depends(get_session),
+    service: ChatflowRuntimeV2Service = Depends(get_chatflow_runtime_v2_service),
 ) -> dict[str, Any]:
-    return success(service.execute(chatflow_id, request))
+    data = service.start_run(chatflow_id, dict(request.input), request.idempotency_key)
+    if not data.get("idempotentReplay"):
+        _start_runtime_v2_completion_thread(session, int(data["runId"]), owner_type="CHATFLOW")
+    return success(data)
 
 
 @chatflow_router.get("/{chatflow_id}/runs/{run_id}/debug")
@@ -391,6 +443,154 @@ def resume_chatflow_run(
     service: WorkflowService = Depends(get_chatflow_service),
 ) -> dict[str, Any]:
     return success(service.resume_run(chatflow_id, run_id, request))
+
+
+@runtime_v2_router.get("/{run_id}")
+def get_runtime_v2_run(
+    run_id: int,
+    service: ChatflowRuntimeV2Service = Depends(get_chatflow_runtime_v2_service),
+) -> dict[str, Any]:
+    return success(service.get_result(run_id))
+
+
+@runtime_v2_router.get("/{run_id}/result")
+def get_runtime_v2_result(
+    run_id: int,
+    service: ChatflowRuntimeV2Service = Depends(get_chatflow_runtime_v2_service),
+) -> dict[str, Any]:
+    return success(service.get_result(run_id))
+
+
+@runtime_v2_router.get("/{run_id}/events")
+def list_runtime_v2_events(
+    run_id: int,
+    after_sequence: int = Query(default=0, alias="afterSequence", ge=0),
+    service: ChatflowRuntimeV2Service = Depends(get_chatflow_runtime_v2_service),
+) -> dict[str, Any]:
+    return success(service.list_events(run_id, after_sequence=after_sequence))
+
+
+@runtime_v2_router.get("/{run_id}/nodes")
+def list_runtime_v2_nodes(
+    run_id: int,
+    service: ChatflowRuntimeV2Service = Depends(get_chatflow_runtime_v2_service),
+) -> dict[str, Any]:
+    return success(service.list_nodes(run_id))
+
+
+@runtime_v2_router.get("/{run_id}/events/stream")
+def stream_runtime_v2_events(
+    run_id: int,
+    after_sequence: int = Query(default=0, alias="afterSequence", ge=0),
+    heartbeat_ms: int = Query(default=1000, alias="heartbeatMs", ge=100, le=30000),
+    test_limit: int | None = Query(default=None, alias="_testLimit", ge=1, le=1000),
+    test_heartbeat_limit: int | None = Query(default=None, alias="_testHeartbeatLimit", ge=1, le=1000),
+    service: ChatflowRuntimeV2Service = Depends(get_chatflow_runtime_v2_service),
+) -> StreamingResponse:
+    return StreamingResponse(
+        _iter_runtime_v2_sse(
+            service,
+            run_id=run_id,
+            after_sequence=after_sequence,
+            heartbeat_ms=heartbeat_ms,
+            test_limit=test_limit,
+            test_heartbeat_limit=test_heartbeat_limit,
+        ),
+        media_type="text/event-stream",
+    )
+
+
+@runtime_v2_router.post("/{run_id}/resume")
+def resume_runtime_v2_run(
+    run_id: int,
+    request: WorkflowResumeRequest,
+    service: ChatflowRuntimeV2Service = Depends(get_chatflow_runtime_v2_service),
+) -> dict[str, Any]:
+    return success(service.resume_run(run_id, dict(request.resume_data), request.idempotency_key))
+
+
+@runtime_v2_router.post("/{run_id}/cancel")
+def cancel_runtime_v2_run(
+    run_id: int,
+    service: ChatflowRuntimeV2Service = Depends(get_chatflow_runtime_v2_service),
+) -> dict[str, Any]:
+    return success(service.cancel_run(run_id))
+
+
+def _accepts_event_stream(request: Request) -> bool:
+    return "text/event-stream" in str(request.headers.get("accept") or "").lower()
+
+
+def _start_runtime_v2_completion_thread(session: Session, run_id: int, *, owner_type: str = "CHATFLOW") -> None:
+    bind = session.get_bind()
+    if bind is None:
+        return
+    factory = sessionmaker(bind=bind, autoflush=False, autocommit=False, expire_on_commit=False)
+
+    def complete() -> None:
+        with factory() as background_session:
+            if owner_type.upper() == "WORKFLOW":
+                WorkflowRuntimeV2Service(
+                    WorkflowRepository(background_session),
+                    ChatflowStateRepository(background_session),
+                    WorkflowPublishRepository(background_session),
+                ).complete_run(run_id)
+            else:
+                ChatflowRuntimeV2Service(
+                    WorkflowRepository(background_session),
+                    ChatflowStateRepository(background_session),
+                ).complete_run(run_id)
+
+    threading.Thread(target=complete, daemon=True).start()
+
+
+def _iter_runtime_v2_sse(
+    service: ChatflowRuntimeV2Service,
+    *,
+    run_id: int,
+    after_sequence: int,
+    heartbeat_ms: int,
+    test_limit: int | None,
+    test_heartbeat_limit: int | None,
+) -> Iterable[str]:
+    last_sequence = after_sequence
+    emitted = 0
+    heartbeats = 0
+    while True:
+        rows = service.list_events(run_id, after_sequence=last_sequence)["list"]
+        if rows:
+            for row in rows:
+                last_sequence = int(row["sequence"])
+                yield _sse_data(row)
+                emitted += 1
+                if test_limit is not None and emitted >= test_limit:
+                    return
+            continue
+        yield ": heartbeat\n\n"
+        heartbeats += 1
+        if test_heartbeat_limit is not None and heartbeats >= test_heartbeat_limit:
+            return
+        time.sleep(heartbeat_ms / 1000)
+
+
+def _iter_chatflow_run_sse(data: dict[str, Any]) -> Iterable[str]:
+    for event in data.get("streamEvents") or []:
+        if isinstance(event, dict):
+            yield _sse_data(event)
+    yield _sse_data(
+        {
+            "type": "run_done",
+            "runId": data.get("runId"),
+            "status": data.get("status"),
+            "output": data.get("output") or {},
+            "sessionId": data.get("sessionId"),
+            "sessionStatus": data.get("sessionStatus"),
+        }
+    )
+
+
+def _sse_data(payload: dict[str, Any]) -> str:
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
 @chatflow_router.delete("/{chatflow_id}")

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.database import Base
+from app.core.db_write import insert_and_fetch
 from app.core.schema import register_baseline_tables
 
 register_baseline_tables()
@@ -40,18 +41,17 @@ class McpServerRepository:
 
     def create(self, values: dict[str, Any]) -> dict[str, Any]:
         now = datetime.now()
-        result = self._session.execute(
-            self._mcp_server.insert()
-            .values(
+        row = insert_and_fetch(
+            self._session,
+            self._mcp_server,
+            {
                 **values,
-                enabled=True,
-                deleted=False,
-                created_at=now,
-                updated_at=now,
-            )
-            .returning(self._mcp_server)
+                "enabled": True,
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
         )
-        row = dict(result.mappings().one())
         self._session.commit()
         return row
 

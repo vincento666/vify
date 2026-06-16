@@ -37,7 +37,7 @@ def register_runtime_policy_tables(metadata: sa.MetaData | None = None) -> None:
             id_column(),
             sa.Column("session_id", BIGINT, nullable=False),
             sa.Column("message_id", sa.String(160), nullable=False, server_default=""),
-            sa.Column("user_message", sa.Text(), nullable=False, server_default=""),
+            sa.Column("user_message", sa.Text(), nullable=False),
             sa.Column("active_task_snapshot", sa.JSON(), nullable=True),
             sa.Column("suspended_task_snapshot", sa.JSON(), nullable=True),
             sa.Column("policy_profile_id", BIGINT, nullable=True),

@@ -8,6 +8,7 @@ from app.core.database import Base
 
 BIGINT = sa.BigInteger().with_variant(sa.Integer, "sqlite")
 DEFAULT_EMBEDDING_DIMENSIONS = 1536
+RELATIONAL_VECTOR_TABLES = {"document_embedding", "knowledge_faq_embedding"}
 
 
 def register_baseline_tables() -> None:
@@ -27,6 +28,7 @@ def register_baseline_tables() -> None:
         register_agent_prompt_optimization_tables(metadata)
         register_api_resource_tables(metadata)
         _register_runtime_policy_tables(metadata)
+        _register_customer_assistant_tables(metadata)
         return
 
     sa.Table(
@@ -93,8 +95,8 @@ def register_baseline_tables() -> None:
         id_column(),
         sa.Column("name", sa.String(100), nullable=False),
         sa.Column("description", sa.String(500), server_default="", nullable=True),
-        sa.Column("system_prompt", sa.Text(), server_default="", nullable=True),
-        sa.Column("opening_message", sa.Text(), server_default="", nullable=True),
+        sa.Column("system_prompt", sa.Text(), nullable=True),
+        sa.Column("opening_message", sa.Text(), nullable=True),
         sa.Column("suggested_questions", sa.JSON(), nullable=True),
         sa.Column("variables", sa.JSON(), nullable=True),
         sa.Column("memory", sa.JSON(), nullable=True),
@@ -206,7 +208,7 @@ def register_baseline_tables() -> None:
         sa.Column("node_key", sa.String(100), nullable=False),
         sa.Column("type", sa.String(50), nullable=False),
         sa.Column("name", sa.String(100), nullable=False, server_default=""),
-        sa.Column("config", sa.JSON(), server_default="{}", nullable=True),
+        sa.Column("config", sa.JSON(), nullable=True),
         deleted_column(),
         *timestamps(),
         sa.Index("idx_workflow_node_workflow_id", "workflow_id"),
@@ -272,6 +274,7 @@ def register_baseline_tables() -> None:
     register_knowledge_faq_tables(metadata)
     register_evaluation_tables(metadata)
     _register_runtime_policy_tables(metadata)
+    _register_customer_assistant_tables(metadata)
 
 
 def ensure_pgvector_extension(bind: Engine | Connection) -> None:
@@ -285,10 +288,26 @@ def ensure_pgvector_extension(bind: Engine | Connection) -> None:
     bind.execute(statement)
 
 
+def tables_for_bind(bind: Engine | Connection) -> list[sa.Table]:
+    if bind.dialect.name == "mysql":
+        return [
+            table
+            for table in Base.metadata.sorted_tables
+            if table.name not in RELATIONAL_VECTOR_TABLES
+        ]
+    return list(Base.metadata.sorted_tables)
+
+
 def _register_runtime_policy_tables(metadata: sa.MetaData) -> None:
     from app.modules.runtime_policy.infra.schema import register_runtime_policy_tables
 
     register_runtime_policy_tables(metadata)
+
+
+def _register_customer_assistant_tables(metadata: sa.MetaData) -> None:
+    from app.modules.customer_assistant.infra.schema import register_customer_assistant_tables
+
+    register_customer_assistant_tables(metadata)
 
 
 def register_chatflow_state_tables(metadata: sa.MetaData) -> None:
@@ -799,7 +818,7 @@ def register_api_resource_tables(metadata: sa.MetaData) -> None:
             sa.Column("endpoint", sa.String(1000), nullable=False),
             sa.Column("auth_mode", sa.String(40), nullable=False, server_default="none"),
             sa.Column("headers", sa.JSON(), nullable=True),
-            sa.Column("body_template", sa.Text(), nullable=False, server_default=""),
+            sa.Column("body_template", sa.Text(), nullable=False),
             sa.Column("input_schema", sa.JSON(), nullable=True),
             sa.Column("output_schema", sa.JSON(), nullable=True),
             sa.Column("timeout_ms", sa.Integer(), nullable=False, server_default="30000"),

@@ -1,0 +1,1916 @@
+import hashlib
+import json
+from dataclasses import replace
+from datetime import datetime
+from typing import Any
+
+from app.core.errors import BizError, ErrorCode
+from app.modules.customer_assistant.harness_adapter import (
+    event_stream_ref,
+    reserved_worker_async_refs,
+    result_ref,
+    sub_agent_run_public_id,
+    unsupported_cancellation,
+)
+from app.modules.customer_assistant.domain.action_executor import MockActionExecutorRegistry
+from app.modules.customer_assistant.domain.actor import DEFAULT_CUSTOMER_ASSISTANT_ACTOR, CustomerAssistantActor
+from app.modules.customer_assistant.domain.controller import DeterministicTaskRecognitionController
+from app.modules.customer_assistant.domain.ledger import CustomerAssistantLedger, _task_item
+from app.modules.customer_assistant.domain.llm_primary import (
+    CustomerAssistantLlmRuntimeMode,
+    CustomerAssistantLlmRuntimeSettings,
+)
+from app.modules.customer_assistant.domain.models import AssistantTurnResult, TaskCommand, TaskCommandType, TaskItem, TaskLedger, TaskStatus, WorkerResult
+from app.modules.customer_assistant.domain.policy import CustomerAssistantActionPolicy, UnsupportedTaskCommand
+from app.modules.customer_assistant.domain.react_core import AssistantTurnContext, ControlledReActCore, CoreObservation
+from app.modules.customer_assistant.domain.scheduler import LocalWorkerScheduler
+from app.modules.customer_assistant.domain.shadow import (
+    CustomerAssistantShadowClient,
+    CustomerAssistantShadowSettings,
+    FakeCustomerAssistantShadowClient,
+    ShadowCallResult,
+    ShadowPhase,
+    build_shadow_event_payload,
+    call_shadow,
+    parse_recommendation_shadow_output,
+    parse_task_recognition_shadow_output,
+)
+from app.modules.customer_assistant.domain.two_stage import (
+    TWO_STAGE_EQUIVALENCE_MIN_PASS_RATE,
+    TWO_STAGE_EQUIVALENCE_SUITE,
+    CustomerAssistantTwoStageRuntime,
+    TwoStageFinalizer,
+)
+from app.modules.customer_assistant.domain.turn_mode import (
+    CustomerAssistantTurnMode,
+    classify_customer_assistant_turn,
+)
+from app.modules.customer_assistant.domain.worker_runtime import (
+    CustomerAssistantWorkerRuntime,
+    parse_worker_run_public_id,
+    worker_async_refs,
+    worker_result_from_worker_run,
+)
+from app.modules.customer_assistant.domain.workers import ChatflowSopWorker, RecommendationAggregator, StubQaWorker
+from app.modules.customer_assistant.infra.repository import CustomerAssistantRepository, IdempotencyConflict
+from app.modules.runtime_lab.domain.sop_adapter import FakeSopRuntimeAdapter
+
+
+class CustomerAssistantService:
+    def __init__(
+        self,
+        repository: CustomerAssistantRepository,
+        core: ControlledReActCore | None = None,
+        scheduler: LocalWorkerScheduler | None = None,
+        aggregator: RecommendationAggregator | None = None,
+        shadow_settings: CustomerAssistantShadowSettings | None = None,
+        shadow_client: CustomerAssistantShadowClient | None = None,
+        llm_runtime_settings: CustomerAssistantLlmRuntimeSettings | None = None,
+        llm_primary_client: CustomerAssistantShadowClient | None = None,
+        two_stage_runtime: TwoStageFinalizer | None = None,
+        action_executor_registry: MockActionExecutorRegistry | None = None,
+        async_worker_runtime: CustomerAssistantWorkerRuntime | None = None,
+    ) -> None:
+        self._repository = repository
+        self._ledger = CustomerAssistantLedger(repository)
+        self._core = core or ControlledReActCore(
+            DeterministicTaskRecognitionController(),
+            CustomerAssistantActionPolicy(),
+        )
+        self._scheduler = scheduler or LocalWorkerScheduler(
+            {
+                "chatflow_sop": ChatflowSopWorker(FakeSopRuntimeAdapter()),
+                "stub_qa": StubQaWorker(),
+            }
+        )
+        self._aggregator = aggregator or RecommendationAggregator()
+        self._shadow_settings = shadow_settings or CustomerAssistantShadowSettings()
+        if shadow_client is not None:
+            self._shadow_client = shadow_client
+        elif self._shadow_settings.mode == "fake":
+            self._shadow_client = FakeCustomerAssistantShadowClient()
+        else:
+            self._shadow_client = None
+        self._llm_runtime_settings = llm_runtime_settings or CustomerAssistantLlmRuntimeSettings()
+        self._llm_primary_client = llm_primary_client
+        self._two_stage_runtime = two_stage_runtime or CustomerAssistantTwoStageRuntime()
+        self._action_executor_registry = action_executor_registry or MockActionExecutorRegistry()
+        self._async_worker_runtime = async_worker_runtime
+
+    def create_session(self, context: dict[str, Any] | None = None) -> dict[str, Any]:
+        row = self._repository.create_session(context)
+        return _format_session(row)
+
+    def handle_turn(
+        self,
+        session_id: int,
+        message: str,
+        idempotency_key: str | None = None,
+        actor: CustomerAssistantActor = DEFAULT_CUSTOMER_ASSISTANT_ACTOR,
+    ) -> dict[str, Any]:
+        self._ensure_session(session_id)
+        self._consume_completed_async_worker_results(session_id, actor=actor)
+        turn_mode = classify_customer_assistant_turn(actor, message)
+        request_hash = _request_hash(message, actor, turn_mode)
+        try:
+            run, replayed = self._repository.create_run(
+                session_id=session_id,
+                idempotency_key=idempotency_key,
+                request_hash=request_hash,
+                input_payload={"message": message, "actor": actor, "turnMode": turn_mode.value},
+            )
+        except IdempotencyConflict as exc:
+            raise BizError(ErrorCode.BAD_REQUEST, str(exc)) from exc
+        if replayed:
+            payload = dict(run.get("response_payload") or {})
+            payload["replayed"] = True
+            return payload
+
+        return self._execute_turn_for_run(int(run["id"]), session_id, message, actor, turn_mode)
+
+    def spawn_sub_agent(
+        self,
+        *,
+        message: str,
+        actor: CustomerAssistantActor = DEFAULT_CUSTOMER_ASSISTANT_ACTOR,
+        session_id: int | None = None,
+        event_level: str = "L1",
+    ) -> dict[str, Any]:
+        if session_id is None:
+            session_id = int(self.create_session({})["id"])
+        else:
+            self._ensure_session(session_id)
+        turn_mode = classify_customer_assistant_turn(actor, message)
+        run, _ = self._repository.create_run(
+            session_id=session_id,
+            idempotency_key=None,
+            request_hash=_request_hash(message, actor, turn_mode),
+            input_payload={
+                "message": message,
+                "actor": actor,
+                "turnMode": turn_mode.value,
+                "tool": "spawn_sub_agent",
+                "agentType": "customer_assistant",
+                "eventLevel": event_level,
+            },
+        )
+        run_id = int(run["id"])
+        payload = _sub_agent_run_payload(run_id=run_id, session_id=session_id, status="running")
+        self._repository.append_event(
+            session_id,
+            "sub_agent_spawned",
+            {
+                **payload,
+                "input": {"message": message, "actor": actor},
+                "eventLevel": event_level,
+            },
+            run_id=run_id,
+            source="harness",
+            actor=actor,
+        )
+        return payload
+
+    def run_spawned_sub_agent(
+        self,
+        run_id: int,
+        session_id: int,
+        message: str,
+        actor: CustomerAssistantActor = DEFAULT_CUSTOMER_ASSISTANT_ACTOR,
+        event_level: str = "L1",
+    ) -> dict[str, Any]:
+        self._ensure_session(session_id)
+        turn_mode = classify_customer_assistant_turn(actor, message)
+        self._repository.append_event(
+            session_id,
+            "sub_agent_started",
+            {
+                "subAgentRunId": sub_agent_run_public_id(run_id),
+                "agentType": "customer_assistant",
+                "eventLevel": event_level,
+            },
+            run_id=run_id,
+            source="harness",
+            actor=actor,
+        )
+        self._repository.append_event(
+            session_id,
+            "sub_agent_progress",
+            {
+                "subAgentRunId": sub_agent_run_public_id(run_id),
+                "stage": "customer_assistant_runtime",
+                "status": "running",
+            },
+            run_id=run_id,
+            source="harness",
+            actor=actor,
+        )
+        try:
+            result = self._execute_turn_for_run(run_id, session_id, message, actor, turn_mode)
+        except BizError as exc:
+            self._repository.append_event(
+                session_id,
+                "sub_agent_failed",
+                {
+                    "subAgentRunId": sub_agent_run_public_id(run_id),
+                    "status": "failed",
+                    "error": str(exc),
+                },
+                run_id=run_id,
+                source="harness",
+                actor=actor,
+            )
+            return {"error": str(exc)}
+        except Exception as exc:
+            error = str(exc) or exc.__class__.__name__
+            self._repository.complete_run(run_id, {"error": error}, status="FAILED", warnings=[error])
+            self._repository.append_event(
+                session_id,
+                "sub_agent_failed",
+                {
+                    "subAgentRunId": sub_agent_run_public_id(run_id),
+                    "status": "failed",
+                    "error": error,
+                },
+                run_id=run_id,
+                source="harness",
+                actor=actor,
+            )
+            return {"error": error}
+        self._repository.append_event(
+            session_id,
+            "sub_agent_completed",
+            {
+                "subAgentRunId": sub_agent_run_public_id(run_id),
+                "status": "completed",
+                "resultRef": result_ref(run_id),
+            },
+            run_id=run_id,
+            source="harness",
+            actor=actor,
+        )
+        return result
+
+    def get_sub_agent_run(self, run_id: int) -> dict[str, Any]:
+        run = self._repository.get_run(run_id)
+        if run is None:
+            raise BizError(ErrorCode.NOT_FOUND, "Customer assistant run not found")
+        session_id = int(run["session_id"])
+        events = [
+            _format_event(row)
+            for row in self._repository.list_events(session_id)
+            if int(row.get("run_id") or 0) == run_id
+        ]
+        return {
+            **_sub_agent_run_payload(
+                run_id=run_id,
+                session_id=session_id,
+                status=_sub_agent_status(str(run["status"])),
+            ),
+            "result": run.get("response_payload"),
+            "events": events,
+            "warnings": run.get("warnings_json") or [],
+            "startedAt": _iso(run.get("started_at")),
+            "completedAt": _iso(run.get("completed_at")),
+        }
+
+    def cancel_worker_run(self, worker_run_id: str) -> dict[str, Any]:
+        worker_run = self._get_worker_run_row(worker_run_id)
+        numeric_worker_run_id = int(worker_run["id"])
+        status = "CANCEL_UNSUPPORTED"
+        if str(worker_run["status"]) not in {"COMPLETED", "FAILED", "TIMED_OUT", "CANCELLED", "CANCEL_UNSUPPORTED"}:
+            self._repository.complete_worker_run(
+                numeric_worker_run_id,
+                status=status,
+                result_payload=dict(worker_run.get("result_payload") or {}),
+                error={"code": "CANCEL_UNSUPPORTED", "message": "Cooperative cancellation is not supported for this worker."},
+            )
+        payload = {
+            "workerRunId": worker_run_id,
+            "runId": numeric_worker_run_id,
+            "parentRunId": int(worker_run["parent_run_id"]),
+            "supported": False,
+            "reason": "Cooperative cancellation is not supported for this customer-assistant worker.",
+        }
+        self._repository.append_worker_event(
+            numeric_worker_run_id,
+            "worker_cancel_requested",
+            payload,
+            source="customer_assistant_worker",
+            actor="operator",
+        )
+        self._repository.append_worker_event(
+            numeric_worker_run_id,
+            "worker_cancel_unsupported",
+            payload,
+            source="customer_assistant_worker",
+            actor="operator",
+        )
+        self._repository.append_event(
+            int(worker_run["session_id"]),
+            "worker_cancel_requested",
+            payload,
+            run_id=int(worker_run["parent_run_id"]),
+            task_id=int(worker_run["task_id"]),
+            source="customer_assistant_worker",
+            actor="operator",
+        )
+        self._repository.append_event(
+            int(worker_run["session_id"]),
+            "worker_cancel_unsupported",
+            payload,
+            run_id=int(worker_run["parent_run_id"]),
+            task_id=int(worker_run["task_id"]),
+            source="customer_assistant_worker",
+            actor="operator",
+        )
+        return {
+            "workerRunId": worker_run_id,
+            "runId": numeric_worker_run_id,
+            "parentRunId": int(worker_run["parent_run_id"]),
+            "status": "cancel_unsupported",
+            "cancellation": {"supported": False, "reason": payload["reason"]},
+        }
+
+    def get_worker_run(self, worker_run_id: str) -> dict[str, Any]:
+        return _format_worker_run(self._get_worker_run_row(worker_run_id))
+
+    def get_worker_result(self, worker_run_id: str) -> dict[str, Any]:
+        row = self._get_worker_run_row(worker_run_id)
+        return {
+            **_format_worker_run(row),
+            "result": row.get("result_payload") or {},
+            "error": row.get("error_json") or {},
+        }
+
+    def list_worker_events(self, worker_run_id: str) -> dict[str, Any]:
+        row = self._get_worker_run_row(worker_run_id)
+        events = [_format_worker_event(event) for event in self._repository.list_worker_events(int(row["id"]))]
+        return {"list": events, "total": len(events)}
+
+    def list_worker_events_after(self, worker_run_id: str, after_sequence: int) -> list[dict[str, Any]]:
+        row = self._get_worker_run_row(worker_run_id)
+        return [
+            _format_worker_event(event)
+            for event in self._repository.list_worker_events_after(int(row["id"]), after_sequence)
+        ]
+
+    def _get_worker_run_row(self, worker_run_id: str) -> dict[str, Any]:
+        try:
+            numeric_worker_run_id = parse_worker_run_public_id(worker_run_id)
+        except ValueError as exc:
+            raise BizError(ErrorCode.BAD_REQUEST, "Invalid customer assistant worker run id") from exc
+        worker_run = self._repository.get_worker_run(numeric_worker_run_id)
+        if worker_run is None:
+            raise BizError(ErrorCode.NOT_FOUND, "Customer assistant worker run not found")
+        return worker_run
+
+    def _execute_turn_for_run(
+        self,
+        run_id: int,
+        session_id: int,
+        message: str,
+        actor: CustomerAssistantActor,
+        turn_mode: CustomerAssistantTurnMode | None = None,
+    ) -> dict[str, Any]:
+        turn_mode = turn_mode or classify_customer_assistant_turn(actor, message)
+        run_started_at = datetime.now()
+        self._repository.append_event(
+            session_id,
+            "run_started",
+            {
+                "message": message,
+                "actor": actor,
+                "turnMode": turn_mode.value,
+                "startedAt": _iso(run_started_at),
+            },
+            run_id=run_id,
+            actor=actor,
+        )
+        self._repository.append_event(
+            session_id,
+            "operator_turn_classified",
+            {"actor": actor, "turnMode": turn_mode.value},
+            run_id=run_id,
+            actor=actor,
+        )
+        if turn_mode == CustomerAssistantTurnMode.OPERATOR_RECOMMENDATION_TURN:
+            result = self._handle_operator_recommendation_turn(session_id, run_id, message, actor, turn_mode)
+            payload = _turn_result_payload(result, replayed=False)
+            self._repository.complete_run(run_id, payload)
+            return payload
+        context = AssistantTurnContext(
+            session_id=session_id,
+            run_id=run_id,
+            message=message,
+            ledger=self._current_ledger(session_id),
+        )
+        try:
+            result = self._run_core_with_optional_primary_selector(context, session_id, run_id, message, actor)
+        except UnsupportedTaskCommand as exc:
+            failed_at = datetime.now()
+            self._repository.append_event(
+                session_id,
+                "run_failed",
+                {
+                    "runId": run_id,
+                    "actor": actor,
+                    "error": str(exc),
+                    "startedAt": _iso(run_started_at),
+                    "completedAt": _iso(failed_at),
+                    "elapsedMs": _elapsed_ms(run_started_at, failed_at),
+                },
+                run_id=run_id,
+                actor=actor,
+            )
+            self._repository.complete_run(run_id, {"error": str(exc)}, status="FAILED", warnings=[str(exc)])
+            raise BizError(ErrorCode.BAD_REQUEST, str(exc)) from exc
+
+        payload = _turn_result_payload(result, replayed=False)
+        self._repository.complete_run(run_id, payload)
+        return payload
+
+    def _run_core_with_optional_primary_selector(
+        self,
+        context: AssistantTurnContext,
+        session_id: int,
+        run_id: int,
+        message: str,
+        actor: CustomerAssistantActor,
+    ) -> AssistantTurnResult:
+        def action_handler(commands: list[TaskCommand]) -> dict[str, Any]:
+            return self._act(session_id, run_id, message, commands, actor)
+
+        def finalizer(observation: CoreObservation) -> AssistantTurnResult:
+            return self._finalize(session_id, run_id, observation, actor)
+
+        try:
+            return self._core.run(
+                context,
+                action_handler=action_handler,
+                finalizer=finalizer,
+                command_selector=lambda commands: self._select_task_commands(
+                    session_id,
+                    run_id,
+                    message,
+                    actor,
+                    commands,
+                ),
+            )
+        except TypeError as exc:
+            if "command_selector" not in str(exc):
+                raise
+            return self._core.run(
+                context,
+                action_handler=action_handler,
+                finalizer=finalizer,
+            )
+
+    def _handle_operator_recommendation_turn(
+        self,
+        session_id: int,
+        run_id: int,
+        message: str,
+        actor: CustomerAssistantActor,
+        turn_mode: CustomerAssistantTurnMode,
+    ) -> AssistantTurnResult:
+        context_pack = self._operator_advisory_context_pack(session_id)
+        self._repository.append_event(
+            session_id,
+            "operator_advisory_context_packed",
+            {
+                "turnMode": turn_mode.value,
+                "taskCount": len(context_pack["taskSummaries"]),
+                "eventCount": context_pack["eventCount"],
+                "evidenceCount": len(context_pack["evidence"]),
+                "warnings": list(context_pack["warnings"]),
+            },
+            run_id=run_id,
+            source="operator_advisory",
+            actor=actor,
+        )
+        self._repository.append_event(
+            session_id,
+            "operator_advisory_harness_summarized",
+            {
+                "turnMode": turn_mode.value,
+                "readOnly": True,
+                "taskCount": len(context_pack["taskSummaries"]),
+                "eventCount": context_pack["eventCount"],
+                "mutationApplied": False,
+            },
+            run_id=run_id,
+            source="harness",
+            actor=actor,
+        )
+        created_actions = self._create_operator_proposed_task_commands(session_id, run_id, message, actor)
+        action_rows = [_format_action(row) for row in self._repository.list_proposed_actions(session_id)]
+        recommendation = _operator_advisory_recommendation(message, context_pack, created_actions)
+        self._repository.append_event(
+            session_id,
+            "operator_recommendation_generated",
+            {
+                "turnMode": turn_mode.value,
+                "proposedTaskCommandCount": len(created_actions),
+                "warningCount": len(context_pack["warnings"]),
+            },
+            run_id=run_id,
+            source="operator_advisory",
+            actor=actor,
+        )
+        events = [_format_event(row) for row in self._repository.list_events(session_id)]
+        return AssistantTurnResult(
+            run_id=run_id,
+            session_id=session_id,
+            reply_type="OPERATOR_RECOMMENDATION",
+            operator_recommendation=recommendation,
+            customer_reply_draft="",
+            task_summaries=list(context_pack["taskSummaries"]),
+            proposed_actions=action_rows,
+            warnings=list(context_pack["warnings"]),
+            events=events,
+        )
+
+    def _operator_advisory_context_pack(self, session_id: int) -> dict[str, Any]:
+        task_summaries = [_format_task(row) for row in self._repository.list_tasks(session_id)]
+        event_rows = self._repository.list_events(session_id)
+        event_summary = [_operator_event_summary(row) for row in event_rows[-8:]]
+        evidence = _operator_evidence_from_tasks(task_summaries)
+        warnings: list[str] = []
+        if not task_summaries:
+            warnings.append("Task ledger context missing; operator recommendation is read-only.")
+        warnings.append("Knowledge snippets unavailable for operator advisory context.")
+        if not evidence:
+            warnings.append("Chatflow/SOP metadata unavailable for operator advisory context.")
+        warnings.append("Harness advisory summaries unavailable for operator advisory context.")
+        return {
+            "taskSummaries": task_summaries,
+            "eventSummary": event_summary,
+            "eventCount": len(event_rows),
+            "evidence": evidence,
+            "warnings": warnings,
+        }
+
+    def _create_operator_proposed_task_commands(
+        self,
+        session_id: int,
+        run_id: int,
+        message: str,
+        actor: CustomerAssistantActor,
+    ) -> list[dict[str, Any]]:
+        if not _operator_message_requests_task_mutation(message):
+            return []
+        ledger = self._current_ledger(session_id)
+        commands = DeterministicTaskRecognitionController().recognize(message, ledger)
+        allowed = {
+            TaskCommandType.ADD_TASK,
+            TaskCommandType.RETAIN_TASK,
+            TaskCommandType.SUSPEND_TASK,
+            TaskCommandType.RESUME_TASK,
+            TaskCommandType.CANCEL_TASK,
+        }
+        created: list[dict[str, Any]] = []
+        for command in commands:
+            if command.type not in allowed:
+                continue
+            payload = {
+                "turnMode": CustomerAssistantTurnMode.OPERATOR_APPLY_TASK_COMMAND.value,
+                "requiresConfirmation": True,
+                "message": message,
+                "taskCommand": _command_payload(command),
+            }
+            row = self._repository.upsert_proposed_action(
+                session_id=session_id,
+                run_id=run_id,
+                task_id=None,
+                action_key=f"operator-task-command:{run_id}:{command.type.value}:{command.task_key}",
+                action_type="PROPOSED_TASK_COMMAND",
+                title=f"确认任务变更：{command.task_key}",
+                payload=payload,
+            )
+            self._repository.append_event(
+                session_id,
+                "proposed_task_command_created",
+                {
+                    "turnMode": CustomerAssistantTurnMode.OPERATOR_RECOMMENDATION_TURN.value,
+                    "actionId": row["id"],
+                    "taskCommand": _command_payload(command),
+                },
+                run_id=run_id,
+                source="operator_advisory",
+                actor=actor,
+            )
+            created.append(_format_action(row))
+        return created
+
+    def list_tasks(self, session_id: int) -> dict[str, Any]:
+        self._ensure_session(session_id)
+        rows = self._repository.list_tasks(session_id)
+        return {"list": [_format_task(row) for row in rows], "total": len(rows)}
+
+    def list_events(self, session_id: int) -> dict[str, Any]:
+        self._ensure_session(session_id)
+        rows = self._repository.list_events(session_id)
+        return {"list": [_format_event(row) for row in rows], "total": len(rows)}
+
+    def list_events_after(self, session_id: int, after_sequence: int) -> list[dict[str, Any]]:
+        self._ensure_session(session_id)
+        rows = self._repository.list_events_after(session_id, after_sequence)
+        return [_format_event(row) for row in rows]
+
+    def refresh_worker_results(self, session_id: int) -> dict[str, Any]:
+        self._ensure_session(session_id)
+        consumed = self._consume_completed_async_worker_results(session_id, actor="system")
+        rows = self._repository.list_tasks(session_id)
+        return {
+            "sessionId": session_id,
+            "consumed": consumed,
+            "tasks": [_format_task(row) for row in rows],
+        }
+
+    def confirm_action(self, action_id: int) -> dict[str, Any]:
+        action = self._repository.get_proposed_action(action_id)
+        if action is None:
+            raise BizError(ErrorCode.NOT_FOUND, "Proposed action not found")
+        if action["status"] != "PENDING":
+            raise BizError(ErrorCode.BAD_REQUEST, "Only pending proposed actions can be confirmed")
+        if action["action_type"] == "PROPOSED_TASK_COMMAND":
+            return self._confirm_proposed_task_command(action)
+        updated = self._repository.update_proposed_action_status(action_id, "CONFIRMED")
+        self._repository.append_event(
+            int(updated["session_id"]),
+            "proposed_action_confirmed",
+            {"actionId": action_id, "actionType": updated["action_type"]},
+            run_id=int(updated["run_id"]),
+        )
+        return _format_action(updated)
+
+    def _confirm_proposed_task_command(self, action: dict[str, Any]) -> dict[str, Any]:
+        payload = dict(action.get("payload") or {})
+        command = _task_command_from_proposed_payload(dict(payload.get("taskCommand") or {}))
+        session_id = int(action["session_id"])
+        run_id = int(action["run_id"])
+        self._ledger.apply_commands(
+            session_id,
+            run_id,
+            str(payload.get("message") or ""),
+            [command],
+            actor="operator",
+        )
+        updated = self._repository.update_proposed_action_status(
+            int(action["id"]),
+            "CONFIRMED",
+            result={"applied": True, "taskCommand": _command_payload(command)},
+        )
+        self._repository.append_event(
+            session_id,
+            "proposed_task_command_confirmed",
+            {
+                "actionId": int(action["id"]),
+                "turnMode": CustomerAssistantTurnMode.OPERATOR_APPLY_TASK_COMMAND.value,
+                "taskCommand": _command_payload(command),
+            },
+            run_id=run_id,
+            source="operator_advisory",
+            actor="operator",
+        )
+        self._repository.append_event(
+            session_id,
+            "proposed_action_confirmed",
+            {"actionId": int(action["id"]), "actionType": updated["action_type"]},
+            run_id=run_id,
+            actor="operator",
+        )
+        return _format_action(updated)
+
+    def reject_action(self, action_id: int) -> dict[str, Any]:
+        action = self._repository.get_proposed_action(action_id)
+        if action is None:
+            raise BizError(ErrorCode.NOT_FOUND, "Proposed action not found")
+        if action["status"] != "PENDING":
+            raise BizError(ErrorCode.BAD_REQUEST, "Only pending proposed actions can be rejected")
+        updated = self._repository.update_proposed_action_status(action_id, "REJECTED")
+        self._repository.append_event(
+            int(updated["session_id"]),
+            "proposed_action_rejected",
+            {"actionId": action_id, "actionType": updated["action_type"]},
+            run_id=int(updated["run_id"]),
+        )
+        return _format_action(updated)
+
+    def execute_action(self, action_id: int) -> dict[str, Any]:
+        action = self._repository.get_proposed_action(action_id)
+        if action is None:
+            raise BizError(ErrorCode.NOT_FOUND, "Proposed action not found")
+        if action["status"] != "CONFIRMED":
+            raise BizError(ErrorCode.BAD_REQUEST, "Only confirmed proposed actions can be executed")
+        executing = self._repository.update_proposed_action_status(action_id, "EXECUTING")
+        self._repository.append_event(
+            int(executing["session_id"]),
+            "proposed_action_executing",
+            {"actionId": action_id, "actionType": executing["action_type"]},
+            run_id=int(executing["run_id"]),
+        )
+        result = self._action_executor_registry.execute(
+            str(executing["action_type"]),
+            dict(executing.get("payload") or {}),
+        )
+        result_payload = {
+            "executorRef": result.executor_ref,
+            "audit": result.audit_payload,
+            "error": result.error,
+        }
+        final_status = "EXECUTED" if result.status == "EXECUTED" else "FAILED"
+        updated = self._repository.update_proposed_action_status(action_id, final_status, result=result_payload)
+        self._repository.append_event(
+            int(updated["session_id"]),
+            "proposed_action_executed" if final_status == "EXECUTED" else "proposed_action_failed",
+            {
+                "actionId": action_id,
+                "actionType": updated["action_type"],
+                "status": final_status,
+                "result": result_payload,
+            },
+            run_id=int(updated["run_id"]),
+        )
+        return _format_action(updated)
+
+    def _act(
+        self,
+        session_id: int,
+        run_id: int,
+        message: str,
+        commands: list[TaskCommand],
+        actor: str,
+    ) -> dict[str, Any]:
+        if commands:
+            self._repository.append_event(
+                session_id,
+                "task_recognized",
+                {"commands": [_command_payload(command) for command in commands], "actor": actor},
+                run_id=run_id,
+                actor=actor,
+            )
+        self._record_task_recognition_shadow(session_id, run_id, message, commands, actor)
+        mutation = self._ledger.apply_commands(session_id, run_id, message, commands, actor=actor)
+        worker_spans: dict[int, str] = {}
+        for task in mutation.ready_tasks:
+            span_id = f"run-{run_id}:task-{task.id}:worker"
+            if task.id is not None:
+                worker_spans[int(task.id)] = span_id
+            self._repository.append_event(
+                session_id,
+                "task_started",
+                {
+                    "taskKey": task.task_key,
+                    "workerType": task.worker_type,
+                    "startedAt": _iso(datetime.now()),
+                },
+                run_id=run_id,
+                task_id=task.id,
+                actor=actor,
+            )
+            self._repository.append_event(
+                session_id,
+                "worker_started",
+                {
+                    "taskKey": task.task_key,
+                    "workerType": task.worker_type,
+                    "spanId": span_id,
+                    "startedAt": _iso(datetime.now()),
+                },
+                run_id=run_id,
+                task_id=task.id,
+                visibility="debug",
+                source=task.worker_type,
+                actor=actor,
+                span_id=span_id,
+            )
+        worker_results = self._run_ready_tasks(session_id, run_id, list(mutation.ready_tasks), message, actor)
+        for result in worker_results:
+            parent_span_id = worker_spans.get(result.task_id)
+            for index, event in enumerate(result.events, start=1):
+                payload = dict(event.get("payload") or {})
+                if result.worker_run_id:
+                    payload.setdefault("workerRunId", result.worker_run_id)
+                runtime_refs = dict(result.evidence.get("chatflowRuntimeRefs") or {})
+                if runtime_refs:
+                    payload.setdefault("runtimeRunId", runtime_refs.get("runId"))
+                self._repository.append_event(
+                    session_id,
+                    str(event.get("type") or "worker_result_received"),
+                    payload,
+                    run_id=run_id,
+                    task_id=result.task_id,
+                    visibility="debug",
+                    source=str(event.get("source") or result.worker_type),
+                    actor=actor,
+                    parent_span_id=parent_span_id,
+                    span_id=f"{parent_span_id}:event-{index}" if parent_span_id else None,
+                )
+            if result.proposed_actions:
+                self._repository.append_event(
+                    session_id,
+                    "worker_proposed_action",
+                    {"count": len(result.proposed_actions)},
+                    run_id=run_id,
+                    task_id=result.task_id,
+                    visibility="debug",
+                    source=result.worker_type,
+                    actor=actor,
+                    parent_span_id=parent_span_id,
+                    span_id=f"{parent_span_id}:proposed-action" if parent_span_id else None,
+                )
+        updated_tasks = self._ledger.apply_worker_results(session_id, run_id, worker_results, actor=actor)
+        return {
+            "commands": commands,
+            "workerResults": worker_results,
+            "updatedTasks": updated_tasks,
+        }
+
+    def _run_ready_tasks(
+        self,
+        session_id: int,
+        run_id: int,
+        ready_tasks: list[TaskItem],
+        message: str,
+        actor: str,
+    ) -> list[WorkerResult]:
+        if self._async_worker_runtime is None:
+            return self._scheduler.run(ready_tasks, message)
+        async_results: list[WorkerResult] = []
+        legacy_tasks: list[TaskItem] = []
+        for task in ready_tasks:
+            if self._async_worker_runtime.supports(task):
+                async_results.append(
+                    self._async_worker_runtime.start_and_wait(
+                        self._repository,
+                        session_id=session_id,
+                        parent_run_id=run_id,
+                        task=task,
+                        message=message,
+                        actor=actor,
+                    )
+                )
+            else:
+                legacy_tasks.append(task)
+        return sorted([*async_results, *self._scheduler.run(legacy_tasks, message)], key=lambda result: result.task_id)
+
+    def _finalize(
+        self,
+        session_id: int,
+        run_id: int,
+        observation: CoreObservation,
+        actor: str,
+    ) -> AssistantTurnResult:
+        worker_results = list(observation.action_result.get("workerResults") or [])
+        task_rows = self._repository.list_tasks(session_id)
+        action_rows = self._repository.list_proposed_actions(session_id)
+        task_summaries = [_format_task(row) for row in task_rows]
+        proposed_actions = [_format_action(row) for row in action_rows]
+        recommendation_started_at = datetime.now()
+        self._repository.append_event(
+            session_id,
+            "recommendation_started",
+            {
+                "taskCount": len(task_summaries),
+                "proposedActionCount": len(proposed_actions),
+                "startedAt": _iso(recommendation_started_at),
+            },
+            run_id=run_id,
+            actor=actor,
+        )
+        result = self._aggregator.aggregate(
+            run_id=run_id,
+            session_id=session_id,
+            task_summaries=task_summaries,
+            worker_results=worker_results,
+            proposed_actions=proposed_actions,
+            events=[],
+        )
+        pending_warnings = _worker_result_warnings(worker_results)
+        if pending_warnings:
+            result = replace(result, warnings=[*result.warnings, *pending_warnings])
+        result = self._select_recommendation(
+            session_id,
+            run_id,
+            actor,
+            task_summaries,
+            result,
+        )
+        result = self._select_two_stage_recommendation(
+            session_id,
+            run_id,
+            actor,
+            task_summaries,
+            proposed_actions,
+            result,
+        )
+        recommendation_completed_at = datetime.now()
+        recommendation_timing = {
+            "taskCount": len(task_summaries),
+            "proposedActionCount": len(proposed_actions),
+            "startedAt": _iso(recommendation_started_at),
+            "completedAt": _iso(recommendation_completed_at),
+            "elapsedMs": _elapsed_ms(recommendation_started_at, recommendation_completed_at),
+        }
+        self._repository.append_event(
+            session_id,
+            "recommendation_completed",
+            recommendation_timing,
+            run_id=run_id,
+            actor=actor,
+        )
+        self._record_recommendation_shadow(
+            session_id=session_id,
+            run_id=run_id,
+            task_summaries=task_summaries,
+            result=result,
+            actor=actor,
+        )
+        self._repository.append_event(
+            session_id,
+            "recommendation_generated",
+            recommendation_timing,
+            run_id=run_id,
+            actor=actor,
+        )
+        self._repository.append_event(
+            session_id,
+            "run_completed",
+            {"runId": run_id, "actor": actor},
+            run_id=run_id,
+            actor=actor,
+        )
+        return replace(result, events=[_format_event(row) for row in self._repository.list_events(session_id)])
+
+    def _consume_completed_async_worker_results(self, session_id: int, actor: str) -> int:
+        consumed = 0
+        for row in self._repository.list_tasks(session_id):
+            task = _task_item(row)
+            if task.status != TaskStatus.RUNNING:
+                continue
+            refs = dict(task.last_result.get("workerAsyncRefs") or {})
+            worker_run_id = str(refs.get("workerRunId") or "")
+            if not worker_run_id:
+                continue
+            try:
+                numeric_worker_run_id = parse_worker_run_public_id(worker_run_id)
+            except ValueError:
+                continue
+            worker_run = self._repository.get_worker_run(numeric_worker_run_id)
+            if worker_run is None or str(worker_run["status"]) not in {"COMPLETED", "FAILED", "TIMED_OUT", "CANCELLED", "CANCEL_UNSUPPORTED"}:
+                continue
+            dispatched_version = _worker_run_task_version(worker_run)
+            if dispatched_version is not None and int(row.get("version") or 0) != dispatched_version + 1:
+                self._repository.append_event(
+                    session_id,
+                    "worker_result_stale",
+                    {
+                        "workerRunId": worker_run_id,
+                        "taskId": task.id,
+                        "taskVersion": row.get("version"),
+                        "dispatchedTaskVersion": dispatched_version,
+                    },
+                    run_id=int(worker_run["parent_run_id"]),
+                    task_id=task.id,
+                    source="customer_assistant_worker",
+                    actor=actor,
+                )
+                continue
+            result = worker_result_from_worker_run(task, worker_run, refs=worker_async_refs(numeric_worker_run_id))
+            self._ledger.apply_worker_results(
+                session_id,
+                int(worker_run["parent_run_id"]),
+                [result],
+                actor=actor,
+            )
+            self._repository.append_event(
+                session_id,
+                "worker_result_consumed",
+                {"workerRunId": worker_run_id, "workerStatus": worker_run["status"], "taskId": task.id},
+                run_id=int(worker_run["parent_run_id"]),
+                task_id=task.id,
+                source="customer_assistant_worker",
+                actor=actor,
+            )
+            consumed += 1
+        return consumed
+
+    def _current_ledger(self, session_id: int) -> TaskLedger:
+        return TaskLedger(
+            session_id=session_id,
+            tasks=tuple(_task_item(row) for row in self._repository.list_tasks(session_id)),
+        )
+
+    def _ensure_session(self, session_id: int) -> None:
+        if self._repository.get_session(session_id) is None:
+            raise BizError(ErrorCode.NOT_FOUND, "Customer assistant session not found")
+
+    def _select_task_commands(
+        self,
+        session_id: int,
+        run_id: int,
+        message: str,
+        actor: CustomerAssistantActor,
+        baseline_commands: list[TaskCommand],
+    ) -> list[TaskCommand]:
+        if self._llm_runtime_settings.mode != CustomerAssistantLlmRuntimeMode.LLM_PRIMARY_WITH_FALLBACK:
+            return baseline_commands
+        if self._llm_primary_client is None:
+            self._append_llm_primary_event(
+                session_id,
+                run_id,
+                actor,
+                "llm_primary_fallback",
+                {"phase": "task_recognition", "reason": "client_unavailable"},
+            )
+            return baseline_commands
+        call_result = call_shadow(
+            lambda: self._llm_primary_client.recognize_tasks(message=message, commands=baseline_commands),
+            parse_task_recognition_shadow_output,
+        )
+        if not call_result.ok:
+            self._append_llm_primary_event(
+                session_id,
+                run_id,
+                actor,
+                "llm_primary_fallback",
+                {"phase": "task_recognition", "reason": "schema_failure", "error": call_result.error},
+            )
+            return baseline_commands
+        confidence = _confidence(call_result.data.get("confidence"))
+        if confidence < self._llm_runtime_settings.min_confidence:
+            self._append_llm_primary_event(
+                session_id,
+                run_id,
+                actor,
+                "llm_primary_fallback",
+                {
+                    "phase": "task_recognition",
+                    "reason": "low_confidence",
+                    "confidence": confidence,
+                    "minConfidence": self._llm_runtime_settings.min_confidence,
+                },
+            )
+            return baseline_commands
+        try:
+            selected_commands = [_task_command_from_primary(command) for command in call_result.data["commands"]]
+            CustomerAssistantActionPolicy().validate(selected_commands)
+        except ValueError as exc:
+            self._append_llm_primary_event(
+                session_id,
+                run_id,
+                actor,
+                "llm_primary_fallback",
+                {"phase": "task_recognition", "reason": "unsupported_direct_write", "error": str(exc)},
+            )
+            return baseline_commands
+        except (KeyError, TypeError, UnsupportedTaskCommand) as exc:
+            self._append_llm_primary_event(
+                session_id,
+                run_id,
+                actor,
+                "llm_primary_fallback",
+                {"phase": "task_recognition", "reason": "safety_or_policy_failure", "error": str(exc)},
+            )
+            return baseline_commands
+        self._append_llm_primary_event(
+            session_id,
+            run_id,
+            actor,
+            "llm_primary_selected",
+            {
+                "phase": "task_recognition",
+                "selectedSource": "llm_primary",
+                "confidence": confidence,
+                "commandCount": len(selected_commands),
+            },
+        )
+        return selected_commands
+
+    def _append_llm_primary_event(
+        self,
+        session_id: int,
+        run_id: int,
+        actor: CustomerAssistantActor,
+        event_type: str,
+        payload: dict[str, Any],
+    ) -> None:
+        self._repository.append_event(
+            session_id,
+            event_type,
+            payload,
+            run_id=run_id,
+            visibility="debug",
+            source="llm_primary",
+            actor=actor,
+        )
+
+    def _select_recommendation(
+        self,
+        session_id: int,
+        run_id: int,
+        actor: CustomerAssistantActor,
+        task_summaries: list[dict[str, Any]],
+        baseline_result: AssistantTurnResult,
+    ) -> AssistantTurnResult:
+        if self._llm_runtime_settings.mode != CustomerAssistantLlmRuntimeMode.LLM_PRIMARY_WITH_FALLBACK:
+            return baseline_result
+        if self._llm_primary_client is None:
+            self._append_llm_primary_event(
+                session_id,
+                run_id,
+                actor,
+                "llm_primary_fallback",
+                {"phase": "recommendation", "reason": "client_unavailable"},
+            )
+            return baseline_result
+        call_result = call_shadow(
+            lambda: self._llm_primary_client.recommend(
+                task_summaries=task_summaries,
+                operator_recommendation=baseline_result.operator_recommendation,
+                customer_reply_draft=baseline_result.customer_reply_draft,
+            ),
+            parse_recommendation_shadow_output,
+        )
+        if not call_result.ok:
+            self._append_llm_primary_event(
+                session_id,
+                run_id,
+                actor,
+                "llm_primary_fallback",
+                {"phase": "recommendation", "reason": "schema_failure", "error": call_result.error},
+            )
+            return baseline_result
+        self._append_llm_primary_event(
+            session_id,
+            run_id,
+            actor,
+            "llm_primary_selected",
+            {"phase": "recommendation", "selectedSource": "llm_primary"},
+        )
+        return replace(
+            baseline_result,
+            operator_recommendation=str(call_result.data["operatorRecommendation"]),
+            customer_reply_draft=str(call_result.data["customerReplyDraft"]),
+            warnings=[*baseline_result.warnings, *list(call_result.data.get("warnings") or [])],
+        )
+
+    def _select_two_stage_recommendation(
+        self,
+        session_id: int,
+        run_id: int,
+        actor: CustomerAssistantActor,
+        task_summaries: list[dict[str, Any]],
+        proposed_actions: list[dict[str, Any]],
+        baseline_result: AssistantTurnResult,
+    ) -> AssistantTurnResult:
+        mode = self._llm_runtime_settings.mode
+        if mode not in {
+            CustomerAssistantLlmRuntimeMode.TWO_STAGE_SHADOW,
+            CustomerAssistantLlmRuntimeMode.TWO_STAGE_PRIMARY_WITH_FALLBACK,
+        }:
+            return baseline_result
+        input_pack = _two_stage_input_pack(task_summaries, proposed_actions, baseline_result)
+        candidate = self._two_stage_runtime.finalize(input_pack, baseline_result)
+        validation_error = _two_stage_validation_error(candidate, input_pack)
+        diff = _recommendation_diff(
+            {
+                "operatorRecommendation": baseline_result.operator_recommendation,
+                "customerReplyDraft": baseline_result.customer_reply_draft,
+            },
+            candidate if isinstance(candidate, dict) else {},
+        )
+        promotion_gate = _two_stage_promotion_gate(diff)
+        if mode == CustomerAssistantLlmRuntimeMode.TWO_STAGE_SHADOW:
+            self._repository.append_event(
+                session_id,
+                "two_stage_shadow_completed",
+                {
+                    "schemaVersion": "customer_assistant.two_stage_shadow/1",
+                    "equivalence": {"passed": validation_error == "" and promotion_gate["passed"], "differences": diff},
+                    "promotionGate": promotion_gate,
+                    "sideEffects": {"extraWorkerDispatches": 0, "extraToolCalls": 0},
+                },
+                run_id=run_id,
+                visibility="debug",
+                source="two_stage_react",
+                actor=actor,
+            )
+            return baseline_result
+        fallback_reason = validation_error or ("" if promotion_gate["passed"] else "equivalence_threshold_failed")
+        if fallback_reason:
+            self._repository.append_event(
+                session_id,
+                "two_stage_fallback",
+                {
+                    "schemaVersion": "customer_assistant.two_stage_fallback/1",
+                    "reason": fallback_reason,
+                    "equivalence": {"passed": False, "differences": diff},
+                    "promotionGate": promotion_gate,
+                },
+                run_id=run_id,
+                visibility="debug",
+                source="two_stage_react",
+                actor=actor,
+            )
+            return baseline_result
+        self._repository.append_event(
+            session_id,
+            "two_stage_primary_selected",
+            {
+                "schemaVersion": "customer_assistant.two_stage_primary/1",
+                "equivalence": {"passed": True, "differences": diff},
+                "promotionGate": promotion_gate,
+            },
+            run_id=run_id,
+            visibility="debug",
+            source="two_stage_react",
+            actor=actor,
+        )
+        return replace(
+            baseline_result,
+            operator_recommendation=str(candidate["operatorRecommendation"]),
+            customer_reply_draft=str(candidate["customerReplyDraft"]),
+            warnings=[*baseline_result.warnings, *list(candidate.get("warnings") or [])],
+        )
+
+    def _record_task_recognition_shadow(
+        self,
+        session_id: int,
+        run_id: int,
+        message: str,
+        commands: list[TaskCommand],
+        actor: str,
+    ) -> None:
+        if not self._shadow_enabled(ShadowPhase.TASK_RECOGNITION):
+            return
+        baseline = {"commands": [_command_payload(command) for command in commands]}
+        self._append_shadow_event(
+            session_id,
+            run_id,
+            "llm_shadow_started",
+            ShadowPhase.TASK_RECOGNITION,
+            actor,
+            baseline=baseline,
+        )
+        call_result = call_shadow(
+            lambda: self._shadow_client.recognize_tasks(message=message, commands=commands),  # type: ignore[union-attr]
+            parse_task_recognition_shadow_output,
+        )
+        self._record_shadow_call_result(
+            session_id,
+            run_id,
+            ShadowPhase.TASK_RECOGNITION,
+            actor,
+            baseline,
+            call_result,
+            _task_recognition_diff(baseline, call_result.data) if call_result.ok else None,
+        )
+
+    def _record_recommendation_shadow(
+        self,
+        *,
+        session_id: int,
+        run_id: int,
+        task_summaries: list[dict[str, Any]],
+        result: AssistantTurnResult,
+        actor: str,
+    ) -> None:
+        if not self._shadow_enabled(ShadowPhase.RECOMMENDATION):
+            return
+        baseline = {
+            "operatorRecommendation": result.operator_recommendation,
+            "customerReplyDraft": result.customer_reply_draft,
+            "taskSummaries": task_summaries,
+        }
+        self._append_shadow_event(
+            session_id,
+            run_id,
+            "llm_shadow_started",
+            ShadowPhase.RECOMMENDATION,
+            actor,
+            baseline=baseline,
+        )
+        call_result = call_shadow(
+            lambda: self._shadow_client.recommend(  # type: ignore[union-attr]
+                task_summaries=task_summaries,
+                operator_recommendation=result.operator_recommendation,
+                customer_reply_draft=result.customer_reply_draft,
+            ),
+            parse_recommendation_shadow_output,
+        )
+        self._record_shadow_call_result(
+            session_id,
+            run_id,
+            ShadowPhase.RECOMMENDATION,
+            actor,
+            baseline,
+            call_result,
+            _recommendation_diff(baseline, call_result.data) if call_result.ok else None,
+        )
+
+    def _record_shadow_call_result(
+        self,
+        session_id: int,
+        run_id: int,
+        phase: ShadowPhase,
+        actor: str,
+        baseline: dict[str, Any],
+        call_result: ShadowCallResult,
+        diff: dict[str, Any] | None,
+    ) -> None:
+        if not call_result.ok:
+            self._append_shadow_event(
+                session_id,
+                run_id,
+                "llm_shadow_failed",
+                phase,
+                actor,
+                baseline=baseline,
+                latency_ms=call_result.latency_ms,
+                error=call_result.error,
+            )
+            return
+        self._append_shadow_event(
+            session_id,
+            run_id,
+            "llm_shadow_completed",
+            phase,
+            actor,
+            baseline=baseline,
+            shadow=call_result.data,
+            latency_ms=call_result.latency_ms,
+        )
+        self._append_shadow_event(
+            session_id,
+            run_id,
+            "llm_shadow_diff_recorded",
+            phase,
+            actor,
+            baseline=baseline,
+            shadow=call_result.data,
+            diff=diff,
+            latency_ms=call_result.latency_ms,
+        )
+
+    def _append_shadow_event(
+        self,
+        session_id: int,
+        run_id: int,
+        event_type: str,
+        phase: ShadowPhase,
+        actor: str,
+        *,
+        baseline: dict[str, Any] | None = None,
+        shadow: dict[str, Any] | None = None,
+        diff: dict[str, Any] | None = None,
+        latency_ms: int | None = None,
+        error: str | None = None,
+    ) -> None:
+        self._repository.append_event(
+            session_id,
+            event_type,
+            build_shadow_event_payload(
+                phase=phase,
+                mode=self._shadow_settings.mode,
+                model_config_id=self._shadow_settings.model_config_id,
+                actor=actor,
+                baseline=baseline,
+                shadow=shadow,
+                diff=diff,
+                latency_ms=latency_ms,
+                error=error,
+            ),
+            run_id=run_id,
+            visibility="debug",
+            source="llm_shadow",
+            actor=actor,
+        )
+
+    def _shadow_enabled(self, phase: ShadowPhase) -> bool:
+        if self._shadow_settings.mode == "off" or self._shadow_client is None:
+            return False
+        if phase == ShadowPhase.TASK_RECOGNITION:
+            return self._shadow_settings.task_recognition_enabled
+        return self._shadow_settings.recommendation_enabled
+
+
+def _request_hash(message: str, actor: str, turn_mode: CustomerAssistantTurnMode | None = None) -> str:
+    raw = json.dumps(
+        {"actor": actor, "message": message, "turnMode": turn_mode.value if turn_mode else None},
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _format_session(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "status": row["status"],
+        "context": row.get("context_json") or {},
+        "version": row.get("version") or 1,
+        "createdAt": _iso(row.get("created_at")),
+        "updatedAt": _iso(row.get("updated_at")),
+    }
+
+
+def _format_task(row: dict[str, Any]) -> dict[str, Any]:
+    last_result = row.get("last_result_json") or {}
+    return {
+        "id": row["id"],
+        "sessionId": row["session_id"],
+        "taskKey": row["task_key"],
+        "taskType": row["task_type"],
+        "businessKey": row["business_key"],
+        "shortId": row["short_id"],
+        "status": row["status"],
+        "workerType": row["worker_type"],
+        "workerRef": row["worker_ref"],
+        "checkpoint": row.get("checkpoint_json") or {},
+        "lastResult": last_result,
+        "workerAsyncRefs": last_result.get("workerAsyncRefs") or _unsupported_worker_async_refs(),
+        "proposedActions": row.get("proposed_actions_json") or [],
+        "version": row.get("version") or 1,
+    }
+
+
+def _format_event(row: dict[str, Any]) -> dict[str, Any]:
+    formatted = {
+        "id": row["id"],
+        "sessionId": row["session_id"],
+        "runId": row.get("run_id"),
+        "sequence": row["sequence"],
+        "type": row["type"],
+        "visibility": row["visibility"],
+        "source": row["source"],
+        "actor": row.get("actor") or (row.get("payload") or {}).get("actor") or DEFAULT_CUSTOMER_ASSISTANT_ACTOR,
+        "taskId": row.get("task_id"),
+        "parentSpanId": row.get("parent_span_id"),
+        "spanId": row.get("span_id"),
+        "payload": row.get("payload") or {},
+        "createdAt": _iso(row.get("created_at")),
+    }
+    formatted["observability"] = _event_observability(formatted)
+    return formatted
+
+
+def _format_worker_run(row: dict[str, Any]) -> dict[str, Any]:
+    worker_run_id = int(row["id"])
+    return {
+        "id": worker_run_id,
+        "workerRunId": worker_async_refs(worker_run_id)["workerRunId"],
+        "sessionId": row["session_id"],
+        "parentRunId": row["parent_run_id"],
+        "taskId": row["task_id"],
+        "workerType": row["worker_type"],
+        "workerRef": row["worker_ref"],
+        "status": row["status"],
+        "refs": worker_async_refs(worker_run_id),
+        "queuedAt": _iso(row.get("queued_at")),
+        "startedAt": _iso(row.get("started_at")),
+        "completedAt": _iso(row.get("completed_at")),
+    }
+
+
+def _format_worker_event(row: dict[str, Any]) -> dict[str, Any]:
+    formatted = {
+        "id": row["id"],
+        "workerRunId": worker_async_refs(int(row["worker_run_id"]))["workerRunId"],
+        "sequence": row["sequence"],
+        "type": row["type"],
+        "visibility": row["visibility"],
+        "source": row["source"],
+        "actor": row.get("actor") or "system",
+        "payload": row.get("payload") or {},
+        "createdAt": _iso(row.get("created_at")),
+    }
+    formatted["observability"] = _worker_event_observability(formatted)
+    return formatted
+
+
+def _event_observability(event: dict[str, Any]) -> dict[str, Any]:
+    payload = dict(event.get("payload") or {})
+    payload_source = str(payload.get("source") or "")
+    runtime_refs = dict(payload.get("chatflowRuntimeRefs") or payload.get("runtimeRefs") or {})
+    worker_run_id = (
+        payload.get("workerRunId")
+        or dict(payload.get("workerAsyncRefs") or {}).get("workerRunId")
+        or dict(payload.get("refs") or {}).get("workerRunId")
+    )
+    return {
+        "sourceKind": _summary_source_kind(str(event.get("source") or ""), payload_source),
+        "eventMode": _summary_event_mode(event, payload_source),
+        "correlationRefs": {
+            "assistantRunId": _optional_int(event.get("runId")),
+            "taskId": _optional_int(event.get("taskId")),
+            "workerRunId": worker_run_id,
+            "runtimeRunId": _optional_int(payload.get("runtimeRunId") or payload.get("runId") or runtime_refs.get("runId")),
+            "sourceEventId": _optional_int(payload.get("sourceEventId")) or _optional_int(event.get("id")),
+            "sourceSequence": _optional_int(payload.get("sourceSequence")) or _optional_int(event.get("sequence")),
+        },
+    }
+
+
+def _worker_event_observability(event: dict[str, Any]) -> dict[str, Any]:
+    payload = dict(event.get("payload") or {})
+    return {
+        "sourceKind": _summary_source_kind(str(event.get("source") or ""), str(payload.get("source") or "")),
+        "eventMode": "live",
+        "correlationRefs": {
+            "workerRunId": event.get("workerRunId"),
+            "runtimeRunId": _optional_int(payload.get("runtimeRunId") or payload.get("runId")),
+            "sourceEventId": _optional_int(payload.get("sourceEventId")) or _optional_int(event.get("id")),
+            "sourceSequence": _optional_int(payload.get("sourceSequence")) or _optional_int(event.get("sequence")),
+        },
+    }
+
+
+def _summary_source_kind(source: str, payload_source: str) -> str:
+    signal = payload_source or source
+    if signal.startswith("chatflow_") or signal == "chatflow_sop":
+        return "chatflow"
+    if signal.startswith("workflow_"):
+        return "workflow"
+    if signal in {"customer_assistant_worker", "stub_qa", "react_worker"}:
+        return "worker"
+    if signal == "customer_assistant":
+        return "assistant"
+    return "runtime" if signal.endswith("_runtime_v2") else "worker"
+
+
+def _summary_event_mode(event: dict[str, Any], payload_source: str) -> str:
+    if payload_source.endswith("_runtime_v2") and str(event.get("type") or "") == "worker_result_received":
+        return "compatibility_summary"
+    if event.get("replayed") is True:
+        return "replay"
+    return "live"
+
+
+def _format_action(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "sessionId": row["session_id"],
+        "runId": row["run_id"],
+        "taskId": row.get("task_id"),
+        "actionKey": row["action_key"],
+        "actionType": row["action_type"],
+        "title": row["title"],
+        "payload": row.get("payload") or {},
+        "status": row["status"],
+        "result": row.get("result_json") or {},
+    }
+
+
+def _turn_result_payload(result: AssistantTurnResult, *, replayed: bool) -> dict[str, Any]:
+    return {
+        "runId": result.run_id,
+        "sessionId": result.session_id,
+        "replyType": result.reply_type,
+        "operatorRecommendation": result.operator_recommendation,
+        "customerReplyDraft": result.customer_reply_draft,
+        "taskSummaries": result.task_summaries,
+        "proposedActions": result.proposed_actions,
+        "warnings": result.warnings,
+        "events": result.events,
+        "replayed": replayed,
+    }
+
+
+def _sub_agent_run_payload(*, run_id: int, session_id: int, status: str) -> dict[str, Any]:
+    return {
+        "subAgentRunId": sub_agent_run_public_id(run_id),
+        "runId": run_id,
+        "sessionId": session_id,
+        "agentType": "customer_assistant",
+        "status": status,
+        "eventStreamRef": event_stream_ref(session_id, after_sequence=0),
+        "resultRef": result_ref(run_id),
+        "cancellation": unsupported_cancellation(),
+        "workerAsyncRefs": reserved_worker_async_refs(run_id=run_id, session_id=session_id),
+    }
+
+
+def _sub_agent_status(status: str) -> str:
+    return {
+        "RUNNING": "running",
+        "COMPLETED": "completed",
+        "FAILED": "failed",
+        "CANCELLED": "cancelled",
+        "WAITING": "waiting",
+    }.get(status.upper(), status.lower())
+
+
+def _unsupported_worker_async_refs() -> dict[str, Any]:
+    return {
+        "supported": False,
+        "workerRunId": None,
+        "workerStatusRef": None,
+        "workerEventsRef": None,
+        "workerEventStreamRef": None,
+        "workerResultRef": None,
+        "reason": "No durable async worker run exists for this task.",
+    }
+
+
+def _worker_result_warnings(worker_results: list[WorkerResult]) -> list[str]:
+    warnings: list[str] = []
+    for result in worker_results:
+        if result.status == TaskStatus.RUNNING:
+            warnings.append(
+                f"required worker evidence is pending for task {result.task_id}; "
+                f"poll {result.worker_async_refs.get('workerStatusRef')} for completion."
+            )
+        elif result.status == TaskStatus.FAILED:
+            warnings.append(f"worker failed for task {result.task_id}; inspect worker events before replying.")
+    return warnings
+
+
+def _worker_run_task_version(worker_run: dict[str, Any]) -> int | None:
+    task_payload = dict((worker_run.get("input_payload") or {}).get("task") or {})
+    raw = task_payload.get("taskVersion")
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _optional_int(value: Any) -> int | None:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _run_id_from_worker_run_id(worker_run_id: str) -> int:
+    prefix = "customer-assistant-worker-run-"
+    if not worker_run_id.startswith(prefix):
+        raise BizError(ErrorCode.BAD_REQUEST, "Invalid customer assistant worker run id")
+    raw = worker_run_id.removeprefix(prefix)
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise BizError(ErrorCode.BAD_REQUEST, "Invalid customer assistant worker run id") from exc
+
+
+def _task_command_from_primary(command: dict[str, Any]) -> TaskCommand:
+    return TaskCommand(
+        type=TaskCommandType(str(command["type"])),
+        task_key=str(command["taskKey"]),
+        task_type=str(command["taskType"]),
+        business_key=str(command["businessKey"]),
+        worker_type=str(command["workerType"]),
+        worker_ref=str(command["workerRef"]),
+        reason=str(command.get("reason") or "llm_primary"),
+    )
+
+
+def _task_command_from_proposed_payload(command: dict[str, Any]) -> TaskCommand:
+    try:
+        command_type = TaskCommandType(str(command["type"]))
+    except (KeyError, ValueError) as exc:
+        raise BizError(ErrorCode.BAD_REQUEST, "Invalid proposed task command") from exc
+    return TaskCommand(
+        type=command_type,
+        task_key=str(command.get("taskKey") or ""),
+        task_type=str(command.get("taskType") or ""),
+        business_key=str(command.get("businessKey") or command.get("taskKey") or ""),
+        worker_type=str(command.get("workerType") or ""),
+        worker_ref=str(command.get("workerRef") or ""),
+        reason=str(command.get("reason") or "operator_confirmed"),
+        input_snapshot=dict(command.get("inputSnapshot") or command.get("input_snapshot") or {}),
+    )
+
+
+def _confidence(value: Any) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _command_payload(command: TaskCommand) -> dict[str, Any]:
+    return {
+        "type": command.type.value,
+        "taskKey": command.task_key,
+        "taskType": command.task_type,
+        "businessKey": command.business_key,
+        "workerType": command.worker_type,
+        "workerRef": command.worker_ref,
+        "reason": command.reason,
+    }
+
+
+def _operator_message_requests_task_mutation(message: str) -> bool:
+    text = message.strip().lower()
+    if not any(term in text for term in ("退票", "退款", "refund", "行李", "baggage")):
+        return False
+    return any(
+        term in text
+        for term in (
+            "加入",
+            "添加",
+            "新增",
+            "创建",
+            "登记",
+            "建一个",
+            "建个",
+            "生成任务",
+            "加到",
+            "add",
+            "create",
+        )
+    )
+
+
+def _operator_event_summary(row: dict[str, Any]) -> dict[str, Any]:
+    payload = dict(row.get("payload") or {})
+    return {
+        "sequence": row.get("sequence"),
+        "type": row.get("type"),
+        "actor": row.get("actor"),
+        "taskKey": payload.get("taskKey"),
+        "source": row.get("source"),
+    }
+
+
+def _operator_evidence_from_tasks(task_summaries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    evidence: list[dict[str, Any]] = []
+    for task in task_summaries:
+        last_result = dict(task.get("lastResult") or {})
+        result_evidence = dict(last_result.get("evidence") or {})
+        if result_evidence:
+            evidence.append(
+                {
+                    "taskKey": task.get("taskKey"),
+                    "sopId": result_evidence.get("sopId"),
+                    "currentStep": result_evidence.get("currentStep"),
+                }
+            )
+    return evidence
+
+
+def _operator_advisory_recommendation(
+    message: str,
+    context_pack: dict[str, Any],
+    proposed_actions: list[dict[str, Any]],
+) -> str:
+    task_summaries = list(context_pack.get("taskSummaries") or [])
+    event_summary = list(context_pack.get("eventSummary") or [])
+    evidence = list(context_pack.get("evidence") or [])
+    warnings = list(context_pack.get("warnings") or [])
+    lines = [f"Operator recommendation for: {message}"]
+    if task_summaries:
+        task_lines = [
+            f"{task['taskKey']} status={task['status']} worker={task['workerType']}"
+            for task in task_summaries
+        ]
+        lines.append(f"- task ledger: {'; '.join(task_lines)}")
+    else:
+        lines.append("- task ledger: no active customer task; do not mutate ledger without confirmation.")
+    if event_summary:
+        latest = ", ".join(str(event.get("type")) for event in event_summary[-5:])
+        lines.append(f"- event summary: {len(event_summary)} event rows available; latest={latest}")
+    if evidence:
+        evidence_lines = [
+            f"{item.get('taskKey')} SOP/Chatflow {item.get('sopId') or 'unknown'} step={item.get('currentStep')}"
+            for item in evidence
+        ]
+        lines.append(f"- SOP/Chatflow evidence: {'; '.join(evidence_lines)}")
+    if proposed_actions:
+        titles = ", ".join(str(action.get("title") or action.get("actionType")) for action in proposed_actions)
+        lines.append(f"- proposed_task_command: {titles}; pending explicit operator confirmation.")
+    if warnings:
+        lines.append(f"- warnings: {'; '.join(str(warning) for warning in warnings)}")
+    return "\n".join(lines)
+
+
+def _task_recognition_diff(baseline: dict[str, Any], shadow: dict[str, Any]) -> dict[str, Any]:
+    baseline_commands = [_compact_command(command) for command in baseline.get("commands") or []]
+    shadow_commands = [_compact_command(command) for command in shadow.get("commands") or []]
+    differences: list[str] = []
+    if baseline_commands != shadow_commands:
+        differences.append("commands")
+    return {"matches": not differences, "differences": differences}
+
+
+def _recommendation_diff(baseline: dict[str, Any], shadow: dict[str, Any]) -> dict[str, Any]:
+    differences: list[str] = []
+    for key in ("operatorRecommendation", "customerReplyDraft"):
+        if str(baseline.get(key) or "") != str(shadow.get(key) or ""):
+            differences.append(key)
+    if len(baseline.get("taskSummaries") or []) != len(shadow.get("taskSummaries") or []):
+        differences.append("taskSummaries")
+    return {"matches": not differences, "differences": differences}
+
+
+def _two_stage_promotion_gate(diff: dict[str, Any]) -> dict[str, Any]:
+    current_run_pass_rate = 1.0 if diff["matches"] else 0.0
+    return {
+        "suite": TWO_STAGE_EQUIVALENCE_SUITE,
+        "minPassRate": TWO_STAGE_EQUIVALENCE_MIN_PASS_RATE,
+        "currentRunPassRate": current_run_pass_rate,
+        "passed": current_run_pass_rate >= TWO_STAGE_EQUIVALENCE_MIN_PASS_RATE,
+    }
+
+
+def _two_stage_input_pack(
+    task_summaries: list[dict[str, Any]],
+    proposed_actions: list[dict[str, Any]],
+    baseline_result: AssistantTurnResult,
+) -> dict[str, Any]:
+    waiting_prompts = [
+        prompt
+        for task in task_summaries
+        if str(task.get("status") or "").upper() == TaskStatus.WAITING.value
+        for prompt in _task_waiting_prompts(task)
+    ]
+    return {
+        "schemaVersion": "customer_assistant.two_stage_input/1",
+        "taskSummaries": [dict(task) for task in task_summaries],
+        "proposedActions": [dict(action) for action in proposed_actions],
+        "baseline": {
+            "operatorRecommendation": baseline_result.operator_recommendation,
+            "customerReplyDraft": baseline_result.customer_reply_draft,
+            "warnings": list(baseline_result.warnings),
+        },
+        "waitingPrompts": waiting_prompts,
+        "safety": {
+            "directWritesAllowed": False,
+            "highRiskWritesRequire": "proposed_action",
+            "rawChainOfThoughtAllowed": False,
+        },
+    }
+
+
+def _two_stage_validation_error(candidate: Any, input_pack: dict[str, Any]) -> str:
+    if not isinstance(candidate, dict):
+        return "schema_failure"
+    if _contains_forbidden_reasoning_field(candidate):
+        return "unsafe_reasoning_field"
+    allowed_keys = {"schemaVersion", "operatorRecommendation", "customerReplyDraft", "warnings"}
+    if set(candidate) - allowed_keys:
+        return "unsupported_field"
+    if not isinstance(candidate.get("operatorRecommendation"), str):
+        return "schema_failure"
+    if not isinstance(candidate.get("customerReplyDraft"), str):
+        return "schema_failure"
+    warnings = candidate.get("warnings", [])
+    if not isinstance(warnings, list) or not all(isinstance(item, str) for item in warnings):
+        return "schema_failure"
+    waiting_prompts = [str(prompt) for prompt in input_pack.get("waitingPrompts") or [] if str(prompt)]
+    if waiting_prompts:
+        baseline = dict(input_pack.get("baseline") or {})
+        baseline_draft = str(baseline.get("customerReplyDraft") or "")
+        draft = str(candidate["customerReplyDraft"])
+        if baseline_draft in waiting_prompts and draft != baseline_draft:
+            return "prompt_preservation_failed"
+        for prompt in waiting_prompts:
+            if prompt and prompt not in draft:
+                return "prompt_preservation_failed"
+    return ""
+
+
+def _task_waiting_prompts(task: dict[str, Any]) -> list[str]:
+    prompts: list[str] = []
+    last_result = dict(task.get("lastResult") or {})
+    checkpoint = dict(task.get("checkpoint") or last_result.get("checkpoint") or {})
+    evidence = dict(last_result.get("evidence") or {})
+    for source in (checkpoint, evidence, last_result):
+        for key in ("pendingPrompt", "pending_prompt", "followup", "followUp", "prompt", "customerReplyDraft"):
+            value = source.get(key)
+            if isinstance(value, str) and value and value not in prompts:
+                prompts.append(value)
+    return prompts
+
+
+def _contains_forbidden_reasoning_field(value: Any) -> bool:
+    forbidden = {"chainofthought", "chain_of_thought", "reasoningtrace", "reasoning_trace", "rawthoughts"}
+    if isinstance(value, dict):
+        return any(str(key).replace("-", "_").lower() in forbidden or _contains_forbidden_reasoning_field(item) for key, item in value.items())
+    if isinstance(value, list):
+        return any(_contains_forbidden_reasoning_field(item) for item in value)
+    return False
+
+
+def _compact_command(command: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "type": command.get("type"),
+        "taskKey": command.get("taskKey"),
+        "taskType": command.get("taskType"),
+        "workerType": command.get("workerType"),
+    }
+
+
+def _iso(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return str(value)
+
+
+def _elapsed_ms(started_at: datetime, completed_at: datetime) -> int:
+    return max(0, int((completed_at - started_at).total_seconds() * 1000))

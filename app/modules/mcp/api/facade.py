@@ -46,6 +46,13 @@ class McpFacade:
             if row is None or not row["enabled"]:
                 continue
             endpoint = str(row["endpoint"])
+            if _missing_credential(endpoint):
+                return McpCallResult(
+                    success=False,
+                    result=None,
+                    elapsed_ms=0,
+                    error_message="Missing credential for resource",
+                )
             if tool_name not in {tool.name for tool in self._client.list_tools(endpoint)}:
                 continue
             return self._client.call_tool(endpoint, tool_name, arguments)
@@ -55,3 +62,8 @@ class McpFacade:
             elapsed_ms=0,
             error_message=f"Tool is not bound to this agent: {tool_name}",
         )
+
+
+def _missing_credential(endpoint: str) -> bool:
+    lowered = endpoint.lower()
+    return "credential=missing" in lowered or "missing-credential" in lowered

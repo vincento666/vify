@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import os
 import re
+from time import sleep
 from typing import Any
 
 import httpx
@@ -51,14 +53,22 @@ class OpenAIChatRequestBuilder:
             payload.update(extra_params)
         if tools:
             payload["tools"] = self._tool_serializer.serialize(tools)
-            payload["tool_choice"] = "auto"
+            payload["tool_choice"] = payload.get("tool_choice", "auto")
         return payload
 
 
 class ProviderBackedOpenAIChatClient:
-    def __init__(self, config: ProviderChatConfig, timeout: float = 60.0) -> None:
+    def __init__(
+        self,
+        config: ProviderChatConfig,
+        timeout: float = 60.0,
+        max_attempts: int = 3,
+        retry_sleep: float = 0.5,
+    ) -> None:
         self._config = config
         self._timeout = timeout
+        self._max_attempts = max(1, max_attempts)
+        self._retry_sleep = max(0.0, retry_sleep)
 
     def complete(self, payload: dict[str, Any]) -> dict[str, Any]:
         if self._config.base_url.startswith("mock://"):
@@ -69,12 +79,7 @@ class ProviderBackedOpenAIChatClient:
             "Content-Type": "application/json",
             "X-Title": "Hify",
         }
-        with httpx.Client(timeout=self._timeout) as client:
-            response = client.post(
-                f"{self._config.base_url.rstrip('/')}/chat/completions",
-                headers=headers,
-                json=payload,
-            )
+        response = self._post_with_retry(headers, payload)
         if response.status_code >= 400:
             raise RuntimeError(f"LLM request failed: HTTP {response.status_code} {response.text}")
         data = response.json()
@@ -83,7 +88,31 @@ class ProviderBackedOpenAIChatClient:
         return data
 
     def _api_key(self) -> str:
-        return str(self._config.auth_config.get("api_key") or self._config.auth_config.get("apiKey") or "")
+        direct = str(self._config.auth_config.get("api_key") or self._config.auth_config.get("apiKey") or "")
+        if direct:
+            return direct
+        ref = str(self._config.auth_config.get("api_key_ref") or self._config.auth_config.get("apiKeyRef") or "")
+        if ref.startswith("env:"):
+            return os.getenv(ref.removeprefix("env:"), "")
+        return ""
+
+    def _post_with_retry(self, headers: dict[str, str], payload: dict[str, Any]) -> httpx.Response:
+        last_error: httpx.TransportError | None = None
+        for attempt in range(1, self._max_attempts + 1):
+            try:
+                with httpx.Client(timeout=self._timeout, trust_env=True) as client:
+                    return client.post(
+                        f"{self._config.base_url.rstrip('/')}/chat/completions",
+                        headers=headers,
+                        json=payload,
+                    )
+            except httpx.TransportError as exc:
+                last_error = exc
+                if attempt >= self._max_attempts:
+                    raise
+                if self._retry_sleep:
+                    sleep(self._retry_sleep)
+        raise last_error or RuntimeError("LLM request failed before a response was returned")
 
 
 class FakeOpenAIChatClient:

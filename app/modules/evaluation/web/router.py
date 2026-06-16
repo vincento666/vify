@@ -4,19 +4,26 @@ from fastapi import APIRouter, Depends, File, Query, Response, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.database import get_session
+from app.core.host.context import RequestContext
+from app.core.host.dependencies import get_request_context
 from app.core.responses import success
+from app.modules.audit.infra.repository import AuditRepository
 from app.modules.evaluation.domain.service import EvaluationService
 from app.modules.evaluation.infra.repository import EvaluationRepository
 from app.modules.evaluation.web.schemas import (
     EvalCaseCreateRequest,
     EvalCaseUpdateRequest,
     EvalSetCreateRequest,
+    EvalSetFieldsUpdateRequest,
     EvalSetUpdateRequest,
+    EvalSetVersionCreateRequest,
     ExperimentCreateRequest,
     EvaluatorCreateRequest,
     EvaluatorDraftTestRequest,
     EvaluatorSampleTestRequest,
     EvaluatorUpdateRequest,
+    EvaluatorVersionCreateRequest,
+    LlmEvaluatorDebugRequest,
 )
 
 router = APIRouter(prefix="/api/v1/eval-sets", tags=["eval-sets"])
@@ -26,8 +33,11 @@ experiment_router = APIRouter(prefix="/api/v1/evaluation-experiments", tags=["ev
 run_router = APIRouter(prefix="/api/v1/evaluation-runs", tags=["evaluation-runs"])
 
 
-def get_evaluation_service(session: Session = Depends(get_session)) -> EvaluationService:
-    return EvaluationService(EvaluationRepository(session))
+def get_evaluation_service(
+    session: Session = Depends(get_session),
+    request_context: RequestContext = Depends(get_request_context),
+) -> EvaluationService:
+    return EvaluationService(EvaluationRepository(session), AuditRepository(session), request_context)
 
 
 @router.get("")
@@ -56,6 +66,40 @@ def get_eval_set(
     return success(service.get_eval_set(eval_set_id))
 
 
+@router.post("/{eval_set_id}/versions")
+def submit_eval_set_version(
+    eval_set_id: int,
+    request: EvalSetVersionCreateRequest,
+    service: EvaluationService = Depends(get_evaluation_service),
+) -> dict[str, Any]:
+    return success(service.submit_eval_set_version(eval_set_id, request))
+
+
+@router.get("/{eval_set_id}/versions")
+def list_eval_set_versions(
+    eval_set_id: int,
+    service: EvaluationService = Depends(get_evaluation_service),
+) -> dict[str, Any]:
+    return success(service.list_eval_set_versions(eval_set_id))
+
+
+@router.get("/{eval_set_id}/versions/{version_id}")
+def get_eval_set_version(
+    eval_set_id: int,
+    version_id: int,
+    service: EvaluationService = Depends(get_evaluation_service),
+) -> dict[str, Any]:
+    return success(service.get_eval_set_version(eval_set_id, version_id))
+
+
+@router.get("/{eval_set_id}/related-experiments")
+def list_eval_set_related_experiments(
+    eval_set_id: int,
+    service: EvaluationService = Depends(get_evaluation_service),
+) -> dict[str, Any]:
+    return success(service.list_eval_set_related_experiments(eval_set_id))
+
+
 @router.put("/{eval_set_id}")
 def update_eval_set(
     eval_set_id: int,
@@ -72,6 +116,23 @@ def delete_eval_set(
 ) -> dict[str, Any]:
     service.delete_eval_set(eval_set_id)
     return success(None)
+
+
+@router.get("/{eval_set_id}/fields")
+def list_eval_set_fields(
+    eval_set_id: int,
+    service: EvaluationService = Depends(get_evaluation_service),
+) -> dict[str, Any]:
+    return success(service.list_eval_set_fields(eval_set_id))
+
+
+@router.put("/{eval_set_id}/fields")
+def update_eval_set_fields(
+    eval_set_id: int,
+    request: EvalSetFieldsUpdateRequest,
+    service: EvaluationService = Depends(get_evaluation_service),
+) -> dict[str, Any]:
+    return success(service.update_eval_set_fields(eval_set_id, request))
 
 
 @router.post("/{eval_set_id}/cases")
@@ -137,6 +198,21 @@ def test_draft_evaluator(
     return success(service.test_draft_evaluator(request))
 
 
+@evaluator_router.get("/presets")
+def list_evaluator_presets(
+    service: EvaluationService = Depends(get_evaluation_service),
+) -> dict[str, Any]:
+    return success(service.list_evaluator_presets())
+
+
+@evaluator_router.post("/llm-debug")
+def debug_llm_evaluator(
+    request: LlmEvaluatorDebugRequest,
+    service: EvaluationService = Depends(get_evaluation_service),
+) -> dict[str, Any]:
+    return success(service.debug_llm_evaluator(request))
+
+
 @evaluator_router.get("/{evaluator_id}")
 def get_evaluator(
     evaluator_id: int,
@@ -161,6 +237,23 @@ def delete_evaluator(
 ) -> dict[str, Any]:
     service.delete_evaluator(evaluator_id)
     return success(None)
+
+
+@evaluator_router.post("/{evaluator_id}/versions")
+def publish_evaluator_version(
+    evaluator_id: int,
+    request: EvaluatorVersionCreateRequest,
+    service: EvaluationService = Depends(get_evaluation_service),
+) -> dict[str, Any]:
+    return success(service.publish_evaluator_version(evaluator_id, request))
+
+
+@evaluator_router.get("/{evaluator_id}/versions")
+def list_evaluator_versions(
+    evaluator_id: int,
+    service: EvaluationService = Depends(get_evaluation_service),
+) -> dict[str, Any]:
+    return success(service.list_evaluator_versions(evaluator_id))
 
 
 @evaluator_router.post("/{evaluator_id}/test")

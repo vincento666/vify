@@ -63,9 +63,46 @@ class ChatflowResourceContextTest(unittest.TestCase):
 
         self.assertIn("LLM callable tools require a tool runtime", str(error.exception))
 
+    def test_chatflow_llm_prompt_uses_local_input_parameter_aliases(self) -> None:
+        fake_client = FakeOpenAIChatClient(response_payload=_assistant_payload("LOCAL_INPUT_OK"))
+        service = WorkflowService(
+            _ChatflowRepositoryStub(
+                resources=[],
+                include_history=False,
+                system_prompt="System sees {{input}}",
+                prompt="User prompt: {{input}}",
+                input_parameters=[
+                    {"name": "input", "type": "string", "valueMode": "reference", "value": "{{start.sys.query}}"},
+                ],
+            ),
+            flow_type="CHATFLOW",
+            agent_repository=_AgentRepositoryStub(),
+            model_facade=_ModelFacadeStub(),
+            knowledge_facade=_KnowledgeFacadeStub(),
+            llm_client_factory=lambda _config: fake_client,
+        )
+
+        result = service.execute(901, WorkflowRunRequest(input={"sys.query": "refund status"}))
+
+        self.assertEqual(result["status"], "SUCCEEDED")
+        messages = fake_client.captured_payload["messages"]
+        self.assertIn(
+            {"role": "system", "content": "System sees refund status"},
+            messages,
+        )
+        self.assertEqual(messages[-1]["content"], "User prompt: refund status")
+        self.assertNotIn("{{input}}", str(messages))
+
 
 class _ChatflowRepositoryStub:
-    def __init__(self, resources: list[dict[str, Any]] | None = None, include_history: bool = True) -> None:
+    def __init__(
+        self,
+        resources: list[dict[str, Any]] | None = None,
+        include_history: bool = True,
+        system_prompt: str = "",
+        prompt: str = "Chatflow prompt: {{sys.query}}",
+        input_parameters: list[dict[str, Any]] | None = None,
+    ) -> None:
         now = datetime.now()
         self.workflow = {
             "id": 901,
@@ -83,6 +120,9 @@ class _ChatflowRepositoryStub:
             "topK": 1,
         }]
         self._include_history = include_history
+        self._system_prompt = system_prompt
+        self._prompt = prompt
+        self._input_parameters = input_parameters or []
 
     def get(self, workflow_id: int, _flow_type: str | None = None) -> dict[str, Any] | None:
         return self.workflow if workflow_id == 901 else None
@@ -95,7 +135,9 @@ class _ChatflowRepositoryStub:
                 "type": "LLM",
                 "name": "Answer",
                 "config": {
-                    "prompt": "Chatflow prompt: {{sys.query}}",
+                    "systemPrompt": self._system_prompt,
+                    "prompt": self._prompt,
+                    "inputParameters": self._input_parameters,
                     "outputVariable": "answer",
                     "resources": self._resources,
                     "includeHistory": "true" if self._include_history else "",

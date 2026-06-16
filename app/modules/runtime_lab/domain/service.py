@@ -1,6 +1,7 @@
 import hashlib
+import json
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from time import perf_counter
 from typing import Any, Protocol
@@ -188,16 +189,41 @@ class RuntimeLabService:
         message: str,
         idempotency_key: str | None = None,
         enabled_sop_ids: Sequence[str] | None = None,
+        policy_thresholds_override: Mapping[str, Any] | None = None,
+        classifier_override: Any | None = None,
+        route_settings_signature: Mapping[str, Any] | None = None,
     ) -> RuntimeLabCommandResult:
         self._ensure_session_exists(session_id)
-        request_hash = _request_hash(message, enabled_sop_ids)
+        normalized_thresholds_override = _normalized_policy_thresholds_override(policy_thresholds_override)
+        request_hash = _request_hash(
+            message,
+            enabled_sop_ids,
+            normalized_thresholds_override,
+            route_settings_signature,
+        )
         if idempotency_key:
             existing = self._repository.get_command_response(session_id, idempotency_key)
             if existing is not None:
                 if existing["request_hash"] != request_hash:
                     raise BizError(ErrorCode.BAD_REQUEST, "Idempotency key reused with different request")
                 return RuntimeLabCommandResult(dict(existing["response_payload"]), replayed=True)
-        payload = format_turn(self.handle_message(session_id, message, enabled_sop_ids=enabled_sop_ids))
+        previous_thresholds = self._policy_thresholds
+        previous_policy_gate = self._policy_gate
+        previous_classifier = self._classifier
+        if normalized_thresholds_override:
+            self._policy_thresholds = {**previous_thresholds, **normalized_thresholds_override}
+            self._policy_gate = PolicyGate(
+                self._adapter,
+                strong_accept_threshold=self._strong_accept_threshold(),
+            )
+        if classifier_override is not None:
+            self._classifier = classifier_override
+        try:
+            payload = format_turn(self.handle_message(session_id, message, enabled_sop_ids=enabled_sop_ids))
+        finally:
+            self._policy_thresholds = previous_thresholds
+            self._policy_gate = previous_policy_gate
+            self._classifier = previous_classifier
         if idempotency_key:
             self._repository.store_command_response(session_id, idempotency_key, request_hash, payload)
         return RuntimeLabCommandResult(payload, replayed=False)
@@ -510,6 +536,7 @@ class RuntimeLabService:
             classifier_result = self._classifier.classify(classifier_input)
         except Exception as exc:
             classifier_result = _classifier_failure_result(exc, self._classifier, classifier_input)
+        classifier_result = _recover_clarify_result(classifier_result, candidates, message, active_task)
         route_steps.append(
             _route_step(
                 "llm_intent_arbitration",
@@ -1802,6 +1829,101 @@ def _should_add_agent_fallback_candidate(
     return has_low_confidence_answer_clarify and not has_sop_candidate
 
 
+def _recover_clarify_result(
+    result: ClassifierResult,
+    candidates: Sequence[RouteCandidate],
+    message: str,
+    active_task: dict[str, Any] | None,
+) -> ClassifierResult:
+    if result.selected_action != "CLARIFY":
+        return result
+    if not result.used_real_llm:
+        return result
+    recovered = _clarify_answer_recovery_candidate(candidates)
+    if recovered is None:
+        recovered = _clarify_single_sop_recovery_candidate(candidates, message, active_task)
+    if recovered is None:
+        return result
+    action = _action_for_recovered_candidate(recovered)
+    debug = dict(result.debug or {})
+    debug["clarifyRecovery"] = {
+        "from": "CLARIFY",
+        "candidateId": recovered.candidate_id,
+        "candidateType": str(recovered.candidate_type),
+        "targetId": recovered.target_id,
+        "score": recovered.score,
+    }
+    return ClassifierResult(
+        selected_action=action,
+        selected_candidate_id=recovered.candidate_id,
+        confidence=max(float(result.confidence or 0.0), recovered.score),
+        rationale=f"{result.rationale}; recovered by finite-candidate policy guard",
+        needs_clarification=False,
+        clarification_question=None,
+        arbitrator_mode=result.arbitrator_mode,
+        used_real_llm=result.used_real_llm,
+        debug=debug,
+    )
+
+
+def _clarify_answer_recovery_candidate(candidates: Sequence[RouteCandidate]) -> RouteCandidate | None:
+    answer_candidates = [
+        candidate
+        for candidate in candidates
+        if str(candidate.candidate_type) in {"ANSWER_FAQ", "ANSWER_RAG"} and candidate.score >= 0.86
+    ]
+    if not answer_candidates:
+        return None
+    return select_top_candidates(answer_candidates, top_k=1)[0]
+
+
+def _clarify_single_sop_recovery_candidate(
+    candidates: Sequence[RouteCandidate],
+    message: str,
+    active_task: dict[str, Any] | None,
+) -> RouteCandidate | None:
+    if active_task is not None:
+        return None
+    sop_candidates = [
+        candidate
+        for candidate in candidates
+        if str(candidate.candidate_type) == "SOP_INTENT" and candidate.score >= 0.78
+    ]
+    target_ids = {candidate.target_id for candidate in sop_candidates}
+    if len(target_ids) != 1:
+        return None
+    candidate = select_top_candidates(sop_candidates, top_k=1)[0]
+    if not _can_recover_single_sop_clarify(message, candidate.target_id):
+        return None
+    return candidate
+
+
+def _can_recover_single_sop_clarify(message: str, sop_id: str) -> bool:
+    text = message.strip()
+    if not text or _explicitly_denies_sop_transaction(text):
+        return False
+    if sop_id == "flight_status":
+        return any(term in text for term in ("查航班", "航班现在", "到哪", "到哪了", "航班号", "接人", "等我"))
+    return _looks_like_strong_sop_request(text)
+
+
+def _action_for_recovered_candidate(candidate: RouteCandidate) -> str:
+    candidate_type = str(candidate.candidate_type)
+    if candidate_type == "ANSWER_FAQ":
+        return "ANSWER_FAQ"
+    if candidate_type == "ANSWER_RAG":
+        return "ANSWER_RAG"
+    if candidate_type == "SUSPENDED_TASK_RESUME":
+        return "RESUME_TASK"
+    if candidate_type == "AGENT_FALLBACK":
+        return "AGENT_FALLBACK"
+    if candidate_type == "SOP_INTENT":
+        return "START_SOP"
+    if candidate_type == "ACTIVE_TASK_CONTINUE":
+        return "CONTINUE_ACTIVE_SOP"
+    return "CLARIFY"
+
+
 def _looks_like_active_sop_continuation_detail(message: str) -> bool:
     text = message.strip()
     if not text:
@@ -1827,9 +1949,52 @@ def _looks_like_active_sop_continuation_detail(message: str) -> bool:
     return any(term in text for term in continuation_terms)
 
 
-def _request_hash(message: str, enabled_sop_ids: Sequence[str] | None = None) -> str:
+def _request_hash(
+    message: str,
+    enabled_sop_ids: Sequence[str] | None = None,
+    policy_thresholds_override: Mapping[str, Any] | None = None,
+    route_settings_signature: Mapping[str, Any] | None = None,
+) -> str:
     scope = "<all>" if enabled_sop_ids is None else ",".join(sorted(set(enabled_sop_ids)))
-    return hashlib.sha256(f"{message}\0{scope}".encode("utf-8")).hexdigest()
+    threshold_payload = _json_stable(policy_thresholds_override or {})
+    route_settings_payload = _json_stable(route_settings_signature or {})
+    return hashlib.sha256(f"{message}\0{scope}\0{threshold_payload}\0{route_settings_payload}".encode("utf-8")).hexdigest()
+
+
+def _normalized_policy_thresholds_override(raw: Mapping[str, Any] | None) -> dict[str, Any]:
+    if not raw:
+        return {}
+    allowed = {
+        "strongAcceptThreshold",
+        "classifierMinConfidence",
+        "candidateTopK",
+        "candidateSourceWeights",
+        "llmArbitrationRequiredForNonHardStop",
+        "faqKeywordMinScore",
+        "faqKeywordMinMargin",
+        "faqSemanticMinScore",
+        "faqSemanticMinMargin",
+        "ragMinScore",
+        "ragLexicalAcceptThreshold",
+    }
+    normalized: dict[str, Any] = {}
+    for key, value in raw.items():
+        if key not in allowed:
+            continue
+        if key == "candidateSourceWeights":
+            normalized[key] = value if isinstance(value, dict) else {}
+        elif key == "llmArbitrationRequiredForNonHardStop":
+            normalized[key] = bool(value)
+        else:
+            try:
+                normalized[key] = float(value)
+            except (TypeError, ValueError):
+                continue
+    return normalized
+
+
+def _json_stable(value: Mapping[str, Any]) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
 def _checkpoint_status(result: SopExecutionResult) -> str:

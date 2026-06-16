@@ -5,6 +5,7 @@ from typing import Any
 
 
 _TEMPLATE_PATTERN = re.compile(r"\{\{\s*([A-Za-z0-9_-]+)\.([A-Za-z0-9_.-]+)\s*\}\}")
+_LOCAL_TEMPLATE_PATTERN = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
 
 
 class ExecutionContext:
@@ -20,6 +21,7 @@ class ExecutionContext:
             "channel": {},
             "sys": {},
         }
+        self._local_values: dict[str, Any] = {}
 
     def set_output(self, node_key: str, values: dict[str, Any]) -> None:
         self._outputs[node_key] = dict(values)
@@ -49,6 +51,9 @@ class ExecutionContext:
     def get_output(self, node_key: str) -> dict[str, Any]:
         return dict(self._outputs.get(node_key, {}))
 
+    def outputs_snapshot(self) -> dict[str, dict[str, Any]]:
+        return {node_key: dict(values) for node_key, values in self._outputs.items()}
+
     def get_scope(self, scope: str) -> dict[str, Any]:
         return dict(self._scopes.get(scope.strip().lower(), {}))
 
@@ -58,6 +63,12 @@ class ExecutionContext:
             if normalized_scope not in self._scopes or not isinstance(values, dict):
                 continue
             self._scopes[normalized_scope] = dict(values)
+
+    def set_local_values(self, values: dict[str, Any]) -> None:
+        self._local_values = dict(values)
+
+    def clear_local_values(self) -> None:
+        self._local_values = {}
 
     def scopes_snapshot(self) -> dict[str, dict[str, Any]]:
         return {scope: dict(values) for scope, values in self._scopes.items()}
@@ -69,7 +80,17 @@ class ExecutionContext:
         return None
 
     def render(self, template: str) -> str:
-        return _TEMPLATE_PATTERN.sub(self._replace_match, template)
+        with_local_values = _LOCAL_TEMPLATE_PATTERN.sub(self._replace_local_match, template)
+        return _TEMPLATE_PATTERN.sub(self._replace_match, with_local_values)
+
+    def _replace_local_match(self, match: re.Match[str]) -> str:
+        variable_name = match.group(1)
+        if variable_name not in self._local_values:
+            return match.group(0)
+        value = self._local_values.get(variable_name)
+        if value is None:
+            return ""
+        return str(value)
 
     def _replace_match(self, match: re.Match[str]) -> str:
         node_key, variable_name = match.group(1), match.group(2)

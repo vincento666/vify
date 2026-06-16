@@ -150,13 +150,19 @@ class LlmNodeExecutor:
     def execute(self, node: dict[str, Any], context: ExecutionContext) -> dict[str, Any]:
         config = _config(node)
         output_variable = str(config.get("outputVariable") or "answer")
-        prompt = context.render(str(config.get("prompt") or ""))
+        local_inputs = _node_inputs(config, context)
+        system_prompt, prompt = _render_llm_prompts(config, context, local_inputs)
         prompt = self._with_resource_context(config, context, prompt)
+        llm_options = _llm_options(config)
+        if system_prompt:
+            llm_options["systemPrompt"] = system_prompt
+        else:
+            llm_options.pop("systemPrompt", None)
         tool_resources = _callable_tool_resources(config)
         if tool_resources and _tool_choice_mode(config) != "disabled":
-            return self._execute_with_tools(node, config, prompt, output_variable)
+            return self._execute_with_tools(node, config, prompt, output_variable, llm_options)
         if self._completer is not None:
-            answer = self._completer.complete_prompt(prompt, _llm_options(config))
+            answer = self._completer.complete_prompt(prompt, llm_options)
             return self._output_with_stream_events(
                 config,
                 str(node["node_key"]),
@@ -166,7 +172,14 @@ class LlmNodeExecutor:
             )
         return self._output_with_stream_events(config, str(node["node_key"]), output_variable, f"LLM mock: {prompt}")
 
-    def _execute_with_tools(self, node: dict[str, Any], config: dict[str, Any], prompt: str, output_variable: str) -> dict[str, Any]:
+    def _execute_with_tools(
+        self,
+        node: dict[str, Any],
+        config: dict[str, Any],
+        prompt: str,
+        output_variable: str,
+        llm_options: dict[str, Any],
+    ) -> dict[str, Any]:
         if self._completer is None:
             raise WorkflowExecutionError("LLM callable tools require a configured LLM provider")
         if self._mcp_tool_executor is None:
@@ -187,7 +200,7 @@ class LlmNodeExecutor:
             raise WorkflowExecutionError("No callable tool schemas are available for LLM node")
         answer, tool_calls = self._completer.complete_prompt_with_tools(
             prompt=prompt,
-            options=_llm_options(config),
+            options=llm_options,
             tools=tools,
             tool_ids=tool_ids,
             mcp_facade=self._mcp_tool_executor,
@@ -1413,36 +1426,40 @@ class WorkflowExecutionEngine:
         context = initial_context or ExecutionContext()
         _load_input_scopes(context, input_data)
         for _step in range(MAX_STEPS):
-            node_run_id = self._repository.create_node_run(
-                run_id,
-                str(current["node_key"]),
-                str(current["type"]),
-                inputs=_node_run_inputs(current, context, input_data),
-            )
-            started_at = perf_counter()
+            context.set_local_values(_node_inputs(_config(current), context))
             try:
-                output = self._execute_node(workflow_id, current, context, input_data)
-                context.set_output(str(current["node_key"]), output)
-                self._last_variable_scopes = context.scopes_snapshot()
-                elapsed_ms = int((perf_counter() - started_at) * 1000)
-                self._repository.finish_node_run(node_run_id, "SUCCEEDED", outputs=output, elapsed_ms=elapsed_ms)
-            except WorkflowInterrupt as exc:
-                self._last_variable_scopes = context.scopes_snapshot()
-                elapsed_ms = int((perf_counter() - started_at) * 1000)
-                self._repository.finish_node_run(node_run_id, "INTERRUPTED", outputs=exc.output, elapsed_ms=elapsed_ms)
-                raise
-            except Exception as exc:
-                elapsed_ms = int((perf_counter() - started_at) * 1000)
-                self._repository.finish_node_run(node_run_id, "FAILED", outputs={}, error=str(exc), elapsed_ms=elapsed_ms)
-                raise
+                node_run_id = self._repository.create_node_run(
+                    run_id,
+                    str(current["node_key"]),
+                    str(current["type"]),
+                    inputs=_node_run_inputs(current, context, input_data),
+                )
+                started_at = perf_counter()
+                try:
+                    output = self._execute_node(workflow_id, current, context, input_data)
+                    context.set_output(str(current["node_key"]), output)
+                    self._last_variable_scopes = context.scopes_snapshot()
+                    elapsed_ms = int((perf_counter() - started_at) * 1000)
+                    self._repository.finish_node_run(node_run_id, "SUCCEEDED", outputs=output, elapsed_ms=elapsed_ms)
+                except WorkflowInterrupt as exc:
+                    self._last_variable_scopes = context.scopes_snapshot()
+                    elapsed_ms = int((perf_counter() - started_at) * 1000)
+                    self._repository.finish_node_run(node_run_id, "INTERRUPTED", outputs=exc.output, elapsed_ms=elapsed_ms)
+                    raise
+                except Exception as exc:
+                    elapsed_ms = int((perf_counter() - started_at) * 1000)
+                    self._repository.finish_node_run(node_run_id, "FAILED", outputs={}, error=str(exc), elapsed_ms=elapsed_ms)
+                    raise
 
-            if current["type"] == "END":
-                return output
+                if current["type"] == "END":
+                    return output
 
-            next_node_key = self._next_node_key(current, edges, output)
-            if next_node_key is None or next_node_key not in node_map:
-                raise WorkflowExecutionError(f"Next node not found after {current['node_key']}")
-            current = node_map[next_node_key]
+                next_node_key = self._next_node_key(current, edges, output)
+                if next_node_key is None or next_node_key not in node_map:
+                    raise WorkflowExecutionError(f"Next node not found after {current['node_key']}")
+                current = node_map[next_node_key]
+            finally:
+                context.clear_local_values()
 
         raise WorkflowExecutionError("Workflow step limit exceeded")
 
@@ -1585,6 +1602,16 @@ def _node_inputs(config: dict[str, Any], context: ExecutionContext) -> dict[str,
         else:
             inputs[name] = context.render(str(value or ""))
     return inputs
+
+
+def _render_node_local_template(template: str, context: ExecutionContext, local_values: Mapping[str, Any]) -> str:
+    return _render_local_template(context.render(template), local_values)
+
+
+def _render_llm_prompts(config: dict[str, Any], context: ExecutionContext, local_inputs: Mapping[str, Any]) -> tuple[str, str]:
+    system_prompt = _render_node_local_template(str(config.get("systemPrompt") or ""), context, local_inputs).strip()
+    user_prompt = _render_node_local_template(str(config.get("prompt") or ""), context, local_inputs).strip()
+    return system_prompt, user_prompt
 
 
 def _node_run_inputs(node: Mapping[str, Any], context: ExecutionContext, input_data: dict[str, Any]) -> dict[str, Any]:
@@ -2463,9 +2490,11 @@ def _intent_terms(intent: Mapping[str, Any]) -> list[str]:
 def _json_path_value(value: Any, path: str) -> Any:
     if not path or path == "$":
         return value
-    normalized = path[2:] if path.startswith("$.") else path
+    parts = _json_path_parts(path)
+    if not parts:
+        return None
     current = value
-    for part in normalized.split("."):
+    for part in parts:
         if part == "":
             continue
         if isinstance(current, Mapping):
@@ -2477,6 +2506,41 @@ def _json_path_value(value: Any, path: str) -> Any:
             continue
         return None
     return current
+
+
+def _json_path_parts(path: str) -> list[str]:
+    normalized = path.strip()
+    if normalized == "$":
+        return []
+    if normalized.startswith("$"):
+        normalized = normalized[1:]
+
+    parts: list[str] = []
+    index = 0
+    while index < len(normalized):
+        char = normalized[index]
+        if char == ".":
+            index += 1
+            continue
+        if char == "[":
+            end = normalized.find("]", index + 1)
+            if end < 0:
+                return []
+            token = normalized[index + 1:end].strip()
+            if len(token) >= 2 and token[0] in {"'", '"'} and token[-1] == token[0]:
+                token = token[1:-1]
+            parts.append(token)
+            index = end + 1
+            continue
+
+        end = index
+        while end < len(normalized) and normalized[end] not in ".[":
+            end += 1
+        token = normalized[index:end].strip()
+        if token:
+            parts.append(token)
+        index = end
+    return parts
 
 
 def _resource_items(config: dict[str, Any]) -> list[dict[str, Any]]:

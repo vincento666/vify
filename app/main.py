@@ -12,6 +12,7 @@ from app.core.logging import configure_logging
 from app.modules.agent.web.router import router as agent_router
 from app.modules.audit.web.router import router as audit_router
 from app.modules.chat.web.router import router as chat_router
+from app.modules.customer_assistant.web.router import router as customer_assistant_router
 from app.modules.evaluation.web.router import case_router as eval_case_router
 from app.modules.evaluation.web.router import evaluator_router
 from app.modules.evaluation.web.router import experiment_router
@@ -26,7 +27,12 @@ from app.modules.runtime_lab.web.router import router as runtime_lab_router
 from app.modules.runtime_policy.web.router import router as runtime_policy_router
 from app.modules.workflow.web.api_resource_router import router as api_resource_router
 from app.modules.workflow.web.api_resource_router import tool_router
-from app.modules.workflow.web.router import chatflow_router, resource_router as workflow_resource_router, router as workflow_router
+from app.modules.workflow.web.router import (
+    chatflow_router,
+    resource_router as workflow_resource_router,
+    router as workflow_router,
+    runtime_v2_router,
+)
 
 settings = get_settings()
 configure_logging(settings.log_level)
@@ -50,6 +56,7 @@ app.include_router(document_router)
 app.include_router(faq_router)
 app.include_router(workflow_router)
 app.include_router(chatflow_router)
+app.include_router(runtime_v2_router)
 app.include_router(workflow_resource_router)
 app.include_router(api_resource_router)
 app.include_router(tool_router)
@@ -59,6 +66,7 @@ app.include_router(evaluator_router)
 app.include_router(experiment_router)
 app.include_router(evaluation_run_router)
 app.include_router(chat_router)
+app.include_router(customer_assistant_router)
 app.include_router(handoff_router)
 app.include_router(observe_router)
 app.include_router(audit_router)

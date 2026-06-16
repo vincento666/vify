@@ -66,6 +66,10 @@ class RuntimePolicyRuntimeFactoryTest(unittest.TestCase):
         self.assertEqual(payload["temperature"], 0.35)
         self.assertEqual(payload["max_tokens"], 123)
         self.assertIn("PROFILE PROMPT", payload["messages"][0]["content"])
+        self.assertEqual(
+            result.debug["usage"],
+            {"inputTokens": 9, "outputTokens": 4, "totalTokens": 13, "estimated": False},
+        )
 
     def test_fallback_factory_honors_fake_disabled_and_policy_attempts(self) -> None:
         snapshot = _snapshot()
@@ -151,7 +155,7 @@ class _CapturingClient:
                     }
                 }
             ],
-            "usage": {"total_tokens": 1},
+            "usage": {"prompt_tokens": 9, "completion_tokens": 4, "total_tokens": 13},
         }
 
 
