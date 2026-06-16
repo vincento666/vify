@@ -103,6 +103,28 @@ UAT 记录模板：
 - 更新 `tasks.md` 完成项。
 - 如发生架构决策变化，新增或更新 ADR。
 
+## Opt-in Live Gates
+
+默认 CI 不跑真实外部模型。live gate 必须显式 env 打开，并把 artifact 写到
+对应 slice 目录。
+
+### Customer Assistant Live ReAct Acceptance
+
+- Gate: `customer-assistant-live-react-acceptance`
+- Test:
+  `PYTHONPATH=. uv run pytest tests/acceptance/test_customer_assistant_live_react_acceptance.py -q`
+- Enable:
+  `HIFY_RUN_CUSTOMER_ASSISTANT_LIVE_REACT_ACCEPTANCE=1`
+- API key:
+  `HIFY_CUSTOMER_ASSISTANT_LIVE_API_KEY` or `OPENROUTER_API_KEY`
+- Base URL default: `https://openrouter.ai/api/v1`
+- Model pool default:
+  `xiaomi/mimo-v2-flash,qwen/qwen3.5-9b,deepseek/deepseek-v4-flash`
+- Artifact:
+  `artifacts/slices/072-customer-assistant-live-react-acceptance/live/customer-assistant-live-react-acceptance.md`
+- Default CI evidence:
+  `artifacts/slices/072-customer-assistant-live-react-acceptance/acceptance-skip.txt`
+
 ## Slice Done 定义
 
 一个 slice 只有在以下条件都满足时才算完成：
