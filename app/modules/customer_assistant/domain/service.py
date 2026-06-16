@@ -60,6 +60,7 @@ from app.modules.customer_assistant.domain.worker_profiles import (
 )
 from app.modules.customer_assistant.domain.workers import ChatflowSopWorker, RecommendationAggregator, StubQaWorker
 from app.modules.customer_assistant.infra.repository import CustomerAssistantRepository, IdempotencyConflict
+from app.modules.knowledge.api.facade import KnowledgeContextResult, KnowledgeFacade
 from app.modules.knowledge.infra.repository import KnowledgeBaseRepository
 from app.modules.runtime_lab.domain.sop_adapter import FakeSopRuntimeAdapter
 
@@ -87,6 +88,7 @@ class CustomerAssistantService:
         async_worker_runtime: CustomerAssistantWorkerRuntime | None = None,
         worker_profiles: CustomerAssistantWorkerProfileCatalog | None = None,
         request_context: RequestContext | None = None,
+        knowledge_facade: KnowledgeFacade | None = None,
     ) -> None:
         self._repository = repository
         self._ledger = CustomerAssistantLedger(repository)
@@ -115,6 +117,7 @@ class CustomerAssistantService:
         self._two_stage_runtime = two_stage_runtime or CustomerAssistantTwoStageRuntime()
         self._action_executor_registry = action_executor_registry or MockActionExecutorRegistry()
         self._async_worker_runtime = async_worker_runtime
+        self._knowledge_facade = knowledge_facade
 
     def create_session(self, context: dict[str, Any] | None = None) -> dict[str, Any]:
         row = self._repository.create_session(_session_context_with_host_context(context, self._request_context))
@@ -750,6 +753,80 @@ class CustomerAssistantService:
         self._ensure_session(session_id)
         rows = self._repository.list_tasks(session_id)
         return {"list": [_format_task(row) for row in rows], "total": len(rows)}
+
+    def answer_operator_knowledge_question(self, session_id: int, question: str) -> dict[str, Any]:
+        normalized_question = question.strip()
+        if not normalized_question:
+            raise BizError(ErrorCode.BAD_REQUEST, "Operator knowledge question is required")
+        self._ensure_session(session_id)
+        session_row = self._repository.get_session(session_id)
+        session_context = dict((session_row or {}).get("context_json") or {})
+        task_summaries = [_format_task(row) for row in self._repository.list_tasks(session_id)]
+        action_rows = [_format_action(row) for row in self._repository.list_proposed_actions(session_id)]
+        event_rows = self._repository.list_events(session_id)
+        context_summary = _operator_knowledge_qa_context_summary(
+            session_id,
+            session_context,
+            task_summaries,
+            action_rows,
+            event_rows,
+        )
+        evidence = _operator_knowledge_qa_evidence(task_summaries)
+        sources, warnings = self._operator_knowledge_qa_sources(
+            session_context,
+            task_summaries,
+            normalized_question,
+        )
+        if not evidence:
+            warnings.append("Task/SOP evidence unavailable for this customer-assistant session.")
+        answer = _operator_knowledge_qa_answer(
+            normalized_question,
+            sources,
+            context_summary,
+            evidence,
+            warnings,
+        )
+        return {
+            "sessionId": session_id,
+            "question": sanitize_text(normalized_question),
+            "answer": answer,
+            "sources": sources,
+            "evidence": evidence,
+            "contextSummary": context_summary,
+            "warnings": warnings,
+        }
+
+    def _operator_knowledge_qa_sources(
+        self,
+        session_context: dict[str, Any],
+        task_summaries: list[dict[str, Any]],
+        question: str,
+    ) -> tuple[list[dict[str, Any]], list[str]]:
+        knowledge_base_ids = _operator_knowledge_base_ids(session_context)
+        if not knowledge_base_ids:
+            return [], ["No session knowledge base ids are configured for operator Q&A."]
+        retrieval_settings = dict(session_context.get("retrievalSettings") or {})
+        retrieval_mode = str(retrieval_settings.get("mode") or "faq")
+        top_k = _positive_int(retrieval_settings.get("topK"), default=3, maximum=5)
+        facade = self._knowledge_facade or KnowledgeFacade(self._repository.session)
+        query = _operator_knowledge_qa_query(question, task_summaries)
+        sources: list[dict[str, Any]] = []
+        for knowledge_base_id in knowledge_base_ids:
+            results = facade.search_context(
+                knowledge_base_id,
+                query,
+                top_k=top_k,
+                retrieval_mode=retrieval_mode,
+            )
+            sources.extend(
+                _operator_knowledge_qa_source(knowledge_base_id, result)
+                for result in results
+            )
+        sources.sort(key=lambda item: (-float(item.get("score") or 0.0), str(item.get("title") or "")))
+        warnings: list[str] = []
+        if not sources:
+            warnings.append("No seeded FAQ or knowledge source matched the operator question.")
+        return sources[:top_k], warnings
 
     def list_events(self, session_id: int) -> dict[str, Any]:
         self._ensure_session(session_id)
@@ -2582,6 +2659,143 @@ def _operator_faq_score(faq: dict[str, Any], terms: set[str]) -> int:
         ]
     ).lower()
     return sum(1 for term in terms if term.lower() in haystack)
+
+
+def _operator_knowledge_qa_query(question: str, task_summaries: list[dict[str, Any]]) -> str:
+    terms = sorted(_operator_knowledge_terms(question, task_summaries))
+    if not terms:
+        return question
+    return " ".join([question, *terms])
+
+
+def _operator_knowledge_qa_context_summary(
+    session_id: int,
+    session_context: dict[str, Any],
+    task_summaries: list[dict[str, Any]],
+    proposed_actions: list[dict[str, Any]],
+    event_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    customer = dict(session_context.get("customer") or {})
+    return {
+        "sessionId": session_id,
+        "storyId": sanitize_text(str(session_context.get("storyId") or "")),
+        "storyTitle": sanitize_text(str(session_context.get("storyTitle") or "")),
+        "customer": {
+            "name": sanitize_text(str(customer.get("name") or "")),
+            "maskedPhone": sanitize_text(str(customer.get("phone") or "")),
+        },
+        "taskCount": len(task_summaries),
+        "taskStatusCounts": _count_formatted_values(task_summaries, "status"),
+        "taskTypes": sorted({sanitize_text(str(task.get("taskType") or "")) for task in task_summaries}),
+        "workerRefs": sorted({sanitize_text(str(task.get("workerRef") or "")) for task in task_summaries}),
+        "proposedActionCount": len(proposed_actions),
+        "pendingActionCount": sum(1 for action in proposed_actions if action.get("status") == "PENDING"),
+        "eventCount": len(event_rows),
+        "latestEventTypes": [sanitize_text(str(row.get("type") or "")) for row in event_rows[-5:]],
+        "knowledgeBaseIds": _operator_knowledge_base_ids(session_context),
+    }
+
+
+def _operator_knowledge_qa_evidence(task_summaries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    evidence: list[dict[str, Any]] = []
+    for item in _operator_evidence_from_tasks(task_summaries):
+        task = _task_summary_by_key(task_summaries, str(item.get("taskKey") or ""))
+        evidence.append(
+            {
+                "type": "TASK_LEDGER",
+                "taskKey": sanitize_text(str(item.get("taskKey") or "")),
+                "taskType": sanitize_text(str((task or {}).get("taskType") or "")),
+                "status": sanitize_text(str((task or {}).get("status") or "")),
+                "workerType": sanitize_text(str((task or {}).get("workerType") or "")),
+                "workerRef": sanitize_text(str((task or {}).get("workerRef") or "")),
+                "sopId": sanitize_text(str(item.get("sopId") or "")),
+                "currentStep": sanitize_text(str(item.get("currentStep") or "")),
+            }
+        )
+    return evidence
+
+
+def _operator_knowledge_qa_source(
+    knowledge_base_id: int,
+    result: KnowledgeContextResult,
+) -> dict[str, Any]:
+    answer_excerpt = result.answer or result.content
+    source = {
+        "knowledgeBaseId": knowledge_base_id,
+        "sourceType": sanitize_text(result.source_type),
+        "matchType": sanitize_text(result.match_type),
+        "score": round(float(result.score), 4),
+        "title": sanitize_text(result.title),
+        "answerExcerpt": sanitize_text(answer_excerpt)[:600],
+    }
+    if result.faq_id:
+        source["faqId"] = result.faq_id
+    if result.document_id:
+        source["documentId"] = result.document_id
+    if result.chunk_id:
+        source["chunkId"] = result.chunk_id
+        source["chunkIndex"] = result.chunk_index
+    return source
+
+
+def _operator_knowledge_qa_answer(
+    question: str,
+    sources: list[dict[str, Any]],
+    context_summary: dict[str, Any],
+    evidence: list[dict[str, Any]],
+    warnings: list[str],
+) -> str:
+    lines: list[str] = []
+    if sources:
+        lines.append(str(sources[0].get("answerExcerpt") or sources[0].get("title") or ""))
+    else:
+        lines.append("未找到可引用的知识库答案，请按当前任务状态保守处理并继续人工确认。")
+    task_count = int(context_summary.get("taskCount") or 0)
+    if task_count:
+        status_counts = dict(context_summary.get("taskStatusCounts") or {})
+        status_text = ", ".join(f"{key}={value}" for key, value in sorted(status_counts.items()))
+        lines.append(f"Current task ledger: {task_count} task(s), {status_text}.")
+    proposed_action_count = int(context_summary.get("proposedActionCount") or 0)
+    if proposed_action_count:
+        pending_count = int(context_summary.get("pendingActionCount") or 0)
+        lines.append(f"Proposed-action ledger: {proposed_action_count} action(s), pending={pending_count}.")
+    if evidence:
+        evidence_text = "; ".join(
+            f"{item.get('taskType')} {item.get('status')} via {item.get('workerRef')}"
+            for item in evidence[:3]
+        )
+        lines.append(f"Evidence summary: {evidence_text}.")
+    if sources:
+        lines.append(f"Primary source: {sources[0].get('title')} ({sources[0].get('matchType')}).")
+    if warnings:
+        lines.append(f"Warnings: {'; '.join(warnings)}")
+    return sanitize_text("\n".join(line for line in lines if line))
+
+
+def _count_formatted_values(rows: list[dict[str, Any]], key: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        value = str(row.get(key) or "UNKNOWN")
+        counts[value] = counts.get(value, 0) + 1
+    return counts
+
+
+def _task_summary_by_key(
+    task_summaries: list[dict[str, Any]],
+    task_key: str,
+) -> dict[str, Any] | None:
+    for task in task_summaries:
+        if str(task.get("taskKey") or "") == task_key:
+            return task
+    return None
+
+
+def _positive_int(value: Any, *, default: int, maximum: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = default
+    return min(maximum, max(1, parsed))
 
 
 def _operator_advisory_recommendation(

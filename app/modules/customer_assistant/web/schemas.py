@@ -18,6 +18,10 @@ class CustomerAssistantTurnRequest(BaseModel):
     actor: CustomerAssistantActor = DEFAULT_CUSTOMER_ASSISTANT_ACTOR
 
 
+class CustomerAssistantOperatorKnowledgeQaRequest(BaseModel):
+    question: str = Field(min_length=1)
+
+
 class CustomerAssistantTaskControlRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 

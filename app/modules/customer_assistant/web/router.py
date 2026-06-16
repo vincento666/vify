@@ -40,6 +40,7 @@ from app.modules.customer_assistant.domain.worker_runtime import CustomerAssista
 from app.modules.customer_assistant.domain.worker_profiles import CustomerAssistantWorkerProfileCatalog
 from app.modules.customer_assistant.infra.repository import CustomerAssistantRepository
 from app.modules.customer_assistant.web.schemas import (
+    CustomerAssistantOperatorKnowledgeQaRequest,
     CustomerAssistantProposedActionUpdateRequest,
     CustomerAssistantSessionCreateRequest,
     CustomerAssistantSpawnSubAgentRequest,
@@ -149,6 +150,7 @@ def build_customer_assistant_service(
         ),
         worker_profiles=worker_profiles,
         request_context=request_context,
+        knowledge_facade=KnowledgeFacade(session),
     )
 
 
@@ -417,6 +419,16 @@ def list_tasks(
     service: CustomerAssistantService = Depends(get_customer_assistant_service),
 ) -> dict[str, Any]:
     return success(service.list_tasks(session_id))
+
+
+@router.post("/sessions/{session_id}/operator-knowledge-qa")
+def answer_operator_knowledge_question(
+    session_id: int,
+    request: CustomerAssistantOperatorKnowledgeQaRequest,
+    _access: RequestContext = Depends(require_customer_assistant_operate),
+    service: CustomerAssistantService = Depends(get_customer_assistant_service),
+) -> dict[str, Any]:
+    return success(service.answer_operator_knowledge_question(session_id, request.question))
 
 
 @router.post("/sessions/{session_id}/tasks/{task_id}/controls/propose")
