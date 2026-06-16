@@ -422,8 +422,9 @@ class ChatflowRuntimeV2Service:
         if run_status not in _RUNTIME_V2_CANCELLABLE_STATUSES:
             raise BizError(ErrorCode.BAD_REQUEST, f"Runtime v2 run cannot be cancelled from status {run_status}")
         checkpoint = self._state_repository.get_waiting_checkpoint(chatflow_id, run_id)
-        if checkpoint is not None:
-            self._state_repository.mark_checkpoint_completed(int(checkpoint["id"]))
+        checkpoint_id = int(checkpoint["id"]) if checkpoint is not None else None
+        if checkpoint_id is not None:
+            self._state_repository.mark_checkpoint_completed(checkpoint_id)
         self._repository.finish_run(run_id, "CANCELLED", output={}, error="cancelled by operator")
         if self._use_chatflow_session and owner_type == "CHATFLOW":
             self._state_repository.update_session_status(
@@ -442,8 +443,10 @@ class ChatflowRuntimeV2Service:
                 "ownerType": owner_type,
                 "previousStatus": run_status,
                 "status": "CANCELLED",
+                "checkpointId": checkpoint_id,
                 "cancellation": {"applied": True, "idempotent": False},
             },
+            checkpoint_id=checkpoint_id,
         )
         result = self.get_result(run_id)
         result["cancellation"] = {
@@ -996,6 +999,7 @@ def _format_runtime_event(event: dict[str, Any]) -> dict[str, Any]:
         "source": str(payload.get("source") or "runtime_v2"),
         "actor": str(payload.get("actor") or "system"),
         "nodeId": str(event.get("node_key") or ""),
+        "checkpointId": int(event["checkpoint_id"]) if event.get("checkpoint_id") else None,
         "spanId": payload.get("spanId"),
         "parentSpanId": payload.get("parentSpanId"),
         "payload": payload,
