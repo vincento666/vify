@@ -12,6 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from app.core.database import Base
+from app.core.db_write import insert_and_get_id
 from app.core.schema import register_baseline_tables
 from app.modules.customer_assistant.domain.worker_profiles import default_customer_assistant_worker_profiles_json
 from app.modules.customer_assistant.infra.repository import CustomerAssistantRepository
@@ -27,12 +28,18 @@ from app.modules.runtime_lab.infra.airline_chatflow_seed import (
 )
 
 
+ONE_CLICK_DEMO_SPEC_ID = "106-one-click-demo-seed"
+ONE_CLICK_DEMO_REPORT_SCHEMA = "hify.mvp_demo_seed_report/1"
 MVP_DEMO_STORY_IDS = (
     "refund_baggage_parallel",
     "invoice_interrupt_flight_status",
     "chatflow_block_resume_recommendation",
 )
 MVP_DEMO_KNOWLEDGE_NAME = "073 MVP Demo Airline Service Knowledge"
+MVP_DEMO_PROVIDER_NAME = "106 MVP Demo Mock Provider"
+MVP_DEMO_MODEL_CONFIG_NAME = "106 MVP Demo Mock Customer Assistant Model"
+MVP_DEMO_MODEL_ID = "hify-mvp-demo/mock-safe-chat"
+MVP_DEMO_PROVIDER_BASE_URL = "mock://success"
 MVP_DEMO_HOST_CONTEXT: dict[str, Any] = {
     "actorId": "mvp-demo-operator",
     "actorName": "MVP Demo Operator",
@@ -51,6 +58,16 @@ class MvpDemoSeedResult:
     customer_session_ids: list[int]
     knowledge_base_ids: list[int]
     story_ids: list[str]
+    provider_ids: list[int] | None = None
+    model_config_ids: list[int] | None = None
+
+
+@dataclass(frozen=True)
+class OneClickMvpDemoSeedResult:
+    seed: MvpDemoSeedResult
+    report: dict[str, Any]
+    env_path: Path
+    report_path: Path | None
 
 
 @dataclass(frozen=True)
@@ -193,6 +210,7 @@ FAQ_ENTRIES = (
 
 def seed_mvp_demo(session: Session) -> MvpDemoSeedResult:
     _ensure_seed_tables(session)
+    provider_id, model_config_id = _seed_demo_provider_model(session)
     chatflow_bindings = seed_runtime_lab_airline_chatflows(session)
     knowledge_base_id = _seed_knowledge(session)
     customer_session_ids = [
@@ -204,10 +222,17 @@ def seed_mvp_demo(session: Session) -> MvpDemoSeedResult:
         customer_session_ids=customer_session_ids,
         knowledge_base_ids=[knowledge_base_id],
         story_ids=list(MVP_DEMO_STORY_IDS),
+        provider_ids=[provider_id],
+        model_config_ids=[model_config_id],
     )
 
 
-def write_mvp_demo_env(path: Path, result: MvpDemoSeedResult) -> None:
+def write_mvp_demo_env(
+    path: Path,
+    result: MvpDemoSeedResult,
+    *,
+    report_path: Path | None = None,
+) -> None:
     updates = {
         "HIFY_RUNTIME_LAB_SOP_CHATFLOW_IDS": _format_bindings(result.chatflow_bindings),
         "HIFY_RUNTIME_LAB_INTENT_ARBITRATOR_MODE": "fake",
@@ -220,6 +245,12 @@ def write_mvp_demo_env(path: Path, result: MvpDemoSeedResult) -> None:
         "HIFY_MVP_DEMO_HOST_CONTEXT_JSON": _compact_json(MVP_DEMO_HOST_CONTEXT),
         "HIFY_CUSTOMER_ASSISTANT_WORKER_PROFILES_JSON": default_customer_assistant_worker_profiles_json(),
     }
+    if result.provider_ids:
+        updates["HIFY_MVP_DEMO_PROVIDER_IDS"] = ",".join(str(item) for item in result.provider_ids)
+    if result.model_config_ids:
+        updates["HIFY_MVP_DEMO_MODEL_CONFIG_IDS"] = ",".join(str(item) for item in result.model_config_ids)
+    if report_path is not None:
+        updates["HIFY_MVP_DEMO_SEED_REPORT_PATH"] = str(report_path)
     existing_lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
     next_lines: list[str] = []
     for line in existing_lines:
@@ -237,6 +268,26 @@ def write_mvp_demo_env(path: Path, result: MvpDemoSeedResult) -> None:
     path.write_text("\n".join(next_lines).rstrip() + "\n", encoding="utf-8")
 
 
+def seed_one_click_mvp_demo(
+    session: Session,
+    *,
+    env_path: Path,
+    report_path: Path | None = None,
+) -> OneClickMvpDemoSeedResult:
+    result = seed_mvp_demo(session)
+    env_path.parent.mkdir(parents=True, exist_ok=True)
+    write_mvp_demo_env(env_path, result, report_path=report_path)
+    report = verify_mvp_demo_topology(session, env_text=env_path.read_text(encoding="utf-8"))
+    if report_path is not None:
+        _write_one_click_report(report_path, result, report, env_path=env_path)
+    return OneClickMvpDemoSeedResult(
+        seed=result,
+        report=report,
+        env_path=env_path,
+        report_path=report_path,
+    )
+
+
 def verify_mvp_demo_topology(session: Session, *, env_text: str | None = None) -> dict[str, Any]:
     _ensure_seed_tables(session)
     story_rows = _demo_story_sessions(session)
@@ -249,6 +300,7 @@ def verify_mvp_demo_topology(session: Session, *, env_text: str | None = None) -
     missing_stories = [story_id for story_id, row in story_rows.items() if row is None]
     chatflow_report = _verify_airline_chatflow_bindings(session)
     knowledge_report = _verify_demo_knowledge(session)
+    provider_model_report = _verify_demo_provider_models(session)
     host_context_report = _verify_demo_host_context(story_report, env_text)
     security_report = {
         "secretFreeEnv": _text_is_secret_free(env_text or ""),
@@ -288,6 +340,15 @@ def verify_mvp_demo_topology(session: Session, *, env_text: str | None = None) -
             host_context_report,
         ),
         _check(
+            "demo_provider_model_config",
+            provider_model_report["providerId"] is not None
+            and provider_model_report["modelConfigId"] is not None
+            and provider_model_report["baseUrl"] == MVP_DEMO_PROVIDER_BASE_URL
+            and provider_model_report["secretFree"],
+            "Mock-safe demo provider/model config is available.",
+            provider_model_report,
+        ),
+        _check(
             "secret_free_env",
             security_report["secretFreeEnv"],
             "Generated demo env text does not contain secret-looking values.",
@@ -306,9 +367,36 @@ def verify_mvp_demo_topology(session: Session, *, env_text: str | None = None) -
         "stories": story_report,
         "chatflowBindings": chatflow_report,
         "knowledge": knowledge_report,
+        "providerModel": provider_model_report,
         "hostContext": host_context_report,
         "security": security_report,
     }
+
+
+def _write_one_click_report(
+    path: Path,
+    result: MvpDemoSeedResult,
+    verification: dict[str, Any],
+    *,
+    env_path: Path,
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "schemaVersion": ONE_CLICK_DEMO_REPORT_SCHEMA,
+        "specId": ONE_CLICK_DEMO_SPEC_ID,
+        "generatedAt": datetime.now().isoformat(timespec="seconds"),
+        "envPath": str(env_path),
+        "seed": {
+            "providerIds": list(result.provider_ids or []),
+            "modelConfigIds": list(result.model_config_ids or []),
+            "chatflowBindings": dict(result.chatflow_bindings),
+            "knowledgeBaseIds": list(result.knowledge_base_ids),
+            "customerSessionIds": list(result.customer_session_ids),
+            "storyIds": list(result.story_ids),
+        },
+        "verification": verification,
+    }
+    path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def _ensure_seed_tables(session: Session) -> None:
@@ -317,6 +405,64 @@ def _ensure_seed_tables(session: Session) -> None:
     bind = session.get_bind()
     if bind is not None:
         Base.metadata.create_all(bind=bind)
+
+
+def _seed_demo_provider_model(session: Session) -> tuple[int, int]:
+    provider = Base.metadata.tables["provider"]
+    model_config = Base.metadata.tables["model_config"]
+    now = datetime.now()
+    provider_row = session.execute(
+        sa.select(provider).where(
+            provider.c.name == MVP_DEMO_PROVIDER_NAME,
+            provider.c.deleted.is_(False),
+        )
+    ).mappings().one_or_none()
+    provider_values = {
+        "name": MVP_DEMO_PROVIDER_NAME,
+        "type": "OPENAI_COMPATIBLE",
+        "base_url": MVP_DEMO_PROVIDER_BASE_URL,
+        "auth_config": {},
+        "description": "Spec 106 mock-safe provider anchor for one-click MVP demos.",
+        "enabled": True,
+        "deleted": False,
+        "updated_at": now,
+    }
+    if provider_row is None:
+        provider_id = insert_and_get_id(session, provider, {**provider_values, "created_at": now})
+    else:
+        provider_id = int(provider_row["id"])
+        session.execute(provider.update().where(provider.c.id == provider_id).values(**provider_values))
+    model_row = session.execute(
+        sa.select(model_config).where(
+            model_config.c.name == MVP_DEMO_MODEL_CONFIG_NAME,
+            model_config.c.deleted.is_(False),
+        )
+    ).mappings().one_or_none()
+    model_values = {
+        "provider_id": provider_id,
+        "name": MVP_DEMO_MODEL_CONFIG_NAME,
+        "model_id": MVP_DEMO_MODEL_ID,
+        "context_size": 8192,
+        "extra_params": {
+            "temperature": 0,
+            "demoSeed": ONE_CLICK_DEMO_SPEC_ID,
+            "mockSafe": True,
+        },
+        "enabled": True,
+        "deleted": False,
+        "updated_at": now,
+    }
+    if model_row is None:
+        model_config_id = insert_and_get_id(session, model_config, {**model_values, "created_at": now})
+    else:
+        model_config_id = int(model_row["id"])
+        session.execute(
+            model_config.update()
+            .where(model_config.c.id == model_config_id)
+            .values(**model_values)
+        )
+    session.commit()
+    return provider_id, model_config_id
 
 
 def _seed_knowledge(session: Session) -> int:
@@ -490,6 +636,45 @@ def _verify_demo_knowledge(session: Session) -> dict[str, Any]:
         "knowledgeBaseId": int(base_row["id"]),
         "faqCount": len(faq_rows),
         "keywords": sorted(keywords),
+    }
+
+
+def _verify_demo_provider_models(session: Session) -> dict[str, Any]:
+    provider = Base.metadata.tables["provider"]
+    model_config = Base.metadata.tables["model_config"]
+    row = session.execute(
+        sa.select(
+            provider.c.id.label("provider_id"),
+            provider.c.base_url,
+            provider.c.auth_config,
+            model_config.c.id.label("model_config_id"),
+            model_config.c.model_id,
+        )
+        .select_from(model_config.join(provider, provider.c.id == model_config.c.provider_id))
+        .where(
+            provider.c.name == MVP_DEMO_PROVIDER_NAME,
+            provider.c.deleted.is_(False),
+            provider.c.enabled.is_(True),
+            model_config.c.name == MVP_DEMO_MODEL_CONFIG_NAME,
+            model_config.c.deleted.is_(False),
+            model_config.c.enabled.is_(True),
+        )
+    ).mappings().one_or_none()
+    if row is None:
+        return {
+            "providerId": None,
+            "modelConfigId": None,
+            "baseUrl": None,
+            "modelId": None,
+            "secretFree": False,
+        }
+    auth_config = dict(row.get("auth_config") or {})
+    return {
+        "providerId": int(row["provider_id"]),
+        "modelConfigId": int(row["model_config_id"]),
+        "baseUrl": str(row["base_url"]),
+        "modelId": str(row["model_id"]),
+        "secretFree": _text_is_secret_free(json.dumps(auth_config, ensure_ascii=False)),
     }
 
 
