@@ -348,6 +348,7 @@ def register_chatflow_state_tables(metadata: sa.MetaData) -> None:
         sa.Column("checkpoint_id", BIGINT, nullable=True),
         deleted_column(),
         *timestamps(),
+        sa.UniqueConstraint("run_id", "sequence", name="idx_chatflow_event_run_sequence"),
         sa.Index("idx_chatflow_event_run_id", "run_id"),
         sa.Index("idx_chatflow_event_session_id", "session_id"),
     )

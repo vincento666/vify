@@ -33,6 +33,9 @@
 - [x] Prove max-connection/backpressure behavior or document MVP bounds.
 - [x] N/A: pub/sub not used; ADR documents durable replay requirement for any
       future broker miss.
+- [x] Harden durable event sequence writes with unique constraints plus retry
+      on stale `max(sequence)+1` conflicts for assistant, worker, and runtime v2
+      event streams.
 
 ## 070.4 Browser UAT
 
@@ -40,13 +43,22 @@
 - [x] Verify reconnect behavior.
 - [x] Verify SOP router can still call Chatflow SOP, switch intents, resume a
       suspended task, and fall back to v1 when needed.
+- [x] Verify canvas debug `查看日志` opens the runtime v2 run detail route and
+      projects live node events/status.
+- [x] Verify runtime v2 failed-stop keeps downstream nodes unscheduled.
 - [x] Save screenshots and notes.
 
 ## 070 Evidence
 
 - RED: `artifacts/slices/070-realtime-control-and-scale-out-transport/red.txt`
+- Runtime v2 log route RED:
+  `artifacts/slices/070-realtime-control-and-scale-out-transport/red-run-log-v2-route.txt`
 - Unit: `artifacts/slices/070-realtime-control-and-scale-out-transport/unit.txt`
 - Backend gate: `artifacts/slices/070-realtime-control-and-scale-out-transport/backend-gates.txt`
+- Sequence retry:
+  `artifacts/slices/070-realtime-control-and-scale-out-transport/sequence-retry.txt`
+- Runtime v2 log route unit:
+  `artifacts/slices/070-realtime-control-and-scale-out-transport/frontend-run-log-v2-route.txt`
 - E2E: `artifacts/slices/070-realtime-control-and-scale-out-transport/e2e.txt`
 - Browser UAT: `artifacts/slices/070-realtime-control-and-scale-out-transport/uat.md`
 - ADR: `docs/adr/0004-realtime-control-scaleout-transport.md`

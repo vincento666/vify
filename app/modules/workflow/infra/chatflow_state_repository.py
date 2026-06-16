@@ -13,6 +13,9 @@ from app.core.schema import register_baseline_tables
 register_baseline_tables()
 
 
+_SEQUENCE_RETRY_ATTEMPTS = 3
+
+
 class ChatflowStateRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
@@ -67,27 +70,34 @@ class ChatflowStateRepository:
         payload: dict[str, Any] | None = None,
         checkpoint_id: int | None = None,
     ) -> dict[str, Any]:
-        now = datetime.now()
-        sequence = self._next_sequence(run_id)
-        row = insert_and_fetch(
-            self._session,
-            self._event_table,
-            {
-                "session_id": session_id,
-                "chatflow_id": chatflow_id,
-                "run_id": run_id,
-                "sequence": sequence,
-                "event_type": event_type,
-                "node_key": node_key,
-                "payload": payload or {},
-                "checkpoint_id": checkpoint_id,
-                "deleted": False,
-                "created_at": now,
-                "updated_at": now,
-            },
-        )
-        self._session.commit()
-        return row
+        for attempt in range(_SEQUENCE_RETRY_ATTEMPTS):
+            now = datetime.now()
+            sequence = self._next_sequence(run_id)
+            try:
+                row = insert_and_fetch(
+                    self._session,
+                    self._event_table,
+                    {
+                        "session_id": session_id,
+                        "chatflow_id": chatflow_id,
+                        "run_id": run_id,
+                        "sequence": sequence,
+                        "event_type": event_type,
+                        "node_key": node_key,
+                        "payload": payload or {},
+                        "checkpoint_id": checkpoint_id,
+                        "deleted": False,
+                        "created_at": now,
+                        "updated_at": now,
+                    },
+                )
+                self._session.commit()
+                return row
+            except sa.exc.IntegrityError as exc:
+                self._session.rollback()
+                if attempt == _SEQUENCE_RETRY_ATTEMPTS - 1 or not _is_sequence_conflict(exc):
+                    raise
+        raise RuntimeError("Could not append chatflow event after sequence retries")
 
     def create_checkpoint(
         self,
@@ -308,3 +318,8 @@ class ChatflowStateRepository:
             .where(self._event_table.c.run_id == run_id)
         ).scalar_one()
         return int(value) + 1
+
+
+def _is_sequence_conflict(exc: sa.exc.IntegrityError) -> bool:
+    message = str(exc.orig).lower()
+    return "sequence" in message and ("chatflow_event" in message or "idx_chatflow_event_run_sequence" in message)
