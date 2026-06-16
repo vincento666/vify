@@ -81,6 +81,9 @@ export const get = <T>(url: string, params?: object): Promise<T> =>
 export const post = <T>(url: string, data?: object): Promise<T> =>
   instance.post(url, data)
 
+export const patch = <T>(url: string, data?: object): Promise<T> =>
+  instance.patch(url, data)
+
 export const put = <T>(url: string, data?: object): Promise<T> =>
   instance.put(url, data)
 

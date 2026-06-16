@@ -9,6 +9,6 @@
 
 ## 076.2 Workbench Modify Flow
 
-- [ ] Add RED frontend/API/runtime tests.
-- [ ] Render pending-action edit flow in the workbench.
-- [ ] Run frontend/rem/browser gates and commit.
+- [x] Add RED frontend/API/runtime tests.
+- [x] Render pending-action edit flow in the workbench.
+- [x] Run frontend/rem/browser gates and commit.

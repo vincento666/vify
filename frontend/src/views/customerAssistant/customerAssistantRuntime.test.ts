@@ -17,6 +17,7 @@ const apiMocks = vi.hoisted(() => ({
   proposeCustomerAssistantTaskControl: vi.fn(),
   rejectCustomerAssistantAction: vi.fn(),
   sendCustomerAssistantTurn: vi.fn(),
+  updateCustomerAssistantAction: vi.fn(),
 }))
 
 vi.mock('@/api/customerAssistant', () => apiMocks)
@@ -174,6 +175,38 @@ describe('customer assistant runtime integration', () => {
     expect(apiMocks.rejectCustomerAssistantAction).toHaveBeenCalledWith(pending.id)
     expect(confirmed.proposedActions[0].status).toBe('CONFIRMED')
     expect(rejected.proposedActions[0].status).toBe('REJECTED')
+  })
+
+  it('updates pending proposed action edits in local runtime state', async () => {
+    const pending = mockCustomerAssistantTurnResult.proposedActions[0]
+    apiMocks.updateCustomerAssistantAction.mockResolvedValue({
+      ...pending,
+      title: '提交退票申请（已修正）',
+      payload: { ...pending.payload, amount: 300 },
+    })
+
+    const { createCustomerAssistantRuntimeState, updateCustomerAssistantRuntimeAction } = await import(
+      './customerAssistantRuntime'
+    )
+    const initial = createCustomerAssistantRuntimeState({
+      session: { id: 12, status: 'ACTIVE' },
+      turnResult: mockCustomerAssistantTurnResult,
+    })
+
+    const updated = await updateCustomerAssistantRuntimeAction(initial, pending.id, {
+      title: '提交退票申请（已修正）',
+      payload: { ...pending.payload, amount: 300 },
+    })
+
+    expect(apiMocks.updateCustomerAssistantAction).toHaveBeenCalledWith(pending.id, {
+      title: '提交退票申请（已修正）',
+      payload: { ...pending.payload, amount: 300 },
+    })
+    expect(updated.proposedActions[0]).toMatchObject({
+      id: pending.id,
+      title: '提交退票申请（已修正）',
+      payload: { ...pending.payload, amount: 300 },
+    })
   })
 
   it('refreshes ledgers after confirming a proposed task command', async () => {

@@ -9,6 +9,8 @@ import {
   proposeCustomerAssistantTaskControl,
   rejectCustomerAssistantAction,
   sendCustomerAssistantTurn,
+  updateCustomerAssistantAction,
+  type CustomerAssistantActionUpdatePayload,
   type CustomerAssistantDemoStory,
   type CustomerAssistantEvent,
   type CustomerAssistantListResult,
@@ -156,6 +158,22 @@ export async function executeCustomerAssistantRuntimeAction(
   actionId: number,
 ): Promise<CustomerAssistantRuntimeState> {
   const action = await executeCustomerAssistantAction(actionId)
+  return {
+    ...applyCustomerAssistantActionState(current, action),
+    session: current.session,
+    tasks: current.tasks,
+    events: current.events,
+    loading: false,
+    error: null,
+  }
+}
+
+export async function updateCustomerAssistantRuntimeAction(
+  current: CustomerAssistantRuntimeState,
+  actionId: number,
+  payload: CustomerAssistantActionUpdatePayload,
+): Promise<CustomerAssistantRuntimeState> {
+  const action = await updateCustomerAssistantAction(actionId, payload)
   return {
     ...applyCustomerAssistantActionState(current, action),
     session: current.session,

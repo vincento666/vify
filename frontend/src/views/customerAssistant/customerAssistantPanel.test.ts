@@ -95,6 +95,16 @@ describe('CustomerAssistantPanel UI contract', () => {
     expect(section(content, 'customer-conversation-lane')).not.toContain('proposeTaskControl')
   })
 
+  it('renders pending proposed action edit controls in the operator panel', () => {
+    const actionPanel = section(content, 'operator-proposed-actions-panel')
+
+    expect(actionPanel).toContain('data-testid="operator-action-edit-form"')
+    expect(actionPanel).toContain('startEditAction')
+    expect(actionPanel).toContain('saveEditedAction')
+    expect(content).toContain('updateCustomerAssistantRuntimeAction')
+    expect(section(content, 'customer-conversation-lane')).not.toContain('operator-action-edit-form')
+  })
+
   it('renders configured worker profile metadata in task rows', () => {
     const taskLedger = section(content, 'operator-task-ledger')
 

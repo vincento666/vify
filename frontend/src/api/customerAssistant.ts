@@ -1,4 +1,4 @@
-import { get, post } from '@/utils/request'
+import { get, patch, post } from '@/utils/request'
 
 export interface CustomerAssistantListResult<T> {
   list: T[]
@@ -33,6 +33,11 @@ export type CustomerAssistantTaskControlType = 'retry' | 'cancel' | 'resume'
 export interface CustomerAssistantTaskControlPayload {
   controlType: CustomerAssistantTaskControlType
   reason?: string
+}
+
+export interface CustomerAssistantActionUpdatePayload {
+  title?: string
+  payload?: Record<string, unknown>
 }
 
 export interface CustomerAssistantWorkerProfile {
@@ -161,3 +166,6 @@ export const rejectCustomerAssistantAction = (actionId: number) =>
 
 export const executeCustomerAssistantAction = (actionId: number) =>
   post<CustomerAssistantProposedAction>(`/v1/customer-assistant/proposed-actions/${actionId}/execute`)
+
+export const updateCustomerAssistantAction = (actionId: number, payload: CustomerAssistantActionUpdatePayload) =>
+  patch<CustomerAssistantProposedAction>(`/v1/customer-assistant/proposed-actions/${actionId}`, payload)

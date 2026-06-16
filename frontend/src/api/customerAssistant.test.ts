@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const requestMocks = vi.hoisted(() => ({
   get: vi.fn(),
+  patch: vi.fn(),
   post: vi.fn(),
 }))
 
@@ -10,6 +11,7 @@ vi.mock('@/utils/request', () => requestMocks)
 describe('customer-assistant frontend API client', () => {
   beforeEach(() => {
     requestMocks.get.mockReset()
+    requestMocks.patch.mockReset()
     requestMocks.post.mockReset()
   })
 
@@ -119,6 +121,23 @@ describe('customer-assistant frontend API client', () => {
     expect(requestMocks.post).toHaveBeenNthCalledWith(1, '/v1/customer-assistant/proposed-actions/9/confirm')
     expect(requestMocks.post).toHaveBeenNthCalledWith(2, '/v1/customer-assistant/proposed-actions/10/reject')
     expect(requestMocks.post).toHaveBeenNthCalledWith(3, '/v1/customer-assistant/proposed-actions/11/execute')
+  })
+
+  it('updates pending proposed actions through the patch endpoint', async () => {
+    requestMocks.patch.mockResolvedValueOnce({ id: 9, title: '提交退票申请（已修正）', status: 'PENDING' })
+
+    const { updateCustomerAssistantAction } = await import('./customerAssistant')
+
+    await expect(
+      updateCustomerAssistantAction(9, {
+        title: '提交退票申请（已修正）',
+        payload: { orderNo: 'TK-100', amount: 300 },
+      }),
+    ).resolves.toEqual({ id: 9, title: '提交退票申请（已修正）', status: 'PENDING' })
+    expect(requestMocks.patch).toHaveBeenCalledWith('/v1/customer-assistant/proposed-actions/9', {
+      title: '提交退票申请（已修正）',
+      payload: { orderNo: 'TK-100', amount: 300 },
+    })
   })
 
   it('proposes task controls through the session task endpoint', async () => {

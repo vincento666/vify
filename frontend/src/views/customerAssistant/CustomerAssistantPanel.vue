@@ -297,7 +297,51 @@
               <a-tag v-if="isProposedTaskCommand(action)" color="blue">任务变更</a-tag>
               <a-tag :color="action.status === 'PENDING' ? 'warning' : 'default'">{{ action.status }}</a-tag>
               <code>{{ compactPayload(action.payload) }}</code>
+              <div
+                v-if="editingActionId === action.id"
+                class="action-edit-form"
+                data-testid="operator-action-edit-form"
+              >
+                <a-input
+                  v-model:value="editingActionTitle"
+                  aria-label="修改拟议动作标题"
+                  placeholder="拟议动作标题"
+                />
+                <a-textarea
+                  v-model:value="editingActionPayload"
+                  aria-label="修改拟议动作参数"
+                  :auto-size="{ minRows: 4, maxRows: 8 }"
+                  placeholder="拟议动作参数 JSON"
+                />
+                <p v-if="editingActionError" class="edit-error">{{ editingActionError }}</p>
+                <div class="panel-actions action-edit-actions">
+                  <a-button
+                    size="small"
+                    type="primary"
+                    :loading="actionLoadingId === action.id"
+                    @click="saveEditedAction(action.id)"
+                  >
+                    <CheckOutlined />
+                    保存修改
+                  </a-button>
+                  <a-button size="small" @click="cancelEditAction">
+                    <CloseOutlined />
+                    取消修改
+                  </a-button>
+                </div>
+              </div>
               <div class="panel-actions">
+                <a-tooltip title="修改拟议动作">
+                  <a-button
+                    size="small"
+                    aria-label="修改拟议动作"
+                    :disabled="action.status !== 'PENDING'"
+                    @click="startEditAction(action)"
+                  >
+                    <EditOutlined />
+                    修改
+                  </a-button>
+                </a-tooltip>
                 <a-tooltip :title="actionConfirmTooltip(action)">
                   <a-button
                     size="small"
@@ -428,6 +472,7 @@ import {
   proposeCustomerAssistantRuntimeTaskControl,
   rejectCustomerAssistantRuntimeAction,
   sendCustomerAssistantRuntimeTurn,
+  updateCustomerAssistantRuntimeAction,
 } from './customerAssistantRuntime'
 import {
   applyCustomerAssistantDraftLocally,
@@ -453,6 +498,10 @@ const demoStoryError = ref<string | null>(null)
 const workerProfiles = ref<CustomerAssistantWorkerProfile[]>([])
 const workerProfilesLoading = ref(false)
 const workerProfileError = ref<string | null>(null)
+const editingActionId = ref<number | null>(null)
+const editingActionTitle = ref('')
+const editingActionPayload = ref('')
+const editingActionError = ref<string | null>(null)
 
 const workspace = computed(() => ({
   ...runtimeState.value,
@@ -519,6 +568,44 @@ function actionConfirmLabel(action: CustomerAssistantProposedAction) {
 
 function actionConfirmTooltip(action: CustomerAssistantProposedAction) {
   return isProposedTaskCommand(action) ? '确认任务变更' : '确认拟议动作'
+}
+
+function startEditAction(action: CustomerAssistantProposedAction) {
+  editingActionId.value = action.id
+  editingActionTitle.value = action.title
+  editingActionPayload.value = JSON.stringify(action.payload, null, 2)
+  editingActionError.value = null
+}
+
+function cancelEditAction() {
+  editingActionId.value = null
+  editingActionTitle.value = ''
+  editingActionPayload.value = ''
+  editingActionError.value = null
+}
+
+async function saveEditedAction(actionId: number) {
+  editingActionError.value = null
+  let payload: Record<string, unknown>
+  try {
+    payload = JSON.parse(editingActionPayload.value || '{}') as Record<string, unknown>
+  } catch {
+    editingActionError.value = '动作参数必须是合法 JSON'
+    return
+  }
+  actionLoadingId.value = actionId
+  try {
+    runtimeState.value = await updateCustomerAssistantRuntimeAction(runtimeState.value, actionId, {
+      title: editingActionTitle.value.trim(),
+      payload,
+    })
+    cancelEditAction()
+    message.success('已保存动作修改')
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '保存动作修改失败')
+  } finally {
+    actionLoadingId.value = null
+  }
 }
 
 function taskControlTooltip(control: CustomerAssistantTaskControlType) {
@@ -996,6 +1083,26 @@ async function executeAction(actionId: number) {
   flex-wrap: wrap;
   gap: 0.5rem;
   margin-top: 0.65rem;
+}
+
+.action-edit-form {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.6rem;
+  border: 0.0625rem dashed #b8c7dc;
+  border-radius: 0.45rem;
+  background: #f7fbff;
+}
+
+.action-edit-actions {
+  margin-top: 0;
+}
+
+.edit-error {
+  margin: 0;
+  color: #b42318;
+  font-size: 0.8125rem;
+  line-height: 1.45;
 }
 
 .action-row code,
