@@ -2,12 +2,16 @@ import {
   confirmCustomerAssistantAction,
   createCustomerAssistantSession,
   executeCustomerAssistantAction,
+  listCustomerAssistantDemoStories,
   listCustomerAssistantEvents,
+  listCustomerAssistantProposedActions,
   listCustomerAssistantTasks,
   rejectCustomerAssistantAction,
   sendCustomerAssistantTurn,
+  type CustomerAssistantDemoStory,
   type CustomerAssistantEvent,
   type CustomerAssistantListResult,
+  type CustomerAssistantProposedAction,
   type CustomerAssistantSession,
   type CustomerAssistantTask,
   type CustomerAssistantTurnPayload,
@@ -82,19 +86,44 @@ export async function sendCustomerAssistantRuntimeTurn(
   })
   try {
     const turnResult = await sendCustomerAssistantTurn(session.id, payload)
-    const { tasks, events } = await refreshCustomerAssistantRuntimeLedgers(session.id)
-    return fromTurnResult(session, payload, turnResult, tasks.list, events.list)
+    const { tasks, events, proposedActions } = await refreshCustomerAssistantRuntimeLedgers(session.id)
+    return fromTurnResult(session, payload, turnResult, tasks.list, events.list, proposedActions.list)
   } finally {
     stream?.close()
   }
 }
 
 export async function refreshCustomerAssistantRuntimeLedgers(sessionId: number) {
-  const [tasks, events] = await Promise.all([
+  const [tasks, events, proposedActions] = await Promise.all([
     listCustomerAssistantTasks(sessionId),
     listCustomerAssistantEvents(sessionId),
+    listCustomerAssistantProposedActions(sessionId),
   ])
-  return { tasks, events }
+  return { tasks, events, proposedActions }
+}
+
+export async function loadCustomerAssistantDemoStory(storyId: string): Promise<CustomerAssistantRuntimeState> {
+  const stories = await listCustomerAssistantDemoStories()
+  const story = stories.list.find((item) => item.storyId === storyId)
+  if (!story) {
+    throw new Error(`Demo story not found: ${storyId}`)
+  }
+  const { tasks, events, proposedActions } = await refreshCustomerAssistantRuntimeLedgers(story.sessionId)
+  const session = demoStorySession(story)
+  return {
+    ...buildCustomerAssistantState({
+      sessionId: story.sessionId,
+      customerInput: story.openingMessage,
+      tasks: tasks.list,
+      events: events.list,
+      proposedActions: proposedActions.list,
+    }),
+    session,
+    tasks: tasks.list,
+    events: events.list,
+    loading: false,
+    error: null,
+  }
 }
 
 export async function confirmCustomerAssistantRuntimeAction(
@@ -141,6 +170,7 @@ function fromTurnResult(
   turnResult: CustomerAssistantTurnResult,
   tasks: CustomerAssistantListResult<CustomerAssistantTask>['list'],
   events: CustomerAssistantListResult<CustomerAssistantEvent>['list'],
+  proposedActions: CustomerAssistantListResult<CustomerAssistantProposedAction>['list'],
 ): CustomerAssistantRuntimeState {
   return {
     ...buildCustomerAssistantState({
@@ -150,12 +180,32 @@ function fromTurnResult(
       turnResult,
       tasks,
       events,
+      proposedActions,
     }),
     session,
     tasks,
     events,
     loading: false,
     error: null,
+  }
+}
+
+function demoStorySession(story: CustomerAssistantDemoStory): CustomerAssistantSession {
+  return {
+    id: story.sessionId,
+    status: story.sessionStatus ?? 'ACTIVE',
+    context: {
+      demoSeed: '073',
+      storyId: story.storyId,
+      storyTitle: story.title,
+      customer: {
+        name: story.customerName,
+        phone: story.maskedPhone ?? '',
+      },
+      openingMessage: story.openingMessage ?? '',
+      knowledgeBaseIds: story.knowledgeBaseIds,
+      chatflowBindings: story.chatflowBindings ?? {},
+    },
   }
 }
 
@@ -256,17 +306,19 @@ async function applyRuntimeActionResult(
     error: null,
   }
   if (action.actionType !== 'PROPOSED_TASK_COMMAND' || !current.session?.id) return updated
-  const { tasks, events } = await refreshCustomerAssistantRuntimeLedgers(current.session.id)
+  const { tasks, events, proposedActions } = await refreshCustomerAssistantRuntimeLedgers(current.session.id)
   const rebuilt = buildCustomerAssistantState({
     sessionId: current.session.id,
     tasks: tasks.list,
     events: events.list,
+    proposedActions: proposedActions.list,
   })
   return {
     ...updated,
     taskSummary: rebuilt.taskSummary,
     eventTimeline: rebuilt.eventTimeline,
     progressStages: rebuilt.progressStages,
+    proposedActions: rebuilt.proposedActions,
     tasks: tasks.list,
     events: events.list,
   }

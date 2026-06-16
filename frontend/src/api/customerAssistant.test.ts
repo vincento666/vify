@@ -59,15 +59,33 @@ describe('customer-assistant frontend API client', () => {
   })
 
   it('lists task and event ledgers', async () => {
-    requestMocks.get.mockResolvedValueOnce({ list: [], total: 0 }).mockResolvedValueOnce({ list: [], total: 0 })
+    requestMocks.get
+      .mockResolvedValueOnce({ list: [], total: 0 })
+      .mockResolvedValueOnce({ list: [], total: 0 })
+      .mockResolvedValueOnce({ list: [], total: 0 })
 
-    const { listCustomerAssistantEvents, listCustomerAssistantTasks } = await import('./customerAssistant')
+    const { listCustomerAssistantEvents, listCustomerAssistantProposedActions, listCustomerAssistantTasks } =
+      await import('./customerAssistant')
 
     await listCustomerAssistantTasks(7)
     await listCustomerAssistantEvents(7)
+    await listCustomerAssistantProposedActions(7)
 
     expect(requestMocks.get).toHaveBeenNthCalledWith(1, '/v1/customer-assistant/sessions/7/tasks')
     expect(requestMocks.get).toHaveBeenNthCalledWith(2, '/v1/customer-assistant/sessions/7/events')
+    expect(requestMocks.get).toHaveBeenNthCalledWith(3, '/v1/customer-assistant/sessions/7/proposed-actions')
+  })
+
+  it('lists seeded demo stories', async () => {
+    requestMocks.get.mockResolvedValueOnce({ list: [{ storyId: 'refund_baggage_parallel' }], total: 1 })
+
+    const { listCustomerAssistantDemoStories } = await import('./customerAssistant')
+
+    await expect(listCustomerAssistantDemoStories()).resolves.toEqual({
+      list: [{ storyId: 'refund_baggage_parallel' }],
+      total: 1,
+    })
+    expect(requestMocks.get).toHaveBeenCalledWith('/v1/customer-assistant/demo-stories')
   })
 
   it('confirms, rejects, and executes proposed actions through explicit endpoints', async () => {

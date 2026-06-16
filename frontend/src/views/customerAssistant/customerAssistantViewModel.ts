@@ -94,6 +94,7 @@ export interface BuildCustomerAssistantStateInput {
   turnResult?: CustomerAssistantTurnResult | null
   tasks?: CustomerAssistantTask[]
   events?: CustomerAssistantEvent[]
+  proposedActions?: CustomerAssistantProposedAction[]
 }
 
 export function buildCustomerAssistantState(input: BuildCustomerAssistantStateInput = {}): CustomerAssistantState {
@@ -129,7 +130,7 @@ export function buildCustomerAssistantState(input: BuildCustomerAssistantStateIn
       customerReplyDraft: turn?.customerReplyDraft ?? '',
       warnings: [...(turn?.warnings ?? [])],
     },
-    proposedActions: [...(turn?.proposedActions ?? [])],
+    proposedActions: [...(input.proposedActions ?? turn?.proposedActions ?? [])],
     eventTimeline: formatCustomerAssistantEvents(events),
     progressStages: deriveCustomerAssistantProgressStages(events),
     replayed: Boolean(turn?.replayed),

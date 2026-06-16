@@ -14,6 +14,20 @@ export interface CustomerAssistantSession {
   updatedAt?: string | null
 }
 
+export interface CustomerAssistantDemoStory {
+  storyId: string
+  title: string
+  sessionId: number
+  sessionStatus?: string
+  customerName: string
+  maskedPhone?: string
+  openingMessage?: string
+  taskCount: number
+  pendingActionCount: number
+  knowledgeBaseIds: number[]
+  chatflowBindings?: Record<string, number>
+}
+
 export interface CustomerAssistantProposedAction {
   id: number
   sessionId?: number
@@ -83,6 +97,9 @@ export interface CustomerAssistantTurnPayload {
 export const createCustomerAssistantSession = (context: Record<string, unknown> = {}) =>
   post<CustomerAssistantSession>('/v1/customer-assistant/sessions', { context })
 
+export const listCustomerAssistantDemoStories = () =>
+  get<CustomerAssistantListResult<CustomerAssistantDemoStory>>('/v1/customer-assistant/demo-stories')
+
 export const sendCustomerAssistantTurn = (sessionId: number, payload: CustomerAssistantTurnPayload) => {
   const { message, idempotencyKey, actor } = payload
   return post<CustomerAssistantTurnResult>(`/v1/customer-assistant/sessions/${sessionId}/turns`, {
@@ -97,6 +114,11 @@ export const listCustomerAssistantTasks = (sessionId: number) =>
 
 export const listCustomerAssistantEvents = (sessionId: number) =>
   get<CustomerAssistantListResult<CustomerAssistantEvent>>(`/v1/customer-assistant/sessions/${sessionId}/events`)
+
+export const listCustomerAssistantProposedActions = (sessionId: number) =>
+  get<CustomerAssistantListResult<CustomerAssistantProposedAction>>(
+    `/v1/customer-assistant/sessions/${sessionId}/proposed-actions`,
+  )
 
 export const confirmCustomerAssistantAction = (actionId: number) =>
   post<CustomerAssistantProposedAction>(`/v1/customer-assistant/proposed-actions/${actionId}/confirm`)

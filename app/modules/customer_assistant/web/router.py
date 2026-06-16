@@ -181,6 +181,13 @@ def create_session(
     return success(service.create_session(context))
 
 
+@router.get("/demo-stories")
+def list_demo_stories(
+    service: CustomerAssistantService = Depends(get_customer_assistant_service),
+) -> dict[str, Any]:
+    return success(service.list_demo_stories())
+
+
 @router.post("/sessions/{session_id}/turns")
 def submit_turn(
     session_id: int,
@@ -319,6 +326,14 @@ def list_events(
     service: CustomerAssistantService = Depends(get_customer_assistant_service),
 ) -> dict[str, Any]:
     return success(service.list_events(session_id))
+
+
+@router.get("/sessions/{session_id}/proposed-actions")
+def list_proposed_actions(
+    session_id: int,
+    service: CustomerAssistantService = Depends(get_customer_assistant_service),
+) -> dict[str, Any]:
+    return success(service.list_proposed_actions(session_id))
 
 
 @router.get("/sessions/{session_id}/events/stream")

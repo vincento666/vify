@@ -59,6 +59,20 @@ class CustomerAssistantRepository:
         ).mappings().one_or_none()
         return dict(row) if row else None
 
+    def list_demo_sessions(self, demo_seed: str) -> list[dict[str, Any]]:
+        rows = self._session.execute(
+            sa.select(self._session_table)
+            .where(self._session_table.c.deleted.is_(False))
+            .order_by(self._session_table.c.id.asc())
+        ).mappings().all()
+        demo_rows: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            context = dict(item.get("context_json") or {})
+            if context.get("demoSeed") == demo_seed:
+                demo_rows.append(item)
+        return demo_rows
+
     def create_run(
         self,
         session_id: int,

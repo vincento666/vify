@@ -10,7 +10,9 @@ const apiMocks = vi.hoisted(() => ({
   confirmCustomerAssistantAction: vi.fn(),
   createCustomerAssistantSession: vi.fn(),
   executeCustomerAssistantAction: vi.fn(),
+  listCustomerAssistantDemoStories: vi.fn(),
   listCustomerAssistantEvents: vi.fn(),
+  listCustomerAssistantProposedActions: vi.fn(),
   listCustomerAssistantTasks: vi.fn(),
   rejectCustomerAssistantAction: vi.fn(),
   sendCustomerAssistantTurn: vi.fn(),
@@ -35,6 +37,10 @@ describe('customer assistant runtime integration', () => {
     apiMocks.sendCustomerAssistantTurn.mockResolvedValue(mockCustomerAssistantTurnResult)
     apiMocks.listCustomerAssistantTasks.mockResolvedValue(mockCustomerAssistantTasks)
     apiMocks.listCustomerAssistantEvents.mockResolvedValue(mockCustomerAssistantEvents)
+    apiMocks.listCustomerAssistantProposedActions.mockResolvedValue({
+      list: mockCustomerAssistantTurnResult.proposedActions,
+      total: 1,
+    })
 
     const { createCustomerAssistantRuntimeState, sendCustomerAssistantRuntimeTurn } = await import(
       './customerAssistantRuntime'
@@ -54,6 +60,7 @@ describe('customer assistant runtime integration', () => {
     })
     expect(apiMocks.listCustomerAssistantTasks).toHaveBeenCalledWith(12)
     expect(apiMocks.listCustomerAssistantEvents).toHaveBeenCalledWith(12)
+    expect(apiMocks.listCustomerAssistantProposedActions).toHaveBeenCalledWith(12)
     expect(state.session?.id).toBe(12)
     expect(state.taskSummary.items[0].taskKey).toBe('refund_ticket')
     expect(state.eventTimeline[0].title).toBe('run_started')
@@ -63,6 +70,10 @@ describe('customer assistant runtime integration', () => {
     apiMocks.sendCustomerAssistantTurn.mockResolvedValue(mockCustomerAssistantTurnResult)
     apiMocks.listCustomerAssistantTasks.mockResolvedValue(mockCustomerAssistantTasks)
     apiMocks.listCustomerAssistantEvents.mockResolvedValue(mockCustomerAssistantEvents)
+    apiMocks.listCustomerAssistantProposedActions.mockResolvedValue({
+      list: mockCustomerAssistantTurnResult.proposedActions,
+      total: 1,
+    })
 
     const { createCustomerAssistantRuntimeState, sendCustomerAssistantRuntimeTurn } = await import(
       './customerAssistantRuntime'
@@ -87,6 +98,10 @@ describe('customer assistant runtime integration', () => {
     apiMocks.createCustomerAssistantSession.mockResolvedValue({ id: 12, status: 'ACTIVE' })
     apiMocks.listCustomerAssistantTasks.mockResolvedValue(mockCustomerAssistantTasks)
     apiMocks.listCustomerAssistantEvents.mockResolvedValue(mockCustomerAssistantEvents)
+    apiMocks.listCustomerAssistantProposedActions.mockResolvedValue({
+      list: mockCustomerAssistantTurnResult.proposedActions,
+      total: 1,
+    })
     let resolveTurn: (value: typeof mockCustomerAssistantTurnResult) => void = () => {}
     apiMocks.sendCustomerAssistantTurn.mockReturnValue(
       new Promise((resolve) => {
@@ -195,6 +210,10 @@ describe('customer assistant runtime integration', () => {
       ],
       total: 2,
     })
+    apiMocks.listCustomerAssistantProposedActions.mockResolvedValue({
+      list: [{ ...proposedTaskCommand, status: 'CONFIRMED' }],
+      total: 1,
+    })
 
     const { confirmCustomerAssistantRuntimeAction, createCustomerAssistantRuntimeState } = await import(
       './customerAssistantRuntime'
@@ -215,5 +234,41 @@ describe('customer assistant runtime integration', () => {
     expect(confirmed.proposedActions[0].status).toBe('CONFIRMED')
     expect(confirmed.taskSummary.items[0].taskKey).toBe('refund_ticket')
     expect(confirmed.eventTimeline.some((event) => event.title === 'proposed_task_command_confirmed')).toBe(true)
+  })
+
+  it('loads a seeded demo story into the workbench state', async () => {
+    apiMocks.listCustomerAssistantDemoStories.mockResolvedValue({
+      list: [
+        {
+          storyId: 'refund_baggage_parallel',
+          title: '退票 + 行李额并行',
+          sessionId: 73,
+          customerName: '赵女士',
+          taskCount: 2,
+          pendingActionCount: 1,
+          knowledgeBaseIds: [201],
+        },
+      ],
+      total: 1,
+    })
+    apiMocks.listCustomerAssistantTasks.mockResolvedValue(mockCustomerAssistantTasks)
+    apiMocks.listCustomerAssistantEvents.mockResolvedValue(mockCustomerAssistantEvents)
+    apiMocks.listCustomerAssistantProposedActions.mockResolvedValue({
+      list: mockCustomerAssistantTurnResult.proposedActions,
+      total: 1,
+    })
+
+    const { loadCustomerAssistantDemoStory } = await import('./customerAssistantRuntime')
+
+    const state = await loadCustomerAssistantDemoStory('refund_baggage_parallel')
+
+    expect(apiMocks.listCustomerAssistantDemoStories).toHaveBeenCalled()
+    expect(apiMocks.listCustomerAssistantTasks).toHaveBeenCalledWith(73)
+    expect(apiMocks.listCustomerAssistantEvents).toHaveBeenCalledWith(73)
+    expect(apiMocks.listCustomerAssistantProposedActions).toHaveBeenCalledWith(73)
+    expect(state.session?.id).toBe(73)
+    expect(state.taskSummary.items[0].taskKey).toBe('refund_ticket')
+    expect(state.proposedActions[0].title).toBe(mockCustomerAssistantTurnResult.proposedActions[0].title)
+    expect(state.eventTimeline[0].title).toBe('run_started')
   })
 })

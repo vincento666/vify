@@ -31,6 +31,37 @@
       description="当前回复来自相同 idempotencyKey 的历史结果。"
     />
 
+    <section class="demo-story-strip" data-testid="customer-assistant-demo-stories" aria-label="演示故事线">
+      <div class="demo-story-heading">
+        <span class="panel-heading-title">
+          <CustomerServiceOutlined />
+          演示故事线
+        </span>
+        <a-tag v-if="selectedDemoStory" color="blue">
+          {{ selectedDemoStory.customerName }} · {{ selectedDemoStory.maskedPhone }}
+        </a-tag>
+      </div>
+      <div class="demo-story-list">
+        <a-button
+          v-for="story in demoStories"
+          :key="story.storyId"
+          class="demo-story-button"
+          :type="story.storyId === selectedDemoStoryId ? 'primary' : 'default'"
+          :loading="demoStoryLoadingId === story.storyId"
+          @click="loadDemoStory(story.storyId)"
+        >
+          <ThunderboltOutlined />
+          <span>{{ story.title }}</span>
+          <small>{{ story.customerName }} · {{ story.taskCount }} 任务 · {{ story.pendingActionCount }} 待确认</small>
+        </a-button>
+        <a-button v-if="demoStories.length === 0" class="demo-story-button" disabled :loading="demoStoriesLoading">
+          <HistoryOutlined />
+          <span>{{ demoStoriesLoading ? '正在加载演示故事' : '暂无演示故事' }}</span>
+          <small>{{ demoStoryError || '请先执行 demo seed' }}</small>
+        </a-button>
+      </div>
+    </section>
+
     <div class="workspace-grid">
       <section class="workspace-panel conversation-panel" data-testid="customer-conversation-lane">
         <div class="panel-heading">
@@ -324,9 +355,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
-import type { CustomerAssistantProposedAction } from '@/api/customerAssistant'
+import {
+  listCustomerAssistantDemoStories,
+  type CustomerAssistantDemoStory,
+  type CustomerAssistantProposedAction,
+} from '@/api/customerAssistant'
 import {
   BulbOutlined,
   CheckOutlined,
@@ -348,6 +383,7 @@ import {
   confirmCustomerAssistantRuntimeAction,
   createCustomerAssistantRuntimeState,
   executeCustomerAssistantRuntimeAction,
+  loadCustomerAssistantDemoStory,
   rejectCustomerAssistantRuntimeAction,
   sendCustomerAssistantRuntimeTurn,
 } from './customerAssistantRuntime'
@@ -365,8 +401,16 @@ const sendingSource = ref<'customer' | 'operator' | null>(null)
 const actionLoadingId = ref<number | null>(null)
 const expandedEventKeys = ref<string[]>([])
 const runtimeState = ref(createCustomerAssistantRuntimeState())
+const demoStories = ref<CustomerAssistantDemoStory[]>([])
+const selectedDemoStoryId = ref<string | null>(null)
+const demoStoriesLoading = ref(false)
+const demoStoryLoadingId = ref<string | null>(null)
+const demoStoryError = ref<string | null>(null)
 
 const workspace = computed(() => runtimeState.value)
+const selectedDemoStory = computed(() =>
+  demoStories.value.find((story) => story.storyId === selectedDemoStoryId.value) ?? null,
+)
 const sessionLabel = computed(() =>
   workspace.value.sessionId === null ? '尚未创建会话' : `Session #${workspace.value.sessionId}`,
 )
@@ -386,6 +430,10 @@ const turnStatusColor = computed(() => {
   if (turnStatus.value.kind === 'loading') return 'processing'
   if (turnStatus.value.kind === 'replayed') return 'blue'
   return 'default'
+})
+
+onMounted(() => {
+  loadDemoStories()
 })
 
 function messageLabel(role: string) {
@@ -420,6 +468,35 @@ function actionConfirmLabel(action: CustomerAssistantProposedAction) {
 
 function actionConfirmTooltip(action: CustomerAssistantProposedAction) {
   return isProposedTaskCommand(action) ? '确认任务变更' : '确认拟议动作'
+}
+
+async function loadDemoStories() {
+  demoStoriesLoading.value = true
+  demoStoryError.value = null
+  try {
+    const result = await listCustomerAssistantDemoStories()
+    demoStories.value = result.list
+  } catch (error) {
+    demoStoryError.value = error instanceof Error ? error.message : '演示故事加载失败'
+  } finally {
+    demoStoriesLoading.value = false
+  }
+}
+
+async function loadDemoStory(storyId: string) {
+  demoStoryLoadingId.value = storyId
+  demoStoryError.value = null
+  try {
+    runtimeState.value = await loadCustomerAssistantDemoStory(storyId)
+    selectedDemoStoryId.value = storyId
+    draftApplied.value = false
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : '演示故事加载失败'
+    demoStoryError.value = errorMessage
+    message.error(errorMessage)
+  } finally {
+    demoStoryLoadingId.value = null
+  }
 }
 
 async function copyDraft() {
@@ -546,6 +623,54 @@ async function executeAction(actionId: number) {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.5rem;
+}
+
+.demo-story-strip {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.875rem;
+  border: 0.0625rem solid #d9e6f7;
+  border-radius: 0.5rem;
+  background: #f7fbff;
+}
+
+.demo-story-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.demo-story-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.625rem;
+}
+
+.demo-story-button {
+  display: grid;
+  grid-template-columns: 1.25rem minmax(0, 1fr);
+  gap: 0.25rem 0.5rem;
+  align-items: center;
+  justify-content: start;
+  min-height: 3.8rem;
+  height: auto;
+  padding: 0.65rem 0.75rem;
+  text-align: left;
+  white-space: normal;
+}
+
+.demo-story-button small {
+  grid-column: 2;
+  overflow: hidden;
+  color: #5c667a;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+}
+
+.demo-story-button.ant-btn-primary small {
+  color: #e7f0ff;
 }
 
 .workspace-grid {

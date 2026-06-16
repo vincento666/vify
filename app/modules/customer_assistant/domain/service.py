@@ -56,6 +56,13 @@ from app.modules.customer_assistant.infra.repository import CustomerAssistantRep
 from app.modules.runtime_lab.domain.sop_adapter import FakeSopRuntimeAdapter
 
 
+_MVP_DEMO_STORY_ORDER = (
+    "refund_baggage_parallel",
+    "invoice_interrupt_flight_status",
+    "chatflow_block_resume_recommendation",
+)
+
+
 class CustomerAssistantService:
     def __init__(
         self,
@@ -100,6 +107,12 @@ class CustomerAssistantService:
     def create_session(self, context: dict[str, Any] | None = None) -> dict[str, Any]:
         row = self._repository.create_session(context)
         return _format_session(row)
+
+    def list_demo_stories(self) -> dict[str, Any]:
+        rows = self._repository.list_demo_sessions("073")
+        stories = [_format_demo_story(row, self._repository) for row in rows]
+        stories.sort(key=_demo_story_sort_key)
+        return {"list": stories, "total": len(stories)}
 
     def handle_turn(
         self,
@@ -611,6 +624,11 @@ class CustomerAssistantService:
         self._ensure_session(session_id)
         rows = self._repository.list_events(session_id)
         return {"list": [_format_event(row) for row in rows], "total": len(rows)}
+
+    def list_proposed_actions(self, session_id: int) -> dict[str, Any]:
+        self._ensure_session(session_id)
+        rows = self._repository.list_proposed_actions(session_id)
+        return {"list": [_format_action(row) for row in rows], "total": len(rows)}
 
     def list_events_after(self, session_id: int, after_sequence: int) -> list[dict[str, Any]]:
         self._ensure_session(session_id)
@@ -1442,6 +1460,35 @@ def _format_session(row: dict[str, Any]) -> dict[str, Any]:
         "createdAt": _iso(row.get("created_at")),
         "updatedAt": _iso(row.get("updated_at")),
     }
+
+
+def _format_demo_story(row: dict[str, Any], repository: CustomerAssistantRepository) -> dict[str, Any]:
+    context = dict(row.get("context_json") or {})
+    customer = dict(context.get("customer") or {})
+    session_id = int(row["id"])
+    tasks = repository.list_tasks(session_id)
+    actions = repository.list_proposed_actions(session_id)
+    return {
+        "storyId": str(context.get("storyId") or context.get("demoSeedKey") or session_id),
+        "title": str(context.get("storyTitle") or "未命名演示故事"),
+        "sessionId": session_id,
+        "sessionStatus": str(row.get("status") or "UNKNOWN"),
+        "customerName": str(customer.get("name") or "演示客户"),
+        "maskedPhone": str(customer.get("phone") or ""),
+        "openingMessage": str(context.get("openingMessage") or ""),
+        "taskCount": len(tasks),
+        "pendingActionCount": sum(1 for action in actions if str(action.get("status")) == "PENDING"),
+        "knowledgeBaseIds": [int(item) for item in list(context.get("knowledgeBaseIds") or [])],
+        "chatflowBindings": dict(context.get("chatflowBindings") or {}),
+    }
+
+
+def _demo_story_sort_key(story: dict[str, Any]) -> tuple[int, str]:
+    story_id = str(story.get("storyId") or "")
+    try:
+        return (_MVP_DEMO_STORY_ORDER.index(story_id), story_id)
+    except ValueError:
+        return (len(_MVP_DEMO_STORY_ORDER), story_id)
 
 
 def _format_task(row: dict[str, Any]) -> dict[str, Any]:
