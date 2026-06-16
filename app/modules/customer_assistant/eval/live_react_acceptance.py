@@ -8,6 +8,7 @@ import os
 import tempfile
 from pathlib import Path
 from typing import Any, Literal, cast
+from urllib.parse import urlparse
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -46,9 +47,11 @@ from app.modules.customer_assistant.infra.schema import (
     register_customer_assistant_tables,
 )
 from app.modules.provider.infra.llm_adapters import OpenAIAdapterParser
+from app.modules.provider.infra.repository import ProviderRepository
 
 LIVE_GATE_NAME = "customer-assistant-live-react-acceptance"
 LIVE_GATE_FLAG = "HIFY_RUN_CUSTOMER_ASSISTANT_LIVE_REACT_ACCEPTANCE"
+LIVE_MODEL_CONFIG_ID = "HIFY_CUSTOMER_ASSISTANT_LIVE_MODEL_CONFIG_ID"
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_MODEL_POOL = ("xiaomi/mimo-v2-flash", "qwen/qwen3.5-9b", "deepseek/deepseek-v4-flash")
 DEFAULT_OUTPUT_DIR = Path("artifacts/slices/072-customer-assistant-live-react-acceptance/live")
@@ -98,16 +101,28 @@ def load_live_react_acceptance_config(
     output_dir: Path | None = None,
 ) -> LiveReactAcceptanceConfig:
     values = os.environ if env is None else env
-    model_pool = _model_pool_from_env(str(values.get("HIFY_CUSTOMER_ASSISTANT_LIVE_MODEL_POOL") or ""))
+    raw_model_pool = str(values.get("HIFY_CUSTOMER_ASSISTANT_LIVE_MODEL_POOL") or "")
+    model_pool = _model_pool_from_env(raw_model_pool)
+    base_url = str(
+        values.get("HIFY_CUSTOMER_ASSISTANT_LIVE_BASE_URL")
+        or values.get("OPENROUTER_BASE_URL")
+        or DEFAULT_BASE_URL
+    ).rstrip("/")
+    api_key = str(values.get("HIFY_CUSTOMER_ASSISTANT_LIVE_API_KEY") or values.get("OPENROUTER_API_KEY") or "")
+    provider_type = PROVIDER_TYPE
+    if not api_key:
+        provider_config = _provider_config_from_env(values)
+        if provider_config is not None:
+            provider_type = str(provider_config["provider_type"] or PROVIDER_TYPE)
+            base_url = str(provider_config["provider_base_url"] or DEFAULT_BASE_URL).rstrip("/")
+            auth_config = dict(provider_config.get("provider_auth_config") or {})
+            api_key = str(auth_config.get("api_key") or auth_config.get("apiKey") or "")
+            model_pool = (str(provider_config["model_id"]),)
     return LiveReactAcceptanceConfig(
         enabled=str(values.get(LIVE_GATE_FLAG) or "").strip() == "1",
-        provider_type=PROVIDER_TYPE,
-        base_url=str(
-            values.get("HIFY_CUSTOMER_ASSISTANT_LIVE_BASE_URL")
-            or values.get("OPENROUTER_BASE_URL")
-            or DEFAULT_BASE_URL
-        ).rstrip("/"),
-        api_key=str(values.get("HIFY_CUSTOMER_ASSISTANT_LIVE_API_KEY") or values.get("OPENROUTER_API_KEY") or ""),
+        provider_type=provider_type,
+        base_url=base_url,
+        api_key=api_key,
         model_pool=model_pool,
         output_dir=output_dir or DEFAULT_OUTPUT_DIR,
     )
@@ -132,7 +147,10 @@ def run_customer_assistant_live_react_acceptance(
     if not config.api_key:
         result = LiveAcceptanceResult(
             status="failed",
-            reason="Missing HIFY_CUSTOMER_ASSISTANT_LIVE_API_KEY or OPENROUTER_API_KEY.",
+            reason=(
+                "Missing HIFY_CUSTOMER_ASSISTANT_LIVE_API_KEY, OPENROUTER_API_KEY, "
+                f"or resolvable {LIVE_MODEL_CONFIG_ID}."
+            ),
         )
         artifact = config.output_dir / f"{LIVE_GATE_NAME}.md"
         _write_artifact(artifact, config, result)
@@ -644,6 +662,43 @@ def _model_pool_from_env(value: str) -> tuple[str, ...]:
         return DEFAULT_MODEL_POOL
     models = tuple(item.strip() for item in value.split(",") if item.strip())
     return models or DEFAULT_MODEL_POOL
+
+
+def _provider_config_from_env(env: dict[str, str] | os._Environ[str]) -> dict[str, Any] | None:
+    raw_model_config_id = str(env.get(LIVE_MODEL_CONFIG_ID) or "").strip()
+    if not raw_model_config_id:
+        return None
+    try:
+        model_config_id = int(raw_model_config_id)
+    except ValueError:
+        return None
+    if model_config_id <= 0:
+        return None
+    database_url = str(env.get("HIFY_DATABASE_URL") or "").strip()
+    if not database_url:
+        return None
+    try:
+        engine = create_engine(database_url, future=True)
+        factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+        with factory() as session:
+            row = ProviderRepository(session).get_enabled_model_config(model_config_id)
+            return row if _is_supported_provider_config(row) else None
+    except Exception:  # noqa: BLE001 - live gate fails closed without leaking DB/provider details.
+        return None
+    finally:
+        if "engine" in locals():
+            engine.dispose()
+
+
+def _is_supported_provider_config(row: dict[str, Any] | None) -> bool:
+    if row is None:
+        return False
+    if str(row.get("provider_type") or "") != PROVIDER_TYPE:
+        return False
+    parsed = urlparse(str(row.get("provider_base_url") or ""))
+    if parsed.scheme not in {"http", "https"}:
+        return False
+    return not parsed.username and not parsed.password
 
 
 def _write_artifact(path: Path, config: LiveReactAcceptanceConfig, result: LiveAcceptanceResult) -> None:

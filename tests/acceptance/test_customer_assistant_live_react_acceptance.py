@@ -1,14 +1,22 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from datetime import datetime
 import json
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+import tempfile
 from threading import Thread
 from typing import Any
 import unittest
+from unittest.mock import patch
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from app.core.database import Base
+from app.core.schema import register_baseline_tables
 from app.modules.customer_assistant.eval.live_react_acceptance import (
     LIVE_GATE_NAME,
     run_customer_assistant_live_react_acceptance,
@@ -19,6 +27,12 @@ ARTIFACT_DIR = Path("artifacts/slices/072-customer-assistant-live-react-acceptan
 LOCAL_COMPATIBLE_ARTIFACT_DIR = Path(
     "artifacts/slices/072-customer-assistant-live-react-acceptance/local-compatible-provider"
 )
+PROVIDER_CONFIG_ARTIFACT_DIR = Path(
+    "artifacts/slices/093-live-gate-provider-config-bridge/provider-config"
+)
+LOCAL_COMPATIBLE_API_KEY = "local-api-key"
+PROVIDER_CONFIG_API_KEY = "provider-config-secret"
+DIRECT_ENV_API_KEY = "direct-secret"
 EXPECTED_CATEGORIES = {
     "task_recognition_accuracy",
     "two_stage_recommendation_quality",
@@ -33,7 +47,7 @@ class CustomerAssistantLiveReactAcceptanceTest(unittest.TestCase):
                 result = run_customer_assistant_live_react_acceptance(
                     env={
                         "HIFY_RUN_CUSTOMER_ASSISTANT_LIVE_REACT_ACCEPTANCE": "1",
-                        "HIFY_CUSTOMER_ASSISTANT_LIVE_API_KEY": "local-api-key",
+                        "HIFY_CUSTOMER_ASSISTANT_LIVE_API_KEY": LOCAL_COMPATIBLE_API_KEY,
                         "HIFY_CUSTOMER_ASSISTANT_LIVE_BASE_URL": server.base_url,
                     },
                     output_dir=LOCAL_COMPATIBLE_ARTIFACT_DIR,
@@ -48,11 +62,87 @@ class CustomerAssistantLiveReactAcceptanceTest(unittest.TestCase):
         self.assertTrue(any(call["model"] == "xiaomi/mimo-v2-flash" for call in server.calls))
         self.assertTrue(any(call["model"] == "qwen/qwen3.5-9b" for call in server.calls))
         self.assertTrue(all(call["path"] == "/chat/completions" for call in server.calls))
-        self.assertTrue(all(call["authorization"] == "Bearer local-api-key" for call in server.calls))
+        self.assertTrue(all(call["authorization"] == f"Bearer {LOCAL_COMPATIBLE_API_KEY}" for call in server.calls))
         self.assertIn("task_recognition_accuracy", content)
         self.assertIn("two_stage_recommendation_quality", content)
         self.assertIn("react_worker_tool_call_policy_and_event_echo", content)
-        self.assertNotIn("local-api-key", content)
+        self.assertNotIn(LOCAL_COMPATIBLE_API_KEY, content)
+
+    def test_gate_resolves_local_provider_model_config_without_recording_secret(self) -> None:
+        with _local_openai_compatible_server() as server:
+            with _provider_model_config_db(server.base_url, api_key=PROVIDER_CONFIG_API_KEY) as model_config:
+                result = run_customer_assistant_live_react_acceptance(
+                    env={
+                        "HIFY_RUN_CUSTOMER_ASSISTANT_LIVE_REACT_ACCEPTANCE": "1",
+                        "HIFY_DATABASE_URL": model_config.database_url,
+                        "HIFY_CUSTOMER_ASSISTANT_LIVE_MODEL_CONFIG_ID": str(model_config.model_config_id),
+                    },
+                    output_dir=PROVIDER_CONFIG_ARTIFACT_DIR,
+                )
+            artifact = Path(result.evidence_path or "")
+            content = artifact.read_text(encoding="utf-8")
+
+        self.assertEqual(result.status, "completed", result.reason)
+        self.assertGreaterEqual(result.live_model_calls, 5)
+        self.assertEqual({category.name for category in result.categories}, EXPECTED_CATEGORIES)
+        self.assertTrue(all(call["authorization"] == f"Bearer {PROVIDER_CONFIG_API_KEY}" for call in server.calls))
+        self.assertTrue(all(call["model"] == "local/provider-config-model" for call in server.calls))
+        self.assertIn("local/provider-config-model", content)
+        self.assertNotIn(PROVIDER_CONFIG_API_KEY, content)
+
+    def test_direct_live_env_takes_precedence_over_provider_model_config(self) -> None:
+        with _local_openai_compatible_server() as direct_server:
+            with _local_openai_compatible_server() as provider_server:
+                with _provider_model_config_db(provider_server.base_url, api_key=PROVIDER_CONFIG_API_KEY) as model_config:
+                    result = run_customer_assistant_live_react_acceptance(
+                        env={
+                            "HIFY_RUN_CUSTOMER_ASSISTANT_LIVE_REACT_ACCEPTANCE": "1",
+                            "HIFY_CUSTOMER_ASSISTANT_LIVE_API_KEY": DIRECT_ENV_API_KEY,
+                            "HIFY_CUSTOMER_ASSISTANT_LIVE_BASE_URL": direct_server.base_url,
+                            "HIFY_CUSTOMER_ASSISTANT_LIVE_MODEL_POOL": "direct/env-model",
+                            "HIFY_DATABASE_URL": model_config.database_url,
+                            "HIFY_CUSTOMER_ASSISTANT_LIVE_MODEL_CONFIG_ID": str(model_config.model_config_id),
+                        },
+                        output_dir=PROVIDER_CONFIG_ARTIFACT_DIR,
+                    )
+
+        self.assertEqual(result.status, "completed", result.reason)
+        self.assertGreaterEqual(result.live_model_calls, 5)
+        self.assertTrue(all(call["authorization"] == f"Bearer {DIRECT_ENV_API_KEY}" for call in direct_server.calls))
+        self.assertTrue(all(call["model"] == "direct/env-model" for call in direct_server.calls))
+        self.assertEqual(provider_server.calls, [])
+
+    def test_provider_config_bridge_does_not_use_ambient_database_url(self) -> None:
+        with _local_openai_compatible_server() as server:
+            with _provider_model_config_db(server.base_url, api_key=PROVIDER_CONFIG_API_KEY) as model_config:
+                with patch.dict(os.environ, {"HIFY_DATABASE_URL": model_config.database_url}):
+                    result = run_customer_assistant_live_react_acceptance(
+                        env={
+                            "HIFY_RUN_CUSTOMER_ASSISTANT_LIVE_REACT_ACCEPTANCE": "1",
+                            "HIFY_CUSTOMER_ASSISTANT_LIVE_MODEL_CONFIG_ID": str(model_config.model_config_id),
+                        },
+                        output_dir=PROVIDER_CONFIG_ARTIFACT_DIR,
+                    )
+                artifact = Path(result.evidence_path or "")
+                content = artifact.read_text(encoding="utf-8")
+
+        self.assertEqual(result.status, "failed")
+        self.assertIn("resolvable HIFY_CUSTOMER_ASSISTANT_LIVE_MODEL_CONFIG_ID", result.reason)
+        self.assertEqual(server.calls, [])
+        self.assertNotIn(PROVIDER_CONFIG_API_KEY, content)
+        self.assertNotIn(model_config.database_url, content)
+
+    def test_provider_config_bridge_rejects_unsupported_or_credential_urls(self) -> None:
+        unsupported = _provider_config_failure(provider_type="MOCK", base_url="https://example.test/v1")
+        credential_url = _provider_config_failure(
+            provider_type="OPENAI_COMPATIBLE",
+            base_url="https://user:pass@example.test/v1",
+        )
+
+        self.assertEqual(unsupported.status, "failed")
+        self.assertEqual(credential_url.status, "failed")
+        self.assertNotIn("user:pass", credential_url.artifact_text)
+        self.assertNotIn(PROVIDER_CONFIG_API_KEY, credential_url.artifact_text)
 
     def test_customer_assistant_live_react_acceptance(self) -> None:
         result = run_customer_assistant_live_react_acceptance(env=os.environ, output_dir=ARTIFACT_DIR)
@@ -106,6 +196,92 @@ def _local_openai_compatible_server():
         yield wrapper
     finally:
         wrapper.close()
+
+
+class _ProviderModelConfig:
+    def __init__(self, *, database_url: str, model_config_id: int) -> None:
+        self.database_url = database_url
+        self.model_config_id = model_config_id
+
+
+class _ProviderConfigFailure:
+    def __init__(self, *, status: str, artifact_text: str) -> None:
+        self.status = status
+        self.artifact_text = artifact_text
+
+
+@contextmanager
+def _provider_model_config_db(
+    base_url: str,
+    *,
+    api_key: str,
+    provider_type: str = "OPENAI_COMPATIBLE",
+):
+    tmp_dir = tempfile.TemporaryDirectory()
+    engine = create_engine(f"sqlite:///{Path(tmp_dir.name) / 'provider-config.db'}", future=True)
+    register_baseline_tables()
+    Base.metadata.create_all(
+        bind=engine,
+        tables=[
+            Base.metadata.tables["provider"],
+            Base.metadata.tables["model_config"],
+            Base.metadata.tables["provider_health"],
+        ],
+    )
+    factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+    session = factory()
+    now = datetime.now()
+    try:
+        provider = session.execute(
+            Base.metadata.tables["provider"].insert().values(
+                name="Local Provider Config",
+                type=provider_type,
+                base_url=base_url,
+                auth_config={"api_key": api_key},
+                description="provider config bridge test",
+                enabled=True,
+                deleted=False,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        provider_id = int(provider.inserted_primary_key[0])
+        model_config = session.execute(
+            Base.metadata.tables["model_config"].insert().values(
+                provider_id=provider_id,
+                name="Provider Config Model",
+                model_id="local/provider-config-model",
+                context_size=4096,
+                extra_params={},
+                enabled=True,
+                deleted=False,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        session.commit()
+        yield _ProviderModelConfig(
+            database_url=str(engine.url),
+            model_config_id=int(model_config.inserted_primary_key[0]),
+        )
+    finally:
+        session.close()
+        engine.dispose()
+        tmp_dir.cleanup()
+
+
+def _provider_config_failure(*, provider_type: str, base_url: str) -> _ProviderConfigFailure:
+    with _provider_model_config_db(base_url, api_key=PROVIDER_CONFIG_API_KEY, provider_type=provider_type) as model_config:
+        result = run_customer_assistant_live_react_acceptance(
+            env={
+                "HIFY_RUN_CUSTOMER_ASSISTANT_LIVE_REACT_ACCEPTANCE": "1",
+                "HIFY_DATABASE_URL": model_config.database_url,
+                "HIFY_CUSTOMER_ASSISTANT_LIVE_MODEL_CONFIG_ID": str(model_config.model_config_id),
+            },
+            output_dir=PROVIDER_CONFIG_ARTIFACT_DIR,
+        )
+        artifact_text = Path(result.evidence_path or "").read_text(encoding="utf-8")
+    return _ProviderConfigFailure(status=result.status, artifact_text=artifact_text)
 
 
 class _OpenAICompatibleHandler(BaseHTTPRequestHandler):
