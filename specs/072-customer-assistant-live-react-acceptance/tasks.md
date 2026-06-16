@@ -13,4 +13,4 @@
 - [x] Run unit RED/GREEN evidence.
 - [x] Run acceptance default-skip gate evidence.
 - [x] Run browser UAT evidence.
-- [ ] Run live gate with explicit provider env, or leave goal active if provider credentials are unavailable.
+- [x] Run live gate with explicit provider env, or leave goal active if provider credentials are unavailable.
