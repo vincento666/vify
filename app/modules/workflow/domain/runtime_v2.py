@@ -323,6 +323,7 @@ class ChatflowRuntimeV2Service:
             for node_key, output in node_outputs.items():
                 if isinstance(output, dict):
                     context.set_output(str(node_key), output)
+        runtime_definition = _runtime_definition(dict(run.get("input") or {}))
         input_data = dict((checkpoint.get("execution_context") or {}).get("input") or {})
         input_data["resume"] = {pending_node_key: resume_data}
         context.set_output("start", input_data)
@@ -342,6 +343,8 @@ class ChatflowRuntimeV2Service:
             node_key=pending_node_key,
             context=context,
             input_data=input_data,
+            nodes=runtime_definition.get("nodes") if runtime_definition else None,
+            edges=runtime_definition.get("edges") if runtime_definition else None,
         )
         self._state_repository.mark_checkpoint_completed(int(checkpoint["id"]))
         self._repository.finish_run(run_id, "SUCCEEDED", output=output)

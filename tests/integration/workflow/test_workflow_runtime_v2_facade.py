@@ -71,6 +71,29 @@ class WorkflowRuntimeV2FacadeTest(unittest.TestCase):
         self.assertIn("unsupportedNodes", payload["message"])
         self.assertNotIn("eventStreamRef", payload)
 
+    def test_workflow_v2_resume_uses_published_snapshot_after_draft_edit(self) -> None:
+        with TestClient(app) as client:
+            workflow = _create_question_message_workflow(client, message="published")
+            version = client.post(f"/api/v1/workflows/{workflow['id']}/publish").json()["data"]
+            started = client.post(
+                f"/api/v1/workflows/{workflow['id']}/runs-v2",
+                json={"input": {"sys.query": "refund"}},
+            ).json()["data"]
+            interrupted = _wait_for_result(client, started["resultRef"])
+            _replace_question_message_workflow_message(client, workflow["id"], message="draft-edited")
+            resumed = client.post(
+                f"/api/v1/runtime-runs/{started['runId']}/resume",
+                json={"resumeData": {"answer": "yes"}, "idempotencyKey": "workflow-v2-snapshot-resume-1"},
+            )
+
+        self.assertEqual(interrupted["status"], "INTERRUPTED")
+        self.assertEqual(resumed.status_code, 200, resumed.text)
+        data = resumed.json()["data"]
+        self.assertEqual(data["status"], "SUCCEEDED")
+        self.assertEqual(data["output"], {"final": "published answer=yes"})
+        self.assertEqual(data["versionId"], version["id"])
+        self.assertEqual(data["version"], version["version"])
+
     def test_legacy_workflow_run_response_stays_compatible(self) -> None:
         with TestClient(app) as client:
             workflow = _create_workflow(client, message="legacy")
@@ -126,6 +149,20 @@ def _create_workflow(client: TestClient, *, message: str, node_type: str = "MESS
     return response.json()["data"]
 
 
+def _create_question_message_workflow(client: TestClient, *, message: str) -> dict[str, object]:
+    response = client.post(
+        "/api/v1/workflows",
+        json={
+            "name": f"Workflow V2 Resume Snapshot {datetime.now().timestamp()}",
+            "description": "",
+            "nodes": _question_message_nodes(message),
+            "edges": _question_message_edges(),
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["data"]
+
+
 def _replace_workflow_message(client: TestClient, workflow_id: int, *, message: str) -> None:
     response = client.put(
         f"/api/v1/workflows/{workflow_id}",
@@ -152,6 +189,49 @@ def _replace_workflow_message(client: TestClient, workflow_id: int, *, message: 
         },
     )
     assert response.status_code == 200, response.text
+
+
+def _replace_question_message_workflow_message(client: TestClient, workflow_id: int, *, message: str) -> None:
+    response = client.put(
+        f"/api/v1/workflows/{workflow_id}",
+        json={
+            "nodes": _question_message_nodes(message),
+            "edges": _question_message_edges(),
+        },
+    )
+    assert response.status_code == 200, response.text
+
+
+def _question_message_nodes(message: str) -> list[dict[str, object]]:
+    return [
+        {"nodeKey": "start", "type": "START", "name": "Start", "config": {}},
+        {
+            "nodeKey": "question_1",
+            "type": "QUESTION",
+            "name": "Question",
+            "config": {"question": "Continue?", "outputVariable": "answer", "answerType": "text"},
+        },
+        {
+            "nodeKey": "message_1",
+            "type": "MESSAGE",
+            "name": "Message",
+            "config": {"content": f"{message} answer={{{{question_1.answer}}}}", "outputVariable": "content"},
+        },
+        {
+            "nodeKey": "end",
+            "type": "END",
+            "name": "End",
+            "config": {"outputVariable": "final", "output": "{{message_1.content}}"},
+        },
+    ]
+
+
+def _question_message_edges() -> list[dict[str, object]]:
+    return [
+        {"sourceNodeKey": "start", "targetNodeKey": "question_1", "condition": None},
+        {"sourceNodeKey": "question_1", "targetNodeKey": "message_1", "condition": None},
+        {"sourceNodeKey": "message_1", "targetNodeKey": "end", "condition": None},
+    ]
 
 
 if __name__ == "__main__":
