@@ -4,8 +4,9 @@ from dataclasses import replace
 from datetime import datetime
 from typing import Any
 
-from app.core.sanitization import sanitize_text, sanitize_value
 from app.core.errors import BizError, ErrorCode
+from app.core.host.context import RequestContext
+from app.core.sanitization import sanitize_text, sanitize_value
 from app.modules.customer_assistant.harness_adapter import (
     event_stream_ref,
     reserved_worker_async_refs,
@@ -84,9 +85,11 @@ class CustomerAssistantService:
         action_executor_registry: MockActionExecutorRegistry | None = None,
         async_worker_runtime: CustomerAssistantWorkerRuntime | None = None,
         worker_profiles: CustomerAssistantWorkerProfileCatalog | None = None,
+        request_context: RequestContext | None = None,
     ) -> None:
         self._repository = repository
         self._ledger = CustomerAssistantLedger(repository)
+        self._request_context = request_context
         self._worker_profiles = worker_profiles or CustomerAssistantWorkerProfileCatalog.default()
         self._core = core or ControlledReActCore(
             DeterministicTaskRecognitionController(self._worker_profiles),
@@ -113,7 +116,7 @@ class CustomerAssistantService:
         self._async_worker_runtime = async_worker_runtime
 
     def create_session(self, context: dict[str, Any] | None = None) -> dict[str, Any]:
-        row = self._repository.create_session(context)
+        row = self._repository.create_session(_session_context_with_host_context(context, self._request_context))
         return _format_session(row)
 
     def list_demo_stories(self) -> dict[str, Any]:
@@ -1648,6 +1651,33 @@ def _format_session(row: dict[str, Any]) -> dict[str, Any]:
         "createdAt": _iso(row.get("created_at")),
         "updatedAt": _iso(row.get("updated_at")),
     }
+
+
+def _session_context_with_host_context(
+    context: dict[str, Any] | None,
+    request_context: RequestContext | None,
+) -> dict[str, Any]:
+    sanitized = sanitize_value(context or {})
+    session_context = dict(sanitized) if isinstance(sanitized, dict) else {"value": sanitized}
+    if request_context is not None and _should_record_host_context(request_context):
+        session_context["hostContext"] = sanitize_value(request_context.audit_metadata())
+    return session_context
+
+
+def _should_record_host_context(request_context: RequestContext) -> bool:
+    return any(
+        (
+            request_context.actor_id != "local-user",
+            request_context.actor_name not in {"local-user", "Local User"},
+            request_context.tenant_id != "local",
+            request_context.org_id != "local",
+            bool(request_context.roles),
+            bool(request_context.permissions),
+            bool(request_context.request_id),
+            request_context.source != "local",
+            request_context.locale != "zh-CN",
+        )
+    )
 
 
 def _format_demo_story(row: dict[str, Any], repository: CustomerAssistantRepository) -> dict[str, Any]:

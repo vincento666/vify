@@ -9,6 +9,9 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import Settings, get_settings
 from app.core.database import get_session
+from app.core.errors import BizError, ErrorCode
+from app.core.host.context import RequestContext
+from app.core.host.dependencies import get_request_context
 from app.core.responses import success
 from app.modules.agent.infra.repository import AgentRepository
 from app.modules.customer_assistant.domain.scheduler import LocalWorkerScheduler
@@ -49,18 +52,69 @@ from app.modules.workflow.infra.chatflow_state_repository import ChatflowStateRe
 from app.modules.workflow.infra.repository import WorkflowRepository
 
 
-router = APIRouter(prefix="/api/v1/customer-assistant", tags=["customer-assistant"])
+CUSTOMER_ASSISTANT_READ_PERMISSION = "customer_assistant:read"
+CUSTOMER_ASSISTANT_OPERATE_PERMISSION = "customer_assistant:operate"
 CUSTOMER_ASSISTANT_LLM_AGENT_NAME = "034 RuntimeLab Airline Chatflow LLM Agent"
+
+
+def require_customer_assistant_read(
+    request_context: RequestContext = Depends(get_request_context),
+) -> RequestContext:
+    _ensure_customer_assistant_permission(request_context, CUSTOMER_ASSISTANT_READ_PERMISSION)
+    return request_context
+
+
+def require_customer_assistant_operate(
+    request_context: RequestContext = Depends(get_request_context),
+) -> RequestContext:
+    _ensure_customer_assistant_permission(request_context, CUSTOMER_ASSISTANT_OPERATE_PERMISSION)
+    return request_context
+
+
+def _ensure_customer_assistant_permission(request_context: RequestContext, required_permission: str) -> None:
+    if _is_local_development_context(request_context):
+        return
+    if required_permission in request_context.permissions:
+        return
+    raise BizError(
+        ErrorCode.FORBIDDEN,
+        f"Missing permission {required_permission} for customer assistant access",
+    )
+
+
+def _is_local_development_context(request_context: RequestContext) -> bool:
+    return (
+        request_context.source == "local"
+        and request_context.actor_id == "local-user"
+        and request_context.actor_name in {"local-user", "Local User"}
+        and request_context.tenant_id == "local"
+        and request_context.org_id == "local"
+        and not request_context.roles
+        and not request_context.permissions
+        and not request_context.request_id
+    )
+
+
+router = APIRouter(
+    prefix="/api/v1/customer-assistant",
+    tags=["customer-assistant"],
+    dependencies=[Depends(require_customer_assistant_read)],
+)
 
 
 def get_customer_assistant_service(
     session: Session = Depends(get_session),
     settings: Settings = Depends(get_settings),
+    request_context: RequestContext = Depends(get_request_context),
 ) -> CustomerAssistantService:
-    return build_customer_assistant_service(session, settings)
+    return build_customer_assistant_service(session, settings, request_context=request_context)
 
 
-def build_customer_assistant_service(session: Session, settings: Settings) -> CustomerAssistantService:
+def build_customer_assistant_service(
+    session: Session,
+    settings: Settings,
+    request_context: RequestContext | None = None,
+) -> CustomerAssistantService:
     shadow_settings = CustomerAssistantShadowSettings.from_settings(settings)
     llm_runtime_settings = CustomerAssistantLlmRuntimeSettings.from_settings(settings)
     workers = _customer_assistant_workers(session, settings)
@@ -84,6 +138,7 @@ def build_customer_assistant_service(session: Session, settings: Settings) -> Cu
             task_timeout_seconds=settings.customer_assistant_worker_timeout_seconds,
         ),
         worker_profiles=worker_profiles,
+        request_context=request_context,
     )
 
 
@@ -187,6 +242,7 @@ def _customer_assistant_chatflow_bindings(raw: str | None) -> dict[str, int]:
 @router.post("/sessions")
 def create_session(
     request: CustomerAssistantSessionCreateRequest | None = None,
+    _access: RequestContext = Depends(require_customer_assistant_operate),
     service: CustomerAssistantService = Depends(get_customer_assistant_service),
 ) -> dict[str, Any]:
     context = request.context if request else {}
@@ -211,6 +267,7 @@ def list_worker_profiles(
 def submit_turn(
     session_id: int,
     request: CustomerAssistantTurnRequest,
+    _access: RequestContext = Depends(require_customer_assistant_operate),
     service: CustomerAssistantService = Depends(get_customer_assistant_service),
 ) -> dict[str, Any]:
     return success(service.handle_turn(session_id, request.message, request.idempotency_key, request.actor))
@@ -220,6 +277,7 @@ def submit_turn(
 def spawn_sub_agent(
     request: CustomerAssistantSpawnSubAgentRequest,
     background_tasks: BackgroundTasks,
+    _access: RequestContext = Depends(require_customer_assistant_operate),
     session: Session = Depends(get_session),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
@@ -270,6 +328,7 @@ def get_sub_agent_run(
 @router.post("/worker-runs/{worker_run_id}/cancel")
 def cancel_worker_run(
     worker_run_id: str,
+    _access: RequestContext = Depends(require_customer_assistant_operate),
     service: CustomerAssistantService = Depends(get_customer_assistant_service),
 ) -> dict[str, Any]:
     return success(service.cancel_worker_run(worker_run_id))
@@ -336,6 +395,7 @@ def propose_task_control(
     session_id: int,
     task_id: int,
     request: CustomerAssistantTaskControlRequest,
+    _access: RequestContext = Depends(require_customer_assistant_operate),
     service: CustomerAssistantService = Depends(get_customer_assistant_service),
 ) -> dict[str, Any]:
     return success(
@@ -352,6 +412,7 @@ def propose_task_control(
 @router.post("/sessions/{session_id}/worker-results/refresh")
 def refresh_worker_results(
     session_id: int,
+    _access: RequestContext = Depends(require_customer_assistant_operate),
     service: CustomerAssistantService = Depends(get_customer_assistant_service),
 ) -> dict[str, Any]:
     return success(service.refresh_worker_results(session_id))
@@ -385,6 +446,7 @@ def get_session_metrics(
 def update_action(
     action_id: int,
     request: CustomerAssistantProposedActionUpdateRequest,
+    _access: RequestContext = Depends(require_customer_assistant_operate),
     service: CustomerAssistantService = Depends(get_customer_assistant_service),
 ) -> dict[str, Any]:
     return success(
@@ -425,6 +487,7 @@ def stream_events(
 @router.post("/proposed-actions/{action_id}/confirm")
 def confirm_action(
     action_id: int,
+    _access: RequestContext = Depends(require_customer_assistant_operate),
     service: CustomerAssistantService = Depends(get_customer_assistant_service),
 ) -> dict[str, Any]:
     return success(service.confirm_action(action_id))
@@ -433,6 +496,7 @@ def confirm_action(
 @router.post("/proposed-actions/{action_id}/reject")
 def reject_action(
     action_id: int,
+    _access: RequestContext = Depends(require_customer_assistant_operate),
     service: CustomerAssistantService = Depends(get_customer_assistant_service),
 ) -> dict[str, Any]:
     return success(service.reject_action(action_id))
@@ -441,6 +505,7 @@ def reject_action(
 @router.post("/proposed-actions/{action_id}/execute")
 def execute_action(
     action_id: int,
+    _access: RequestContext = Depends(require_customer_assistant_operate),
     service: CustomerAssistantService = Depends(get_customer_assistant_service),
 ) -> dict[str, Any]:
     return success(service.execute_action(action_id))

@@ -18,6 +18,24 @@ from app.modules.customer_assistant.infra.schema import (
 )
 
 
+HOST_BASE_HEADERS = {
+    "X-Hify-Actor-Id": "operator-078",
+    "X-Hify-Actor-Name": "Demo Operator",
+    "X-Hify-Tenant-Id": "tenant-078",
+    "X-Hify-Org-Id": "org-078",
+    "X-Hify-Source": "embedded-demo-shell",
+    "X-Request-Id": "req-078",
+}
+HOST_READ_HEADERS = {
+    **HOST_BASE_HEADERS,
+    "X-Hify-Permissions": "customer_assistant:read",
+}
+HOST_OPERATE_HEADERS = {
+    **HOST_BASE_HEADERS,
+    "X-Hify-Permissions": "customer_assistant:read,customer_assistant:operate",
+}
+
+
 class CustomerAssistantApiContractTest(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp_dir = tempfile.TemporaryDirectory()
@@ -78,6 +96,98 @@ class CustomerAssistantApiContractTest(unittest.TestCase):
         self.assertEqual(confirmed.json()["data"]["status"], "CONFIRMED")
         self.assertEqual(rejected.status_code, 400)
         self.assertEqual(rejected.json()["code"], 400)
+
+    def test_embedded_host_requires_read_permission_for_customer_assistant_views(self) -> None:
+        denied_headers = {**HOST_BASE_HEADERS, "X-Hify-Permissions": "workflow:run"}
+
+        with TestClient(app) as client:
+            response = client.get("/api/v1/customer-assistant/demo-stories", headers=denied_headers)
+
+        self.assertEqual(response.status_code, 403, response.text)
+        self.assertEqual(response.json()["code"], 403)
+        self.assertIn("customer_assistant:read", response.json()["message"])
+
+    def test_embedded_host_requires_operate_permission_for_customer_assistant_actions(self) -> None:
+        denied_headers = {**HOST_BASE_HEADERS, "X-Hify-Permissions": "customer_assistant:read"}
+
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/v1/customer-assistant/sessions",
+                json={"context": {"customerId": "C-078"}},
+                headers=denied_headers,
+            )
+
+        self.assertEqual(response.status_code, 403, response.text)
+        self.assertEqual(response.json()["code"], 403)
+        self.assertIn("customer_assistant:operate", response.json()["message"])
+
+    def test_host_identity_without_source_still_requires_customer_assistant_permission(self) -> None:
+        denied_headers = {
+            "X-Hify-Actor-Id": "operator-078",
+            "X-Hify-Tenant-Id": "tenant-078",
+            "X-Hify-Permissions": "workflow:run",
+        }
+
+        with TestClient(app) as client:
+            response = client.get("/api/v1/customer-assistant/worker-profiles", headers=denied_headers)
+
+        self.assertEqual(response.status_code, 403, response.text)
+        self.assertEqual(response.json()["code"], 403)
+        self.assertIn("customer_assistant:read", response.json()["message"])
+
+    def test_embedded_host_with_permissions_can_run_demo_loop(self) -> None:
+        with TestClient(app) as client:
+            created = client.post(
+                "/api/v1/customer-assistant/sessions",
+                json={"context": {"customerId": "C-078"}},
+                headers=HOST_OPERATE_HEADERS,
+            )
+            session_id = created.json()["data"]["id"]
+            turn = client.post(
+                f"/api/v1/customer-assistant/sessions/{session_id}/turns",
+                json={"message": "我要退票", "idempotencyKey": "host-operate-turn"},
+                headers=HOST_OPERATE_HEADERS,
+            )
+            tasks = client.get(f"/api/v1/customer-assistant/sessions/{session_id}/tasks", headers=HOST_READ_HEADERS)
+            metrics = client.get(f"/api/v1/customer-assistant/sessions/{session_id}/metrics", headers=HOST_READ_HEADERS)
+
+        self.assertEqual(created.status_code, 200, created.text)
+        self.assertEqual(turn.status_code, 200, turn.text)
+        self.assertEqual(turn.json()["data"]["taskSummaries"][0]["taskKey"], "refund_ticket")
+        self.assertEqual(tasks.status_code, 200, tasks.text)
+        self.assertEqual(tasks.json()["data"]["total"], 1)
+        self.assertEqual(metrics.status_code, 200, metrics.text)
+        self.assertEqual(metrics.json()["data"]["sessionId"], session_id)
+
+    def test_embedded_host_context_is_recorded_and_sanitized_on_session(self) -> None:
+        with TestClient(app) as client:
+            created = client.post(
+                "/api/v1/customer-assistant/sessions",
+                json={
+                    "context": {
+                        "customer": {
+                            "phone": "13800138000",
+                            "orderNo": "TK-100",
+                        },
+                        "debug": "token=raw-demo-token",
+                        "apiToken": "raw-api-token",
+                    }
+                },
+                headers=HOST_OPERATE_HEADERS,
+            )
+
+        self.assertEqual(created.status_code, 200, created.text)
+        context = created.json()["data"]["context"]
+        self.assertEqual(context["hostContext"]["tenantId"], "tenant-078")
+        self.assertEqual(context["hostContext"]["actorId"], "operator-078")
+        self.assertEqual(context["hostContext"]["requestId"], "req-078")
+        serialized = json.dumps(context, ensure_ascii=False)
+        self.assertNotIn("13800138000", serialized)
+        self.assertNotIn("TK-100", serialized)
+        self.assertNotIn("raw-demo-token", serialized)
+        self.assertNotIn("raw-api-token", serialized)
+        self.assertIn("[REDACTED]", serialized)
+        self.assertIn("***", serialized)
 
     def test_bound_refund_sop_uses_chatflow_adapter_instead_of_fake_sop(self) -> None:
         app.dependency_overrides[get_settings] = lambda: Settings(runtime_lab_sop_chatflow_ids="refund_ticket:999")

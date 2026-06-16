@@ -3,7 +3,17 @@ from __future__ import annotations
 import re
 from typing import Any
 
-SENSITIVE_KEYS = {"apikey", "secret", "password", "authorization", "bearertoken", "accesstoken", "token"}
+SENSITIVE_KEYS = {
+    "apikey",
+    "apitoken",
+    "secret",
+    "password",
+    "authorization",
+    "bearertoken",
+    "accesstoken",
+    "refreshtoken",
+    "token",
+}
 SENSITIVE_ASSIGNMENT_RE = re.compile(
     r"(?i)\b(api[-_ ]?key|password|secret|authorization|bearer[-_ ]?token|access[-_ ]?token|token)\s*[:=]\s*([^\s,;]+)"
 )
