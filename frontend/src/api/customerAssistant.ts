@@ -53,6 +53,33 @@ export interface CustomerAssistantWorkerProfile {
   enabled: boolean
 }
 
+export interface CustomerAssistantSessionMetrics {
+  sessionId: number
+  taskStatusCounts: Record<string, number>
+  proposedActionStatusCounts: Record<string, number>
+  humanConfirmation: {
+    pending: number
+    adopted: number
+    terminal: number
+    adoptionRate: number
+  }
+  eventCounts: {
+    total: number
+    byType: Record<string, number>
+    bySource: Record<string, number>
+  }
+  workerEventCounts: {
+    total: number
+    byType: Record<string, number>
+  }
+  recentFailureReasons: Array<{
+    taskId: number
+    taskType: string
+    source: string
+    reason: string
+  }>
+}
+
 export interface CustomerAssistantProposedAction {
   id: number
   sessionId?: number
@@ -147,6 +174,9 @@ export const listCustomerAssistantProposedActions = (sessionId: number) =>
   get<CustomerAssistantListResult<CustomerAssistantProposedAction>>(
     `/v1/customer-assistant/sessions/${sessionId}/proposed-actions`,
   )
+
+export const getCustomerAssistantSessionMetrics = (sessionId: number) =>
+  get<CustomerAssistantSessionMetrics>(`/v1/customer-assistant/sessions/${sessionId}/metrics`)
 
 export const proposeCustomerAssistantTaskControl = (
   sessionId: number,

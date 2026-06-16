@@ -33,6 +33,7 @@ describe('CustomerAssistantPanel UI contract', () => {
       'customer-conversation-lane',
       'operator-conversation-lane',
       'operator-progress-checklist',
+      'operator-metrics-panel',
       'operator-task-ledger',
       'operator-recommendation-panel',
       'operator-draft-panel',
@@ -49,6 +50,7 @@ describe('CustomerAssistantPanel UI contract', () => {
 
     expect(customerLane).toContain('客户侧')
     expect(customerLane).not.toContain('operator-task-ledger')
+    expect(customerLane).not.toContain('operator-metrics-panel')
     expect(customerLane).not.toContain('confirmCustomerAssistantAction')
     expect(customerLane).not.toContain('rejectCustomerAssistantAction')
     expect(customerLane).not.toContain('确认动作')
@@ -76,6 +78,15 @@ describe('CustomerAssistantPanel UI contract', () => {
     expect(content).toContain('workspace.progressStages')
     expect(content).toContain('stage.label')
     expect(content).toContain('const expandedEventKeys = ref<string[]>([])')
+  })
+
+  it('renders observability metrics in the operator panel without raw payload details', () => {
+    const metricsPanel = section(content, 'operator-metrics-panel')
+
+    expect(metricsPanel).toContain('metricsSummary.tiles')
+    expect(metricsPanel).toContain('metricsSummary.failures')
+    expect(metricsPanel).toContain('人工采纳率')
+    expect(metricsPanel).not.toContain('compactPayload')
   })
 
   it('distinguishes proposed task commands from executable actions', () => {

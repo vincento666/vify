@@ -1,6 +1,7 @@
 import type {
   CustomerAssistantEvent,
   CustomerAssistantProposedAction,
+  CustomerAssistantSessionMetrics,
   CustomerAssistantTask,
   CustomerAssistantTaskControlType,
   CustomerAssistantTurnResult,
@@ -60,6 +61,26 @@ export interface CustomerAssistantProgressStage {
   key: 'recognizing' | 'workers' | 'recommendation' | 'ready'
   label: string
   status: 'pending' | 'active' | 'complete'
+}
+
+export interface CustomerAssistantMetricTile {
+  key: 'adoption' | 'pending' | 'tasks' | 'events'
+  label: string
+  value: string
+  tone: 'default' | 'processing' | 'success' | 'warning'
+}
+
+export interface CustomerAssistantFailureRow {
+  taskId: number
+  taskType: string
+  source: string
+  reason: string
+}
+
+export interface CustomerAssistantMetricsSummary {
+  empty: boolean
+  tiles: CustomerAssistantMetricTile[]
+  failures: CustomerAssistantFailureRow[]
 }
 
 export interface CustomerAssistantRecommendationState {
@@ -234,6 +255,45 @@ export function formatCustomerAssistantEvents(events: CustomerAssistantEvent[]):
     debug: event.visibility === 'debug',
     defaultCollapsed: event.visibility === 'debug',
   }))
+}
+
+export function formatCustomerAssistantMetrics(
+  metrics: CustomerAssistantSessionMetrics | null,
+): CustomerAssistantMetricsSummary {
+  const adoptionRate = metrics?.humanConfirmation.adoptionRate ?? 0
+  const pending = metrics?.humanConfirmation.pending ?? 0
+  const activeTasks = (metrics?.taskStatusCounts.RUNNING ?? 0) + (metrics?.taskStatusCounts.WAITING ?? 0)
+  const eventTotal = metrics?.eventCounts.total ?? 0
+  return {
+    empty: metrics === null,
+    tiles: [
+      {
+        key: 'adoption',
+        label: '人工采纳率',
+        value: `${Math.round(adoptionRate * 100)}%`,
+        tone: adoptionRate > 0 ? 'success' : 'default',
+      },
+      {
+        key: 'pending',
+        label: '待确认动作',
+        value: String(pending),
+        tone: pending > 0 ? 'warning' : 'default',
+      },
+      {
+        key: 'tasks',
+        label: '活跃任务',
+        value: String(activeTasks),
+        tone: activeTasks > 0 ? 'processing' : 'default',
+      },
+      {
+        key: 'events',
+        label: '运行事件',
+        value: String(eventTotal),
+        tone: 'default',
+      },
+    ],
+    failures: [...(metrics?.recentFailureReasons ?? [])],
+  }
 }
 
 export function deriveCustomerAssistantProgressStages(events: CustomerAssistantEvent[]): CustomerAssistantProgressStage[] {

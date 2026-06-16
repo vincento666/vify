@@ -1,6 +1,7 @@
 import type {
   CustomerAssistantEvent,
   CustomerAssistantListResult,
+  CustomerAssistantSessionMetrics,
   CustomerAssistantTask,
   CustomerAssistantTurnResult,
 } from '@/api/customerAssistant'
@@ -77,4 +78,26 @@ export const mockCustomerAssistantTasks: CustomerAssistantListResult<CustomerAss
 export const mockCustomerAssistantEvents: CustomerAssistantListResult<CustomerAssistantEvent> = {
   list: mockCustomerAssistantTurnResult.events,
   total: mockCustomerAssistantTurnResult.events.length,
+}
+
+export const mockCustomerAssistantMetrics: CustomerAssistantSessionMetrics = {
+  sessionId: 12,
+  taskStatusCounts: { WAITING: 1 },
+  proposedActionStatusCounts: { PENDING: 1 },
+  humanConfirmation: {
+    pending: 1,
+    adopted: 0,
+    terminal: 0,
+    adoptionRate: 0,
+  },
+  eventCounts: {
+    total: 1,
+    byType: { run_started: 1 },
+    bySource: { customer_assistant: 1 },
+  },
+  workerEventCounts: {
+    total: 0,
+    byType: {},
+  },
+  recentFailureReasons: [],
 }

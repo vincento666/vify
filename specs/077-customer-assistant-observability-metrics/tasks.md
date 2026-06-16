@@ -8,6 +8,6 @@
 
 ## 077.2 Workbench Metrics Panel
 
-- [ ] Add RED frontend/API/runtime/panel tests.
-- [ ] Render session metrics in the workbench.
-- [ ] Run frontend/rem/browser gates and commit.
+- [x] Add RED frontend/API/runtime/panel tests.
+- [x] Render session metrics in the workbench.
+- [x] Run frontend/rem/browser gates and commit.

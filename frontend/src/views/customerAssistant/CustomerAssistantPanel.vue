@@ -165,6 +165,34 @@
           </div>
         </section>
 
+        <section class="workspace-panel compact-panel" data-testid="operator-metrics-panel">
+          <div class="panel-heading">
+            <span class="panel-heading-title">
+              <DashboardOutlined />
+              观测指标
+            </span>
+          </div>
+          <div v-if="metricsSummary.empty" class="empty-compact">暂无会话指标</div>
+          <div class="metrics-grid" aria-label="人工采纳率">
+            <div
+              v-for="tile in metricsSummary.tiles"
+              :key="tile.key"
+              class="metric-tile"
+              :class="tile.tone"
+            >
+              <span>{{ tile.label }}</span>
+              <strong>{{ tile.value }}</strong>
+            </div>
+          </div>
+          <div v-if="metricsSummary.failures.length" class="failure-list">
+            <div v-for="failure in metricsSummary.failures" :key="`${failure.taskId}:${failure.reason}`">
+              <a-tag color="error">{{ failure.taskType }}</a-tag>
+              <span>{{ failure.source }}</span>
+              <p>{{ failure.reason }}</p>
+            </div>
+          </div>
+        </section>
+
         <section class="workspace-panel compact-panel" data-testid="operator-task-ledger">
           <div class="panel-heading">
             <span class="panel-heading-title">
@@ -453,6 +481,7 @@ import {
   CloseOutlined,
   CopyOutlined,
   CustomerServiceOutlined,
+  DashboardOutlined,
   EditOutlined,
   HistoryOutlined,
   MessageOutlined,
@@ -477,6 +506,7 @@ import {
 import {
   applyCustomerAssistantDraftLocally,
   createCustomerAssistantDraftState,
+  formatCustomerAssistantMetrics,
   formatCustomerAssistantTurnStatus,
   summarizeCustomerAssistantTasks,
   type CustomerAssistantTaskRow,
@@ -507,6 +537,7 @@ const workspace = computed(() => ({
   ...runtimeState.value,
   taskSummary: summarizeCustomerAssistantTasks(runtimeState.value.tasks, workerProfiles.value),
 }))
+const metricsSummary = computed(() => formatCustomerAssistantMetrics(workspace.value.metrics))
 const selectedDemoStory = computed(() =>
   demoStories.value.find((story) => story.storyId === selectedDemoStoryId.value) ?? null,
 )
@@ -1060,6 +1091,73 @@ async function executeAction(actionId: number) {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.metric-tile {
+  display: grid;
+  gap: 0.25rem;
+  min-height: 3.1rem;
+  padding: 0.55rem;
+  border: 0.0625rem solid #e1e7f0;
+  border-radius: 0.45rem;
+  background: #fbfcff;
+}
+
+.metric-tile span {
+  color: #667085;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.metric-tile strong {
+  color: #1d2535;
+  font-size: 1.15rem;
+  line-height: 1.1;
+}
+
+.metric-tile.success {
+  border-color: #b7dfc9;
+  background: #f4fbf7;
+}
+
+.metric-tile.warning {
+  border-color: #f3d599;
+  background: #fffbf0;
+}
+
+.metric-tile.processing {
+  border-color: #bad3f7;
+  background: #f5f9ff;
+}
+
+.failure-list {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.65rem;
+}
+
+.failure-list > div {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.55rem;
+  border: 0.0625rem solid #f2c2bc;
+  border-radius: 0.45rem;
+  background: #fff7f5;
+}
+
+.failure-list span,
+.failure-list p {
+  margin: 0;
+  color: #5c667a;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .panel-copy,

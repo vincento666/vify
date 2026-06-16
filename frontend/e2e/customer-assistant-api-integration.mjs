@@ -54,6 +54,16 @@ const turnResult = {
   replayed: false,
 }
 
+const metricsResult = {
+  sessionId: 120,
+  taskStatusCounts: { WAITING: 1 },
+  proposedActionStatusCounts: {},
+  humanConfirmation: { pending: 0, adopted: 0, terminal: 0, adoptionRate: 0 },
+  eventCounts: { total: 1, byType: { run_started: 1 }, bySource: { customer_assistant: 1 } },
+  workerEventCounts: { total: 0, byType: {} },
+  recentFailureReasons: [],
+}
+
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 
@@ -80,6 +90,14 @@ try {
       await route.fulfill({ json: envelope({ list: turnResult.events, total: 1 }) })
       return
     }
+    if (method === 'GET' && url.endsWith('/sessions/120/proposed-actions')) {
+      await route.fulfill({ json: envelope({ list: turnResult.proposedActions, total: 0 }) })
+      return
+    }
+    if (method === 'GET' && url.endsWith('/sessions/120/metrics')) {
+      await route.fulfill({ json: envelope(metricsResult) })
+      return
+    }
     await route.fulfill({ status: 404, json: { code: 404, message: 'missing route', data: null } })
   })
 
@@ -95,6 +113,8 @@ try {
   assert(calls.some((call) => call.method === 'POST' && call.url.endsWith('/sessions/120/turns')), 'Expected turn call')
   assert(calls.some((call) => call.method === 'GET' && call.url.endsWith('/sessions/120/tasks')), 'Expected task refresh')
   assert(calls.some((call) => call.method === 'GET' && call.url.endsWith('/sessions/120/events')), 'Expected event refresh')
+  assert(calls.some((call) => call.method === 'GET' && call.url.endsWith('/sessions/120/proposed-actions')), 'Expected action refresh')
+  assert(calls.some((call) => call.method === 'GET' && call.url.endsWith('/sessions/120/metrics')), 'Expected metrics refresh')
 
   const turnCall = calls.find((call) => call.method === 'POST' && call.url.endsWith('/sessions/120/turns'))
   assert(turnCall.body.message === '我要退票', `Expected message payload, got ${JSON.stringify(turnCall.body)}`)

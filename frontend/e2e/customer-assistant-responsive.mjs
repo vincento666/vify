@@ -60,6 +60,16 @@ const turnResult = {
   replayed: false,
 }
 
+const metricsResult = {
+  sessionId: 12,
+  taskStatusCounts: { COMPLETED: 1 },
+  proposedActionStatusCounts: { PENDING: 1 },
+  humanConfirmation: { pending: 1, adopted: 0, terminal: 0, adoptionRate: 0 },
+  eventCounts: { total: 0, byType: {}, bySource: {} },
+  workerEventCounts: { total: 0, byType: {} },
+  recentFailureReasons: [],
+}
+
 const viewports = [
   { name: 'desktop', width: 1440, height: 900 },
   { name: 'narrow', width: 390, height: 900 },
@@ -92,6 +102,14 @@ try {
       await route.fulfill({ json: envelope({ list: turnResult.events, total: 0 }) })
       return
     }
+    if (method === 'GET' && url.endsWith('/sessions/12/proposed-actions')) {
+      await route.fulfill({ json: envelope({ list: [pendingAction], total: 1 }) })
+      return
+    }
+    if (method === 'GET' && url.endsWith('/sessions/12/metrics')) {
+      await route.fulfill({ json: envelope(metricsResult) })
+      return
+    }
     await route.fulfill({ status: 404, json: { code: 404, message: 'unexpected call', data: null } })
   })
 
@@ -106,6 +124,7 @@ try {
     for (const testId of [
       'customer-conversation-lane',
       'operator-conversation-lane',
+      'operator-metrics-panel',
       'operator-task-ledger',
       'operator-recommendation-panel',
       'operator-draft-panel',
@@ -120,6 +139,7 @@ try {
       const ids = [
         'customer-conversation-lane',
         'operator-conversation-lane',
+        'operator-metrics-panel',
         'operator-task-ledger',
         'operator-recommendation-panel',
         'operator-draft-panel',

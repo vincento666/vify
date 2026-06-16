@@ -58,6 +58,24 @@ const turnResult = {
   replayed: false,
 }
 
+const pendingMetrics = {
+  sessionId: 12,
+  taskStatusCounts: { COMPLETED: 1 },
+  proposedActionStatusCounts: { PENDING: 1 },
+  humanConfirmation: { pending: 1, adopted: 0, terminal: 0, adoptionRate: 0 },
+  eventCounts: { total: 0, byType: {}, bySource: {} },
+  workerEventCounts: { total: 0, byType: {} },
+  recentFailureReasons: [],
+}
+
+const confirmedMetrics = {
+  ...pendingMetrics,
+  proposedActionStatusCounts: { CONFIRMED: 1 },
+  humanConfirmation: { pending: 0, adopted: 1, terminal: 1, adoptionRate: 1 },
+}
+
+let actionConfirmed = false
+
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 
@@ -69,6 +87,7 @@ try {
     calls.push({ method, url, body: request.postDataJSON?.() })
 
     if (method === 'POST' && url.endsWith('/proposed-actions/9/confirm')) {
+      actionConfirmed = true
       await route.fulfill({ json: envelope(confirmedAction) })
       return
     }
@@ -86,6 +105,14 @@ try {
     }
     if (method === 'GET' && url.endsWith('/sessions/12/events')) {
       await route.fulfill({ json: envelope({ list: turnResult.events, total: 0 }) })
+      return
+    }
+    if (method === 'GET' && url.endsWith('/sessions/12/proposed-actions')) {
+      await route.fulfill({ json: envelope({ list: [pendingAction], total: 1 }) })
+      return
+    }
+    if (method === 'GET' && url.endsWith('/sessions/12/metrics')) {
+      await route.fulfill({ json: envelope(actionConfirmed ? confirmedMetrics : pendingMetrics) })
       return
     }
     await route.fulfill({ status: 404, json: { code: 404, message: 'unexpected call', data: null } })

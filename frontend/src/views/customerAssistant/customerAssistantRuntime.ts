@@ -2,6 +2,7 @@ import {
   confirmCustomerAssistantAction,
   createCustomerAssistantSession,
   executeCustomerAssistantAction,
+  getCustomerAssistantSessionMetrics,
   listCustomerAssistantDemoStories,
   listCustomerAssistantEvents,
   listCustomerAssistantProposedActions,
@@ -16,6 +17,7 @@ import {
   type CustomerAssistantListResult,
   type CustomerAssistantProposedAction,
   type CustomerAssistantSession,
+  type CustomerAssistantSessionMetrics,
   type CustomerAssistantTask,
   type CustomerAssistantTaskControlType,
   type CustomerAssistantTurnPayload,
@@ -34,12 +36,14 @@ export interface CustomerAssistantRuntimeState extends CustomerAssistantState {
   session: CustomerAssistantSession | null
   tasks: CustomerAssistantTask[]
   events: CustomerAssistantEvent[]
+  metrics: CustomerAssistantSessionMetrics | null
   loading: boolean
   error: string | null
 }
 
 export interface CreateCustomerAssistantRuntimeStateInput extends BuildCustomerAssistantStateInput {
   session?: CustomerAssistantSession | null
+  metrics?: CustomerAssistantSessionMetrics | null
 }
 
 export interface SendCustomerAssistantRuntimeTurnOptions {
@@ -58,6 +62,7 @@ export function createCustomerAssistantRuntimeState(
     session,
     tasks: input.tasks ?? input.turnResult?.taskSummaries ?? [],
     events: input.events ?? input.turnResult?.events ?? [],
+    metrics: input.metrics ?? null,
     loading: false,
     error: null,
   }
@@ -90,8 +95,8 @@ export async function sendCustomerAssistantRuntimeTurn(
   })
   try {
     const turnResult = await sendCustomerAssistantTurn(session.id, payload)
-    const { tasks, events, proposedActions } = await refreshCustomerAssistantRuntimeLedgers(session.id)
-    return fromTurnResult(session, payload, turnResult, tasks.list, events.list, proposedActions.list)
+    const { tasks, events, proposedActions, metrics } = await refreshCustomerAssistantRuntimeLedgers(session.id)
+    return fromTurnResult(session, payload, turnResult, tasks.list, events.list, proposedActions.list, metrics)
   } finally {
     stream?.close()
   }
@@ -103,7 +108,8 @@ export async function refreshCustomerAssistantRuntimeLedgers(sessionId: number) 
     listCustomerAssistantEvents(sessionId),
     listCustomerAssistantProposedActions(sessionId),
   ])
-  return { tasks, events, proposedActions }
+  const metrics = await getCustomerAssistantSessionMetrics(sessionId)
+  return { tasks, events, proposedActions, metrics }
 }
 
 export async function loadCustomerAssistantDemoStory(storyId: string): Promise<CustomerAssistantRuntimeState> {
@@ -112,7 +118,7 @@ export async function loadCustomerAssistantDemoStory(storyId: string): Promise<C
   if (!story) {
     throw new Error(`Demo story not found: ${storyId}`)
   }
-  const { tasks, events, proposedActions } = await refreshCustomerAssistantRuntimeLedgers(story.sessionId)
+  const { tasks, events, proposedActions, metrics } = await refreshCustomerAssistantRuntimeLedgers(story.sessionId)
   const session = demoStorySession(story)
   return {
     ...buildCustomerAssistantState({
@@ -125,6 +131,7 @@ export async function loadCustomerAssistantDemoStory(storyId: string): Promise<C
     session,
     tasks: tasks.list,
     events: events.list,
+    metrics,
     loading: false,
     error: null,
   }
@@ -143,14 +150,15 @@ export async function rejectCustomerAssistantRuntimeAction(
   actionId: number,
 ): Promise<CustomerAssistantRuntimeState> {
   const action = await rejectCustomerAssistantAction(actionId)
-  return {
+  return withCustomerAssistantMetrics(current, {
     ...applyCustomerAssistantActionState(current, action),
     session: current.session,
     tasks: current.tasks,
     events: current.events,
+    metrics: current.metrics,
     loading: false,
     error: null,
-  }
+  })
 }
 
 export async function executeCustomerAssistantRuntimeAction(
@@ -158,14 +166,15 @@ export async function executeCustomerAssistantRuntimeAction(
   actionId: number,
 ): Promise<CustomerAssistantRuntimeState> {
   const action = await executeCustomerAssistantAction(actionId)
-  return {
+  return withCustomerAssistantMetrics(current, {
     ...applyCustomerAssistantActionState(current, action),
     session: current.session,
     tasks: current.tasks,
     events: current.events,
+    metrics: current.metrics,
     loading: false,
     error: null,
-  }
+  })
 }
 
 export async function updateCustomerAssistantRuntimeAction(
@@ -174,14 +183,15 @@ export async function updateCustomerAssistantRuntimeAction(
   payload: CustomerAssistantActionUpdatePayload,
 ): Promise<CustomerAssistantRuntimeState> {
   const action = await updateCustomerAssistantAction(actionId, payload)
-  return {
+  return withCustomerAssistantMetrics(current, {
     ...applyCustomerAssistantActionState(current, action),
     session: current.session,
     tasks: current.tasks,
     events: current.events,
+    metrics: current.metrics,
     loading: false,
     error: null,
-  }
+  })
 }
 
 export async function proposeCustomerAssistantRuntimeTaskControl(
@@ -194,7 +204,7 @@ export async function proposeCustomerAssistantRuntimeTaskControl(
     throw new Error('Customer assistant session is required before proposing a task control')
   }
   await proposeCustomerAssistantTaskControl(current.session.id, taskId, { controlType, reason })
-  const { tasks, events, proposedActions } = await refreshCustomerAssistantRuntimeLedgers(current.session.id)
+  const { tasks, events, proposedActions, metrics } = await refreshCustomerAssistantRuntimeLedgers(current.session.id)
   const rebuilt = buildCustomerAssistantState({
     sessionId: current.session.id,
     tasks: tasks.list,
@@ -206,6 +216,7 @@ export async function proposeCustomerAssistantRuntimeTaskControl(
     session: current.session,
     tasks: tasks.list,
     events: events.list,
+    metrics,
     loading: false,
     error: null,
   }
@@ -218,6 +229,7 @@ function fromTurnResult(
   tasks: CustomerAssistantListResult<CustomerAssistantTask>['list'],
   events: CustomerAssistantListResult<CustomerAssistantEvent>['list'],
   proposedActions: CustomerAssistantListResult<CustomerAssistantProposedAction>['list'],
+  metrics: CustomerAssistantSessionMetrics,
 ): CustomerAssistantRuntimeState {
   return {
     ...buildCustomerAssistantState({
@@ -232,6 +244,7 @@ function fromTurnResult(
     session,
     tasks,
     events,
+    metrics,
     loading: false,
     error: null,
   }
@@ -271,6 +284,7 @@ export function mergeCustomerAssistantLiveEvent(
     session: current.session,
     tasks,
     events,
+    metrics: current.metrics,
     loading: current.loading,
     error: current.error,
   }
@@ -344,16 +358,18 @@ async function applyRuntimeActionResult(
   current: CustomerAssistantRuntimeState,
   action: Awaited<ReturnType<typeof confirmCustomerAssistantAction>>,
 ): Promise<CustomerAssistantRuntimeState> {
-  const updated = {
+  const updated: CustomerAssistantRuntimeState = {
     ...applyCustomerAssistantActionState(current, action),
     session: current.session,
     tasks: current.tasks,
     events: current.events,
+    metrics: current.metrics,
     loading: false,
     error: null,
   }
-  if (action.actionType !== 'PROPOSED_TASK_COMMAND' || !current.session?.id) return updated
-  const { tasks, events, proposedActions } = await refreshCustomerAssistantRuntimeLedgers(current.session.id)
+  if (!current.session?.id) return updated
+  if (action.actionType !== 'PROPOSED_TASK_COMMAND') return withCustomerAssistantMetrics(current, updated)
+  const { tasks, events, proposedActions, metrics } = await refreshCustomerAssistantRuntimeLedgers(current.session.id)
   const rebuilt = buildCustomerAssistantState({
     sessionId: current.session.id,
     tasks: tasks.list,
@@ -368,5 +384,15 @@ async function applyRuntimeActionResult(
     proposedActions: rebuilt.proposedActions,
     tasks: tasks.list,
     events: events.list,
+    metrics,
   }
+}
+
+async function withCustomerAssistantMetrics(
+  current: CustomerAssistantRuntimeState,
+  state: CustomerAssistantRuntimeState,
+): Promise<CustomerAssistantRuntimeState> {
+  if (!current.session?.id) return state
+  const metrics = await getCustomerAssistantSessionMetrics(current.session.id)
+  return { ...state, metrics }
 }

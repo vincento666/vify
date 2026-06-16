@@ -78,6 +78,26 @@ describe('customer-assistant frontend API client', () => {
     expect(requestMocks.get).toHaveBeenNthCalledWith(3, '/v1/customer-assistant/sessions/7/proposed-actions')
   })
 
+  it('loads session observability metrics', async () => {
+    requestMocks.get.mockResolvedValueOnce({
+      sessionId: 7,
+      taskStatusCounts: { FAILED: 1 },
+      proposedActionStatusCounts: { PENDING: 1 },
+      humanConfirmation: { pending: 1, adopted: 0, terminal: 0, adoptionRate: 0 },
+      eventCounts: { total: 2, byType: { task_failed: 1 }, bySource: { chatflow_sop: 1 } },
+      workerEventCounts: { total: 1, byType: { task_failed: 1 } },
+      recentFailureReasons: [{ taskId: 101, taskType: 'REFUND', source: 'chatflow_sop', reason: '[REDACTED]' }],
+    })
+
+    const { getCustomerAssistantSessionMetrics } = await import('./customerAssistant')
+
+    await expect(getCustomerAssistantSessionMetrics(7)).resolves.toMatchObject({
+      sessionId: 7,
+      humanConfirmation: { pending: 1, adoptionRate: 0 },
+    })
+    expect(requestMocks.get).toHaveBeenCalledWith('/v1/customer-assistant/sessions/7/metrics')
+  })
+
   it('lists seeded demo stories', async () => {
     requestMocks.get.mockResolvedValueOnce({ list: [{ storyId: 'refund_baggage_parallel' }], total: 1 })
 

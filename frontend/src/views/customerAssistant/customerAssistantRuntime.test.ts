@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   mockCustomerAssistantEvents,
+  mockCustomerAssistantMetrics,
   mockCustomerAssistantTasks,
   mockCustomerAssistantTurnResult,
 } from './customerAssistantFixtures'
@@ -10,6 +11,7 @@ const apiMocks = vi.hoisted(() => ({
   confirmCustomerAssistantAction: vi.fn(),
   createCustomerAssistantSession: vi.fn(),
   executeCustomerAssistantAction: vi.fn(),
+  getCustomerAssistantSessionMetrics: vi.fn(),
   listCustomerAssistantDemoStories: vi.fn(),
   listCustomerAssistantEvents: vi.fn(),
   listCustomerAssistantProposedActions: vi.fn(),
@@ -31,6 +33,7 @@ vi.mock('./customerAssistantEventStream', () => streamMocks)
 describe('customer assistant runtime integration', () => {
   beforeEach(() => {
     Object.values(apiMocks).forEach((mock) => mock.mockReset())
+    apiMocks.getCustomerAssistantSessionMetrics.mockResolvedValue(mockCustomerAssistantMetrics)
     streamMocks.openCustomerAssistantEventStream.mockReset()
   })
 
@@ -63,7 +66,9 @@ describe('customer assistant runtime integration', () => {
     expect(apiMocks.listCustomerAssistantTasks).toHaveBeenCalledWith(12)
     expect(apiMocks.listCustomerAssistantEvents).toHaveBeenCalledWith(12)
     expect(apiMocks.listCustomerAssistantProposedActions).toHaveBeenCalledWith(12)
+    expect(apiMocks.getCustomerAssistantSessionMetrics).toHaveBeenCalledWith(12)
     expect(state.session?.id).toBe(12)
+    expect(state.metrics?.humanConfirmation.pending).toBe(1)
     expect(state.taskSummary.items[0].taskKey).toBe('refund_ticket')
     expect(state.eventTimeline[0].title).toBe('run_started')
   })
@@ -265,7 +270,9 @@ describe('customer assistant runtime integration', () => {
 
     expect(apiMocks.listCustomerAssistantTasks).toHaveBeenCalledWith(12)
     expect(apiMocks.listCustomerAssistantEvents).toHaveBeenCalledWith(12)
+    expect(apiMocks.getCustomerAssistantSessionMetrics).toHaveBeenCalledWith(12)
     expect(confirmed.proposedActions[0].status).toBe('CONFIRMED')
+    expect(confirmed.metrics?.eventCounts.total).toBe(mockCustomerAssistantMetrics.eventCounts.total)
     expect(confirmed.taskSummary.items[0].taskKey).toBe('refund_ticket')
     expect(confirmed.eventTimeline.some((event) => event.title === 'proposed_task_command_confirmed')).toBe(true)
   })
@@ -300,7 +307,9 @@ describe('customer assistant runtime integration', () => {
     expect(apiMocks.listCustomerAssistantTasks).toHaveBeenCalledWith(73)
     expect(apiMocks.listCustomerAssistantEvents).toHaveBeenCalledWith(73)
     expect(apiMocks.listCustomerAssistantProposedActions).toHaveBeenCalledWith(73)
+    expect(apiMocks.getCustomerAssistantSessionMetrics).toHaveBeenCalledWith(73)
     expect(state.session?.id).toBe(73)
+    expect(state.metrics?.taskStatusCounts.WAITING).toBe(1)
     expect(state.taskSummary.items[0].taskKey).toBe('refund_ticket')
     expect(state.proposedActions[0].title).toBe(mockCustomerAssistantTurnResult.proposedActions[0].title)
     expect(state.eventTimeline[0].title).toBe('run_started')
@@ -354,6 +363,7 @@ describe('customer assistant runtime integration', () => {
     expect(apiMocks.listCustomerAssistantTasks).toHaveBeenCalledWith(12)
     expect(apiMocks.listCustomerAssistantEvents).toHaveBeenCalledWith(12)
     expect(apiMocks.listCustomerAssistantProposedActions).toHaveBeenCalledWith(12)
+    expect(apiMocks.getCustomerAssistantSessionMetrics).toHaveBeenCalledWith(12)
     expect(state.proposedActions[0]).toMatchObject({
       id: 88,
       title: '恢复任务：refund_ticket',

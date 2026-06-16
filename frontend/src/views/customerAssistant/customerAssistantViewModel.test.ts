@@ -4,6 +4,7 @@ import type { CustomerAssistantProposedAction } from '@/api/customerAssistant'
 
 import {
   mockCustomerAssistantEvents,
+  mockCustomerAssistantMetrics,
   mockCustomerAssistantTasks,
   mockCustomerAssistantTurnResult,
 } from './customerAssistantFixtures'
@@ -11,6 +12,7 @@ import {
   applyCustomerAssistantActionState,
   buildCustomerAssistantState,
   formatCustomerAssistantEvents,
+  formatCustomerAssistantMetrics,
   summarizeCustomerAssistantTasks,
 } from './customerAssistantViewModel'
 
@@ -171,6 +173,40 @@ describe('customer assistant view model', () => {
       visibilityLabel: 'normal',
       payloadPreview: '{"message":"我要退票"}',
     })
+  })
+
+  it('formats session metrics as compact operator tiles and redacted failure rows', () => {
+    const metrics = formatCustomerAssistantMetrics({
+      ...mockCustomerAssistantMetrics,
+      taskStatusCounts: { RUNNING: 2, FAILED: 1 },
+      proposedActionStatusCounts: { PENDING: 1, CONFIRMED: 1, EXECUTED: 1 },
+      humanConfirmation: { pending: 1, adopted: 2, terminal: 2, adoptionRate: 1 },
+      eventCounts: { total: 8, byType: { task_failed: 1 }, bySource: { chatflow_sop: 3 } },
+      workerEventCounts: { total: 4, byType: { worker_started: 2 } },
+      recentFailureReasons: [
+        { taskId: 3, taskType: 'REFUND', source: 'chatflow_sop', reason: '工具失败 [REDACTED] api_key=***' },
+      ],
+    })
+
+    expect(metrics.tiles).toEqual([
+      { key: 'adoption', label: '人工采纳率', value: '100%', tone: 'success' },
+      { key: 'pending', label: '待确认动作', value: '1', tone: 'warning' },
+      { key: 'tasks', label: '活跃任务', value: '2', tone: 'processing' },
+      { key: 'events', label: '运行事件', value: '8', tone: 'default' },
+    ])
+    expect(metrics.failures[0]).toMatchObject({
+      taskType: 'REFUND',
+      source: 'chatflow_sop',
+      reason: '工具失败 [REDACTED] api_key=***',
+    })
+  })
+
+  it('formats empty metrics safely before a session exists', () => {
+    const metrics = formatCustomerAssistantMetrics(null)
+
+    expect(metrics.empty).toBe(true)
+    expect(metrics.tiles[0]).toMatchObject({ key: 'adoption', value: '0%' })
+    expect(metrics.failures).toEqual([])
   })
 
   it('derives live progress stages from L1 events', () => {

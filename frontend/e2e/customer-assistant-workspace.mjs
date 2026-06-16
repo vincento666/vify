@@ -17,6 +17,7 @@ try {
   for (const testId of [
     'customer-conversation-lane',
     'operator-conversation-lane',
+    'operator-metrics-panel',
     'operator-task-ledger',
     'operator-recommendation-panel',
     'operator-draft-panel',
