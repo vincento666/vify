@@ -13,9 +13,9 @@
 
 ## 075.2 Workbench Profile Visibility
 
-- [ ] Add RED frontend/API tests.
-- [ ] Render active profile metadata in the workbench.
-- [ ] Run frontend/rem/browser gates and commit.
+- [x] Add RED frontend/API tests.
+- [x] Render active profile metadata in the workbench.
+- [x] Run frontend/rem/browser gates and commit.
 
 ## 075.3 Profile Evaluation Gate
 

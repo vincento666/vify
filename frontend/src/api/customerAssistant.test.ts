@@ -88,6 +88,21 @@ describe('customer-assistant frontend API client', () => {
     expect(requestMocks.get).toHaveBeenCalledWith('/v1/customer-assistant/demo-stories')
   })
 
+  it('lists worker profile catalog entries for the workbench', async () => {
+    requestMocks.get.mockResolvedValueOnce({
+      list: [{ profileId: 'refund_ticket_chatflow', taskKey: 'refund_ticket' }],
+      total: 1,
+    })
+
+    const { listCustomerAssistantWorkerProfiles } = await import('./customerAssistant')
+
+    await expect(listCustomerAssistantWorkerProfiles()).resolves.toEqual({
+      list: [{ profileId: 'refund_ticket_chatflow', taskKey: 'refund_ticket' }],
+      total: 1,
+    })
+    expect(requestMocks.get).toHaveBeenCalledWith('/v1/customer-assistant/worker-profiles')
+  })
+
   it('confirms, rejects, and executes proposed actions through explicit endpoints', async () => {
     requestMocks.post
       .mockResolvedValueOnce({ id: 9, status: 'CONFIRMED' })

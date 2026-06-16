@@ -27,6 +27,9 @@ try {
   const taskLedger = await page.getByTestId('operator-task-ledger').innerText()
   assert(taskLedger.includes('refund_ticket:MU5137-8899'), 'Expected seeded refund task in ledger')
   assert(taskLedger.includes('baggage_service:MU5137-8899'), 'Expected seeded baggage task in ledger')
+  assert(taskLedger.includes('refund_ticket_chatflow'), 'Expected refund worker profile in task ledger')
+  assert(taskLedger.includes('customer_assistant_chatflow_default'), 'Expected model policy in task ledger')
+  assert(taskLedger.includes('manual_confirm'), 'Expected risk policy in task ledger')
 
   const proposedActions = await page.getByTestId('operator-proposed-actions-panel').innerText()
   assert(proposedActions.includes('并行处理退票与行李额确认'), 'Expected seeded proposed action in panel')

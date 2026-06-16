@@ -60,6 +60,59 @@ describe('customer assistant view model', () => {
     })
   })
 
+  it('attaches configured worker profile metadata to task rows', () => {
+    const summary = summarizeCustomerAssistantTasks(mockCustomerAssistantTasks.list, [
+      {
+        profileId: 'refund_ticket_chatflow',
+        taskKey: 'refund_ticket',
+        taskType: 'REFUND',
+        workerType: 'chatflow_sop',
+        workerRef: 'flight_refund',
+        modelPolicyRef: 'customer_assistant_chatflow_default',
+        promptRef: 'refund_ticket_sop_prompt',
+        toolRefs: ['refund_policy_lookup'],
+        riskPolicyRef: 'manual_confirm',
+        enabled: true,
+      },
+    ])
+
+    expect(summary.items[0].profile).toEqual({
+      profileId: 'refund_ticket_chatflow',
+      modelPolicyRef: 'customer_assistant_chatflow_default',
+      promptRef: 'refund_ticket_sop_prompt',
+      toolRefs: ['refund_policy_lookup'],
+      riskPolicyRef: 'manual_confirm',
+    })
+  })
+
+  it('matches worker profiles for business-scoped task keys', () => {
+    const summary = summarizeCustomerAssistantTasks(
+      [
+        {
+          ...mockCustomerAssistantTasks.list[0],
+          taskKey: 'refund_ticket:MU5137-8899',
+          workerRef: 'refund_ticket',
+        },
+      ],
+      [
+        {
+          profileId: 'refund_ticket_chatflow',
+          taskKey: 'refund_ticket',
+          taskType: 'REFUND',
+          workerType: 'chatflow_sop',
+          workerRef: 'refund_ticket',
+          modelPolicyRef: 'customer_assistant_chatflow_default',
+          promptRef: 'refund_ticket_sop_prompt',
+          toolRefs: ['refund_policy_lookup'],
+          riskPolicyRef: 'manual_confirm',
+          enabled: true,
+        },
+      ],
+    )
+
+    expect(summary.items[0].profile?.profileId).toBe('refund_ticket_chatflow')
+  })
+
   it('derives permitted operator task controls from task status', () => {
     const summary = summarizeCustomerAssistantTasks([
       { ...mockCustomerAssistantTasks.list[0], id: 1, status: 'RUNNING' },

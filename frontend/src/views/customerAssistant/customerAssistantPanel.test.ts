@@ -94,4 +94,14 @@ describe('CustomerAssistantPanel UI contract', () => {
     expect(taskLedger).toContain('恢复')
     expect(section(content, 'customer-conversation-lane')).not.toContain('proposeTaskControl')
   })
+
+  it('renders configured worker profile metadata in task rows', () => {
+    const taskLedger = section(content, 'operator-task-ledger')
+
+    expect(taskLedger).toContain('data-testid="operator-task-profile"')
+    expect(taskLedger).toContain('task.profile.profileId')
+    expect(taskLedger).toContain('task.profile.modelPolicyRef')
+    expect(taskLedger).toContain('task.profile.riskPolicyRef')
+    expect(taskLedger).toContain('task.profile.toolRefs')
+  })
 })

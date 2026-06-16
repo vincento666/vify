@@ -4,6 +4,7 @@ import type {
   CustomerAssistantTask,
   CustomerAssistantTaskControlType,
   CustomerAssistantTurnResult,
+  CustomerAssistantWorkerProfile,
 } from '@/api/customerAssistant'
 
 export interface CustomerAssistantLaneMessage {
@@ -23,10 +24,20 @@ export interface CustomerAssistantTaskRow {
   status: string
   statusTone: 'default' | 'processing' | 'success' | 'warning' | 'error'
   workerType: string
+  workerRef?: string
+  profile?: CustomerAssistantTaskProfile
   missingFields: string[]
   proposedActions: CustomerAssistantProposedAction[]
   availableControls: CustomerAssistantTaskControlType[]
   checkpoint: Record<string, unknown>
+}
+
+export interface CustomerAssistantTaskProfile {
+  profileId: string
+  modelPolicyRef: string
+  promptRef: string
+  toolRefs: string[]
+  riskPolicyRef: string
 }
 
 export interface CustomerAssistantTaskSummaryModel {
@@ -97,6 +108,7 @@ export interface BuildCustomerAssistantStateInput {
   tasks?: CustomerAssistantTask[]
   events?: CustomerAssistantEvent[]
   proposedActions?: CustomerAssistantProposedAction[]
+  workerProfiles?: CustomerAssistantWorkerProfile[]
 }
 
 export function buildCustomerAssistantState(input: BuildCustomerAssistantStateInput = {}): CustomerAssistantState {
@@ -126,7 +138,7 @@ export function buildCustomerAssistantState(input: BuildCustomerAssistantStateIn
     sessionId,
     customerMessages,
     operatorMessages,
-    taskSummary: summarizeCustomerAssistantTasks(tasks),
+    taskSummary: summarizeCustomerAssistantTasks(tasks, input.workerProfiles),
     recommendation: {
       operatorRecommendation: turn?.operatorRecommendation ?? '',
       customerReplyDraft: turn?.customerReplyDraft ?? '',
@@ -139,9 +151,13 @@ export function buildCustomerAssistantState(input: BuildCustomerAssistantStateIn
   }
 }
 
-export function summarizeCustomerAssistantTasks(tasks: CustomerAssistantTask[]): CustomerAssistantTaskSummaryModel {
+export function summarizeCustomerAssistantTasks(
+  tasks: CustomerAssistantTask[],
+  workerProfiles: CustomerAssistantWorkerProfile[] = [],
+): CustomerAssistantTaskSummaryModel {
   const counts: Record<string, number> = {}
   const items = tasks.map((task) => {
+    const profile = taskWorkerProfile(task, workerProfiles)
     counts[task.status] = (counts[task.status] ?? 0) + 1
     return {
       id: task.id,
@@ -150,6 +166,8 @@ export function summarizeCustomerAssistantTasks(tasks: CustomerAssistantTask[]):
       status: task.status,
       statusTone: statusTone(task.status),
       workerType: task.workerType,
+      workerRef: task.workerRef,
+      profile: profile ? taskProfile(profile) : undefined,
       missingFields: taskMissingFields(task),
       proposedActions: [...task.proposedActions],
       availableControls: availableTaskControls(task.status),
@@ -157,6 +175,34 @@ export function summarizeCustomerAssistantTasks(tasks: CustomerAssistantTask[]):
     }
   })
   return { counts, items }
+}
+
+function taskWorkerProfile(
+  task: CustomerAssistantTask,
+  workerProfiles: CustomerAssistantWorkerProfile[],
+): CustomerAssistantWorkerProfile | undefined {
+  return (
+    workerProfiles.find(
+      (profile) =>
+        taskMatchesProfile(task, profile) &&
+        profile.workerType === task.workerType &&
+        (!task.workerRef || profile.workerRef === task.workerRef),
+    ) ?? workerProfiles.find((profile) => taskMatchesProfile(task, profile))
+  )
+}
+
+function taskMatchesProfile(task: CustomerAssistantTask, profile: CustomerAssistantWorkerProfile): boolean {
+  return task.taskKey === profile.taskKey || task.taskKey.startsWith(`${profile.taskKey}:`)
+}
+
+function taskProfile(profile: CustomerAssistantWorkerProfile): CustomerAssistantTaskProfile {
+  return {
+    profileId: profile.profileId,
+    modelPolicyRef: profile.modelPolicyRef,
+    promptRef: profile.promptRef,
+    toolRefs: [...profile.toolRefs],
+    riskPolicyRef: profile.riskPolicyRef,
+  }
 }
 
 export function applyCustomerAssistantActionState(

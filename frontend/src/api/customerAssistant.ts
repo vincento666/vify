@@ -35,6 +35,19 @@ export interface CustomerAssistantTaskControlPayload {
   reason?: string
 }
 
+export interface CustomerAssistantWorkerProfile {
+  profileId: string
+  taskKey: string
+  taskType: string
+  workerType: string
+  workerRef: string
+  modelPolicyRef: string
+  promptRef: string
+  toolRefs: string[]
+  riskPolicyRef: string
+  enabled: boolean
+}
+
 export interface CustomerAssistantProposedAction {
   id: number
   sessionId?: number
@@ -106,6 +119,9 @@ export const createCustomerAssistantSession = (context: Record<string, unknown> 
 
 export const listCustomerAssistantDemoStories = () =>
   get<CustomerAssistantListResult<CustomerAssistantDemoStory>>('/v1/customer-assistant/demo-stories')
+
+export const listCustomerAssistantWorkerProfiles = () =>
+  get<CustomerAssistantListResult<CustomerAssistantWorkerProfile>>('/v1/customer-assistant/worker-profiles')
 
 export const sendCustomerAssistantTurn = (sessionId: number, payload: CustomerAssistantTurnPayload) => {
   const { message, idempotencyKey, actor } = payload

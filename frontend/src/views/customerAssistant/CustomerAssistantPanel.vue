@@ -171,7 +171,11 @@
               <OrderedListOutlined />
               任务台账
             </span>
-            <span class="panel-count">{{ workspace.taskSummary.items.length }}</span>
+            <div class="heading-meta">
+              <a-tag v-if="workerProfileError" color="warning">配置未加载</a-tag>
+              <a-tag v-else-if="workerProfilesLoading" color="processing">配置加载中</a-tag>
+              <span class="panel-count">{{ workspace.taskSummary.items.length }}</span>
+            </div>
           </div>
           <div class="task-list">
             <div
@@ -184,7 +188,17 @@
             <div v-for="task in workspace.taskSummary.items" :key="task.id" class="task-row">
               <div>
                 <strong>{{ task.displayName }}</strong>
-                <span>{{ task.taskKey }} · {{ task.workerType }}</span>
+                <span>
+                  {{ task.taskKey }} · {{ task.workerType }}
+                  <template v-if="task.workerRef"> · {{ task.workerRef }}</template>
+                </span>
+              </div>
+              <div v-if="task.profile" class="task-profile" data-testid="operator-task-profile">
+                <a-tag color="blue">{{ task.profile.profileId }}</a-tag>
+                <span>模型 {{ task.profile.modelPolicyRef }}</span>
+                <span>提示词 {{ task.profile.promptRef }}</span>
+                <span>风险 {{ task.profile.riskPolicyRef }}</span>
+                <span v-if="task.profile.toolRefs.length">工具 {{ task.profile.toolRefs.join('、') }}</span>
               </div>
               <a-tag :color="statusColor(task.statusTone)">{{ task.status }}</a-tag>
               <p v-if="task.missingFields.length">缺失：{{ task.missingFields.join('、') }}</p>
@@ -383,9 +397,11 @@ import { computed, onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import {
   listCustomerAssistantDemoStories,
+  listCustomerAssistantWorkerProfiles,
   type CustomerAssistantDemoStory,
   type CustomerAssistantProposedAction,
   type CustomerAssistantTaskControlType,
+  type CustomerAssistantWorkerProfile,
 } from '@/api/customerAssistant'
 import {
   BulbOutlined,
@@ -417,6 +433,7 @@ import {
   applyCustomerAssistantDraftLocally,
   createCustomerAssistantDraftState,
   formatCustomerAssistantTurnStatus,
+  summarizeCustomerAssistantTasks,
   type CustomerAssistantTaskRow,
 } from './customerAssistantViewModel'
 
@@ -433,8 +450,14 @@ const selectedDemoStoryId = ref<string | null>(null)
 const demoStoriesLoading = ref(false)
 const demoStoryLoadingId = ref<string | null>(null)
 const demoStoryError = ref<string | null>(null)
+const workerProfiles = ref<CustomerAssistantWorkerProfile[]>([])
+const workerProfilesLoading = ref(false)
+const workerProfileError = ref<string | null>(null)
 
-const workspace = computed(() => runtimeState.value)
+const workspace = computed(() => ({
+  ...runtimeState.value,
+  taskSummary: summarizeCustomerAssistantTasks(runtimeState.value.tasks, workerProfiles.value),
+}))
 const selectedDemoStory = computed(() =>
   demoStories.value.find((story) => story.storyId === selectedDemoStoryId.value) ?? null,
 )
@@ -460,7 +483,8 @@ const turnStatusColor = computed(() => {
 })
 
 onMounted(() => {
-  loadDemoStories()
+  void loadDemoStories()
+  void loadWorkerProfiles()
 })
 
 function messageLabel(role: string) {
@@ -519,6 +543,19 @@ async function loadDemoStories() {
     demoStoryError.value = error instanceof Error ? error.message : '演示故事加载失败'
   } finally {
     demoStoriesLoading.value = false
+  }
+}
+
+async function loadWorkerProfiles() {
+  workerProfilesLoading.value = true
+  workerProfileError.value = null
+  try {
+    const result = await listCustomerAssistantWorkerProfiles()
+    workerProfiles.value = result.list
+  } catch (error) {
+    workerProfileError.value = error instanceof Error ? error.message : '任务配置加载失败'
+  } finally {
+    workerProfilesLoading.value = false
   }
 }
 
@@ -781,6 +818,14 @@ async function executeAction(actionId: number) {
   font-weight: 600;
 }
 
+.heading-meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
 .panel-count {
   min-width: 1.5rem;
   border-radius: 999rem;
@@ -912,6 +957,16 @@ async function executeAction(actionId: number) {
   margin: 0;
   color: #8a5a00;
   font-size: 0.8125rem;
+}
+
+.task-profile {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  color: #4d5b70;
+  font-size: 0.75rem;
+  line-height: 1.45;
 }
 
 .task-controls {
