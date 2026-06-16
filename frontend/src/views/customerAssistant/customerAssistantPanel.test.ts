@@ -126,6 +126,15 @@ describe('CustomerAssistantPanel UI contract', () => {
     expect(section(content, 'customer-conversation-lane')).not.toContain('proposeTaskControl')
   })
 
+  it('renders pending worker refs and manual refresh controls in the operator ledger', () => {
+    const taskLedger = section(content, 'operator-task-ledger')
+
+    expect(taskLedger).toContain('data-testid="operator-worker-async-refs"')
+    expect(taskLedger).toContain('task.workerAsyncRefs.workerRunId')
+    expect(taskLedger).toContain('refreshWorkerResults')
+    expect(taskLedger).toContain('刷新结果')
+  })
+
   it('renders pending proposed action edit controls in the operator panel', () => {
     const actionPanel = section(content, 'operator-proposed-actions-panel')
 

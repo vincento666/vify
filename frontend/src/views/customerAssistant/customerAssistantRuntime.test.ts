@@ -18,6 +18,7 @@ const apiMocks = vi.hoisted(() => ({
   listCustomerAssistantTasks: vi.fn(),
   proposeCustomerAssistantTaskControl: vi.fn(),
   rejectCustomerAssistantAction: vi.fn(),
+  refreshCustomerAssistantWorkerResults: vi.fn(),
   sendCustomerAssistantTurn: vi.fn(),
   updateCustomerAssistantAction: vi.fn(),
 }))
@@ -275,6 +276,33 @@ describe('customer assistant runtime integration', () => {
     expect(confirmed.metrics?.eventCounts.total).toBe(mockCustomerAssistantMetrics.eventCounts.total)
     expect(confirmed.taskSummary.items[0].taskKey).toBe('refund_ticket')
     expect(confirmed.eventTimeline.some((event) => event.title === 'proposed_task_command_confirmed')).toBe(true)
+  })
+
+  it('refreshes pending worker results and reloads runtime ledgers', async () => {
+    apiMocks.refreshCustomerAssistantWorkerResults.mockResolvedValue({ consumed: 1 })
+    apiMocks.listCustomerAssistantTasks.mockResolvedValue({
+      list: [{ ...mockCustomerAssistantTasks.list[0], status: 'COMPLETED' }],
+      total: 1,
+    })
+    apiMocks.listCustomerAssistantEvents.mockResolvedValue(mockCustomerAssistantEvents)
+    apiMocks.listCustomerAssistantProposedActions.mockResolvedValue({
+      list: mockCustomerAssistantTurnResult.proposedActions,
+      total: 1,
+    })
+
+    const { createCustomerAssistantRuntimeState, refreshCustomerAssistantRuntimeWorkerResults } = await import(
+      './customerAssistantRuntime'
+    )
+    const initial = createCustomerAssistantRuntimeState({
+      session: { id: 12, status: 'ACTIVE' },
+      turnResult: mockCustomerAssistantTurnResult,
+    })
+
+    const refreshed = await refreshCustomerAssistantRuntimeWorkerResults(initial)
+
+    expect(apiMocks.refreshCustomerAssistantWorkerResults).toHaveBeenCalledWith(12)
+    expect(apiMocks.listCustomerAssistantTasks).toHaveBeenCalledWith(12)
+    expect(refreshed.taskSummary.items[0].status).toBe('COMPLETED')
   })
 
   it('loads a seeded demo story into the workbench state', async () => {

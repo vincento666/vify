@@ -55,6 +55,16 @@ export interface CustomerAssistantWorkerProfile {
 
 export type CustomerAssistantWorkerProfileUpdatePayload = Omit<CustomerAssistantWorkerProfile, 'profileId'>
 
+export interface CustomerAssistantWorkerAsyncRefs {
+  supported: boolean
+  workerRunId?: string | null
+  workerStatusRef?: string | null
+  workerEventsRef?: string | null
+  workerEventStreamRef?: string | null
+  workerResultRef?: string | null
+  reason?: string
+}
+
 export interface CustomerAssistantSessionMetrics extends CustomerAssistantObservabilityMetrics {
   sessionId: number
 }
@@ -130,6 +140,7 @@ export interface CustomerAssistantTask {
   workerRef?: string
   checkpoint: Record<string, unknown>
   lastResult?: Record<string, unknown>
+  workerAsyncRefs?: CustomerAssistantWorkerAsyncRefs
   proposedActions: CustomerAssistantProposedAction[]
   version?: number
 }
@@ -210,6 +221,9 @@ export const listCustomerAssistantProposedActions = (sessionId: number) =>
 
 export const getCustomerAssistantSessionMetrics = (sessionId: number) =>
   get<CustomerAssistantSessionMetrics>(`/v1/customer-assistant/sessions/${sessionId}/metrics`)
+
+export const refreshCustomerAssistantWorkerResults = (sessionId: number) =>
+  post<{ consumed: number }>(`/v1/customer-assistant/sessions/${sessionId}/worker-results/refresh`)
 
 export const proposeCustomerAssistantTaskControl = (
   sessionId: number,

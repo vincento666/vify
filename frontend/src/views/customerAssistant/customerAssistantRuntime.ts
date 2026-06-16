@@ -9,6 +9,7 @@ import {
   listCustomerAssistantTasks,
   proposeCustomerAssistantTaskControl,
   rejectCustomerAssistantAction,
+  refreshCustomerAssistantWorkerResults,
   sendCustomerAssistantTurn,
   updateCustomerAssistantAction,
   type CustomerAssistantActionUpdatePayload,
@@ -204,6 +205,31 @@ export async function proposeCustomerAssistantRuntimeTaskControl(
     throw new Error('Customer assistant session is required before proposing a task control')
   }
   await proposeCustomerAssistantTaskControl(current.session.id, taskId, { controlType, reason })
+  const { tasks, events, proposedActions, metrics } = await refreshCustomerAssistantRuntimeLedgers(current.session.id)
+  const rebuilt = buildCustomerAssistantState({
+    sessionId: current.session.id,
+    tasks: tasks.list,
+    events: events.list,
+    proposedActions: proposedActions.list,
+  })
+  return {
+    ...rebuilt,
+    session: current.session,
+    tasks: tasks.list,
+    events: events.list,
+    metrics,
+    loading: false,
+    error: null,
+  }
+}
+
+export async function refreshCustomerAssistantRuntimeWorkerResults(
+  current: CustomerAssistantRuntimeState,
+): Promise<CustomerAssistantRuntimeState> {
+  if (!current.session?.id) {
+    throw new Error('Customer assistant session is required before refreshing worker results')
+  }
+  await refreshCustomerAssistantWorkerResults(current.session.id)
   const { tasks, events, proposedActions, metrics } = await refreshCustomerAssistantRuntimeLedgers(current.session.id)
   const rebuilt = buildCustomerAssistantState({
     sessionId: current.session.id,

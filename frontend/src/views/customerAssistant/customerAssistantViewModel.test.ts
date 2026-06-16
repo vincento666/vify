@@ -134,6 +134,31 @@ describe('customer assistant view model', () => {
     ])
   })
 
+  it('projects durable worker async refs onto running task rows', () => {
+    const summary = summarizeCustomerAssistantTasks([
+      {
+        ...mockCustomerAssistantTasks.list[0],
+        status: 'RUNNING',
+        lastResult: {
+          workerAsyncRefs: {
+            supported: true,
+            workerRunId: 'customer-assistant-worker-run-42',
+            workerStatusRef: '/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-42',
+            workerEventsRef: '/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-42/events',
+            workerResultRef: '/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-42/result',
+            workerEventStreamRef: '/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-42/events/stream',
+          },
+        },
+      },
+    ])
+
+    expect(summary.items[0].workerAsyncRefs?.supported).toBe(true)
+    expect(summary.items[0].workerAsyncRefs?.workerRunId).toBe('customer-assistant-worker-run-42')
+    expect(summary.items[0].workerAsyncRefs?.workerEventsRef).toBe(
+      '/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-42/events',
+    )
+  })
+
   it('keeps recommendation and customer draft as separate operator panel state', () => {
     const state = buildCustomerAssistantState({
       sessionId: 12,

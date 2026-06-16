@@ -5,6 +5,7 @@ import type {
   CustomerAssistantTask,
   CustomerAssistantTaskControlType,
   CustomerAssistantTurnResult,
+  CustomerAssistantWorkerAsyncRefs,
   CustomerAssistantWorkerProfile,
 } from '@/api/customerAssistant'
 
@@ -27,6 +28,7 @@ export interface CustomerAssistantTaskRow {
   workerType: string
   workerRef?: string
   profile?: CustomerAssistantTaskProfile
+  workerAsyncRefs?: CustomerAssistantWorkerAsyncRefs
   missingFields: string[]
   proposedActions: CustomerAssistantProposedAction[]
   availableControls: CustomerAssistantTaskControlType[]
@@ -232,6 +234,7 @@ export function summarizeCustomerAssistantTasks(
       workerType: task.workerType,
       workerRef: task.workerRef,
       profile: profile ? taskProfile(profile) : undefined,
+      workerAsyncRefs: taskWorkerAsyncRefs(task),
       missingFields: taskMissingFields(task),
       proposedActions: [...task.proposedActions],
       availableControls: availableTaskControls(task.status),
@@ -266,6 +269,22 @@ function taskProfile(profile: CustomerAssistantWorkerProfile): CustomerAssistant
     promptRef: profile.promptRef,
     toolRefs: [...profile.toolRefs],
     riskPolicyRef: profile.riskPolicyRef,
+  }
+}
+
+function taskWorkerAsyncRefs(task: CustomerAssistantTask): CustomerAssistantWorkerAsyncRefs | undefined {
+  const direct = task.workerAsyncRefs
+  if (direct?.supported) return direct
+  const lastResultRefs = asRecord(task.lastResult?.workerAsyncRefs)
+  if (!lastResultRefs?.supported) return undefined
+  return {
+    supported: true,
+    workerRunId: stringField(lastResultRefs.workerRunId, ''),
+    workerStatusRef: stringField(lastResultRefs.workerStatusRef, ''),
+    workerEventsRef: stringField(lastResultRefs.workerEventsRef, ''),
+    workerEventStreamRef: stringField(lastResultRefs.workerEventStreamRef, ''),
+    workerResultRef: stringField(lastResultRefs.workerResultRef, ''),
+    reason: stringField(lastResultRefs.reason, ''),
   }
 }
 

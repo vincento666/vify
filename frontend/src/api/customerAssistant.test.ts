@@ -237,4 +237,13 @@ describe('customer-assistant frontend API client', () => {
       reason: 'customer supplied missing order number',
     })
   })
+
+  it('refreshes pending worker results through the session endpoint', async () => {
+    requestMocks.post.mockResolvedValueOnce({ consumed: 1 })
+
+    const { refreshCustomerAssistantWorkerResults } = await import('./customerAssistant')
+
+    await expect(refreshCustomerAssistantWorkerResults(12)).resolves.toEqual({ consumed: 1 })
+    expect(requestMocks.post).toHaveBeenCalledWith('/v1/customer-assistant/sessions/12/worker-results/refresh')
+  })
 })

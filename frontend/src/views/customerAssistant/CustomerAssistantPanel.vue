@@ -292,6 +292,25 @@
                 </a-tooltip>
               </div>
               <div
+                v-if="task.workerAsyncRefs?.supported"
+                class="worker-async-refs"
+                data-testid="operator-worker-async-refs"
+              >
+                <a-tag color="processing">Worker</a-tag>
+                <span v-if="task.workerAsyncRefs.workerRunId">Run {{ task.workerAsyncRefs.workerRunId }}</span>
+                <span v-if="task.workerAsyncRefs.workerResultRef">结果 {{ task.workerAsyncRefs.workerResultRef }}</span>
+                <a-tooltip title="刷新 Worker 结果">
+                  <a-button
+                    size="small"
+                    :loading="workerRefreshLoadingTaskId === task.id"
+                    @click="refreshWorkerResults(task.id)"
+                  >
+                    <HistoryOutlined />
+                    刷新结果
+                  </a-button>
+                </a-tooltip>
+              </div>
+              <div
                 v-if="editingWorkerProfileTaskId === task.id && editingWorkerProfileForm"
                 class="worker-profile-edit-form"
                 data-testid="operator-worker-profile-edit-form"
@@ -694,6 +713,7 @@ import {
   loadCustomerAssistantDemoStory,
   proposeCustomerAssistantRuntimeTaskControl,
   rejectCustomerAssistantRuntimeAction,
+  refreshCustomerAssistantRuntimeWorkerResults,
   sendCustomerAssistantRuntimeTurn,
   updateCustomerAssistantRuntimeAction,
 } from './customerAssistantRuntime'
@@ -737,6 +757,7 @@ const editingWorkerProfileForm = ref<CustomerAssistantWorkerProfileUpdatePayload
 const editingWorkerProfileToolRefs = ref('')
 const editingWorkerProfileError = ref<string | null>(null)
 const workerProfileSavingId = ref<string | null>(null)
+const workerRefreshLoadingTaskId = ref<number | null>(null)
 const editingActionId = ref<number | null>(null)
 const editingActionTitle = ref('')
 const editingActionPayload = ref('')
@@ -1029,6 +1050,19 @@ async function proposeTaskControl(taskId: number, controlType: CustomerAssistant
     catchCustomerAssistantError(error, '生成任务控制失败')
   } finally {
     taskControlLoadingKey.value = null
+  }
+}
+
+async function refreshWorkerResults(taskId: number) {
+  workerRefreshLoadingTaskId.value = taskId
+  try {
+    runtimeState.value = await refreshCustomerAssistantRuntimeWorkerResults(runtimeState.value)
+    void loadDemoStoryMetrics()
+    message.success('已刷新 Worker 结果')
+  } catch (error) {
+    catchCustomerAssistantError(error, '刷新 Worker 结果失败')
+  } finally {
+    workerRefreshLoadingTaskId.value = null
   }
 }
 
@@ -1449,6 +1483,20 @@ async function executeAction(actionId: number) {
   flex-wrap: wrap;
   gap: 0.35rem;
   align-items: center;
+  color: #4d5b70;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.worker-async-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 0.45rem;
+  border: 0.0625rem dashed #b8c7dc;
+  border-radius: 0.45rem;
+  background: #f7fbff;
   color: #4d5b70;
   font-size: 0.75rem;
   line-height: 1.45;
