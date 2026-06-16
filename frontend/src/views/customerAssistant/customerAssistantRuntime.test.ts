@@ -9,6 +9,7 @@ import {
 } from './customerAssistantFixtures'
 
 const apiMocks = vi.hoisted(() => ({
+  askCustomerAssistantOperatorKnowledgeQuestion: vi.fn(),
   confirmCustomerAssistantAction: vi.fn(),
   createCustomerAssistantSession: vi.fn(),
   executeCustomerAssistantAction: vi.fn(),
@@ -525,5 +526,44 @@ describe('customer assistant runtime integration', () => {
       status: 'PENDING',
     })
     expect(state.eventTimeline.some((event) => event.title === 'task_control_proposed')).toBe(true)
+  })
+
+  it('asks operator knowledge Q&A without refreshing or mutating ledgers', async () => {
+    apiMocks.askCustomerAssistantOperatorKnowledgeQuestion.mockResolvedValue({
+      sessionId: 12,
+      question: '退票和行李额可以并行处理吗？',
+      answer: '可以并行处理，执行写操作前分别确认。',
+      sources: [{ knowledgeBaseId: 201, sourceType: 'FAQ', title: '退票和行李额并行处理' }],
+      evidence: [{ type: 'TASK_LEDGER', taskKey: 'refund_ticket', taskType: 'REFUND', status: 'WAITING' }],
+      contextSummary: { sessionId: 12, taskCount: 1, pendingActionCount: 1, knowledgeBaseIds: [201] },
+      warnings: [],
+    })
+
+    const { askCustomerAssistantRuntimeOperatorKnowledgeQuestion, createCustomerAssistantRuntimeState } = await import(
+      './customerAssistantRuntime'
+    )
+    const initial = createCustomerAssistantRuntimeState({
+      session: { id: 12, status: 'ACTIVE' },
+      tasks: mockCustomerAssistantTasks.list,
+      events: mockCustomerAssistantEvents.list,
+      operatorAudit: mockCustomerAssistantOperatorAudit,
+      metrics: mockCustomerAssistantMetrics,
+    })
+
+    const answered = await askCustomerAssistantRuntimeOperatorKnowledgeQuestion(
+      initial,
+      '退票和行李额可以并行处理吗？',
+    )
+
+    expect(apiMocks.askCustomerAssistantOperatorKnowledgeQuestion).toHaveBeenCalledWith(12, {
+      question: '退票和行李额可以并行处理吗？',
+    })
+    expect(apiMocks.listCustomerAssistantTasks).not.toHaveBeenCalled()
+    expect(apiMocks.listCustomerAssistantEvents).not.toHaveBeenCalled()
+    expect(apiMocks.listCustomerAssistantProposedActions).not.toHaveBeenCalled()
+    expect(answered.tasks).toBe(initial.tasks)
+    expect(answered.events).toBe(initial.events)
+    expect(answered.operatorKnowledgeQa).not.toBeNull()
+    expect(answered.operatorKnowledgeQa!.answer).toContain('可以并行处理')
   })
 })

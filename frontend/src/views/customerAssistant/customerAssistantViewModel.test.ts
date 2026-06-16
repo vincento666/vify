@@ -13,8 +13,10 @@ import {
   buildCustomerAssistantState,
   formatCustomerAssistantActionReceipt,
   formatCustomerAssistantEvents,
+  formatCustomerAssistantEvalSurface,
   formatCustomerAssistantMetrics,
   formatCustomerAssistantOperatorAudit,
+  formatCustomerAssistantOperatorKnowledgeQa,
   formatOperatorAdvisoryEvidence,
   formatTaskRecognitionEvidence,
   summarizeCustomerAssistantTasks,
@@ -418,6 +420,61 @@ describe('customer assistant view model', () => {
     })
   })
 
+  it('formats operator knowledge Q&A without raw payload leaks', () => {
+    const qa = formatCustomerAssistantOperatorKnowledgeQa({
+      sessionId: 12,
+      question: '退票和行李额可以并行处理吗？',
+      answer: '可以并行处理，执行写操作前分别确认。',
+      sources: [
+        {
+          knowledgeBaseId: 201,
+          sourceType: 'FAQ',
+          matchType: 'faq',
+          score: 0.96,
+          title: '退票和行李额并行处理',
+          answerExcerpt: '退票和行李额任务可以并行推进。',
+        },
+      ],
+      evidence: [
+        {
+          type: 'TASK_LEDGER',
+          taskKey: 'refund_ticket:MU5137-8899',
+          taskType: 'REFUND',
+          status: 'WAITING',
+          workerRef: 'refund_ticket',
+          currentStep: 'collect_order_no',
+        },
+      ],
+      contextSummary: {
+        sessionId: 12,
+        storyTitle: '退票 + 行李额并行',
+        customer: { name: '赵女士', maskedPhone: '138****0000' },
+        taskCount: 2,
+        pendingActionCount: 1,
+        eventCount: 5,
+        knowledgeBaseIds: [201],
+        latestEventTypes: ['operator_advisory_context_packed'],
+        hostContext: { token: 'secret-token' },
+      } as Record<string, unknown>,
+      warnings: ['No seeded FAQ or knowledge source matched the operator question.'],
+    })
+
+    expect(qa.answer).toContain('可以并行处理')
+    expect(qa.sourceRows[0]).toMatchObject({
+      title: '退票和行李额并行处理',
+      meta: 'FAQ · faq · KB 201',
+      score: '0.96',
+    })
+    expect(qa.evidenceRows[0]).toMatchObject({
+      label: 'REFUND · WAITING',
+      detail: 'refund_ticket:[REDACTED] · refund_ticket · collect_order_no',
+    })
+    expect(qa.contextRows).toContainEqual({ key: 'taskCount', label: '任务数', value: '2' })
+    expect(JSON.stringify(qa)).not.toContain('secret-token')
+    expect(JSON.stringify(qa)).not.toContain('hostContext')
+    expect(JSON.stringify(qa)).not.toContain('MU5137-8899')
+  })
+
   it('formats session metrics as compact operator tiles and redacted failure rows', () => {
     const metrics = formatCustomerAssistantMetrics({
       ...mockCustomerAssistantMetrics,
@@ -450,6 +507,152 @@ describe('customer assistant view model', () => {
     expect(metrics.empty).toBe(true)
     expect(metrics.tiles[0]).toMatchObject({ key: 'adoption', value: '0%' })
     expect(metrics.failures).toEqual([])
+  })
+
+  it('builds a product-readable eval surface from existing session evidence', () => {
+    const recognitionEvents = [
+      {
+        id: 502,
+        sessionId: 12,
+        runId: 31,
+        sequence: 2,
+        type: 'task_recognized',
+        visibility: 'normal',
+        source: 'task_recognition',
+        actor: 'customer' as const,
+        payload: {
+          message: '客户手机号 13800138000，需要退票',
+          commands: [
+            {
+              taskKey: 'refund_ticket',
+              taskType: 'REFUND',
+              workerType: 'chatflow_sop',
+              workerRef: 'flight_refund',
+              profileRefs: {
+                profileId: 'refund_ticket_chatflow',
+                modelPolicyRef: 'customer_assistant_chatflow_default',
+                promptRef: 'refund_ticket_sop_prompt',
+                toolRefs: ['refund_policy_lookup'],
+                riskPolicyRef: 'manual_confirm',
+              },
+            },
+          ],
+        },
+      },
+    ]
+    const events = [
+      ...recognitionEvents,
+      {
+        id: 503,
+        sessionId: 12,
+        runId: 31,
+        sequence: 3,
+        type: 'worker_started',
+        source: 'chatflow_sop',
+        payload: { taskKey: 'refund_ticket', workerRef: 'flight_refund' },
+      },
+      {
+        id: 504,
+        sessionId: 12,
+        runId: 31,
+        sequence: 4,
+        type: 'worker_result_received',
+        source: 'chatflow_sop',
+        payload: { taskKey: 'refund_ticket', status: 'WAITING' },
+      },
+      {
+        id: 505,
+        sessionId: 12,
+        runId: 31,
+        sequence: 5,
+        type: 'llm_shadow_diff_recorded',
+        source: 'llm_shadow',
+        payload: {
+          phase: 'recommendation',
+          mode: 'fake',
+          modelConfigId: 7,
+          diff: { matches: false, differences: ['operatorRecommendation'] },
+          baseline: { operatorRecommendation: '客户手机号 13800138000' },
+        },
+      },
+      {
+        id: 506,
+        sessionId: 12,
+        runId: 31,
+        sequence: 6,
+        type: 'llm_primary_fallback',
+        source: 'llm_primary',
+        payload: {
+          phase: 'task_recognition',
+          reason: 'low_confidence',
+          error: 'api_key=sk-live-secret customer 13800138000',
+        },
+      },
+    ]
+    const taskSummary = summarizeCustomerAssistantTasks(mockCustomerAssistantTasks.list)
+    const recognitionEvidence = formatTaskRecognitionEvidence(recognitionEvents)
+
+    const surface = formatCustomerAssistantEvalSurface({
+      taskSummary,
+      recognitionEvidence,
+      events,
+      metrics: {
+        ...mockCustomerAssistantMetrics,
+        humanConfirmation: { pending: 1, adopted: 2, terminal: 4, adoptionRate: 0.5 },
+        eventCounts: { total: 6, byType: { task_recognized: 1 }, bySource: { chatflow_sop: 2 } },
+        workerEventCounts: { total: 2, byType: { worker_started: 1, worker_result_received: 1 } },
+        recentFailureReasons: [
+          {
+            taskId: 101,
+            taskType: 'REFUND',
+            source: 'chatflow_sop',
+            reason: '工具失败 api_key=sk-live-secret phone 13800138000',
+          },
+        ],
+      },
+    })
+
+    expect(surface.empty).toBe(false)
+    expect(surface.tiles).toEqual([
+      { key: 'taskHits', label: '任务命中', value: '1', detail: 'refund_ticket', tone: 'success' },
+      { key: 'workerRuns', label: 'Worker 执行', value: '2', detail: 'started 1 · result 1 · failed 0', tone: 'processing' },
+      { key: 'modelEvidence', label: '模型证据', value: '2', detail: 'diff 1 · fallback 1', tone: 'warning' },
+      { key: 'adoption', label: '采纳率', value: '50%', detail: '2/4 adopted · pending 1', tone: 'success' },
+    ])
+    expect(surface.taskRecognition[0]).toMatchObject({
+      title: 'refund_ticket',
+      detail: 'REFUND · chatflow_sop · flight_refund',
+      meta: ['模型 customer_assistant_chatflow_default', '提示词 refund_ticket_sop_prompt', '风险 manual_confirm'],
+    })
+    expect(surface.workerExecution[0]).toMatchObject({
+      title: '退票处理',
+      detail: 'refund_ticket · chatflow_sop · flight_refund',
+      meta: ['WAITING', '缺失 订单号'],
+      tone: 'warning',
+    })
+    expect(surface.modelEvidence).toEqual([
+      {
+        key: 'model-505',
+        title: '推荐影子差异',
+        detail: 'recommendation · operatorRecommendation',
+        reason: 'diff mismatch',
+        tone: 'warning',
+      },
+      {
+        key: 'model-506',
+        title: '模型回退',
+        detail: 'task_recognition · low_confidence',
+        reason: 'low_confidence',
+        tone: 'warning',
+      },
+    ])
+    expect(surface.failures[0]).toMatchObject({
+      taskType: 'REFUND',
+      source: 'chatflow_sop',
+      reason: '工具失败 api_key=[REDACTED] phone [REDACTED]',
+    })
+    expect(JSON.stringify(surface)).not.toContain('13800138000')
+    expect(JSON.stringify(surface)).not.toContain('sk-live-secret')
   })
 
   it('derives live progress stages from L1 events', () => {

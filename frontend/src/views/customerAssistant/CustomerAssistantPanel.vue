@@ -214,6 +214,79 @@
           </div>
         </section>
 
+        <section class="workspace-panel compact-panel" data-testid="operator-eval-observability-panel">
+          <div class="panel-heading">
+            <span class="panel-heading-title">
+              <DashboardOutlined />
+              评估观测
+            </span>
+            <a-tag :color="evalSurface.empty ? 'default' : 'blue'">
+              {{ evalSurface.empty ? '暂无证据' : 'Session eval' }}
+            </a-tag>
+          </div>
+          <div class="eval-metrics-grid" aria-label="会话评估指标">
+            <div
+              v-for="tile in evalSurface.tiles"
+              :key="tile.key"
+              class="metric-tile"
+              :class="tile.tone"
+            >
+              <span>{{ tile.label }}</span>
+              <strong>{{ tile.value }}</strong>
+              <small>{{ tile.detail }}</small>
+            </div>
+          </div>
+          <div class="eval-evidence-block">
+            <strong>任务识别</strong>
+            <div v-if="evalSurface.taskRecognition.length === 0" class="empty-compact">暂无任务命中</div>
+            <div
+              v-for="row in evalSurface.taskRecognition"
+              :key="row.key"
+              class="eval-evidence-row"
+              :class="row.tone"
+            >
+              <span>{{ row.title }}</span>
+              <p>{{ row.detail }}</p>
+              <small>{{ row.meta.join(' · ') }}</small>
+            </div>
+          </div>
+          <div class="eval-evidence-block">
+            <strong>Worker 执行</strong>
+            <div v-if="evalSurface.workerExecution.length === 0" class="empty-compact">暂无 Worker 执行证据</div>
+            <div
+              v-for="row in evalSurface.workerExecution"
+              :key="row.key"
+              class="eval-evidence-row"
+              :class="row.tone"
+            >
+              <span>{{ row.title }}</span>
+              <p>{{ row.detail }}</p>
+              <small>{{ row.meta.join(' · ') }}</small>
+            </div>
+          </div>
+          <div class="eval-evidence-block">
+            <strong>模型/回退证据</strong>
+            <div v-if="evalSurface.modelEvidence.length === 0" class="empty-compact">暂无模型差异或回退证据</div>
+            <div
+              v-for="row in evalSurface.modelEvidence"
+              :key="row.key"
+              class="eval-evidence-row"
+              :class="row.tone"
+            >
+              <span>{{ row.title }}</span>
+              <p>{{ row.detail }}</p>
+              <small>{{ row.reason }}</small>
+            </div>
+          </div>
+          <div v-if="evalSurface.failures.length" class="failure-list">
+            <div v-for="failure in evalSurface.failures" :key="`eval-${failure.taskId}:${failure.reason}`">
+              <a-tag color="error">{{ failure.taskType }}</a-tag>
+              <span>{{ failure.source }}</span>
+              <p>{{ failure.reason }}</p>
+            </div>
+          </div>
+        </section>
+
         <section class="workspace-panel compact-panel" data-testid="operator-recognition-evidence-panel">
           <div class="panel-heading">
             <span class="panel-heading-title">
@@ -247,6 +320,83 @@
                 <span v-if="recognition.toolRefs.length">工具 {{ recognition.toolRefs.join('、') }}</span>
               </div>
             </div>
+          </div>
+        </section>
+
+        <section class="workspace-panel compact-panel" data-testid="operator-knowledge-qa-panel">
+          <div class="panel-heading">
+            <span class="panel-heading-title">
+              <BulbOutlined />
+              知识追问
+            </span>
+            <a-tag v-if="runtimeState.operatorKnowledgeQaLoading" color="processing">查询中</a-tag>
+            <a-tag v-else-if="operatorKnowledgeQa.empty" color="default">只读</a-tag>
+            <a-tag v-else color="success">已回答</a-tag>
+          </div>
+          <div class="knowledge-qa-composer">
+            <a-textarea
+              v-model:value="operatorKnowledgeQuestion"
+              data-testid="operator-knowledge-qa-question"
+              aria-label="坐席知识追问"
+              :auto-size="{ minRows: 2, maxRows: 4 }"
+              placeholder="询问当前会话知识或上下文，例如：退票和行李额可以并行处理吗？"
+            />
+            <div class="knowledge-qa-actions">
+              <a-button
+                type="primary"
+                :loading="runtimeState.operatorKnowledgeQaLoading"
+                :disabled="!workspace.sessionId || !operatorKnowledgeQuestion.trim()"
+                @click="askOperatorKnowledgeQuestion"
+              >
+                <BulbOutlined />
+                提问
+              </a-button>
+            </div>
+          </div>
+          <p v-if="!workspace.sessionId" class="empty-compact">请先打开演示故事或发起一轮会话</p>
+          <a-alert
+            v-if="runtimeState.operatorKnowledgeQaError"
+            type="warning"
+            show-icon
+            :message="runtimeState.operatorKnowledgeQaError"
+          />
+          <div v-if="!operatorKnowledgeQa.empty" class="knowledge-qa-result">
+            <p class="panel-copy" data-testid="operator-knowledge-qa-answer">{{ operatorKnowledgeQa.answer }}</p>
+            <div v-if="operatorKnowledgeQa.sourceRows.length" class="knowledge-qa-list" aria-label="知识来源">
+              <div
+                v-for="source in operatorKnowledgeQa.sourceRows"
+                :key="source.key"
+                class="knowledge-qa-row"
+                data-testid="operator-knowledge-qa-source"
+              >
+                <strong>{{ source.title }}</strong>
+                <span>{{ source.meta }}<template v-if="source.score"> · score {{ source.score }}</template></span>
+                <p v-if="source.excerpt">{{ source.excerpt }}</p>
+              </div>
+            </div>
+            <div v-if="operatorKnowledgeQa.evidenceRows.length" class="knowledge-qa-list" aria-label="任务证据">
+              <div
+                v-for="evidence in operatorKnowledgeQa.evidenceRows"
+                :key="evidence.key"
+                class="knowledge-qa-row"
+                data-testid="operator-knowledge-qa-evidence"
+              >
+                <strong>{{ evidence.label }}</strong>
+                <span>{{ evidence.detail }}</span>
+              </div>
+            </div>
+            <div v-if="operatorKnowledgeQa.contextRows.length" class="knowledge-qa-context" aria-label="上下文摘要">
+              <span v-for="row in operatorKnowledgeQa.contextRows" :key="row.key">
+                {{ row.label }}：{{ row.value }}
+              </span>
+            </div>
+            <a-alert
+              v-for="warning in operatorKnowledgeQa.warnings"
+              :key="warning"
+              type="warning"
+              show-icon
+              :message="warning"
+            />
           </div>
         </section>
 
@@ -854,6 +1004,7 @@ import {
 } from '@ant-design/icons-vue'
 
 import {
+  askCustomerAssistantRuntimeOperatorKnowledgeQuestion,
   confirmCustomerAssistantRuntimeAction,
   createCustomerAssistantRuntimeState,
   executeCustomerAssistantRuntimeAction,
@@ -873,7 +1024,9 @@ import {
   applyCustomerAssistantDraftLocally,
   createCustomerAssistantDraftState,
   formatCustomerAssistantActionReceipt,
+  formatCustomerAssistantEvalSurface,
   formatCustomerAssistantMetrics,
+  formatCustomerAssistantOperatorKnowledgeQa,
   formatCustomerAssistantTurnStatus,
   summarizeCustomerAssistantTasks,
   type CustomerAssistantTaskRow,
@@ -881,6 +1034,7 @@ import {
 
 const customerInput = ref('我要退票')
 const operatorInput = ref('请给我处置建议')
+const operatorKnowledgeQuestion = ref('退票和行李额可以并行处理吗？')
 const draftApplied = ref(false)
 const sendingSource = ref<'customer' | 'operator' | null>(null)
 const actionLoadingId = ref<number | null>(null)
@@ -918,7 +1072,18 @@ const workspace = computed(() => ({
   taskSummary: summarizeCustomerAssistantTasks(runtimeState.value.tasks, workerProfiles.value),
 }))
 const metricsSummary = computed(() => formatCustomerAssistantMetrics(workspace.value.metrics))
+const evalSurface = computed(() =>
+  formatCustomerAssistantEvalSurface({
+    taskSummary: workspace.value.taskSummary,
+    recognitionEvidence: workspace.value.recognitionEvidence,
+    events: workspace.value.events,
+    metrics: workspace.value.metrics,
+  }),
+)
 const demoStoryMetricsSummary = computed(() => formatCustomerAssistantMetrics(demoStoryMetrics.value))
+const operatorKnowledgeQa = computed(() =>
+  formatCustomerAssistantOperatorKnowledgeQa(runtimeState.value.operatorKnowledgeQa),
+)
 const selectedDemoStory = computed(() =>
   demoStories.value.find((story) => story.storyId === selectedDemoStoryId.value) ?? null,
 )
@@ -1223,6 +1388,30 @@ async function refreshWorkerResults(taskId: number) {
     catchCustomerAssistantError(error, '刷新 Worker 结果失败')
   } finally {
     workerRefreshLoadingTaskId.value = null
+  }
+}
+
+async function askOperatorKnowledgeQuestion() {
+  const question = operatorKnowledgeQuestion.value.trim()
+  if (!question) return
+  runtimeState.value = {
+    ...runtimeState.value,
+    operatorKnowledgeQaLoading: true,
+    operatorKnowledgeQaError: null,
+  }
+  try {
+    runtimeState.value = await askCustomerAssistantRuntimeOperatorKnowledgeQuestion(runtimeState.value, question)
+    if (runtimeState.value.operatorKnowledgeQaError) {
+      message.warning(runtimeState.value.operatorKnowledgeQaError)
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : '知识追问失败'
+    runtimeState.value = {
+      ...runtimeState.value,
+      operatorKnowledgeQaLoading: false,
+      operatorKnowledgeQaError: errorMessage,
+    }
+    message.error(errorMessage)
   }
 }
 
@@ -1574,7 +1763,8 @@ async function executeAction(actionId: number) {
 .worker-profile-catalog,
 .audit-list,
 .recognition-evidence-list,
-.advisory-evidence-list {
+.advisory-evidence-list,
+.knowledge-qa-list {
   display: grid;
   gap: 0.625rem;
 }
@@ -1609,7 +1799,8 @@ async function executeAction(actionId: number) {
 .worker-profile-row,
 .audit-row,
 .recognition-evidence-row,
-.advisory-evidence-row {
+.advisory-evidence-row,
+.knowledge-qa-row {
   display: grid;
   gap: 0.5rem;
   padding: 0.65rem;
@@ -1638,17 +1829,45 @@ async function executeAction(actionId: number) {
 .worker-profile-row span,
 .audit-row span,
 .recognition-evidence-row span,
-.advisory-evidence-row span {
+.advisory-evidence-row span,
+.knowledge-qa-row span {
   color: #667085;
   font-size: 0.75rem;
 }
 
 .task-row p,
 .audit-row p,
-.advisory-evidence-row p {
+.advisory-evidence-row p,
+.knowledge-qa-row p {
   margin: 0;
   color: #8a5a00;
   font-size: 0.8125rem;
+}
+
+.knowledge-qa-composer,
+.knowledge-qa-result {
+  display: grid;
+  gap: 0.625rem;
+}
+
+.knowledge-qa-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.knowledge-qa-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.knowledge-qa-context span {
+  padding: 0.25rem 0.45rem;
+  border-radius: 999rem;
+  background: #eef4ff;
+  color: #2456a7;
+  font-size: 0.75rem;
+  line-height: 1.35;
 }
 
 .task-profile {
@@ -1743,6 +1962,12 @@ async function executeAction(actionId: number) {
   gap: 0.5rem;
 }
 
+.eval-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: 0.5rem;
+}
+
 .metric-tile {
   display: grid;
   gap: 0.25rem;
@@ -1765,6 +1990,13 @@ async function executeAction(actionId: number) {
   line-height: 1.1;
 }
 
+.metric-tile small {
+  color: #667085;
+  font-size: 0.6875rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
 .metric-tile.success {
   border-color: #b7dfc9;
   background: #f4fbf7;
@@ -1778,6 +2010,66 @@ async function executeAction(actionId: number) {
 .metric-tile.processing {
   border-color: #bad3f7;
   background: #f5f9ff;
+}
+
+.metric-tile.error {
+  border-color: #f2c2bc;
+  background: #fff7f5;
+}
+
+.eval-evidence-block {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.65rem;
+}
+
+.eval-evidence-block > strong {
+  color: #344054;
+  font-size: 0.8125rem;
+}
+
+.eval-evidence-row {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.55rem;
+  border: 0.0625rem solid #edf0f6;
+  border-radius: 0.45rem;
+  background: #fbfcff;
+}
+
+.eval-evidence-row.warning {
+  border-color: #f3d599;
+  background: #fffbf0;
+}
+
+.eval-evidence-row.error {
+  border-color: #f2c2bc;
+  background: #fff7f5;
+}
+
+.eval-evidence-row.success {
+  border-color: #b7dfc9;
+  background: #f4fbf7;
+}
+
+.eval-evidence-row.processing {
+  border-color: #bad3f7;
+  background: #f5f9ff;
+}
+
+.eval-evidence-row span {
+  color: #1d2535;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.eval-evidence-row p,
+.eval-evidence-row small {
+  margin: 0;
+  color: #667085;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .failure-list {

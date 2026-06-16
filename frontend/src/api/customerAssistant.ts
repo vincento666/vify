@@ -89,6 +89,63 @@ export interface CustomerAssistantOperatorAudit {
   total: number
 }
 
+export interface CustomerAssistantOperatorKnowledgeQaPayload {
+  question: string
+}
+
+export interface CustomerAssistantOperatorKnowledgeQaSource {
+  knowledgeBaseId: number
+  sourceType: string
+  matchType?: string
+  score?: number
+  title: string
+  answerExcerpt?: string
+  faqId?: number
+  documentId?: number
+  chunkId?: number
+  chunkIndex?: number
+}
+
+export interface CustomerAssistantOperatorKnowledgeQaEvidence {
+  type: string
+  taskKey?: string
+  taskType?: string
+  status?: string
+  workerType?: string
+  workerRef?: string
+  sopId?: string
+  currentStep?: string
+}
+
+export interface CustomerAssistantOperatorKnowledgeQaContextSummary {
+  sessionId?: number
+  storyId?: string
+  storyTitle?: string
+  customer?: {
+    name?: string
+    maskedPhone?: string
+  }
+  taskCount?: number
+  taskStatusCounts?: Record<string, number>
+  taskTypes?: string[]
+  workerRefs?: string[]
+  proposedActionCount?: number
+  pendingActionCount?: number
+  eventCount?: number
+  latestEventTypes?: string[]
+  knowledgeBaseIds?: number[]
+}
+
+export interface CustomerAssistantOperatorKnowledgeQaResult {
+  sessionId: number
+  question: string
+  answer: string
+  sources: CustomerAssistantOperatorKnowledgeQaSource[]
+  evidence: CustomerAssistantOperatorKnowledgeQaEvidence[]
+  contextSummary: CustomerAssistantOperatorKnowledgeQaContextSummary
+  warnings: string[]
+}
+
 export interface CustomerAssistantObservabilityMetrics {
   taskStatusCounts: Record<string, number>
   proposedActionStatusCounts: Record<string, number>
@@ -244,6 +301,15 @@ export const getCustomerAssistantSessionMetrics = (sessionId: number) =>
 
 export const listCustomerAssistantOperatorAudit = (sessionId: number) =>
   get<CustomerAssistantOperatorAudit>(`/v1/customer-assistant/sessions/${sessionId}/operator-audit`)
+
+export const askCustomerAssistantOperatorKnowledgeQuestion = (
+  sessionId: number,
+  payload: CustomerAssistantOperatorKnowledgeQaPayload,
+) =>
+  post<CustomerAssistantOperatorKnowledgeQaResult>(
+    `/v1/customer-assistant/sessions/${sessionId}/operator-knowledge-qa`,
+    { question: payload.question },
+  )
 
 export const refreshCustomerAssistantWorkerResults = (sessionId: number) =>
   post<{ consumed: number }>(`/v1/customer-assistant/sessions/${sessionId}/worker-results/refresh`)

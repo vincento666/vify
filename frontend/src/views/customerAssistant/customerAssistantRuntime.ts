@@ -1,4 +1,5 @@
 import {
+  askCustomerAssistantOperatorKnowledgeQuestion,
   confirmCustomerAssistantAction,
   createCustomerAssistantSession,
   executeCustomerAssistantAction,
@@ -18,6 +19,7 @@ import {
   type CustomerAssistantEvent,
   type CustomerAssistantListResult,
   type CustomerAssistantOperatorAudit,
+  type CustomerAssistantOperatorKnowledgeQaResult,
   type CustomerAssistantProposedAction,
   type CustomerAssistantSession,
   type CustomerAssistantSessionMetrics,
@@ -41,6 +43,9 @@ export interface CustomerAssistantRuntimeState extends CustomerAssistantState {
   events: CustomerAssistantEvent[]
   metrics: CustomerAssistantSessionMetrics | null
   operatorAudit: CustomerAssistantOperatorAudit
+  operatorKnowledgeQa: CustomerAssistantOperatorKnowledgeQaResult | null
+  operatorKnowledgeQaLoading: boolean
+  operatorKnowledgeQaError: string | null
   loading: boolean
   error: string | null
 }
@@ -49,6 +54,7 @@ export interface CreateCustomerAssistantRuntimeStateInput extends BuildCustomerA
   session?: CustomerAssistantSession | null
   metrics?: CustomerAssistantSessionMetrics | null
   operatorAudit?: CustomerAssistantOperatorAudit | null
+  operatorKnowledgeQa?: CustomerAssistantOperatorKnowledgeQaResult | null
 }
 
 export interface SendCustomerAssistantRuntimeTurnOptions {
@@ -70,6 +76,9 @@ export function createCustomerAssistantRuntimeState(
     events: input.events ?? input.turnResult?.events ?? [],
     metrics: input.metrics ?? null,
     operatorAudit: input.operatorAudit ?? emptyCustomerAssistantOperatorAudit(session?.id ?? input.sessionId ?? null),
+    operatorKnowledgeQa: input.operatorKnowledgeQa ?? null,
+    operatorKnowledgeQaLoading: false,
+    operatorKnowledgeQaError: null,
     loading: false,
     error: null,
   }
@@ -144,6 +153,9 @@ export async function loadCustomerAssistantDemoStory(storyId: string): Promise<C
     events: events.list,
     metrics,
     operatorAudit,
+    operatorKnowledgeQa: null,
+    operatorKnowledgeQaLoading: false,
+    operatorKnowledgeQaError: null,
     loading: false,
     error: null,
   }
@@ -209,6 +221,9 @@ export async function proposeCustomerAssistantRuntimeTaskControl(
     events: events.list,
     metrics,
     operatorAudit,
+    operatorKnowledgeQa: null,
+    operatorKnowledgeQaLoading: false,
+    operatorKnowledgeQaError: null,
     loading: false,
     error: null,
   }
@@ -238,8 +253,41 @@ export async function refreshCustomerAssistantRuntimeWorkerResults(
     events: events.list,
     metrics,
     operatorAudit,
+    operatorKnowledgeQa: null,
+    operatorKnowledgeQaLoading: false,
+    operatorKnowledgeQaError: null,
     loading: false,
     error: null,
+  }
+}
+
+export async function askCustomerAssistantRuntimeOperatorKnowledgeQuestion(
+  current: CustomerAssistantRuntimeState,
+  question: string,
+): Promise<CustomerAssistantRuntimeState> {
+  if (!current.session?.id) {
+    throw new Error('Customer assistant session is required before asking operator knowledge Q&A')
+  }
+  const normalizedQuestion = question.trim()
+  if (!normalizedQuestion) {
+    throw new Error('Operator knowledge question is required')
+  }
+  try {
+    const operatorKnowledgeQa = await askCustomerAssistantOperatorKnowledgeQuestion(current.session.id, {
+      question: normalizedQuestion,
+    })
+    return {
+      ...current,
+      operatorKnowledgeQa,
+      operatorKnowledgeQaLoading: false,
+      operatorKnowledgeQaError: null,
+    }
+  } catch (error) {
+    return {
+      ...current,
+      operatorKnowledgeQaLoading: false,
+      operatorKnowledgeQaError: error instanceof Error ? error.message : 'Operator knowledge Q&A failed',
+    }
   }
 }
 
@@ -269,6 +317,9 @@ function fromTurnResult(
     events,
     metrics,
     operatorAudit,
+    operatorKnowledgeQa: null,
+    operatorKnowledgeQaLoading: false,
+    operatorKnowledgeQaError: null,
     loading: false,
     error: null,
   }
@@ -311,6 +362,9 @@ export function mergeCustomerAssistantLiveEvent(
     events,
     metrics: current.metrics,
     operatorAudit: current.operatorAudit,
+    operatorKnowledgeQa: current.operatorKnowledgeQa,
+    operatorKnowledgeQaLoading: current.operatorKnowledgeQaLoading,
+    operatorKnowledgeQaError: current.operatorKnowledgeQaError,
     loading: current.loading,
     error: current.error,
   }
@@ -391,6 +445,9 @@ async function applyRuntimeActionResult(
     events: current.events,
     metrics: current.metrics,
     operatorAudit: current.operatorAudit,
+    operatorKnowledgeQa: null,
+    operatorKnowledgeQaLoading: false,
+    operatorKnowledgeQaError: null,
     loading: false,
     error: null,
   }

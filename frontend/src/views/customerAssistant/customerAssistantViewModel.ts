@@ -3,6 +3,7 @@ import type {
   CustomerAssistantObservabilityMetrics,
   CustomerAssistantOperatorAudit,
   CustomerAssistantOperatorAuditRow as CustomerAssistantOperatorAuditApiRow,
+  CustomerAssistantOperatorKnowledgeQaResult,
   CustomerAssistantProposedAction,
   CustomerAssistantTask,
   CustomerAssistantTaskControlType,
@@ -97,6 +98,36 @@ export interface CustomerAssistantOperatorAdvisoryEvidenceRow {
   warnings: string[]
 }
 
+export interface CustomerAssistantOperatorKnowledgeQaSourceRow {
+  key: string
+  title: string
+  meta: string
+  score: string
+  excerpt: string
+}
+
+export interface CustomerAssistantOperatorKnowledgeQaEvidenceRow {
+  key: string
+  label: string
+  detail: string
+}
+
+export interface CustomerAssistantOperatorKnowledgeQaContextRow {
+  key: string
+  label: string
+  value: string
+}
+
+export interface CustomerAssistantOperatorKnowledgeQaState {
+  empty: boolean
+  question: string
+  answer: string
+  sourceRows: CustomerAssistantOperatorKnowledgeQaSourceRow[]
+  evidenceRows: CustomerAssistantOperatorKnowledgeQaEvidenceRow[]
+  contextRows: CustomerAssistantOperatorKnowledgeQaContextRow[]
+  warnings: string[]
+}
+
 export interface CustomerAssistantProgressStage {
   key: 'recognizing' | 'workers' | 'recommendation' | 'ready'
   label: string
@@ -120,6 +151,46 @@ export interface CustomerAssistantFailureRow {
 export interface CustomerAssistantMetricsSummary {
   empty: boolean
   tiles: CustomerAssistantMetricTile[]
+  failures: CustomerAssistantFailureRow[]
+}
+
+export interface CustomerAssistantEvalTile {
+  key: 'taskHits' | 'workerRuns' | 'modelEvidence' | 'adoption'
+  label: string
+  value: string
+  detail: string
+  tone: 'default' | 'processing' | 'success' | 'warning' | 'error'
+}
+
+export interface CustomerAssistantEvalEvidenceRow {
+  key: string
+  title: string
+  detail: string
+  meta: string[]
+  tone: 'default' | 'processing' | 'success' | 'warning' | 'error'
+}
+
+export interface CustomerAssistantModelEvidenceRow {
+  key: string
+  title: string
+  detail: string
+  reason: string
+  tone: 'default' | 'success' | 'warning' | 'error'
+}
+
+export interface CustomerAssistantEvalSurfaceInput {
+  taskSummary: CustomerAssistantTaskSummaryModel
+  recognitionEvidence: CustomerAssistantRecognitionEvidenceRow[]
+  events: CustomerAssistantEvent[]
+  metrics: CustomerAssistantObservabilityMetrics | null
+}
+
+export interface CustomerAssistantEvalSurface {
+  empty: boolean
+  tiles: CustomerAssistantEvalTile[]
+  taskRecognition: CustomerAssistantEvalEvidenceRow[]
+  workerExecution: CustomerAssistantEvalEvidenceRow[]
+  modelEvidence: CustomerAssistantModelEvidenceRow[]
   failures: CustomerAssistantFailureRow[]
 }
 
@@ -433,6 +504,57 @@ export function formatOperatorAdvisoryEvidence(
   })
 }
 
+export function formatCustomerAssistantOperatorKnowledgeQa(
+  qa: CustomerAssistantOperatorKnowledgeQaResult | null | undefined,
+): CustomerAssistantOperatorKnowledgeQaState {
+  if (!qa) {
+    return {
+      empty: true,
+      question: '',
+      answer: '',
+      sourceRows: [],
+      evidenceRows: [],
+      contextRows: [],
+      warnings: [],
+    }
+  }
+  return {
+    empty: false,
+    question: redactOperatorKnowledgeText(qa.question),
+    answer: redactOperatorKnowledgeText(qa.answer),
+    sourceRows: qa.sources.map((source, index) => ({
+      key: `source-${source.knowledgeBaseId}-${source.faqId ?? source.documentId ?? source.chunkId ?? index}`,
+      title: redactOperatorKnowledgeText(stringField(source.title, '未命名来源')),
+      meta: [
+        redactOperatorKnowledgeText(stringField(source.sourceType, 'SOURCE')),
+        redactOperatorKnowledgeText(stringField(source.matchType, 'match')),
+        `KB ${source.knowledgeBaseId}`,
+      ].join(' · '),
+      score: source.score === undefined ? '' : String(source.score),
+      excerpt: redactOperatorKnowledgeText(stringField(source.answerExcerpt, '')),
+    })),
+    evidenceRows: qa.evidence.map((item, index) => {
+      const taskKey = redactOperatorKnowledgeText(stringField(item.taskKey, item.type))
+      return {
+        key: `evidence-${index}-${taskKey}`,
+        label: [
+          redactOperatorKnowledgeText(stringField(item.taskType, item.type)),
+          redactOperatorKnowledgeText(stringField(item.status, 'UNKNOWN')),
+        ].join(' · '),
+        detail: [
+          taskKey,
+          redactOperatorKnowledgeText(stringField(item.workerRef, item.workerType ?? '')),
+          redactOperatorKnowledgeText(stringField(item.currentStep, item.sopId ?? '')),
+        ]
+          .filter(Boolean)
+          .join(' · '),
+      }
+    }),
+    contextRows: operatorKnowledgeContextRows(qa.contextSummary),
+    warnings: qa.warnings.map(redactOperatorKnowledgeText),
+  }
+}
+
 export function formatCustomerAssistantMetrics(
   metrics: CustomerAssistantObservabilityMetrics | null,
 ): CustomerAssistantMetricsSummary {
@@ -469,6 +591,91 @@ export function formatCustomerAssistantMetrics(
       },
     ],
     failures: [...(metrics?.recentFailureReasons ?? [])],
+  }
+}
+
+export function formatCustomerAssistantEvalSurface(
+  input: CustomerAssistantEvalSurfaceInput,
+): CustomerAssistantEvalSurface {
+  const workerCounts = input.metrics?.workerEventCounts.byType ?? countWorkerEvents(input.events)
+  const workerStarted = numberMetric(workerCounts, 'worker_started')
+  const workerResult =
+    numberMetric(workerCounts, 'worker_result_received') +
+    numberMetric(workerCounts, 'worker_result_consumed') +
+    numberMetric(workerCounts, 'task_waiting') +
+    numberMetric(workerCounts, 'task_completed')
+  const workerFailed =
+    numberMetric(workerCounts, 'worker_failed') +
+    numberMetric(workerCounts, 'worker_timed_out') +
+    numberMetric(workerCounts, 'task_failed')
+  const workerTotal = input.metrics?.workerEventCounts.total ?? workerStarted + workerResult + workerFailed
+  const modelEvidence = formatModelEvidence(input.events)
+  const diffCount = modelEvidence.filter((row) => row.reason === 'diff mismatch' || row.reason === 'baseline match').length
+  const fallbackCount = modelEvidence.filter((row) => row.title === '模型回退').length
+  const adoption = input.metrics?.humanConfirmation ?? { pending: 0, adopted: 0, terminal: 0, adoptionRate: 0 }
+  const taskKeys = input.recognitionEvidence.map((row) => row.taskKey)
+  return {
+    empty:
+      input.recognitionEvidence.length === 0 &&
+      input.taskSummary.items.length === 0 &&
+      modelEvidence.length === 0 &&
+      input.metrics === null,
+    tiles: [
+      {
+        key: 'taskHits',
+        label: '任务命中',
+        value: String(input.recognitionEvidence.length),
+        detail: taskKeys.length ? taskKeys.join('、') : 'no recognized task',
+        tone: input.recognitionEvidence.length > 0 ? 'success' : 'default',
+      },
+      {
+        key: 'workerRuns',
+        label: 'Worker 执行',
+        value: String(workerTotal),
+        detail: `started ${workerStarted} · result ${workerResult} · failed ${workerFailed}`,
+        tone: workerFailed > 0 ? 'error' : workerTotal > 0 ? 'processing' : 'default',
+      },
+      {
+        key: 'modelEvidence',
+        label: '模型证据',
+        value: String(modelEvidence.length),
+        detail: `diff ${diffCount} · fallback ${fallbackCount}`,
+        tone: fallbackCount > 0 || diffCount > 0 ? 'warning' : modelEvidence.length > 0 ? 'success' : 'default',
+      },
+      {
+        key: 'adoption',
+        label: '采纳率',
+        value: `${Math.round(adoption.adoptionRate * 100)}%`,
+        detail: `${adoption.adopted}/${adoption.terminal} adopted · pending ${adoption.pending}`,
+        tone: adoption.adopted > 0 ? 'success' : adoption.pending > 0 ? 'warning' : 'default',
+      },
+    ],
+    taskRecognition: input.recognitionEvidence.map((row) => ({
+      key: row.key,
+      title: row.taskKey,
+      detail: `${row.taskType} · ${row.workerRoute}`,
+      meta: [
+        `模型 ${row.modelPolicyRef}`,
+        `提示词 ${row.promptRef}`,
+        `风险 ${row.riskPolicyRef}`,
+      ],
+      tone: row.profileId === '未配置' ? 'warning' : 'success',
+    })),
+    workerExecution: input.taskSummary.items.map((task) => ({
+      key: `worker-${task.id}`,
+      title: task.displayName,
+      detail: `${task.taskKey} · ${task.workerType}${task.workerRef ? ` · ${task.workerRef}` : ''}`,
+      meta: [
+        task.status,
+        ...(task.missingFields.length ? [`缺失 ${task.missingFields.join('、')}`] : []),
+      ],
+      tone: task.statusTone,
+    })),
+    modelEvidence,
+    failures: (input.metrics?.recentFailureReasons ?? []).map((failure) => ({
+      ...failure,
+      reason: redactEvalText(failure.reason),
+    })),
   }
 }
 
@@ -635,6 +842,97 @@ function numberField(value: unknown): number {
   return Number.isFinite(numeric) ? numeric : 0
 }
 
+function numberMetric(counts: Record<string, number>, key: string): number {
+  return Number(counts[key] ?? 0)
+}
+
+function countWorkerEvents(events: CustomerAssistantEvent[]): Record<string, number> {
+  const workerTypes = new Set([
+    'worker_started',
+    'worker_result_received',
+    'worker_result_consumed',
+    'worker_failed',
+    'worker_timed_out',
+    'task_waiting',
+    'task_completed',
+    'task_failed',
+  ])
+  const counts: Record<string, number> = {}
+  for (const event of events) {
+    if (!workerTypes.has(event.type)) continue
+    counts[event.type] = (counts[event.type] ?? 0) + 1
+  }
+  return counts
+}
+
+function formatModelEvidence(events: CustomerAssistantEvent[]): CustomerAssistantModelEvidenceRow[] {
+  return events.flatMap((event): CustomerAssistantModelEvidenceRow[] => {
+    const payload = asRecord(event.payload) ?? {}
+    const phase = redactEvalText(stringField(payload.phase, 'recommendation'))
+    if (event.type === 'llm_shadow_diff_recorded') {
+      const diff = asRecord(payload.diff)
+      const matches = Boolean(diff?.matches)
+      const differences = stringListField(diff?.differences).map(redactEvalText)
+      const title = phase === 'recommendation'
+        ? matches ? '推荐影子一致' : '推荐影子差异'
+        : matches ? '识别影子一致' : '识别影子差异'
+      return [
+        {
+          key: `model-${event.id}`,
+          title,
+          detail: `${phase} · ${matches ? 'matches' : differences.join('、') || 'difference'}`,
+          reason: matches ? 'baseline match' : 'diff mismatch',
+          tone: matches ? 'success' : 'warning',
+        },
+      ]
+    }
+    if (event.type === 'llm_primary_fallback' || event.type === 'two_stage_fallback') {
+      const reason = redactEvalText(stringField(payload.reason, 'fallback'))
+      return [
+        {
+          key: `model-${event.id}`,
+          title: '模型回退',
+          detail: `${phase} · ${reason}`,
+          reason,
+          tone: 'warning',
+        },
+      ]
+    }
+    if (event.type === 'llm_primary_selected' || event.type === 'two_stage_primary_selected') {
+      const selectedSource = redactEvalText(stringField(payload.selectedSource, event.source ?? 'model'))
+      return [
+        {
+          key: `model-${event.id}`,
+          title: '模型路径选中',
+          detail: `${phase} · ${selectedSource}`,
+          reason: 'selected',
+          tone: 'success',
+        },
+      ]
+    }
+    if (event.type === 'llm_shadow_failed') {
+      const error = redactEvalText(stringField(payload.error, 'shadow failed'))
+      return [
+        {
+          key: `model-${event.id}`,
+          title: '影子评估失败',
+          detail: `${phase} · ${error}`,
+          reason: error,
+          tone: 'error',
+        },
+      ]
+    }
+    return []
+  })
+}
+
+function redactEvalText(value: string): string {
+  return value
+    .replace(/api[_-]?key\s*=\s*[^,\s;]+/gi, 'api_key=[REDACTED]')
+    .replace(/sk-[A-Za-z0-9._-]+/g, '[REDACTED]')
+    .replace(/\b1[3-9]\d{9}\b/g, '[REDACTED]')
+}
+
 function workerRoute(command: Record<string, unknown>): string {
   const workerType = stringField(command.workerType, 'unknown_worker')
   const workerRef = stringField(command.workerRef, '')
@@ -643,4 +941,55 @@ function workerRoute(command: Record<string, unknown>): string {
 
 function hasAny(types: Set<string>, candidates: string[]): boolean {
   return candidates.some((type) => types.has(type))
+}
+
+function operatorKnowledgeContextRows(
+  context: CustomerAssistantOperatorKnowledgeQaResult['contextSummary'],
+): CustomerAssistantOperatorKnowledgeQaContextRow[] {
+  const rows: CustomerAssistantOperatorKnowledgeQaContextRow[] = []
+  const pushNumber = (key: string, label: string, value: unknown) => {
+    if (value === undefined || value === null) return
+    rows.push({ key, label, value: String(numberField(value)) })
+  }
+  const pushText = (key: string, label: string, value: unknown) => {
+    const text = redactOperatorKnowledgeText(stringField(value, ''))
+    if (text) rows.push({ key, label, value: text })
+  }
+  pushText('storyTitle', '故事线', context.storyTitle)
+  const customer = asRecord(context.customer)
+  const customerName = redactOperatorKnowledgeText(stringField(customer?.name, ''))
+  const maskedPhone = redactOperatorKnowledgeText(stringField(customer?.maskedPhone, ''))
+  if (customerName || maskedPhone) {
+    rows.push({
+      key: 'customer',
+      label: '客户',
+      value: [customerName, maskedPhone].filter(Boolean).join(' · '),
+    })
+  }
+  pushNumber('taskCount', '任务数', context.taskCount)
+  pushNumber('pendingActionCount', '待确认动作', context.pendingActionCount)
+  pushNumber('eventCount', '事件数', context.eventCount)
+  if (Array.isArray(context.knowledgeBaseIds) && context.knowledgeBaseIds.length) {
+    rows.push({
+      key: 'knowledgeBaseIds',
+      label: '知识库',
+      value: context.knowledgeBaseIds.map(String).join('、'),
+    })
+  }
+  if (Array.isArray(context.latestEventTypes) && context.latestEventTypes.length) {
+    rows.push({
+      key: 'latestEventTypes',
+      label: '最近事件',
+      value: context.latestEventTypes.map((item) => redactOperatorKnowledgeText(String(item))).join('、'),
+    })
+  }
+  return rows
+}
+
+function redactOperatorKnowledgeText(value: string): string {
+  return value
+    .replace(/(api[_-]?key=)[^\s;]+/gi, '$1[REDACTED]')
+    .replace(/\b1[3-9]\d{9}\b/g, '[REDACTED]')
+    .replace(/(:)[A-Z]{2,}\d[\w-]*/g, '$1[REDACTED]')
+    .replace(/\b[A-Z]{2,}\d{2,}-\d{2,}\b/g, '[REDACTED]')
 }

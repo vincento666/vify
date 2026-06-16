@@ -35,6 +35,7 @@ describe('CustomerAssistantPanel UI contract', () => {
       'operator-progress-checklist',
       'operator-metrics-panel',
       'operator-recognition-evidence-panel',
+      'operator-knowledge-qa-panel',
       'operator-task-ledger',
       'operator-recommendation-panel',
       'operator-advisory-evidence-panel',
@@ -183,6 +184,22 @@ describe('CustomerAssistantPanel UI contract', () => {
     expect(section(content, 'customer-conversation-lane')).not.toContain('operator-worker-profile-edit-form')
   })
 
+  it('renders the eval observability surface as a dedicated read-only panel', () => {
+    const evalPanel = section(content, 'operator-eval-observability-panel')
+
+    expect(evalPanel).toContain('evalSurface.tiles')
+    expect(evalPanel).toContain('evalSurface.taskRecognition')
+    expect(evalPanel).toContain('evalSurface.workerExecution')
+    expect(evalPanel).toContain('evalSurface.modelEvidence')
+    expect(evalPanel).toContain('evalSurface.failures')
+    expect(evalPanel).toContain('任务识别')
+    expect(evalPanel).toContain('Worker 执行')
+    expect(evalPanel).toContain('模型/回退证据')
+    expect(content).toContain('formatCustomerAssistantEvalSurface')
+    expect(section(content, 'operator-event-timeline')).not.toContain('evalSurface.modelEvidence')
+    expect(section(content, 'customer-conversation-lane')).not.toContain('operator-eval-observability-panel')
+  })
+
   it('renders task recognition evidence as a dedicated operator panel', () => {
     const evidencePanel = section(content, 'operator-recognition-evidence-panel')
 
@@ -192,6 +209,23 @@ describe('CustomerAssistantPanel UI contract', () => {
     expect(evidencePanel).toContain('recognition.riskPolicyRef')
     expect(evidencePanel).toContain('operator-recognition-empty-state')
     expect(section(content, 'operator-event-timeline')).not.toContain('recognition.profileId')
+  })
+
+  it('renders operator knowledge Q&A as a dedicated compact panel', () => {
+    const qaPanel = section(content, 'operator-knowledge-qa-panel')
+
+    expect(qaPanel).toContain('operatorKnowledgeQuestion')
+    expect(qaPanel).toContain('askOperatorKnowledgeQuestion')
+    expect(qaPanel).toContain('operatorKnowledgeQa.sourceRows')
+    expect(qaPanel).toContain('operatorKnowledgeQa.evidenceRows')
+    expect(qaPanel).toContain('operatorKnowledgeQa.contextRows')
+    expect(qaPanel).toContain('operatorKnowledgeQa.warnings')
+    expect(qaPanel).toContain('data-testid="operator-knowledge-qa-answer"')
+    expect(qaPanel).toContain('data-testid="operator-knowledge-qa-source"')
+    expect(qaPanel).toContain('data-testid="operator-knowledge-qa-evidence"')
+    expect(qaPanel).not.toContain('JSON.stringify')
+    expect(qaPanel).not.toContain('compactPayload')
+    expect(section(content, 'customer-conversation-lane')).not.toContain('operator-knowledge-qa-panel')
   })
 
   it('renders operator advisory knowledge evidence as a dedicated panel', () => {

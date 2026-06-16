@@ -114,6 +114,33 @@ describe('customer-assistant frontend API client', () => {
     expect(requestMocks.get).toHaveBeenCalledWith('/v1/customer-assistant/sessions/7/operator-audit')
   })
 
+  it('asks a session-scoped operator knowledge question', async () => {
+    requestMocks.post.mockResolvedValueOnce({
+      sessionId: 7,
+      question: '退票和行李额可以并行处理吗？',
+      answer: '可以并行处理，执行写操作前分别确认。',
+      sources: [{ knowledgeBaseId: 201, sourceType: 'FAQ', title: '退票和行李额并行处理' }],
+      evidence: [{ type: 'TASK_LEDGER', taskKey: 'refund_ticket', status: 'WAITING' }],
+      contextSummary: { taskCount: 2, pendingActionCount: 1 },
+      warnings: ['No seeded FAQ or knowledge source matched the operator question.'],
+    })
+
+    const { askCustomerAssistantOperatorKnowledgeQuestion } = await import('./customerAssistant')
+
+    await expect(
+      askCustomerAssistantOperatorKnowledgeQuestion(7, {
+        question: '退票和行李额可以并行处理吗？',
+      }),
+    ).resolves.toMatchObject({
+      answer: '可以并行处理，执行写操作前分别确认。',
+      sources: [{ sourceType: 'FAQ' }],
+      contextSummary: { taskCount: 2 },
+    })
+    expect(requestMocks.post).toHaveBeenCalledWith('/v1/customer-assistant/sessions/7/operator-knowledge-qa', {
+      question: '退票和行李额可以并行处理吗？',
+    })
+  })
+
   it('lists seeded demo stories', async () => {
     requestMocks.get.mockResolvedValueOnce({ list: [{ storyId: 'refund_baggage_parallel' }], total: 1 })
 
