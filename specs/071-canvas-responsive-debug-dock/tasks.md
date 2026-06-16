@@ -17,3 +17,10 @@
 - [x] Run final diff hygiene check.
 - [x] Add regression coverage for the intermediate right-edge anchored phase.
 - [x] Verify chatflow node config panel remains fully visible at the anchored phase.
+
+## 071.R2 Stage-Shelved Peek Regression Closure
+
+- [x] Add checked-in browser phase verifier for workflow/chatflow canvas widths.
+- [x] Reproduce stage-shelved right-panel peek failure.
+- [x] Keep shelved right panels viewport-anchored once the center stage is clipped.
+- [x] Run focused unit, rem, full frontend unit, build, and browser phase gates.

@@ -11690,7 +11690,10 @@ onUnmounted(() => {
 .workflow-canvas-page.canvas-layout-left-rail .node-config-panel,
 .workflow-canvas-page.canvas-layout-left-rail .test-run-panel,
 .workflow-canvas-page.canvas-layout-left-rail .ops-panel {
+  position: fixed;
+  top: calc(4.625rem + var(--debug-dock-gap));
   right: calc(-1 * (var(--workflow-side-panel-width) - var(--workflow-panel-peek-width)));
+  bottom: var(--debug-dock-gap);
 }
 
 .workflow-canvas-page.canvas-layout-stage-shelved .node-test-drawer,

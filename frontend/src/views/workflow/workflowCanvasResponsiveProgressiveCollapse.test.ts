@@ -69,6 +69,18 @@ describe('workflow canvas responsive progressive collapse contract', () => {
     expect(stageBlock).toContain('overflow: hidden;')
   })
 
+  it('anchors shelved right panels to the viewport once the center stage is clipped', () => {
+    const content = readWorkflowCreateSource()
+    const stageAndRailPanelBlock = extractSelectorBlock(
+      content,
+      '.workflow-canvas-page.canvas-layout-stage-shelved .node-config-panel,\n.workflow-canvas-page.canvas-layout-stage-shelved .test-run-panel,\n.workflow-canvas-page.canvas-layout-stage-shelved .ops-panel,\n.workflow-canvas-page.canvas-layout-left-rail .node-config-panel,\n.workflow-canvas-page.canvas-layout-left-rail .test-run-panel,\n.workflow-canvas-page.canvas-layout-left-rail .ops-panel',
+    )
+
+    expect(stageAndRailPanelBlock).toContain('position: fixed;')
+    expect(stageAndRailPanelBlock).toContain('top: calc(4.625rem + var(--debug-dock-gap));')
+    expect(stageAndRailPanelBlock).toContain('right: calc(-1 * (var(--workflow-side-panel-width) - var(--workflow-panel-peek-width)))')
+  })
+
   it('keeps the debug dock anchored as an overlay with non-zero minimum width and height', () => {
     const content = readWorkflowCreateSource()
     const dockBlock = extractSelectorBlock(content, '.workflow-debug-dock')
