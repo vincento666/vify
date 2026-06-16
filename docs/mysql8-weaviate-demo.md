@@ -88,6 +88,14 @@ HIFY_MYSQL8_TEST_DATABASE_URL=mysql+pymysql://hify:hify@127.0.0.1:3306/hify?char
 uv run pytest tests/integration/mysql8
 ```
 
+For the runtime v2 + customer assistant MVP persistence smoke specifically:
+
+```bash
+PYTHONPATH=. \
+HIFY_MYSQL8_TEST_DATABASE_URL=mysql+pymysql://hify:hify@127.0.0.1:3306/hify?charset=utf8mb4 \
+uv run pytest tests/integration/mysql8/test_mysql8_runtime_v2_customer_assistant_persistence.py -q
+```
+
 ## Known Limits
 
 - Demo migration only; no production live-data cutover or dual-write.

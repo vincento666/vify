@@ -61,6 +61,11 @@ def _ensure_compatible_schema(engine: Engine) -> None:
         if "chatflow_session" in table_names
         else set()
     )
+    chatflow_event_indexes = (
+        {index["name"] for index in inspector.get_indexes("chatflow_event")}
+        if "chatflow_event" in table_names
+        else set()
+    )
     chat_message_columns = (
         {column["name"] for column in inspector.get_columns("chat_message")}
         if "chat_message" in table_names
@@ -109,6 +114,10 @@ def _ensure_compatible_schema(engine: Engine) -> None:
                 connection.execute(sa.text(f"ALTER TABLE agent ADD COLUMN {column_name} JSON"))
         if "chatflow_session" in table_names and "variables" not in chatflow_session_columns:
             connection.execute(sa.text("ALTER TABLE chatflow_session ADD COLUMN variables JSON"))
+        if "chatflow_event" in table_names and "idx_chatflow_event_run_sequence" not in chatflow_event_indexes:
+            connection.execute(
+                sa.text("CREATE UNIQUE INDEX idx_chatflow_event_run_sequence ON chatflow_event (run_id, sequence)")
+            )
         if "chat_message" in table_names and "tool_calls" not in chat_message_columns:
             connection.execute(sa.text("ALTER TABLE chat_message ADD COLUMN tool_calls JSON"))
         if "evaluation_experiment" in table_names and "eval_set_version_id" not in experiment_columns:
