@@ -30,8 +30,8 @@ export function deriveRunPathEdgeClasses(
 
   for (const edge of edges) {
     const targetStatus = normalizeRunStatus(detailByNodeKey.get(edge.targetNodeKey)?.status)
-    if (['RUNNING', 'INTERRUPTED', 'PENDING'].includes(targetStatus)) addEdgeClass(classes, edge.id, 'edge-running')
-    if (targetStatus === 'SUCCEEDED') addEdgeClass(classes, edge.id, 'edge-succeeded')
+    if (['RUNNING', 'INTERRUPTED', 'PENDING', 'WAITING'].includes(targetStatus)) addEdgeClass(classes, edge.id, 'edge-running')
+    if (['SUCCEEDED', 'COMPLETED'].includes(targetStatus)) addEdgeClass(classes, edge.id, 'edge-succeeded')
   }
 
   for (const detail of nodeDetails) {

@@ -1,12 +1,16 @@
 <template>
   <div
     class="workflow-canvas-page"
-    :class="{
-      'chatflow-mode': isChatflowMode,
-      'debug-dock-open': debugDockOpen,
-      'has-right-panel': rightSidePanelOpen,
-      'has-node-test-drawer': nodeTestDrawerOpen,
-    }"
+    :class="[
+      responsiveCanvasLayout.className,
+      {
+        'chatflow-mode': isChatflowMode,
+        'debug-dock-open': debugDockOpen,
+        'has-right-panel': rightSidePanelOpen,
+        'has-node-test-drawer': nodeTestDrawerOpen,
+      },
+    ]"
+    :data-layout-phase="responsiveCanvasLayout.phase"
   >
     <div class="canvas-topbar">
       <div class="canvas-title-wrap">
@@ -3873,11 +3877,14 @@ import {
   getChatflow,
   getChatflowRunDebug,
   getChatflowSession,
+  getRuntimeV2Run,
   getWorkflow,
   getWorkflowRunDebug,
   listChatflowChannels,
   listChatflowRunEvents,
   listChatflowVersions,
+  listRuntimeV2Events,
+  listRuntimeV2Nodes,
   listWorkflowVersions,
   publishChatflowVersion,
   publishWorkflowVersion,
@@ -3885,8 +3892,10 @@ import {
   rollbackWorkflowVersion,
   resumeChatflowRun,
   runChatflow,
+  runChatflowV2,
   runChatflowNode,
   runWorkflow,
+  runWorkflowV2,
   runWorkflowNode,
   updateChatflow,
   updateWorkflow,
@@ -3924,6 +3933,7 @@ import {
   operationModeTitle,
   type CanvasOperationMode,
 } from './canvasControls'
+import { resolveCanvasResponsiveLayout } from './canvasResponsiveLayout'
 import { buildChatflowRunInput } from './chatflowRunProfile'
 import { buildChatflowStreamPreview, buildChatflowWelcomeState, formatChatflowAssistantText } from './chatflowTrialRun'
 import {
@@ -4010,6 +4020,17 @@ import { buildInlineVariableCatalog, buildVariableCatalog, type VariableCatalogG
 import { evaluateWorkflowPublishGate } from './workflowPublish'
 import { validateWorkflowGraph } from './workflowValidation'
 import { buildChatflowRunDebugLink, buildWorkflowRunDebugLink } from '@/router/runDebugDeepLinks'
+import {
+  applyRuntimeV2EventsToDebugDetail,
+  applyRuntimeV2NodesToDebugDetail,
+  createRuntimeV2DebugDetail,
+  isRuntimeV2TerminalStatus,
+  mergeRuntimeV2RunToDebugDetail,
+  resolveRunLogAction,
+  type RuntimeV2Event,
+  type RuntimeV2Node,
+  type RuntimeV2StartRef,
+} from './runtimeV2Debug'
 import {
   buildWorkflowRunCallTree,
   buildWorkflowRunFlamegraph,
@@ -4157,6 +4178,10 @@ const loading = ref(false)
 const canvasTab = ref<CanvasTab>('compose')
 const composerLifecycleTabs = composerCanvasTabs()
 const canvasStageRef = ref<HTMLElement | null>(null)
+const canvasViewportWidth = ref(typeof window === 'undefined' ? 1600 : window.innerWidth)
+const responsiveCanvasLayout = computed(() =>
+  resolveCanvasResponsiveLayout({ viewportWidth: canvasViewportWidth.value, rem: rootRemSize() }),
+)
 const selectedNodeKey = ref('')
 const selectedEdgeId = ref('')
 const hoveredEdgeId = ref('')
@@ -4246,6 +4271,8 @@ const workflowRunDebugDetail = ref<WorkflowRunDebugDetail | null>(null)
 const chatflowRunDebugDetail = ref<ChatflowRunDebugDetail | null>(null)
 const workflowRunDebugLoading = ref(false)
 const dirtySinceTestRun = ref(true)
+const RUNTIME_V2_POLL_DELAY_MS = 350
+const RUNTIME_V2_MAX_POLLS = 180
 const openingText = ref('你好，我可以帮你处理订单、售后和产品咨询。')
 const guideQuestions = ref(['查订单进度', '申请退款', '咨询发票'])
 const chatflowHistorySettingsOpen = ref(false)
@@ -5098,10 +5125,13 @@ function debugStatusLabel(status: string | undefined) {
   const normalized = String(status || '').toUpperCase()
   return {
     SUCCEEDED: '成功',
+    COMPLETED: '完成',
     RUNNING: '运行中',
     FAILED: '失败',
     INTERRUPTED: '等待输入',
+    WAITING: '等待输入',
     PENDING: '等待',
+    SKIPPED: '跳过',
   }[normalized] || normalized || '未知'
 }
 
@@ -5510,6 +5540,11 @@ function rootRemSize() {
   if (typeof window === 'undefined') return 16
   const parsed = Number.parseFloat(window.getComputedStyle(document.documentElement).fontSize)
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 16
+}
+
+function refreshCanvasResponsiveLayout() {
+  if (typeof window === 'undefined') return
+  canvasViewportWidth.value = window.innerWidth
 }
 
 function rectSnapshot(element: Element): ViewportRect {
@@ -8260,6 +8295,11 @@ function setNodeTestInput(name: string, value: string) {
 }
 
 function openRunLogPanel() {
+  const action = resolveRunLogAction(lastTestRunId.value, testResult.value?.runtimeVersion)
+  if (action.shouldOpenRunDetail) {
+    openObserveRunDetail()
+    return
+  }
   debugDockOpen.value = true
   debugDockTab.value = 'debug'
 }
@@ -8340,15 +8380,51 @@ function openDebugDetails() {
 }
 
 function openObserveRunDetail() {
-  if (!lastTestRunId.value) return
+  const action = resolveRunLogAction(lastTestRunId.value, testResult.value?.runtimeVersion)
+  if (!action.shouldOpenRunDetail) return
   debugDockOpen.value = true
   debugDockTab.value = 'debug'
   if (isChatflowMode.value) {
-    void router.push(buildChatflowRunDebugLink(workflowId.value, { runId: lastTestRunId.value }))
-    void loadChatflowRunDebugDetail(lastTestRunId.value)
+    const link = buildChatflowRunDebugLink(workflowId.value, { runId: lastTestRunId.value }) as Record<string, any>
+    void router.push({ ...link, query: { ...(link.query || {}), ...action.runtimeQuery } })
+    if (testResult.value?.runtimeVersion === 'v2') {
+      void loadRuntimeV2DebugDetail(lastTestRunId.value, 'CHATFLOW')
+    } else {
+      void loadChatflowRunDebugDetail(lastTestRunId.value)
+    }
   } else {
-    void router.push(buildWorkflowRunDebugLink(workflowId.value, { runId: lastTestRunId.value }))
-    void loadWorkflowRunDebugDetail(lastTestRunId.value)
+    const link = buildWorkflowRunDebugLink(workflowId.value, { runId: lastTestRunId.value }) as Record<string, any>
+    void router.push({ ...link, query: { ...(link.query || {}), ...action.runtimeQuery } })
+    if (testResult.value?.runtimeVersion === 'v2') {
+      void loadRuntimeV2DebugDetail(lastTestRunId.value, 'WORKFLOW')
+    } else {
+      void loadWorkflowRunDebugDetail(lastTestRunId.value)
+    }
+  }
+}
+
+async function loadRuntimeV2DebugDetail(runId: number, ownerType: 'WORKFLOW' | 'CHATFLOW') {
+  const [run, eventPage, nodePage] = await Promise.all([
+    getRuntimeV2Run(runId) as Promise<RuntimeV2StartRef>,
+    listRuntimeV2Events(runId, { afterSequence: 0 }) as Promise<{ list: RuntimeV2Event[]; total: number }>,
+    listRuntimeV2Nodes(runId) as Promise<{ list: RuntimeV2Node[]; total: number }>,
+  ])
+  let detail = createRuntimeV2DebugDetail({
+    ...run,
+    runId,
+    ownerType: run.ownerType || ownerType,
+  })
+  detail = mergeRuntimeV2RunToDebugDetail(
+    applyRuntimeV2NodesToDebugDetail(
+      applyRuntimeV2EventsToDebugDetail(detail, eventPage.list || []),
+      nodePage.list || [],
+    ),
+    run,
+  )
+  setRuntimeV2DebugDetail(ownerType, detail)
+  updateRuntimeV2RunState(ownerType, detail, run)
+  if (!isRuntimeV2TerminalStatus(detail.status)) {
+    void observeRuntimeV2Run(ownerType, run)
   }
 }
 
@@ -8356,6 +8432,14 @@ async function loadWorkflowRunDebugDetail(runId: number) {
   if (!workflowId.value || !runId || isChatflowMode.value) return
   workflowRunDebugLoading.value = true
   try {
+    if (route.query.runtime === 'v2') {
+      try {
+        await loadRuntimeV2DebugDetail(runId, 'WORKFLOW')
+        return
+      } catch {
+        // Compatibility fallback: older runs still use the legacy debug detail route.
+      }
+    }
     const detail = await getWorkflowRunDebug(workflowId.value, runId) as WorkflowRunDebugDetail
     workflowRunDebugDetail.value = detail
     ensureSelectedDebugNode(detail.nodeDetails || [])
@@ -8390,6 +8474,14 @@ async function loadChatflowRunDebugDetail(runId: number) {
   if (!workflowId.value || !runId || !isChatflowMode.value) return
   chatflowRunDebugLoading.value = true
   try {
+    if (route.query.runtime === 'v2') {
+      try {
+        await loadRuntimeV2DebugDetail(runId, 'CHATFLOW')
+        return
+      } catch {
+        // Compatibility fallback: older runs still use the legacy debug detail route.
+      }
+    }
     const detail = await getChatflowRunDebug(workflowId.value, runId) as ChatflowRunDebugDetail
     chatflowRunDebugDetail.value = detail
     ensureSelectedDebugNode(detail.nodeDetails || [])
@@ -8449,6 +8541,127 @@ async function loadChatflowChannels() {
   }
 }
 
+async function runCanvasTestWithRuntimeV2(
+  id: number,
+  input: Record<string, any>,
+): Promise<Record<string, any> | null> {
+  const ownerType = isChatflowMode.value ? 'CHATFLOW' : 'WORKFLOW'
+  let started: RuntimeV2StartRef
+  try {
+    started = await (isChatflowMode.value
+      ? runChatflowV2(id, input, runtimeV2IdempotencyKey(ownerType, id))
+      : runWorkflowV2(id, input, runtimeV2IdempotencyKey(ownerType, id))) as RuntimeV2StartRef
+  } catch {
+    return null
+  }
+
+  const detail = createRuntimeV2DebugDetail({
+    ...started,
+    ownerType: started.ownerType || ownerType,
+    ownerId: started.ownerId || id,
+  })
+  setRuntimeV2DebugDetail(ownerType, detail)
+  updateRuntimeV2RunState(ownerType, detail, started)
+  return observeRuntimeV2Run(ownerType, started)
+}
+
+async function observeRuntimeV2Run(
+  ownerType: string,
+  started: RuntimeV2StartRef,
+): Promise<Record<string, any>> {
+  const runId = Number(started.runId || 0)
+  if (!runId) return runtimeV2ResultPayload(createRuntimeV2DebugDetail(started), started)
+
+  let detail = currentRuntimeV2DebugDetail(ownerType) || createRuntimeV2DebugDetail(started)
+  let afterSequence = 0
+  let latestRun: RuntimeV2StartRef = started
+
+  for (let attempt = 0; attempt < RUNTIME_V2_MAX_POLLS; attempt += 1) {
+    const [eventPage, nodePage, run] = await Promise.all([
+      listRuntimeV2Events(runId, { afterSequence }),
+      listRuntimeV2Nodes(runId),
+      getRuntimeV2Run(runId),
+    ])
+    const events = (eventPage.list || []) as RuntimeV2Event[]
+    const nodes = (nodePage.list || []) as RuntimeV2Node[]
+    afterSequence = Math.max(afterSequence, ...events.map((event) => Number(event.sequence || 0)))
+    latestRun = run as RuntimeV2StartRef
+    detail = mergeRuntimeV2RunToDebugDetail(
+      applyRuntimeV2NodesToDebugDetail(
+        applyRuntimeV2EventsToDebugDetail(detail, events),
+        nodes,
+      ),
+      latestRun,
+    )
+    setRuntimeV2DebugDetail(ownerType, detail)
+    updateRuntimeV2RunState(ownerType, detail, latestRun)
+    if (isRuntimeV2TerminalStatus(detail.status)) return runtimeV2ResultPayload(detail, latestRun)
+    await waitRuntimeV2PollDelay()
+  }
+
+  return runtimeV2ResultPayload(detail, latestRun)
+}
+
+function setRuntimeV2DebugDetail(ownerType: string, detail: WorkflowRunDebugDetail) {
+  if (ownerType === 'CHATFLOW') {
+    chatflowRunDebugDetail.value = detail as ChatflowRunDebugDetail
+    ensureSelectedDebugNode(detail.nodeDetails || [])
+  } else {
+    workflowRunDebugDetail.value = detail
+    ensureSelectedDebugNode(detail.nodeDetails || [])
+  }
+}
+
+function currentRuntimeV2DebugDetail(ownerType: string): WorkflowRunDebugDetail | null {
+  return ownerType === 'CHATFLOW' ? chatflowRunDebugDetail.value : workflowRunDebugDetail.value
+}
+
+function updateRuntimeV2RunState(
+  ownerType: string,
+  detail: WorkflowRunDebugDetail,
+  run: RuntimeV2StartRef,
+) {
+  const payload = runtimeV2ResultPayload(detail, run)
+  testResult.value = payload
+  lastTestRunId.value = Number(detail.runId || run.runId || 0)
+  lastTestRunStatus.value = String(detail.status || run.status || '')
+  lastRunOutput.value = detail.output || run.output || null
+  if (ownerType === 'CHATFLOW') {
+    chatflowSessionState.value = {
+      ...(chatflowSessionState.value || {}),
+      sessionId: String((run as Record<string, any>).sessionId || chatflowSessionState.value?.sessionId || ''),
+      status: String(detail.status || run.status || ''),
+      currentRunId: Number(detail.runId || run.runId || 0),
+      variables: chatflowSessionState.value?.variables || {},
+      waitingEvent: (run as Record<string, any>).waitingEvent || chatflowSessionState.value?.waitingEvent || null,
+      checkpoint: (run as Record<string, any>).checkpoint || chatflowSessionState.value?.checkpoint || null,
+    } as ChatflowSessionState
+  }
+}
+
+function runtimeV2ResultPayload(
+  detail: WorkflowRunDebugDetail,
+  run: RuntimeV2StartRef,
+): Record<string, any> {
+  return {
+    ...run,
+    runId: Number(detail.runId || run.runId || 0),
+    ownerType: detail.ownerType || run.ownerType,
+    status: String(detail.status || run.status || ''),
+    output: detail.output || run.output || {},
+    error: detail.error || run.error || '',
+    runtimeVersion: 'v2',
+  }
+}
+
+function runtimeV2IdempotencyKey(ownerType: string, id: number) {
+  return `canvas-debug-${ownerType.toLowerCase()}-${id}-${Date.now()}`
+}
+
+function waitRuntimeV2PollDelay() {
+  return new Promise((resolve) => window.setTimeout(resolve, RUNTIME_V2_POLL_DELAY_MS))
+}
+
 async function runCanvasTest() {
   const runMessage = testInput.value.trim()
   if (isChatflowMode.value && !runMessage) {
@@ -8478,12 +8691,16 @@ async function runCanvasTest() {
     const id = await saveCanvas({ silent: true })
     if (!id) throw new Error('保存画布失败')
 
-    const result = await (isChatflowMode.value
-      ? runChatflow(id, buildChatflowRunInput({ message: runMessage, ...testProfile.value, historyRetentionRounds: chatflowHistoryRetentionRounds.value }))
-      : runWorkflow(id, {
+    const runInput = isChatflowMode.value
+      ? buildChatflowRunInput({ message: runMessage, ...testProfile.value, historyRetentionRounds: chatflowHistoryRetentionRounds.value })
+      : {
         userMessage: testInput.value,
         USER_INPUT: testInput.value,
-      })) as any
+      }
+    const runtimeV2Result = await runCanvasTestWithRuntimeV2(id, runInput)
+    const result = runtimeV2Result || (await (isChatflowMode.value
+      ? runChatflow(id, runInput)
+      : runWorkflow(id, runInput)) as any)
     testResult.value = result
     lastTestRunStatus.value = String(result?.status || '')
     lastTestRunId.value = Number(result?.runId || 0)
@@ -8506,11 +8723,11 @@ async function runCanvasTest() {
         chatflowTrialMessages.value = [...chatflowTrialMessages.value, assistantMessage]
       }
       testProfile.value.round += 1
-      if (debugDockOpen.value) {
+      if (debugDockOpen.value && result?.runtimeVersion !== 'v2') {
         debugDockTab.value = 'debug'
         await loadChatflowDebugState(id, result)
       }
-    } else if (debugDockOpen.value && debugDockTab.value === 'debug' && lastTestRunId.value) {
+    } else if (debugDockOpen.value && debugDockTab.value === 'debug' && lastTestRunId.value && result?.runtimeVersion !== 'v2') {
       await loadWorkflowRunDebugDetail(lastTestRunId.value)
     }
   } catch (e: any) {
@@ -8680,7 +8897,7 @@ function formatClock(value: Date) {
 }
 
 watch(() => [route.path, route.params.id], loadWorkflow)
-watch(() => [route.query.runId, route.query.executeId, route.query.debug], () => {
+watch(() => [route.query.runId, route.query.executeId, route.query.debug, route.query.runtime], () => {
   void applyWorkflowRunDebugRoute()
   void applyChatflowRunDebugRoute()
 })
@@ -8689,6 +8906,8 @@ watch(
   requestCanvasLayoutRefit,
 )
 onMounted(() => {
+  refreshCanvasResponsiveLayout()
+  window.addEventListener('resize', refreshCanvasResponsiveLayout)
   window.addEventListener('keydown', handleGlobalVariableKeydown)
   document.addEventListener('pointerdown', handleGlobalVariablePointerDown, true)
   document.addEventListener('pointerdown', handleGlobalEdgePointerDown, true)
@@ -8700,6 +8919,7 @@ onMounted(() => {
 onUnmounted(() => {
   window.clearTimeout(canvasLayoutRefitTimer)
   window.clearTimeout(canvasLayoutSettledRefitTimer)
+  window.removeEventListener('resize', refreshCanvasResponsiveLayout)
   window.removeEventListener('keydown', handleGlobalVariableKeydown)
   document.removeEventListener('pointerdown', handleGlobalVariablePointerDown, true)
   document.removeEventListener('pointerdown', handleGlobalEdgePointerDown, true)
@@ -8712,10 +8932,15 @@ onUnmounted(() => {
 .workflow-canvas-page {
   --workflow-panel-gap: 0.625rem;
   --debug-dock-gap: var(--workflow-panel-gap);
-  --debug-dock-height: min(23rem, calc(100vh - 8.25rem));
+  --debug-dock-min-width: 42rem;
+  --debug-dock-min-height: 18rem;
+  --debug-dock-height: 21rem;
   --workflow-side-panel-width: 34rem;
   --workflow-side-panel-gap: var(--workflow-panel-gap);
+  --workflow-panel-peek-width: 2.5rem;
   --workflow-resource-panel-width: 20rem;
+  --workflow-left-rail-min-width: 17.5rem;
+  --workflow-stage-min-width: 44rem;
   --workflow-node-test-panel-width: 23.75rem;
   --workflow-node-test-panel-gap: var(--workflow-panel-gap);
   --workflow-right-panel-reserve: calc(var(--workflow-side-panel-width) + var(--workflow-side-panel-gap) + var(--debug-dock-gap));
@@ -8895,6 +9120,13 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 0.625rem;
+}
+
+.workflow-canvas-page.canvas-layout-stage-shelved .canvas-mode-tabs,
+.workflow-canvas-page.canvas-layout-stage-shelved .canvas-actions,
+.workflow-canvas-page.canvas-layout-left-rail .canvas-mode-tabs,
+.workflow-canvas-page.canvas-layout-left-rail .canvas-actions {
+  display: none;
 }
 
 .canvas-workbench {
@@ -9658,6 +9890,30 @@ onUnmounted(() => {
 
 .workflow-canvas-page.has-node-test-drawer .canvas-stage-shell {
   width: 100%;
+}
+
+.workflow-canvas-page.canvas-layout-stage-shelved .canvas-workbench {
+  grid-template-columns: var(--workflow-resource-panel-width) var(--workflow-stage-min-width);
+}
+
+.workflow-canvas-page.canvas-layout-stage-shelved .canvas-stage-shell {
+  width: var(--workflow-stage-min-width);
+  min-width: var(--workflow-stage-min-width);
+  overflow: hidden;
+}
+
+.workflow-canvas-page.canvas-layout-left-rail .canvas-workbench {
+  grid-template-columns: minmax(var(--workflow-left-rail-min-width), var(--workflow-resource-panel-width)) var(--workflow-stage-min-width);
+}
+
+.workflow-canvas-page.canvas-layout-left-rail .canvas-resource-panel {
+  min-width: var(--workflow-left-rail-min-width);
+}
+
+.workflow-canvas-page.canvas-layout-left-rail .canvas-stage-shell {
+  width: var(--workflow-stage-min-width);
+  min-width: var(--workflow-stage-min-width);
+  overflow: hidden;
 }
 
 .coze-flow {
@@ -10511,9 +10767,9 @@ onUnmounted(() => {
   bottom: var(--debug-dock-gap);
   z-index: 35;
   width: auto;
-  min-width: 0;
+  min-width: var(--debug-dock-min-width);
   height: var(--debug-dock-height);
-  min-height: 16rem;
+  min-height: var(--debug-dock-min-height);
   display: flex;
   flex-direction: column;
   border: 1px solid #dfe3ee;
@@ -10533,6 +10789,29 @@ onUnmounted(() => {
 
 .workflow-canvas-page.has-node-test-drawer:not(.has-right-panel) .workflow-debug-dock {
   right: calc(var(--workflow-node-test-panel-width) + var(--workflow-node-test-panel-gap) + var(--debug-dock-gap));
+}
+
+.workflow-canvas-page.canvas-layout-right-shelved.has-right-panel .workflow-debug-dock {
+  right: calc(var(--workflow-panel-peek-width) + var(--debug-dock-gap));
+}
+
+.workflow-canvas-page.canvas-layout-right-shelved.has-node-test-drawer.has-right-panel .workflow-debug-dock {
+  right: calc(
+    var(--workflow-panel-peek-width) +
+    var(--workflow-panel-peek-width) +
+    var(--workflow-node-test-panel-gap) +
+    var(--debug-dock-gap)
+  );
+}
+
+.workflow-canvas-page.canvas-layout-right-shelved.has-node-test-drawer:not(.has-right-panel) .workflow-debug-dock {
+  right: calc(var(--workflow-panel-peek-width) + var(--debug-dock-gap));
+}
+
+.workflow-canvas-page.canvas-layout-stage-shelved .workflow-debug-dock,
+.workflow-canvas-page.canvas-layout-left-rail .workflow-debug-dock {
+  right: auto;
+  width: var(--debug-dock-min-width);
 }
 
 .debug-dock-header {
@@ -11375,6 +11654,48 @@ onUnmounted(() => {
 
 .workflow-canvas-page.has-node-test-drawer:not(.has-right-panel) .node-test-drawer {
   right: var(--debug-dock-gap);
+}
+
+.workflow-canvas-page.canvas-layout-right-anchored .node-config-panel {
+  right: var(--debug-dock-gap);
+}
+
+.workflow-canvas-page.canvas-layout-right-anchored .test-run-panel {
+  right: var(--debug-dock-gap);
+}
+
+.workflow-canvas-page.canvas-layout-right-anchored .ops-panel {
+  right: var(--debug-dock-gap);
+}
+
+.workflow-canvas-page.canvas-layout-right-shelved .node-config-panel {
+  right: calc(-1 * (var(--workflow-side-panel-width) - var(--workflow-panel-peek-width)));
+}
+
+.workflow-canvas-page.canvas-layout-right-shelved .test-run-panel {
+  right: calc(-1 * (var(--workflow-side-panel-width) - var(--workflow-panel-peek-width)));
+}
+
+.workflow-canvas-page.canvas-layout-right-shelved .ops-panel {
+  right: calc(-1 * (var(--workflow-side-panel-width) - var(--workflow-panel-peek-width)));
+}
+
+.workflow-canvas-page.canvas-layout-right-shelved .node-test-drawer {
+  right: calc(var(--workflow-panel-peek-width) + var(--workflow-node-test-panel-gap));
+}
+
+.workflow-canvas-page.canvas-layout-stage-shelved .node-config-panel,
+.workflow-canvas-page.canvas-layout-stage-shelved .test-run-panel,
+.workflow-canvas-page.canvas-layout-stage-shelved .ops-panel,
+.workflow-canvas-page.canvas-layout-left-rail .node-config-panel,
+.workflow-canvas-page.canvas-layout-left-rail .test-run-panel,
+.workflow-canvas-page.canvas-layout-left-rail .ops-panel {
+  right: calc(-1 * (var(--workflow-side-panel-width) - var(--workflow-panel-peek-width)));
+}
+
+.workflow-canvas-page.canvas-layout-stage-shelved .node-test-drawer,
+.workflow-canvas-page.canvas-layout-left-rail .node-test-drawer {
+  right: calc(-1 * (var(--workflow-node-test-panel-width) - var(--workflow-panel-peek-width)));
 }
 
 .node-test-header {

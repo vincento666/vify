@@ -63,6 +63,13 @@ export function runWorkflow(id: number, input: Record<string, any>) {
   return post<any>(`/v1/workflows/${id}/runs`, { input })
 }
 
+export function runWorkflowV2(id: number, input: Record<string, any>, idempotencyKey?: string) {
+  return post<any>(`/v1/workflows/${id}/runs-v2`, {
+    input,
+    ...(idempotencyKey ? { idempotencyKey } : {}),
+  })
+}
+
 export function getWorkflowRunDebug(id: number, runId: number) {
   return get<any>(`/v1/workflows/${id}/runs/${runId}/debug`)
 }
@@ -111,6 +118,13 @@ export function runChatflow(id: number, input: Record<string, any>) {
   return post<any>(`/v1/chatflows/${id}/runs`, { input })
 }
 
+export function runChatflowV2(id: number, input: Record<string, any>, idempotencyKey?: string) {
+  return post<any>(`/v1/chatflows/${id}/runs-v2`, {
+    input,
+    ...(idempotencyKey ? { idempotencyKey } : {}),
+  })
+}
+
 export function getChatflowRunDebug(id: number, runId: number) {
   return get<any>(`/v1/chatflows/${id}/runs/${runId}/debug`)
 }
@@ -145,6 +159,18 @@ export function getChatflowSession(id: number, sessionId: string) {
 
 export function listChatflowRunEvents(id: number, runId: number) {
   return get<{ list: any[]; total: number }>(`/v1/chatflows/${id}/runs/${runId}/events`)
+}
+
+export function getRuntimeV2Run(runId: number) {
+  return get<any>(`/v1/runtime-runs/${runId}`)
+}
+
+export function listRuntimeV2Events(runId: number, params?: { afterSequence?: number }) {
+  return get<{ list: any[]; total: number }>(`/v1/runtime-runs/${runId}/events`, params)
+}
+
+export function listRuntimeV2Nodes(runId: number) {
+  return get<{ list: any[]; total: number }>(`/v1/runtime-runs/${runId}/nodes`)
 }
 
 export function listChatflowChannels(id: number) {

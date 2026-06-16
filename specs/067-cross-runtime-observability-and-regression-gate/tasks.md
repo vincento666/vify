@@ -84,6 +84,13 @@
 - Browser UAT:
   `artifacts/slices/067-cross-runtime-observability-and-regression-gate/uat.md`
   and `artifacts/slices/067-cross-runtime-observability-and-regression-gate/screenshots/browser-uat-cross-runtime-observability.png`
+- Slice E frontend canvas runtime v2 audit closure:
+  RED `artifacts/slices/067-cross-runtime-observability-and-regression-gate/slice-e-frontend-canvas-debug-runtime-v2/red.txt`;
+  focused unit `artifacts/slices/067-cross-runtime-observability-and-regression-gate/slice-e-frontend-canvas-debug-runtime-v2/focused.txt`;
+  rem gate `artifacts/slices/067-cross-runtime-observability-and-regression-gate/slice-e-frontend-canvas-debug-runtime-v2/rem.txt`;
+  full frontend unit `artifacts/slices/067-cross-runtime-observability-and-regression-gate/slice-e-frontend-canvas-debug-runtime-v2/frontend-unit.txt`;
+  build `artifacts/slices/067-cross-runtime-observability-and-regression-gate/slice-e-frontend-canvas-debug-runtime-v2/build.txt`;
+  Browser UAT `artifacts/slices/067-cross-runtime-observability-and-regression-gate/slice-e-frontend-canvas-debug-runtime-v2/uat.md`.
 
 Note: the customer-assistant deterministic router currently exposes one
 Chatflow SOP plus non-SOP baggage QA. Same-session routed-task isolation is
