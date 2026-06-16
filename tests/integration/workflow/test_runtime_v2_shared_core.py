@@ -65,7 +65,7 @@ class RuntimeV2SharedCoreTest(unittest.TestCase):
         self.assertIn("workflow_node_failed", [event["type"] for event in events])
         self.assertNotIn("end", [node["nodeKey"] for node in nodes])
 
-    def test_cancel_endpoint_records_unsupported_event_without_terminal_rewrite(self) -> None:
+    def test_cancel_endpoint_marks_running_run_cancelled_and_blocks_completion(self) -> None:
         with TestClient(app) as client:
             chatflow = _create_message_chatflow(client)
             started = client.post(
@@ -73,11 +73,21 @@ class RuntimeV2SharedCoreTest(unittest.TestCase):
                 json={"input": {"sys.query": "Ada"}},
             ).json()["data"]
             cancelled = client.post(f"/api/v1/runtime-runs/{started['runId']}/cancel")
+            second_cancel = client.post(f"/api/v1/runtime-runs/{started['runId']}/cancel")
+            time.sleep(0.7)
+            terminal = client.get(started["resultRef"]).json()["data"]
             events = client.get(started["eventsRef"]).json()["data"]["list"]
 
         self.assertEqual(cancelled.status_code, 200)
-        self.assertEqual(cancelled.json()["data"]["status"], "cancel_unsupported")
-        self.assertIn("runtime_cancel_unsupported", [event["type"] for event in events])
+        self.assertEqual(cancelled.json()["data"]["status"], "CANCELLED")
+        self.assertTrue(cancelled.json()["data"]["cancellation"]["applied"])
+        self.assertEqual(second_cancel.status_code, 200)
+        self.assertEqual(second_cancel.json()["data"]["status"], "CANCELLED")
+        self.assertTrue(second_cancel.json()["data"]["cancellation"]["idempotent"])
+        self.assertEqual(terminal["status"], "CANCELLED")
+        event_types = [event["type"] for event in events]
+        self.assertIn("workflow_run_cancelled", event_types)
+        self.assertNotIn("workflow_run_completed", event_types)
 
 
 def _wait_for_result(

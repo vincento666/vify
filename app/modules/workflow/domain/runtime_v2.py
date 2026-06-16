@@ -44,6 +44,8 @@ _SUPPORTED_CORE_NODE_TYPES = {
     "KNOWLEDGE",
     "END",
 }
+_RUNTIME_V2_CANCELLABLE_STATUSES = {"RUNNING", "INTERRUPTED"}
+_RUNTIME_V2_TERMINAL_STATUSES = {"SUCCEEDED", "FAILED", "CANCELLED"}
 
 
 class RuntimeV2RefBuilder:
@@ -231,6 +233,9 @@ class ChatflowRuntimeV2Service:
         if str(run["status"]) != "RUNNING":
             return
         time.sleep(self._completion_delay_seconds)
+        run = self._run_or_404(run_id)
+        if str(run["status"]) != "RUNNING":
+            return
         chatflow_id = int(run["workflow_id"])
         session_id = self._session_id_for_run(chatflow_id, run_id)
         input_data = _runtime_user_input(dict(run.get("input") or {}))
@@ -250,6 +255,8 @@ class ChatflowRuntimeV2Service:
                 edges=edges,
             )
         except _RuntimeV2Interrupt as interrupted:
+            if not self._run_has_status(run_id, "RUNNING"):
+                return
             self._repository.finish_run(run_id, "INTERRUPTED", output=interrupted.output)
             if self._use_chatflow_session:
                 self._state_repository.update_session_status(
@@ -269,6 +276,8 @@ class ChatflowRuntimeV2Service:
             )
             return
         except Exception as exc:
+            if not self._run_has_status(run_id, "RUNNING"):
+                return
             self._repository.finish_run(run_id, "FAILED", output={}, error=str(exc))
             self._append_event(
                 session_id=session_id,
@@ -277,6 +286,8 @@ class ChatflowRuntimeV2Service:
                 event_type="workflow_run_failed",
                 payload={"error": str(exc)},
             )
+            return
+        if not self._run_has_status(run_id, "RUNNING"):
             return
         self._repository.finish_run(run_id, "SUCCEEDED", output=output)
         if self._use_chatflow_session:
@@ -368,26 +379,60 @@ class ChatflowRuntimeV2Service:
         run = self._run_or_404(run_id)
         chatflow_id = int(run["workflow_id"])
         session_id = self._session_id_for_run(chatflow_id, run_id)
+        owner_type = self._owner_type_for_run(run)
+        run_status = str(run["status"]).upper()
+        if run_status == "CANCELLED":
+            result = self.get_result(run_id)
+            result["cancellation"] = {
+                "applied": False,
+                "idempotent": True,
+                "previousStatus": "CANCELLED",
+                "reason": "Runtime v2 run was already cancelled.",
+            }
+            return result
+        if run_status in _RUNTIME_V2_TERMINAL_STATUSES:
+            result = self.get_result(run_id)
+            result["cancellation"] = {
+                "applied": False,
+                "idempotent": False,
+                "previousStatus": run_status,
+                "reason": "Runtime v2 run is already terminal.",
+            }
+            return result
+        if run_status not in _RUNTIME_V2_CANCELLABLE_STATUSES:
+            raise BizError(ErrorCode.BAD_REQUEST, f"Runtime v2 run cannot be cancelled from status {run_status}")
+        checkpoint = self._state_repository.get_waiting_checkpoint(chatflow_id, run_id)
+        if checkpoint is not None:
+            self._state_repository.mark_checkpoint_completed(int(checkpoint["id"]))
+        self._repository.finish_run(run_id, "CANCELLED", output={}, error="cancelled by operator")
+        if self._use_chatflow_session and owner_type == "CHATFLOW":
+            self._state_repository.update_session_status(
+                chatflow_id=chatflow_id,
+                session_id=session_id,
+                status="cancelled",
+                current_run_id=run_id,
+            )
         self._append_event(
             session_id=session_id,
             chatflow_id=chatflow_id,
             run_id=run_id,
-            event_type="runtime_cancel_unsupported",
+            event_type="workflow_run_cancelled",
             payload={
                 "runId": run_id,
-                "runStatus": str(run["status"]),
-                "reason": "Runtime v2 cancellation is not implemented in shared core MVP.",
+                "ownerType": owner_type,
+                "previousStatus": run_status,
+                "status": "CANCELLED",
+                "cancellation": {"applied": True, "idempotent": False},
             },
         )
-        return {
-            "runId": run_id,
-            "status": "cancel_unsupported",
-            "runStatus": str(run["status"]),
-            "cancellation": {
-                "supported": False,
-                "reason": "Runtime v2 cancellation is not implemented in shared core MVP.",
-            },
+        result = self.get_result(run_id)
+        result["cancellation"] = {
+            "applied": True,
+            "idempotent": False,
+            "previousStatus": run_status,
+            "reason": "Runtime v2 run cancelled before further scheduling.",
         }
+        return result
 
     def get_result(self, run_id: int) -> dict[str, Any]:
         run = self._run_or_404(run_id)
@@ -701,6 +746,10 @@ class ChatflowRuntimeV2Service:
         if run is None:
             raise BizError(ErrorCode.NOT_FOUND, "Runtime v2 run not found")
         return run
+
+    def _run_has_status(self, run_id: int, status: str) -> bool:
+        run = self._run_or_404(run_id)
+        return str(run["status"]).upper() == status.upper()
 
     def _ensure_owner(self, chatflow_id: int) -> None:
         if self._repository.get(chatflow_id, self._flow_type) is None:
