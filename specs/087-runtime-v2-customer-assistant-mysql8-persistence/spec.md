@@ -17,6 +17,8 @@ owned by runtime v2, RuntimeLab SOP routing, and the customer assistant ledger.
   runtime and customer-assistant events or idempotency keys.
 - The test is skipped without an explicit MySQL8 URL, and the skip is treated as
   environment-blocked evidence rather than final product completion.
+- Legacy local/demo databases that already contain duplicate Chatflow event
+  sequence rows do not crash startup compatibility repair.
 
 ## Non-goals
 
@@ -28,3 +30,5 @@ owned by runtime v2, RuntimeLab SOP routing, and the customer assistant ledger.
 
 Evidence lives under
 `artifacts/slices/087-runtime-v2-customer-assistant-mysql8-persistence/087.1/`.
+Follow-up compatibility evidence lives under
+`artifacts/slices/087-runtime-v2-customer-assistant-mysql8-persistence/087.2/`.

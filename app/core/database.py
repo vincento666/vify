@@ -114,7 +114,11 @@ def _ensure_compatible_schema(engine: Engine) -> None:
                 connection.execute(sa.text(f"ALTER TABLE agent ADD COLUMN {column_name} JSON"))
         if "chatflow_session" in table_names and "variables" not in chatflow_session_columns:
             connection.execute(sa.text("ALTER TABLE chatflow_session ADD COLUMN variables JSON"))
-        if "chatflow_event" in table_names and "idx_chatflow_event_run_sequence" not in chatflow_event_indexes:
+        if (
+            "chatflow_event" in table_names
+            and "idx_chatflow_event_run_sequence" not in chatflow_event_indexes
+            and not _has_chatflow_event_sequence_duplicates(connection)
+        ):
             connection.execute(
                 sa.text("CREATE UNIQUE INDEX idx_chatflow_event_run_sequence ON chatflow_event (run_id, sequence)")
             )
@@ -169,6 +173,21 @@ def _create_index_if_missing(
     if index_name in existing:
         return
     connection.execute(sa.text(f"CREATE INDEX {index_name} ON {table_name} ({column_sql})"))
+
+
+def _has_chatflow_event_sequence_duplicates(connection: Connection) -> bool:
+    duplicate = connection.execute(
+        sa.text(
+            """
+            SELECT 1
+            FROM chatflow_event
+            GROUP BY run_id, sequence
+            HAVING COUNT(*) > 1
+            LIMIT 1
+            """
+        )
+    ).first()
+    return duplicate is not None
 
 
 def get_session() -> Generator[Session]:
