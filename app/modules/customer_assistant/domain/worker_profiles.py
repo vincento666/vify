@@ -86,16 +86,18 @@ def _merge_profile_overrides(
 ) -> list[CustomerAssistantWorkerProfile]:
     merged = list(base_profiles)
     for override in override_profiles:
+        if not override.enabled:
+            continue
         replaced = False
         next_profiles: list[CustomerAssistantWorkerProfile] = []
         for profile in merged:
             if profile.profile_id == override.profile_id or profile.task_key == override.task_key:
-                if not replaced and override.enabled:
+                if not replaced:
                     next_profiles.append(override)
                 replaced = True
                 continue
             next_profiles.append(profile)
-        if not replaced and override.enabled:
+        if not replaced:
             next_profiles.append(override)
         merged = next_profiles
     return merged

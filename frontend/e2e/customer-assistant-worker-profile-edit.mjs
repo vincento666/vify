@@ -71,6 +71,7 @@ const configuredProfile = {
 
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+let cleanupError = null
 
 try {
   const hostParam = encodeURIComponent(JSON.stringify(hostContext))
@@ -140,10 +141,18 @@ try {
   console.log('PASS customer assistant worker profile edit e2e')
 } finally {
   if (!page.isClosed()) {
-    await api(page, `/customer-assistant/worker-profiles/${profileId}`, {
-      method: 'PATCH',
-      body: JSON.stringify(defaultRefundProfile),
-    }).catch(() => undefined)
+    try {
+      const reset = await api(page, `/customer-assistant/worker-profiles/${profileId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(defaultRefundProfile),
+      })
+      if (!reset.ok) {
+        cleanupError = new Error(`Failed to reset worker profile: ${reset.status}`)
+      }
+    } catch (error) {
+      cleanupError = error
+    }
   }
   await browser.close()
+  if (cleanupError) throw cleanupError
 }

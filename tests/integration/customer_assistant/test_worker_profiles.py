@@ -13,6 +13,18 @@ from app.core.database import Base, get_session
 from app.main import app
 
 
+def _host_headers(tenant_id: str, org_id: str | None = None) -> dict[str, str]:
+    return {
+        "X-Hify-Actor-Id": f"operator-{tenant_id}",
+        "X-Hify-Actor-Name": f"Operator {tenant_id}",
+        "X-Hify-Tenant-Id": tenant_id,
+        "X-Hify-Org-Id": org_id or tenant_id,
+        "X-Hify-Source": "embedded-demo-shell",
+        "X-Hify-Permissions": "customer_assistant:read,customer_assistant:operate",
+        "X-Request-Id": f"req-{tenant_id}",
+    }
+
+
 class CustomerAssistantWorkerProfileApiTest(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp_dir = tempfile.TemporaryDirectory()
@@ -151,6 +163,92 @@ class CustomerAssistantWorkerProfileApiTest(unittest.TestCase):
         self.assertEqual(profile_refs["modelPolicyRef"], "demo-model-v2")
         self.assertEqual(profile_refs["promptRef"], "runtime-refund-prompt")
         self.assertEqual(profile_refs["riskPolicyRef"], "manual_confirm_high_risk")
+
+    def test_worker_profile_overrides_are_scoped_by_host_tenant(self) -> None:
+        tenant_a_headers = _host_headers("tenant-profile-a")
+        tenant_b_headers = _host_headers("tenant-profile-b")
+        payload = {
+            "taskKey": "refund_ticket",
+            "taskType": "REFUND",
+            "workerType": "chatflow_sop",
+            "workerRef": "tenant_a_refund_worker",
+            "modelPolicyRef": "tenant-a-model",
+            "promptRef": "tenant-a-prompt",
+            "toolRefs": ["lookup_order"],
+            "riskPolicyRef": "manual_confirm_high_risk",
+            "enabled": True,
+        }
+
+        with TestClient(app) as client:
+            patched = client.patch(
+                "/api/v1/customer-assistant/worker-profiles/configured_refund_stub",
+                json=payload,
+                headers=tenant_a_headers,
+            )
+            self.assertEqual(patched.status_code, 200, patched.text)
+
+            tenant_a_profile = client.get(
+                "/api/v1/customer-assistant/worker-profiles",
+                headers=tenant_a_headers,
+            ).json()["data"]["list"][0]
+            tenant_b_profile = client.get(
+                "/api/v1/customer-assistant/worker-profiles",
+                headers=tenant_b_headers,
+            ).json()["data"]["list"][0]
+
+            created_b = client.post(
+                "/api/v1/customer-assistant/sessions",
+                json={"context": {}},
+                headers=tenant_b_headers,
+            )
+            session_b = int(created_b.json()["data"]["id"])
+            turn_b = client.post(
+                f"/api/v1/customer-assistant/sessions/{session_b}/turns",
+                json={"message": "我要退票", "idempotencyKey": "tenant-b-refund"},
+                headers=tenant_b_headers,
+            )
+            self.assertEqual(turn_b.status_code, 200, turn_b.text)
+            task_b = client.get(
+                f"/api/v1/customer-assistant/sessions/{session_b}/tasks",
+                headers=tenant_b_headers,
+            ).json()["data"]["list"][0]
+
+        self.assertEqual(tenant_a_profile["workerRef"], "tenant_a_refund_worker")
+        self.assertEqual(tenant_b_profile["workerRef"], "configured_refund_stub")
+        self.assertEqual(task_b["workerRef"], "configured_refund_stub")
+
+    def test_disabled_worker_profile_override_falls_back_to_configured_profile(self) -> None:
+        payload = {
+            "taskKey": "refund_ticket",
+            "taskType": "REFUND",
+            "workerType": "chatflow_sop",
+            "workerRef": "disabled_refund_worker",
+            "modelPolicyRef": "disabled-model",
+            "promptRef": "disabled-prompt",
+            "toolRefs": ["lookup_order"],
+            "riskPolicyRef": "manual_confirm_high_risk",
+            "enabled": False,
+        }
+
+        with TestClient(app) as client:
+            patched = client.patch(
+                "/api/v1/customer-assistant/worker-profiles/configured_refund_stub",
+                json=payload,
+            )
+            self.assertEqual(patched.status_code, 200, patched.text)
+            profiles = client.get("/api/v1/customer-assistant/worker-profiles").json()["data"]["list"]
+            created = client.post("/api/v1/customer-assistant/sessions", json={"context": {}})
+            session_id = int(created.json()["data"]["id"])
+            turn = client.post(
+                f"/api/v1/customer-assistant/sessions/{session_id}/turns",
+                json={"message": "我要退票", "idempotencyKey": "disabled-profile-fallback"},
+            )
+            self.assertEqual(turn.status_code, 200, turn.text)
+            task = client.get(f"/api/v1/customer-assistant/sessions/{session_id}/tasks").json()["data"]["list"][0]
+
+        self.assertEqual(profiles[0]["workerRef"], "configured_refund_stub")
+        self.assertEqual(profiles[0]["modelPolicyRef"], "demo-model")
+        self.assertEqual(task["workerRef"], "configured_refund_stub")
 
     def _session_override(self) -> Generator[Session]:
         with self._factory() as session:

@@ -164,6 +164,8 @@ def register_customer_assistant_tables(metadata: sa.MetaData | None = None) -> N
             "customer_assistant_worker_profile",
             target,
             id_column(),
+            sa.Column("tenant_id", sa.String(120), nullable=False, server_default="local"),
+            sa.Column("org_id", sa.String(120), nullable=False, server_default="local"),
             sa.Column("profile_id", sa.String(120), nullable=False),
             sa.Column("task_key", sa.String(120), nullable=False),
             sa.Column("task_type", sa.String(60), nullable=False),
@@ -176,7 +178,13 @@ def register_customer_assistant_tables(metadata: sa.MetaData | None = None) -> N
             sa.Column("enabled", sa.Boolean(), nullable=False, server_default=sa.true()),
             deleted_column(),
             *timestamps(),
-            sa.UniqueConstraint("profile_id", name="idx_customer_assistant_worker_profile_id"),
+            sa.UniqueConstraint(
+                "tenant_id",
+                "org_id",
+                "profile_id",
+                name="idx_customer_assistant_worker_profile_scope_id",
+            ),
+            sa.Index("idx_customer_assistant_worker_profile_scope", "tenant_id", "org_id"),
             sa.Index("idx_customer_assistant_worker_profile_task", "task_key"),
             sa.Index("idx_customer_assistant_worker_profile_enabled", "enabled"),
         )

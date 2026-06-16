@@ -74,19 +74,25 @@ class CustomerAssistantRepository:
                 demo_rows.append(item)
         return demo_rows
 
-    def list_worker_profile_overrides(self) -> list[dict[str, Any]]:
+    def list_worker_profile_overrides(self, *, tenant_id: str, org_id: str) -> list[dict[str, Any]]:
         rows = self._session.execute(
             sa.select(self._worker_profile_table)
-            .where(self._worker_profile_table.c.deleted.is_(False))
+            .where(
+                self._worker_profile_table.c.tenant_id == tenant_id,
+                self._worker_profile_table.c.org_id == org_id,
+                self._worker_profile_table.c.deleted.is_(False),
+            )
             .order_by(self._worker_profile_table.c.id.asc())
         ).mappings().all()
         return [_worker_profile_row_to_payload(dict(row)) for row in rows]
 
-    def upsert_worker_profile(self, profile_id: str, profile: dict[str, Any]) -> dict[str, Any]:
+    def upsert_worker_profile(self, profile_id: str, profile: dict[str, Any], *, tenant_id: str, org_id: str) -> dict[str, Any]:
         now = datetime.now()
-        values = _worker_profile_values(profile_id, profile, now)
+        values = _worker_profile_values(profile_id, profile, now, tenant_id=tenant_id, org_id=org_id)
         existing = self._session.execute(
             sa.select(self._worker_profile_table).where(
+                self._worker_profile_table.c.tenant_id == tenant_id,
+                self._worker_profile_table.c.org_id == org_id,
                 self._worker_profile_table.c.profile_id == profile_id,
                 self._worker_profile_table.c.deleted.is_(False),
             )
@@ -102,13 +108,34 @@ class CustomerAssistantRepository:
                 sa.select(self._worker_profile_table).where(self._worker_profile_table.c.id == existing["id"])
             ).mappings().one()
             return _worker_profile_row_to_payload(dict(row))
-        row = insert_and_fetch(
-            self._session,
-            self._worker_profile_table,
-            values,
-        )
-        self._session.commit()
-        return _worker_profile_row_to_payload(row)
+        try:
+            row = insert_and_fetch(
+                self._session,
+                self._worker_profile_table,
+                values,
+            )
+            self._session.commit()
+            return _worker_profile_row_to_payload(row)
+        except sa.exc.IntegrityError:
+            self._session.rollback()
+            legacy = self._session.execute(
+                sa.select(self._worker_profile_table).where(
+                    self._worker_profile_table.c.profile_id == profile_id,
+                    self._worker_profile_table.c.deleted.is_(False),
+                )
+            ).mappings().one_or_none()
+            if legacy is None:
+                raise
+            self._session.execute(
+                self._worker_profile_table.update()
+                .where(self._worker_profile_table.c.id == legacy["id"])
+                .values(**values)
+            )
+            self._session.commit()
+            updated = self._session.execute(
+                sa.select(self._worker_profile_table).where(self._worker_profile_table.c.id == legacy["id"])
+            ).mappings().one()
+            return _worker_profile_row_to_payload(dict(updated))
 
     def create_run(
         self,
@@ -734,6 +761,7 @@ class CustomerAssistantRepository:
         if bind is not None:
             Base.metadata.create_all(bind=bind, tables=customer_assistant_tables())
             self._ensure_event_actor_column(bind)
+            self._ensure_worker_profile_scope_columns(bind)
 
     def _ensure_event_actor_column(self, bind: Any) -> None:
         inspector = sa.inspect(bind)
@@ -749,6 +777,32 @@ class CustomerAssistantRepository:
                     "ADD COLUMN actor VARCHAR(30) NOT NULL DEFAULT 'customer'"
                 )
             )
+
+    def _ensure_worker_profile_scope_columns(self, bind: Any) -> None:
+        inspector = sa.inspect(bind)
+        if "customer_assistant_worker_profile" not in inspector.get_table_names():
+            return
+        columns = {column["name"] for column in inspector.get_columns("customer_assistant_worker_profile")}
+        statements: list[str] = []
+        if "tenant_id" not in columns:
+            statements.append(
+                "ALTER TABLE customer_assistant_worker_profile "
+                "ADD COLUMN tenant_id VARCHAR(120) NOT NULL DEFAULT 'local'"
+            )
+        if "org_id" not in columns:
+            statements.append(
+                "ALTER TABLE customer_assistant_worker_profile "
+                "ADD COLUMN org_id VARCHAR(120) NOT NULL DEFAULT 'local'"
+            )
+        if not statements:
+            return
+        with bind.begin() as connection:
+            for statement in statements:
+                try:
+                    connection.execute(sa.text(statement))
+                except sa.exc.OperationalError as exc:
+                    if "duplicate column" not in str(exc).lower():
+                        raise
 
     def _next_event_sequence(self, session_id: int) -> int:
         value = self._session.execute(
@@ -803,8 +857,17 @@ def _redact_payload(value: Any) -> Any:
     return value
 
 
-def _worker_profile_values(profile_id: str, profile: dict[str, Any], now: datetime) -> dict[str, Any]:
+def _worker_profile_values(
+    profile_id: str,
+    profile: dict[str, Any],
+    now: datetime,
+    *,
+    tenant_id: str,
+    org_id: str,
+) -> dict[str, Any]:
     return {
+        "tenant_id": tenant_id,
+        "org_id": org_id,
         "profile_id": profile_id,
         "task_key": str(profile.get("taskKey") or profile.get("task_key") or ""),
         "task_type": str(profile.get("taskType") or profile.get("task_type") or ""),

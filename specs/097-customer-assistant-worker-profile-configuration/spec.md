@@ -2,7 +2,7 @@
 
 ## Status
 
-Slice 097.1 complete.
+Slice 097.1 complete. Review hardening complete.
 
 ## User Story
 
@@ -16,6 +16,8 @@ As an operator/demo admin, I can change the customer-assistant worker profile fo
 - Route new customer assistant task recognition through the persisted override immediately.
 - Return configured profile refs in task-recognition/operator evidence exactly as existing catalog profiles do.
 - Add a lightweight workbench edit flow so the configured worker profile is visible and editable from the operator surface.
+- Scope persisted overrides by tenant/org so one demo tenant cannot change another tenant's routing.
+- Treat disabled persisted overrides as inactive overlays so default/env catalog profiles remain available.
 
 ## Non-Goals
 
@@ -29,6 +31,9 @@ As an operator/demo admin, I can change the customer-assistant worker profile fo
 - Backend integration verifies PATCH persists a profile, GET returns it, and the next customer turn routes to the configured worker refs.
 - Frontend API and workbench tests verify profile update calls and visible edit flow.
 - Browser UAT proves an operator can edit a task profile from the customer assistant workbench and see the updated profile evidence.
+- Review-fix RED evidence proves tenant leakage and disabled override fallback failed before the hardening patch.
+- Migration evidence proves worker-profile migrations do not import live metadata and remain idempotent with existing local databases.
+- Browser UAT cleanup fails loudly if the edited profile cannot be reset.
 - Rem gate and focused frontend unit tests pass for UI changes.
 - Docs/tasks record evidence paths and final status.
 
@@ -42,3 +47,10 @@ As an operator/demo admin, I can change the customer-assistant worker profile fo
 - Frontend focused/unit/rem/build: `frontend-focused.txt`, `frontend-unit-focused.txt`, `frontend-unit-full.txt`, `frontend-rem.txt`, `frontend-build.txt`
 - Browser UAT: `artifacts/slices/097-customer-assistant-worker-profile-configuration/097.1/uat.txt`
 - Browser UAT screenshot: `artifacts/slices/097-customer-assistant-worker-profile-configuration/097.1/worker-profile-edit.png`
+- Review-fix RED: `artifacts/slices/097-customer-assistant-worker-profile-configuration/097.1/red-review-fixes.txt`
+- Review-fix integration: `artifacts/slices/097-customer-assistant-worker-profile-configuration/097.1/review-fixes-worker-profiles.txt`
+- Review-fix schema/migration: `artifacts/slices/097-customer-assistant-worker-profile-configuration/097.1/review-fixes-schema.txt`
+- Review-fix ruff: `artifacts/slices/097-customer-assistant-worker-profile-configuration/097.1/review-fixes-ruff.txt`
+- Review-fix frontend/rem: `artifacts/slices/097-customer-assistant-worker-profile-configuration/097.1/review-fixes-frontend.txt`
+- Review-fix Browser UAT: `artifacts/slices/097-customer-assistant-worker-profile-configuration/097.1/review-fixes-uat.txt`
+- Review-fix Browser UAT screenshot: `artifacts/slices/097-customer-assistant-worker-profile-configuration/097.1/worker-profile-edit-review-fix.png`

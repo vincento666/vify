@@ -19,3 +19,17 @@
   - Evidence: `uat.txt`, `worker-profile-edit.png`
 - [x] Commit focused feature point.
   - Commit: `feat(customer-assistant): edit worker profiles`
+
+## 097.1 Review Hardening
+
+- [x] Save RED review-fix failure for tenant leakage and disabled override fallback.
+  - Evidence: `artifacts/slices/097-customer-assistant-worker-profile-configuration/097.1/red-review-fixes.txt`
+- [x] Scope worker-profile overrides by tenant/org and keep disabled overrides from suppressing default/env profiles.
+- [x] Freeze worker-profile migration metadata and add idempotent tenant/org scope migration.
+- [x] Make browser UAT cleanup mandatory instead of best-effort.
+- [x] Run review-fix integration, schema, and lint gates.
+  - Evidence: `review-fixes-worker-profiles.txt`, `review-fixes-schema.txt`, `review-fixes-ruff.txt`
+- [x] Reuse focused frontend/rem evidence for unchanged UI code.
+  - Evidence: `review-fixes-frontend.txt`
+- [x] Run review-fix browser UAT and save screenshot.
+  - Evidence: `review-fixes-uat.txt`, `worker-profile-edit-review-fix.png`

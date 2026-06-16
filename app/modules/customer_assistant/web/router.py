@@ -22,7 +22,10 @@ from app.modules.customer_assistant.domain.llm_primary import (
 )
 from app.modules.customer_assistant.domain.policy import CustomerAssistantActionPolicy
 from app.modules.customer_assistant.domain.react_core import ControlledReActCore
-from app.modules.customer_assistant.domain.service import CustomerAssistantService
+from app.modules.customer_assistant.domain.service import (
+    CustomerAssistantService,
+    customer_assistant_worker_profile_scope,
+)
 from app.modules.customer_assistant.domain.shadow import (
     CustomerAssistantShadowClient,
     CustomerAssistantShadowSettings,
@@ -121,9 +124,10 @@ def build_customer_assistant_service(
     llm_runtime_settings = CustomerAssistantLlmRuntimeSettings.from_settings(settings)
     workers = _customer_assistant_workers(session, settings)
     repository = CustomerAssistantRepository(session)
+    tenant_id, org_id = customer_assistant_worker_profile_scope(request_context)
     worker_profiles = CustomerAssistantWorkerProfileCatalog.from_json_with_overrides(
         settings.customer_assistant_worker_profiles_json,
-        repository.list_worker_profile_overrides(),
+        repository.list_worker_profile_overrides(tenant_id=tenant_id, org_id=org_id),
     )
     return CustomerAssistantService(
         repository,

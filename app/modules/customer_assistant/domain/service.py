@@ -138,7 +138,13 @@ class CustomerAssistantService:
             }
         )
         _validate_worker_profile(profile)
-        return self._repository.upsert_worker_profile(profile.profile_id, profile.to_dict())
+        tenant_id, org_id = customer_assistant_worker_profile_scope(self._request_context)
+        return self._repository.upsert_worker_profile(
+            profile.profile_id,
+            profile.to_dict(),
+            tenant_id=tenant_id,
+            org_id=org_id,
+        )
 
     def _profile_refs_for_task(self, task: TaskItem) -> dict[str, Any] | None:
         profile = self._worker_profiles.resolve(task.task_key)
@@ -1743,6 +1749,12 @@ def _session_context_with_host_context(
     if request_context is not None and _should_record_host_context(request_context):
         session_context["hostContext"] = sanitize_value(request_context.audit_metadata())
     return session_context
+
+
+def customer_assistant_worker_profile_scope(request_context: RequestContext | None) -> tuple[str, str]:
+    if request_context is None or _is_local_request_context(request_context):
+        return "local", "local"
+    return request_context.tenant_id or "default", request_context.org_id or "default"
 
 
 def _should_record_host_context(request_context: RequestContext) -> bool:
