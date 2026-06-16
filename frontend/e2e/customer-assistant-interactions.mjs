@@ -90,6 +90,80 @@ const executedMetrics = {
   humanConfirmation: { pending: 0, adopted: 1, terminal: 1, adoptionRate: 1 },
 }
 
+function visibleAction() {
+  if (actionExecuted) return executedAction
+  if (actionConfirmed) return confirmedAction
+  return pendingAction
+}
+
+function visibleEvents() {
+  const events = []
+  if (actionConfirmed || actionExecuted) {
+    events.push({
+      id: 901,
+      sessionId: 12,
+      runId: 31,
+      sequence: 1,
+      type: 'proposed_action_confirmed',
+      visibility: 'operator',
+      source: 'operator_advisory',
+      actor: 'operator',
+      taskId: 101,
+      payload: { actionId: 9, actionType: 'submit_refund' },
+    })
+  }
+  if (actionExecuted) {
+    events.push({
+      id: 902,
+      sessionId: 12,
+      runId: 31,
+      sequence: 2,
+      type: 'proposed_action_executed',
+      visibility: 'operator',
+      source: 'operator_advisory',
+      actor: 'operator',
+      taskId: 101,
+      payload: { actionId: 9, actionType: 'submit_refund', status: 'EXECUTED' },
+    })
+  }
+  return events
+}
+
+function visibleOperatorAudit() {
+  const rows = []
+  if (actionConfirmed || actionExecuted) {
+    rows.push({
+      id: 701,
+      sequence: 1,
+      eventType: 'proposed_action_confirmed',
+      title: '拟议动作已确认',
+      actor: 'operator',
+      source: 'operator_advisory',
+      status: 'CONFIRMED',
+      targetType: 'action',
+      targetId: 9,
+      summary: 'submit_refund CONFIRMED',
+      createdAt: '2026-06-17T05:00:00',
+    })
+  }
+  if (actionExecuted) {
+    rows.push({
+      id: 702,
+      sequence: 2,
+      eventType: 'proposed_action_executed',
+      title: '拟议动作已执行',
+      actor: 'operator',
+      source: 'operator_advisory',
+      status: 'EXECUTED',
+      targetType: 'action',
+      targetId: 9,
+      summary: 'submit_refund EXECUTED',
+      createdAt: '2026-06-17T05:01:00',
+    })
+  }
+  return { sessionId: 12, list: rows, total: rows.length }
+}
+
 let actionConfirmed = false
 let actionExecuted = false
 
@@ -146,20 +220,34 @@ try {
       return
     }
     if (method === 'GET' && url.endsWith('/sessions/12/tasks')) {
-      await route.fulfill({ json: envelope({ list: turnResult.taskSummaries, total: 1 }) })
+      await route.fulfill({
+        json: envelope({
+          list: [
+            {
+              ...turnResult.taskSummaries[0],
+              proposedActions: [visibleAction()],
+            },
+          ],
+          total: 1,
+        }),
+      })
       return
     }
     if (method === 'GET' && url.endsWith('/sessions/12/events')) {
-      await route.fulfill({ json: envelope({ list: turnResult.events, total: 0 }) })
+      const events = visibleEvents()
+      await route.fulfill({ json: envelope({ list: events, total: events.length }) })
       return
     }
     if (method === 'GET' && url.endsWith('/sessions/12/proposed-actions')) {
-      const visibleAction = actionExecuted ? executedAction : actionConfirmed ? confirmedAction : pendingAction
-      await route.fulfill({ json: envelope({ list: [visibleAction], total: 1 }) })
+      await route.fulfill({ json: envelope({ list: [visibleAction()], total: 1 }) })
       return
     }
     if (method === 'GET' && url.endsWith('/sessions/12/metrics')) {
       await route.fulfill({ json: envelope(actionExecuted ? executedMetrics : actionConfirmed ? confirmedMetrics : pendingMetrics) })
+      return
+    }
+    if (method === 'GET' && url.endsWith('/sessions/12/operator-audit')) {
+      await route.fulfill({ json: envelope(visibleOperatorAudit()) })
       return
     }
     await route.fulfill({ status: 404, json: { code: 404, message: 'unexpected call', data: null } })
@@ -182,7 +270,14 @@ try {
   )
 
   await page.getByLabel('确认拟议动作').click()
-  await page.getByText('CONFIRMED').waitFor({ state: 'visible', timeout: 10000 })
+  await page.getByTestId('operator-proposed-actions-panel').getByText('CONFIRMED').waitFor({
+    state: 'visible',
+    timeout: 10000,
+  })
+  await page.getByTestId('operator-audit-panel').getByText('拟议动作已确认').waitFor({
+    state: 'visible',
+    timeout: 10000,
+  })
   assert(await page.getByLabel('确认拟议动作').isDisabled(), 'Confirmed action should disable confirm control')
   assert(!(await page.getByLabel('执行已确认动作').isDisabled()), 'Confirmed action should enable execute control')
   assert(
@@ -191,11 +286,22 @@ try {
   )
 
   await page.getByLabel('执行已确认动作').click()
-  await page.getByText('EXECUTED').waitFor({ state: 'visible', timeout: 10000 })
+  await page.getByTestId('operator-proposed-actions-panel').getByText('EXECUTED').waitFor({
+    state: 'visible',
+    timeout: 10000,
+  })
   const receipt = page.getByTestId('operator-action-receipt')
   await receipt.getByText('refund_submit_mock').waitFor({ state: 'visible', timeout: 10000 })
   await receipt.getByText('REFUND_SUBMITTED_MOCK').waitFor({ state: 'visible', timeout: 10000 })
   await receipt.getByText('[REDACTED]').waitFor({ state: 'visible', timeout: 10000 })
+  await page.getByTestId('operator-audit-panel').getByText('拟议动作已执行').waitFor({
+    state: 'visible',
+    timeout: 10000,
+  })
+  await page.getByTestId('operator-event-timeline').getByText('proposed_action_executed').waitFor({
+    state: 'visible',
+    timeout: 10000,
+  })
   const receiptText = await receipt.textContent()
   assert(!receiptText?.includes('TK-100'), `Execution receipt leaked raw order number: ${receiptText}`)
   const executeCalls = calls.filter((call) => call.method === 'POST' && call.url.endsWith('/proposed-actions/9/execute'))

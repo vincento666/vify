@@ -31,7 +31,6 @@ import { openCustomerAssistantEventStream, type CustomerAssistantEventStream } f
 import {
   applyCustomerAssistantActionState,
   buildCustomerAssistantState,
-  formatCustomerAssistantOperatorAudit,
   type BuildCustomerAssistantStateInput,
   type CustomerAssistantState,
 } from './customerAssistantViewModel'
@@ -163,16 +162,7 @@ export async function rejectCustomerAssistantRuntimeAction(
   actionId: number,
 ): Promise<CustomerAssistantRuntimeState> {
   const action = await rejectCustomerAssistantAction(actionId)
-  return withCustomerAssistantMetrics(current, {
-    ...applyCustomerAssistantActionState(current, action),
-    session: current.session,
-    tasks: current.tasks,
-    events: current.events,
-    metrics: current.metrics,
-    operatorAudit: current.operatorAudit,
-    loading: false,
-    error: null,
-  })
+  return applyRuntimeActionResult(current, action)
 }
 
 export async function executeCustomerAssistantRuntimeAction(
@@ -180,16 +170,7 @@ export async function executeCustomerAssistantRuntimeAction(
   actionId: number,
 ): Promise<CustomerAssistantRuntimeState> {
   const action = await executeCustomerAssistantAction(actionId)
-  return withCustomerAssistantMetrics(current, {
-    ...applyCustomerAssistantActionState(current, action),
-    session: current.session,
-    tasks: current.tasks,
-    events: current.events,
-    metrics: current.metrics,
-    operatorAudit: current.operatorAudit,
-    loading: false,
-    error: null,
-  })
+  return applyRuntimeActionResult(current, action)
 }
 
 export async function updateCustomerAssistantRuntimeAction(
@@ -198,16 +179,7 @@ export async function updateCustomerAssistantRuntimeAction(
   payload: CustomerAssistantActionUpdatePayload,
 ): Promise<CustomerAssistantRuntimeState> {
   const action = await updateCustomerAssistantAction(actionId, payload)
-  return withCustomerAssistantMetrics(current, {
-    ...applyCustomerAssistantActionState(current, action),
-    session: current.session,
-    tasks: current.tasks,
-    events: current.events,
-    metrics: current.metrics,
-    operatorAudit: current.operatorAudit,
-    loading: false,
-    error: null,
-  })
+  return applyRuntimeActionResult(current, action)
 }
 
 export async function proposeCustomerAssistantRuntimeTaskControl(
@@ -410,7 +382,7 @@ function lastEventSequence(events: CustomerAssistantEvent[]): number {
 
 async function applyRuntimeActionResult(
   current: CustomerAssistantRuntimeState,
-  action: Awaited<ReturnType<typeof confirmCustomerAssistantAction>>,
+  action: CustomerAssistantProposedAction,
 ): Promise<CustomerAssistantRuntimeState> {
   const updated: CustomerAssistantRuntimeState = {
     ...applyCustomerAssistantActionState(current, action),
@@ -423,7 +395,6 @@ async function applyRuntimeActionResult(
     error: null,
   }
   if (!current.session?.id) return updated
-  if (action.actionType !== 'PROPOSED_TASK_COMMAND') return withCustomerAssistantMetrics(current, updated)
   const { tasks, events, proposedActions, metrics, operatorAudit } = await refreshCustomerAssistantRuntimeLedgers(
     current.session.id,
   )
@@ -440,28 +411,13 @@ async function applyRuntimeActionResult(
     eventTimeline: rebuilt.eventTimeline,
     progressStages: rebuilt.progressStages,
     operatorAuditRows: rebuilt.operatorAuditRows,
+    recognitionEvidence: rebuilt.recognitionEvidence,
+    operatorAdvisoryEvidence: rebuilt.operatorAdvisoryEvidence,
     proposedActions: rebuilt.proposedActions,
     tasks: tasks.list,
     events: events.list,
     metrics,
     operatorAudit,
-  }
-}
-
-async function withCustomerAssistantMetrics(
-  current: CustomerAssistantRuntimeState,
-  state: CustomerAssistantRuntimeState,
-): Promise<CustomerAssistantRuntimeState> {
-  if (!current.session?.id) return state
-  const [metrics, operatorAudit] = await Promise.all([
-    getCustomerAssistantSessionMetrics(current.session.id),
-    listCustomerAssistantOperatorAudit(current.session.id),
-  ])
-  return {
-    ...state,
-    metrics,
-    operatorAudit,
-    operatorAuditRows: formatCustomerAssistantOperatorAudit(operatorAudit),
   }
 }
 
