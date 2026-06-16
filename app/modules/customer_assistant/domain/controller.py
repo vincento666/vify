@@ -1,9 +1,13 @@
 import re
 
 from app.modules.customer_assistant.domain.models import TaskCommand, TaskCommandType, TaskLedger, TaskStatus
+from app.modules.customer_assistant.domain.worker_profiles import CustomerAssistantWorkerProfileCatalog
 
 
 class DeterministicTaskRecognitionController:
+    def __init__(self, worker_profiles: CustomerAssistantWorkerProfileCatalog | None = None) -> None:
+        self._worker_profiles = worker_profiles or CustomerAssistantWorkerProfileCatalog.default()
+
     def recognize(self, message: str, ledger: TaskLedger) -> list[TaskCommand]:
         text = message.strip().lower()
         commands: list[TaskCommand] = []
@@ -44,13 +48,14 @@ class DeterministicTaskRecognitionController:
         command_type = TaskCommandType.ADD_TASK
         if existing is not None and existing.status not in {TaskStatus.COMPLETED, TaskStatus.CANCELLED}:
             command_type = TaskCommandType.RETAIN_TASK
+        profile = self._worker_profiles.resolve(task_key)
         return TaskCommand(
             type=command_type,
             task_key=task_key,
-            task_type=task_type,
+            task_type=profile.task_type if profile else task_type,
             business_key=task_key,
-            worker_type=worker_type,
-            worker_ref=worker_ref,
+            worker_type=profile.worker_type if profile else worker_type,
+            worker_ref=profile.worker_ref if profile else worker_ref,
             reason="deterministic_intent",
         )
 

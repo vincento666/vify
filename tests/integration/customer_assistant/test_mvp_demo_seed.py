@@ -78,6 +78,9 @@ class MvpDemoSeedTest(unittest.TestCase):
             self.assertIn("HIFY_MVP_DEMO_STORY_IDS=refund_baggage_parallel,invoice_interrupt_flight_status,chatflow_block_resume_recommendation", content)
             self.assertIn("HIFY_MVP_DEMO_CUSTOMER_SESSION_IDS=101,102", content)
             self.assertIn("HIFY_RUNTIME_LAB_SOP_CHATFLOW_IDS=refund_ticket:11,baggage_service:12", content)
+            self.assertIn("HIFY_CUSTOMER_ASSISTANT_WORKER_PROFILES_JSON=", content)
+            self.assertIn("refund_ticket", content)
+            self.assertIn("manual_confirm", content)
             self.assertNotIn("OPENROUTER_API_KEY", content)
             self.assertNotIn("sk-", content)
 

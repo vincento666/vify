@@ -51,6 +51,7 @@ from app.modules.customer_assistant.domain.worker_runtime import (
     worker_async_refs,
     worker_result_from_worker_run,
 )
+from app.modules.customer_assistant.domain.worker_profiles import CustomerAssistantWorkerProfileCatalog
 from app.modules.customer_assistant.domain.workers import ChatflowSopWorker, RecommendationAggregator, StubQaWorker
 from app.modules.customer_assistant.infra.repository import CustomerAssistantRepository, IdempotencyConflict
 from app.modules.knowledge.infra.repository import KnowledgeBaseRepository
@@ -78,11 +79,13 @@ class CustomerAssistantService:
         two_stage_runtime: TwoStageFinalizer | None = None,
         action_executor_registry: MockActionExecutorRegistry | None = None,
         async_worker_runtime: CustomerAssistantWorkerRuntime | None = None,
+        worker_profiles: CustomerAssistantWorkerProfileCatalog | None = None,
     ) -> None:
         self._repository = repository
         self._ledger = CustomerAssistantLedger(repository)
+        self._worker_profiles = worker_profiles or CustomerAssistantWorkerProfileCatalog.default()
         self._core = core or ControlledReActCore(
-            DeterministicTaskRecognitionController(),
+            DeterministicTaskRecognitionController(self._worker_profiles),
             CustomerAssistantActionPolicy(),
         )
         self._scheduler = scheduler or LocalWorkerScheduler(
@@ -114,6 +117,10 @@ class CustomerAssistantService:
         stories = [_format_demo_story(row, self._repository) for row in rows]
         stories.sort(key=_demo_story_sort_key)
         return {"list": stories, "total": len(stories)}
+
+    def list_worker_profiles(self) -> dict[str, Any]:
+        profiles = self._worker_profiles.list_profiles()
+        return {"list": profiles, "total": len(profiles)}
 
     def handle_turn(
         self,

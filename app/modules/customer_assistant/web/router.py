@@ -12,10 +12,13 @@ from app.core.database import get_session
 from app.core.responses import success
 from app.modules.agent.infra.repository import AgentRepository
 from app.modules.customer_assistant.domain.scheduler import LocalWorkerScheduler
+from app.modules.customer_assistant.domain.controller import DeterministicTaskRecognitionController
 from app.modules.customer_assistant.domain.llm_primary import (
     CustomerAssistantLlmRuntimeMode,
     CustomerAssistantLlmRuntimeSettings,
 )
+from app.modules.customer_assistant.domain.policy import CustomerAssistantActionPolicy
+from app.modules.customer_assistant.domain.react_core import ControlledReActCore
 from app.modules.customer_assistant.domain.service import CustomerAssistantService
 from app.modules.customer_assistant.domain.shadow import (
     CustomerAssistantShadowClient,
@@ -28,6 +31,7 @@ from app.modules.customer_assistant.domain.react_worker import default_restricte
 from app.modules.customer_assistant.domain.worker_registry import default_react_worker_registry
 from app.modules.customer_assistant.domain.worker import TaskWorker
 from app.modules.customer_assistant.domain.worker_runtime import CustomerAssistantWorkerRuntime
+from app.modules.customer_assistant.domain.worker_profiles import CustomerAssistantWorkerProfileCatalog
 from app.modules.customer_assistant.infra.repository import CustomerAssistantRepository
 from app.modules.customer_assistant.web.schemas import (
     CustomerAssistantSessionCreateRequest,
@@ -59,8 +63,13 @@ def build_customer_assistant_service(session: Session, settings: Settings) -> Cu
     shadow_settings = CustomerAssistantShadowSettings.from_settings(settings)
     llm_runtime_settings = CustomerAssistantLlmRuntimeSettings.from_settings(settings)
     workers = _customer_assistant_workers(session, settings)
+    worker_profiles = CustomerAssistantWorkerProfileCatalog.from_json(settings.customer_assistant_worker_profiles_json)
     return CustomerAssistantService(
         CustomerAssistantRepository(session),
+        core=ControlledReActCore(
+            DeterministicTaskRecognitionController(worker_profiles),
+            CustomerAssistantActionPolicy(),
+        ),
         scheduler=LocalWorkerScheduler(workers),
         shadow_settings=shadow_settings,
         shadow_client=_customer_assistant_shadow_client(session, shadow_settings),
@@ -73,6 +82,7 @@ def build_customer_assistant_service(session: Session, settings: Settings) -> Cu
             wait_deadline_seconds=settings.customer_assistant_worker_wait_deadline_seconds,
             task_timeout_seconds=settings.customer_assistant_worker_timeout_seconds,
         ),
+        worker_profiles=worker_profiles,
     )
 
 
@@ -187,6 +197,13 @@ def list_demo_stories(
     service: CustomerAssistantService = Depends(get_customer_assistant_service),
 ) -> dict[str, Any]:
     return success(service.list_demo_stories())
+
+
+@router.get("/worker-profiles")
+def list_worker_profiles(
+    service: CustomerAssistantService = Depends(get_customer_assistant_service),
+) -> dict[str, Any]:
+    return success(service.list_worker_profiles())
 
 
 @router.post("/sessions/{session_id}/turns")

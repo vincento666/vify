@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     customer_assistant_worker_wait_deadline_seconds: float | None = None
     customer_assistant_worker_timeout_seconds: float = 5.0
     customer_assistant_stub_qa_delay_seconds: float = 0.0
+    customer_assistant_worker_profiles_json: str | None = None
 
     model_config = SettingsConfigDict(env_prefix="HIFY_", env_file=".env", extra="ignore")
 

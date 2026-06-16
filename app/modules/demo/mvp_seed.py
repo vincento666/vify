@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import Base
 from app.core.schema import register_baseline_tables
+from app.modules.customer_assistant.domain.worker_profiles import default_customer_assistant_worker_profiles_json
 from app.modules.customer_assistant.infra.repository import CustomerAssistantRepository
 from app.modules.customer_assistant.infra.schema import register_customer_assistant_tables
 from app.modules.knowledge.infra.repository import KnowledgeBaseRepository
@@ -203,6 +204,7 @@ def write_mvp_demo_env(path: Path, result: MvpDemoSeedResult) -> None:
         "HIFY_MVP_DEMO_CUSTOMER_SESSION_IDS": ",".join(str(item) for item in result.customer_session_ids),
         "HIFY_MVP_DEMO_KNOWLEDGE_BASE_IDS": ",".join(str(item) for item in result.knowledge_base_ids),
         "HIFY_MVP_DEMO_STORY_IDS": ",".join(result.story_ids),
+        "HIFY_CUSTOMER_ASSISTANT_WORKER_PROFILES_JSON": default_customer_assistant_worker_profiles_json(),
     }
     existing_lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
     next_lines: list[str] = []
