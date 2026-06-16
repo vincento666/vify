@@ -1,9 +1,0 @@
-Command:
-rtk npm --prefix frontend run build
-
-Result:
-PASS
-
-Summary:
-vue-tsc and Vite production build passed after the independent runtime-lab template build blockers were committed.
-Existing Vite CJS deprecation and large chunk warnings remain.

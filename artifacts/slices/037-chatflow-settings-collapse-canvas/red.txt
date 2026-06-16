@@ -1,9 +1,0 @@
-file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-settings-collapse-canvas.mjs:7
-  if (!condition) throw new Error(message)
-                        ^
-
-Error: Toolbar must stay in the visible canvas, got {"viewportWidth":877,"availableRight":483.25,"panel":{"left":483.25,"right":861.25,"top":80.5,"bottom":823.25,"width":378,"height":742.75},"toolbar":{"left":-92.75,"right":346.75,"top":779.5,"bottom":818,"width":439.5,"height":38.5},"start":{"left":40.000003814697266,"right":288.123722076416,"top":328.1498107910156,"bottom":415.7228698730469,"width":248.12371826171875,"height":87.57305908203125},"end":{"left":590.4593505859375,"right":838.5830078125,"top":481.6112060546875,"bottom":568.298095703125,"width":248.1236572265625,"height":86.6868896484375},"stage":{"left":0,"right":877,"top":64.75,"bottom":832,"width":877,"height":767.25},"resourcePanelDisplay":"none"}
-    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-settings-collapse-canvas.mjs:7:25)
-    at file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-settings-collapse-canvas.mjs:56:3
-
-Node.js v23.11.0

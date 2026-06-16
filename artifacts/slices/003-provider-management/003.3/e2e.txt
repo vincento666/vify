@@ -1,1 +1,0 @@
-UAT Connection Provider 1780214813500408000 {'success': True, 'latencyMs': 0, 'modelCount': 2, 'errorMessage': None}

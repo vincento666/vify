@@ -1,9 +1,0 @@
-file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-settings-collapse-canvas.mjs:7
-  if (!condition) throw new Error(message)
-                        ^
-
-Error: Collapsed dialog settings must keep canvas stage visible, got {"viewportWidth":1440,"availableRight":1440,"panel":null,"toolbar":{"left":-227.5625,"right":227.5625,"top":845.625,"bottom":885.5,"width":455.125,"height":39.875},"start":{"left":-25.625,"right":69.53515625,"top":447.0625,"bottom":474.25,"width":95.16015625,"height":27.1875},"end":{"left":139.375,"right":234.53515625,"top":493.0625,"bottom":519.95703125,"width":95.16015625,"height":26.89453125},"stage":{"left":0,"right":0,"top":67.0625,"bottom":900,"width":0,"height":832.9375},"resourcePanelDisplay":"block"}
-    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-settings-collapse-canvas.mjs:7:25)
-    at file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-settings-collapse-canvas.mjs:50:3
-
-Node.js v23.11.0

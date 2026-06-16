@@ -1,1 +1,0 @@
-PASS workflow publish/open-api/debug e2e

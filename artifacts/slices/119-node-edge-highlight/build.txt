@@ -1,8 +1,0 @@
-Command: rtk npm --prefix frontend run build
-Date: 2026-06-09
-Result: PASS
-
-Summary:
-- vue-tsc passed.
-- vite build passed.
-- Existing large chunk warning remains.

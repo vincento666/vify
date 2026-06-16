@@ -1,6 +1,0 @@
-Command: rtk npm --prefix frontend run test:unit -- src/remScaleClosure.test.ts
-Date: 2026-06-09
-Result: PASS
-
-Summary:
-- src/remScaleClosure.test.ts: 1 passed

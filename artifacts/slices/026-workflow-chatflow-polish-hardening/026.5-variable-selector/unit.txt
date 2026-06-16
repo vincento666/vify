@@ -1,9 +1,0 @@
-> vitest run src/views/workflow/nodeConfig.test.ts src/views/workflow/variableCatalog.test.ts
- RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
- ✓ src/views/workflow/nodeConfig.test.ts (19 tests) 19ms
- ✓ src/views/workflow/variableCatalog.test.ts (6 tests) 15ms
- Test Files  2 passed (2)
-      Tests  25 passed (25)
-   Start at  00:49:13
-   Duration  1.04s (transform 131ms, setup 0ms, collect 153ms, tests 34ms, environment 0ms, prepare 375ms)
-[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m

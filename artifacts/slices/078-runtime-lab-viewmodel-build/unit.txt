@@ -1,5 +1,0 @@
-Command:
-rtk npm --prefix frontend run test:unit -- src/views/chat/unifiedRoutingChatLab.test.ts
-
-Result:
-7 tests passed.

@@ -1,9 +1,0 @@
-file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-condition-branch-endpoints.mjs:7
-  if (!condition) throw new Error(message)
-                        ^
-
-Error: Condition branch headers must be directly editable without visible helper copy, got 选择器_1连接多个下游分支，若设定的条件成立则仅运行对应的分支，若均不成立则只运行“否则”分支›条件分支⋮⋮如果优先级 1VIP 客户点击编辑USER_INPUTstr.等于添加条件否则普通客户点击编辑
-    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-condition-branch-endpoints.mjs:7:25)
-    at file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-condition-branch-endpoints.mjs:110:3
-
-Node.js v23.11.0

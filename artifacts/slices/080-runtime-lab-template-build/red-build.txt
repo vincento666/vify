@@ -1,9 +1,0 @@
-Command:
-rtk npm --prefix frontend run build
-
-Failure:
-vue-tsc reported missing template symbols in UnifiedRoutingChatLab.vue:
-Setting, scopeDialogVisible, openChatflowCanvas, chatflowTraceCards, openChatflowDebug.
-
-Expected:
-The Runtime Lab template should keep its script setup bindings for the scope dialog, linked Chatflow navigation, and trace cards.

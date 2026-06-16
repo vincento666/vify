@@ -1,4 +1,0 @@
-ChatCompletionResult(content='hello', finish_reason='stop', tokens=12)
-['hel', 'lo']
-ChatCompletionResult(content='hi', finish_reason='end_turn', tokens=None)
-ChatCompletionResult(content='local', finish_reason='stop', tokens=None)

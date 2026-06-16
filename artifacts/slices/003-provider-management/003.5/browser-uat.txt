@@ -1,2 +1,0 @@
-Navigating to file:///Users/vincento/work/develop/hify/artifacts/slices/003-provider-management/003.5/fixture-report.html
-Capturing screenshot into artifacts/slices/003-provider-management/003.5/screenshots/fixture-report.png

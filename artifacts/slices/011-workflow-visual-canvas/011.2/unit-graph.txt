@@ -1,8 +1,0 @@
-> vitest run --run src/views/workflow/flowGraph.test.ts
- RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
- ✓ src/views/workflow/flowGraph.test.ts (2 tests) 3ms
- Test Files  1 passed (1)
-      Tests  2 passed (2)
-   Start at  00:34:25
-   Duration  305ms (transform 43ms, setup 0ms, collect 28ms, tests 3ms, environment 0ms, prepare 70ms)
-[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m

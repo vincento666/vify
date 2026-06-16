@@ -1,8 +1,0 @@
-Command:
-rtk node frontend/e2e/workflow-node-test.mjs
-
-Expected RED:
-locator.waitFor: Timeout 30000ms exceeded while waiting for [data-testid="node-test-drawer"] text SUCCEEDED.
-
-Context:
-The e2e creates an LLM node without a deterministic model config, opens the selected-node test drawer, fills `userMessage`, clicks run, and never observes a successful node result.

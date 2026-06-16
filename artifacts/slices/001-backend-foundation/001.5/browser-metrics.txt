@@ -1,2 +1,0 @@
-Navigating to http://127.0.0.1:8010/metrics
-Capturing screenshot into artifacts/slices/001-backend-foundation/001.5/screenshots/metrics.png

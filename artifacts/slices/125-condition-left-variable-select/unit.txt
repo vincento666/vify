@@ -1,8 +1,0 @@
-PASS
-
-Command:
-- rtk npm --prefix frontend run test:unit
-
-Result:
-- 58 test files passed.
-- 212 tests passed.

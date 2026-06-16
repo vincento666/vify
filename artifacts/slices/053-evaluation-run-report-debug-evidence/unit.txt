@@ -1,8 +1,0 @@
-> vitest run src/views/evaluation/runReportViewModel.test.ts
- RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
- ✓ src/views/evaluation/runReportViewModel.test.ts (2 tests) 1ms
- Test Files  1 passed (1)
-      Tests  2 passed (2)
-   Start at  13:44:00
-   Duration  687ms (transform 22ms, setup 0ms, collect 14ms, tests 1ms, environment 407ms, prepare 55ms)
-[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m

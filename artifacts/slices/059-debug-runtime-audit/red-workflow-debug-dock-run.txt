@@ -1,9 +1,0 @@
-file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-debug-dock-run.mjs:7
-  if (!condition) throw new Error(message)
-                        ^
-
-Error: Expected debug dock detail to show successful status
-    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-debug-dock-run.mjs:7:25)
-    at file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-debug-dock-run.mjs:52:3
-
-Node.js v23.11.0

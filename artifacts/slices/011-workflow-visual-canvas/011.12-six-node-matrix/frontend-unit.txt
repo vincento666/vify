@@ -1,8 +1,0 @@
-> vitest run src/views/workflow/nodeTestFixtures.test.ts
- RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
- ✓ src/views/workflow/nodeTestFixtures.test.ts (3 tests) 13ms
- Test Files  1 passed (1)
-      Tests  3 passed (3)
-   Start at  07:55:41
-   Duration  945ms (transform 117ms, setup 0ms, collect 133ms, tests 13ms, environment 0ms, prepare 192ms)
-[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m

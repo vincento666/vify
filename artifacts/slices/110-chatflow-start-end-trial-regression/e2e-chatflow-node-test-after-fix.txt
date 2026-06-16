@@ -1,9 +1,0 @@
-file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-node-test.mjs:7
-  if (!condition) throw new Error(message)
-                        ^
-
-Error: Expected history fixture row
-    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-node-test.mjs:7:25)
-    at file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-node-test.mjs:77:3
-
-Node.js v23.11.0

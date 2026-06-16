@@ -1,6 +1,0 @@
-{
-  "createdCode": 200,
-  "createdName": "041 browser uat policy",
-  "createdVersion": 1,
-  "total": 1
-}

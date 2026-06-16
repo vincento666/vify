@@ -1,9 +1,0 @@
-file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-trial-chat-panel.mjs:7
-  if (!condition) throw new Error(message)
-                        ^
-
-Error: Expected chatflow trial panel to layer above toolbar, got {"panel":9,"toolbar":45}
-    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-trial-chat-panel.mjs:7:25)
-    at file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-trial-chat-panel.mjs:39:3
-
-Node.js v23.11.0

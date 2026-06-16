@@ -1,2 +1,0 @@
-Navigating to http://127.0.0.1:8010/api/v1/not-found
-Capturing screenshot into artifacts/slices/001-backend-foundation/001.3/screenshots/error-envelope.png

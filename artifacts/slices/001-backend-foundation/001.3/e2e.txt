@@ -1,2 +1,0 @@
-404
-{"code": 404, "data": null, "message": "Not Found"}

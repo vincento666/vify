@@ -1,8 +1,0 @@
-> vitest run src/views/knowledge/documentListRemGovernance.test.ts
- RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
- ✓ src/views/knowledge/documentListRemGovernance.test.ts (1 test) 2ms
- Test Files  1 passed (1)
-      Tests  1 passed (1)
-   Start at  10:08:30
-   Duration  222ms (transform 17ms, setup 0ms, collect 11ms, tests 2ms, environment 0ms, prepare 51ms)
-[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m

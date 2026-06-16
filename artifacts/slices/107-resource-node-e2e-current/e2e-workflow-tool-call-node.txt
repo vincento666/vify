@@ -1,9 +1,0 @@
-file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-tool-call-node.mjs:7
-  if (!condition) throw new Error(message)
-                        ^
-
-Error: Expected resource id config field
-    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-tool-call-node.mjs:7:25)
-    at file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-tool-call-node.mjs:85:3
-
-Node.js v23.11.0

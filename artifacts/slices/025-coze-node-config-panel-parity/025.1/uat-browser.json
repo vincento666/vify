@@ -1,8 +1,0 @@
-{
-  "url": "http://127.0.0.1:5173/chatflows/1676/canvas",
-  "sources": "U\n用户变量\n开始\n3\nG\n应用变量\nGlobal\n2\nC\n会话变量\n会话\n4\nS\n系统变量\n系统\n10\nU\n用户画像\n用户\n2",
-  "systemList": "系统\n系统变量\nquery\n{{sys.query}}\nstr.\nconversation_id\n{{sys.conversation_id}}\nstr.\nconversation_name\n{{sys.conversation_name}}\nstr.\nuser_id\n{{sys.user_id}}\nstr.\nchannel\n{{sys.channel}}\nstr.\nchannel_id\n{{sys.channel_id}}\nstr.\nnow\n{{sys.now}}\nstr.\nmessage_id\n{{sys.message_id}}\nstr.\nround\n{{sys.round}}\nnum.\nfiles\n{{sys.files}}\narr.",
-  "sysChipText": "S\nquery\n系统变量 · {{sys.query}}\nstr.\n×",
-  "globalChipText": "G\nbrand\n应用变量 · {{global.brand}}\nstr.\n×",
-  "screenshot": "/Users/vincento/work/develop/hify/artifacts/slices/025-coze-node-config-panel-parity/025.1/screenshots/uat-variable-reference-chip.png"
-}

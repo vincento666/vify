@@ -1,5 +1,0 @@
-> vue-tsc && vite build
-src/views/chat/unifiedRoutingChatLab.test.ts(156,13): error TS2739: Type '{ nodeKey: string; nodeType: string; name: string; status: string; current: false; elapsedMs: number; outputs: {}; error: string; }' is missing the following properties from type 'RuntimeLabTraceNode': inputs, usage
-src/views/chat/unifiedRoutingChatLab.test.ts(157,13): error TS2739: Type '{ nodeKey: string; nodeType: string; name: string; status: string; current: true; elapsedMs: number; outputs: { collected: { route: string; }; }; error: string; }' is missing the following properties from type 'RuntimeLabTraceNode': inputs, usage
-src/views/workflow/chatflowVariables.ts(41,90): error TS2550: Property 'replaceAll' does not exist on type 'string'. Do you need to change your target library? Try changing the 'lib' compiler option to 'es2021' or later.
-src/views/workflow/WorkflowCreate.vue(7036,10): error TS6133: 'chatflowPanelVariableTypeLabel' is declared but its value is never read.

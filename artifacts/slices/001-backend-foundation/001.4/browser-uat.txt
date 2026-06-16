@@ -1,2 +1,0 @@
-Navigating to file:///Users/vincento/work/develop/hify/artifacts/slices/001-backend-foundation/001.4/schema-report.html
-Capturing screenshot into artifacts/slices/001-backend-foundation/001.4/screenshots/schema-report.png

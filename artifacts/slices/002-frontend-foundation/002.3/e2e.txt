@@ -1,3 +1,0 @@
-http://127.0.0.1:8011/api/v1/health 200 UP
-http://127.0.0.1:5174/api/v1/health 200 UP
-frontend root 200 True

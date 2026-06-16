@@ -1,4 +1,0 @@
-E2E: N/A for 001.1.
-
-Reason: this slice only establishes the Python package skeleton and importable
-FastAPI app object. Browser-visible routes start in 001.2.

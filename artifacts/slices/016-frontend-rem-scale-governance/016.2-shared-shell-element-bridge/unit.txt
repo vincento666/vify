@@ -1,8 +1,0 @@
-> vitest run src/utils/remGovernance.test.ts
- RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
- ✓ src/utils/remGovernance.test.ts (2 tests) 2ms
- Test Files  1 passed (1)
-      Tests  2 passed (2)
-   Start at  09:52:25
-   Duration  220ms (transform 30ms, setup 0ms, collect 12ms, tests 2ms, environment 0ms, prepare 53ms)
-[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m

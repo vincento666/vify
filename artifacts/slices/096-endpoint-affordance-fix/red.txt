@@ -1,9 +1,0 @@
-file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-endpoint-affordances.mjs:7
-  if (!condition) throw new Error(message)
-                        ^
-
-Error: Expected source port center to align with node right edge, got node={"left":707.5829467773438,"right":1022.1513061523438,"centerY":483.4656524658203} source={"width":8.9873046875,"height":8.987274169921875,"centerX":1026.5675048828125,"centerY":483.4591827392578,"handleScale":1,"dotScale":1}
-    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-endpoint-affordances.mjs:7:25)
-    at file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-endpoint-affordances.mjs:98:3
-
-Node.js v23.11.0

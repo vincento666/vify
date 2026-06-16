@@ -1,8 +1,0 @@
-> vitest run src/views/provider/providerRemGovernance.test.ts
- RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
- ✓ src/views/provider/providerRemGovernance.test.ts (1 test) 1ms
- Test Files  1 passed (1)
-      Tests  1 passed (1)
-   Start at  09:57:05
-   Duration  241ms (transform 21ms, setup 0ms, collect 13ms, tests 1ms, environment 0ms, prepare 43ms)
-[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m

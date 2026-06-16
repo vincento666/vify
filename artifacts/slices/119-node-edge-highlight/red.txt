@@ -1,9 +1,0 @@
-Command: rtk node frontend/e2e/workflow-node-edge-highlight.mjs
-Date: 2026-06-09
-Expected: FAIL before node-connected edge highlighting.
-
-Failure:
-Error: Hovering a node should highlight all connected edges
-
-Meaning:
-Node hover currently enlarges endpoint affordances but does not propagate visual hover state to the edges connected to that node. The requested behavior is for node hover to highlight connected edges, and node selection to apply the selected-edge visual state to connected edges.

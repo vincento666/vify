@@ -1,5 +1,0 @@
-create 200 1
-list 200 1
-update 200 e2e-updated False
-delete 200 None
-detail-after-delete 404 Provider not found

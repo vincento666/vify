@@ -1,8 +1,0 @@
-PASS workflow LLM resource context e2e
-
-RERUN 2026-06-09:
-Command:
-HIFY_E2E_SCREENSHOT=artifacts/slices/011-workflow-visual-canvas/011.10-llm-resource-context/screenshots/e2e-llm-resources-rerun.png rtk node frontend/e2e/workflow-llm-resources.mjs
-
-Result:
-PASS workflow LLM resource context e2e

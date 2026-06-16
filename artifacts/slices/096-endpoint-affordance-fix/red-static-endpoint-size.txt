@@ -1,6 +1,0 @@
-Command:
-rtk npm --prefix frontend run test:unit -- src/views/workflow/canvasControls.test.ts src/views/workflow/workflowCanvasRemGovernance.test.ts
-
-Expected RED:
-- canvasControls.test.ts failed because CANVAS_ENDPOINT_BASE_DIAMETER_REM was 0.875 instead of 1.
-- workflowCanvasRemGovernance.test.ts failed because WorkflowCreate.vue still used --node-port-dot-size: 0.875rem instead of 1rem.

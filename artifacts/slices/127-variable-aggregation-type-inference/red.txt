@@ -1,9 +1,0 @@
-file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-variable-aggregation-official.mjs:7
-  if (!condition) throw new Error(message)
-                        ^
-
-Error: Variable aggregation output summary should preserve inferred group variable type
-    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-variable-aggregation-official.mjs:7:25)
-    at file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-variable-aggregation-official.mjs:117:3
-
-Node.js v23.11.0

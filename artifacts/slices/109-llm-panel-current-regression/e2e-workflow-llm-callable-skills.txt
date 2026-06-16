@@ -1,9 +1,0 @@
-file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-llm-callable-skills.mjs:7
-  if (!condition) throw new Error(message)
-                        ^
-
-Error: Expected tool choice config
-    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-llm-callable-skills.mjs:7:25)
-    at file:///Users/vincento/work/develop/hify/frontend/e2e/workflow-llm-callable-skills.mjs:82:3
-
-Node.js v23.11.0

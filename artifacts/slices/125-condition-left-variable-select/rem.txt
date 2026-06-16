@@ -1,7 +1,0 @@
-PASS
-
-Command:
-- rtk npm --prefix frontend run test:unit -- src/remScaleClosure.test.ts
-
-Result:
-- 1 passed

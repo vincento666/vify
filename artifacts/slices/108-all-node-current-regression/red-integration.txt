@@ -1,9 +1,0 @@
-Backend integration matrix initially failed before updating the six-node matrix knowledge facade test double.
-
-Failure:
-
-TypeError: _KnowledgeFacadeStub.search_chunks() got an unexpected keyword argument 'retrieval_mode'
-
-Root cause:
-
-KnowledgeNodeExecutor now passes retrieval mode, score threshold, and rerank arguments to the knowledge facade. The integration test stub still used the older three-argument signature.

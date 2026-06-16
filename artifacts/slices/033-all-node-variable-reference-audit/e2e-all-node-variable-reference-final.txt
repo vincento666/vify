@@ -1,7 +1,0 @@
-PASS all node variable reference picker audit
-
-Final PASS evidence is also captured in:
-- e2e-all-node-variable-reference-after-assignment-fix.txt
-
-The final run covered generic input-variable pickers plus the special condition,
-variable aggregation, variable assignment, and END output picker paths.

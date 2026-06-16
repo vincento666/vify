@@ -10,6 +10,7 @@ __pycache__/
 .playwright-cli/
 *.pyc
 *.db
+artifacts/
 artifacts/**/*.png
 artifacts/**/*.jpg
 artifacts/**/*.jpeg
@@ -17,6 +18,7 @@ artifacts/**/*.webm
 artifacts/**/*.pid
 artifacts/integration-export/
 artifacts/research/
+frontend/artifacts/
 output/
 node_modules/
 dist/
