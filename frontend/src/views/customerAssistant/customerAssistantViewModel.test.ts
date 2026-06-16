@@ -13,6 +13,7 @@ import {
   buildCustomerAssistantState,
   formatCustomerAssistantEvents,
   formatCustomerAssistantMetrics,
+  formatTaskRecognitionEvidence,
   summarizeCustomerAssistantTasks,
 } from './customerAssistantViewModel'
 
@@ -172,6 +173,92 @@ describe('customer assistant view model', () => {
       title: 'run_started',
       visibilityLabel: 'normal',
       payloadPreview: '{"message":"我要退票"}',
+    })
+  })
+
+  it('formats task recognition evidence without exposing raw customer text', () => {
+    const rows = formatTaskRecognitionEvidence([
+      {
+        id: 502,
+        sessionId: 12,
+        runId: 31,
+        sequence: 2,
+        type: 'task_recognized',
+        visibility: 'normal',
+        source: 'task_recognition',
+        actor: 'customer',
+        payload: {
+          actor: 'customer',
+          message: '客户手机号 13800138000，需要退票',
+          commands: [
+            {
+              taskKey: 'refund_ticket',
+              taskType: 'REFUND',
+              workerType: 'chatflow_sop',
+              workerRef: 'flight_refund',
+              profileRefs: {
+                profileId: 'refund_ticket_chatflow',
+                modelPolicyRef: 'customer_assistant_chatflow_default',
+                promptRef: 'refund_ticket_sop_prompt',
+                toolRefs: ['refund_policy_lookup'],
+                riskPolicyRef: 'manual_confirm',
+              },
+            },
+          ],
+        },
+      },
+    ])
+
+    expect(rows).toEqual([
+      {
+        key: 'recognition-502-0',
+        sequenceLabel: '#2',
+        taskKey: 'refund_ticket',
+        taskType: 'REFUND',
+        workerRoute: 'chatflow_sop · flight_refund',
+        profileId: 'refund_ticket_chatflow',
+        modelPolicyRef: 'customer_assistant_chatflow_default',
+        promptRef: 'refund_ticket_sop_prompt',
+        toolRefs: ['refund_policy_lookup'],
+        riskPolicyRef: 'manual_confirm',
+      },
+    ])
+    expect(JSON.stringify(rows)).not.toContain('13800138000')
+  })
+
+  it('includes recognition evidence in the built operator state', () => {
+    const state = buildCustomerAssistantState({
+      sessionId: 12,
+      events: [
+        {
+          id: 502,
+          sessionId: 12,
+          sequence: 2,
+          type: 'task_recognized',
+          payload: {
+            commands: [
+              {
+                taskKey: 'refund_ticket',
+                taskType: 'REFUND',
+                workerType: 'chatflow_sop',
+                workerRef: 'flight_refund',
+                profileRefs: {
+                  profileId: 'refund_ticket_chatflow',
+                  modelPolicyRef: 'customer_assistant_chatflow_default',
+                  promptRef: 'refund_ticket_sop_prompt',
+                  toolRefs: ['refund_policy_lookup'],
+                  riskPolicyRef: 'manual_confirm',
+                },
+              },
+            ],
+          },
+        },
+      ],
+    })
+
+    expect(state.recognitionEvidence[0]).toMatchObject({
+      taskKey: 'refund_ticket',
+      profileId: 'refund_ticket_chatflow',
     })
   })
 

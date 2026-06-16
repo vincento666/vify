@@ -57,6 +57,19 @@ export interface CustomerAssistantEventRow {
   defaultCollapsed: boolean
 }
 
+export interface CustomerAssistantRecognitionEvidenceRow {
+  key: string
+  sequenceLabel: string
+  taskKey: string
+  taskType: string
+  workerRoute: string
+  profileId: string
+  modelPolicyRef: string
+  promptRef: string
+  toolRefs: string[]
+  riskPolicyRef: string
+}
+
 export interface CustomerAssistantProgressStage {
   key: 'recognizing' | 'workers' | 'recommendation' | 'ready'
   label: string
@@ -117,6 +130,7 @@ export interface CustomerAssistantState {
   recommendation: CustomerAssistantRecommendationState
   proposedActions: CustomerAssistantProposedAction[]
   eventTimeline: CustomerAssistantEventRow[]
+  recognitionEvidence: CustomerAssistantRecognitionEvidenceRow[]
   progressStages: CustomerAssistantProgressStage[]
   replayed: boolean
 }
@@ -167,6 +181,7 @@ export function buildCustomerAssistantState(input: BuildCustomerAssistantStateIn
     },
     proposedActions: [...(input.proposedActions ?? turn?.proposedActions ?? [])],
     eventTimeline: formatCustomerAssistantEvents(events),
+    recognitionEvidence: formatTaskRecognitionEvidence(events),
     progressStages: deriveCustomerAssistantProgressStages(events),
     replayed: Boolean(turn?.replayed),
   }
@@ -255,6 +270,34 @@ export function formatCustomerAssistantEvents(events: CustomerAssistantEvent[]):
     debug: event.visibility === 'debug',
     defaultCollapsed: event.visibility === 'debug',
   }))
+}
+
+export function formatTaskRecognitionEvidence(
+  events: CustomerAssistantEvent[],
+): CustomerAssistantRecognitionEvidenceRow[] {
+  return events.flatMap((event) => {
+    if (event.type !== 'task_recognized') return []
+    const commands = Array.isArray(event.payload.commands) ? event.payload.commands : []
+    return commands.flatMap((value, index) => {
+      const command = asRecord(value)
+      if (!command) return []
+      const profileRefs = asRecord(command.profileRefs)
+      return [
+        {
+          key: `recognition-${event.id}-${index}`,
+          sequenceLabel: `#${event.sequence}`,
+          taskKey: stringField(command.taskKey, 'unknown_task'),
+          taskType: stringField(command.taskType, 'unknown'),
+          workerRoute: workerRoute(command),
+          profileId: stringField(profileRefs?.profileId, '未配置'),
+          modelPolicyRef: stringField(profileRefs?.modelPolicyRef, '未配置'),
+          promptRef: stringField(profileRefs?.promptRef, '未配置'),
+          toolRefs: stringListField(profileRefs?.toolRefs),
+          riskPolicyRef: stringField(profileRefs?.riskPolicyRef, '未配置'),
+        },
+      ]
+    })
+  })
 }
 
 export function formatCustomerAssistantMetrics(
@@ -422,6 +465,32 @@ function taskMissingFields(task: CustomerAssistantTask): string[] {
   if (typeof pendingPrompt === 'string' && pendingPrompt) return [pendingPrompt]
 
   return []
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null
+  return value as Record<string, unknown>
+}
+
+function stringField(value: unknown, fallback: string): string {
+  if (typeof value === 'string' && value.trim()) return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return fallback
+}
+
+function stringListField(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .filter((item): item is string | number | boolean =>
+      typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean',
+    )
+    .map(String)
+}
+
+function workerRoute(command: Record<string, unknown>): string {
+  const workerType = stringField(command.workerType, 'unknown_worker')
+  const workerRef = stringField(command.workerRef, '')
+  return workerRef ? `${workerType} · ${workerRef}` : workerType
 }
 
 function hasAny(types: Set<string>, candidates: string[]): boolean {

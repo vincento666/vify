@@ -193,6 +193,42 @@
           </div>
         </section>
 
+        <section class="workspace-panel compact-panel" data-testid="operator-recognition-evidence-panel">
+          <div class="panel-heading">
+            <span class="panel-heading-title">
+              <ThunderboltOutlined />
+              识别证据
+            </span>
+            <span class="panel-count">{{ workspace.recognitionEvidence.length }}</span>
+          </div>
+          <div class="recognition-evidence-list">
+            <div
+              v-if="workspace.recognitionEvidence.length === 0"
+              class="empty-compact"
+              data-testid="operator-recognition-empty-state"
+            >
+              暂无任务识别证据
+            </div>
+            <div
+              v-for="recognition in workspace.recognitionEvidence"
+              :key="recognition.key"
+              class="recognition-evidence-row"
+            >
+              <div class="recognition-main">
+                <strong>{{ recognition.sequenceLabel }} {{ recognition.taskKey }}</strong>
+                <span>{{ recognition.taskType }} · {{ recognition.workerRoute }}</span>
+              </div>
+              <div class="recognition-profile">
+                <a-tag color="blue">{{ recognition.profileId }}</a-tag>
+                <span>模型 {{ recognition.modelPolicyRef }}</span>
+                <span>提示词 {{ recognition.promptRef }}</span>
+                <span>风险 {{ recognition.riskPolicyRef }}</span>
+                <span v-if="recognition.toolRefs.length">工具 {{ recognition.toolRefs.join('、') }}</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section class="workspace-panel compact-panel" data-testid="operator-task-ledger">
           <div class="panel-heading">
             <span class="panel-heading-title">
@@ -1053,7 +1089,8 @@ async function executeAction(actionId: number) {
 
 .task-list,
 .action-list,
-.progress-list {
+.progress-list,
+.recognition-evidence-list {
   display: grid;
   gap: 0.625rem;
 }
@@ -1084,7 +1121,8 @@ async function executeAction(actionId: number) {
 }
 
 .task-row,
-.action-row {
+.action-row,
+.recognition-evidence-row {
   display: grid;
   gap: 0.5rem;
   padding: 0.65rem;
@@ -1094,14 +1132,16 @@ async function executeAction(actionId: number) {
 }
 
 .task-row > div:first-child,
-.action-row > div:first-child {
+.action-row > div:first-child,
+.recognition-main {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
 }
 
 .task-row span,
-.action-row span {
+.action-row span,
+.recognition-evidence-row span {
   color: #667085;
   font-size: 0.75rem;
 }
@@ -1113,6 +1153,16 @@ async function executeAction(actionId: number) {
 }
 
 .task-profile {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  color: #4d5b70;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.recognition-profile {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;

@@ -34,6 +34,7 @@ describe('CustomerAssistantPanel UI contract', () => {
       'operator-conversation-lane',
       'operator-progress-checklist',
       'operator-metrics-panel',
+      'operator-recognition-evidence-panel',
       'operator-task-ledger',
       'operator-recommendation-panel',
       'operator-draft-panel',
@@ -124,6 +125,17 @@ describe('CustomerAssistantPanel UI contract', () => {
     expect(taskLedger).toContain('task.profile.modelPolicyRef')
     expect(taskLedger).toContain('task.profile.riskPolicyRef')
     expect(taskLedger).toContain('task.profile.toolRefs')
+  })
+
+  it('renders task recognition evidence as a dedicated operator panel', () => {
+    const evidencePanel = section(content, 'operator-recognition-evidence-panel')
+
+    expect(evidencePanel).toContain('workspace.recognitionEvidence')
+    expect(evidencePanel).toContain('recognition.profileId')
+    expect(evidencePanel).toContain('recognition.modelPolicyRef')
+    expect(evidencePanel).toContain('recognition.riskPolicyRef')
+    expect(evidencePanel).toContain('operator-recognition-empty-state')
+    expect(section(content, 'operator-event-timeline')).not.toContain('recognition.profileId')
   })
 
   it('deep-links and auto-opens seeded demo stories through the route query', () => {

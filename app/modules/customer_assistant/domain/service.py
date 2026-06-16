@@ -987,7 +987,7 @@ class CustomerAssistantService:
             self._repository.append_event(
                 session_id,
                 "task_recognized",
-                {"commands": [_command_payload(command) for command in commands], "actor": actor},
+                {"commands": [self._command_payload_with_profile_refs(command) for command in commands], "actor": actor},
                 run_id=run_id,
                 actor=actor,
             )

@@ -88,6 +88,26 @@ class CustomerAssistantWorkerProfileApiTest(unittest.TestCase):
         self.assertEqual(task_started["payload"]["profileRefs"]["riskPolicyRef"], "manual_confirm")
         self.assertEqual(task_started["observability"]["profileRefs"]["profileId"], "configured_refund_stub")
 
+    def test_task_recognized_records_profile_refs_for_operator_evidence(self) -> None:
+        with TestClient(app) as client:
+            created = client.post("/api/v1/customer-assistant/sessions", json={"context": {}})
+            session_id = int(created.json()["data"]["id"])
+            turn = client.post(
+                f"/api/v1/customer-assistant/sessions/{session_id}/turns",
+                json={"message": "我要退票", "idempotencyKey": "recognition-profile-refs"},
+            )
+            self.assertEqual(turn.status_code, 200, turn.text)
+            events = client.get(f"/api/v1/customer-assistant/sessions/{session_id}/events").json()["data"]["list"]
+
+        task_recognized = next(event for event in events if event["type"] == "task_recognized")
+        command = task_recognized["payload"]["commands"][0]
+        self.assertEqual(command["taskKey"], "refund_ticket")
+        self.assertEqual(command["profileRefs"]["profileId"], "configured_refund_stub")
+        self.assertEqual(command["profileRefs"]["modelPolicyRef"], "demo-model")
+        self.assertEqual(command["profileRefs"]["promptRef"], "demo-refund-prompt")
+        self.assertEqual(command["profileRefs"]["toolRefs"], ["lookup_order"])
+        self.assertEqual(command["profileRefs"]["riskPolicyRef"], "manual_confirm")
+
     def _session_override(self) -> Generator[Session]:
         with self._factory() as session:
             yield session
