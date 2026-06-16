@@ -111,6 +111,64 @@ class CustomerAssistantLiveReactAcceptanceGateTest(unittest.TestCase):
             self.assertIn("xiaomi/mimo-v2-flash", content)
             self.assertNotIn("unit-api-key", content)
 
+    def test_enabled_gate_requires_proposed_action_safety_boundary_category(self) -> None:
+        module = _load_gate_module(self)
+
+        def fake_runner(config):
+            self.assertEqual(config.api_key, "unit-api-key")
+            return module.LiveAcceptanceResult(
+                status="completed",
+                live_model_calls=5,
+                categories=[
+                    module.LiveCategoryResult(
+                        name="task_recognition_accuracy",
+                        status="passed",
+                        success_model="xiaomi/mimo-v2-flash",
+                        attempts=[
+                            {
+                                "phase": "task_recognition",
+                                "model": "xiaomi/mimo-v2-flash",
+                                "status": "passed",
+                            }
+                        ],
+                    ),
+                    module.LiveCategoryResult(
+                        name="two_stage_recommendation_quality",
+                        status="passed",
+                        success_model="qwen/qwen3.5-9b",
+                        attempts=[
+                            {
+                                "phase": "two_stage_final",
+                                "model": "qwen/qwen3.5-9b",
+                                "status": "passed",
+                            }
+                        ],
+                    ),
+                    module.LiveCategoryResult(
+                        name="react_worker_tool_call_policy_and_event_echo",
+                        status="passed",
+                        success_model="deepseek/deepseek-v4-flash",
+                        attempts=[
+                            {
+                                "phase": "react_submit_refund",
+                                "model": "deepseek/deepseek-v4-flash",
+                                "status": "passed",
+                            }
+                        ],
+                    ),
+                ],
+            )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            result = module.run_customer_assistant_live_react_acceptance(
+                env={module.LIVE_GATE_FLAG: "1", "OPENROUTER_API_KEY": "unit-api-key"},
+                output_dir=Path(tmp),
+                live_runner=fake_runner,
+            )
+
+        self.assertEqual(result.status, "failed")
+        self.assertIn("proposed_action_safety_boundaries", result.reason)
+
     def test_enabled_gate_records_all_required_category_attempts_without_persisting_secret_values(self) -> None:
         module = _load_gate_module(self)
 
@@ -141,6 +199,24 @@ class CustomerAssistantLiveReactAcceptanceGateTest(unittest.TestCase):
                         attempts=[{"model": "deepseek/deepseek-v4-flash", "status": "passed", "error": ""}],
                         summary="tool call and event echo passed",
                     ),
+                    module.LiveCategoryResult(
+                        name="proposed_action_safety_boundaries",
+                        status="passed",
+                        success_model="deepseek/deepseek-v4-flash",
+                        attempts=[
+                            {
+                                "model": "deepseek/deepseek-v4-flash",
+                                "status": "passed",
+                                "error": "",
+                            }
+                        ],
+                        summary="pending proposed action",
+                        evidence={
+                            "actionStatus": "PENDING",
+                            "actionType": "submit_refund",
+                            "writeToolExecutions": 0,
+                        },
+                    ),
                 ],
             )
 
@@ -160,6 +236,7 @@ class CustomerAssistantLiveReactAcceptanceGateTest(unittest.TestCase):
             self.assertIn("task_recognition_accuracy", content)
             self.assertIn("two_stage_recommendation_quality", content)
             self.assertIn("react_worker_tool_call_policy_and_event_echo", content)
+            self.assertIn("proposed_action_safety_boundaries", content)
             self.assertNotIn("unit-api-key", content)
 
 

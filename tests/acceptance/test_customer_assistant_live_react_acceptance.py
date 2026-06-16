@@ -37,6 +37,7 @@ EXPECTED_CATEGORIES = {
     "task_recognition_accuracy",
     "two_stage_recommendation_quality",
     "react_worker_tool_call_policy_and_event_echo",
+    "proposed_action_safety_boundaries",
 }
 
 
@@ -66,6 +67,7 @@ class CustomerAssistantLiveReactAcceptanceTest(unittest.TestCase):
         self.assertIn("task_recognition_accuracy", content)
         self.assertIn("two_stage_recommendation_quality", content)
         self.assertIn("react_worker_tool_call_policy_and_event_echo", content)
+        self.assertIn("proposed_action_safety_boundaries", content)
         self.assertNotIn(LOCAL_COMPATIBLE_API_KEY, content)
 
     def test_gate_resolves_local_provider_model_config_without_recording_secret(self) -> None:
