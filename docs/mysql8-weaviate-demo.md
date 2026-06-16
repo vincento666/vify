@@ -24,16 +24,26 @@ Initialize the database:
 uv run alembic upgrade head
 ```
 
-Seed optional RuntimeLab airline Chatflow demo data after migrating an empty
-MySQL database:
+Seed the productized MVP demo topology after migrating an empty MySQL database:
+
+```bash
+PYTHONPATH=. uv run python scripts/seed_mvp_demo.py
+```
+
+This creates or updates the RuntimeLab airline Chatflow SOP bindings, customer
+assistant demo sessions, deterministic knowledge material, and three named MVP
+demo stories. The command writes only non-secret local bindings such as
+`HIFY_MVP_DEMO_STORY_IDS`; keep API keys in shell env or provider config.
+
+To seed only the older RuntimeLab airline Chatflow data, run:
 
 ```bash
 PYTHONPATH=. uv run python scripts/seed_runtime_lab_airline_sops.py
 ```
 
-The seed command writes fresh `HIFY_RUNTIME_LAB_SOP_CHATFLOW_IDS` values for the
-current database. Do not reuse IDs copied from a SQLite/Postgres `.env`; clear
-the variable or rerun the seed after rebuilding the MySQL demo database.
+Both seed commands write fresh `HIFY_RUNTIME_LAB_SOP_CHATFLOW_IDS` values for
+the current database. Do not reuse IDs copied from a SQLite/Postgres `.env`;
+clear the variable or rerun the seed after rebuilding the MySQL demo database.
 
 Run the backend:
 
