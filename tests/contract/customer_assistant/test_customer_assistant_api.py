@@ -232,6 +232,46 @@ class CustomerAssistantApiContractTest(unittest.TestCase):
             self.assertEqual(response.status_code, 403, response.text)
             self.assertEqual(response.json()["code"], 403)
 
+    def test_cross_tenant_event_streams_are_denied_before_sse_response_starts(self) -> None:
+        with TestClient(app) as client:
+            created = client.post(
+                "/api/v1/customer-assistant/sessions",
+                json={"context": {"customerId": "C-078-A"}},
+                headers=HOST_OPERATE_HEADERS,
+            )
+            session_id = created.json()["data"]["id"]
+            baggage_turn = client.post(
+                f"/api/v1/customer-assistant/sessions/{session_id}/turns",
+                json={"message": "行李额度是多少", "idempotencyKey": "tenant-a-stream-ref"},
+                headers=HOST_OPERATE_HEADERS,
+            ).json()["data"]
+            worker_ref = baggage_turn["taskSummaries"][0]["workerAsyncRefs"]["workerEventStreamRef"]
+
+            with client.stream(
+                "GET",
+                f"/api/v1/customer-assistant/sessions/{session_id}/events/stream"
+                "?afterSequence=0&_testLimit=1",
+                headers=HOST_B_READ_HEADERS,
+            ) as session_stream:
+                session_status = session_stream.status_code
+                session_stream.read()
+                session_payload = session_stream.json()
+            with client.stream(
+                "GET",
+                f"{worker_ref}&_testLimit=1",
+                headers=HOST_B_READ_HEADERS,
+            ) as worker_stream:
+                worker_status = worker_stream.status_code
+                worker_stream.read()
+                worker_payload = worker_stream.json()
+
+        self.assertEqual(session_status, 403)
+        self.assertEqual(session_payload["code"], 403)
+        self.assertIn("another tenant", session_payload["message"])
+        self.assertEqual(worker_status, 403)
+        self.assertEqual(worker_payload["code"], 403)
+        self.assertIn("another tenant", worker_payload["message"])
+
     def test_cross_tenant_cannot_read_run_action_or_worker_refs(self) -> None:
         with TestClient(app) as client:
             session_id = client.post(

@@ -27,6 +27,16 @@ const hostOperateHeaders = {
   'X-Hify-Permissions': 'customer_assistant:read,customer_assistant:operate',
 }
 
+const otherTenantReadHeaders = {
+  ...hostBaseHeaders,
+  'X-Hify-Actor-Id': 'operator-078-uat-b',
+  'X-Hify-Actor-Name': 'Access Boundary Operator B',
+  'X-Hify-Tenant-Id': 'tenant-078-uat-b',
+  'X-Hify-Org-Id': 'org-078-uat-b',
+  'X-Request-Id': 'req-078-uat-b',
+  'X-Hify-Permissions': 'customer_assistant:read',
+}
+
 async function api(page, path, options = {}) {
   return page.evaluate(
     async ({ path, options }) => {
@@ -34,6 +44,21 @@ async function api(page, path, options = {}) {
       return {
         ok: response.ok,
         status: response.status,
+        body: await response.json(),
+      }
+    },
+    { path, options },
+  )
+}
+
+async function apiRaw(page, path, options = {}) {
+  return page.evaluate(
+    async ({ path, options }) => {
+      const response = await fetch(path, options)
+      return {
+        ok: response.ok,
+        status: response.status,
+        contentType: response.headers.get('content-type') || '',
         body: await response.json(),
       }
     },
@@ -105,11 +130,44 @@ try {
   assert(metrics.ok, `Expected metrics read, got ${metrics.status}`)
   assert(metrics.body.data.sessionId === sessionId, 'Expected metrics for created session')
 
+  const baggageTurn = await api(page, `/customer-assistant/sessions/${sessionId}/turns`, {
+    method: 'POST',
+    headers: hostOperateHeaders,
+    body: JSON.stringify({ message: '行李额度是多少', idempotencyKey: 'access-boundary-worker-stream-browser' }),
+  })
+  assert(baggageTurn.ok, `Expected baggage turn, got ${baggageTurn.status}`)
+  const workerStreamRef = baggageTurn.body.data.taskSummaries[0].workerAsyncRefs.workerEventStreamRef
+  assert(workerStreamRef.includes('/events/stream'), `Expected worker stream ref, got ${workerStreamRef}`)
+
+  const deniedSessionStream = await api(page, `/customer-assistant/sessions/${sessionId}/events/stream?_testLimit=1`, {
+    headers: otherTenantReadHeaders,
+  })
+  assert(deniedSessionStream.status === 403, `Expected session stream 403, got ${deniedSessionStream.status}`)
+  assert(
+    deniedSessionStream.body.message.includes('another tenant'),
+    `Expected tenant denial for session stream, got ${deniedSessionStream.body.message}`,
+  )
+
+  const deniedWorkerStream = await apiRaw(page, `${workerStreamRef}&_testLimit=1`, {
+    headers: otherTenantReadHeaders,
+  })
+  assert(deniedWorkerStream.status === 403, `Expected worker stream 403, got ${deniedWorkerStream.status}`)
+  assert(
+    deniedWorkerStream.body.message.includes('another tenant'),
+    `Expected tenant denial for worker stream, got ${deniedWorkerStream.body.message}`,
+  )
+  assert(
+    !deniedWorkerStream.contentType.includes('text/event-stream'),
+    `Denied worker stream must return JSON envelope, got ${deniedWorkerStream.contentType}`,
+  )
+
   await page.setContent(`
     <main style="font-family: system-ui; padding: 24px;">
       <h1>Customer Assistant Access Boundary UAT</h1>
       <p>Denied read: ${deniedRead.status}</p>
       <p>Denied operate: ${deniedOperate.status}</p>
+      <p>Denied session stream: ${deniedSessionStream.status}</p>
+      <p>Denied worker stream: ${deniedWorkerStream.status}</p>
       <p>Allowed session: ${sessionId}</p>
       <p>Metrics events: ${metrics.body.data.eventCounts.total}</p>
     </main>

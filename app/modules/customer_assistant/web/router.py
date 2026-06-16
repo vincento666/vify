@@ -370,6 +370,7 @@ def stream_worker_events(
     test_heartbeat_limit: int | None = Query(default=None, alias="_testHeartbeatLimit", ge=1, le=1000),
     service: CustomerAssistantService = Depends(get_customer_assistant_service),
 ) -> StreamingResponse:
+    service.ensure_worker_run_access(worker_run_id)
     return StreamingResponse(
         _iter_customer_assistant_worker_sse(
             service,
@@ -472,6 +473,7 @@ def stream_events(
     service: CustomerAssistantService = Depends(get_customer_assistant_service),
 ) -> StreamingResponse:
     start_after = _stream_start_sequence(request, after_sequence)
+    service.ensure_session_access(session_id)
     return StreamingResponse(
         _iter_customer_assistant_sse(
             service,

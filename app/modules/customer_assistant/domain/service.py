@@ -402,6 +402,9 @@ class CustomerAssistantService:
             for event in self._repository.list_worker_events_after(int(row["id"]), after_sequence)
         ]
 
+    def ensure_worker_run_access(self, worker_run_id: str) -> None:
+        self._get_worker_run_row(worker_run_id)
+
     def _get_worker_run_row(self, worker_run_id: str) -> dict[str, Any]:
         try:
             numeric_worker_run_id = parse_worker_run_public_id(worker_run_id)
@@ -822,6 +825,9 @@ class CustomerAssistantService:
         self._ensure_session(session_id)
         rows = self._repository.list_events_after(session_id, after_sequence)
         return [_format_event(row) for row in rows]
+
+    def ensure_session_access(self, session_id: int) -> None:
+        self._ensure_session(session_id)
 
     def refresh_worker_results(self, session_id: int) -> dict[str, Any]:
         self._ensure_session(session_id)

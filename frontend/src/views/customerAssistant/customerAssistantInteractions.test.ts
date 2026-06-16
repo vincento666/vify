@@ -84,4 +84,14 @@ describe('customer assistant interaction polish', () => {
     expect(content).toContain('data-testid="customer-assistant-failed-state"')
     expect(content).toContain('data-testid="customer-assistant-replayed-state"')
   })
+
+  it('persists action and task-control failures in the workbench failed-state alert', () => {
+    const content = readProjectFile('src/views/customerAssistant/CustomerAssistantPanel.vue')
+
+    expect(content).toContain('setRuntimeError(errorMessage)')
+    expect(content).toContain("catchCustomerAssistantError(error, '确认动作失败')")
+    expect(content).toContain("catchCustomerAssistantError(error, '拒绝动作失败')")
+    expect(content).toContain("catchCustomerAssistantError(error, '执行动作失败')")
+    expect(content).toContain("catchCustomerAssistantError(error, '生成任务控制失败')")
+  })
 })

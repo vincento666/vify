@@ -641,7 +641,7 @@ async function saveEditedAction(actionId: number) {
     cancelEditAction()
     message.success('已保存动作修改')
   } catch (error) {
-    message.error(error instanceof Error ? error.message : '保存动作修改失败')
+    catchCustomerAssistantError(error, '保存动作修改失败')
   } finally {
     actionLoadingId.value = null
   }
@@ -728,7 +728,7 @@ async function proposeTaskControl(taskId: number, controlType: CustomerAssistant
     )
     message.success('已生成待确认任务控制')
   } catch (error) {
-    message.error(error instanceof Error ? error.message : '生成任务控制失败')
+    catchCustomerAssistantError(error, '生成任务控制失败')
   } finally {
     taskControlLoadingKey.value = null
   }
@@ -781,15 +781,26 @@ async function submitTurn(actor: 'customer' | 'operator', text: string) {
     )
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : '客服助手调用失败'
-    runtimeState.value = {
-      ...runtimeState.value,
-      loading: false,
-      error: errorMessage,
-    }
+    setRuntimeError(errorMessage)
     message.error(errorMessage)
   } finally {
     sendingSource.value = null
   }
+}
+
+function setRuntimeError(errorMessage: string) {
+  runtimeState.value = {
+    ...runtimeState.value,
+    loading: false,
+    error: errorMessage,
+  }
+}
+
+function catchCustomerAssistantError(error: unknown, fallbackMessage: string) {
+  const errorMessage = error instanceof Error ? error.message : fallbackMessage
+  setRuntimeError(errorMessage)
+  message.error(errorMessage)
+  return errorMessage
 }
 
 async function confirmAction(actionId: number) {
@@ -797,7 +808,7 @@ async function confirmAction(actionId: number) {
   try {
     runtimeState.value = await confirmCustomerAssistantRuntimeAction(runtimeState.value, actionId)
   } catch (error) {
-    message.error(error instanceof Error ? error.message : '确认动作失败')
+    catchCustomerAssistantError(error, '确认动作失败')
   } finally {
     actionLoadingId.value = null
   }
@@ -808,7 +819,7 @@ async function rejectAction(actionId: number) {
   try {
     runtimeState.value = await rejectCustomerAssistantRuntimeAction(runtimeState.value, actionId)
   } catch (error) {
-    message.error(error instanceof Error ? error.message : '拒绝动作失败')
+    catchCustomerAssistantError(error, '拒绝动作失败')
   } finally {
     actionLoadingId.value = null
   }
@@ -819,7 +830,7 @@ async function executeAction(actionId: number) {
   try {
     runtimeState.value = await executeCustomerAssistantRuntimeAction(runtimeState.value, actionId)
   } catch (error) {
-    message.error(error instanceof Error ? error.message : '执行动作失败')
+    catchCustomerAssistantError(error, '执行动作失败')
   } finally {
     actionLoadingId.value = null
   }
