@@ -32,6 +32,35 @@ class RuntimeV2CoreTest(unittest.TestCase):
         self.assertIn({"nodeKey": "llm_1", "nodeType": "LLM"}, result["unsupportedNodes"])
         self.assertIn("branching_edges", result["unsupportedPatterns"])
 
+    def test_compatibility_checker_accepts_knowledge_but_still_rejects_llm(self) -> None:
+        supported = RuntimeV2CompatibilityChecker.check(
+            nodes=[
+                {"nodeKey": "start", "type": "START"},
+                {"nodeKey": "knowledge_1", "type": "KNOWLEDGE"},
+                {"nodeKey": "end", "type": "END"},
+            ],
+            edges=[
+                {"sourceNodeKey": "start", "targetNodeKey": "knowledge_1"},
+                {"sourceNodeKey": "knowledge_1", "targetNodeKey": "end"},
+            ],
+        )
+        rejected = RuntimeV2CompatibilityChecker.check(
+            nodes=[
+                {"nodeKey": "start", "type": "START"},
+                {"nodeKey": "llm_1", "type": "LLM"},
+                {"nodeKey": "end", "type": "END"},
+            ],
+            edges=[
+                {"sourceNodeKey": "start", "targetNodeKey": "llm_1"},
+                {"sourceNodeKey": "llm_1", "targetNodeKey": "end"},
+            ],
+        )
+
+        self.assertTrue(supported["supported"], supported)
+        self.assertIn("KNOWLEDGE", supported["supportedNodeTypes"])
+        self.assertFalse(rejected["supported"])
+        self.assertIn({"nodeKey": "llm_1", "nodeType": "LLM"}, rejected["unsupportedNodes"])
+
 
 if __name__ == "__main__":
     unittest.main()

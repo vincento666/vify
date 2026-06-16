@@ -105,6 +105,7 @@ def get_chatflow_runtime_v2_service(session: Session = Depends(get_session)) -> 
     return ChatflowRuntimeV2Service(
         WorkflowRepository(session),
         ChatflowStateRepository(session),
+        knowledge_facade=KnowledgeFacade(session),
     )
 
 
@@ -113,6 +114,7 @@ def get_workflow_runtime_v2_service(session: Session = Depends(get_session)) -> 
         WorkflowRepository(session),
         ChatflowStateRepository(session),
         WorkflowPublishRepository(session),
+        knowledge_facade=KnowledgeFacade(session),
     )
 
 
@@ -534,11 +536,13 @@ def _start_runtime_v2_completion_thread(session: Session, run_id: int, *, owner_
                     WorkflowRepository(background_session),
                     ChatflowStateRepository(background_session),
                     WorkflowPublishRepository(background_session),
+                    knowledge_facade=KnowledgeFacade(background_session),
                 ).complete_run(run_id)
             else:
                 ChatflowRuntimeV2Service(
                     WorkflowRepository(background_session),
                     ChatflowStateRepository(background_session),
+                    knowledge_facade=KnowledgeFacade(background_session),
                 ).complete_run(run_id)
 
     threading.Thread(target=complete, daemon=True).start()

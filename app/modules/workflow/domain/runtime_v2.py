@@ -6,6 +6,7 @@ from datetime import date, datetime
 from typing import Any
 
 from app.core.errors import BizError, ErrorCode
+from app.modules.knowledge.api.facade import KnowledgeFacade
 from app.modules.workflow.domain.context import ExecutionContext
 from app.modules.workflow.domain.engine import (
     ConditionBranchPicker,
@@ -15,6 +16,7 @@ from app.modules.workflow.domain.engine import (
     InformationCollectionNodeExecutor,
     IntentRecognitionNodeExecutor,
     JsonParseNodeExecutor,
+    KnowledgeNodeExecutor,
     TextProcessNodeExecutor,
     VariableAggregationNodeExecutor,
     VariableAssignNodeExecutor,
@@ -39,6 +41,7 @@ _SUPPORTED_CORE_NODE_TYPES = {
     "CONDITION",
     "INTENT_RECOGNITION",
     "INFORMATION_COLLECTION",
+    "KNOWLEDGE",
     "END",
 }
 
@@ -131,6 +134,7 @@ class ChatflowRuntimeV2Service:
         flow_type: str = "CHATFLOW",
         use_chatflow_session: bool = True,
         publish_repository: WorkflowPublishRepository | None = None,
+        knowledge_facade: KnowledgeFacade | None = None,
     ) -> None:
         self._repository = repository
         self._state_repository = state_repository
@@ -139,6 +143,7 @@ class ChatflowRuntimeV2Service:
         self._flow_type = flow_type.upper()
         self._use_chatflow_session = use_chatflow_session
         self._publish_repository = publish_repository
+        self._knowledge_facade = knowledge_facade
 
     def start_run(
         self,
@@ -499,6 +504,8 @@ class ChatflowRuntimeV2Service:
                 output = IntentRecognitionNodeExecutor().execute(node, context)
             elif node_type == "INFORMATION_COLLECTION":
                 output = InformationCollectionNodeExecutor().execute(node, context)
+            elif node_type == "KNOWLEDGE":
+                output = KnowledgeNodeExecutor(self._knowledge_facade).execute(node, context)
             elif node_type == "END":
                 output = EndNodeExecutor().execute(node, context)
             else:
@@ -742,6 +749,7 @@ class WorkflowRuntimeV2Service(ChatflowRuntimeV2Service):
         publish_repository: WorkflowPublishRepository,
         *,
         completion_delay_seconds: float = 0.45,
+        knowledge_facade: KnowledgeFacade | None = None,
     ) -> None:
         super().__init__(
             repository,
@@ -751,6 +759,7 @@ class WorkflowRuntimeV2Service(ChatflowRuntimeV2Service):
             flow_type="WORKFLOW",
             use_chatflow_session=False,
             publish_repository=publish_repository,
+            knowledge_facade=knowledge_facade,
         )
 
 

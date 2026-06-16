@@ -8,6 +8,40 @@ from app.main import app
 
 
 class ChatflowRuntimeV2FacadeTest(unittest.TestCase):
+    def test_knowledge_node_returns_faq_answer_and_runtime_node_evidence(self) -> None:
+        with TestClient(app) as client:
+            kb_id = _create_knowledge_base_with_faq(client)
+            chatflow = _create_knowledge_chatflow(client, kb_id)
+            started_response = client.post(
+                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                json={
+                    "input": {
+                        "sys.query": "runtime v2 refund knowledge",
+                        "sys.conversation_id": f"knowledge-v2-{time.time_ns()}",
+                        "sys.user_id": "user-runtime-v2-knowledge",
+                        "sys.channel": "web",
+                    }
+                },
+            )
+            self.assertEqual(started_response.status_code, 200, started_response.text)
+            started = started_response.json()["data"]
+            terminal = _wait_for_result(client, started["resultRef"], "SUCCEEDED")
+            events = client.get(started["eventsRef"]).json()["data"]["list"]
+            nodes = client.get(started["nodesRef"]).json()["data"]["list"]
+
+        self.assertEqual(terminal["output"]["answer"], "Runtime v2 knowledge FAQ answer.")
+        self.assertTrue(
+            any(
+                event["type"] == "workflow_node_completed"
+                and event.get("nodeId") == "knowledge_1"
+                and event["payload"]["nodeType"] == "KNOWLEDGE"
+                for event in events
+            ),
+            events,
+        )
+        knowledge_node = next(node for node in nodes if node["nodeKey"] == "knowledge_1")
+        self.assertEqual(knowledge_node["status"], "COMPLETED")
+
     def test_unsupported_chatflow_graph_is_rejected_without_live_v2_refs(self) -> None:
         with TestClient(app) as client:
             chatflow = _create_unsupported_chatflow(client)
@@ -61,6 +95,63 @@ def _create_unsupported_chatflow(client: TestClient) -> dict[str, object]:
             "edges": [
                 {"sourceNodeKey": "start", "targetNodeKey": "llm_1", "condition": None},
                 {"sourceNodeKey": "llm_1", "targetNodeKey": "end", "condition": None},
+            ],
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["data"]
+
+
+def _create_knowledge_base_with_faq(client: TestClient) -> int:
+    created = client.post(
+        "/api/v1/knowledge-bases",
+        json={"name": f"Runtime V2 Knowledge KB {time.time_ns()}", "description": "runtime v2 knowledge fixture"},
+    )
+    assert created.status_code == 200, created.text
+    kb_id = int(created.json()["data"]["id"])
+    faq = client.post(
+        f"/api/v1/knowledge-bases/{kb_id}/faqs",
+        json={
+            "question": "How does runtime v2 answer refund knowledge?",
+            "answer": "Runtime v2 knowledge FAQ answer.",
+            "alternativeQuestions": ["runtime v2 refund knowledge"],
+            "keywords": ["refund", "runtime", "knowledge"],
+            "category": "runtime-v2",
+            "priority": 20,
+            "enabled": True,
+            "metadata": {},
+            "source": "test",
+        },
+    )
+    assert faq.status_code == 200, faq.text
+    return kb_id
+
+
+def _create_knowledge_chatflow(client: TestClient, kb_id: int) -> dict[str, object]:
+    response = client.post(
+        "/api/v1/chatflows",
+        json={
+            "name": f"Chatflow V2 Knowledge {time.time_ns()}",
+            "description": "runtime v2 knowledge tracer bullet",
+            "nodes": [
+                {"nodeKey": "start", "type": "START", "name": "Start", "config": {}},
+                {
+                    "nodeKey": "knowledge_1",
+                    "type": "KNOWLEDGE",
+                    "name": "Knowledge",
+                    "config": {
+                        "knowledgeBaseId": kb_id,
+                        "query": "{{start.sys.query}}",
+                        "topK": 3,
+                        "retrievalMode": "faq",
+                        "outputVariable": "answer",
+                    },
+                },
+                {"nodeKey": "end", "type": "END", "name": "End", "config": {"outputVariable": "answer"}},
+            ],
+            "edges": [
+                {"sourceNodeKey": "start", "targetNodeKey": "knowledge_1", "condition": None},
+                {"sourceNodeKey": "knowledge_1", "targetNodeKey": "end", "condition": None},
             ],
         },
     )
