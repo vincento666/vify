@@ -23,10 +23,12 @@ try {
   await page.getByPlaceholder('工作流名称').fill(name)
   await page.getByRole('button', { name: '发布' }).click()
 
-  const opsPanel = page.locator('[data-testid="workflow-ops-panel"]')
-  await opsPanel.waitFor({ state: 'visible', timeout: 5000 })
-  let opsText = await opsPanel.innerText()
-  assert(opsText.includes('画布校验未通过'), 'Expected publish to be blocked by validation errors')
+  const publishDialog = page.locator('[data-testid="workflow-publish-dialog"]')
+  await publishDialog.waitFor({ state: 'visible', timeout: 5000 })
+  let publishText = await publishDialog.innerText()
+  assert(publishText.includes('画布校验未通过'), 'Expected publish to be blocked by validation errors')
+  assert(await page.locator('[data-testid="workflow-ops-panel"]').count() === 0, 'Expected publish to use a modal instead of the mixed ops panel')
+  await page.keyboard.press('Escape')
 
   await page.locator('.canvas-actions').getByRole('button', { name: '保存', exact: true }).click()
   await page.waitForURL('**/workflows/*/canvas', { timeout: 10000 })
@@ -58,11 +60,12 @@ try {
   )
   await page.reload({ waitUntil: 'networkidle' })
   await page.getByRole('button', { name: '发布' }).click()
-  await opsPanel.waitFor({ state: 'visible', timeout: 5000 })
-  opsText = await opsPanel.innerText()
-  assert(opsText.includes('需要先完成一次成功试运行'), 'Expected publish to require a successful test run')
+  await publishDialog.waitFor({ state: 'visible', timeout: 5000 })
+  publishText = await publishDialog.innerText()
+  assert(publishText.includes('需要先完成一次成功试运行'), 'Expected publish to require a successful test run')
+  await page.keyboard.press('Escape')
 
-  await page.getByRole('button', { name: '试运行' }).click()
+  await page.locator('.canvas-actions').getByRole('button', { name: '试运行', exact: true }).click()
   const testPanel = page.locator('[data-testid="test-run-panel"]')
   await testPanel.waitFor({ state: 'visible', timeout: 5000 })
   await testPanel.getByPlaceholder('输入 userMessage').fill('hello publish gate')
@@ -71,24 +74,28 @@ try {
   await testPanel.locator('[data-testid="workflow-run-output"]').waitFor({ state: 'visible', timeout: 10000 })
 
   await page.getByRole('button', { name: '发布' }).click()
-  await opsPanel.waitFor({ state: 'visible', timeout: 5000 })
-  await opsPanel.getByRole('button', { name: '确认发布' }).click()
-  await opsPanel.getByText('PUBLISHED').waitFor({ state: 'visible', timeout: 10000 })
+  await publishDialog.waitFor({ state: 'visible', timeout: 5000 })
+  await publishDialog.getByRole('button', { name: '确认发布' }).click()
+  await publishDialog.getByText('PUBLISHED').waitFor({ state: 'visible', timeout: 10000 })
+  await page.keyboard.press('Escape')
 
-  await opsPanel.getByRole('button', { name: 'Open API' }).click()
-  opsText = await opsPanel.innerText()
-  assert(opsText.includes('/api/v1/workflows/'), 'Expected Open API tab to show workflow run endpoint')
-  assert(opsText.includes('userMessage'), 'Expected Open API tab to show request sample')
+  await page.getByRole('button', { name: '开放', exact: true }).click()
+  const openSurface = page.getByTestId('workflow-open-surface')
+  await openSurface.waitFor({ state: 'visible', timeout: 5000 })
+  const openText = await openSurface.innerText()
+  assert(openText.includes('/api/v1/workflows/'), 'Expected Open surface to show workflow run endpoint')
+  assert(openText.includes('userMessage'), 'Expected Open surface to show request sample')
 
-  await opsPanel.getByRole('button', { name: '运行观测' }).click()
-  opsText = await opsPanel.innerText()
-  assert(opsText.includes('SUCCEEDED'), 'Expected observe tab to show latest successful run status')
+  await page.getByRole('button', { name: '调试详情', exact: true }).click()
+  const debugDock = page.getByTestId('workflow-debug-dock')
+  await debugDock.waitFor({ state: 'visible', timeout: 5000 })
+  assert(await debugDock.getByText('调试详情', { exact: true }).count() >= 1, 'Expected debug details to use the bottom dock')
 
   if (screenshotPath) {
     await page.screenshot({ path: screenshotPath, fullPage: true })
   }
 
-  console.log('PASS workflow publish/open-api/observe e2e')
+  console.log('PASS workflow publish/open-api/debug e2e')
 } finally {
   await browser.close()
 }

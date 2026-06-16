@@ -10,18 +10,32 @@
   >
     <div class="canvas-topbar">
       <div class="canvas-title-wrap">
-        <el-button text class="back-button" @click="router.push(listPath)">
-          <el-icon><ArrowLeft /></el-icon>
-        </el-button>
+        <a-button type="text" class="back-button" @click="router.push(listRoute)">
+          <ArrowLeft aria-hidden="true" />
+        </a-button>
         <div class="flow-icon"><Share /></div>
         <div>
           <div class="title-row">
-            <el-input
-              v-model="form.name"
+            <a-input
+              v-if="flowTitleEditing"
+              v-model:value="flowTitleDraft"
               class="title-input"
               maxlength="100"
               :placeholder="isChatflowMode ? 'Chatflow 名称' : '工作流名称'"
+              @blur="commitFlowTitleEdit"
+              @keydown.enter.prevent="commitFlowTitleEdit"
+              @keydown.esc.prevent="cancelFlowTitleEdit"
             />
+            <button
+              v-else
+              type="button"
+              class="title-display-button"
+              :class="{ placeholder: !form.name.trim() }"
+              aria-label="编辑画布名称"
+              @click="startFlowTitleEdit"
+            >
+              {{ flowTitleDisplay }}
+            </button>
             <span class="flow-info">i</span>
           </div>
           <div class="save-state">{{ saveState }}</div>
@@ -39,10 +53,10 @@
         </button>
       </div>
       <div class="canvas-actions">
-        <el-button @click="openTestPanel">{{ isChatflowMode ? '对话试运行' : '试运行' }}</el-button>
-        <el-button @click="openDebugDetails">调试详情</el-button>
-        <el-button type="primary" plain @click="openPublishDialog">发布</el-button>
-        <el-button :loading="saving" type="primary" @click="saveCanvas">保存</el-button>
+        <a-button @click="openTestPanel">{{ isChatflowMode ? '对话试运行' : '试运行' }}</a-button>
+        <a-button @click="openDebugDetails">调试详情</a-button>
+        <a-button type="primary" ghost @click="openPublishDialog">发布</a-button>
+        <a-button :loading="saving" type="primary" @click="saveCanvas">保存</a-button>
       </div>
     </div>
 
@@ -58,9 +72,7 @@
         aria-label="展开侧栏"
         @click="resourcePanelCollapsed = !resourcePanelCollapsed"
       >
-        <el-icon>
-          <ArrowRight />
-        </el-icon>
+        <ArrowRight aria-hidden="true" />
       </button>
 
       <aside v-if="!resourcePanelCollapsed && canvasTab === 'compose'" class="canvas-resource-panel" data-testid="canvas-resource-panel">
@@ -131,7 +143,7 @@
         <template v-if="isChatflowMode">
           <section class="resource-section">
             <h4>开场白</h4>
-            <el-input v-model="openingText" type="textarea" :rows="3" placeholder="欢迎语" @input="markGraphDirty" />
+            <a-textarea v-model:value="openingText" :rows="3" placeholder="欢迎语" @input="markGraphDirty" />
           </section>
           <section class="resource-section" data-testid="chatflow-guide-question-settings">
             <h4>引导问题</h4>
@@ -392,7 +404,7 @@
               @mouseenter="hoveredEdgeId = edgeProps.id"
               @mouseleave="clearEdgeHover(edgeProps.id)"
             >
-              <el-input v-model="nodePaletteSearch" size="large" placeholder="搜索节点、插件、工作流" />
+              <a-input v-model:value="nodePaletteSearch" size="large" placeholder="搜索节点、插件、工作流" />
               <div v-for="group in filteredNodePaletteGroups" :key="`edge-${group.title}`" class="edge-insert-palette-group">
                 <strong>{{ group.title }}</strong>
                 <div class="edge-node-palette-grid">
@@ -454,7 +466,13 @@
                   <small v-if="nodeProps.data.runElapsedLabel">{{ nodeProps.data.runElapsedLabel }}</small>
                 </span>
               </div>
-              <div v-if="!isFixedNode(nodeProps.data)" class="node-card-actions" @click.stop @pointerdown.stop>
+              <div
+                v-if="!isFixedNode(nodeProps.data)"
+                class="node-card-actions"
+                :class="{ 'menu-open': nodeCardMenuKey === nodeProps.data.nodeKey }"
+                @click.stop
+                @pointerdown.stop
+              >
                 <button
                   v-if="canRunSingleNodeTest(nodeProps.data)"
                   type="button"
@@ -464,13 +482,17 @@
                 >
                   <PlayIcon aria-hidden="true" />
                 </button>
-                <div class="node-card-menu-wrap">
+                <div
+                  class="node-card-menu-wrap"
+                  @mouseenter="openNodeCardMenu(nodeProps.data.nodeKey)"
+                  @mouseleave="scheduleCloseNodeCardMenu(nodeProps.data.nodeKey)"
+                >
                   <button
                     type="button"
                     aria-label="更多操作"
                     title="更多操作"
                     :aria-expanded="nodeCardMenuKey === nodeProps.data.nodeKey"
-                    @click="toggleNodeCardMenu(nodeProps.data.nodeKey)"
+                    @click.prevent.stop
                   >
                     <MoreHorizontalIcon aria-hidden="true" />
                   </button>
@@ -489,7 +511,6 @@
                       <Trash2 aria-hidden="true" />
                       删除
                     </button>
-                    <button type="button" role="menuitem" @click="openNodeHelp(nodeProps.data.type)">帮助文档</button>
                   </div>
                 </div>
               </div>
@@ -806,36 +827,52 @@
           </button>
           <div v-if="modelPickerOpen" class="model-picker-shell" data-testid="llm-model-selector">
             <div class="model-picker-header">
-              <strong>选择模型</strong>
+              <strong>模型选择</strong>
               <span>{{ filteredLlmModelOptions.length }} 个结果</span>
             </div>
             <div class="model-search-row">
-              <el-input
-                v-model="llmModelSearch"
-                placeholder="搜索模型名称、供应商或能力"
-                clearable
+              <a-input
+                v-model:value="llmModelSearch"
+                placeholder="搜索模型或供应商"
+                allow-clear
                 @keydown.enter.prevent="applyLlmModelSearch"
               />
               <button type="button" aria-label="搜索模型" @click="applyLlmModelSearch">
                 搜索
               </button>
             </div>
-            <div
-              v-for="group in filteredLlmModelGroups"
-              :key="group.provider"
-              class="model-provider-group"
-              :class="{ muted: group.options.every((option) => !option.enabled) }"
-            >
-              <strong>{{ group.provider }}</strong>
+            <div class="model-option-list">
               <button
-                v-for="option in group.options"
-                :key="option.value"
+                v-for="option in filteredLlmModelOptions"
+                :key="option.modelConfigId || option.value"
                 type="button"
+                class="model-option-card"
+                data-testid="llm-model-option"
+                :class="{ unavailable: !option.enabled }"
                 :disabled="!option.enabled"
-                @click="selectLlmModel(option.value)"
+                @click="selectLlmModel(option)"
               >
-                <span>{{ option.label }}</span>
-                <small>{{ option.description }}</small>
+                <span
+                  class="model-provider-icon"
+                  :data-provider-icon="option.providerIconKey"
+                  data-testid="llm-model-provider-icon"
+                  aria-hidden="true"
+                >
+                  <img
+                    v-if="modelProviderLogoSrc(option.providerIconKey)"
+                    :src="modelProviderLogoSrc(option.providerIconKey)"
+                    alt=""
+                    loading="lazy"
+                  >
+                  <span v-else>{{ modelProviderIconText(option.providerIconKey) }}</span>
+                </span>
+                <span class="model-option-copy">
+                  <span class="model-option-heading">
+                    <span class="model-option-name">{{ option.label }}</span>
+                    <span class="model-provider-tag" data-testid="llm-model-provider-tag">{{ option.providerType }}</span>
+                  </span>
+                  <span class="model-option-description" data-testid="llm-model-description">{{ option.description }}</span>
+                </span>
               </button>
             </div>
             <p v-if="filteredLlmModelOptions.length === 0" class="model-picker-empty">没有匹配的模型</p>
@@ -871,31 +908,29 @@
                     :style="modelParameterSliderStyle(field)"
                     @input="setModelParameterNumberValue(field.key, ($event.target as HTMLInputElement).value)"
                   />
-                  <el-input-number
+                  <a-input-number
                     class="model-parameter-number-input"
                     data-testid="model-parameter-number-input"
-                    :model-value="modelParameterNumberValue(field)"
+                    :value="modelParameterNumberValue(field)"
                     :min="field.min ?? 0"
                     :max="field.max ?? 100000"
                     :step="field.step ?? 1"
-                    controls-position="right"
-                    @update:model-value="setModelParameterNumberValue(field.key, $event ?? modelParameterDefault(field.key))"
+                    @update:value="setModelParameterNumberValue(field.key, $event ?? modelParameterDefault(field.key))"
                   />
                 </div>
-                <el-select
+                <a-select :virtual="false"
                   v-else-if="field.type === 'select'"
-                  :model-value="fieldValue(field.key) || field.options?.[0]"
-                  @update:model-value="setFieldValue(field.key, $event)"
+                  :value="fieldValue(field.key) || field.options?.[0]"
+                  @update:value="setFieldValue(field.key, $event)"
                 >
-                  <el-option v-for="option in field.options || []" :key="option" :label="selectOptionLabel(field.key, option)" :value="option" />
-                </el-select>
-                <el-input
+                  <a-select-option v-for="option in field.options || []" :key="option" :value="option" >{{ selectOptionLabel(field.key, option) }}</a-select-option>
+                </a-select>
+                <a-textarea
                   v-else
-                  :model-value="String(fieldValue(field.key) || '')"
+                  :value="String(fieldValue(field.key) || '')"
                   :placeholder="field.placeholder"
-                  type="textarea"
                   :rows="3"
-                  @update:model-value="setFieldValue(field.key, $event)"
+                  @update:value="setFieldValue(field.key, $event)"
                 />
               </label>
             </div>
@@ -948,29 +983,29 @@
               <div v-if="normalizeLlmResourceType(resource) === 'KNOWLEDGE_BASE'" class="llm-resource-fields">
                 <label>
                   知识库 ID
-                  <el-input
-                    :model-value="String(resource.knowledgeBaseId || resource.id || '')"
+                  <a-input
+                    :value="String(resource.knowledgeBaseId || resource.id || '')"
                     aria-label="知识库 ID"
                     placeholder="1"
-                    @update:model-value="updateLlmResource(index, { knowledgeBaseId: $event })"
+                    @update:value="updateLlmResource(index, { knowledgeBaseId: $event })"
                   />
                 </label>
                 <label>
                   检索问题
-                  <el-input
-                    :model-value="String(resource.query || '')"
+                  <a-input
+                    :value="String(resource.query || '')"
                     aria-label="检索问题"
                     placeholder="{{start.USER_INPUT}}"
-                    @update:model-value="updateLlmResource(index, { query: $event })"
+                    @update:value="updateLlmResource(index, { query: $event })"
                   />
                 </label>
                 <label>
                   召回数量
-                  <el-input
-                    :model-value="String(resource.topK || 3)"
+                  <a-input
+                    :value="String(resource.topK || 3)"
                     aria-label="召回数量"
                     placeholder="3"
-                    @update:model-value="updateLlmResource(index, { topK: Number($event) || 3 })"
+                    @update:value="updateLlmResource(index, { topK: Number($event) || 3 })"
                   />
                 </label>
               </div>
@@ -990,8 +1025,8 @@
                 {{ tab.label }}
               </button>
             </div>
-            <el-input
-              v-model="llmSkillSearch"
+            <a-input
+              v-model:value="llmSkillSearch"
               class="llm-skill-search"
               size="small"
               placeholder="搜索技能"
@@ -1066,14 +1101,13 @@
               <label>{{ field.label }}</label>
             </div>
             <div v-if="field.type === 'readonly'" class="readonly-values">
-              <el-tag
+              <a-tag
                 v-for="value in readonlyValues(field.key)"
                 :key="value"
                 size="small"
-                effect="plain"
               >
                 {{ value }}
-              </el-tag>
+              </a-tag>
             </div>
             <div
               v-else-if="field.type === 'end-response'"
@@ -1098,18 +1132,18 @@
               </div>
               <div class="end-output-format-row">
                 <label>输出格式</label>
-                <el-select
-                  :model-value="outputFormatValue()"
+                <a-select :virtual="false"
+                  :value="outputFormatValue()"
                   aria-label="输出格式"
-                  @update:model-value="setOutputFormat"
+                  @update:value="setOutputFormat"
                 >
-                  <el-option
+                  <a-select-option
                     v-for="option in outputFormatOptions"
                     :key="option"
-                    :label="option"
+
                     :value="option"
-                  />
-                </el-select>
+                  >{{ option }}</a-select-option>
+                </a-select>
               </div>
               <template v-if="endReturnMode() === 'text'">
                 <div class="end-response-heading">
@@ -1117,22 +1151,21 @@
                   <div class="end-response-actions">
                     <label class="end-stream-switch">
                       <span>流式输出</span>
-                      <el-switch
-                        :model-value="switchFieldValue('streamOutput')"
+                      <a-switch
+                        :checked="switchFieldValue('streamOutput')"
                         aria-label="流式输出"
-                        @update:model-value="setSwitchFieldValue('streamOutput', $event)"
+                        @update:checked="setSwitchFieldValue('streamOutput', $event)"
                       />
                     </label>
                   </div>
                 </div>
-                <el-input
+                <a-textarea
                   class="end-response-textarea"
-                  :model-value="String(fieldValue('output') || '')"
+                  :value="String(fieldValue('output') || '')"
                   aria-label="响应内容"
                   placeholder="返回给调用方的文本，可使用变量引用"
-                  type="textarea"
                   :rows="5"
-                  @update:model-value="handleVariableFieldInput('output', $event)"
+                  @update:value="handleVariableFieldInput('output', $event)"
                 />
                 <div
                   v-if="activeVariableField === 'output'"
@@ -1140,7 +1173,7 @@
                   data-testid="variable-picker"
                   data-picker-kind="inline"
                 >
-                  <el-input v-model="variableSearch" size="small" placeholder="搜索变量" />
+                  <a-input v-model:value="variableSearch" size="small" placeholder="搜索变量" />
                   <div class="inline-variable-list" data-testid="inline-variable-list">
                     <button
                       v-for="option in inlineVariableOptions"
@@ -1173,24 +1206,24 @@
                   class="output-parameter-row"
                   data-testid="output-parameter-row"
                 >
-                  <el-input
-                    :model-value="row.name"
+                  <a-input
+                    :value="row.name"
                     aria-label="输出变量名"
                     placeholder="变量名"
-                    @update:model-value="setOutputParameterName(index, $event)"
+                    @update:value="setOutputParameterName(index, $event)"
                   />
-                  <el-select
-                    :model-value="row.type"
+                  <a-select :virtual="false"
+                    :value="row.type"
                     aria-label="输出变量类型"
-                    @update:model-value="setOutputParameterType(index, $event)"
+                    @update:value="setOutputParameterType(index, $event)"
                   >
-                    <el-option
+                    <a-select-option
                       v-for="option in outputParameterTypeOptions"
                       :key="option"
-                      :label="outputParameterTypeLabel(option)"
+
                       :value="option"
-                    />
-                  </el-select>
+                    >{{ outputParameterTypeLabel(option) }}</a-select-option>
+                  </a-select>
                   <button
                     type="button"
                     class="output-row-icon"
@@ -1231,13 +1264,13 @@
                   >
                     <strong>{{ branch.name }}</strong>
                   </button>
-                  <el-input
+                  <a-input
                     v-else
-                    :model-value="branch.name"
+                    :value="branch.name"
                     aria-label="分支名称"
                     class="condition-branch-name-input"
                     placeholder="点击填写分支名称"
-                    @update:model-value="setConditionBranchName(branchIndex, $event)"
+                    @update:value="setConditionBranchName(branchIndex, $event)"
                     @blur="stopConditionBranchNameEdit"
                     @keydown.enter="stopConditionBranchNameEdit"
                     @keydown.esc="stopConditionBranchNameEdit"
@@ -1306,7 +1339,7 @@
                       class="variable-popover coze-variable-source-popover input-variable-popover condition-variable-popover"
                       data-testid="condition-variable-picker"
                     >
-                      <el-input v-model="conditionVariableSearch" placeholder="搜索变量" clearable />
+                      <a-input v-model:value="conditionVariableSearch" placeholder="搜索变量" allow-clear />
                       <div class="variable-source-list coze-variable-source-list" data-testid="condition-variable-source-list">
                         <button
                           v-for="group in filteredConditionVariableGroups"
@@ -1349,19 +1382,19 @@
                       </div>
                     </div>
                   </div>
-                  <el-select
+                  <a-select :virtual="false"
                     class="condition-operator-select"
-                    :model-value="condition.operator"
+                    :value="condition.operator"
                     aria-label="条件操作符"
-                    @update:model-value="setConditionRowValue(branchIndex, conditionIndex, 'operator', $event)"
+                    @update:value="setConditionRowValue(branchIndex, conditionIndex, 'operator', $event)"
                   >
-                    <el-option
+                    <a-select-option
                       v-for="option in conditionOperatorOptionsForCondition(condition)"
                       :key="option.value"
-                      :label="option.label"
+
                       :value="option.value"
-                    />
-                  </el-select>
+                    >{{ option.label }}</a-select-option>
+                  </a-select>
                   <div class="condition-value-cell condition-right-cell">
                     <div class="variable-value-combo condition-operand-control condition-comparison-value-control" data-testid="condition-operand-control">
                       <span
@@ -1390,13 +1423,13 @@
                             <span aria-hidden="true">×</span>
                           </button>
                         </div>
-                        <el-input
+                        <a-input
                           v-else
-                          :model-value="condition.right.value"
+                          :value="condition.right.value"
                           aria-label="条件右值"
                           :placeholder="conditionRightOperandPlaceholder(condition.operator)"
                           :disabled="isConditionRightOperandDisabled(condition.operator)"
-                          @update:model-value="handleConditionOperandInput(branchIndex, conditionIndex, 'right', $event)"
+                          @update:value="handleConditionOperandInput(branchIndex, conditionIndex, 'right', $event)"
                         />
                       </div>
                       <button
@@ -1414,7 +1447,7 @@
                       class="variable-popover coze-variable-source-popover input-variable-popover condition-variable-popover"
                       data-testid="condition-variable-picker"
                     >
-                      <el-input v-model="conditionVariableSearch" placeholder="搜索变量" clearable />
+                      <a-input v-model:value="conditionVariableSearch" placeholder="搜索变量" allow-clear />
                       <div class="variable-source-list coze-variable-source-list" data-testid="condition-variable-source-list">
                         <button
                           v-for="group in filteredConditionVariableGroups"
@@ -1478,12 +1511,12 @@
                 >
                   <strong>{{ conditionDefaultBranchName(selectedNode.config) }}</strong>
                 </button>
-                <el-input
+                <a-input
                   v-else
-                  :model-value="conditionDefaultBranchName(selectedNode.config)"
+                  :value="conditionDefaultBranchName(selectedNode.config)"
                   aria-label="否则分支名称"
                   placeholder="点击填写默认分支名称"
-                  @update:model-value="setConditionDefaultBranchName($event)"
+                  @update:value="setConditionDefaultBranchName($event)"
                   @blur="stopConditionDefaultNameEdit"
                   @keydown.enter="stopConditionDefaultNameEdit"
                   @keydown.esc="stopConditionDefaultNameEdit"
@@ -1508,17 +1541,17 @@
                 class="secondary-row question-option-row"
                 data-testid="question-option-row"
               >
-                <el-input
-                  :model-value="row.label"
+                <a-input
+                  :value="row.label"
                   aria-label="选项文案"
                   placeholder="例如 是"
-                  @update:model-value="setQuestionOptionLabel(index, $event)"
+                  @update:value="setQuestionOptionLabel(index, $event)"
                 />
-                <el-input
-                  :model-value="row.value"
+                <a-input
+                  :value="row.value"
                   aria-label="选项值"
                   placeholder="例如 yes"
-                  @update:model-value="setQuestionOptionValue(index, $event)"
+                  @update:value="setQuestionOptionValue(index, $event)"
                 />
                 <button type="button" class="output-row-icon" aria-label="删除回答选项" @click="removeQuestionOption(index)">
                   <XIcon aria-hidden="true" />
@@ -1547,24 +1580,24 @@
                 class="secondary-row collection-field-row"
                 data-testid="collection-field-row"
               >
-                <el-input
-                  :model-value="row.name"
+                <a-input
+                  :value="row.name"
                   aria-label="收集字段名"
                   placeholder="phone"
-                  @update:model-value="setCollectionFieldName(index, $event)"
+                  @update:value="setCollectionFieldName(index, $event)"
                 />
-                <el-select
-                  :model-value="row.type"
+                <a-select :virtual="false"
+                  :value="row.type"
                   aria-label="收集字段类型"
-                  @update:model-value="setCollectionFieldType(index, $event)"
+                  @update:value="setCollectionFieldType(index, $event)"
                 >
-                  <el-option
+                  <a-select-option
                     v-for="option in outputParameterTypeOptions"
                     :key="option"
-                    :label="variableTypeLabel(option)"
+
                     :value="option"
-                  />
-                </el-select>
+                  >{{ variableTypeLabel(option) }}</a-select-option>
+                </a-select>
                 <label class="start-required-toggle">
                   <input
                     type="checkbox"
@@ -1573,29 +1606,29 @@
                     @change="setCollectionFieldRequired(index, ($event.target as HTMLInputElement).checked)"
                   />
                 </label>
-                <el-input
-                  :model-value="row.description"
+                <a-input
+                  :value="row.description"
                   aria-label="收集字段说明"
                   placeholder="字段说明"
-                  @update:model-value="setCollectionFieldDescription(index, $event)"
+                  @update:value="setCollectionFieldDescription(index, $event)"
                 />
                 <div class="collection-target-cell">
-                  <el-select
-                    :model-value="row.targetScope"
+                  <a-select :virtual="false"
+                    :value="row.targetScope"
                     aria-label="收集字段写入范围"
-                    @update:model-value="setCollectionFieldTargetScope(index, $event)"
+                    @update:value="setCollectionFieldTargetScope(index, $event)"
                   >
-                    <el-option label="flow" value="flow" />
-                    <el-option label="conversation" value="conversation" />
-                    <el-option label="user" value="user" />
-                    <el-option label="channel" value="channel" />
-                    <el-option label="global" value="global" />
-                  </el-select>
-                  <el-input
-                    :model-value="row.targetVariable"
+                    <a-select-option value="flow" >flow</a-select-option>
+                    <a-select-option value="conversation" >conversation</a-select-option>
+                    <a-select-option value="user" >user</a-select-option>
+                    <a-select-option value="channel" >channel</a-select-option>
+                    <a-select-option value="global" >global</a-select-option>
+                  </a-select>
+                  <a-input
+                    :value="row.targetVariable"
                     aria-label="收集字段目标变量"
                     placeholder="变量名"
-                    @update:model-value="setCollectionFieldTargetVariable(index, $event)"
+                    @update:value="setCollectionFieldTargetVariable(index, $event)"
                   />
                 </div>
                 <button type="button" class="output-row-icon" aria-label="删除收集字段" @click="removeCollectionField(index)">
@@ -1635,29 +1668,28 @@
                   ⋮⋮
                 </button>
                 <div class="intent-row-fields">
-                  <el-input
+                  <a-input
                     class="intent-name-field"
-                    :model-value="row.name"
+                    :value="row.name"
                     aria-label="意图名称"
                     placeholder="退款"
-                    @update:model-value="setIntentName(index, $event)"
+                    @update:value="setIntentName(index, $event)"
                   />
-                  <el-input
+                  <a-input
                     class="intent-description-field"
-                    :model-value="row.description"
+                    :value="row.description"
                     aria-label="意图描述"
                     placeholder="请输入用户意图的描述，如售后问题等"
-                    @update:model-value="setIntentDescription(index, $event)"
+                    @update:value="setIntentDescription(index, $event)"
                   />
-                  <el-input
+                  <a-textarea
                     class="intent-examples-field"
-                    :model-value="row.examples.join('\n')"
+                    :value="row.examples.join('\n')"
                     aria-label="意图示例"
-                    type="textarea"
                     :maxlength="300"
                     :rows="3"
                     placeholder="每行一个例句"
-                    @update:model-value="setIntentExamples(index, $event)"
+                    @update:value="setIntentExamples(index, $event)"
                   />
                 </div>
                 <button type="button" class="output-row-icon" aria-label="删除意图" @click="removeIntentRow(index)">
@@ -1685,26 +1717,26 @@
                 :class="{ 'built-in': row.builtIn }"
                 data-testid="start-variable-row"
               >
-                <el-input
-                  :model-value="row.name"
+                <a-input
+                  :value="row.name"
                   aria-label="开始变量名"
                   placeholder="变量名"
                   :disabled="row.builtIn"
-                  @update:model-value="setStartVariableName(index, $event)"
+                  @update:value="setStartVariableName(index, $event)"
                 />
-                <el-select
-                  :model-value="row.type"
+                <a-select :virtual="false"
+                  :value="row.type"
                   aria-label="开始变量类型"
                   :disabled="row.builtIn"
-                  @update:model-value="setStartVariableType(index, $event)"
+                  @update:value="setStartVariableType(index, $event)"
                 >
-                  <el-option
+                  <a-select-option
                     v-for="option in outputParameterTypeOptions"
                     :key="option"
-                    :label="variableTypeLabel(option)"
+
                     :value="option"
-                  />
-                </el-select>
+                  >{{ variableTypeLabel(option) }}</a-select-option>
+                </a-select>
                 <label class="start-required-toggle">
                   <input
                     type="checkbox"
@@ -1744,24 +1776,24 @@
                 class="input-parameter-row"
                 data-testid="input-parameter-row"
               >
-                <el-input
-                  :model-value="row.name"
+                <a-input
+                  :value="row.name"
                   aria-label="输入变量名"
                   placeholder="变量名"
-                  @update:model-value="setInputParameterName(index, $event)"
+                  @update:value="setInputParameterName(index, $event)"
                 />
-                <el-select
-                  :model-value="row.type"
+                <a-select :virtual="false"
+                  :value="row.type"
                   aria-label="输入变量类型"
-                  @update:model-value="setInputParameterType(index, $event)"
+                  @update:value="setInputParameterType(index, $event)"
                 >
-                  <el-option
+                  <a-select-option
                     v-for="option in outputParameterTypeOptions"
                     :key="option"
-                    :label="variableTypeLabel(option)"
+
                     :value="option"
-                  />
-                </el-select>
+                  >{{ variableTypeLabel(option) }}</a-select-option>
+                </a-select>
                 <div class="input-value-cell">
                   <div class="variable-value-combo" data-testid="input-variable-value-control">
                     <div class="variable-value-main">
@@ -1839,7 +1871,7 @@
                     class="variable-popover coze-variable-source-popover input-variable-popover"
                     data-testid="input-variable-picker"
                   >
-                    <el-input v-model="inputVariableSearch" size="small" placeholder="搜索变量" />
+                    <a-input v-model:value="inputVariableSearch" size="small" placeholder="搜索变量" />
                     <div class="variable-source-list coze-variable-source-list" data-testid="input-variable-source-list">
                       <button
                         v-for="group in filteredInputVariableGroups"
@@ -1897,18 +1929,18 @@
             >
               <div v-if="shouldShowOutputFormat()" class="output-format-row">
                 <label>输出格式</label>
-                <el-select
-                  :model-value="outputFormatValue()"
+                <a-select :virtual="false"
+                  :value="outputFormatValue()"
                   aria-label="输出格式"
-                  @update:model-value="setOutputFormat"
+                  @update:value="setOutputFormat"
                 >
-                  <el-option
+                  <a-select-option
                     v-for="option in outputFormatOptions"
                     :key="option"
-                    :label="option"
+
                     :value="option"
-                  />
-                </el-select>
+                  >{{ option }}</a-select-option>
+                </a-select>
               </div>
               <div
                 class="output-column-row"
@@ -1928,24 +1960,24 @@
                 :class="{ 'end-output-parameter-row': shouldEditOutputParameterValue() }"
                 data-testid="output-parameter-row"
               >
-                <el-input
-                  :model-value="row.name"
+                <a-input
+                  :value="row.name"
                   aria-label="输出变量名"
                   placeholder="变量名"
-                  @update:model-value="setOutputParameterName(index, $event)"
+                  @update:value="setOutputParameterName(index, $event)"
                 />
-                <el-select
-                  :model-value="row.type"
+                <a-select :virtual="false"
+                  :value="row.type"
                   aria-label="输出变量类型"
-                  @update:model-value="setOutputParameterType(index, $event)"
+                  @update:value="setOutputParameterType(index, $event)"
                 >
-                  <el-option
+                  <a-select-option
                     v-for="option in outputParameterTypeOptions"
                     :key="option"
-                    :label="outputParameterTypeLabel(option)"
+
                     :value="option"
-                  />
-                </el-select>
+                  >{{ outputParameterTypeLabel(option) }}</a-select-option>
+                </a-select>
                 <div v-if="shouldEditOutputParameterValue()" class="input-value-cell output-value-cell">
                   <div class="variable-value-combo" data-testid="output-variable-value-control">
                     <div class="variable-value-main">
@@ -2001,7 +2033,7 @@
                     class="variable-popover coze-variable-source-popover input-variable-popover"
                     data-testid="output-variable-picker"
                   >
-                    <el-input v-model="outputVariableSearch" size="small" placeholder="搜索变量" />
+                    <a-input v-model:value="outputVariableSearch" size="small" placeholder="搜索变量" />
                     <div class="variable-source-list coze-variable-source-list" data-testid="output-variable-source-list">
                       <button
                         v-for="group in filteredOutputVariableGroups"
@@ -2084,22 +2116,21 @@
                   <div class="end-response-actions">
                     <label class="end-stream-switch">
                       <span>流式输出</span>
-                      <el-switch
-                        :model-value="switchFieldValue('streamOutput')"
+                      <a-switch
+                        :checked="switchFieldValue('streamOutput')"
                         aria-label="流式输出"
-                        @update:model-value="setSwitchFieldValue('streamOutput', $event)"
+                        @update:checked="setSwitchFieldValue('streamOutput', $event)"
                       />
                     </label>
                   </div>
                 </div>
-                <el-input
+                <a-textarea
                   class="end-response-textarea"
-                  :model-value="String(fieldValue('output') || '')"
+                  :value="String(fieldValue('output') || '')"
                   aria-label="回答内容"
                   placeholder="返回给调用方的文本，可使用变量引用"
-                  type="textarea"
                   :rows="5"
-                  @update:model-value="handleVariableFieldInput('output', $event)"
+                  @update:value="handleVariableFieldInput('output', $event)"
                 />
                 <div
                   v-if="activeVariableField === 'output'"
@@ -2107,7 +2138,7 @@
                   data-testid="variable-picker"
                   data-picker-kind="inline"
                 >
-                  <el-input v-model="variableSearch" size="small" placeholder="搜索变量" />
+                  <a-input v-model:value="variableSearch" size="small" placeholder="搜索变量" />
                   <div class="inline-variable-list" data-testid="inline-variable-list">
                     <button
                       v-for="option in inlineVariableOptions"
@@ -2132,19 +2163,18 @@
               class="switch-field-row"
             >
               <span>{{ field.label }}</span>
-              <el-switch
-                :model-value="switchFieldValue(field.key)"
+              <a-switch
+                :checked="switchFieldValue(field.key)"
                 :aria-label="field.label"
-                @update:model-value="setSwitchFieldValue(field.key, $event)"
+                @update:checked="setSwitchFieldValue(field.key, $event)"
               />
             </label>
-            <el-input
+            <a-textarea
               v-else-if="field.type === 'textarea'"
-              :model-value="fieldValue(field.key)"
+              :value="fieldValue(field.key)"
               :placeholder="field.placeholder"
-              type="textarea"
               :rows="5"
-              @update:model-value="handleVariableFieldInput(field.key, $event)"
+              @update:value="handleVariableFieldInput(field.key, $event)"
             />
             <div
               v-else-if="field.type === 'code-editor'"
@@ -2157,23 +2187,21 @@
                   插入基础模板
                 </button>
               </div>
-              <el-input
+              <a-textarea
                 class="code-editor-input"
-                :model-value="fieldValue(field.key)"
+                :value="fieldValue(field.key)"
                 :placeholder="field.placeholder"
-                type="textarea"
                 :rows="12"
-                @update:model-value="setFieldValue(field.key, $event)"
+                @update:value="setFieldValue(field.key, $event)"
               />
             </div>
-            <el-input-number
+            <a-input-number
               v-else-if="field.type === 'number'"
-              :model-value="Number(fieldValue(field.key) || 0)"
+              :value="Number(fieldValue(field.key) || 0)"
               :min="field.min ?? 0"
               :max="field.max ?? 100000"
               :step="field.step ?? 1"
-              controls-position="right"
-              @update:model-value="setFieldValue(field.key, $event)"
+              @update:value="setFieldValue(field.key, $event)"
             />
             <div
               v-else-if="field.type === 'resource-adapter-badge'"
@@ -2222,7 +2250,7 @@
                         tabindex="-1"
                       />
                       <span>选择变量</span>
-                      <el-icon><Connection /></el-icon>
+                      <Connection aria-hidden="true" />
                     </button>
                     <div
                       v-else
@@ -2256,30 +2284,29 @@
                       </button>
                     </div>
                   </div>
-                  <el-input-number
+                  <a-input-number
                     v-else-if="row.type === 'number'"
-                    :model-value="Number(row.value || 0)"
+                    :value="Number(row.value || 0)"
                     aria-label="参数值"
-                    controls-position="right"
-                    @update:model-value="setSchemaInputMappingValue(index, $event)"
+                    @update:value="setSchemaInputMappingValue(index, $event)"
                   />
-                  <el-select
+                  <a-select :virtual="false"
                     v-else-if="row.type === 'boolean'"
-                    :model-value="String(row.value === true)"
+                    :value="String(row.value === true)"
                     aria-label="参数值"
-                    @update:model-value="setSchemaInputMappingValue(index, $event === 'true')"
+                    @update:value="setSchemaInputMappingValue(index, $event === 'true')"
                   >
-                    <el-option label="true" value="true" />
-                    <el-option label="false" value="false" />
-                  </el-select>
-                  <el-input
+                    <a-select-option value="true" >true</a-select-option>
+                    <a-select-option value="false" >false</a-select-option>
+                  </a-select>
+                  <a-input
                     v-else
-                    :model-value="String(row.value ?? '')"
+                    :value="String(row.value ?? '')"
                     :type="row.type === 'object' || row.type === 'array' ? 'textarea' : 'text'"
                     :rows="2"
                     :placeholder="row.description || '输入或引用参数值'"
                     aria-label="参数值"
-                    @update:model-value="setSchemaInputMappingValue(index, $event)"
+                    @update:value="setSchemaInputMappingValue(index, $event)"
                   />
                   <button
                     v-if="row.valueMode !== 'reference'"
@@ -2295,7 +2322,7 @@
                     class="variable-popover coze-variable-source-popover input-variable-popover"
                     data-testid="schema-input-variable-picker"
                   >
-                    <el-input v-model="schemaVariableSearch" size="small" placeholder="搜索变量" />
+                    <a-input v-model:value="schemaVariableSearch" size="small" placeholder="搜索变量" />
                     <div class="variable-source-list coze-variable-source-list" data-testid="schema-input-variable-source-list">
                       <button
                         v-for="group in filteredSchemaVariableGroups"
@@ -2373,30 +2400,30 @@
                 class="json-field-mapping-row"
                 data-testid="json-field-mapping-row"
               >
-                <el-input
-                  :model-value="row.name"
+                <a-input
+                  :value="row.name"
                   aria-label="映射输出变量"
                   placeholder="order_id"
-                  @update:model-value="setJsonFieldMappingName(index, $event)"
+                  @update:value="setJsonFieldMappingName(index, $event)"
                 />
-                <el-input
-                  :model-value="row.path"
+                <a-input
+                  :value="row.path"
                   aria-label="JSONPath"
                   placeholder="$.order.id"
-                  @update:model-value="setJsonFieldMappingPath(index, $event)"
+                  @update:value="setJsonFieldMappingPath(index, $event)"
                 />
-                <el-select
-                  :model-value="row.type"
+                <a-select :virtual="false"
+                  :value="row.type"
                   aria-label="字段变量类型"
-                  @update:model-value="setJsonFieldMappingType(index, $event)"
+                  @update:value="setJsonFieldMappingType(index, $event)"
                 >
-                  <el-option
+                  <a-select-option
                     v-for="option in outputParameterTypeOptions"
                     :key="option"
-                    :label="variableTypeLabel(option)"
+
                     :value="option"
-                  />
-                </el-select>
+                  >{{ variableTypeLabel(option) }}</a-select-option>
+                </a-select>
                 <button type="button" class="output-row-icon" aria-label="删除字段映射" @click="removeJsonFieldMapping(index)">
                   <XIcon aria-hidden="true" />
                 </button>
@@ -2508,7 +2535,7 @@
                         class="variable-popover coze-variable-source-popover input-variable-popover"
                         data-testid="structured-variable-picker"
                       >
-                        <el-input v-model="structuredVariableSearch" size="small" placeholder="搜索变量" />
+                        <a-input v-model:value="structuredVariableSearch" size="small" placeholder="搜索变量" />
                         <div class="variable-source-list coze-variable-source-list" data-testid="structured-variable-source-list">
                           <button
                             v-for="sourceGroup in filteredStructuredVariableGroups"
@@ -2580,11 +2607,11 @@
                 class="aggregation-source-row"
                 data-testid="aggregation-source-row"
               >
-                <el-input
-                  :model-value="row.name"
+                <a-input
+                  :value="row.name"
                   aria-label="聚合来源名"
                   placeholder="primary"
-                  @update:model-value="setAggregationSourceName(index, $event)"
+                  @update:value="setAggregationSourceName(index, $event)"
                 />
                 <div class="input-value-cell">
                   <div class="variable-value-combo structured-value-control" data-testid="structured-value-control">
@@ -2628,7 +2655,7 @@
                     class="variable-popover coze-variable-source-popover input-variable-popover"
                     data-testid="structured-variable-picker"
                   >
-                    <el-input v-model="structuredVariableSearch" size="small" placeholder="搜索变量" />
+                    <a-input v-model:value="structuredVariableSearch" size="small" placeholder="搜索变量" />
                     <div class="variable-source-list coze-variable-source-list" data-testid="structured-variable-source-list">
                       <button
                         v-for="group in filteredStructuredVariableGroups"
@@ -2714,7 +2741,7 @@
                     class="variable-popover coze-variable-source-popover input-variable-popover"
                     data-testid="assignment-target-picker"
                   >
-                    <el-input v-model="variableAssignmentTargetSearch" size="small" placeholder="搜索变量" />
+                    <a-input v-model:value="variableAssignmentTargetSearch" size="small" placeholder="搜索变量" />
                     <div class="variable-source-list coze-variable-source-list" data-testid="assignment-target-source-list">
                       <button
                         v-for="group in filteredVariableAssignmentTargetGroups"
@@ -2799,7 +2826,7 @@
                     class="variable-popover coze-variable-source-popover input-variable-popover"
                     data-testid="structured-variable-picker"
                   >
-                    <el-input v-model="structuredVariableSearch" size="small" placeholder="搜索变量" />
+                    <a-input v-model:value="structuredVariableSearch" size="small" placeholder="搜索变量" />
                     <div class="variable-source-list coze-variable-source-list" data-testid="structured-variable-source-list">
                       <button
                         v-for="group in filteredStructuredVariableGroups"
@@ -2864,12 +2891,12 @@
                 class="human-input-schema-row"
                 data-testid="human-input-schema-row"
               >
-                <el-input :model-value="row.name" aria-label="人工输入字段名" placeholder="approved" @update:model-value="setHumanInputSchemaName(index, $event)" />
-                <el-select :model-value="row.type" aria-label="人工输入字段类型" @update:model-value="setHumanInputSchemaType(index, $event)">
-                  <el-option v-for="option in outputParameterTypeOptions" :key="option" :label="variableTypeLabel(option)" :value="option" />
-                </el-select>
-                <el-switch :model-value="row.required" aria-label="人工输入字段必填" @update:model-value="setHumanInputSchemaRequired(index, $event)" />
-                <el-input :model-value="row.description" aria-label="人工输入字段说明" placeholder="字段说明" @update:model-value="setHumanInputSchemaDescription(index, $event)" />
+                <a-input :value="row.name" aria-label="人工输入字段名" placeholder="approved" @update:value="setHumanInputSchemaName(index, $event)" />
+                <a-select :virtual="false" :value="row.type" aria-label="人工输入字段类型" @update:value="setHumanInputSchemaType(index, $event)">
+                  <a-select-option v-for="option in outputParameterTypeOptions" :key="option" :value="option" >{{ variableTypeLabel(option) }}</a-select-option>
+                </a-select>
+                <a-switch :checked="row.required" aria-label="人工输入字段必填" @update:checked="setHumanInputSchemaRequired(index, $event)" />
+                <a-input :value="row.description" aria-label="人工输入字段说明" placeholder="字段说明" @update:value="setHumanInputSchemaDescription(index, $event)" />
                 <button type="button" class="output-row-icon" aria-label="删除人工输入字段" @click="removeHumanInputSchemaField(index)">
                   <XIcon aria-hidden="true" />
                 </button>
@@ -2878,18 +2905,18 @@
                 添加字段后，人工处理者将按结构提交恢复数据。
               </p>
             </div>
-            <el-select
+            <a-select :virtual="false"
               v-else-if="field.type === 'resource-select'"
-              :model-value="String(fieldValue(field.key) || '')"
-              filterable
+              :value="String(fieldValue(field.key) || '')"
+              show-search
               data-testid="tool-call-resource-select"
               :placeholder="field.placeholder"
-              @update:model-value="selectWorkflowResource(field, $event)"
+              @update:value="selectWorkflowResource(field, $event)"
             >
-              <el-option
+              <a-select-option
                 v-for="resource in workflowResourceOptions(field.resourceTypes || [])"
                 :key="resource.resourceId"
-                :label="toolCallResourceLabel(resource)"
+
                 :value="resource.resourceId"
                 :disabled="!isResourceSelectable(resource)"
               >
@@ -2897,20 +2924,20 @@
                   <strong>{{ resource.displayName }}</strong>
                   <small>{{ resource.resourceType }} · {{ resource.resourceId }} · {{ resourceStatusLabel(resource) }}</small>
                 </span>
-              </el-option>
-            </el-select>
-            <el-select
+              </a-select-option>
+            </a-select>
+            <a-select :virtual="false"
               v-else-if="field.type === 'select'"
-              :model-value="fieldValue(field.key) || field.options?.[0]"
-              @update:model-value="setFieldValue(field.key, $event)"
+              :value="fieldValue(field.key) || field.options?.[0]"
+              @update:value="setFieldValue(field.key, $event)"
             >
-              <el-option v-for="option in field.options || []" :key="option" :label="selectOptionLabel(field.key, option)" :value="option" />
-            </el-select>
-            <el-input
+              <a-select-option v-for="option in field.options || []" :key="option" :value="option" >{{ selectOptionLabel(field.key, option) }}</a-select-option>
+            </a-select>
+            <a-input
               v-else
-              :model-value="fieldValue(field.key)"
+              :value="fieldValue(field.key)"
               :placeholder="field.placeholder"
-              @update:model-value="handleVariableFieldInput(field.key, $event)"
+              @update:value="handleVariableFieldInput(field.key, $event)"
             />
             <div
               v-if="activeVariableField === field.key"
@@ -2918,7 +2945,7 @@
               data-testid="variable-picker"
               data-picker-kind="inline"
             >
-              <el-input v-model="variableSearch" size="small" placeholder="搜索变量" />
+              <a-input v-model:value="variableSearch" size="small" placeholder="搜索变量" />
               <div class="inline-variable-list" data-testid="inline-variable-list">
                 <button
                   v-for="option in inlineVariableOptions"
@@ -2943,11 +2970,14 @@
 
       <aside v-if="nodeTestDrawerOpen && nodeTestTarget" class="node-test-drawer" data-testid="node-test-drawer">
         <div class="node-test-header">
-          <div>
+          <div class="node-test-header-title">
             <h3>试运行</h3>
             <span>{{ nodeTestTarget.name || nodeTestTarget.nodeKey }}</span>
           </div>
-          <button type="button" aria-label="关闭节点试运行" @click="closeSelectedNodeTest">
+          <button type="button" class="node-test-log-action" @click="openRunLogPanel">
+            查看日志
+          </button>
+          <button type="button" class="node-test-close-button" aria-label="关闭节点试运行" @click="closeSelectedNodeTest">
             <XIcon aria-hidden="true" />
           </button>
         </div>
@@ -2968,19 +2998,18 @@
                   {{ row.name }}
                   <em>{{ row.type }}</em>
                 </span>
-                <el-input
+                <a-textarea
                   v-if="row.type === 'json'"
-                  type="textarea"
-                  :autosize="{ minRows: 3, maxRows: 8 }"
-                  :model-value="row.value"
+                  :auto-size="{ minRows: 3, maxRows: 8 }"
+                  :value="row.value"
                   :placeholder="row.name"
-                  @update:model-value="setNodeTestInput(row.name, $event)"
+                  @update:value="setNodeTestInput(row.name, $event)"
                 />
-                <el-input
+                <a-input
                   v-else
-                  :model-value="row.value"
+                  :value="row.value"
                   :placeholder="row.name"
-                  @update:model-value="setNodeTestInput(row.name, $event)"
+                  @update:value="setNodeTestInput(row.name, $event)"
                 />
               </label>
             </div>
@@ -2996,18 +3025,51 @@
               SUCCEEDED
               <span>{{ nodeTestResult.elapsedMs || 0 }}ms</span>
             </div>
-            <div class="node-test-result-block">
-              <strong>运行结果</strong>
-              <dl>
-                <dt>输入</dt>
-                <dd>{{ formatNodeTestValue(nodeTestResult.input) }}</dd>
-                <dt>推理内容</dt>
-                <dd>{{ nodeTestReasoning }}</dd>
-                <dt>技能调用</dt>
-                <dd>{{ nodeTestSkillCalls }}</dd>
-                <dt>输出</dt>
-                <dd>{{ formatNodeTestValue(nodeTestResult.output) }}</dd>
-              </dl>
+            <div class="node-test-readable-result">
+              <h4>运行结果</h4>
+              <article class="node-test-readable-block">
+                <div class="node-test-readable-heading">
+                  <strong>输入</strong>
+                  <button type="button" aria-label="复制输入" @click="copyNodeTestReadableValue(nodeTestResult.input)">
+                    <CopyIcon aria-hidden="true" />
+                  </button>
+                </div>
+                <div class="node-test-readable-card">
+                  <div v-for="row in nodeTestInputReadableRows" :key="row.key" class="node-test-readable-row">
+                    <span>{{ row.key }}</span>
+                    <em>{{ row.value }}</em>
+                  </div>
+                </div>
+              </article>
+              <article class="node-test-readable-block">
+                <div class="node-test-readable-heading">
+                  <strong>推理内容</strong>
+                  <button type="button" aria-label="复制推理内容" @click="copyNodeTestReadableValue(nodeTestReasoning)">
+                    <CopyIcon aria-hidden="true" />
+                  </button>
+                </div>
+                <div class="node-test-readable-card node-test-readable-text">{{ nodeTestReasoning }}</div>
+              </article>
+              <article class="node-test-readable-block">
+                <div class="node-test-readable-heading">
+                  <strong>技能调用</strong>
+                </div>
+                <div class="node-test-readable-card node-test-readable-text">{{ nodeTestSkillCalls }}</div>
+              </article>
+              <article class="node-test-readable-block">
+                <div class="node-test-readable-heading">
+                  <strong>输出</strong>
+                  <button type="button" aria-label="复制输出" @click="copyNodeTestReadableValue(nodeTestResult.output)">
+                    <CopyIcon aria-hidden="true" />
+                  </button>
+                </div>
+                <div class="node-test-readable-card">
+                  <div v-for="row in nodeTestOutputReadableRows" :key="row.key" class="node-test-readable-row">
+                    <span>{{ row.key }}</span>
+                    <em>{{ row.value }}</em>
+                  </div>
+                </div>
+              </article>
             </div>
           </section>
         </template>
@@ -3024,55 +3086,80 @@
       </aside>
 
       <aside v-if="testPanelOpen" class="test-run-panel" :class="{ 'chatflow-run-panel': isChatflowMode }" data-testid="test-run-panel">
-        <div class="config-header">
-          <div class="node-type-icon icon-start"><Finished /></div>
-          <div>
-            <h3>{{ isChatflowMode ? '对话试运行' : '试运行' }}</h3>
-            <span>{{ isChatflowMode ? '输入用户消息并执行当前 Chatflow' : '从 START 节点执行当前画布' }}</span>
+        <div v-if="!isChatflowMode" class="node-test-header test-run-header">
+          <div class="node-test-header-title">
+            <h3>试运行</h3>
           </div>
-          <button type="button" aria-label="关闭试运行" @click="testPanelOpen = false">
+          <button type="button" class="node-test-log-action" @click="openRunLogPanel">
+            查看日志
+          </button>
+          <button type="button" class="node-test-close-button" aria-label="关闭试运行" @click="testPanelOpen = false">
             <XIcon aria-hidden="true" />
           </button>
         </div>
-
-        <template v-if="isChatflowMode">
-          <section class="config-section chatflow-run-settings" :class="{ collapsed: !chatflowRunFieldsOpen }" data-testid="chatflow-run-fields">
+        <div v-else class="config-header chatflow-run-header">
+          <div class="node-type-icon icon-start"><Finished /></div>
+          <div class="chatflow-run-header-title">
+            <h3>对话试运行</h3>
+          </div>
+          <div class="chatflow-run-header-actions">
             <button
               type="button"
-              class="section-title config-section-toggle chatflow-run-fields-toggle"
-              data-testid="chatflow-run-fields-toggle"
-              :aria-expanded="chatflowRunFieldsOpen"
-              @click="chatflowRunFieldsOpen = !chatflowRunFieldsOpen"
+              class="chatflow-run-header-button"
+              :class="{ active: chatflowRunSettingsOpen }"
+              aria-label="对话设置"
+              :aria-expanded="chatflowRunSettingsOpen"
+              @click="chatflowRunSettingsOpen = !chatflowRunSettingsOpen"
             >
-              <span class="section-chevron" aria-hidden="true">›</span>
-              <strong>运行参数</strong>
-              <small>{{ testProfile.conversationId }} / {{ testProfile.userId }} / {{ testProfile.channel }}</small>
+              <span>对话设置</span>
+              <ChevronDownIcon aria-hidden="true" />
             </button>
-            <div v-if="chatflowRunFieldsOpen" class="chatflow-profile-grid">
+            <button
+              type="button"
+              class="chatflow-run-header-icon"
+              aria-label="清空对话"
+              :disabled="running"
+              @click="resetChatflowTrialSession"
+            >
+              <BroomIcon aria-hidden="true" />
+            </button>
+            <button type="button" class="chatflow-run-header-icon" aria-label="关闭试运行" @click="testPanelOpen = false">
+              <XIcon aria-hidden="true" />
+            </button>
+          </div>
+          <div
+            v-if="chatflowRunSettingsOpen"
+            class="chatflow-run-settings-popover"
+            data-testid="chatflow-run-settings-popover"
+          >
+            <div class="chatflow-run-settings-summary">{{ testProfile.conversationId }} / {{ testProfile.userId }} / {{ testProfile.channel }}</div>
+            <div class="chatflow-profile-grid">
               <div class="run-input-field compact">
                 <label>会话 ID（sys.conversation_id）</label>
-                <el-input v-model="testProfile.conversationId" placeholder="conversation_id" />
+                <a-input v-model:value="testProfile.conversationId" placeholder="conversation_id" />
               </div>
               <div class="run-input-field compact">
                 <label>用户 ID（sys.user_id）</label>
-                <el-input v-model="testProfile.userId" placeholder="user_id" />
+                <a-input v-model:value="testProfile.userId" placeholder="user_id" />
               </div>
               <div class="run-input-field compact">
                 <label>渠道（sys.channel）</label>
-                <el-select v-model="testProfile.channel" placeholder="channel">
-                  <el-option label="web" value="web" />
-                  <el-option label="api" value="api" />
-                  <el-option label="feishu" value="feishu" />
-                  <el-option label="dingtalk" value="dingtalk" />
-                </el-select>
+                <a-select :virtual="false" v-model:value="testProfile.channel" placeholder="channel">
+                  <a-select-option value="web" >web</a-select-option>
+                  <a-select-option value="api" >api</a-select-option>
+                  <a-select-option value="feishu" >feishu</a-select-option>
+                  <a-select-option value="dingtalk" >dingtalk</a-select-option>
+                </a-select>
               </div>
               <div class="run-input-field compact">
                 <label>渠道 ID（sys.channel_id）</label>
-                <el-input v-model="testProfile.channelId" placeholder="channel_id" />
+                <a-input v-model:value="testProfile.channelId" placeholder="channel_id" />
               </div>
             </div>
-          </section>
+          </div>
+        </div>
 
+        <template v-if="isChatflowMode">
           <section v-if="validationErrors.length" class="config-section">
             <div class="section-title validation-title"><span>!</span> 校验失败</div>
             <ul class="validation-list">
@@ -3119,10 +3206,20 @@
                 <div
                   v-for="message in chatflowTrialMessages"
                   :key="message.id"
-                  :class="['message-bubble', message.role]"
+                  :class="['message-bubble', message.role, { loading: message.loading, error: message.error }]"
                   :data-testid="message.role === 'user' ? 'chatflow-user-message' : 'chatflow-assistant-message'"
                 >
-                  <span :data-testid="message.streaming ? 'chatflow-typewriter-message' : undefined">
+                  <span
+                    v-if="message.loading"
+                    class="chatflow-loading-dots"
+                    data-testid="chatflow-assistant-loading"
+                    aria-label="等待回复"
+                  >
+                    <i aria-hidden="true"></i>
+                    <i aria-hidden="true"></i>
+                    <i aria-hidden="true"></i>
+                  </span>
+                  <span v-else :data-testid="message.streaming ? 'chatflow-typewriter-message' : undefined">
                     {{ message.content }}
                     <span v-if="message.streaming" class="typewriter-caret" aria-hidden="true"></span>
                   </span>
@@ -3136,39 +3233,50 @@
             </div>
 
             <div class="chatflow-composer">
-              <el-input
-                v-model="testInput"
-                class="chatflow-composer-input"
-                data-testid="chatflow-run-message-input"
-                type="textarea"
-                :autosize="{ minRows: 1, maxRows: 4 }"
-                placeholder="输入消息"
-                :disabled="running"
-                @keydown.enter.exact.prevent="sendChatflowMessage"
-              />
-              <button
-                type="button"
-                class="chatflow-send-button"
-                aria-label="发送消息"
-                :disabled="running || !testInput.trim()"
-                @click="sendChatflowMessage"
-              >
-                <el-icon><Promotion /></el-icon>
-              </button>
+              <div class="chatflow-composer-shell" data-testid="chatflow-composer-shell">
+                <div class="chatflow-composer-editor" data-testid="chatflow-composer-editor">
+                  <a-textarea
+                    v-model:value="testInput"
+                    class="chatflow-composer-input"
+                    data-testid="chatflow-run-message-input"
+                    :auto-size="{ minRows: 2, maxRows: 6 }"
+                    placeholder="输入问题，可通过 shift + enter 换行"
+                    :disabled="running"
+                    @keydown.enter.exact.prevent="sendChatflowMessage"
+                  />
+                </div>
+                <div class="chatflow-composer-actions" data-testid="chatflow-composer-actions">
+                  <button
+                    type="button"
+                    class="chatflow-upload-button"
+                    aria-label="上传文件"
+                  >
+                    <LucidePlus aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    class="chatflow-send-button"
+                    aria-label="发送消息"
+                    :disabled="running || !testInput.trim()"
+                    @click="sendChatflowMessage"
+                  >
+                    <Promotion aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
             </div>
           </section>
         </template>
 
         <template v-else>
           <section class="config-section">
-            <div class="section-title">
-              <span>⌄</span> 输入
+            <div class="node-test-section-title">
+              <strong>试运行输入</strong>
             </div>
             <div class="run-input-field">
               <label>用户消息（userMessage / USER_INPUT）</label>
-              <el-input
-                v-model="testInput"
-                type="textarea"
+              <a-textarea
+                v-model:value="testInput"
                 :rows="4"
                 placeholder="输入 userMessage"
               />
@@ -3197,8 +3305,10 @@
             </div>
           </section>
 
-          <div class="test-run-actions">
-            <el-button :loading="running" type="primary" @click="runCanvasTest">运行</el-button>
+          <div class="node-test-footer test-run-actions">
+            <button type="button" class="run" :disabled="running" @click="runCanvasTest">
+              {{ running ? '运行中...' : '运行' }}
+            </button>
           </div>
         </template>
       </aside>
@@ -3219,7 +3329,7 @@
             >
               查看运行详情
             </button>
-            <button type="button" aria-label="关闭调试工具" class="debug-close-button" @click="debugDockOpen = false">
+            <button type="button" aria-label="关闭调试工具" class="debug-close-button" @click="closeDebugDock">
               <XIcon aria-hidden="true" />
             </button>
           </div>
@@ -3563,7 +3673,7 @@
       </aside>
 
       <div v-if="paletteOpen" class="node-palette" data-testid="bottom-node-palette">
-        <el-input v-model="nodePaletteSearch" size="small" placeholder="搜索节点、插件、工作流" />
+        <a-input v-model:value="nodePaletteSearch" size="small" placeholder="搜索节点、插件、工作流" />
         <div v-for="group in filteredNodePaletteGroups" :key="group.title" class="node-palette-group">
           <strong>{{ group.title }}</strong>
           <div class="node-palette-grid">
@@ -3635,12 +3745,14 @@
       </div>
     </section>
 
-    <el-dialog
-      v-model="publishDialogOpen"
+    <a-modal
+      v-model:open="publishDialogOpen"
       class="workflow-publish-dialog"
       title="发布"
       width="42rem"
-      append-to-body
+      :footer="null"
+      :keyboard="true"
+      @cancel="publishDialogOpen = false"
     >
       <div class="publish-dialog-body" data-testid="workflow-publish-dialog">
         <section class="publish-dialog-section">
@@ -3700,54 +3812,54 @@
         </section>
 
         <div class="publish-actions">
-          <el-button @click="publishDialogOpen = false">取消</el-button>
-          <el-button
+          <a-button @click="publishDialogOpen = false">取消</a-button>
+          <a-button
             :disabled="!publishGate.allowed"
             :loading="publishing"
             type="primary"
             @click="publishWorkflow"
           >
             确认发布
-          </el-button>
+          </a-button>
         </div>
       </div>
-    </el-dialog>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, markRaw, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import type { RouteLocationRaw } from 'vue-router'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { message } from 'ant-design-vue'
 import {
   ArrowLeft,
   ArrowRight,
-  ChatDotRound,
-  ChatLineRound,
-  Connection,
-  Cpu,
-  DataAnalysis,
-  Finished,
-  Operation,
-  Promotion,
-  Share,
-  Tools,
-  User,
-} from '@element-plus/icons-vue'
-import {
+  BarChart3 as DataAnalysis,
+  BrushCleaning as BroomIcon,
+  Cable as Connection,
   Check as CheckIcon,
   ChevronDown as ChevronDownIcon,
   ChevronRight as ChevronRightIcon,
+  CircleCheck as Finished,
   Copy as CopyIcon,
+  Cpu,
   Hand as HandIcon,
   LayoutDashboard as LayoutDashboardIcon,
+  MessageCircle as ChatDotRound,
+  MessageSquare as ChatLineRound,
   Minus as LucideMinus,
   MoreHorizontal as MoreHorizontalIcon,
   MousePointer2 as MousePointerIcon,
   Play as PlayIcon,
   Plus as LucidePlus,
+  Send as Promotion,
   Settings as SettingsIcon,
+  Share2 as Share,
+  SlidersHorizontal as Operation,
   Trash2,
+  User,
+  Wrench as Tools,
   Wrench as WrenchIcon,
   X as XIcon,
 } from 'lucide-vue-next'
@@ -3781,6 +3893,15 @@ import {
   listWorkflowResources,
   type WorkflowDetail,
 } from '@/api/workflow'
+import { getProviderList, type ProviderVO } from '@/api/provider'
+import anthropicLogoUrl from '@/assets/provider-logos/anthropic.svg?url'
+import azureLogoUrl from '@/assets/provider-logos/azure.svg?url'
+import compatibleLogoUrl from '@/assets/provider-logos/compatible.svg?url'
+import geminiLogoUrl from '@/assets/provider-logos/gemini.svg?url'
+import ollamaLogoUrl from '@/assets/provider-logos/ollama.svg?url'
+import openaiLogoUrl from '@/assets/provider-logos/openai.svg?url'
+import { computeVariableFlyoutPosition } from './floatingPanelGeometry'
+import { buildLlmModelOptions, llmModelSelectionFields, type LlmModelOption } from './llmModelOptions'
 import {
   buildChatflowResumeFields,
   flattenChatflowVariables,
@@ -3884,7 +4005,7 @@ import { buildNodeTestInputs, canRunSingleNodeTest, nodeTestInputPayload, type N
 import { buildNodePaletteGroups, filterNodePaletteGroups, type NodePaletteEntry } from './nodePalette'
 import { isResourceSelectable, resourceStatusLabel, type WorkflowResource } from './resourceRegistry'
 import { deriveRunPathEdgeClasses } from './runPathEdges'
-import { completeVariableBraceTrigger, insertInlineVariableReference } from './inlineVariableText'
+import { completeVariableBraceTrigger, insertInlineVariableReference, localizeInlineVariableReference } from './inlineVariableText'
 import { buildInlineVariableCatalog, buildVariableCatalog, type VariableCatalogGroup, type VariableCatalogType, type VariableDefinition } from './variableCatalog'
 import { evaluateWorkflowPublishGate } from './workflowPublish'
 import { validateWorkflowGraph } from './workflowValidation'
@@ -3909,6 +4030,8 @@ type ChatflowTrialMessage = {
   role: 'user' | 'assistant'
   content: string
   streaming?: boolean
+  loading?: boolean
+  error?: boolean
 }
 type ChatflowSessionState = {
   sessionId: string
@@ -3937,13 +4060,6 @@ type LlmSkillChoice = {
   description: string
   disabled?: boolean
   registryResource?: WorkflowResource
-}
-type LlmModelOption = {
-  provider: string
-  value: string
-  label: string
-  description: string
-  enabled: boolean
 }
 type LlmResource = {
   type?: string
@@ -4022,13 +4138,21 @@ const isChatflowMode = computed(() => route.path.startsWith('/chatflows'))
 const flowId = computed(() => Number(route.params.id || 0))
 const workflowId = flowId
 const isEditing = computed(() => flowId.value > 0)
-const listPath = computed(() => isChatflowMode.value ? '/chatflows' : '/workflows')
+const listRoute = computed<RouteLocationRaw>(() => ({
+  name: isChatflowMode.value ? 'HifyChatflows' : 'HifyWorkflows',
+}))
+const canvasRoute = (id: number | string): RouteLocationRaw => ({
+  name: isChatflowMode.value ? 'HifyChatflowsCanvas' : 'HifyWorkflowsCanvas',
+  params: { id },
+})
 
 const graph = ref<WorkflowCanvasGraph>(createDefaultGraph())
 const form = ref(defaultForm())
 const saving = ref(false)
+const canvasDirty = ref(false)
 const running = ref(false)
 const nodeTestRunning = ref(false)
+const optimisticRunNodeKeys = ref<Set<string>>(new Set())
 const loading = ref(false)
 const canvasTab = ref<CanvasTab>('compose')
 const composerLifecycleTabs = composerCanvasTabs()
@@ -4058,6 +4182,7 @@ const modelPickerOpen = ref(false)
 const modelParameterPanelOpen = ref(false)
 const llmModelSearch = ref('')
 const llmModelSearchTerm = ref('')
+const llmProviderModelOptions = ref<LlmModelOption[]>([])
 const resourcePickerOpen = ref(false)
 const activeLlmSkillTab = ref<LlmSkillTabValue>('KNOWLEDGE_BASE')
 const llmSkillSearch = ref('')
@@ -4086,10 +4211,12 @@ const intentDragSourceIndex = ref<number | null>(null)
 const variableFlyoutPlacement = ref<'left' | 'right'>('left')
 const collapsedConfigSections = ref<Set<string>>(new Set())
 const lastSavedAt = ref('')
+const flowTitleEditing = ref(false)
+const flowTitleDraft = ref('')
 const testPanelOpen = ref(false)
 const testInput = ref('hello')
 const testResult = ref<Record<string, any> | null>(null)
-const chatflowRunFieldsOpen = ref(false)
+const chatflowRunSettingsOpen = ref(false)
 const chatflowTrialMessages = ref<ChatflowTrialMessage[]>([])
 const chatflowSessionState = ref<ChatflowSessionState | null>(null)
 const chatflowRunEvents = ref<any[]>([])
@@ -4172,29 +4299,38 @@ const llmSkillTabs: Array<{ value: LlmSkillTabValue; label: string }> = [
   { value: 'SUBWORKFLOW', label: '工作流' },
   { value: 'AGENT', label: '智能体' },
 ]
-const llmModelOptions: LlmModelOption[] = [
+const fallbackLlmModelOptions: LlmModelOption[] = [
   {
     provider: 'OpenRouter',
-    value: 'xiaomi/mimo-v2-flash',
-    label: 'xiaomi/mimo-v2-flash',
-    description: '已启用 · 文本 · 快速响应',
-    enabled: true,
-  },
-  {
-    provider: 'OpenAI',
-    value: 'gpt-4.1-mini',
-    label: 'gpt-4.1-mini',
-    description: '未配置 · 文本 · 高质量推理',
+    providerType: 'OPENAI_COMPATIBLE',
+    providerIconKey: 'qwen',
+    value: 'qwen/qwen3.5-9b',
+    label: 'qwen/qwen3.5-9b',
+    description: '通义千问系列模型，适合中文理解、推理和工具调用。',
     enabled: false,
   },
   {
-    provider: 'Anthropic',
-    value: 'claude-3-5-haiku',
-    label: 'claude-3-5-haiku',
-    description: '未配置 · 文本 · 低延迟',
+    provider: 'OpenRouter',
+    providerType: 'OPENAI_COMPATIBLE',
+    providerIconKey: 'deepseek',
+    value: 'deepseek/deepseek-v4-flash',
+    label: 'deepseek/deepseek-v4-flash',
+    description: 'DeepSeek 系列模型，适合推理、代码和通用对话。',
+    enabled: false,
+  },
+  {
+    provider: 'OpenRouter',
+    providerType: 'OPENAI_COMPATIBLE',
+    providerIconKey: 'mimo',
+    value: 'xiaomi/mimo-v2-flash',
+    label: 'xiaomi/mimo-v2-flash',
+    description: '小米 MiMo 系列模型，适合轻量快速的通用任务。',
     enabled: false,
   },
 ]
+const llmModelOptions = computed(() =>
+  llmProviderModelOptions.value.length ? llmProviderModelOptions.value : fallbackLlmModelOptions,
+)
 const llmModelParameterFields = [
   { key: 'temperature', label: '温度', type: 'number', min: 0, max: 2, step: 0.01, placeholder: '0.7' },
   { key: 'maxTokens', label: '最大输出 Token', type: 'number', min: 1, max: 200000, step: 1, placeholder: '2048' },
@@ -4303,12 +4439,18 @@ function defaultForm() {
 
 const saveState = computed(() => {
   if (loading.value) return '正在载入...'
-  return lastSavedAt.value ? `已保存 ${lastSavedAt.value}` : '已自动保存草稿'
+  if (saving.value) return '保存中...'
+  if (canvasDirty.value) return '未保存更改'
+  return lastSavedAt.value ? `已保存 ${lastSavedAt.value}` : '草稿未保存'
 })
+const flowTitleDisplay = computed(() =>
+  form.value.name.trim() || (isChatflowMode.value ? '未命名对话流' : '未命名工作流'),
+)
 
 const selectedNode = computed(() => graph.value.nodes.find((node) => node.nodeKey === selectedNodeKey.value))
 const selectedSchema = computed(() => selectedNode.value ? getNodeConfigSchema(selectedNode.value.type) : null)
 const nodeCardMenuKey = ref('')
+let nodeCardMenuCloseTimer: ReturnType<typeof window.setTimeout> | null = null
 const nodeTitleEditing = ref(false)
 const nodeTitleDraft = ref('')
 const nodeTitleEditInputRef = ref<HTMLInputElement | null>(null)
@@ -4343,23 +4485,48 @@ const inlineVariableGroups = computed(() => selectedNode.value
     globalVariables: isChatflowMode.value ? chatflowCatalogVariableDefinitions.value : undefined,
   })
   : [])
-const llmModelDisplayName = computed(() => String(fieldValue('model') || 'xiaomi/mimo-v2-flash'))
+const selectedLlmModelOption = computed(() => {
+  const selectedModelConfigId = Number(fieldValue('modelConfigId') || 0)
+  const selectedModel = String(fieldValue('model') || '')
+  return llmModelOptions.value.find((option) => selectedModelConfigId && option.modelConfigId === selectedModelConfigId)
+    || llmModelOptions.value.find((option) => selectedModel && option.value === selectedModel)
+    || null
+})
+const llmModelDisplayName = computed(() => selectedLlmModelOption.value?.label || String(fieldValue('model') || '请选择模型'))
 const filteredLlmModelOptions = computed(() => {
   const keyword = llmModelSearchTerm.value.trim().toLowerCase()
-  if (!keyword) return llmModelOptions
-  return llmModelOptions.filter((option) =>
-    `${option.provider} ${option.label} ${option.value} ${option.description}`.toLowerCase().includes(keyword),
+  if (!keyword) return llmModelOptions.value
+  return llmModelOptions.value.filter((option) =>
+    `${option.provider} ${option.providerType} ${option.label} ${option.value}`.toLowerCase().includes(keyword),
   )
 })
-const filteredLlmModelGroups = computed(() => {
-  const groups = new Map<string, LlmModelOption[]>()
-  filteredLlmModelOptions.value.forEach((option) => {
-    const options = groups.get(option.provider) || []
-    options.push(option)
-    groups.set(option.provider, options)
-  })
-  return Array.from(groups.entries()).map(([provider, options]) => ({ provider, options }))
-})
+const modelProviderLogoUrls: Record<string, string> = {
+  openai: openaiLogoUrl,
+  anthropic: anthropicLogoUrl,
+  gemini: geminiLogoUrl,
+  azure: azureLogoUrl,
+  ollama: ollamaLogoUrl,
+  compatible: compatibleLogoUrl,
+}
+function modelProviderLogoSrc(iconKey: string) {
+  return modelProviderLogoUrls[iconKey] || ''
+}
+function modelProviderIconText(iconKey: string) {
+  const labels: Record<string, string> = {
+    qwen: 'Q',
+    mimo: 'Mi',
+    openai: 'AI',
+    anthropic: 'A',
+    gemini: 'G',
+    azure: 'Az',
+    ollama: 'Ol',
+    deepseek: 'DS',
+    openrouter: 'OR',
+    doubao: '豆',
+    compatible: 'AI',
+  }
+  return labels[iconKey] || 'AI'
+}
 const filteredLlmSkillResources = computed(() => {
   const keyword = llmSkillSearch.value.trim().toLowerCase()
   return llmSkillChoicesForTab(activeLlmSkillTab.value)
@@ -4428,8 +4595,38 @@ function toggleConfigSection(title: string) {
   }
   collapsedConfigSections.value = next
 }
+
+function markCanvasUnsaved() {
+  canvasDirty.value = true
+}
+
+function startFlowTitleEdit() {
+  flowTitleDraft.value = form.value.name
+  flowTitleEditing.value = true
+  void nextTick(() => {
+    const input = document.querySelector('.title-input input') as HTMLInputElement | null
+    input?.focus()
+    input?.select()
+  })
+}
+
+function commitFlowTitleEdit() {
+  if (!flowTitleEditing.value) return
+  const nextName = flowTitleDraft.value.trim()
+  if (nextName !== form.value.name) {
+    form.value = { ...form.value, name: nextName }
+    markCanvasUnsaved()
+  }
+  flowTitleEditing.value = false
+}
+
+function cancelFlowTitleEdit() {
+  flowTitleDraft.value = form.value.name
+  flowTitleEditing.value = false
+}
 const operationModeLabel = computed(() => operationModeTitle(operationMode.value))
 const canvasZoomLabel = computed(() => formatCanvasZoomLabel(canvasZoom.value))
+type NodeTestReadableRow = { key: string; value: string }
 const nodeTestReasoning = computed(() => {
   if (!nodeTestResult.value) return '暂无推理内容'
   const values = Object.values(nodeTestResult.value.output || {})
@@ -4446,6 +4643,8 @@ const nodeTestSkillCalls = computed(() => {
   const resources = nodeTestTarget.value?.type === 'LLM' ? (nodeTestTarget.value.config.resources || []) : []
   return Array.isArray(resources) && resources.length ? `${resources.length} 个资源参与` : '无'
 })
+const nodeTestInputReadableRows = computed(() => readableNodeTestRows(nodeTestResult.value?.input || {}))
+const nodeTestOutputReadableRows = computed(() => readableNodeTestRows(nodeTestResult.value?.output || {}))
 const filteredNodePaletteGroups = computed(() => {
   return filterNodePaletteGroups(nodePaletteGroups.value, nodePaletteSearch.value)
 })
@@ -4532,6 +4731,15 @@ const nodeRunStateByKey = computed(() => {
   activeRunNodeDetails.value.forEach((node) => {
     const key = String(node.nodeKey || '')
     if (key) map.set(key, node)
+  })
+  optimisticRunNodeKeys.value.forEach((key) => {
+    if (!map.has(key)) {
+      map.set(key, {
+        nodeKey: key,
+        status: 'RUNNING',
+        elapsedMs: 0,
+      })
+    }
   })
   return map
 })
@@ -4782,7 +4990,7 @@ function edgeInsertPaletteStyle(path: ReturnType<typeof getBezierPath>) {
   const [, labelX, labelY] = path
   const inverseZoom = 1 / Math.max(CANVAS_ZOOM_MIN, canvasZoom.value || 1)
   return {
-    transform: `translate(0, -50%) translate(${labelX}px, ${labelY}px) scale(${inverseZoom})`,
+    transform: `translate(1.75rem, -50%) translate(${labelX}px, ${labelY}px) scale(${inverseZoom})`,
     transformOrigin: '0 50%',
   }
 }
@@ -4948,6 +5156,8 @@ function debugNodeOutputs(node: WorkflowRunNodeDetail | Record<string, any>) {
 
 async function toggleDebugDock() {
   debugDockOpen.value = !debugDockOpen.value
+  paletteOpen.value = false
+  edgeInsertPaletteId.value = ''
   if (!debugDockOpen.value) return
   debugTraceDetailMode.value = 'flame'
   if (!lastTestRunId.value) return
@@ -4957,6 +5167,12 @@ async function toggleDebugDock() {
   } else {
     await loadWorkflowRunDebugDetail(lastTestRunId.value)
   }
+}
+
+function closeDebugDock() {
+  debugDockOpen.value = false
+  paletteOpen.value = false
+  edgeInsertPaletteId.value = ''
 }
 
 function handleViewportChange(viewport: { zoom?: number }) {
@@ -4973,7 +5189,7 @@ function requestCanvasLayoutRefit() {
   window.clearTimeout(canvasLayoutSettledRefitTimer)
   const refitCanvas = async () => {
     if (canvasTab.value !== 'compose' || flowNodes.value.length === 0) return
-    await fitView({ padding: 0.18, duration: CANVAS_ZOOM_ANIMATION_MS })
+    await fitView({ padding: canvasFitViewPadding(), duration: CANVAS_ZOOM_ANIMATION_MS })
     requestedCanvasZoom = clampCanvasZoom(getViewport().zoom || requestedCanvasZoom)
     canvasZoom.value = requestedCanvasZoom
   }
@@ -4987,6 +5203,10 @@ function requestCanvasLayoutRefit() {
       void refitCanvas()
     }, 260)
   })
+}
+
+function canvasFitViewPadding() {
+  return 0.18
 }
 
 function isZoomPresetActive(preset: number) {
@@ -5032,11 +5252,34 @@ function flamegraphRowStyle(row: WorkflowRunFlamegraphRow, rows: WorkflowRunFlam
   }
 }
 
-function formatNodeTestValue(value: unknown) {
-  if (value === null || value === undefined) return '空'
+function readableNodeTestValue(value: unknown) {
+  if (value === null || value === undefined) return ''
   if (typeof value === 'string') return value
   if (typeof value === 'number' || typeof value === 'boolean') return String(value)
-  return JSON.stringify(value, null, 2)
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return String(value)
+  }
+}
+
+function readableNodeTestRows(value: unknown): NodeTestReadableRow[] {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const rows = Object.entries(value as Record<string, unknown>)
+    if (rows.length) {
+      return rows.map(([key, rowValue]) => ({
+        key,
+        value: readableNodeTestValue(rowValue),
+      }))
+    }
+  }
+  return [{ key: 'value', value: readableNodeTestValue(value) }]
+}
+
+async function copyNodeTestReadableValue(value: unknown) {
+  if (!navigator.clipboard) return
+  await navigator.clipboard.writeText(readableNodeTestValue(value))
+  message.success('已复制')
 }
 
 function buildResumePayload(fields: ChatflowResumeField[], values: Record<string, string>) {
@@ -5087,10 +5330,25 @@ function canRenameNode(node?: WorkflowCanvasNode | null) {
   return Boolean(node && !isFixedNode(node))
 }
 
-function toggleNodeCardMenu(nodeKey: string) {
-  nodeCardMenuKey.value = nodeCardMenuKey.value === nodeKey ? '' : nodeKey
+function clearNodeCardMenuCloseTimer() {
+  if (nodeCardMenuCloseTimer === null) return
+  window.clearTimeout(nodeCardMenuCloseTimer)
+  nodeCardMenuCloseTimer = null
+}
+
+function openNodeCardMenu(nodeKey: string) {
+  clearNodeCardMenuCloseTimer()
+  nodeCardMenuKey.value = nodeKey
   paletteOpen.value = false
   edgeInsertPaletteId.value = ''
+}
+
+function scheduleCloseNodeCardMenu(nodeKey: string) {
+  clearNodeCardMenuCloseTimer()
+  nodeCardMenuCloseTimer = window.setTimeout(() => {
+    if (nodeCardMenuKey.value === nodeKey) nodeCardMenuKey.value = ''
+    nodeCardMenuCloseTimer = null
+  }, 120)
 }
 
 function startSelectedNodeTitleEdit() {
@@ -5202,11 +5460,6 @@ function removeNodeFromMenu(nodeKey: string) {
   nodeCardMenuKey.value = ''
 }
 
-function openNodeHelp(type: WorkflowCanvasNodeType) {
-  nodeCardMenuKey.value = ''
-  ElMessage.info(`${getNodeConfigSchema(type).title}帮助文档待接入`)
-}
-
 function canKeyboardDeleteNode() {
   return Boolean(selectedNode.value && selectedNode.value.type !== 'START' && selectedNode.value.type !== 'END')
 }
@@ -5214,7 +5467,7 @@ function canKeyboardDeleteNode() {
 function isEditableTarget(target: EventTarget | null) {
   const element = target instanceof HTMLElement ? target : null
   if (!element) return false
-  return Boolean(element.closest('input, textarea, select, [contenteditable="true"], .el-input, .el-textarea'))
+  return Boolean(element.closest('input, textarea, select, [contenteditable="true"], .ant-input, .ant-select, .ant-input-number, .ant-switch'))
 }
 
 function handleCanvasKeydown(event: KeyboardEvent) {
@@ -5304,22 +5557,27 @@ function refreshVariableFlyoutAnchor(target: EventTarget | null) {
   if (typeof window === 'undefined' || !(target instanceof HTMLElement)) return
   const rect = rectSnapshot(target)
   const rem = rootRemSize()
-  const width = 18.5 * rem
+  const width = 16 * rem
   const maxHeight = 19 * rem
-  const gap = 0.375 * rem
+  const gap = 0.5 * rem
   const padding = 0.75 * rem
   const panelRect = document.querySelector('[data-testid="node-config-panel"]')?.getBoundingClientRect()
-  const rightWouldFitViewport = rect.right + gap + width <= window.innerWidth - padding
-  const rightWouldOverlapPanel = panelRect ? rect.right + gap + width > panelRect.left - gap : false
-  const placement = rightWouldFitViewport && !rightWouldOverlapPanel ? 'right' : 'left'
-  const left = placement === 'right'
-    ? rect.right + gap
-    : Math.max(padding, rect.left - width - gap)
-  const maxTop = Math.max(padding, window.innerHeight - maxHeight - padding)
-  const top = Math.min(Math.max(rect.top - 0.25 * rem, padding), maxTop)
-  variableFlyoutPlacement.value = placement
-  document.documentElement.style.setProperty('--workflow-variable-flyout-left', `${left / rem}rem`)
-  document.documentElement.style.setProperty('--workflow-variable-flyout-top', `${top / rem}rem`)
+  const sourcePanel = target.closest('.variable-popover')
+  const position = computeVariableFlyoutPosition({
+    triggerRect: rect,
+    sourcePanelRect: sourcePanel ? rectSnapshot(sourcePanel) : null,
+    viewportWidth: window.innerWidth,
+    viewportHeight: window.innerHeight,
+    flyoutWidth: width,
+    flyoutMaxHeight: maxHeight,
+    gap,
+    padding,
+    rem,
+    avoidPanelLeft: panelRect?.left ?? null,
+  })
+  variableFlyoutPlacement.value = position.placement
+  document.documentElement.style.setProperty('--workflow-variable-flyout-left', `${position.left / rem}rem`)
+  document.documentElement.style.setProperty('--workflow-variable-flyout-top', `${position.top / rem}rem`)
 }
 
 function activeTextControl() {
@@ -5408,7 +5666,18 @@ function refreshInlineVariableSuggestionAnchor() {
 }
 
 function handleGlobalVariableKeydown(event: KeyboardEvent) {
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+    event.preventDefault()
+    event.stopPropagation()
+    void saveCanvas()
+    return
+  }
   if (event.key !== 'Escape') return
+  if (publishDialogOpen.value) {
+    event.stopPropagation()
+    publishDialogOpen.value = false
+    return
+  }
   if (!hasOpenVariablePicker()) return
 
   event.stopPropagation()
@@ -5575,6 +5844,8 @@ function handleNodeDragStop(event: any) {
 
 function handleNodeClick(event: any) {
   selectedNodeKey.value = event?.node?.id || ''
+  testPanelOpen.value = false
+  nodeTestDrawerOpen.value = false
   selectedEdgeId.value = ''
   hoveredEdgeId.value = ''
   hoveredNodeKey.value = ''
@@ -5702,8 +5973,11 @@ function applyLlmModelSearch() {
   llmModelSearchTerm.value = llmModelSearch.value
 }
 
-function selectLlmModel(model: string) {
-  setFieldValue('model', model)
+function selectLlmModel(option: LlmModelOption) {
+  const fields = llmModelSelectionFields(option)
+  setFieldValue('model', fields.model)
+  if (fields.modelConfigId) setFieldValue('modelConfigId', fields.modelConfigId)
+  if (fields.providerId) setFieldValue('providerId', fields.providerId)
   modelPickerOpen.value = false
 }
 
@@ -6083,10 +6357,6 @@ function workflowResourceOptions(resourceTypes: string[] = []) {
     if (allowed.has('API_RESOURCE') && type === 'API_TOOL') return true
     return false
   })
-}
-
-function toolCallResourceLabel(resource: WorkflowResource) {
-  return `${resource.displayName} ${resource.resourceId} (${resource.resourceType})`
 }
 
 function selectedWorkflowResource() {
@@ -7241,7 +7511,21 @@ function removeLlmResource(index: number) {
 }
 
 function canUseVariable(key: string) {
-  return ['systemPrompt', 'prompt', 'query', 'endpoint', 'headers', 'body', 'output'].includes(key)
+  return [
+    'systemPrompt',
+    'prompt',
+    'query',
+    'inputSource',
+    'endpoint',
+    'headers',
+    'body',
+    'output',
+    'content',
+    'template',
+    'source',
+    'pattern',
+    'replacement',
+  ].includes(key)
 }
 
 function handleVariableFieldInput(key: string, value: string | number | null | undefined) {
@@ -7401,9 +7685,14 @@ function variableListTypeLabel(type: VariableCatalogType) {
 
 function insertVariable(key: string, reference: string) {
   const currentValue = String(fieldValue(key) || '')
+  const normalizedReference = localizeInlineVariableReference(
+    reference,
+    selectedNode.value?.nodeKey || '',
+    selectedNode.value?.type !== 'END',
+  )
   const nextValue = canUseVariable(key)
-    ? insertInlineVariableReference(currentValue, reference)
-    : currentValue ? `${currentValue} ${reference}` : reference
+    ? insertInlineVariableReference(currentValue, normalizedReference)
+    : currentValue ? `${currentValue} ${normalizedReference}` : normalizedReference
   setFieldValue(key, nextValue)
   activeVariableField.value = ''
   variableSearch.value = ''
@@ -7605,6 +7894,16 @@ async function sendChatflowMessage() {
   await runCanvasTest()
 }
 
+function resetChatflowTrialSession() {
+  chatflowTrialMessages.value = []
+  testResult.value = null
+  lastRunOutput.value = null
+  lastTestRunStatus.value = ''
+  lastTestRunId.value = 0
+  testProfile.value.round = 1
+  resetChatflowDebugState()
+}
+
 function resetChatflowConversationSettings() {
   openingText.value = '你好，我可以帮你处理订单、售后和产品咨询。'
   guideQuestions.value = ['查订单进度', '申请退款', '咨询发票']
@@ -7800,6 +8099,24 @@ function autoLayoutCanvas() {
   markGraphDirty()
 }
 
+async function loadLlmProviderModels() {
+  const pageSize = 100
+  const providers: ProviderVO[] = []
+  let page = 1
+  let total = 0
+  try {
+    do {
+      const response = await getProviderList({ page, pageSize, enabled: true })
+      providers.push(...(response.list || []))
+      total = Number(response.total || providers.length)
+      page += 1
+    } while (providers.length < total && page <= 50)
+    llmProviderModelOptions.value = buildLlmModelOptions(providers)
+  } catch {
+    llmProviderModelOptions.value = []
+  }
+}
+
 async function loadWorkflowResourceRegistry() {
   try {
     const result = await listWorkflowResources({ flowType: isChatflowMode.value ? 'CHATFLOW' : 'WORKFLOW' })
@@ -7817,6 +8134,7 @@ async function loadWorkflow() {
     resetChatflowConversationSettings()
     workflowStatus.value = 'DRAFT'
     lastSavedAt.value = ''
+    canvasDirty.value = false
     dirtySinceTestRun.value = true
     requestCanvasLayoutRefit()
     return
@@ -7829,6 +8147,7 @@ async function loadWorkflow() {
     graph.value = hydrateWorkflowGraph(detail.nodes, detail.edges)
     syncChatflowSettingsFromGraph()
     lastSavedAt.value = formatClock(new Date(detail.updatedAt))
+    canvasDirty.value = false
     if (!running.value) dirtySinceTestRun.value = true
     await applyWorkflowRunDebugRoute()
     await applyChatflowRunDebugRoute()
@@ -7838,9 +8157,10 @@ async function loadWorkflow() {
   }
 }
 
-async function saveCanvas() {
+async function saveCanvas(options: { silent?: boolean } = {}) {
+  commitFlowTitleEdit()
   if (!form.value.name.trim()) {
-    ElMessage.warning(isChatflowMode.value ? '请输入 Chatflow 名称' : '请输入工作流名称')
+    message.warning(isChatflowMode.value ? '请输入 Chatflow 名称' : '请输入工作流名称')
     return
   }
   const payload = serializeWorkflowGraph(graphForPersistence())
@@ -7854,8 +8174,9 @@ async function saveCanvas() {
         nodes: payload.nodes,
         edges: payload.edges,
       })
-      ElMessage.success('画布已保存')
+      if (!options.silent) message.success('画布已保存')
       lastSavedAt.value = formatClock(new Date())
+      canvasDirty.value = false
       return workflowId.value
     } else {
       const create = isChatflowMode.value ? createChatflow : createWorkflow
@@ -7865,13 +8186,14 @@ async function saveCanvas() {
         nodes: payload.nodes,
         edges: payload.edges,
       }) as WorkflowDetail
-      ElMessage.success(isChatflowMode.value ? 'Chatflow 创建成功' : '工作流创建成功')
-      await router.replace(`${listPath.value}/${created.id}/canvas`)
+      if (!options.silent) message.success(isChatflowMode.value ? 'Chatflow 创建成功' : '工作流创建成功')
+      await router.replace(canvasRoute(created.id))
       lastSavedAt.value = formatClock(new Date())
+      canvasDirty.value = false
       return created.id
     }
   } catch (e: any) {
-    ElMessage.error(e?.message || '保存失败')
+    message.error(e?.message || '保存失败')
     return 0
   } finally {
     saving.value = false
@@ -7937,11 +8259,16 @@ function setNodeTestInput(name: string, value: string) {
   nodeTestInputs.value = nodeTestInputs.value.map((row) => row.name === name ? { ...row, value } : row)
 }
 
+function openRunLogPanel() {
+  debugDockOpen.value = true
+  debugDockTab.value = 'debug'
+}
+
 async function runSelectedNodeTest() {
   const target = nodeTestTarget.value
   if (!target || !canRunSingleNodeTest(target)) return
   ensureCanvasNameForRun()
-  const id = await saveCanvas()
+  const id = await saveCanvas({ silent: true })
   if (!id) return
   nodeTestRunning.value = true
   nodeTestResult.value = null
@@ -8133,11 +8460,23 @@ async function runCanvasTest() {
   testResult.value = null
   if (!validation.valid) return
 
+  let pendingAssistantMessageId = 0
+  if (isChatflowMode.value) {
+    const messageId = Date.now()
+    pendingAssistantMessageId = messageId + 1
+    chatflowTrialMessages.value = [
+      ...chatflowTrialMessages.value,
+      { id: messageId, role: 'user', content: runMessage },
+      { id: pendingAssistantMessageId, role: 'assistant', content: '', loading: true },
+    ]
+    testInput.value = ''
+  }
+  optimisticRunNodeKeys.value = new Set(graph.value.nodes.map((node) => node.nodeKey))
   running.value = true
   try {
     ensureCanvasNameForRun()
-    const id = await saveCanvas()
-    if (!id) return
+    const id = await saveCanvas({ silent: true })
+    if (!id) throw new Error('保存画布失败')
 
     const result = await (isChatflowMode.value
       ? runChatflow(id, buildChatflowRunInput({ message: runMessage, ...testProfile.value, historyRetentionRounds: chatflowHistoryRetentionRounds.value }))
@@ -8152,19 +8491,20 @@ async function runCanvasTest() {
     dirtySinceTestRun.value = false
     lastTestRunGraphSnapshot.value = currentGraphSnapshot()
     if (isChatflowMode.value) {
-      const messageId = Date.now()
       const streamPreview = buildChatflowStreamPreview(result?.streamEvents, result?.output)
-      chatflowTrialMessages.value = [
-        ...chatflowTrialMessages.value,
-        { id: messageId, role: 'user', content: runMessage },
-        {
-          id: messageId + 1,
-          role: 'assistant',
-          content: formatChatflowAssistantText(result?.output, streamPreview),
-          streaming: streamPreview.chunks.length > 0,
-        },
-      ]
-      testInput.value = ''
+      const assistantMessage = {
+        id: pendingAssistantMessageId || Date.now(),
+        role: 'assistant',
+        content: formatChatflowAssistantText(result?.output, streamPreview),
+        streaming: false,
+      } as ChatflowTrialMessage
+      if (pendingAssistantMessageId) {
+        chatflowTrialMessages.value = chatflowTrialMessages.value.map((message) =>
+          message.id === pendingAssistantMessageId ? assistantMessage : message,
+        )
+      } else {
+        chatflowTrialMessages.value = [...chatflowTrialMessages.value, assistantMessage]
+      }
       testProfile.value.round += 1
       if (debugDockOpen.value) {
         debugDockTab.value = 'debug'
@@ -8176,8 +8516,21 @@ async function runCanvasTest() {
   } catch (e: any) {
     lastTestRunStatus.value = 'FAILED'
     validationErrors.value = [e?.message || '运行失败']
+    if (isChatflowMode.value && pendingAssistantMessageId) {
+      chatflowTrialMessages.value = chatflowTrialMessages.value.map((message) =>
+        message.id === pendingAssistantMessageId
+          ? {
+              id: pendingAssistantMessageId,
+              role: 'assistant',
+              content: e?.message || '运行失败',
+              error: true,
+            }
+          : message,
+      )
+    }
   } finally {
     running.value = false
+    optimisticRunNodeKeys.value = new Set()
   }
 }
 
@@ -8188,6 +8541,7 @@ function ensureCanvasNameForRun() {
     ...form.value,
     name: `${prefix} ${formatClock(new Date())}`,
   }
+  markCanvasUnsaved()
 }
 
 function resetChatflowDebugState() {
@@ -8207,12 +8561,15 @@ async function loadChatflowDebugState(id: number, result: Record<string, any> | 
   if (!sessionId || !runId) return
   chatflowDebugLoading.value = true
   try {
-    const [session, events] = await Promise.all([
+    const [detail, session, events] = await Promise.all([
+      getChatflowRunDebug(id, runId) as Promise<ChatflowRunDebugDetail>,
       getChatflowSession(id, sessionId) as Promise<ChatflowSessionState>,
       listChatflowRunEvents(id, runId) as Promise<{ list: any[]; total: number }>,
     ])
+    chatflowRunDebugDetail.value = detail
     chatflowSessionState.value = session
     chatflowRunEvents.value = events.list || []
+    ensureSelectedDebugNode(detail.nodeDetails || [])
     chatflowResumeValues.value = Object.fromEntries(
       buildChatflowResumeFields((session.waitingEvent?.payload || session.checkpoint?.resumeSchema || {}) as Record<string, any>)
         .map((field) => [field.key, '']),
@@ -8254,7 +8611,7 @@ async function submitChatflowResume() {
 
 async function publishWorkflow() {
   if (!publishGate.value.allowed) {
-    ElMessage.warning(publishGate.value.reasons[0] || '发布检查未通过')
+    message.warning(publishGate.value.reasons[0] || '发布检查未通过')
     return
   }
 
@@ -8267,9 +8624,9 @@ async function publishWorkflow() {
     await publish(id)
     workflowStatus.value = 'PUBLISHED'
     await loadWorkflowVersions()
-    ElMessage.success(isChatflowMode.value ? 'Chatflow 已发布' : '工作流已发布')
+    message.success(isChatflowMode.value ? 'Chatflow 已发布' : '工作流已发布')
   } catch (e: any) {
-    ElMessage.error(e?.message || '发布失败')
+    message.error(e?.message || '发布失败')
   } finally {
     publishing.value = false
   }
@@ -8299,15 +8656,16 @@ async function rollbackVersion(versionId: number) {
     const rollback = isChatflowMode.value ? rollbackChatflowVersion : rollbackWorkflowVersion
     await rollback(workflowId.value, versionId)
     await loadWorkflowVersions()
-    ElMessage.success('已回滚到选中版本')
+    message.success('已回滚到选中版本')
   } catch (e: any) {
-    ElMessage.error(e?.message || '回滚失败')
+    message.error(e?.message || '回滚失败')
   } finally {
     rollingBackVersionId.value = 0
   }
 }
 
 function markGraphDirty() {
+  markCanvasUnsaved()
   dirtySinceTestRun.value = true
   lastTestRunStatus.value = ''
   lastTestRunId.value = 0
@@ -8327,7 +8685,7 @@ watch(() => [route.query.runId, route.query.executeId, route.query.debug], () =>
   void applyChatflowRunDebugRoute()
 })
 watch(
-  () => [resourcePanelCollapsed.value, canvasTab.value],
+  () => canvasTab.value,
   requestCanvasLayoutRefit,
 )
 onMounted(() => {
@@ -8336,6 +8694,7 @@ onMounted(() => {
   document.addEventListener('pointerdown', handleGlobalEdgePointerDown, true)
   document.addEventListener('pointermove', handleGlobalConnectionPointerMove, true)
   document.addEventListener('mousemove', handleGlobalConnectionPointerMove, true)
+  void loadLlmProviderModels()
   void loadWorkflow()
 })
 onUnmounted(() => {
@@ -8351,13 +8710,14 @@ onUnmounted(() => {
 
 <style scoped>
 .workflow-canvas-page {
-  --debug-dock-gap: 0.625rem;
+  --workflow-panel-gap: 0.625rem;
+  --debug-dock-gap: var(--workflow-panel-gap);
   --debug-dock-height: min(23rem, calc(100vh - 8.25rem));
   --workflow-side-panel-width: 34rem;
-  --workflow-side-panel-gap: 1.125rem;
+  --workflow-side-panel-gap: var(--workflow-panel-gap);
   --workflow-resource-panel-width: 20rem;
   --workflow-node-test-panel-width: 23.75rem;
-  --workflow-node-test-panel-gap: 1.125rem;
+  --workflow-node-test-panel-gap: var(--workflow-panel-gap);
   --workflow-right-panel-reserve: calc(var(--workflow-side-panel-width) + var(--workflow-side-panel-gap) + var(--debug-dock-gap));
   --workflow-node-test-reserve: calc(
     var(--workflow-side-panel-width) +
@@ -8397,6 +8757,13 @@ onUnmounted(() => {
   width: 1.75rem;
   padding: 0;
   color: #445067;
+}
+
+.back-button svg,
+.resource-panel-toggle svg {
+  width: 1rem;
+  height: 1rem;
+  stroke-width: 1.75;
 }
 
 .flow-icon,
@@ -8440,13 +8807,34 @@ onUnmounted(() => {
   width: 13.75rem;
 }
 
-.title-input :deep(.el-input__wrapper) {
+.title-display-button {
+  max-width: 24rem;
+  min-height: 1.875rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #22273a;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: left;
+  cursor: text;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.title-display-button.placeholder {
+  color: #8b93a7;
+}
+
+.title-input :deep(.ant-input) {
   box-shadow: none;
   padding: 0;
   background: transparent;
 }
 
-.title-input :deep(.el-input__inner) {
+.title-input :deep(.ant-input) {
   height: 1.875rem;
   font-size: 1.25rem;
   font-weight: 700;
@@ -9380,13 +9768,13 @@ onUnmounted(() => {
   pointer-events: all;
 }
 
-.edge-insert-button .el-icon {
+.edge-insert-button svg {
   font-size: 1.25rem;
 }
 
 .edge-insert-palette {
   position: absolute;
-  z-index: 110;
+  z-index: 150;
   width: min(16rem, calc(100vw - 2rem));
   max-height: min(22rem, calc(100vh - 4rem));
   padding: 0.5rem;
@@ -9398,14 +9786,14 @@ onUnmounted(() => {
   pointer-events: all;
 }
 
-.edge-insert-palette :deep(.el-input__wrapper) {
+.edge-insert-palette :deep(.ant-input) {
   min-height: 2rem;
   height: 2rem;
   border-radius: 0.5rem;
   background: #fbfcff;
 }
 
-.edge-insert-palette :deep(.el-input__inner) {
+.edge-insert-palette :deep(.ant-input) {
   font-size: 0.8125rem;
 }
 
@@ -9638,6 +10026,8 @@ onUnmounted(() => {
 
 .node-card-actions {
   flex: 0 0 auto;
+  position: relative;
+  z-index: 16;
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
@@ -9647,7 +10037,8 @@ onUnmounted(() => {
 }
 
 .coze-node:hover .node-card-actions,
-.coze-node.selected .node-card-actions {
+.coze-node.selected .node-card-actions,
+.node-card-actions.menu-open {
   opacity: 1;
   pointer-events: auto;
 }
@@ -9666,8 +10057,15 @@ onUnmounted(() => {
   cursor: pointer;
 }
 
-.node-card-actions button:hover {
-  color: #5558e8;
+.node-card-actions button:hover,
+.node-card-actions button:focus,
+.node-card-actions button:active,
+.node-card-actions button[aria-expanded='true'] {
+  border: 0;
+  outline: none;
+  background: transparent;
+  box-shadow: none;
+  color: #252b3d;
 }
 
 .node-card-actions button:disabled {
@@ -9689,7 +10087,7 @@ onUnmounted(() => {
   position: absolute;
   top: calc(100% + 0.5rem);
   right: 0;
-  z-index: 20;
+  z-index: 80;
   min-width: 9rem;
   padding: 0.5rem;
   border: 0.0625rem solid #e4e8f4;
@@ -10095,14 +10493,14 @@ onUnmounted(() => {
   transform: translateX(-50%);
 }
 
-.node-palette :deep(.el-input__wrapper) {
+.node-palette :deep(.ant-input) {
   min-height: 2rem;
   height: 2rem;
   border-radius: 0.5rem;
   background: #fbfcff;
 }
 
-.node-palette :deep(.el-input__inner) {
+.node-palette :deep(.ant-input) {
   font-size: 0.8125rem;
 }
 
@@ -10129,8 +10527,12 @@ onUnmounted(() => {
   right: var(--workflow-right-panel-reserve);
 }
 
-.workflow-canvas-page.has-node-test-drawer .workflow-debug-dock {
+.workflow-canvas-page.has-node-test-drawer.has-right-panel .workflow-debug-dock {
   right: var(--workflow-node-test-reserve);
+}
+
+.workflow-canvas-page.has-node-test-drawer:not(.has-right-panel) .workflow-debug-dock {
+  right: calc(var(--workflow-node-test-panel-width) + var(--workflow-node-test-panel-gap) + var(--debug-dock-gap));
 }
 
 .debug-dock-header {
@@ -10977,11 +11379,15 @@ onUnmounted(() => {
 
 .node-test-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 0.5rem;
   align-items: center;
   padding: 0.875rem 1rem;
   border-bottom: 1px solid #edf0f6;
+}
+
+.node-test-header-title {
+  min-width: 0;
 }
 
 .node-test-header h3 {
@@ -10993,6 +11399,36 @@ onUnmounted(() => {
 .node-test-header span {
   color: #858da1;
   font-size: 0.75rem;
+}
+
+.node-test-log-action {
+  height: 2rem;
+  padding: 0 0.625rem;
+  border: 0;
+  border-radius: 0.4375rem;
+  background: transparent;
+  color: #252b3a;
+  font-size: 0.9375rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.node-test-close-button {
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0.4375rem;
+  background: transparent;
+  color: #252b3a;
+  cursor: pointer;
+}
+
+.node-test-close-button svg {
+  width: 1rem;
+  height: 1rem;
 }
 
 .ghost-action {
@@ -11097,35 +11533,99 @@ onUnmounted(() => {
   font-size: 0.8125rem;
 }
 
-.node-test-result-block {
-  margin-top: 0.75rem;
-}
-
-.node-test-result-block strong {
-  color: #31384c;
-  font-size: 0.875rem;
-}
-
-.node-test-result-block dl {
+.node-test-readable-result {
   display: grid;
-  gap: 0.375rem;
-  margin: 0.625rem 0 0;
+  gap: 1rem;
+  margin-top: 0.875rem;
 }
 
-.node-test-result-block dt {
-  color: #7b8498;
-  font-size: 0.75rem;
+.node-test-readable-result h4 {
+  margin: 0;
+  color: #252b3a;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.node-test-readable-block {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.node-test-readable-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+.node-test-readable-heading strong {
+  color: #252b3a;
+  font-size: 0.9375rem;
+  font-weight: 900;
+}
+
+.node-test-readable-heading button {
+  width: 1.375rem;
+  height: 1.375rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: #596174;
+  cursor: pointer;
+}
+
+.node-test-readable-heading button:hover {
+  background: #eef1fb;
+  color: #4f46ff;
+}
+
+.node-test-readable-heading svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.node-test-readable-card {
+  max-height: 12rem;
+  overflow: auto;
+  padding: 0.75rem;
+  border: 0.0625rem solid #dfe4ef;
+  border-radius: 0.625rem;
+  background: #fff;
+  color: #252b3a;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.node-test-readable-row {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.375rem;
+  align-items: start;
+}
+
+.node-test-readable-row + .node-test-readable-row {
+  margin-top: 0.375rem;
+}
+
+.node-test-readable-row span {
+  color: #4f46ff;
   font-weight: 800;
 }
 
-.node-test-result-block dd {
+.node-test-readable-row span::after {
+  content: ':';
+  margin-left: 0.25rem;
+  color: #4f46ff;
+}
+
+.node-test-readable-row em,
+.node-test-readable-text {
   min-width: 0;
-  margin: 0;
-  padding: 0.5rem;
-  border-radius: 0.5rem;
-  background: #f7f8fc;
-  color: #2f3648;
-  font-size: 0.75rem;
+  color: #252b3a;
+  font-style: normal;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -11427,7 +11927,7 @@ onUnmounted(() => {
   transform: rotate(45deg);
 }
 
-.variable-popover :deep(.el-input__wrapper) {
+.variable-popover :deep(.ant-input) {
   min-height: 2.5rem;
   border-radius: 0.75rem;
   background: #f9fafc;
@@ -11448,7 +11948,7 @@ onUnmounted(() => {
   box-shadow: 0 1rem 2.25rem rgba(35, 42, 72, 0.18);
 }
 
-.inline-variable-suggestion-popover :deep(.el-input__wrapper) {
+.inline-variable-suggestion-popover :deep(.ant-input) {
   min-height: 2.5rem;
   padding: 0 0.75rem;
   border-radius: 0.5rem;
@@ -11456,7 +11956,7 @@ onUnmounted(() => {
   box-shadow: none;
 }
 
-.inline-variable-suggestion-popover :deep(.el-input__inner) {
+.inline-variable-suggestion-popover :deep(.ant-input) {
   color: #30364a;
   font-size: 1rem;
 }
@@ -11593,7 +12093,7 @@ onUnmounted(() => {
   display: none;
 }
 
-.coze-variable-source-popover :deep(.el-input__wrapper) {
+.coze-variable-source-popover :deep(.ant-input) {
   min-height: 2.25rem;
   border-radius: 0.5rem;
   background: #f7f8fb;
@@ -11635,7 +12135,7 @@ onUnmounted(() => {
   z-index: 150;
   top: var(--workflow-variable-flyout-top, 8rem);
   left: var(--workflow-variable-flyout-left, 24rem);
-  width: 18.5rem;
+  width: 16rem;
   max-width: calc(100% - 1.5rem);
   max-height: 19rem;
   padding: 0.5rem;
@@ -11647,24 +12147,8 @@ onUnmounted(() => {
 
 .variable-flyout[data-placement='left']::after,
 .variable-flyout[data-placement='right']::after {
-  content: '';
-  position: absolute;
-  top: 1.375rem;
-  width: 0.75rem;
-  height: 0.75rem;
-  border-top: 0.0625rem solid #e4e8f2;
-  border-right: 0.0625rem solid #e4e8f2;
-  background: #fff;
-}
-
-.variable-flyout[data-placement='left']::after {
-  right: -0.4375rem;
-  transform: rotate(45deg);
-}
-
-.variable-flyout[data-placement='right']::after {
-  left: -0.4375rem;
-  transform: rotate(225deg);
+  display: none;
+  content: none;
 }
 
 .variable-flyout .variable-item-list {
@@ -11899,7 +12383,7 @@ onUnmounted(() => {
   width: 5.75rem;
 }
 
-.model-parameter-number-input :deep(.el-input__wrapper) {
+.model-parameter-number-input :deep(.ant-input) {
   min-height: 2.25rem;
   padding-left: 0.25rem;
   padding-right: 1.375rem;
@@ -11907,20 +12391,175 @@ onUnmounted(() => {
   background: #fff;
 }
 
-.model-parameter-number-input :deep(.el-input__inner) {
+.model-parameter-number-input :deep(.ant-input) {
   padding: 0;
   text-align: left;
   font-size: 0.8125rem;
   font-weight: 800;
 }
 
-.model-parameter-number-input :deep(.el-input-number__increase),
-.model-parameter-number-input :deep(.el-input-number__decrease) {
+.model-parameter-number-input :deep(.ant-input-number-handler-up),
+.model-parameter-number-input :deep(.ant-input-number-handler-down) {
   right: 0;
   width: 1.125rem;
 }
 
-.model-provider-group,
+.model-option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin-top: 0.5rem;
+}
+
+.model-option-card {
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0, 1fr);
+  align-items: start;
+  gap: 0.75rem;
+  min-height: 4.75rem;
+  padding: 0.625rem 0.75rem;
+  border: 0;
+  border-bottom: 0.0625rem solid #edf0f7;
+  border-radius: 0.625rem;
+  background: transparent;
+  color: #30364a;
+  text-align: left;
+}
+
+.model-option-card:hover:not(:disabled) {
+  background: #f3f5ff;
+}
+
+.model-option-card:focus-visible {
+  outline: 0.125rem solid rgba(85, 88, 246, 0.2);
+  outline-offset: 0.125rem;
+}
+
+.model-provider-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0.0625rem solid #e1e6f2;
+  border-radius: 0.75rem;
+  background: #fff;
+  box-shadow: inset 0 0 0 0.0625rem rgba(255, 255, 255, 0.8);
+}
+
+.model-provider-icon img {
+  width: 2rem;
+  height: 2rem;
+  display: block;
+  border-radius: 0.625rem;
+  object-fit: contain;
+}
+
+.model-provider-icon span {
+  width: 1.75rem;
+  height: 1.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999rem;
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.model-provider-icon[data-provider-icon='openai'] span {
+  background: #111827;
+}
+
+.model-provider-icon[data-provider-icon='anthropic'] span {
+  background: linear-gradient(135deg, #c8a77a, #5c4a34);
+}
+
+.model-provider-icon[data-provider-icon='gemini'] span {
+  background: linear-gradient(135deg, #4285f4, #a142f4 48%, #34a853);
+}
+
+.model-provider-icon[data-provider-icon='azure'] span {
+  background: linear-gradient(135deg, #0078d4, #50a7f0);
+}
+
+.model-provider-icon[data-provider-icon='ollama'] span {
+  background: linear-gradient(135deg, #1f2937, #64748b);
+}
+
+.model-provider-icon[data-provider-icon='deepseek'] span {
+  background: linear-gradient(135deg, #2563eb, #22d3ee);
+}
+
+.model-provider-icon[data-provider-icon='openrouter'] span {
+  background: linear-gradient(135deg, #7c3aed, #38bdf8);
+}
+
+.model-provider-icon[data-provider-icon='doubao'] span {
+  background: linear-gradient(135deg, #8b5cf6 0%, #4355ff 45%, #23d3a6 100%);
+}
+
+.model-provider-icon[data-provider-icon='compatible'] span {
+  background: linear-gradient(135deg, #5561f5, #9b5cf6);
+}
+
+.model-option-copy {
+  min-width: 0;
+  display: grid;
+  gap: 0.25rem;
+  align-content: start;
+  justify-items: start;
+}
+
+.model-option-heading {
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.model-option-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #2e3346;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.model-provider-tag {
+  max-width: 8rem;
+  flex: 0 0 auto;
+  overflow: hidden;
+  padding: 0.125rem 0.375rem;
+  border-radius: 62.4375rem;
+  background: #eef1ff;
+  color: #5558e8;
+  font-size: 0.6875rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-option-description {
+  max-width: 100%;
+  overflow: hidden;
+  color: #778196;
+  font-size: 0.8125rem;
+  font-weight: 650;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-option-card.unavailable,
+.resource-picker-group.disabled {
+  opacity: 0.62;
+}
+
 .resource-picker-group {
   display: flex;
   flex-direction: column;
@@ -11928,7 +12567,6 @@ onUnmounted(() => {
   margin-top: 0.5rem;
 }
 
-.model-provider-group button,
 .resource-picker-group button {
   display: flex;
   flex-direction: column;
@@ -11941,15 +12579,9 @@ onUnmounted(() => {
   color: #30364a;
 }
 
-.model-provider-group small,
 .resource-picker-group span {
   color: #8b93a7;
   font-size: 0.6875rem;
-}
-
-.model-provider-group.muted,
-.resource-picker-group.disabled {
-  opacity: 0.62;
 }
 
 .resource-picker-group button.unavailable {
@@ -12225,8 +12857,8 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.condition-branch-name-input :deep(.el-input__wrapper),
-.condition-default-row :deep(.el-input__wrapper) {
+.condition-branch-name-input :deep(.ant-input),
+.condition-default-row :deep(.ant-input) {
   background: #f8f9fc;
 }
 
@@ -12289,11 +12921,11 @@ onUnmounted(() => {
   position: relative;
 }
 
-.condition-row :deep(.el-select__wrapper) {
+.condition-row :deep(.ant-select-selector) {
   min-height: 2.25rem;
 }
 
-.condition-operand-control :deep(.el-input__wrapper) {
+.condition-operand-control :deep(.ant-input) {
   height: 100%;
   min-height: 0;
   padding: 0 0.625rem;
@@ -12302,7 +12934,7 @@ onUnmounted(() => {
   box-shadow: none;
 }
 
-.condition-operand-control :deep(.el-input__inner) {
+.condition-operand-control :deep(.ant-input) {
   color: #30364a;
   font-size: 0.8125rem;
   font-weight: 700;
@@ -12564,7 +13196,7 @@ onUnmounted(() => {
   align-self: start;
 }
 
-.intent-examples-field :deep(.el-textarea__inner) {
+.intent-examples-field :deep(.ant-input) {
   height: 4.75rem;
   resize: none;
   overflow-y: auto;
@@ -12939,7 +13571,7 @@ onUnmounted(() => {
   background: #eef1ff;
 }
 
-.code-editor-input :deep(.el-textarea__inner) {
+.code-editor-input :deep(.ant-input) {
   min-height: 12rem !important;
   resize: none;
   border-radius: 0.625rem;
@@ -12961,7 +13593,7 @@ onUnmounted(() => {
 
 .input-parameter-toolbar {
   display: grid;
-  grid-template-columns: 4.75rem 4.25rem minmax(0, 1fr) 2rem;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 3fr) 2rem;
   gap: 0.375rem;
   align-items: center;
   color: #8b93a7;
@@ -12971,21 +13603,25 @@ onUnmounted(() => {
 
 .input-parameter-row {
   display: grid;
-  grid-template-columns: 4.75rem 4.25rem minmax(0, 1fr) 2rem;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 3fr) 2rem;
   gap: 0.375rem;
   align-items: center;
 }
 
-.input-parameter-row :deep(.el-input__wrapper),
-.input-parameter-row :deep(.el-select__wrapper),
-.output-parameter-row :deep(.el-input__wrapper),
-.output-parameter-row :deep(.el-select__wrapper),
-.schema-input-mapping-row :deep(.el-input__wrapper),
-.schema-input-mapping-row :deep(.el-select__wrapper),
-.secondary-row :deep(.el-input__wrapper),
-.secondary-row :deep(.el-select__wrapper),
-.structured-row-editor :deep(.el-input__wrapper),
-.structured-row-editor :deep(.el-select__wrapper) {
+.input-parameter-row > * {
+  min-width: 0;
+}
+
+.input-parameter-row :deep(.ant-input),
+.input-parameter-row :deep(.ant-select-selector),
+.output-parameter-row :deep(.ant-input),
+.output-parameter-row :deep(.ant-select-selector),
+.schema-input-mapping-row :deep(.ant-input),
+.schema-input-mapping-row :deep(.ant-select-selector),
+.secondary-row :deep(.ant-input),
+.secondary-row :deep(.ant-select-selector),
+.structured-row-editor :deep(.ant-input),
+.structured-row-editor :deep(.ant-select-selector) {
   min-height: 2.25rem;
 }
 
@@ -13285,7 +13921,7 @@ onUnmounted(() => {
   font-weight: 800 !important;
 }
 
-.end-response-textarea :deep(.el-textarea__inner) {
+.end-response-textarea :deep(.ant-input) {
   resize: none;
 }
 
@@ -13357,7 +13993,7 @@ onUnmounted(() => {
   font-weight: 800;
 }
 
-.switch-field-row :deep(.el-switch) {
+.switch-field-row :deep(.ant-switch) {
   margin-left: auto;
 }
 
@@ -13406,13 +14042,13 @@ onUnmounted(() => {
   line-height: 1.7;
 }
 
-.workflow-canvas-page :deep(.el-input__wrapper),
-.workflow-canvas-page :deep(.el-textarea__inner),
-.workflow-canvas-page :deep(.el-select__wrapper) {
+.workflow-canvas-page :deep(.ant-input),
+.workflow-canvas-page :deep(.ant-input),
+.workflow-canvas-page :deep(.ant-select-selector) {
   border-radius: 0.5rem;
 }
 
-.workflow-canvas-page :deep(.el-textarea__inner),
+.workflow-canvas-page :deep(.ant-input),
 .workflow-canvas-page textarea {
   resize: none;
 }
@@ -13502,26 +14138,69 @@ onUnmounted(() => {
   flex: 0 0 auto;
 }
 
-.chatflow-run-settings {
-  padding: 0.75rem 1rem;
+.chatflow-run-header {
+  position: sticky;
+  overflow: visible;
 }
 
-.chatflow-run-fields-toggle {
-  width: 100%;
-  justify-content: flex-start;
+.chatflow-run-header-title {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
-.chatflow-run-fields-toggle strong {
-  font-size: 0.8125rem;
+.chatflow-run-header-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.config-header.chatflow-run-header button {
+  margin-left: 0;
+}
+
+.chatflow-run-header-button {
+  width: auto !important;
+  min-width: 5.5rem;
+  gap: 0.25rem;
+  padding: 0 0.625rem;
+  background: #f7f8ff !important;
+  color: #5558e8 !important;
   font-weight: 800;
 }
 
-.chatflow-run-fields-toggle small {
-  min-width: 0;
-  margin-left: auto;
+.chatflow-run-header-button svg {
+  transition: transform 0.16s ease;
+}
+
+.chatflow-run-header-button.active svg {
+  transform: rotate(180deg);
+}
+
+.chatflow-run-header-icon:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.chatflow-run-settings-popover {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 1rem;
+  z-index: 8;
+  width: min(25rem, calc(100% - 2rem));
+  display: grid;
+  gap: 0.625rem;
+  padding: 0.875rem;
+  border: 0.0625rem solid #dfe5f2;
+  border-radius: 0.75rem;
+  background: #fff;
+  box-shadow: 0 1rem 2.25rem rgba(34, 41, 63, 0.16);
+}
+
+.chatflow-run-settings-summary {
   color: #8b94a8;
-  font-size: 0.6875rem;
-  text-align: right;
+  font-size: 0.75rem;
+  font-weight: 800;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -13531,6 +14210,12 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: 1fr;
   gap: 0.5rem;
+}
+
+.chatflow-profile-grid :deep(.ant-input),
+.chatflow-profile-grid :deep(.ant-select-selector) {
+  height: 2.75rem;
+  min-height: 2.75rem;
 }
 
 .chatflow-run-chat-window {
@@ -13567,38 +14252,100 @@ onUnmounted(() => {
 }
 
 .chatflow-composer {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 2.25rem;
-  gap: 0.5rem;
-  align-items: end;
   padding-top: 0.75rem;
-  border-top: 1px solid #edf0f6;
+  border-top: 0.0625rem solid #edf0f6;
 }
 
-.chatflow-composer-input :deep(.el-textarea__inner) {
-  overflow-y: auto;
-  scrollbar-width: none;
+.chatflow-composer-shell {
+  min-height: 6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  border: 0.0625rem solid #cfd6e5;
+  border-radius: 1rem;
+  background: #fff;
 }
 
-.chatflow-composer-input :deep(.el-textarea__inner::-webkit-scrollbar) {
-  display: none;
+.chatflow-composer-shell:focus-within {
+  border-color: #5f61ff;
+  box-shadow: 0 0 0 0.125rem rgba(95, 97, 255, 0.12);
 }
 
+.chatflow-composer-editor {
+  width: 100%;
+  min-width: 0;
+}
+
+.chatflow-composer-actions {
+  min-height: 2.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.chatflow-upload-button,
 .chatflow-send-button {
   width: 2.25rem;
   height: 2.25rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #cdd3f7;
-  border-radius: 0.5rem;
-  background: #f6f7ff;
-  color: #4b50c8;
+  border: 0;
+  border-radius: 0.625rem;
+  background: transparent;
+  color: #596174;
   cursor: pointer;
 }
 
+.chatflow-upload-button:hover:not(:disabled),
 .chatflow-send-button:hover:not(:disabled) {
-  background: #eef0ff;
+  background: #f3f5fb;
+  color: #4f46ff;
+}
+
+.chatflow-upload-button svg,
+.chatflow-send-button svg {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.chatflow-composer-input {
+  width: 100%;
+  min-width: 0;
+  min-height: 3rem !important;
+  max-height: 9rem;
+  padding: 0.25rem 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #252b3d;
+  font-size: 1rem;
+  line-height: 1.5;
+  resize: none !important;
+  overflow-y: auto !important;
+  scrollbar-width: none;
+}
+
+.chatflow-composer-input :deep(.ant-input) {
+  width: 100%;
+  min-height: 3rem !important;
+  max-height: 9rem;
+  padding: 0.25rem 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #252b3d;
+  font-size: 1rem;
+  line-height: 1.5;
+  resize: none !important;
+  overflow-y: auto !important;
+  scrollbar-width: none;
+}
+
+.chatflow-composer-input :deep(.ant-input::-webkit-scrollbar) {
+  display: none;
 }
 
 .chatflow-send-button:disabled {
@@ -13664,9 +14411,54 @@ onUnmounted(() => {
   color: #2f3548;
 }
 
+.message-bubble.assistant.loading {
+  min-width: 3.25rem;
+}
+
+.message-bubble.assistant.error {
+  background: #fff0f0;
+  color: #d93042;
+}
+
 .message-bubble.opening {
   background: #eefaf8;
   color: #0b6862;
+}
+
+.chatflow-loading-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 1rem;
+}
+
+.chatflow-loading-dots i {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 999rem;
+  background: #8b94a8;
+  animation: chatflow-loading-dot 0.9s ease-in-out infinite;
+}
+
+.chatflow-loading-dots i:nth-child(2) {
+  animation-delay: 0.12s;
+}
+
+.chatflow-loading-dots i:nth-child(3) {
+  animation-delay: 0.24s;
+}
+
+@keyframes chatflow-loading-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.45;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-0.25rem);
+  }
 }
 
 .typewriter-caret {
@@ -14050,7 +14842,7 @@ onUnmounted(() => {
   position: absolute;
   left: 50%;
   bottom: 1rem;
-  z-index: 45;
+  z-index: 55;
   height: 2.75rem;
   display: flex;
   align-items: center;
@@ -14072,7 +14864,7 @@ onUnmounted(() => {
   left: calc((100% - var(--workflow-right-panel-reserve)) / 2 - var(--workflow-resource-panel-width) / 2);
 }
 
-.workflow-canvas-page.has-node-test-drawer .canvas-toolbar {
+.workflow-canvas-page.has-node-test-drawer.has-right-panel .canvas-toolbar {
   left: calc((100% - var(--workflow-node-test-reserve)) / 2 - var(--workflow-resource-panel-width) / 2);
 }
 
@@ -14080,8 +14872,16 @@ onUnmounted(() => {
   left: calc((100% - var(--workflow-right-panel-reserve)) / 2);
 }
 
-.workflow-canvas-page.has-node-test-drawer .canvas-workbench.resource-collapsed .canvas-toolbar {
+.workflow-canvas-page.has-node-test-drawer.has-right-panel .canvas-workbench.resource-collapsed .canvas-toolbar {
   left: calc((100% - var(--workflow-node-test-reserve)) / 2);
+}
+
+.workflow-canvas-page.has-node-test-drawer:not(.has-right-panel) .canvas-toolbar {
+  left: calc((100% - var(--workflow-node-test-panel-width) - var(--workflow-node-test-panel-gap) - var(--debug-dock-gap)) / 2 - var(--workflow-resource-panel-width) / 2);
+}
+
+.workflow-canvas-page.has-node-test-drawer:not(.has-right-panel) .canvas-workbench.resource-collapsed .canvas-toolbar {
+  left: calc((100% - var(--workflow-node-test-panel-width) - var(--workflow-node-test-panel-gap) - var(--debug-dock-gap)) / 2);
 }
 
 .canvas-toolbar button {
@@ -14116,7 +14916,7 @@ onUnmounted(() => {
   cursor: not-allowed;
 }
 
-.canvas-toolbar button .el-icon {
+.canvas-toolbar button svg {
   font-size: 1rem;
 }
 
@@ -14227,38 +15027,29 @@ onUnmounted(() => {
   }
 
   .canvas-workbench {
-    grid-template-columns: 1fr;
+    grid-template-columns: var(--workflow-resource-panel-width) minmax(0, 1fr);
   }
 
   .canvas-workbench.resource-collapsed {
-    grid-template-columns: 1fr;
+    grid-template-columns: 0 minmax(0, 1fr);
   }
 
   .canvas-open-surface,
   .canvas-stage-shell {
-    grid-column: 1;
+    grid-column: 2;
   }
 
   .canvas-resource-panel {
-    position: absolute;
-    inset: 0 auto 0 0;
-    z-index: 11;
-    width: min(var(--workflow-resource-panel-width), calc(100% - 2.5rem));
-    max-width: calc(100% - 2.5rem);
-    box-shadow: 0.75rem 0 2rem rgba(27, 35, 58, 0.12);
+    position: relative;
+    z-index: 1;
+    width: auto;
+    max-width: none;
+    box-shadow: none;
   }
 
   .resource-panel-toggle {
     display: inline-flex;
-    left: min(var(--workflow-resource-panel-width), calc(100% - 2.5rem));
-  }
-
-  .workflow-canvas-page.has-right-panel .canvas-toolbar {
-    left: calc((100% - var(--workflow-right-panel-reserve)) / 2);
-  }
-
-  .workflow-canvas-page.has-node-test-drawer .canvas-toolbar {
-    left: calc((100% - var(--workflow-node-test-reserve)) / 2);
+    left: var(--workflow-resource-panel-width);
   }
 
   .workflow-canvas-page.has-right-panel .canvas-toolbar,

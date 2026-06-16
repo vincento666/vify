@@ -42,6 +42,9 @@ export function validateWorkflowGraph(graph: WorkflowCanvasGraph): WorkflowValid
       (edge) => edge.sourceNodeKey === node.nodeKey || edge.targetNodeKey === node.nodeKey,
     )
     if (!connected) errors.push(`Node ${node.nodeKey} is not connected`)
+    if (node.type === 'LLM' && !node.config.modelConfigId && !node.config.model) {
+      errors.push(`大模型节点 ${node.nodeKey} 需要选择模型`)
+    }
   }
 
   return {

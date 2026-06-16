@@ -4,7 +4,7 @@ export function filterCaseResults<T extends { status: string }>(cases: T[], stat
 }
 
 export function failureInvestigationTitle(failedCases: number): string {
-  return `${failedCases} failed cases need investigation`
+  return `${failedCases} 个失败用例需要排查`
 }
 
 export function rerunActionLabel(caseResult: { status: string }): string {

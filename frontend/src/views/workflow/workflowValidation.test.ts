@@ -30,6 +30,15 @@ describe('workflow graph validation', () => {
     )
   })
 
+  it('requires LLM nodes to select a concrete model before running', () => {
+    let graph = createDefaultWorkflowGraph()
+    graph = addWorkflowNode(graph, 'LLM', { x: 320, y: 240 })
+    graph = connectWorkflowNodes(graph, 'start', 'llm_1')
+    graph = connectWorkflowNodes(graph, 'llm_1', 'end')
+
+    expect(validateWorkflowGraph(graph).errors).toContain('大模型节点 llm_1 需要选择模型')
+  })
+
   it('rejects missing fixed nodes', () => {
     const graph = deleteWorkflowNode(createDefaultWorkflowGraph(), 'llm_1')
     const withoutEnd = { ...graph, nodes: graph.nodes.filter((node) => node.nodeKey !== 'end') }

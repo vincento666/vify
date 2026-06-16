@@ -24,6 +24,17 @@ const CHATFLOW_RUNTIME_DEFAULTS: Array<{ name: string; type: string; value: stri
   { name: 'sys.round', type: 'number', value: '1' },
 ]
 
+const NON_EXECUTABLE_SELECTED_NODE_TYPES = new Set([
+  'START',
+  'END',
+  'CONDITION',
+  'VARIABLE_AGGREGATION',
+  'QUESTION',
+  'HUMAN_INPUT',
+  'INFORMATION_COLLECTION',
+  'TRANSFER_TO_HUMAN',
+])
+
 export function buildNodeTestInputs(
   node: WorkflowCanvasNode,
   options: NodeTestFixtureOptions = {},
@@ -84,7 +95,8 @@ export function buildNodeTestInputs(
 }
 
 export function canRunSingleNodeTest(node: Pick<WorkflowCanvasNode, 'type'> | null | undefined) {
-  return Boolean(node && node.type !== 'START' && node.type !== 'END')
+  if (!node) return false
+  return !NON_EXECUTABLE_SELECTED_NODE_TYPES.has(node.type)
 }
 
 export function nodeTestInputPayload(rows: NodeTestInputRow[]) {

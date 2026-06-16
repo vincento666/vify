@@ -5,7 +5,9 @@ import {
   buildRuntimeLabBoundScenarios,
   buildRuntimeLabConfigSummary,
   buildRuntimeLabFunnelSummary,
+  buildRuntimeLabLocalSettings,
   buildRuntimeLabNodeDebugDetail,
+  buildRuntimeLabRouteSettingsPayload,
   buildRuntimeLabRouteOutcome,
   buildRuntimeLabTraceCards,
   buildRuntimeLabTranscriptRow,
@@ -142,6 +144,113 @@ describe('unified routing chat lab model', () => {
     expect(rows[0].label).toBe('机票预订')
     expect(rows[0].canvasPath).toBe('/chatflows/12/canvas')
     expect(rows[1].label).toBe('自定义异常航班处理')
+  })
+
+  it('builds temporary route lab settings from backend config and defaults', () => {
+    const settings = buildRuntimeLabLocalSettings({
+      sopBindings: [],
+      arbitrator: {
+        mode: 'llm',
+        model: 'qwen/qwen3.5-9b',
+        fallbackModel: 'deepseek/deepseek-v4-flash',
+        baseUrl: 'https://openrouter.ai/api/v1',
+        apiKeyConfigured: true,
+        available: true,
+      },
+      fallbackAgent: {
+        enabled: true,
+        type: 'existing_agent',
+        agentId: 7,
+        agentName: '航空 FAQ 兜底智能体',
+        available: true,
+      },
+      thresholds: {
+        classifierMinConfidence: 0.64,
+        candidateTopK: 5,
+        strongAcceptThreshold: 0.92,
+      },
+      faq: {
+        knowledgeBaseIds: [101],
+      },
+      rag: {
+        knowledgeBaseIds: [201],
+      },
+    })
+
+    expect(settings.arbitratorMode).toBe('llm')
+    expect(settings.arbitratorModelConfigId).toBeNull()
+    expect(settings.arbitratorModel).toBe('qwen/qwen3.5-9b')
+    expect(settings.fallbackModelConfigId).toBeNull()
+    expect(settings.fallbackModel).toBe('deepseek/deepseek-v4-flash')
+    expect(settings.temporaryModel.enabled).toBe(false)
+    expect(settings.temporaryModel.model).toBe('qwen/qwen3.5-9b')
+    expect(settings.temporaryFallbackModel.enabled).toBe(false)
+    expect(settings.temporaryFallbackModel.model).toBe('deepseek/deepseek-v4-flash')
+    expect(settings.fallbackAgentEnabled).toBe(true)
+    expect(settings.fallbackAgentId).toBe(7)
+    expect(settings.classifierMinConfidence).toBe(0.64)
+    expect(settings.candidateTopK).toBe(5)
+    expect(settings.faqKnowledgeBaseIds).toEqual([101])
+    expect(settings.ragKnowledgeBaseIds).toEqual([201])
+
+    const payload = buildRuntimeLabRouteSettingsPayload(settings)
+    expect(payload.arbitrator.model).toBe('qwen/qwen3.5-9b')
+    expect(payload.thresholds.classifierMinConfidence).toBe(0.64)
+    expect(payload).not.toHaveProperty('fallbackAgent')
+    expect(payload).not.toHaveProperty('faq')
+    expect(payload).not.toHaveProperty('rag')
+    expect(payload).not.toHaveProperty('handoff')
+    expect(payload.arbitrator).not.toHaveProperty('baseUrl')
+  })
+
+  it('sends temporary arbitrator model config only when explicitly enabled', () => {
+    const settings = buildRuntimeLabLocalSettings({
+      sopBindings: [],
+      arbitrator: {
+        mode: 'llm',
+        model: 'qwen/qwen3.5-9b',
+        fallbackModel: 'deepseek/deepseek-v4-flash',
+        baseUrl: 'https://openrouter.ai/api/v1',
+        apiKeyConfigured: true,
+        available: true,
+      },
+    })
+
+    settings.arbitratorModelConfigId = 12
+    settings.fallbackModelConfigId = 13
+    settings.temporaryModel = {
+      enabled: true,
+      model: 'temp-main-model',
+      baseUrl: 'https://temp.example.test/v1',
+      apiKey: 'sk-temp',
+      temperature: 0.2,
+      maxTokens: 256,
+      topP: 0.8,
+    }
+    settings.temporaryFallbackModel = {
+      enabled: true,
+      model: 'temp-fallback-model',
+      baseUrl: 'https://temp-fallback.example.test/v1',
+      apiKey: 'sk-temp-fallback',
+      temperature: 0.1,
+      maxTokens: 128,
+      topP: 0.7,
+    }
+
+    const payload = buildRuntimeLabRouteSettingsPayload(settings)
+
+    expect(payload.arbitrator.modelConfigId).toBeNull()
+    expect(payload.arbitrator.fallbackModelConfigId).toBeNull()
+    expect(payload.arbitrator.temporaryModel).toEqual({
+      enabled: true,
+      model: 'temp-main-model',
+      baseUrl: 'https://temp.example.test/v1',
+      apiKey: 'sk-temp',
+      temperature: 0.2,
+      maxTokens: 256,
+      topP: 0.8,
+    })
+    expect(payload.arbitrator.temporaryFallbackModel?.model).toBe('temp-fallback-model')
   })
 
   it('summarizes Chatflow trace nodes and slot values for the inspector', () => {
@@ -288,7 +397,7 @@ describe('unified routing chat lab model', () => {
               model: 'qwen/qwen3.5-9b',
               input: { messages: [{ role: 'user', content: '我要订广州飞北京' }] },
               output: { selectedIntent: 'flight_booking' },
-              usage: { inputTokens: 128, outputTokens: 16, totalTokens: 144, estimated: false },
+              usage: { prompt_tokens: 128, completion_tokens: 16, total_tokens: 144 },
               elapsedMs: 812,
             },
           },

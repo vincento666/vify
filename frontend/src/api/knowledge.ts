@@ -1,4 +1,5 @@
 import { get, post, put, del } from '@/utils/request'
+import { hostFetch } from '@/host/request'
 
 export interface KnowledgeBase {
   id: number
@@ -27,6 +28,52 @@ export interface ChunkVO {
   chunkIndex: number
   content: string
   tokenCount: number
+}
+
+export interface KnowledgeFaq {
+  id: number
+  knowledgeBaseId: number
+  question: string
+  answer: string
+  alternativeQuestions: string[]
+  keywords: string[]
+  category: string
+  priority: number
+  enabled: boolean
+  metadata: Record<string, unknown>
+  source: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface RetrievalHit {
+  sourceType: 'FAQ' | 'DOCUMENT_CHUNK' | string
+  matchType: 'EXACT' | 'KEYWORD' | 'VECTOR' | 'HYBRID' | string
+  score: number
+  title: string
+  content: string
+  answer: string
+  faqId: number
+  documentId: number
+  chunkId: number
+  chunkIndex: number
+  metadata: Record<string, unknown>
+}
+
+export type RetrievalMode = 'auto' | 'hybrid' | 'semantic' | 'keyword' | 'faq'
+
+export interface RetrievalTestRequest {
+  query: string
+  topK?: number
+  retrievalMode?: RetrievalMode
+  scoreThreshold?: number
+  rerank?: boolean
+}
+
+export interface RetrievalTestResult {
+  query: string
+  retrievalMode: RetrievalMode
+  hits: RetrievalHit[]
 }
 
 export interface PageResult<T> {
@@ -63,14 +110,47 @@ export const deleteDocument = (id: number) =>
 export const getChunks = (documentId: number) =>
   get<ChunkVO[]>(`/v1/documents/${documentId}/chunks`)
 
+export const listFaqs = (kbId: number, params?: { page?: number; pageSize?: number }) =>
+  get<PageResult<KnowledgeFaq>>(`/v1/knowledge-bases/${kbId}/faqs`, params)
+
+export const createFaq = (kbId: number, data: Partial<KnowledgeFaq> & { question: string; answer: string }) =>
+  post<KnowledgeFaq>(`/v1/knowledge-bases/${kbId}/faqs`, data)
+
+export const updateFaq = (faqId: number, data: Partial<KnowledgeFaq>) =>
+  put<KnowledgeFaq>(`/v1/knowledge-faqs/${faqId}`, data)
+
+export const deleteFaq = (faqId: number) =>
+  del<void>(`/v1/knowledge-faqs/${faqId}`)
+
+export const retrievalTest = (kbId: number, data: RetrievalTestRequest) =>
+  post<RetrievalTestResult>(`/v1/knowledge-bases/${kbId}/retrieval-test`, data)
+
 export const uploadDocument = (kbId: number, file: File) => {
   const form = new FormData()
   form.append('file', file)
-  return fetch(`/api/v1/knowledge-bases/${kbId}/documents`, {
+  return hostFetch(`/v1/knowledge-bases/${kbId}/documents`, {
     method: 'POST',
     body: form,
   }).then(r => r.json()).then(res => {
     if (res.code !== 200) throw new Error(res.message)
     return res.data as KnowledgeDocument
   })
+}
+
+export const importFaqCsv = (kbId: number, file: File) => {
+  const form = new FormData()
+  form.append('file', file)
+  return hostFetch(`/v1/knowledge-bases/${kbId}/faqs/import-csv`, {
+    method: 'POST',
+    body: form,
+  }).then(r => r.json()).then(res => {
+    if (res.code !== 200) throw new Error(res.message)
+    return res.data as { imported: number }
+  })
+}
+
+export const exportFaqCsv = async (kbId: number) => {
+  const response = await hostFetch(`/v1/knowledge-bases/${kbId}/faqs/export-csv`)
+  if (!response.ok) throw new Error('导出失败')
+  return response.text()
 }

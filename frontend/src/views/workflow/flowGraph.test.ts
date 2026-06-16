@@ -12,6 +12,7 @@ import {
   insertWorkflowNodeOnEdge,
   moveWorkflowNode,
   serializeWorkflowGraph,
+  type WorkflowCanvasGraph,
 } from './flowGraph'
 
 describe('workflow canvas graph model', () => {
@@ -62,6 +63,48 @@ describe('workflow canvas graph model', () => {
     expect(deleted.edges.some((edge) => edge.sourceNodeKey === conditionKey || edge.targetNodeKey === conditionKey)).toBe(false)
     expect(fixedStart.nodes.map((node) => node.nodeKey)).toContain('start')
     expect(fixedEnd.nodes.map((node) => node.nodeKey)).toContain('end')
+  })
+
+  it('clears downstream variable references when deleting their upstream node', () => {
+    const graph: WorkflowCanvasGraph = {
+      nodes: [
+        {
+          nodeKey: 'start',
+          type: 'START',
+          name: '开始',
+          position: { x: 120, y: 96 },
+          config: { outputVariables: ['USER_INPUT'] },
+        },
+        {
+          nodeKey: 'llm_1',
+          type: 'LLM',
+          name: '大模型',
+          position: { x: 420, y: 96 },
+          config: {
+            outputParameters: [{ name: 'answer', type: 'string' }],
+          },
+        },
+        {
+          nodeKey: 'message_1',
+          type: 'MESSAGE',
+          name: '消息',
+          position: { x: 720, y: 96 },
+          config: {
+            inputParameters: [
+              { name: 'content', type: 'string', valueMode: 'reference', value: '{{llm_1.answer}}' },
+            ],
+          },
+        },
+      ],
+      edges: [{ id: 'llm_1->message_1', sourceNodeKey: 'llm_1', targetNodeKey: 'message_1', condition: null }],
+    }
+
+    const deleted = deleteWorkflowNode(graph, 'llm_1')
+    const message = deleted.nodes.find((node) => node.nodeKey === 'message_1')
+
+    expect(message?.config.inputParameters).toEqual([
+      { name: 'content', type: 'string', valueMode: 'reference', value: '' },
+    ])
   })
 
   it('deletes a selected edge without removing its nodes', () => {

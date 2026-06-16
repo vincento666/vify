@@ -27,6 +27,12 @@ describe('runtime-lab frontend API client', () => {
       postRuntimeLabMessage(12, {
         message: '我要退票',
         idempotencyKey: 'front-red',
+        routeSettings: {
+          thresholds: {
+            classifierMinConfidence: 0.72,
+            candidateTopK: 3,
+          },
+        },
       }),
     ).resolves.toEqual({ reply: '请提供退票办理手机号。' })
 
@@ -34,6 +40,12 @@ describe('runtime-lab frontend API client', () => {
     expect(requestMocks.post).toHaveBeenNthCalledWith(2, '/v1/runtime-lab/sessions/12/messages', {
       message: '我要退票',
       idempotencyKey: 'front-red',
+      routeSettings: {
+        thresholds: {
+          classifierMinConfidence: 0.72,
+          candidateTopK: 3,
+        },
+      },
     })
   })
 
@@ -117,5 +129,29 @@ describe('runtime-lab frontend API client', () => {
 
     expect(requestMocks.get).toHaveBeenCalledWith('/v1/runtime-lab/sessions/18/chatflow-trace')
     expect(trace.total).toBe(0)
+  })
+
+  it('tests a temporary route LLM model through the backend probe endpoint', async () => {
+    requestMocks.post.mockResolvedValueOnce({ ok: true, model: 'qwen/qwen3.5-9b', elapsedMs: 120 })
+
+    const { testRuntimeLabTemporaryModel } = await import('./runtimeLab')
+    const result = await testRuntimeLabTemporaryModel({
+      model: 'qwen/qwen3.5-9b',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      apiKey: 'sk-test',
+      temperature: 0,
+      maxTokens: 8,
+      topP: 1,
+    })
+
+    expect(requestMocks.post).toHaveBeenCalledWith('/v1/runtime-lab/route-model/connectivity', {
+      model: 'qwen/qwen3.5-9b',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      apiKey: 'sk-test',
+      temperature: 0,
+      maxTokens: 8,
+      topP: 1,
+    })
+    expect(result.ok).toBe(true)
   })
 })

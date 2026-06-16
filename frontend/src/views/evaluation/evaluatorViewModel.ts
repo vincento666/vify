@@ -2,9 +2,9 @@ import { normalizeCaseTags } from './evalSetViewModel'
 import type { EvaluatorType } from '@/api/evaluation'
 
 export function describeEvaluatorType(type: EvaluatorType): string {
-  if (type === 'EXACT_MATCH') return 'Exact Match'
-  if (type === 'LLM_JUDGE') return 'LLM Judge'
-  return 'Contains Keywords'
+  if (type === 'EXACT_MATCH') return '精确匹配'
+  if (type === 'LLM_JUDGE') return 'LLM 裁判'
+  return '包含关键词'
 }
 
 export function keywordConfigFromText(text: string) {

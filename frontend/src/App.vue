@@ -1,7 +1,8 @@
 <template>
-  <router-view v-if="isCanvasWorkbenchRoute" />
+  <a-config-provider :theme="antTheme" :auto-insert-space-in-button="false">
+    <router-view v-if="isCanvasWorkbenchRoute" />
 
-  <div v-else class="hify-layout">
+    <div v-else class="hify-layout">
     <!-- 侧边栏 -->
     <aside class="sidebar" :class="{ collapsed }">
 
@@ -20,18 +21,18 @@
       <nav class="sidebar-nav">
         <router-link
           v-for="item in navItems"
-          :key="item.path"
-          :to="item.path"
+          :key="item.name"
+          :to="{ name: item.name }"
           class="nav-item"
           :class="{ active: isNavActive(item) }"
         >
-          <el-icon class="nav-icon"><component :is="item.icon" /></el-icon>
+          <span class="nav-icon"><component :is="item.icon" /></span>
           <transition name="fade">
             <span v-if="!collapsed" class="nav-label">{{ item.label }}</span>
           </transition>
-          <el-tooltip v-if="collapsed" :content="item.label" placement="right">
+          <a-tooltip v-if="collapsed" :title="item.label" placement="right">
             <span class="tooltip-anchor" />
-          </el-tooltip>
+          </a-tooltip>
         </router-link>
       </nav>
 
@@ -41,9 +42,9 @@
           <span v-if="!collapsed" class="version">v0.0.1</span>
         </transition>
         <button class="collapse-btn" @click="collapsed = !collapsed">
-          <el-icon class="collapse-icon">
+          <span class="collapse-icon">
             <component :is="collapsed ? ArrowRight : ArrowLeft" />
-          </el-icon>
+          </span>
         </button>
       </div>
 
@@ -59,7 +60,7 @@
           <span class="current">{{ currentLabel }}</span>
         </div>
         <div class="topbar-user">
-          <el-avatar class="topbar-avatar" :style="{ background: 'var(--color-primary-500)' }">A</el-avatar>
+          <a-avatar class="topbar-avatar" :style="{ background: 'var(--color-primary-500)' }">A</a-avatar>
           <span class="topbar-username">Admin</span>
         </div>
       </div>
@@ -68,17 +69,20 @@
         <router-view />
       </div>
     </main>
-  </div>
+    </div>
+  </a-config-provider>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
+import { LeftOutlined as ArrowLeft, RightOutlined as ArrowRight } from '@ant-design/icons-vue'
+import { hifyAntTheme } from './app/ant-design'
 import { composerNavItems } from './appNavigation'
 
 const route = useRoute()
 const collapsed = ref(window.innerWidth < 1200)
+const antTheme = hifyAntTheme
 
 const onResize = () => {
   if (window.innerWidth < 1200) collapsed.value = true
@@ -212,6 +216,9 @@ const hideShellBreadcrumb = computed(() => Boolean(route.meta.hideShellBreadcrum
 }
 .nav-icon {
   font-size: 1.0625rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .tooltip-anchor {
   position: absolute;
@@ -250,9 +257,14 @@ const hideShellBreadcrumb = computed(() => Boolean(route.meta.hideShellBreadcrum
 }
 .collapse-icon {
   font-size: 0.9375rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .topbar-avatar {
-  --el-avatar-size: 2rem;
+  width: 2rem;
+  height: 2rem;
+  line-height: 2rem;
 }
 .topbar-user {
   margin-left: auto;

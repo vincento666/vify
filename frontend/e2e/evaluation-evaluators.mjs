@@ -19,7 +19,7 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 
 try {
   await page.goto(`${baseUrl}/evaluation`, { waitUntil: 'networkidle' })
-  await page.getByRole('tab', { name: 'Evaluators' }).click()
+  await page.getByRole('tab', { name: '评估器' }).click()
   await assertBodyIncludes(page, '创建评估器')
 
   await page.getByTestId('create-evaluator').click()
@@ -27,13 +27,13 @@ try {
   await page.getByPlaceholder('用英文逗号分隔，如 refund,policy').fill('refund, policy, refund')
   await page.getByPlaceholder('粘贴一次 Agent 回复用于试跑').fill('Refund policy is available within seven days.')
   await page.getByTestId('test-evaluator-sample').click()
-  await page.getByText('PASS').waitFor({ state: 'visible', timeout: 5000 })
-  await assertBodyIncludes(page, 'Score 1')
+  await page.getByText('通过').waitFor({ state: 'visible', timeout: 5000 })
+  await assertBodyIncludes(page, '分数 1')
 
   await page.getByTestId('save-evaluator').click()
   await page.locator('.el-dialog', { hasText: '创建评估器' }).waitFor({ state: 'hidden', timeout: 5000 })
   await page.locator('h4', { hasText: evaluatorName }).waitFor({ state: 'visible', timeout: 5000 })
-  await assertBodyIncludes(page, 'Contains Keywords')
+  await assertBodyIncludes(page, '包含关键词')
   await assertBodyIncludes(page, 'refund, policy')
 
   if (screenshotPath) {

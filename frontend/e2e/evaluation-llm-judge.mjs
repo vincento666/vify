@@ -24,21 +24,21 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 
 try {
   await page.goto(`${baseUrl}/evaluation`, { waitUntil: 'networkidle' })
-  await page.getByRole('tab', { name: 'Evaluators' }).click()
+  await page.getByRole('tab', { name: '评估器' }).click()
   await page.getByTestId('create-evaluator').click()
   await page.getByPlaceholder('请输入评估器名称').fill(evaluatorName)
-  await page.locator('.el-segmented__item-label', { hasText: 'LLM Judge' }).click()
+  await page.locator('.el-segmented__item-label', { hasText: 'LLM 裁判' }).click()
   await page.getByTestId('llm-judge-model').selectOption({ label: `${providerName} / ${modelName}` })
-  await page.getByPlaceholder('Exact Match 会使用该字段').fill('refund policy')
+  await page.getByPlaceholder('精确匹配会使用该字段').fill('refund policy')
   await page.getByPlaceholder('粘贴一次 Agent 回复用于试跑').fill('refund policy')
   await page.getByTestId('test-evaluator-sample').click()
-  await page.getByText('PASS').waitFor({ state: 'visible', timeout: 10000 })
+  await page.getByText('通过').waitFor({ state: 'visible', timeout: 10000 })
   await assertBodyIncludes(page, 'mock judge')
 
   await page.getByTestId('save-evaluator').click()
   await page.locator('.el-dialog', { hasText: '创建评估器' }).waitFor({ state: 'hidden', timeout: 5000 })
   await page.locator('h4', { hasText: evaluatorName }).waitFor({ state: 'visible', timeout: 5000 })
-  await assertBodyIncludes(page, 'LLM Judge')
+  await assertBodyIncludes(page, 'LLM 裁判')
 
   if (screenshotPath) {
     await page.screenshot({ path: screenshotPath, fullPage: true })

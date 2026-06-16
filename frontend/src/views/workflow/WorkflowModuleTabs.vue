@@ -1,13 +1,12 @@
 <template>
   <div class="workflow-module-tabs">
-    <el-tabs :model-value="activePath" @tab-change="handleTabChange">
-      <el-tab-pane
+    <a-tabs :active-key="activePath" @change="handleTabChange">
+      <a-tab-pane
         v-for="tab in WORKFLOW_MODULE_TABS"
-        :key="tab.flowType"
-        :label="tab.label"
-        :name="tab.path"
+        :key="tab.path"
+        :tab="tab.label"
       />
-    </el-tabs>
+    </a-tabs>
   </div>
 </template>
 
@@ -24,7 +23,8 @@ const activePath = computed(() => getActiveWorkflowModulePath(route.path))
 function handleTabChange(path: string | number) {
   const nextPath = String(path)
   if (nextPath !== activePath.value) {
-    router.push(nextPath)
+    const tab = WORKFLOW_MODULE_TABS.find((item) => item.path === nextPath)
+    router.push(tab ? { name: tab.name } : nextPath)
   }
 }
 </script>
@@ -34,18 +34,18 @@ function handleTabChange(path: string | number) {
   margin-bottom: 1.125rem;
 }
 
-.workflow-module-tabs :deep(.el-tabs__header) {
+.workflow-module-tabs :deep(.ant-tabs-nav) {
   margin: 0;
 }
 
-.workflow-module-tabs :deep(.el-tabs__nav-wrap::after) {
+.workflow-module-tabs :deep(.ant-tabs-nav::before) {
   height: 0.0625rem;
-  background: var(--el-border-color-lighter);
+  border-bottom-color: var(--color-border-default);
 }
 
-.workflow-module-tabs :deep(.el-tabs__item) {
+.workflow-module-tabs :deep(.ant-tabs-tab) {
   height: 2.25rem;
-  padding: 0 1.125rem;
+  padding: 0 1.125rem 0.75rem;
   font-size: 0.8125rem;
   font-weight: 600;
 }

@@ -2,9 +2,19 @@
   <div class="runtime-lab-layout" data-testid="runtime-lab-chat">
     <aside class="lab-rail">
       <section class="lab-panel">
-        <div class="panel-heading">
-          <Connection class="panel-heading-icon" />
-          <span>系统</span>
+        <div class="panel-heading panel-heading-between">
+          <span class="panel-heading-title">
+            <ApiOutlined class="panel-heading-icon" />
+            <span>系统</span>
+          </span>
+          <a-button
+            size="small"
+            data-testid="route-settings-open"
+            @click="openRouteSettings"
+          >
+            <SettingOutlined />
+            设置
+          </a-button>
         </div>
         <div class="system-stack">
           <button type="button" class="system-option active">
@@ -17,9 +27,10 @@
           </button>
         </div>
         <div class="session-actions">
-          <el-button size="small" :icon="Refresh" :loading="creatingSession" @click="createFreshSession">
+          <a-button size="small" :loading="creatingSession" @click="createFreshSession">
+            <ReloadOutlined />
             新会话
-          </el-button>
+          </a-button>
           <span class="session-id">{{ sessionId ? `#${sessionId}` : '未连接' }}</span>
         </div>
         <div class="runtime-config" data-testid="runtime-lab-config">
@@ -50,56 +61,28 @@
               {{ row }}
             </div>
           </details>
-          <div class="fallback-agent-picker">
-            <el-select
-              v-model="selectedFallbackAgentId"
-              size="small"
-              clearable
-              filterable
-              placeholder="选择兜底 Agent"
-              data-testid="fallback-agent-select"
-            >
-              <el-option
-                v-for="agent in fallbackAgentOptions"
-                :key="agent.id"
-                :label="agent.name"
-                :value="agent.id"
-              />
-            </el-select>
-            <el-button
-              size="small"
-              :loading="savingFallbackAgent"
-              data-testid="fallback-agent-save"
-              @click="saveFallbackAgent"
-            >
-              保存
-            </el-button>
-          </div>
         </div>
       </section>
 
       <section class="lab-panel">
         <div class="panel-heading panel-heading-between">
           <span class="panel-heading-title">
-            <ChatLineRound class="panel-heading-icon" />
+            <MessageOutlined class="panel-heading-icon" />
             <span>意图样例</span>
           </span>
           <span class="scope-toolbar">
-            <el-button
+            <a-button
               size="small"
-              :icon="Setting"
               data-testid="scope-config-open"
               @click="scopeDialogVisible = true"
             >
+              <SettingOutlined />
               接入
-            </el-button>
-            <el-switch
-              v-model="showIntentSamples"
+            </a-button>
+            <a-switch
+              v-model:checked="showIntentSamples"
               class="samples-toggle"
-              size="small"
-              inline-prompt
-              active-text="开"
-              inactive-text="关"
+              size="small" checked-children="开" un-checked-children="关"
               aria-label="显示意图样例"
               data-testid="intent-samples-toggle"
             />
@@ -173,24 +156,24 @@
           <p>自由对话 · {{ routeScopeLabel }} · {{ lastRouteAction }}</p>
         </div>
         <div class="lab-header-actions">
-          <el-button
+          <a-button
             size="small"
-            :icon="Refresh"
             :loading="creatingSession"
             data-testid="runtime-lab-reset"
             @click="createFreshSession"
           >
+            <ReloadOutlined />
             清空会话
-          </el-button>
-          <el-tag size="small" :type="sessionId ? 'success' : 'info'" effect="light">
+          </a-button>
+          <a-tag :color="sessionId ? 'success' : 'default'">
             {{ sessionId ? 'Runtime Ready' : 'Waiting' }}
-          </el-tag>
+          </a-tag>
         </div>
       </header>
 
       <div ref="messagesEl" class="lab-messages">
         <div v-if="transcript.length === 0" class="empty-state">
-          <ChatDotRound class="empty-icon" />
+          <CommentOutlined class="empty-icon" />
           <span>等待自由对话</span>
         </div>
         <div
@@ -216,7 +199,7 @@
             </div>
             <div v-else class="message-content">{{ message.content }}</div>
             <div v-if="message.routeAction || message.usage || message.elapsedMs !== undefined" class="message-meta">
-              <el-tag v-if="message.routeAction" size="small" effect="plain">{{ message.routeAction }}</el-tag>
+              <a-tag v-if="message.routeAction">{{ message.routeAction }}</a-tag>
               <span v-if="message.targetSopId">{{ message.targetSopId }}</span>
               <span v-if="message.taskSummary">{{ message.taskSummary }}</span>
               <span v-if="message.usage">{{ formatRuntimeLabUsage(message.usage) }}</span>
@@ -239,17 +222,15 @@
       </div>
 
       <form class="lab-composer" @submit.prevent="sendInput">
-        <el-input
-          v-model="inputText"
-          type="textarea"
-          :autosize="{ minRows: 1, maxRows: 4 }"
+        <a-textarea
+          v-model:value="inputText"
+          :auto-size="{ minRows: 1, maxRows: 4 }"
           placeholder="输入消息"
-          resize="none"
           :disabled="sending"
           data-testid="runtime-lab-input"
           @keydown.enter.exact.prevent="sendInput"
         />
-        <el-button
+        <a-button
           class="send-button"
           type="primary"
           :disabled="!inputText.trim() || sending"
@@ -258,7 +239,7 @@
           @click="sendInput"
         >
           发送
-        </el-button>
+        </a-button>
       </form>
     </main>
 
@@ -317,14 +298,13 @@
               <strong>{{ card.chatflowName || card.sopId }}</strong>
               <span>{{ card.status }} · {{ card.completedCountLabel }}</span>
             </div>
-            <el-button
+            <a-button
               v-if="card.debugPath"
-              size="small"
-              plain
+              size="small" ghost
               @click="openChatflowDebug(card.debugPath)"
             >
               调试
-            </el-button>
+            </a-button>
           </div>
           <div class="trace-current">
             当前节点：<span>{{ card.currentNodeLabel }}</span>
@@ -366,7 +346,7 @@
           <div v-if="tasks.length === 0" class="muted-line">暂无任务</div>
           <div v-for="task in tasks" :key="task.id" class="task-row">
             <span>{{ task.sopId }}</span>
-            <el-tag size="small" effect="plain">{{ task.status }}</el-tag>
+            <a-tag>{{ task.status }}</a-tag>
           </div>
         </div>
         <div v-if="latestTurn?.resumeOffer" class="resume-box">
@@ -386,11 +366,10 @@
       </section>
     </aside>
 
-    <el-dialog
-      v-model="scopeDialogVisible"
+    <a-modal
+      v-model:open="scopeDialogVisible"
       title="选择接入的 Chatflow SOP"
-      width="42rem"
-      align-center
+      width="42rem" centered
       class="scope-dialog"
     >
       <div class="scope-dialog-body" data-testid="scope-dialog">
@@ -422,18 +401,351 @@
               <span class="sop-label">{{ scenario.label }}</span>
               <small>#{{ scenario.chatflowId }} · {{ scenario.chatflowName || '未找到 Chatflow' }}</small>
             </span>
-            <el-button
-              size="small"
-              plain
+            <a-button
+              size="small" ghost
               :disabled="!scenario.exists"
               @click.stop="openChatflowCanvas(scenario.canvasPath)"
             >
               画布
-            </el-button>
+            </a-button>
           </div>
         </div>
       </div>
-    </el-dialog>
+    </a-modal>
+
+    <a-modal
+      v-model:open="routeSettingsVisible"
+      title="统一路由设置"
+      width="52rem" centered
+      class="route-settings-dialog"
+    >
+      <div class="route-settings-body" data-testid="route-settings-dialog">
+        <section class="route-settings-section">
+          <div class="route-settings-section-head">
+            <h2>配置来源</h2>
+            <a-tag>
+              {{ runtimeConfig?.policyProfile?.source || 'settings' }}
+            </a-tag>
+          </div>
+          <div class="route-settings-meta">
+            <span>Chatflow SOP：{{ configSummary.bindingLabel }}</span>
+            <span>已接通：{{ enabledScenarioIds.length }}/{{ boundScenarios.length }}</span>
+            <span>策略版本：{{ runtimeConfig?.policyProfile?.profileVersion ?? '-' }}</span>
+          </div>
+          <div class="route-settings-actions">
+            <a-button size="small" ghost @click="scopeDialogVisible = true">选择 SOP</a-button>
+          </div>
+        </section>
+
+        <section class="route-settings-section">
+          <div class="route-settings-section-head">
+            <h2>有限意图 LLM 仲裁</h2>
+            <a-tag :color="routeSettings.arbitratorAvailable ? 'success' : 'warning'">
+              {{ routeSettings.arbitratorAvailable ? '可用' : '需检查' }}
+            </a-tag>
+          </div>
+          <div class="route-settings-llm-rows">
+            <label class="route-settings-field">
+              <span>仲裁模式</span>
+              <a-select v-model:value="routeSettings.arbitratorMode" size="small" data-testid="route-settings-arbitrator-mode">
+                <a-select-option value="llm">LLM 有限仲裁</a-select-option>
+                <a-select-option value="fake">Mock 仲裁</a-select-option>
+              </a-select>
+            </label>
+            <label class="route-settings-field">
+              <span class="route-model-field-head">
+                <span>主模型</span>
+                <a-button
+                  size="small" type="link"
+                  data-testid="route-settings-primary-temp-open"
+                  @click.prevent="openTemporaryModelSettings('primary')"
+                >
+                  临时配置
+                </a-button>
+              </span>
+              <div class="route-model-select-line">
+                <a-select
+                  v-model:value="routeSettings.arbitratorModelConfigId"
+                  size="small" allow-clear show-search
+                  :disabled="routeSettings.temporaryModel.enabled"
+                  :loading="modelOptionsLoading"
+                  placeholder="选择模型管理中的模型"
+                  data-testid="route-settings-arbitrator-model"
+                  @change="onArbitratorModelChange"
+                >
+                  <a-select-opt-group
+                    v-for="group in modelOptionGroups"
+                    :key="group.providerName"
+                    :label="group.providerName"
+                  >
+                    <a-select-option
+                      v-for="model in group.models"
+                      :key="model.modelConfigId"
+                      :value="model.modelConfigId"
+                    >
+                      {{ modelOptionLabel(model) }}
+                    </a-select-option>
+                  </a-select-opt-group>
+                </a-select>
+                <a-tag v-if="routeSettings.temporaryModel.enabled" color="warning">
+                  临时 {{ routeSettings.temporaryModel.model || '未填模型' }}
+                </a-tag>
+              </div>
+            </label>
+            <label class="route-settings-field">
+              <span class="route-model-field-head">
+                <span>备用模型</span>
+                <a-button
+                  size="small" type="link"
+                  data-testid="route-settings-fallback-temp-open"
+                  @click.prevent="openTemporaryModelSettings('fallback')"
+                >
+                  临时配置
+                </a-button>
+              </span>
+              <div class="route-model-select-line">
+                <a-select
+                  v-model:value="routeSettings.fallbackModelConfigId"
+                  size="small" allow-clear show-search
+                  :disabled="routeSettings.temporaryFallbackModel.enabled"
+                  :loading="modelOptionsLoading"
+                  placeholder="选择模型管理中的模型"
+                  data-testid="route-settings-fallback-model"
+                  @change="onFallbackModelChange"
+                >
+                  <a-select-opt-group
+                    v-for="group in modelOptionGroups"
+                    :key="`fallback-${group.providerName}`"
+                    :label="group.providerName"
+                  >
+                    <a-select-option
+                      v-for="model in group.models"
+                      :key="`fallback-${model.modelConfigId}`"
+                      :value="model.modelConfigId"
+                    >
+                      {{ modelOptionLabel(model) }}
+                    </a-select-option>
+                  </a-select-opt-group>
+                </a-select>
+                <a-tag v-if="routeSettings.temporaryFallbackModel.enabled" color="warning">
+                  临时 {{ routeSettings.temporaryFallbackModel.model || '未填模型' }}
+                </a-tag>
+              </div>
+            </label>
+          </div>
+          <div class="route-settings-meta">
+            <span>当前主模型：{{ routeSettings.arbitratorModel || '-' }}</span>
+            <span>当前备用：{{ routeSettings.fallbackModel || '-' }}</span>
+            <span>{{ routeSettings.apiKeyConfigured ? 'API Key 已配置' : 'API Key 未配置' }}</span>
+          </div>
+        </section>
+
+        <section class="route-settings-section">
+          <div class="route-settings-section-head">
+            <h2>漏斗阈值</h2>
+            <span class="route-settings-note">随下一轮消息生效</span>
+          </div>
+          <div class="route-settings-grid dense">
+            <label class="route-settings-field">
+              <span>强接收阈值</span>
+              <a-input-number v-model:value="routeSettings.strongAcceptThreshold" size="small" :min="0" :max="1" :step="0.01" :precision="2" />
+            </label>
+            <label class="route-settings-field">
+              <span>LLM 最低置信度</span>
+              <a-input-number v-model:value="routeSettings.classifierMinConfidence" size="small" :min="0" :max="1" :step="0.01" :precision="2" data-testid="route-settings-classifier-confidence" />
+            </label>
+            <label class="route-settings-field">
+              <span>候选 TopK</span>
+              <a-input-number v-model:value="routeSettings.candidateTopK" size="small" :min="1" :max="20" :step="1" :precision="0" data-testid="route-settings-candidate-topk" />
+            </label>
+            <label class="route-settings-field switch-field">
+              <span>非强命中进入 LLM</span>
+              <a-switch v-model:checked="routeSettings.llmArbitrationRequiredForNonHardStop" size="small" disabled />
+            </label>
+          </div>
+          <div class="route-settings-meta">
+            <span>当前 RuntimeLab 当轮热生效：强接收阈值、LLM 最低置信度、候选 TopK。</span>
+            <span>FAQ/RAG 阈值来自当前后端策略，需通过策略配置持久化调整。</span>
+          </div>
+        </section>
+
+        <section class="route-settings-section">
+          <div class="route-settings-section-head">
+            <h2>FAQ / RAG</h2>
+            <span class="route-settings-note">只读策略摘要</span>
+          </div>
+          <div class="route-settings-readonly-grid">
+            <div class="route-settings-readonly-row">
+              <span>FAQ 关键词</span>
+              <strong>{{ routeSettings.faqExactEnabled ? '启用' : '关闭' }}</strong>
+            </div>
+            <div class="route-settings-readonly-row">
+              <span>FAQ 向量</span>
+              <strong>{{ routeSettings.faqSemanticEnabled ? '启用' : '关闭' }}</strong>
+            </div>
+            <div class="route-settings-readonly-row">
+              <span>FAQ TopK</span>
+              <strong>{{ routeSettings.faqTopK }}</strong>
+            </div>
+            <div class="route-settings-readonly-row">
+              <span>FAQ Rerank</span>
+              <strong>{{ routeSettings.faqRerank ? '启用' : '关闭' }}</strong>
+            </div>
+            <div class="route-settings-readonly-row">
+              <span>RAG 启用</span>
+              <strong>{{ routeSettings.ragEnabled ? '启用' : '关闭' }}</strong>
+            </div>
+            <div class="route-settings-readonly-row">
+              <span>RAG 模式</span>
+              <strong>{{ routeSettings.ragRetrievalMode }}</strong>
+            </div>
+            <div class="route-settings-readonly-row">
+              <span>RAG TopK</span>
+              <strong>{{ routeSettings.ragTopK }}</strong>
+            </div>
+            <div class="route-settings-readonly-row">
+              <span>RAG Rerank</span>
+              <strong>{{ routeSettings.ragRerank ? '启用' : '关闭' }}</strong>
+            </div>
+          </div>
+          <div class="route-settings-meta">
+            <span>FAQ KB：{{ routeSettings.faqKnowledgeBaseIds.join(', ') || '-' }}</span>
+            <span>RAG KB：{{ routeSettings.ragKnowledgeBaseIds.join(', ') || '-' }}</span>
+          </div>
+        </section>
+
+        <section class="route-settings-section">
+          <div class="route-settings-section-head">
+            <h2>兜底 Agent / 转人工</h2>
+            <a-tag :color="runtimeConfig?.fallbackAgent?.available ? 'success' : 'default'">
+              {{ runtimeConfig?.fallbackAgent?.available ? 'Agent 可用' : '未启用 Agent' }}
+            </a-tag>
+          </div>
+          <div class="route-settings-grid">
+            <label class="route-settings-field switch-field">
+              <span>启用兜底 Agent</span>
+              <a-switch v-model:checked="routeSettings.fallbackAgentEnabled" size="small" />
+            </label>
+            <label class="route-settings-field">
+              <span>Agent 模块配置</span>
+              <a-select
+                v-model:value="routeSettings.fallbackAgentId"
+                size="small" allow-clear show-search
+                :disabled="!routeSettings.fallbackAgentEnabled"
+                placeholder="选择已启用 Agent"
+                data-testid="route-settings-fallback-agent"
+              >
+                <a-select-option
+                  v-for="agent in fallbackAgentOptions"
+                  :key="agent.id"
+                  :value="agent.id"
+                >
+                  {{ agent.name }}
+                </a-select-option>
+              </a-select>
+            </label>
+            <div class="route-settings-readonly-row inline">
+              <span>允许转人工</span>
+              <strong>{{ routeSettings.handoffEnabled ? '启用' : '关闭' }}</strong>
+            </div>
+            <div class="route-settings-readonly-row inline">
+              <span>转人工队列</span>
+              <strong>{{ routeSettings.handoffQueue }}</strong>
+            </div>
+          </div>
+          <div class="route-settings-actions">
+            <a-button
+              size="small"
+              :loading="savingFallbackAgent"
+              data-testid="route-settings-fallback-save"
+              @click="saveFallbackAgentFromSettings"
+            >
+              保存 Agent 到策略
+            </a-button>
+          </div>
+        </section>
+      </div>
+      <template #footer>
+        <div class="route-settings-footer">
+          <a-button @click="resetLocalRouteSettings">重置为后端配置</a-button>
+          <a-button type="primary" data-testid="route-settings-apply" @click="applyLocalRouteSettings">
+            应用本地暂存
+          </a-button>
+        </div>
+      </template>
+    </a-modal>
+
+    <a-modal
+      v-model:open="temporaryModelDialogVisible"
+      :title="temporaryModelDialogTitle"
+      width="30rem" centered
+      class="temporary-model-dialog"
+    >
+      <div class="temporary-model-form" data-testid="route-settings-temp-model-dialog">
+        <label class="route-settings-field switch-field">
+          <span>启用临时配置</span>
+          <a-switch v-model:checked="temporaryModelForm.enabled" size="small" data-testid="route-settings-temp-enabled" />
+        </label>
+        <label class="route-settings-field">
+          <span>Base URL</span>
+          <a-input v-model:value="temporaryModelForm.baseUrl" size="small" placeholder="https://openrouter.ai/api/v1" data-testid="route-settings-temp-base-url" />
+        </label>
+        <label class="route-settings-field">
+          <span>API Key</span>
+          <a-input-password v-model:value="temporaryModelForm.apiKey" size="small" placeholder="sk-..." data-testid="route-settings-temp-api-key" />
+        </label>
+        <label class="route-settings-field">
+          <span>模型名称</span>
+          <a-input v-model:value="temporaryModelForm.model" size="small" placeholder="qwen/qwen3.5-9b" data-testid="route-settings-temp-model-name" />
+        </label>
+        <div class="temporary-model-sampling">
+          <label class="route-settings-field">
+            <span>Temperature</span>
+            <a-input-number v-model:value="temporaryModelForm.temperature" size="small" :min="0" :max="2" :step="0.05" :precision="2" data-testid="route-settings-temp-temperature" />
+          </label>
+          <label class="route-settings-field">
+            <span>Top P</span>
+            <a-input-number v-model:value="temporaryModelForm.topP" size="small" :min="0" :max="1" :step="0.05" :precision="2" data-testid="route-settings-temp-top-p" />
+          </label>
+          <label class="route-settings-field">
+            <span>最大输出 Token</span>
+            <a-input-number v-model:value="temporaryModelForm.maxTokens" size="small" :min="1" :max="8192" :step="64" :precision="0" data-testid="route-settings-temp-max-tokens" />
+          </label>
+        </div>
+        <div
+          v-if="temporaryModelTestResult"
+          class="temporary-model-test-result"
+          :class="temporaryModelTestResult.ok ? 'success' : 'failure'"
+          data-testid="route-settings-temp-test-result"
+        >
+          <CheckCircleOutlined v-if="temporaryModelTestResult.ok" class="temporary-model-test-icon" />
+          <CloseCircleOutlined v-else class="temporary-model-test-icon" />
+          <div>
+            <strong>{{ temporaryModelTestResult.ok ? '连通性测试成功' : '连通性测试失败' }}</strong>
+            <span v-if="temporaryModelTestResult.ok">
+              {{ temporaryModelTestResult.model }} · {{ formatRuntimeLabElapsed(temporaryModelTestResult.elapsedMs) }}
+            </span>
+            <span v-else>{{ temporaryModelTestResult.error || '未知错误' }}</span>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <div class="route-settings-footer">
+          <a-button @click="temporaryModelDialogVisible = false">取消</a-button>
+          <a-button
+            :loading="testingTemporaryModel"
+            data-testid="route-settings-temp-test"
+            @click="testTemporaryModelConnectivity"
+          >
+            测试连通性
+          </a-button>
+          <a-button ghost @click="clearTemporaryModelSettings">清除临时配置</a-button>
+          <a-button type="primary" data-testid="route-settings-temp-apply" @click="applyTemporaryModelSettings">
+            应用临时配置
+          </a-button>
+        </div>
+      </template>
+    </a-modal>
 
     <aside
       v-if="debugPanel"
@@ -447,7 +759,7 @@
           <span>{{ debugPanel.subtitle }}</span>
         </div>
         <button type="button" class="debug-close" aria-label="关闭调试详情" @click="closeDebugPanel">
-          <Close />
+          <CloseOutlined />
         </button>
       </header>
       <div class="debug-metrics">
@@ -483,16 +795,19 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue'
+import type { RouteLocationRaw } from 'vue-router'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { message } from 'ant-design-vue'
 import {
-  ChatDotRound,
-  ChatLineRound,
-  Close,
-  Connection,
-  Refresh,
-  Setting,
-} from '@element-plus/icons-vue'
+  ApiOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  CloseOutlined,
+  CommentOutlined,
+  MessageOutlined,
+  ReloadOutlined,
+  SettingOutlined,
+} from '@ant-design/icons-vue'
 import {
   createRuntimeLabSession,
   getRuntimeLabChatflowTrace,
@@ -500,19 +815,24 @@ import {
   listRuntimeLabEvents,
   listRuntimeLabTasks,
   postRuntimeLabMessage,
+  testRuntimeLabTemporaryModel,
   updateRuntimeLabFallbackAgent,
 } from '@/api/runtimeLab'
+import { getModelOptions } from '@/api/agent'
+import type { ModelOption } from '@/api/agent'
 import type {
   RuntimeLabChatflowTrace,
   RuntimeLabConfig,
   RuntimeLabEvent,
   RuntimeLabTraceNode,
   RuntimeLabTask,
+  RuntimeLabTemporaryModelTestResult,
   RuntimeLabTurn,
   RuntimeLabUsage,
 } from '@/api/runtimeLab'
 import {
   AIRLINE_SOP_SCENARIOS,
+  buildRuntimeLabRouteSettingsPayload,
   buildRuntimeLabNodeDebugDetail,
   buildRuntimeLabBoundScenarios,
   buildRuntimeLabConfigSummary,
@@ -520,14 +840,18 @@ import {
   buildRuntimeLabRouteOutcome,
   buildRuntimeLabTraceCards,
   buildRuntimeLabTranscriptRow,
+  defaultTemporaryModelSettings,
   buildUserTranscriptRow,
   formatRuntimeLabElapsed,
   formatRuntimeLabUsage,
   runtimeLabPendingDelayMs,
+  buildRuntimeLabLocalSettings,
 } from './unifiedRoutingChatLab'
 import type {
   RuntimeLabDebugDetail,
   RuntimeLabDebugStep,
+  RuntimeLabLocalSettings,
+  RuntimeLabTemporaryModelSettings,
   RuntimeLabTraceCard,
   RuntimeLabTranscriptRow,
 } from './unifiedRoutingChatLab'
@@ -542,8 +866,16 @@ const creatingSession = ref(false)
 const traceLoading = ref(false)
 const runtimeConfigLoading = ref(false)
 const savingFallbackAgent = ref(false)
+const modelOptionsLoading = ref(false)
 const sessionId = ref<number | null>(null)
-const selectedFallbackAgentId = ref<number | null>(null)
+const routeSettingsVisible = ref(false)
+const routeSettings = ref<RuntimeLabLocalSettings>(buildRuntimeLabLocalSettings(null))
+const temporaryModelDialogVisible = ref(false)
+const temporaryModelTarget = ref<'primary' | 'fallback'>('primary')
+const temporaryModelForm = ref<RuntimeLabTemporaryModelSettings>(defaultTemporaryModelSettings())
+const testingTemporaryModel = ref(false)
+const temporaryModelTestResult = ref<RuntimeLabTemporaryModelTestResult | null>(null)
+const modelOptions = ref<ModelOption[]>([])
 const runtimeConfig = ref<RuntimeLabConfig | null>(null)
 const chatflowTrace = ref<RuntimeLabChatflowTrace | null>(null)
 const transcript = ref<RuntimeLabTranscriptRow[]>([])
@@ -581,17 +913,22 @@ const routeScopeLabel = computed(() => `已接通 ${enabledScenarioIds.value.len
 const lastRouteAction = computed(() => latestTurn.value?.routeDecision.action ?? '待开始')
 const configSummary = computed(() => buildRuntimeLabConfigSummary(runtimeConfig.value))
 const fallbackAgentOptions = computed(() => runtimeConfig.value?.fallbackAgentOptions ?? [])
+const modelOptionGroups = computed(() => groupRuntimeModelOptions(modelOptions.value))
 const funnelSummary = computed(() => buildRuntimeLabFunnelSummary(latestTurn.value?.routeDecision))
 const routeOutcome = computed(() => buildRuntimeLabRouteOutcome(latestTurn.value?.routeDecision))
 const chatflowTraceCards = computed(() => buildRuntimeLabTraceCards(chatflowTrace.value))
+const temporaryModelDialogTitle = computed(() =>
+  temporaryModelTarget.value === 'primary' ? '主模型临时配置' : '备用模型临时配置',
+)
 
 onMounted(() => {
   void createFreshSession()
   void loadRuntimeLabConfig()
+  void loadModelOptions()
 })
 
 function openOrdinaryChat() {
-  router.push('/chat')
+  router.push({ name: 'HifyChat' })
 }
 
 function isScenarioEnabled(scenarioId: string) {
@@ -633,7 +970,7 @@ async function createFreshSession() {
     chatflowTrace.value = null
     latestTurn.value = null
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '创建实验会话失败')
+    message.error(error instanceof Error ? error.message : '创建实验会话失败')
   } finally {
     creatingSession.value = false
   }
@@ -644,30 +981,181 @@ async function loadRuntimeLabConfig() {
   try {
     runtimeConfig.value = await getRuntimeLabConfig()
     syncEnabledScenarioIdsWithBindings()
-    syncFallbackAgentSelection()
+    resetLocalRouteSettings()
   } catch (error) {
     runtimeConfig.value = null
-    ElMessage.error(error instanceof Error ? error.message : '加载路由配置失败')
+    message.error(error instanceof Error ? error.message : '加载路由配置失败')
   } finally {
     runtimeConfigLoading.value = false
   }
 }
 
-async function saveFallbackAgent() {
+async function loadModelOptions() {
+  modelOptionsLoading.value = true
+  try {
+    modelOptions.value = await getModelOptions()
+    syncLocalModelConfigIds()
+  } catch (error) {
+    modelOptions.value = []
+    message.error(error instanceof Error ? error.message : '加载模型配置失败')
+  } finally {
+    modelOptionsLoading.value = false
+  }
+}
+
+function openRouteSettings() {
+  syncLocalModelConfigIds()
+  routeSettingsVisible.value = true
+}
+
+function resetLocalRouteSettings() {
+  routeSettings.value = buildRuntimeLabLocalSettings(runtimeConfig.value)
+  syncLocalModelConfigIds()
+}
+
+function applyLocalRouteSettings() {
+  routeSettingsVisible.value = false
+  message.success('统一路由设置已暂存，将随下一轮消息生效')
+}
+
+function openTemporaryModelSettings(target: 'primary' | 'fallback') {
+  temporaryModelTarget.value = target
+  const current = target === 'primary' ? routeSettings.value.temporaryModel : routeSettings.value.temporaryFallbackModel
+  temporaryModelForm.value = { ...current }
+  temporaryModelTestResult.value = null
+  temporaryModelDialogVisible.value = true
+}
+
+function applyTemporaryModelSettings() {
+  const next = {
+    ...temporaryModelForm.value,
+    model: temporaryModelForm.value.model.trim(),
+    baseUrl: temporaryModelForm.value.baseUrl.trim(),
+    apiKey: temporaryModelForm.value.apiKey.trim(),
+    maxTokens: Math.max(1, Math.round(temporaryModelForm.value.maxTokens)),
+  }
+  if (next.enabled && !temporaryModelReady(next)) {
+    message.warning('启用临时配置时需要填写 Base URL 和模型名称，非 mock 地址还需要 API Key')
+    return
+  }
+  if (temporaryModelTarget.value === 'primary') {
+    routeSettings.value.temporaryModel = next
+    if (next.enabled) {
+      routeSettings.value.arbitratorModel = next.model
+      routeSettings.value.arbitratorModelConfigId = null
+    }
+  } else {
+    routeSettings.value.temporaryFallbackModel = next
+    if (next.enabled) {
+      routeSettings.value.fallbackModel = next.model
+      routeSettings.value.fallbackModelConfigId = null
+    }
+  }
+  temporaryModelDialogVisible.value = false
+  message.success('临时模型配置已暂存，将随下一轮消息生效')
+}
+
+function temporaryModelReady(settings: RuntimeLabTemporaryModelSettings) {
+  return Boolean(settings.model && settings.baseUrl && (settings.apiKey || settings.baseUrl.startsWith('mock://')))
+}
+
+function clearTemporaryModelSettings() {
+  const cleared = defaultTemporaryModelSettings({
+    model: temporaryModelTarget.value === 'primary' ? routeSettings.value.arbitratorModel : routeSettings.value.fallbackModel,
+    baseUrl: routeSettings.value.baseUrl,
+  })
+  if (temporaryModelTarget.value === 'primary') {
+    routeSettings.value.temporaryModel = cleared
+  } else {
+    routeSettings.value.temporaryFallbackModel = cleared
+  }
+  temporaryModelForm.value = { ...cleared }
+  syncLocalModelConfigIds()
+  temporaryModelDialogVisible.value = false
+  message.success('已清除临时模型配置')
+}
+
+async function testTemporaryModelConnectivity() {
+  const next = {
+    ...temporaryModelForm.value,
+    enabled: true,
+    model: temporaryModelForm.value.model.trim(),
+    baseUrl: temporaryModelForm.value.baseUrl.trim(),
+    apiKey: temporaryModelForm.value.apiKey.trim(),
+    maxTokens: Math.max(1, Math.round(temporaryModelForm.value.maxTokens || 8)),
+  }
+  if (!temporaryModelReady(next)) {
+    temporaryModelTestResult.value = {
+      ok: false,
+      model: next.model || '-',
+      elapsedMs: 0,
+      error: '请填写 Base URL 和模型名称，非 mock 地址还需要 API Key。',
+    }
+    return
+  }
+  testingTemporaryModel.value = true
+  temporaryModelTestResult.value = null
+  try {
+    temporaryModelTestResult.value = await testRuntimeLabTemporaryModel({
+      model: next.model,
+      baseUrl: next.baseUrl,
+      apiKey: next.apiKey,
+      temperature: next.temperature,
+      maxTokens: next.maxTokens,
+      topP: next.topP,
+    })
+  } catch (error) {
+    temporaryModelTestResult.value = {
+      ok: false,
+      model: next.model,
+      elapsedMs: 0,
+      error: error instanceof Error ? error.message : '连通性测试请求失败',
+    }
+  } finally {
+    testingTemporaryModel.value = false
+  }
+}
+
+async function saveFallbackAgentFromSettings() {
   savingFallbackAgent.value = true
   try {
     runtimeConfig.value = await updateRuntimeLabFallbackAgent({
-      enabled: selectedFallbackAgentId.value !== null,
-      agentId: selectedFallbackAgentId.value,
+      enabled: routeSettings.value.fallbackAgentEnabled,
+      agentId: routeSettings.value.fallbackAgentEnabled ? routeSettings.value.fallbackAgentId : null,
     })
     syncEnabledScenarioIdsWithBindings()
-    syncFallbackAgentSelection()
-    ElMessage.success('兜底 Agent 已更新')
+    resetLocalRouteSettings()
+    message.success('兜底 Agent 已更新')
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '保存兜底 Agent 失败')
+    message.error(error instanceof Error ? error.message : '保存兜底 Agent 失败')
   } finally {
     savingFallbackAgent.value = false
   }
+}
+
+function onArbitratorModelChange(value: unknown) {
+  const modelConfigId = numberOrNull(value)
+  const option = modelOptions.value.find((item) => item.modelConfigId === modelConfigId)
+  routeSettings.value.arbitratorModelConfigId = modelConfigId
+  routeSettings.value.temporaryModel = defaultTemporaryModelSettings({
+    model: option?.modelId || option?.modelName || routeSettings.value.arbitratorModel,
+    baseUrl: option?.providerBaseUrl || routeSettings.value.baseUrl,
+  })
+  if (!option) return
+  routeSettings.value.arbitratorModel = option.modelId || option.modelName
+  routeSettings.value.baseUrl = option.providerBaseUrl || routeSettings.value.baseUrl
+}
+
+function onFallbackModelChange(value: unknown) {
+  const modelConfigId = numberOrNull(value)
+  const option = modelOptions.value.find((item) => item.modelConfigId === modelConfigId)
+  routeSettings.value.fallbackModelConfigId = modelConfigId
+  routeSettings.value.temporaryFallbackModel = defaultTemporaryModelSettings({
+    model: option?.modelId || option?.modelName || routeSettings.value.fallbackModel,
+    baseUrl: option?.providerBaseUrl || routeSettings.value.baseUrl,
+  })
+  if (!option) return
+  routeSettings.value.fallbackModel = option.modelId || option.modelName
 }
 
 async function sendInput() {
@@ -699,6 +1187,7 @@ async function sendMessage(content: string) {
       message: content,
       idempotencyKey: uid('front-turn'),
       enabledSopIds: [...enabledScenarioIds.value],
+      routeSettings: buildRuntimeLabRouteSettingsPayload(routeSettings.value),
     })
     latestTurn.value = turn
     const turnElapsedMs = Date.now() - pendingStartedAt
@@ -715,7 +1204,7 @@ async function sendMessage(content: string) {
       content: error instanceof Error ? error.message : '发送失败',
       routeAction: 'ERROR',
     })
-    ElMessage.error(error instanceof Error ? error.message : '发送失败')
+    message.error(error instanceof Error ? error.message : '发送失败')
   } finally {
     sending.value = false
     await scrollToBottom()
@@ -756,8 +1245,45 @@ function syncEnabledScenarioIdsWithBindings() {
   enabledScenarioIds.value = retained.length ? retained : ids
 }
 
-function syncFallbackAgentSelection() {
-  selectedFallbackAgentId.value = runtimeConfig.value?.fallbackAgent?.agentId ?? null
+function syncLocalModelConfigIds() {
+  if (routeSettings.value.temporaryModel.enabled || routeSettings.value.temporaryFallbackModel.enabled) {
+    if (routeSettings.value.temporaryModel.enabled) routeSettings.value.arbitratorModelConfigId = null
+    if (routeSettings.value.temporaryFallbackModel.enabled) routeSettings.value.fallbackModelConfigId = null
+    return
+  }
+  routeSettings.value.arbitratorModelConfigId = findModelConfigId(routeSettings.value.arbitratorModel)
+  routeSettings.value.fallbackModelConfigId = findModelConfigId(routeSettings.value.fallbackModel)
+}
+
+function findModelConfigId(modelNameOrId: string) {
+  const target = modelNameOrId.trim()
+  if (!target) return null
+  const option = modelOptions.value.find((item) =>
+    item.modelName === target || item.modelId === target,
+  )
+  return option?.modelConfigId ?? null
+}
+
+function groupRuntimeModelOptions(options: ModelOption[]) {
+  const groups = new Map<string, { providerName: string; models: ModelOption[] }>()
+  for (const option of options) {
+    const providerName = option.providerName || '未命名 Provider'
+    if (!groups.has(providerName)) {
+      groups.set(providerName, { providerName, models: [] })
+    }
+    groups.get(providerName)!.models.push(option)
+  }
+  return Array.from(groups.values())
+}
+
+function modelOptionLabel(option: ModelOption) {
+  const modelId = option.modelId && option.modelId !== option.modelName ? ` · ${option.modelId}` : ''
+  return `${option.modelName}${modelId}`
+}
+
+function numberOrNull(value: unknown) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
 }
 
 function replacePendingAssistant(pendingId: string, row: RuntimeLabTranscriptRow) {
@@ -772,12 +1298,22 @@ function replacePendingAssistant(pendingId: string, row: RuntimeLabTranscriptRow
 function openChatflowCanvas(path: string) {
   if (!path) return
   scopeDialogVisible.value = false
-  router.push(path)
+  router.push(toChatflowCanvasRoute(path))
 }
 
 function openChatflowDebug(path: string) {
   if (!path) return
-  router.push(path)
+  router.push(toChatflowCanvasRoute(path))
+}
+
+function toChatflowCanvasRoute(path: string): RouteLocationRaw {
+  const match = path.match(/^\/chatflows\/([^/?#]+)\/canvas(?:\?([^#]+))?/)
+  if (!match) return path
+  return {
+    name: 'HifyChatflowsCanvas',
+    params: { id: decodeURIComponent(match[1]) },
+    query: Object.fromEntries(new URLSearchParams(match[2] || '')),
+  }
 }
 
 function openDebugPanel(detail: RuntimeLabDebugDetail) {
@@ -965,8 +1501,7 @@ function uid(prefix: string) {
   border-radius: 0.5rem;
   background: var(--color-bg-page);
   color: var(--color-text-primary);
-  cursor: pointer;
-  text-align: left;
+  cursor: pointer; text-align: left;
   transition: border-color 0.15s, background 0.15s;
 }
 
@@ -1023,9 +1558,7 @@ function uid(prefix: string) {
   min-width: 0;
   max-width: 10rem;
   overflow: hidden;
-  color: var(--color-text-primary);
-  text-align: right;
-  text-overflow: ellipsis;
+  color: var(--color-text-primary); text-align: right; text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -1046,13 +1579,6 @@ function uid(prefix: string) {
 .runtime-binding-row {
   overflow-wrap: anywhere;
   line-height: 1.5;
-}
-
-.fallback-agent-picker {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.5rem;
-  align-items: center;
 }
 
 .session-id,
@@ -1159,6 +1685,194 @@ function uid(prefix: string) {
   color: var(--color-text-tertiary);
   font-size: 0.75rem;
   line-height: 1.4;
+}
+
+.route-settings-body {
+  display: flex;
+  max-height: 72vh;
+  flex-direction: column;
+  gap: 0.75rem;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.route-settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.875rem;
+  border: 0.0625rem solid var(--color-border-default);
+  border-radius: 0.5rem;
+  background: var(--color-bg-page);
+}
+
+.route-settings-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.route-settings-section h2 {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.route-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.route-settings-grid.dense {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.route-settings-llm-rows {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+.route-model-field-head,
+.route-model-select-line {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.route-model-field-head {
+  justify-content: space-between;
+}
+
+.route-model-select-line :deep(.ant-select) {
+  flex: 1;
+  min-width: 0;
+}
+
+.temporary-model-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.temporary-model-sampling {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.temporary-model-test-result {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  padding: 0.625rem 0.75rem;
+  border: 0.0625rem solid var(--color-border-default);
+  border-radius: 0.5rem;
+  background: #fff;
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.temporary-model-test-result > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.temporary-model-test-result.success {
+  border-color: rgba(22, 163, 74, 0.35);
+  background: rgba(22, 163, 74, 0.08);
+  color: #166534;
+}
+
+.temporary-model-test-result.failure {
+  border-color: rgba(220, 38, 38, 0.35);
+  background: rgba(220, 38, 38, 0.08);
+  color: #991b1b;
+}
+
+.temporary-model-test-icon {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+}
+
+.route-settings-readonly-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.route-settings-readonly-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.5rem 0.625rem;
+  border: 0.0625rem solid var(--color-border-default);
+  border-radius: 0.375rem;
+  background: #fff;
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+}
+
+.route-settings-readonly-row.inline {
+  min-height: 2rem;
+}
+
+.route-settings-readonly-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--color-text-primary); text-align: right;
+}
+
+.route-settings-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.375rem;
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+}
+
+.route-settings-field :deep(.ant-select),
+.route-settings-field :deep(.ant-input),
+.route-settings-field :deep(.ant-input-number) {
+  width: 100%;
+}
+
+.switch-field {
+  justify-content: space-between;
+}
+
+.route-settings-meta,
+.route-settings-actions,
+.route-settings-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.route-settings-meta {
+  color: var(--color-text-tertiary);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.route-settings-note {
+  color: var(--color-text-tertiary);
+  font-size: 0.75rem;
+}
+
+.route-settings-footer {
+  justify-content: flex-end;
 }
 
 .send-button {
@@ -1393,8 +2107,7 @@ function uid(prefix: string) {
 .decision-list dd {
   margin: 0;
   max-width: 11rem;
-  overflow-wrap: anywhere;
-  text-align: right;
+  overflow-wrap: anywhere; text-align: right;
   font-size: 0.75rem;
   color: var(--color-text-primary);
 }
@@ -1523,8 +2236,7 @@ function uid(prefix: string) {
   background: #fff;
   color: inherit;
   cursor: pointer;
-  font: inherit;
-  text-align: left;
+  font: inherit; text-align: left;
 }
 
 .trace-node.current {
@@ -1581,8 +2293,7 @@ function uid(prefix: string) {
 
 .slot-row strong {
   min-width: 0;
-  overflow-wrap: anywhere;
-  text-align: right;
+  overflow-wrap: anywhere; text-align: right;
   font-weight: 600;
 }
 
@@ -1686,8 +2397,7 @@ function uid(prefix: string) {
   background: var(--color-bg-page);
   color: inherit;
   cursor: pointer;
-  font: inherit;
-  text-align: left;
+  font: inherit; text-align: left;
 }
 
 .debug-step-row span {

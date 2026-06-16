@@ -558,9 +558,40 @@ export function insertWorkflowNodeOnEdge(
 export function deleteWorkflowNode(graph: WorkflowCanvasGraph, nodeKey: string): WorkflowCanvasGraph {
   if (FIXED_NODE_KEYS.has(nodeKey)) return graph
   return {
-    nodes: graph.nodes.filter((node) => node.nodeKey !== nodeKey),
+    nodes: graph.nodes
+      .filter((node) => node.nodeKey !== nodeKey)
+      .map((node) => clearNodeReferences(node, nodeKey)),
     edges: graph.edges.filter((edge) => edge.sourceNodeKey !== nodeKey && edge.targetNodeKey !== nodeKey),
   }
+}
+
+function clearNodeReferences(node: WorkflowCanvasNode, deletedNodeKey: string): WorkflowCanvasNode {
+  return {
+    ...node,
+    config: clearConfigReferences(cloneConfig(node.config), deletedNodeKey),
+  }
+}
+
+function clearConfigReferences(value: any, deletedNodeKey: string): any {
+  if (Array.isArray(value)) {
+    return value.map((item) => clearConfigReferences(item, deletedNodeKey))
+  }
+  if (!value || typeof value !== 'object') return value
+  const next: Record<string, any> = {}
+  for (const [key, item] of Object.entries(value)) {
+    if (key === 'value' || key === 'source' || key === 'left' || key === 'right') {
+      next[key] = referenceTargetsDeletedNode(item, deletedNodeKey) ? '' : clearConfigReferences(item, deletedNodeKey)
+      continue
+    }
+    next[key] = clearConfigReferences(item, deletedNodeKey)
+  }
+  return next
+}
+
+function referenceTargetsDeletedNode(value: unknown, deletedNodeKey: string) {
+  if (typeof value !== 'string') return false
+  const trimmed = value.trim()
+  return trimmed === deletedNodeKey || trimmed.startsWith(`${deletedNodeKey}.`) || trimmed.startsWith(`{{${deletedNodeKey}.`)
 }
 
 export function renameWorkflowNode(graph: WorkflowCanvasGraph, nodeKey: string, name: string): WorkflowCanvasGraph {

@@ -191,7 +191,7 @@ describe('workflow variable catalog', () => {
     expect(references).not.toContain(`{{${downstreamKnowledge.nodeKey}.references}}`)
   })
 
-  it('uses upstream variables for END answer inline references', () => {
+  it('uses local output variables for chatflow END inline references', () => {
     let graph = createDefaultChatflowGraph()
     graph = addWorkflowNode(graph, 'LLM', { x: 320, y: 240 })
     const llm = graph.nodes.find((node) => node.type === 'LLM')!
@@ -207,10 +207,32 @@ describe('workflow variable catalog', () => {
     const catalog = buildInlineVariableCatalog(graph, end.nodeKey, { flowType: 'CHATFLOW' })
     const references = catalog.flatMap((group) => group.items.map((item) => item.reference))
 
-    expect(catalog.map((group) => group.title)).toEqual(expect.arrayContaining(['开始', '大模型']))
-    expect(references).toContain('{{start.sys.query}}')
-    expect(references).toContain(`{{${llm.nodeKey}.answer}}`)
-    expect(references).not.toContain('{{final}}')
-    expect(references).not.toContain('{{debug}}')
+    expect(catalog.map((group) => group.title)).toEqual(['输出'])
+    expect(references).toContain('{{final}}')
+    expect(references).toContain('{{debug}}')
+    expect(references).not.toContain('{{start.sys.query}}')
+    expect(references).not.toContain(`{{${llm.nodeKey}.answer}}`)
+  })
+
+  it('uses local output variables for workflow END inline references', () => {
+    let graph = createDefaultWorkflowGraph()
+    graph = addWorkflowNode(graph, 'LLM', { x: 320, y: 240 })
+    const llm = graph.nodes.find((node) => node.type === 'LLM')!
+    const end = graph.nodes.find((node) => node.type === 'END')!
+
+    llm.config.outputParameters = [{ name: 'answer', type: 'string' }]
+    end.config.outputParameters = [
+      { name: 'final', type: 'string' },
+      { name: 'debug', type: 'object' },
+    ]
+    graph = connectWorkflowNodes(connectWorkflowNodes(graph, 'start', llm.nodeKey), llm.nodeKey, end.nodeKey)
+
+    const catalog = buildInlineVariableCatalog(graph, end.nodeKey, { flowType: 'WORKFLOW' })
+    const references = catalog.flatMap((group) => group.items.map((item) => item.reference))
+
+    expect(catalog.map((group) => group.title)).toEqual(['输出'])
+    expect(references).toContain('{{final}}')
+    expect(references).toContain('{{debug}}')
+    expect(references).not.toContain(`{{${llm.nodeKey}.answer}}`)
   })
 })

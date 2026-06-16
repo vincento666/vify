@@ -3,18 +3,18 @@
     <div class="page-header">
       <div class="page-header-left">
         <div class="page-title">知识库管理</div>
-        <div class="page-desc">管理 RAG 知识库，上传文档自动分块向量化</div>
+        <div class="page-desc">沉淀业务资料，上传后自动整理成可回答内容</div>
       </div>
       <div class="page-header-actions">
-        <el-input
-          v-model="searchName"
+        <a-input
+          v-model:value="searchName"
           placeholder="搜索知识库名称"
-          clearable
-          style="width: 200px; margin-right: 10px"
+          allow-clear
+          class="kb-search-input"
           @input="onSearch"
         />
         <button class="btn-primary" @click="openCreate">
-          <el-icon><Plus /></el-icon>
+          <span class="button-icon"><PlusOutlined /></span>
           新建知识库
         </button>
       </div>
@@ -29,14 +29,14 @@
       >
         <div class="kb-card-header">
           <div class="kb-icon">
-            <el-icon :size="22"><Folder /></el-icon>
+            <span class="kb-folder-icon"><FolderOutlined /></span>
           </div>
           <div class="kb-actions" @click.stop>
-            <el-tag :type="kb.enabled ? 'success' : 'info'" size="small" style="margin-right:6px">
+            <a-tag :color="kb.enabled ? 'success' : 'default'" class="kb-status-tag hify-tag">
               {{ kb.enabled ? '启用' : '禁用' }}
-            </el-tag>
-            <el-button type="primary" link size="small" @click="openEdit(kb)">编辑</el-button>
-            <el-button type="danger" link size="small" @click="onDelete(kb)">删除</el-button>
+            </a-tag>
+            <a-button type="link" size="small" @click="openEdit(kb)">编辑</a-button>
+            <a-button type="link" danger size="small" @click="onDelete(kb)">删除</a-button>
           </div>
         </div>
         <div class="kb-name">{{ kb.name }}</div>
@@ -48,56 +48,61 @@
       </div>
 
       <div v-if="kbList.length === 0 && !loading" class="kb-empty">
-        <el-empty description="还没有知识库，点击「新建知识库」开始" />
+        <a-empty description="还没有知识库，点击「新建知识库」开始" />
       </div>
     </div>
 
     <!-- 分页 -->
     <div v-if="total > pageSize" class="page-pagination">
-      <el-pagination
-        v-model:current-page="page"
+      <a-pagination
+        v-model:current="page"
         :page-size="pageSize"
         :total="total"
-        layout="prev, pager, next"
-        @current-change="loadList"
+        show-less-items
+        @change="loadList"
       />
     </div>
 
     <!-- 新建/编辑弹窗 -->
-    <el-dialog
-      v-model="dialogVisible"
+    <a-modal
+      v-model:open="dialogVisible"
       :title="editingKb ? '编辑知识库' : '新建知识库'"
-      width="440px"
-      :close-on-click-modal="false"
+      :width="kbDialogWidth"
+      :mask-closable="false"
       destroy-on-close
     >
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
-        <el-form-item label="名称" prop="name">
-          <el-input v-model="form.name" placeholder="请输入知识库名称" />
-        </el-form-item>
-        <el-form-item label="描述">
-          <el-input v-model="form.description" type="textarea" :rows="3" placeholder="可选" />
-        </el-form-item>
-        <el-form-item v-if="editingKb" label="状态">
-          <el-switch v-model="form.enabled" :active-value="1" :inactive-value="0" />
-        </el-form-item>
-      </el-form>
+      <a-form ref="formRef" :model="form" :rules="rules" :label-col="{ style: { width: kbDialogLabelWidth } }">
+        <a-form-item label="名称" name="name">
+          <a-input v-model:value="form.name" placeholder="请输入知识库名称" />
+        </a-form-item>
+        <a-form-item label="描述">
+          <a-textarea v-model:value="form.description" :rows="3" placeholder="可选" />
+        </a-form-item>
+        <a-form-item v-if="editingKb" label="状态">
+          <a-switch v-model:checked="form.enabled" :checked-value="1" :un-checked-value="0" />
+        </a-form-item>
+      </a-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="onSubmit">确定</el-button>
+        <a-button @click="dialogVisible = false">取消</a-button>
+        <a-button type="primary" :loading="saving" @click="onSubmit">确定</a-button>
       </template>
-    </el-dialog>
+    </a-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import type { FormInstance, FormRules } from 'element-plus'
-import { Plus, Folder } from '@element-plus/icons-vue'
+import { Modal } from 'ant-design-vue'
+import { FolderOutlined, PlusOutlined } from '@ant-design/icons-vue'
+import { notifySuccess } from '@/utils/notify'
 import { listKb, createKb, updateKb, deleteKb } from '@/api/knowledge'
 import type { KnowledgeBase } from '@/api/knowledge'
+
+type FormRules = Record<string, unknown>
+type FormInstance = {
+  validate: () => Promise<unknown>
+}
 
 const router = useRouter()
 
@@ -107,6 +112,8 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = 12
 const searchName = ref('')
+const kbDialogWidth = '27.5rem'
+const kbDialogLabelWidth = '5rem'
 
 const dialogVisible = ref(false)
 const saving = ref(false)
@@ -159,10 +166,10 @@ async function onSubmit() {
   try {
     if (editingKb.value) {
       await updateKb(editingKb.value.id, { name: form.name, description: form.description, enabled: form.enabled })
-      ElMessage.success('保存成功')
+      notifySuccess('保存成功')
     } else {
       await createKb({ name: form.name, description: form.description })
-      ElMessage.success('创建成功')
+      notifySuccess('创建成功')
     }
     dialogVisible.value = false
     loadList()
@@ -172,16 +179,21 @@ async function onSubmit() {
 }
 
 async function onDelete(kb: KnowledgeBase) {
-  try {
-    await ElMessageBox.confirm(`确定删除知识库「${kb.name}」及其所有文档？`, '提示', { type: 'warning' })
-    await deleteKb(kb.id)
-    ElMessage.success('删除成功')
-    loadList()
-  } catch { /* cancel */ }
+  Modal.confirm({
+    title: '提示',
+    content: `确定删除知识库「${kb.name}」及其所有文档？`,
+    okText: '确认',
+    cancelText: '取消',
+    onOk: async () => {
+      await deleteKb(kb.id)
+      notifySuccess('删除成功')
+      await loadList()
+    },
+  })
 }
 
 function goDocuments(kbId: number) {
-  router.push(`/knowledge/${kbId}/documents`)
+  router.push({ name: 'HifyKnowledgeDocuments', params: { kbId } })
 }
 
 function formatDate(iso: string) {
@@ -190,60 +202,73 @@ function formatDate(iso: string) {
 </script>
 
 <style scoped>
-.page-header { margin-bottom: 20px; }
+.page-header { margin-bottom: var(--space-5); }
+
+.kb-search-input {
+  width: 12.5rem;
+  margin-right: 0.625rem;
+}
 
 .kb-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(17.5rem, 1fr));
+  gap: var(--space-4);
 }
 
 .kb-card {
   background: var(--color-bg-card, #fff);
-  border: 1px solid var(--color-border-default, #e3e6ef);
-  border-radius: 10px;
-  padding: 20px;
+  border: 0.0625rem solid var(--color-border-default, #e3e6ef);
+  border-radius: 0.625rem;
+  padding: var(--space-5);
   cursor: pointer;
   transition: box-shadow 0.2s, border-color 0.2s, transform 0.15s;
 }
 .kb-card:hover {
-  box-shadow: 0 4px 16px rgba(99,102,241,0.12);
+  box-shadow: 0 0.25rem 1rem rgba(99,102,241,0.12);
   border-color: var(--color-primary-300, #a5b4fc);
-  transform: translateY(-2px);
+  transform: translateY(-0.125rem);
 }
 
 .kb-card-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
 .kb-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-lg);
   background: linear-gradient(135deg, #eef2ff, #e0e7ff);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--color-primary-500, #6366f1);
 }
-.kb-actions { display: flex; align-items: center; gap: 2px; }
+.kb-folder-icon {
+  font-size: 1.375rem;
+  display: inline-flex;
+}
+.button-icon { display: inline-flex; }
+.kb-actions { display: flex; align-items: center; gap: var(--radius-xs); }
+.kb-status-tag {
+  margin-right: 0.375rem;
+}
 
 .kb-name {
-  font-size: 15px;
+  font-size: var(--text-md);
   font-weight: 600;
   color: var(--color-text-primary, #0f1117);
-  margin-bottom: 6px;
+  margin-bottom: 0.375rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .kb-desc {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--color-text-secondary, #4b5268);
   line-height: 1.5;
-  height: 40px;
+  height: 2.5rem;
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -254,18 +279,18 @@ function formatDate(iso: string) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--color-border-default, #e3e6ef);
+  margin-top: 0.875rem;
+  padding-top: var(--space-3);
+  border-top: 0.0625rem solid var(--color-border-default, #e3e6ef);
 }
-.kb-time { font-size: 12px; color: var(--color-text-tertiary, #8b92a8); }
-.kb-link { font-size: 12px; color: var(--color-primary-500, #6366f1); }
+.kb-time { font-size: var(--text-xs); color: var(--color-text-tertiary, #8b92a8); }
+.kb-link { font-size: var(--text-xs); color: var(--color-primary-500, #6366f1); }
 
-.kb-empty { grid-column: 1 / -1; padding: 60px 0; }
+.kb-empty { grid-column: 1 / -1; padding: 3.75rem 0; }
 
 .page-pagination {
   display: flex;
   justify-content: flex-end;
-  margin-top: 20px;
+  margin-top: var(--space-5);
 }
 </style>

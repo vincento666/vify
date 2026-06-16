@@ -1,0 +1,90 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const requestMocks = vi.hoisted(() => ({
+  get: vi.fn(),
+  post: vi.fn(),
+}))
+
+vi.mock('@/utils/request', () => requestMocks)
+
+describe('customer-assistant frontend API client', () => {
+  beforeEach(() => {
+    requestMocks.get.mockReset()
+    requestMocks.post.mockReset()
+  })
+
+  it('uses the customer-assistant session and turn endpoints', async () => {
+    requestMocks.post
+      .mockResolvedValueOnce({ id: 12, status: 'ACTIVE' })
+      .mockResolvedValueOnce({ runId: 31, customerReplyDraft: '请补充订单号。' })
+
+    const { createCustomerAssistantSession, sendCustomerAssistantTurn } = await import('./customerAssistant')
+
+    await expect(createCustomerAssistantSession({ customerId: 'C-046' })).resolves.toEqual({
+      id: 12,
+      status: 'ACTIVE',
+    })
+    await expect(
+      sendCustomerAssistantTurn(12, {
+        message: '我要退票',
+        idempotencyKey: '046-red',
+      }),
+    ).resolves.toEqual({ runId: 31, customerReplyDraft: '请补充订单号。' })
+
+    expect(requestMocks.post).toHaveBeenNthCalledWith(1, '/v1/customer-assistant/sessions', {
+      context: { customerId: 'C-046' },
+    })
+    expect(requestMocks.post).toHaveBeenNthCalledWith(2, '/v1/customer-assistant/sessions/12/turns', {
+      message: '我要退票',
+      idempotencyKey: '046-red',
+    })
+  })
+
+  it('sends actor through the turn endpoint', async () => {
+    requestMocks.post.mockResolvedValueOnce({ runId: 47 })
+
+    const { sendCustomerAssistantTurn } = await import('./customerAssistant')
+
+    await sendCustomerAssistantTurn(12, {
+      message: '请帮我看下退票建议',
+      idempotencyKey: '047-actor',
+      actor: 'operator',
+    })
+
+    expect(requestMocks.post).toHaveBeenCalledWith('/v1/customer-assistant/sessions/12/turns', {
+      message: '请帮我看下退票建议',
+      idempotencyKey: '047-actor',
+      actor: 'operator',
+    })
+  })
+
+  it('lists task and event ledgers', async () => {
+    requestMocks.get.mockResolvedValueOnce({ list: [], total: 0 }).mockResolvedValueOnce({ list: [], total: 0 })
+
+    const { listCustomerAssistantEvents, listCustomerAssistantTasks } = await import('./customerAssistant')
+
+    await listCustomerAssistantTasks(7)
+    await listCustomerAssistantEvents(7)
+
+    expect(requestMocks.get).toHaveBeenNthCalledWith(1, '/v1/customer-assistant/sessions/7/tasks')
+    expect(requestMocks.get).toHaveBeenNthCalledWith(2, '/v1/customer-assistant/sessions/7/events')
+  })
+
+  it('confirms, rejects, and executes proposed actions through explicit endpoints', async () => {
+    requestMocks.post
+      .mockResolvedValueOnce({ id: 9, status: 'CONFIRMED' })
+      .mockResolvedValueOnce({ id: 10, status: 'REJECTED' })
+      .mockResolvedValueOnce({ id: 11, status: 'EXECUTED' })
+
+    const { confirmCustomerAssistantAction, executeCustomerAssistantAction, rejectCustomerAssistantAction } =
+      await import('./customerAssistant')
+
+    await expect(confirmCustomerAssistantAction(9)).resolves.toEqual({ id: 9, status: 'CONFIRMED' })
+    await expect(rejectCustomerAssistantAction(10)).resolves.toEqual({ id: 10, status: 'REJECTED' })
+    await expect(executeCustomerAssistantAction(11)).resolves.toEqual({ id: 11, status: 'EXECUTED' })
+
+    expect(requestMocks.post).toHaveBeenNthCalledWith(1, '/v1/customer-assistant/proposed-actions/9/confirm')
+    expect(requestMocks.post).toHaveBeenNthCalledWith(2, '/v1/customer-assistant/proposed-actions/10/reject')
+    expect(requestMocks.post).toHaveBeenNthCalledWith(3, '/v1/customer-assistant/proposed-actions/11/execute')
+  })
+})

@@ -7,56 +7,57 @@
         <h2 class="page-title">对话流</h2>
         <p class="page-desc">管理面向对话场景的流程编排</p>
       </div>
-      <el-button type="primary" @click="$router.push('/chatflows/create')">
-        <el-icon><Plus /></el-icon>新建对话流
-      </el-button>
+      <a-button type="primary" @click="$router.push({ name: 'HifyChatflowsCreate' })">
+        <template #icon><PlusOutlined /></template>
+        新建对话流
+      </a-button>
     </div>
 
-    <el-table v-if="chatflows.length" :data="chatflows" v-loading="loading" class="workflow-table" stripe>
-      <el-table-column prop="name" label="名称" :min-width="workflowTableColumnWidths.name">
-        <template #default="{ row }">
+    <a-table v-if="chatflows.length" :data-source="chatflows" :loading="loading" class="workflow-table" row-key="id" :pagination="false" size="middle">
+      <a-table-column data-index="name" title="名称" :width="workflowTableColumnWidths.name">
+        <template #default="{ record: row }">
           <div class="wf-name">
-            <el-icon class="wf-icon"><ChatLineRound /></el-icon>
+            <MessageOutlined class="wf-icon" />
             <span>{{ row.name }}</span>
           </div>
         </template>
-      </el-table-column>
-      <el-table-column prop="description" label="描述" :min-width="workflowTableColumnWidths.description" show-overflow-tooltip />
-      <el-table-column prop="status" label="状态" :width="workflowTableColumnWidths.status">
-        <template #default="{ row }">
-          <el-tag :type="row.status === 'PUBLISHED' ? 'success' : row.status === 'DISABLED' ? 'danger' : 'info'" size="small">
+      </a-table-column>
+      <a-table-column data-index="description" title="描述" :width="workflowTableColumnWidths.description" ellipsis />
+      <a-table-column data-index="status" title="状态" :width="workflowTableColumnWidths.status">
+        <template #default="{ record: row }">
+          <a-tag :color="statusColor(row.status)">
             {{ statusLabel(row.status) }}
-          </el-tag>
+          </a-tag>
         </template>
-      </el-table-column>
-      <el-table-column label="更新时间" :width="workflowTableColumnWidths.updatedAt">
-        <template #default="{ row }">{{ formatTime(row.updatedAt || row.createdAt) }}</template>
-      </el-table-column>
-      <el-table-column label="操作" :width="workflowTableColumnWidths.actions" fixed="right">
-        <template #default="{ row }">
-          <el-button size="small" @click="$router.push(`/chatflows/${row.id}/canvas`)">查看</el-button>
-          <el-button size="small" type="primary" plain @click="$router.push(`/chatflows/${row.id}/canvas`)">画布</el-button>
-          <el-popconfirm title="确认删除这个对话流？" @confirm="handleDelete(row.id)">
-            <template #reference>
-              <el-button size="small" type="danger">删除</el-button>
-            </template>
-          </el-popconfirm>
+      </a-table-column>
+      <a-table-column title="更新时间" :width="workflowTableColumnWidths.updatedAt">
+        <template #default="{ record: row }">{{ formatTime(row.updatedAt || row.createdAt) }}</template>
+      </a-table-column>
+      <a-table-column title="操作" :width="workflowTableColumnWidths.actions" fixed="right">
+        <template #default="{ record: row }">
+          <div class="action-buttons">
+            <a-button size="small" @click="$router.push({ name: 'HifyChatflowsCanvas', params: { id: row.id } })">查看</a-button>
+            <a-button size="small" type="primary" ghost @click="$router.push({ name: 'HifyChatflowsCanvas', params: { id: row.id } })">画布</a-button>
+            <a-popconfirm title="确认删除这个对话流？" ok-text="确认" cancel-text="取消" @confirm="handleDelete(row.id)">
+              <a-button size="small" danger>删除</a-button>
+            </a-popconfirm>
+          </div>
         </template>
-      </el-table-column>
-    </el-table>
+      </a-table-column>
+    </a-table>
 
     <div v-else class="empty-state">
-      <el-empty description="对话流画布已就绪，可创建对话流程并完成试运行与发布">
-        <el-button type="primary" @click="$router.push('/chatflows/create')">创建对话流</el-button>
-      </el-empty>
+      <a-empty description="对话流画布已就绪，可创建对话流程并完成试运行与发布">
+        <a-button type="primary" @click="$router.push({ name: 'HifyChatflowsCreate' })">创建对话流</a-button>
+      </a-empty>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { ChatLineRound, Plus } from '@element-plus/icons-vue'
+import { message } from 'ant-design-vue'
+import { MessageOutlined, PlusOutlined } from '@ant-design/icons-vue'
 
 import { deleteChatflow, listChatflows, type WorkflowListItem } from '@/api/workflow'
 import WorkflowModuleTabs from './WorkflowModuleTabs.vue'
@@ -64,14 +65,12 @@ import WorkflowModuleTabs from './WorkflowModuleTabs.vue'
 const chatflows = ref<WorkflowListItem[]>([])
 const loading = ref(false)
 
-// Element Plus table column props parse CSS unit strings as pixel integers,
-// so rem strings collapse columns. Keep these numeric props scoped here.
 const workflowTableColumnWidths = {
-  name: 220,
-  description: 260,
-  status: 110,
-  updatedAt: 180,
-  actions: 230,
+  name: '13.75rem',
+  description: '16.25rem',
+  status: '6.875rem',
+  updatedAt: '11.25rem',
+  actions: '14.375rem',
 }
 
 async function loadChatflows() {
@@ -86,12 +85,16 @@ async function loadChatflows() {
 
 async function handleDelete(id: number) {
   await deleteChatflow(id)
-  ElMessage.success('已删除')
+  message.success('已删除')
   await loadChatflows()
 }
 
 function statusLabel(status: string) {
   return { DRAFT: '草稿', PUBLISHED: '已发布', DISABLED: '已禁用' }[status] || status
+}
+
+function statusColor(status: string) {
+  return { DRAFT: 'default', PUBLISHED: 'success', DISABLED: 'error' }[status] || 'default'
 }
 
 function formatTime(value: string) {
@@ -118,13 +121,13 @@ onMounted(loadChatflows)
   margin: 0 0 var(--space-1);
   font-size: var(--text-lg);
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--color-text-primary);
 }
 
 .page-desc {
   margin: 0;
   font-size: var(--text-sm);
-  color: var(--el-text-color-secondary);
+  color: var(--color-text-secondary);
 }
 
 .empty-state {
@@ -132,9 +135,9 @@ onMounted(loadChatflows)
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--color-border-default);
   border-radius: var(--radius-md);
-  background: var(--el-bg-color);
+  background: var(--color-bg-surface);
 }
 
 .workflow-table {
@@ -148,6 +151,12 @@ onMounted(loadChatflows)
 }
 
 .wf-icon {
-  color: var(--el-color-primary);
+  color: var(--color-primary-600);
+}
+
+.action-buttons {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 </style>

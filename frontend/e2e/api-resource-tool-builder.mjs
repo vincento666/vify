@@ -113,7 +113,11 @@ try {
   const panel = page.getByTestId('node-config-panel')
   await panel.waitFor({ state: 'visible', timeout: 10000 })
   await panel.getByTestId('tool-call-resource-select').click()
-  await page.getByRole('option', { name: new RegExp(`lookup_order_api_${stamp}`) }).click()
+  await page
+    .locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option', {
+      hasText: `lookup_order_api_${stamp}`,
+    })
+    .click()
   await page.getByRole('button', { name: '保存', exact: true }).click()
   await page.waitForResponse((response) => response.url().includes(`/api/v1/workflows/${workflow.id}`) && response.request().method() === 'PUT')
 

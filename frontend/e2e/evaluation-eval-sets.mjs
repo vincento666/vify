@@ -20,15 +20,15 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 
 try {
   await page.goto(`${baseUrl}/evaluation`, { waitUntil: 'networkidle' })
-  await page.getByRole('tab', { name: 'Eval Sets' }).click()
+  await page.getByRole('tab', { name: '评测集' }).click()
   await assertBodyIncludes(page, '创建评测集')
 
   await page.getByTestId('create-eval-set').click()
   await page.getByPlaceholder('请输入评测集名称').fill(evalSetName)
   await page.getByPlaceholder('描述适用场景').fill('E2E manual regression set')
   await page.getByTestId('save-eval-set').click()
-  await page.locator('h4', { hasText: evalSetName }).waitFor({ state: 'visible', timeout: 5000 })
-  await assertBodyIncludes(page, '0 cases')
+  await page.locator('h2', { hasText: evalSetName }).waitFor({ state: 'visible', timeout: 5000 })
+  await assertBodyIncludes(page, '还没有用例')
 
   await page.getByRole('button', { name: '添加用例' }).first().click()
   await page.getByPlaceholder('用户输入或测试问题').fill('用户问：7 天内可以退款吗？')
@@ -36,7 +36,6 @@ try {
   await page.getByPlaceholder('用英文逗号分隔，如 refund,policy').fill('refund, policy, refund')
   await page.getByTestId('save-eval-case').click()
   await page.getByText('7 天内可以申请退款').waitFor({ state: 'visible', timeout: 5000 })
-  await assertBodyIncludes(page, '1 cases')
   await assertBodyIncludes(page, 'refund')
   await assertBodyIncludes(page, 'policy')
 
@@ -45,7 +44,10 @@ try {
   await page.getByTestId('save-eval-case').click()
   await page.getByText('7 天内可以在线申请退款').waitFor({ state: 'visible', timeout: 5000 })
 
-  await page.getByRole('button', { name: '编辑' }).first().click()
+  await page.getByRole('button', { name: '返回评测集' }).click()
+  const setCard = page.locator('.eval-set-card').filter({ hasText: evalSetName })
+  await setCard.getByText('1 条用例', { exact: true }).waitFor({ state: 'visible', timeout: 5000 })
+  await setCard.getByRole('button', { name: '编辑' }).click()
   await page.getByPlaceholder('描述适用场景').fill(updatedDescription)
   await page.getByTestId('save-eval-set').click()
   await page.locator('.el-dialog', { hasText: '编辑评测集' }).waitFor({ state: 'hidden', timeout: 5000 })

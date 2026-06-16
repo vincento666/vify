@@ -53,18 +53,33 @@ try {
 
   assert(await llmNode.getByRole('button', { name: '试运行当前节点', exact: true }).count() === 1, 'Expected node card run button')
   assert(await llmNode.getByRole('button', { name: '更多操作', exact: true }).count() === 1, 'Expected node card more button')
-  const actionStyle = await llmNode.getByRole('button', { name: '更多操作', exact: true }).evaluate((button) => {
+  const moreButton = llmNode.getByRole('button', { name: '更多操作', exact: true })
+  const runButton = llmNode.getByRole('button', { name: '试运行当前节点', exact: true })
+  const actionStyle = await moreButton.evaluate((button) => {
     const style = getComputedStyle(button)
-    return { backgroundColor: style.backgroundColor, borderStyle: style.borderStyle, borderWidth: style.borderWidth }
+    return { backgroundColor: style.backgroundColor, borderStyle: style.borderStyle, borderWidth: style.borderWidth, color: style.color }
   })
   assert(actionStyle.backgroundColor === 'rgba(0, 0, 0, 0)' && actionStyle.borderStyle === 'none', `Expected icon-only transparent action style ${JSON.stringify(actionStyle)}`)
+  await runButton.hover()
+  const runHoverStyle = await runButton.evaluate((button) => getComputedStyle(button).color)
+  assert(runHoverStyle === actionStyle.color, `Expected node run action to keep icon color on hover, got ${runHoverStyle}`)
+  await moreButton.hover()
+  const moreHoverStyle = await moreButton.evaluate((button) => {
+    const style = getComputedStyle(button)
+    return { backgroundColor: style.backgroundColor, borderStyle: style.borderStyle, color: style.color }
+  })
+  assert(
+    moreHoverStyle.color === actionStyle.color && moreHoverStyle.backgroundColor === actionStyle.backgroundColor && moreHoverStyle.borderStyle === actionStyle.borderStyle,
+    `Expected more action to keep icon-only style on hover, got ${JSON.stringify(moreHoverStyle)}`,
+  )
 
-  await llmNode.getByRole('button', { name: '更多操作', exact: true }).click()
+  await moreButton.hover()
   const menu = page.getByTestId('node-card-menu')
   await menu.waitFor({ state: 'visible', timeout: 5000 })
-  for (const label of ['重命名', '创建副本', '删除', '帮助文档']) {
+  for (const label of ['重命名', '创建副本', '删除']) {
     assert(await menu.getByRole('menuitem', { name: label, exact: true }).count() === 1, `Expected menu item ${label}`)
   }
+  assert(await menu.getByRole('menuitem', { name: '帮助文档', exact: true }).count() === 0, 'Expected help document menu item removed')
 
   await menu.getByRole('menuitem', { name: '重命名', exact: true }).click()
   const panel = page.getByTestId('node-config-panel')
@@ -83,14 +98,30 @@ try {
   await panel.getByRole('button', { name: '关闭配置', exact: true }).click()
 
   await llmNode.hover()
+  await llmNode.getByRole('button', { name: '更多操作', exact: true }).hover()
+  await menu.waitFor({ state: 'visible', timeout: 5000 })
   await llmNode.getByRole('button', { name: '更多操作', exact: true }).click()
+  await page.mouse.move(20, 20)
+  await menu.waitFor({ state: 'hidden', timeout: 5000 })
+  await llmNode.hover()
+  await llmNode.getByRole('button', { name: '更多操作', exact: true }).hover()
+  await menu.waitFor({ state: 'visible', timeout: 5000 })
+  const openMenuActionStyle = await llmNode.getByRole('button', { name: '更多操作', exact: true }).evaluate((button) => {
+    const style = getComputedStyle(button)
+    return { backgroundColor: style.backgroundColor, borderStyle: style.borderStyle, color: style.color }
+  })
+  assert(
+    openMenuActionStyle.color === actionStyle.color && openMenuActionStyle.backgroundColor === actionStyle.backgroundColor && openMenuActionStyle.borderStyle === actionStyle.borderStyle,
+    `Expected open menu action to keep icon-only style after pointer leaves, got ${JSON.stringify(openMenuActionStyle)}`,
+  )
+  assert(await menu.getByRole('menuitem', { name: '帮助文档', exact: true }).count() === 0, 'Expected open menu to stay help-free after pointer leaves')
   await menu.getByRole('menuitem', { name: '创建副本', exact: true }).click()
   await page.locator('.coze-node', { hasText: '大模型二次改名 副本' }).waitFor({ state: 'visible', timeout: 5000 })
   await panel.getByRole('button', { name: '关闭配置', exact: true }).click()
 
   const duplicate = page.locator('.coze-node', { hasText: '大模型二次改名 副本' }).first()
   await duplicate.hover()
-  await duplicate.getByRole('button', { name: '更多操作', exact: true }).click()
+  await duplicate.getByRole('button', { name: '更多操作', exact: true }).hover()
   await menu.getByRole('menuitem', { name: '删除', exact: true }).click()
   await page.locator('.coze-node', { hasText: '大模型二次改名 副本' }).waitFor({ state: 'hidden', timeout: 5000 })
 

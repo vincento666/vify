@@ -1,28 +1,31 @@
 import {
-  ChatLineRound,
-  ChatDotRound,
-  Connection,
-  DataAnalysis,
-  Folder,
-  Setting,
-  Share,
-  User,
-} from '@element-plus/icons-vue'
+  ApiOutlined,
+  BarChartOutlined,
+  CommentOutlined,
+  CustomerServiceOutlined,
+  FolderOutlined,
+  MessageOutlined,
+  SettingOutlined,
+  ShareAltOutlined,
+  UserOutlined,
+} from '@ant-design/icons-vue'
 
 export interface ComposerNavItem {
   path: string
+  name: string
   label: string
   icon: any
   matches?: string[]
 }
 
 export const composerNavItems: ComposerNavItem[] = [
-  { path: '/provider', label: '模型管理', icon: Setting },
-  { path: '/agent', label: 'Agent', icon: User },
-  { path: '/knowledge', label: '知识库', icon: Folder },
-  { path: '/workflows', label: '工作流', icon: Share, matches: ['/workflows', '/chatflows'] },
-  { path: '/evaluation', label: '评测', icon: DataAnalysis },
-  { path: '/mcp', label: 'MCP 工具', icon: Connection },
-  { path: '/runtime-lab/chat', label: '路由对话', icon: ChatLineRound },
-  { path: '/chat', label: '对话', icon: ChatDotRound },
+  { path: '/provider', name: 'HifyProvider', label: '模型管理', icon: SettingOutlined },
+  { path: '/agent', name: 'HifyAgent', label: 'Agent', icon: UserOutlined },
+  { path: '/knowledge', name: 'HifyKnowledge', label: '知识库', icon: FolderOutlined },
+  { path: '/workflows', name: 'HifyWorkflows', label: '工作流', icon: ShareAltOutlined, matches: ['/workflows', '/chatflows'] },
+  { path: '/evaluation', name: 'HifyEvaluation', label: '评测', icon: BarChartOutlined },
+  { path: '/customer-assistant', name: 'HifyCustomerAssistant', label: '客服助手', icon: CustomerServiceOutlined },
+  { path: '/mcp', name: 'HifyMcp', label: 'MCP 工具', icon: ApiOutlined },
+  { path: '/runtime-lab/chat', name: 'HifyRuntimeLabChat', label: '路由对话', icon: CommentOutlined },
+  { path: '/chat', name: 'HifyChat', label: '对话', icon: MessageOutlined },
 ]

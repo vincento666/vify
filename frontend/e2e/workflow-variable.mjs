@@ -11,29 +11,92 @@ const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 const name = `Workflow Variable ${Date.now()}`
 
+async function unwrap(response, label) {
+  assert(response.ok(), `${label} HTTP ${response.status()}`)
+  const payload = await response.json()
+  assert(payload.code === 200, `${label} API ${payload.message}`)
+  return payload.data
+}
+
 try {
-  await page.goto(`${baseUrl}/workflows/create`, { waitUntil: 'networkidle' })
-  await page.getByPlaceholder('工作流名称').fill(name)
-  await page.getByRole('button', { name: '添加节点' }).click()
-  await page.locator('.node-palette button', { hasText: '大模型' }).click()
-  await page.locator('.coze-node', { hasText: '大模型' }).click()
+  const workflow = await unwrap(
+    await page.request.post(`${baseUrl}/api/v1/workflows`, {
+      data: {
+        name,
+        description: 'variable picker e2e',
+        nodes: [
+          {
+            nodeKey: 'start',
+            type: 'START',
+            name: '开始',
+            config: { outputVariables: ['USER_INPUT'], ui: { position: { x: 160, y: 160 } } },
+          },
+          {
+            nodeKey: 'llm_1',
+            type: 'LLM',
+            name: '大模型',
+            config: {
+              prompt: 'Return {{start.USER_INPUT}}',
+              outputFormat: 'JSON',
+              outputParameters: [
+                { name: 'answer', type: 'string' },
+                { name: 'reasoning', type: 'object' },
+              ],
+              outputVariable: 'answer',
+              ui: { position: { x: 520, y: 160 } },
+            },
+          },
+          {
+            nodeKey: 'end',
+            type: 'END',
+            name: '结束',
+            config: {
+              outputVariable: 'output',
+              outputParameters: [{ name: 'final', type: 'string' }],
+              output: '',
+              ui: { position: { x: 880, y: 160 } },
+            },
+          },
+        ],
+        edges: [
+          { sourceNodeKey: 'start', targetNodeKey: 'llm_1', condition: null },
+          { sourceNodeKey: 'llm_1', targetNodeKey: 'end', condition: null },
+        ],
+      },
+    }),
+    'create variable picker workflow',
+  )
+
+  await page.goto(`${baseUrl}/workflows/${workflow.id}/canvas`, { waitUntil: 'networkidle' })
+  await page.locator('.vue-flow__node[data-id="end"]').click()
 
   const panel = page.locator('[data-testid="node-config-panel"]')
   await panel.waitFor({ state: 'visible', timeout: 5000 })
-  await panel.getByRole('button', { name: '变量' }).click()
-  await panel.locator('.variable-popover').waitFor({ state: 'visible', timeout: 5000 })
-  await panel.locator('.variable-group button', { hasText: '{{start.USER_INPUT}}' }).click()
+  const responseInput = panel.getByPlaceholder('返回给调用方的文本，可使用变量引用')
+  await responseInput.fill('{')
+  const picker = panel.locator('[data-testid="variable-picker"]')
+  await picker.waitFor({ state: 'visible', timeout: 5000 })
 
-  const promptValue = await panel.locator('textarea').inputValue()
-  assert(promptValue.includes('{{start.USER_INPUT}}'), 'Expected variable selector to insert start variable reference')
+  const pickerText = await picker.innerText()
+  assert(pickerText.includes('final'), `Expected local final variable, got ${pickerText}`)
+  assert(!pickerText.includes('{{'), `Inline picker must show compact variable labels instead of raw references, got ${pickerText}`)
+  assert(!pickerText.includes('global.brand'), `Inline picker must not expose global variables directly, got ${pickerText}`)
+  assert(!pickerText.includes('sys.now'), `Inline picker must not expose system variables directly, got ${pickerText}`)
+  assert(!pickerText.includes(`${llmNodeKey(workflow)}.answer`), `Inline picker must not expose upstream variables directly, got ${pickerText}`)
 
-  await panel.locator('input').nth(1).fill('answer')
+  const itemListText = await picker.locator('[data-testid="inline-variable-list"]').innerText()
+  assert(itemListText.includes('final'), 'Expected local final output in inline list')
+  await picker.locator('[data-testid="variable-option"]', { hasText: 'final' }).click()
+
+  const outputValue = await responseInput.inputValue()
+  assert(outputValue.includes('{{final}}'), 'Expected variable selector to insert local output reference')
+
   await page.locator('.canvas-actions').getByRole('button', { name: '保存', exact: true }).click()
   await page.waitForURL('**/workflows/*/canvas', { timeout: 10000 })
   await page.reload({ waitUntil: 'networkidle' })
-  await page.locator('.coze-node', { hasText: '大模型' }).click()
-  const reopenedPrompt = await panel.locator('textarea').inputValue()
-  assert(reopenedPrompt.includes('{{start.USER_INPUT}}'), 'Expected inserted variable reference to persist after reopen')
+  await page.locator('.vue-flow__node[data-id="end"]').click()
+  const reopenedOutput = await panel.getByPlaceholder('返回给调用方的文本，可使用变量引用').inputValue()
+  assert(reopenedOutput.includes('{{final}}'), 'Expected local variable reference to persist after reopen')
 
   if (screenshotPath) {
     await page.screenshot({ path: screenshotPath, fullPage: true })
@@ -42,4 +105,8 @@ try {
   console.log('PASS workflow variable selector e2e')
 } finally {
   await browser.close()
+}
+
+function llmNodeKey(workflow) {
+  return workflow.nodes.find((node) => node.type === 'LLM')?.nodeKey || 'llm_1'
 }

@@ -1,0 +1,219 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import {
+  mockCustomerAssistantEvents,
+  mockCustomerAssistantTasks,
+  mockCustomerAssistantTurnResult,
+} from './customerAssistantFixtures'
+
+const apiMocks = vi.hoisted(() => ({
+  confirmCustomerAssistantAction: vi.fn(),
+  createCustomerAssistantSession: vi.fn(),
+  executeCustomerAssistantAction: vi.fn(),
+  listCustomerAssistantEvents: vi.fn(),
+  listCustomerAssistantTasks: vi.fn(),
+  rejectCustomerAssistantAction: vi.fn(),
+  sendCustomerAssistantTurn: vi.fn(),
+}))
+
+vi.mock('@/api/customerAssistant', () => apiMocks)
+
+const streamMocks = vi.hoisted(() => ({
+  openCustomerAssistantEventStream: vi.fn(),
+}))
+
+vi.mock('./customerAssistantEventStream', () => streamMocks)
+
+describe('customer assistant runtime integration', () => {
+  beforeEach(() => {
+    Object.values(apiMocks).forEach((mock) => mock.mockReset())
+    streamMocks.openCustomerAssistantEventStream.mockReset()
+  })
+
+  it('creates a session before the first turn and refreshes task/event ledgers after the turn', async () => {
+    apiMocks.createCustomerAssistantSession.mockResolvedValue({ id: 12, status: 'ACTIVE' })
+    apiMocks.sendCustomerAssistantTurn.mockResolvedValue(mockCustomerAssistantTurnResult)
+    apiMocks.listCustomerAssistantTasks.mockResolvedValue(mockCustomerAssistantTasks)
+    apiMocks.listCustomerAssistantEvents.mockResolvedValue(mockCustomerAssistantEvents)
+
+    const { createCustomerAssistantRuntimeState, sendCustomerAssistantRuntimeTurn } = await import(
+      './customerAssistantRuntime'
+    )
+
+    const state = await sendCustomerAssistantRuntimeTurn(createCustomerAssistantRuntimeState(), {
+      message: '我要退票',
+      idempotencyKey: '046-real-api',
+      actor: 'customer',
+    })
+
+    expect(apiMocks.createCustomerAssistantSession).toHaveBeenCalledWith({})
+    expect(apiMocks.sendCustomerAssistantTurn).toHaveBeenCalledWith(12, {
+      message: '我要退票',
+      idempotencyKey: '046-real-api',
+      actor: 'customer',
+    })
+    expect(apiMocks.listCustomerAssistantTasks).toHaveBeenCalledWith(12)
+    expect(apiMocks.listCustomerAssistantEvents).toHaveBeenCalledWith(12)
+    expect(state.session?.id).toBe(12)
+    expect(state.taskSummary.items[0].taskKey).toBe('refund_ticket')
+    expect(state.eventTimeline[0].title).toBe('run_started')
+  })
+
+  it('reuses an existing session for later turns', async () => {
+    apiMocks.sendCustomerAssistantTurn.mockResolvedValue(mockCustomerAssistantTurnResult)
+    apiMocks.listCustomerAssistantTasks.mockResolvedValue(mockCustomerAssistantTasks)
+    apiMocks.listCustomerAssistantEvents.mockResolvedValue(mockCustomerAssistantEvents)
+
+    const { createCustomerAssistantRuntimeState, sendCustomerAssistantRuntimeTurn } = await import(
+      './customerAssistantRuntime'
+    )
+
+    await sendCustomerAssistantRuntimeTurn(
+      createCustomerAssistantRuntimeState({ session: { id: 12, status: 'ACTIVE' } }),
+      {
+        message: '请给我处置建议',
+        actor: 'operator',
+      },
+    )
+
+    expect(apiMocks.createCustomerAssistantSession).not.toHaveBeenCalled()
+    expect(apiMocks.sendCustomerAssistantTurn).toHaveBeenCalledWith(12, {
+      message: '请给我处置建议',
+      actor: 'operator',
+    })
+  })
+
+  it('opens SSE before a turn and publishes live state while the turn request is pending', async () => {
+    apiMocks.createCustomerAssistantSession.mockResolvedValue({ id: 12, status: 'ACTIVE' })
+    apiMocks.listCustomerAssistantTasks.mockResolvedValue(mockCustomerAssistantTasks)
+    apiMocks.listCustomerAssistantEvents.mockResolvedValue(mockCustomerAssistantEvents)
+    let resolveTurn: (value: typeof mockCustomerAssistantTurnResult) => void = () => {}
+    apiMocks.sendCustomerAssistantTurn.mockReturnValue(
+      new Promise((resolve) => {
+        resolveTurn = resolve
+      }),
+    )
+    let emitLiveEvent: (event: never) => void = () => {}
+    const close = vi.fn()
+    streamMocks.openCustomerAssistantEventStream.mockImplementation((_sessionId, options) => {
+      emitLiveEvent = options.onEvent
+      return { close, lastSequence: () => 2 }
+    })
+    const liveStates: ReturnType<typeof createCustomerAssistantRuntimeState>[] = []
+
+    const { createCustomerAssistantRuntimeState, sendCustomerAssistantRuntimeTurn } = await import(
+      './customerAssistantRuntime'
+    )
+
+    const pending = sendCustomerAssistantRuntimeTurn(
+      createCustomerAssistantRuntimeState(),
+      { message: '我要退票', actor: 'customer' },
+      {},
+      { onLiveState: (state) => liveStates.push(state) },
+    )
+    await Promise.resolve()
+    emitLiveEvent({
+      id: 502,
+      sessionId: 12,
+      sequence: 2,
+      type: 'worker_started',
+      source: 'chatflow_sop',
+      payload: { taskKey: 'refund_ticket', workerType: 'chatflow_sop' },
+    } as never)
+
+    expect(streamMocks.openCustomerAssistantEventStream).toHaveBeenCalledWith(12, expect.any(Object))
+    const latestLiveState = liveStates[liveStates.length - 1]
+    expect(latestLiveState.eventTimeline[0]).toMatchObject({ title: 'worker_started' })
+    expect(latestLiveState.taskSummary.items[0]).toMatchObject({
+      taskKey: 'refund_ticket',
+      status: 'RUNNING',
+    })
+
+    resolveTurn(mockCustomerAssistantTurnResult)
+    const finalState = await pending
+
+    expect(close).toHaveBeenCalled()
+    expect(finalState.taskSummary.items[0].status).toBe('WAITING')
+  })
+
+  it('updates proposed actions from confirm and reject responses', async () => {
+    const pending = mockCustomerAssistantTurnResult.proposedActions[0]
+    apiMocks.confirmCustomerAssistantAction.mockResolvedValue({ ...pending, status: 'CONFIRMED' })
+    apiMocks.rejectCustomerAssistantAction.mockResolvedValue({ ...pending, status: 'REJECTED' })
+
+    const {
+      confirmCustomerAssistantRuntimeAction,
+      createCustomerAssistantRuntimeState,
+      rejectCustomerAssistantRuntimeAction,
+    } = await import('./customerAssistantRuntime')
+    const initial = createCustomerAssistantRuntimeState({
+      session: { id: 12, status: 'ACTIVE' },
+      turnResult: mockCustomerAssistantTurnResult,
+    })
+
+    const confirmed = await confirmCustomerAssistantRuntimeAction(initial, pending.id)
+    const rejected = await rejectCustomerAssistantRuntimeAction(initial, pending.id)
+
+    expect(apiMocks.confirmCustomerAssistantAction).toHaveBeenCalledWith(pending.id)
+    expect(apiMocks.rejectCustomerAssistantAction).toHaveBeenCalledWith(pending.id)
+    expect(confirmed.proposedActions[0].status).toBe('CONFIRMED')
+    expect(rejected.proposedActions[0].status).toBe('REJECTED')
+  })
+
+  it('refreshes ledgers after confirming a proposed task command', async () => {
+    const proposedTaskCommand = {
+      ...mockCustomerAssistantTurnResult.proposedActions[0],
+      taskId: null,
+      actionType: 'PROPOSED_TASK_COMMAND',
+      title: '确认任务变更：refund_ticket',
+      payload: {
+        taskCommand: {
+          type: 'ADD_TASK',
+          taskKey: 'refund_ticket',
+          taskType: 'REFUND',
+          businessKey: 'refund_ticket',
+          workerType: 'chatflow_sop',
+          workerRef: 'refund_ticket',
+        },
+      },
+      status: 'PENDING',
+    }
+    apiMocks.confirmCustomerAssistantAction.mockResolvedValue({ ...proposedTaskCommand, status: 'CONFIRMED' })
+    apiMocks.listCustomerAssistantTasks.mockResolvedValue(mockCustomerAssistantTasks)
+    apiMocks.listCustomerAssistantEvents.mockResolvedValue({
+      list: [
+        ...mockCustomerAssistantEvents.list,
+        {
+          id: 777,
+          sessionId: 12,
+          runId: 31,
+          sequence: 2,
+          type: 'proposed_task_command_confirmed',
+          source: 'operator_advisory',
+          payload: { actionId: proposedTaskCommand.id },
+        },
+      ],
+      total: 2,
+    })
+
+    const { confirmCustomerAssistantRuntimeAction, createCustomerAssistantRuntimeState } = await import(
+      './customerAssistantRuntime'
+    )
+    const initial = createCustomerAssistantRuntimeState({
+      session: { id: 12, status: 'ACTIVE' },
+      turnResult: {
+        ...mockCustomerAssistantTurnResult,
+        taskSummaries: [],
+        proposedActions: [proposedTaskCommand],
+      },
+    })
+
+    const confirmed = await confirmCustomerAssistantRuntimeAction(initial, proposedTaskCommand.id)
+
+    expect(apiMocks.listCustomerAssistantTasks).toHaveBeenCalledWith(12)
+    expect(apiMocks.listCustomerAssistantEvents).toHaveBeenCalledWith(12)
+    expect(confirmed.proposedActions[0].status).toBe('CONFIRMED')
+    expect(confirmed.taskSummary.items[0].taskKey).toBe('refund_ticket')
+    expect(confirmed.eventTimeline.some((event) => event.title === 'proposed_task_command_confirmed')).toBe(true)
+  })
+})

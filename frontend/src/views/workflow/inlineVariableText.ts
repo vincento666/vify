@@ -41,3 +41,20 @@ export function insertInlineVariableReference(currentValue: string, reference: s
 
   return currentValue ? `${currentValue} ${reference}` : reference
 }
+
+export function localizeInlineVariableReference(reference: string, nodeKey: string, localOnly: boolean) {
+  if (!localOnly || !nodeKey) return reference
+
+  const trimmed = reference.trim()
+  if (!trimmed.startsWith('{{') || !trimmed.endsWith('}}')) return reference
+
+  const inner = trimmed.slice(2, -2).trim()
+  const separatorIndex = inner.indexOf('.')
+  if (separatorIndex <= 0) return reference
+
+  const referenceNodeKey = inner.slice(0, separatorIndex)
+  const variable = inner.slice(separatorIndex + 1)
+  if (referenceNodeKey !== nodeKey || !variable) return reference
+
+  return `{{${variable}}}`
+}

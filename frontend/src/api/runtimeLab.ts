@@ -97,6 +97,47 @@ export interface RuntimeLabArbitratorConfig {
   available: boolean
 }
 
+export interface RuntimeLabPolicyProfile {
+  source: string
+  profileId?: number | null
+  profileVersion?: number | null
+}
+
+export interface RuntimeLabThresholdConfig {
+  strongAcceptThreshold?: number
+  classifierMinConfidence?: number
+  candidateTopK?: number
+  candidateSourceWeights?: Record<string, number>
+  llmArbitrationRequiredForNonHardStop?: boolean
+  faqKeywordMinScore?: number
+  faqKeywordMinMargin?: number
+  faqSemanticMinScore?: number
+  faqSemanticMinMargin?: number
+  ragMinScore?: number
+  ragLexicalAcceptThreshold?: number
+}
+
+export interface RuntimeLabFaqConfig {
+  knowledgeBaseIds: number[]
+  exactEnabled?: boolean
+  semanticEnabled?: boolean
+  topK?: number
+  rerank?: boolean
+}
+
+export interface RuntimeLabRagConfig {
+  enabled?: boolean
+  knowledgeBaseIds: number[]
+  retrievalMode?: string
+  topK?: number
+  rerank?: boolean
+}
+
+export interface RuntimeLabHandoffConfig {
+  enabled?: boolean
+  queue?: string
+}
+
 export interface RuntimeLabFallbackAgentConfig {
   enabled: boolean
   type: string
@@ -113,10 +154,47 @@ export interface RuntimeLabFallbackAgentOption {
 }
 
 export interface RuntimeLabConfig {
+  policyProfile?: RuntimeLabPolicyProfile
   sopBindings: RuntimeLabSopBinding[]
   arbitrator: RuntimeLabArbitratorConfig
+  thresholds?: RuntimeLabThresholdConfig
+  faq?: RuntimeLabFaqConfig
+  rag?: RuntimeLabRagConfig
+  handoff?: RuntimeLabHandoffConfig
   fallbackAgent?: RuntimeLabFallbackAgentConfig
   fallbackAgentOptions?: RuntimeLabFallbackAgentOption[]
+}
+
+export interface RuntimeLabRouteSettingsPayload {
+  arbitrator?: {
+    mode?: string
+    model?: string
+    fallbackModel?: string
+    modelConfigId?: number | null
+    fallbackModelConfigId?: number | null
+    temporaryModel?: RuntimeLabTemporaryModelPayload
+    temporaryFallbackModel?: RuntimeLabTemporaryModelPayload
+  }
+  thresholds?: RuntimeLabThresholdConfig
+}
+
+export interface RuntimeLabTemporaryModelPayload {
+  enabled?: boolean
+  model?: string
+  baseUrl?: string
+  apiKey?: string
+  temperature?: number
+  maxTokens?: number
+  topP?: number
+}
+
+export interface RuntimeLabTemporaryModelTestResult {
+  ok: boolean
+  model: string
+  elapsedMs: number
+  usage?: RuntimeLabUsage
+  replyPreview?: string
+  error?: string
 }
 
 export interface RuntimeLabFallbackAgentUpdateResult extends Omit<RuntimeLabConfig, 'fallbackAgent'> {
@@ -194,7 +272,12 @@ export const createRuntimeLabSession = () =>
 
 export const postRuntimeLabMessage = (
   sessionId: number,
-  payload: { message: string; idempotencyKey?: string; enabledSopIds?: string[] },
+  payload: {
+    message: string
+    idempotencyKey?: string
+    enabledSopIds?: string[]
+    routeSettings?: RuntimeLabRouteSettingsPayload
+  },
 ) => post<RuntimeLabTurn>(`/v1/runtime-lab/sessions/${sessionId}/messages`, payload)
 
 export const listRuntimeLabTasks = (sessionId: number) =>
@@ -211,3 +294,6 @@ export const updateRuntimeLabFallbackAgent = (payload: { enabled: boolean; agent
 
 export const getRuntimeLabChatflowTrace = (sessionId: number) =>
   get<RuntimeLabChatflowTrace>(`/v1/runtime-lab/sessions/${sessionId}/chatflow-trace`)
+
+export const testRuntimeLabTemporaryModel = (payload: RuntimeLabTemporaryModelPayload) =>
+  post<RuntimeLabTemporaryModelTestResult>('/v1/runtime-lab/route-model/connectivity', payload)

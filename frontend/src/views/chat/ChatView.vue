@@ -5,7 +5,10 @@
     <aside class="session-sidebar">
       <div class="session-header">
         <span class="session-title">对话列表</span>
-        <el-button type="primary" size="small" :icon="Plus" @click="onNewSession">新建</el-button>
+        <a-button type="primary" size="small" @click="onNewSession">
+          <span class="button-icon"><PlusOutlined /></span>
+          新建
+        </a-button>
       </div>
 
       <div class="session-list">
@@ -21,14 +24,15 @@
             <span class="session-time">{{ formatTime(s.createdAt) }}</span>
           </div>
           <div class="session-preview">{{ sessionPreviewMap[s.id] ?? '暂无消息' }}</div>
-          <el-button
+          <a-button
             class="session-delete-btn"
-            type="danger"
-            link
+            type="link"
+            danger
             size="small"
-            :icon="Delete"
             @click.stop="onDeleteSession(s)"
-          />
+          >
+            <DeleteOutlined />
+          </a-button>
         </div>
 
         <div v-if="sessions.length === 0" class="session-empty">暂无对话</div>
@@ -49,16 +53,41 @@
         <!-- 顶栏 -->
         <div class="chat-topbar">
           <span class="chat-topbar-name">{{ agentNameMap[activeSession?.agentId ?? 0] ?? 'Agent' }}</span>
-          <el-tag v-if="activeAgentWorkflowId" size="small" type="warning" effect="light" style="margin-left:8px">
+          <a-tag v-if="activeAgentWorkflowId" color="warning" class="chat-mode-tag hify-tag">
             工作流模式
-          </el-tag>
-          <el-tag v-else size="small" type="info" effect="light" style="margin-left:8px">
+          </a-tag>
+          <a-tag v-else class="chat-mode-tag hify-tag">
             直接对话
-          </el-tag>
+          </a-tag>
         </div>
 
         <!-- 消息区域 -->
         <div class="messages-wrap" ref="messagesEl">
+          <div
+            v-if="messages.length === 0 && (activeAgentOpening || activeAgentSuggestedQuestions.length)"
+            class="chat-entry"
+          >
+            <div v-if="activeAgentOpening" class="msg-row assistant">
+              <div class="msg-avatar">
+                <a-avatar class="chat-avatar assistant-avatar">AI</a-avatar>
+              </div>
+              <div class="msg-bubble">
+                <div class="msg-content">{{ activeAgentOpening }}</div>
+              </div>
+            </div>
+            <div v-if="activeAgentSuggestedQuestions.length" class="chat-suggestions">
+              <button
+                v-for="question in activeAgentSuggestedQuestions"
+                :key="question"
+                type="button"
+                class="chat-suggestion"
+                :disabled="streaming"
+                @click="sendSuggestedQuestion(question)"
+              >
+                {{ question }}
+              </button>
+            </div>
+          </div>
           <div
             v-for="msg in messages"
             :key="msg.id ?? msg._tempId"
@@ -67,8 +96,8 @@
           >
             <!-- 头像 -->
             <div class="msg-avatar">
-              <el-avatar v-if="msg.role === 'user'" :size="30" style="background:#6366f1;font-size:13px">我</el-avatar>
-              <el-avatar v-else :size="30" style="background:#8b5cf6;font-size:13px">AI</el-avatar>
+              <a-avatar v-if="msg.role === 'user'" class="chat-avatar user-avatar">我</a-avatar>
+              <a-avatar v-else class="chat-avatar assistant-avatar">AI</a-avatar>
             </div>
 
             <!-- 气泡 -->
@@ -90,16 +119,14 @@
 
         <!-- 底部输入区 -->
         <div class="chat-input-area">
-          <el-input
-            v-model="inputText"
-            type="textarea"
-            :autosize="{ minRows: 1, maxRows: 5 }"
+          <a-textarea
+            v-model:value="inputText"
+            :auto-size="{ minRows: 1, maxRows: 5 }"
             placeholder="输入消息，Enter 发送，Shift+Enter 换行"
-            resize="none"
             :disabled="streaming"
             @keydown.enter.exact.prevent="onSend"
           />
-          <el-button
+          <a-button
             class="send-btn"
             type="primary"
             :disabled="!inputText.trim() || streaming"
@@ -107,42 +134,42 @@
             @click="onSend"
           >
             {{ streaming ? '生成中' : '发送' }}
-          </el-button>
+          </a-button>
         </div>
       </template>
 
     </section>
 
     <!-- 新建对话弹窗 -->
-    <el-dialog v-model="newSessionVisible" title="新建对话" width="400px" :close-on-click-modal="false">
-      <el-form label-width="80px">
-        <el-form-item label="选择 Agent">
-          <el-select v-model="newSessionAgentId" placeholder="请选择 Agent" style="width:100%">
-            <el-option v-for="a in agents" :key="a.id" :label="a.name" :value="a.id">
-              <div style="display:flex;align-items:center;gap:8px;justify-content:space-between">
+    <a-modal v-model:open="newSessionVisible" title="新建对话" width="25rem" :mask-closable="false">
+      <a-form :label-col="{ style: { width: '5rem' } }">
+        <a-form-item label="选择 Agent">
+          <a-select v-model:value="newSessionAgentId" placeholder="请选择 Agent" class="agent-select">
+            <a-select-option v-for="a in agents" :key="a.id" :value="a.id">
+              <div class="agent-option-row">
                 <span>{{ a.name }}</span>
-                <div style="display:flex;gap:4px">
-                  <el-tag v-if="a.workflowId" size="small" type="warning" effect="light">工作流</el-tag>
-                  <el-tag v-if="a.knowledgeBaseId" size="small" type="success" effect="light">知识库</el-tag>
+                <div class="agent-option-tags">
+                  <a-tag v-if="a.workflowId" color="warning" class="hify-tag">工作流</a-tag>
+                  <a-tag v-if="a.knowledgeBaseId" color="success" class="hify-tag">知识库</a-tag>
                 </div>
               </div>
-            </el-option>
-          </el-select>
-        </el-form-item>
-      </el-form>
+            </a-select-option>
+          </a-select>
+        </a-form-item>
+      </a-form>
       <template #footer>
-        <el-button @click="newSessionVisible = false">取消</el-button>
-        <el-button type="primary" :disabled="!newSessionAgentId" @click="confirmNewSession">确定</el-button>
+        <a-button @click="newSessionVisible = false">取消</a-button>
+        <a-button type="primary" :disabled="!newSessionAgentId" @click="confirmNewSession">确定</a-button>
       </template>
-    </el-dialog>
+    </a-modal>
 
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete } from '@element-plus/icons-vue'
+import { message, Modal } from 'ant-design-vue'
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import { marked } from 'marked'
 import {
   createSession, getSessions, deleteSession,
@@ -186,12 +213,17 @@ const agentNameMap = computed<Record<number, string>>(() => {
 })
 
 const activeSession = computed(() => sessions.value.find(s => s.id === activeSessionId.value))
-
-const activeAgentWorkflowId = computed(() => {
+const activeAgent = computed(() => {
   const agentId = activeSession.value?.agentId
   if (!agentId) return null
-  return agents.value.find(a => a.id === agentId)?.workflowId ?? null
+  return agents.value.find(a => a.id === agentId) ?? null
 })
+
+const activeAgentWorkflowId = computed(() => {
+  return activeAgent.value?.workflowId ?? null
+})
+const activeAgentOpening = computed(() => activeAgent.value?.openingMessage?.trim() || '')
+const activeAgentSuggestedQuestions = computed(() => normalizeQuestions(activeAgent.value?.suggestedQuestions ?? []))
 
 // ── 初始化 ────────────────────────────────────────────────
 onMounted(async () => {
@@ -243,23 +275,28 @@ async function confirmNewSession() {
     newSessionVisible.value = false
     await selectSession(s.id)
   } catch {
-    ElMessage.error('创建对话失败')
+    message.error('创建对话失败')
   }
 }
 
 // ── 删除会话 ──────────────────────────────────────────────
 async function onDeleteSession(s: ChatSession) {
-  try {
-    await ElMessageBox.confirm('确定删除这个对话？', '提示', { type: 'warning' })
-    await deleteSession(s.id)
-    sessions.value = sessions.value.filter(x => x.id !== s.id)
-    delete sessionPreviewMap.value[s.id]
-    if (activeSessionId.value === s.id) {
-      activeSessionId.value = null
-      messages.value = []
-      if (sessions.value.length > 0) await selectSession(sessions.value[0].id)
-    }
-  } catch { /* cancel */ }
+  Modal.confirm({
+    title: '提示',
+    content: '确定删除这个对话？',
+    okText: '确认',
+    cancelText: '取消',
+    onOk: async () => {
+      await deleteSession(s.id)
+      sessions.value = sessions.value.filter(x => x.id !== s.id)
+      delete sessionPreviewMap.value[s.id]
+      if (activeSessionId.value === s.id) {
+        activeSessionId.value = null
+        messages.value = []
+        if (sessions.value.length > 0) await selectSession(sessions.value[0].id)
+      }
+    },
+  })
 }
 
 // ── 发送消息 ──────────────────────────────────────────────
@@ -303,6 +340,12 @@ async function onSend() {
   )
 }
 
+async function sendSuggestedQuestion(question: string) {
+  if (streaming.value) return
+  inputText.value = question
+  await onSend()
+}
+
 // ── 工具函数 ──────────────────────────────────────────────
 function renderMarkdown(text: string): string {
   if (!text) return ''
@@ -328,6 +371,18 @@ function truncate(text: string, len: number) {
   return text.length > len ? text.slice(0, len) + '…' : text
 }
 
+function normalizeQuestions(questions: string[]) {
+  const normalized: string[] = []
+  const seen = new Set<string>()
+  for (const question of questions) {
+    const value = String(question || '').trim()
+    if (!value || seen.has(value)) continue
+    seen.add(value)
+    normalized.push(value)
+  }
+  return normalized
+}
+
 let _uid = 0
 function uid() { return `tmp-${++_uid}` }
 </script>
@@ -343,11 +398,11 @@ function uid() { return `tmp-${++_uid}` }
 
 /* ── 左侧会话列表 ─────────────────────────────────────────── */
 .session-sidebar {
-  width: 240px;
+  width: 15rem;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--color-border-default);
+  border-right: 0.0625rem solid var(--color-border-default);
   background: var(--color-bg-card);
 }
 
@@ -355,13 +410,13 @@ function uid() { return `tmp-${++_uid}` }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 14px 10px;
-  border-bottom: 1px solid var(--color-border-default);
+  padding: 0.875rem 0.875rem 0.625rem;
+  border-bottom: 0.0625rem solid var(--color-border-default);
   flex-shrink: 0;
 }
 
 .session-title {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--color-text-primary);
 }
@@ -369,14 +424,14 @@ function uid() { return `tmp-${++_uid}` }
 .session-list {
   flex: 1;
   overflow-y: auto;
-  padding: 6px 0;
+  padding: 0.375rem 0;
 }
 
 .session-item {
   position: relative;
-  padding: 10px 14px 10px 12px;
+  padding: 0.625rem 0.875rem 0.625rem 0.75rem;
   cursor: pointer;
-  border-left: 3px solid transparent;
+  border-left: 0.1875rem solid transparent;
   transition: background 0.15s;
 }
 .session-item:hover { background: var(--color-bg-hover); }
@@ -390,29 +445,29 @@ function uid() { return `tmp-${++_uid}` }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 3px;
+  margin-bottom: 0.1875rem;
 }
 .session-agent {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   color: var(--color-text-primary);
 }
 .session-time {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--color-text-tertiary);
 }
 .session-preview {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--color-text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding-right: 20px;
+  padding-right: 1.25rem;
 }
 .session-delete-btn {
   position: absolute;
-  right: 8px;
-  bottom: 10px;
+  right: 0.5rem;
+  bottom: 0.625rem;
   opacity: 0;
   transition: opacity 0.15s;
   padding: 0 !important;
@@ -420,9 +475,9 @@ function uid() { return `tmp-${++_uid}` }
 
 .session-empty {
   text-align: center;
-  padding: 40px 0;
+  padding: 2.5rem 0;
   color: var(--color-text-tertiary);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 /* ── 右侧聊天区 ───────────────────────────────────────────── */
@@ -439,62 +494,117 @@ function uid() { return `tmp-${++_uid}` }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 0.625rem;
   color: var(--color-text-secondary);
 }
-.welcome-icon { font-size: 48px; line-height: 1; }
-.welcome-title { font-size: 16px; font-weight: 600; color: var(--color-text-primary); }
-.welcome-sub { font-size: 13px; }
+.welcome-icon { font-size: 3rem; line-height: 1; }
+.welcome-title { font-size: 1rem; font-weight: 600; color: var(--color-text-primary); }
+.welcome-sub { font-size: 0.8125rem; }
 
 .chat-topbar {
-  height: 48px;
+  height: 3rem;
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  padding: 0 20px;
-  border-bottom: 1px solid var(--color-border-default);
+  padding: 0 1.25rem;
+  border-bottom: 0.0625rem solid var(--color-border-default);
   background: var(--color-bg-card);
 }
 .chat-topbar-name {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--color-text-primary);
+}
+
+.chat-mode-tag {
+  margin-left: var(--space-2);
 }
 
 .messages-wrap {
   flex: 1;
   overflow-y: auto;
-  padding: 20px 24px;
+  padding: 1.25rem 1.5rem;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 1.25rem;
+}
+
+.chat-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.chat-suggestions {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: start;
+  margin-left: 2.5rem;
+}
+
+.chat-suggestion {
+  border: 0.0625rem solid var(--color-border-default);
+  background: var(--color-bg-card);
+  color: var(--color-text-primary);
+  border-radius: 62.4375rem;
+  min-height: 1.875rem;
+  padding: 0.3125rem 0.6875rem;
+  font-size: 0.8125rem;
+  text-align: left;
+}
+
+.chat-suggestion:hover {
+  border-color: var(--color-primary-300);
+  color: var(--color-primary-600);
+}
+
+.chat-suggestion:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .msg-row {
   display: flex;
-  gap: 10px;
+  gap: 0.625rem;
   align-items: flex-start;
 }
 .msg-row.user { flex-direction: row-reverse; }
 
-.msg-avatar { flex-shrink: 0; margin-top: 2px; }
+.msg-avatar { flex-shrink: 0; margin-top: 0.125rem; }
+
+.chat-avatar {
+  width: 1.875rem;
+  height: 1.875rem;
+  font-size: 0.8125rem;
+}
+
+.user-avatar {
+  background: #6366f1;
+}
+
+.assistant-avatar {
+  background: #8b5cf6;
+}
 
 .msg-bubble {
+  width: fit-content;
   max-width: 68%;
-  padding: 10px 14px;
-  border-radius: 12px;
-  font-size: 14px;
+  box-sizing: border-box;
+  padding: 0.625rem 0.875rem;
+  border-radius: 0.75rem;
+  font-size: 0.875rem;
   line-height: 1.65;
   word-break: break-word;
   background: var(--color-bg-card);
   color: var(--color-text-primary);
-  border: 1px solid var(--color-border-default);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  border: 0.0625rem solid var(--color-border-default);
+  box-shadow: 0 1px 0.1875rem rgba(0,0,0,0.04);
 }
 .msg-row.user .msg-bubble {
-  background: var(--color-primary-500);
-  color: #ffffff;
-  border-color: transparent;
+  background: #eaf4ff;
+  color: #1e3a8a;
+  border-color: #bfdbfe;
 }
 .msg-bubble.error {
   background: rgba(239,68,68,0.08);
@@ -505,13 +615,13 @@ function uid() { return `tmp-${++_uid}` }
 /* 打字动画 */
 .typing-dots {
   display: inline-flex;
-  gap: 4px;
+  gap: 0.25rem;
   align-items: center;
-  padding: 2px 0;
+  padding: 0.125rem 0;
 }
 .typing-dots span {
-  width: 6px;
-  height: 6px;
+  width: 0.375rem;
+  height: 0.375rem;
   border-radius: 50%;
   background: var(--color-text-tertiary);
   animation: blink 1.2s infinite;
@@ -527,55 +637,72 @@ function uid() { return `tmp-${++_uid}` }
 .chat-input-area {
   flex-shrink: 0;
   display: flex;
-  gap: 10px;
+  gap: 0.625rem;
   align-items: flex-end;
-  padding: 14px 20px;
-  border-top: 1px solid var(--color-border-default);
+  padding: 0.875rem 1.25rem;
+  border-top: 0.0625rem solid var(--color-border-default);
   background: var(--color-bg-card);
 }
-.chat-input-area :deep(.el-textarea__inner) {
-  border-radius: 8px;
-  font-size: 14px;
-  padding: 10px 14px;
+.chat-input-area :deep(textarea) {
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  padding: 0.625rem 0.875rem;
   resize: none;
 }
+.button-icon { display: inline-flex; }
 .send-btn {
   flex-shrink: 0;
-  height: 38px;
-  padding: 0 18px;
+  height: 2.375rem;
+  padding: 0 1.125rem;
+}
+
+.agent-select {
+  width: 100%;
+}
+
+.agent-option-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  justify-content: space-between;
+}
+
+.agent-option-tags {
+  display: flex;
+  gap: var(--space-1);
 }
 
 /* ── Markdown 样式 ─────────────────────────────────────────── */
-.markdown-body :deep(p) { margin: 0 0 8px; }
+.markdown-body :deep(p) { margin: 0 0 0.5rem; }
 .markdown-body :deep(p:last-child) { margin-bottom: 0; }
 .markdown-body :deep(code) {
   font-family: 'Fira Code', Consolas, monospace;
-  font-size: 13px;
+  font-size: 0.8125rem;
   background: rgba(99,102,241,0.1);
-  padding: 1px 5px;
-  border-radius: 4px;
+  padding: 0.0625rem 0.3125rem;
+  border-radius: 0.25rem;
 }
 .markdown-body :deep(pre) {
   background: #1a1b26;
-  border-radius: 8px;
-  padding: 14px 16px;
+  border-radius: 0.5rem;
+  padding: 0.875rem 1rem;
   overflow-x: auto;
-  margin: 8px 0;
+  margin: 0.5rem 0;
 }
 .markdown-body :deep(pre code) {
   background: none;
   padding: 0;
   color: #c0caf5;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .markdown-body :deep(ul),
-.markdown-body :deep(ol) { padding-left: 20px; margin: 6px 0; }
-.markdown-body :deep(li) { margin: 3px 0; }
+.markdown-body :deep(ol) { padding-left: 1.25rem; margin: 0.375rem 0; }
+.markdown-body :deep(li) { margin: 0.1875rem 0; }
 .markdown-body :deep(strong) { font-weight: 600; }
 .markdown-body :deep(blockquote) {
-  border-left: 3px solid var(--color-primary);
-  margin: 8px 0;
-  padding: 4px 12px;
+  border-left: 0.1875rem solid var(--color-primary);
+  margin: 0.5rem 0;
+  padding: 0.25rem 0.75rem;
   color: var(--color-text-secondary);
 }
 </style>

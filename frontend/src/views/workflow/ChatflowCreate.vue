@@ -8,8 +8,8 @@
         <p class="page-desc">对话流程画布入口，复用工作流节点与运行基础设施</p>
       </div>
       <div class="header-actions">
-        <el-button :loading="saving" type="primary" @click="saveChatflow">保存 Chatflow</el-button>
-        <el-button @click="$router.push('/chatflows')">返回列表</el-button>
+        <a-button :loading="saving" type="primary" @click="saveChatflow">保存 Chatflow</a-button>
+        <a-button @click="$router.push({ name: 'HifyChatflows' })">返回列表</a-button>
       </div>
     </div>
 
@@ -50,17 +50,16 @@
       <div class="canvas-inspector">
         <div class="panel-title">配置</div>
         <label>名称</label>
-        <el-input v-model="form.name" placeholder="Chatflow 名称" />
+        <a-input v-model:value="form.name" placeholder="Chatflow 名称" />
         <div class="field-row">
           <label>回复模板</label>
-          <el-button size="small" @click="variableSelectorOpen = !variableSelectorOpen">变量</el-button>
+          <a-button size="small" @click="variableSelectorOpen = !variableSelectorOpen">变量</a-button>
         </div>
-        <el-input
-          :model-value="replyTemplate"
-          type="textarea"
+        <a-textarea
+          :value="replyTemplate"
           :rows="5"
           placeholder="可插入 {{sys.query}} 等变量"
-          @update:model-value="setReplyTemplate"
+          @update:value="setReplyTemplate"
         />
         <div v-if="variableSelectorOpen" class="variable-popover">
           <section v-for="scope in variableScopes" :key="scope.title" class="variable-scope">
@@ -79,18 +78,18 @@
         <div class="conversation-test-panel" data-testid="chatflow-test-panel">
           <div class="panel-title">对话试运行</div>
           <label>用户消息</label>
-          <el-input v-model="testProfile.message" type="textarea" :rows="3" placeholder="输入用户消息" />
+          <a-textarea v-model:value="testProfile.message" :rows="3" placeholder="输入用户消息" />
           <div class="profile-grid">
-            <el-input v-model="testProfile.conversationId" placeholder="conversation_id" />
-            <el-input v-model="testProfile.userId" placeholder="user_id" />
-            <el-select v-model="testProfile.channel" placeholder="channel">
-              <el-option label="web" value="web" />
-              <el-option label="api" value="api" />
-              <el-option label="feishu" value="feishu" />
-              <el-option label="dingtalk" value="dingtalk" />
-            </el-select>
+            <a-input v-model:value="testProfile.conversationId" placeholder="conversation_id" />
+            <a-input v-model:value="testProfile.userId" placeholder="user_id" />
+            <a-select :virtual="false" v-model:value="testProfile.channel" placeholder="channel">
+              <a-select-option value="web">web</a-select-option>
+              <a-select-option value="api">api</a-select-option>
+              <a-select-option value="feishu">feishu</a-select-option>
+              <a-select-option value="dingtalk">dingtalk</a-select-option>
+            </a-select>
           </div>
-          <el-button :loading="running" type="primary" @click="runConversationTest">发送测试消息</el-button>
+          <a-button :loading="running" type="primary" @click="runConversationTest">发送测试消息</a-button>
           <div v-if="conversationResult" class="conversation-result">
             <div class="message-bubble user">{{ testProfile.message }}</div>
             <div class="message-bubble assistant">{{ conversationResult }}</div>
@@ -123,14 +122,14 @@
           <ul v-if="publishGate.reasons.length" class="publish-reasons">
             <li v-for="reason in publishGate.reasons" :key="reason">{{ reason }}</li>
           </ul>
-          <el-button
+          <a-button
             :disabled="!publishGate.allowed"
             :loading="publishing"
             type="primary"
             @click="publishChatflow"
           >
             发布 Chatflow
-          </el-button>
+          </a-button>
         </div>
         <p>当前资源类型：CHATFLOW。Chatflow 变量、测试运行和发布门禁将在 Spec 012 后续 slice 逐步接入。</p>
       </div>
@@ -141,7 +140,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { message } from 'ant-design-vue'
 
 import { createChatflow, getChatflow, runChatflow, updateChatflow, type WorkflowDetail } from '@/api/workflow'
 import { buildChatflowVariableScopes, insertChatflowVariableReference } from './chatflowVariables'
@@ -248,7 +247,7 @@ async function loadChatflow() {
 
 async function saveChatflow() {
   if (!form.value.name.trim()) {
-    ElMessage.warning('请输入 Chatflow 名称')
+    message.warning('请输入 Chatflow 名称')
     return 0
   }
   const payload = serializeWorkflowGraph(graph.value)
@@ -261,7 +260,7 @@ async function saveChatflow() {
         nodes: payload.nodes,
         edges: payload.edges,
       })
-      ElMessage.success('Chatflow 已保存')
+      message.success('Chatflow 已保存')
       return numericChatflowId.value
     } else {
       const created = await createChatflow({
@@ -271,12 +270,12 @@ async function saveChatflow() {
         edges: payload.edges,
       }) as WorkflowDetail
       chatflowStatus.value = created.status
-      ElMessage.success('Chatflow 创建成功')
-      await router.replace(`/chatflows/${created.id}/canvas`)
+      message.success('Chatflow 创建成功')
+      await router.replace({ name: 'HifyChatflowsCanvas', params: { id: created.id } })
       return created.id
     }
   } catch (e: any) {
-    ElMessage.error(e?.message || '保存失败')
+    message.error(e?.message || '保存失败')
     return 0
   } finally {
     saving.value = false
@@ -289,7 +288,7 @@ async function ensureSavedChatflow() {
 
 async function runConversationTest() {
   if (!testProfile.value.message.trim()) {
-    ElMessage.warning('请输入用户消息')
+    message.warning('请输入用户消息')
     return
   }
 
@@ -315,7 +314,7 @@ async function runConversationTest() {
 
 async function publishChatflow() {
   if (!publishGate.value.allowed) {
-    ElMessage.warning(publishGate.value.reasons[0] || '发布检查未通过')
+    message.warning(publishGate.value.reasons[0] || '发布检查未通过')
     return
   }
 
@@ -326,9 +325,9 @@ async function publishChatflow() {
   try {
     await updateChatflow(id, { status: 'PUBLISHED' })
     chatflowStatus.value = 'PUBLISHED'
-    ElMessage.success('Chatflow 已发布')
+    message.success('Chatflow 已发布')
   } catch (e: any) {
-    ElMessage.error(e?.message || '发布失败')
+    message.error(e?.message || '发布失败')
   } finally {
     publishing.value = false
   }
@@ -366,13 +365,13 @@ onMounted(loadChatflow)
   margin: 0 0 0.25rem;
   font-size: 1.125rem;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--color-text-primary);
 }
 
 .page-desc {
   margin: 0;
   font-size: 0.8125rem;
-  color: var(--el-text-color-secondary);
+  color: var(--color-text-secondary);
 }
 
 .canvas-shell {
@@ -380,7 +379,7 @@ onMounted(loadChatflow)
   min-height: 32.5rem;
   display: grid;
   grid-template-columns: 13.75rem minmax(26.25rem, 1fr) 17.5rem;
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--color-border-default);
   border-radius: 0.5rem;
   overflow: hidden;
   background: #f7f8fb;
@@ -393,20 +392,20 @@ onMounted(loadChatflow)
 }
 
 .canvas-sidebar {
-  border-right: 1px solid var(--el-border-color-lighter);
+  border-right: 1px solid var(--color-border-default);
 }
 
 .canvas-inspector {
-  border-left: 1px solid var(--el-border-color-lighter);
+  border-left: 1px solid var(--color-border-default);
   font-size: 0.8125rem;
   line-height: 1.7;
-  color: var(--el-text-color-secondary);
+  color: var(--color-text-secondary);
 }
 
 .canvas-inspector label {
   display: block;
   margin-bottom: 0.5rem;
-  color: var(--el-text-color-primary);
+  color: var(--color-text-primary);
   font-weight: 700;
 }
 
@@ -414,17 +413,17 @@ onMounted(loadChatflow)
   margin-bottom: 0.75rem;
   font-size: 0.8125rem;
   font-weight: 700;
-  color: var(--el-text-color-primary);
+  color: var(--color-text-primary);
 }
 
 .node-row {
   width: 100%;
   height: 2.25rem;
   margin-bottom: 0.5rem;
-  border: 1px solid var(--el-border-color);
+  border: 1px solid var(--color-border-default);
   border-radius: 0.375rem;
   background: #fff;
-  color: var(--el-text-color-primary);
+  color: var(--color-text-primary);
   text-align: left;
   padding: 0 0.75rem;
   cursor: pointer;

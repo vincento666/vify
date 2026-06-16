@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="Ollama">
+  <rect width="48" height="48" rx="12" fill="#0f172a"/>
+  <path d="M15 34V19.5C15 13 19 9 24 9s9 4 9 10.5V34c0 2.8-2.2 5-5 5h-8c-2.8 0-5-2.2-5-5Z" fill="#fff"/>
+  <circle cx="20.5" cy="22" r="1.8" fill="#0f172a"/>
+  <circle cx="27.5" cy="22" r="1.8" fill="#0f172a"/>
+  <path d="M21 29h6" stroke="#0f172a" stroke-width="2" stroke-linecap="round"/>
+</svg>

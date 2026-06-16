@@ -1,5 +1,7 @@
 import axios from 'axios'
-import { ElMessage } from 'element-plus'
+
+import { buildHostHeaders, resolveApiBaseUrl } from '@/host/request'
+import { notifyError } from '@/utils/notify'
 
 export interface ApiEnvelope<T> {
   code: number
@@ -42,8 +44,18 @@ export function toClientError(error: unknown): Error {
 }
 
 const instance = axios.create({
-  baseURL: '/api',
+  baseURL: resolveApiBaseUrl(),
   timeout: 60000,
+})
+
+instance.interceptors.request.use((config) => {
+  config.baseURL = resolveApiBaseUrl()
+  for (const [key, value] of Object.entries(buildHostHeaders())) {
+    const headers = config.headers as Record<string, string> & { set?: (name: string, value: string) => void }
+    if (typeof headers?.set === 'function') headers.set(key, value)
+    else config.headers = { ...(headers || {}), [key]: value } as typeof config.headers
+  }
+  return config
 })
 
 instance.interceptors.response.use(
@@ -52,13 +64,13 @@ instance.interceptors.response.use(
       return unwrapEnvelope(response.data)
     } catch (error) {
       const message = error instanceof Error ? error.message : '请求失败'
-      ElMessage.error(message)
+      notifyError(message)
       return Promise.reject(error)
     }
   },
   (error) => {
     const clientError = toClientError(error)
-    ElMessage.error(clientError.message || '网络异常')
+    notifyError(clientError.message || '网络异常')
     return Promise.reject(clientError)
   }
 )

@@ -10,6 +10,16 @@ describe('chatflow node test fixtures', () => {
     expect(canRunSingleNodeTest({ nodeKey: 'llm_1', type: 'LLM' } as any)).toBe(true)
   })
 
+  it('only enables selected-node runs for executable nodes', () => {
+    for (const type of ['CONDITION', 'VARIABLE_AGGREGATION', 'QUESTION', 'HUMAN_INPUT', 'INFORMATION_COLLECTION', 'TRANSFER_TO_HUMAN']) {
+      expect(canRunSingleNodeTest({ nodeKey: type.toLowerCase(), type } as any)).toBe(false)
+    }
+
+    for (const type of ['LLM', 'KNOWLEDGE', 'API_CALL', 'TOOL_CALL', 'EXECUTE_WORKFLOW', 'AGENT_CALL', 'CODE', 'TEXT_PROCESS', 'JSON_PARSE', 'VARIABLE_ASSIGN', 'INTENT_RECOGNITION', 'MESSAGE']) {
+      expect(canRunSingleNodeTest({ nodeKey: type.toLowerCase(), type } as any)).toBe(true)
+    }
+  })
+
   it('includes the Chatflow runtime profile variables for selected LLM node runs', () => {
     const graph = createDefaultChatflowGraph()
     const llm = {

@@ -1,10 +1,14 @@
-import { ElMessage } from 'element-plus'
+import { message } from 'ant-design-vue'
 
-export const notifySuccess = (message: string) =>
-  ElMessage({ type: 'success', message, duration: 2500 })
+export interface NotifyOptions {
+  duration?: number
+}
 
-export const notifyError = (message: string) =>
-  ElMessage({ type: 'error', message, duration: 3500 })
+export const notifySuccess = (content: string, options: NotifyOptions = {}) =>
+  message.success(content, options.duration ?? 2.5)
 
-export const notifyWarning = (message: string) =>
-  ElMessage({ type: 'warning', message, duration: 3000 })
+export const notifyError = (content: string, options: NotifyOptions = {}) =>
+  message.error(content, options.duration ?? 3.5)
+
+export const notifyWarning = (content: string, options: NotifyOptions = {}) =>
+  message.warning(content, options.duration ?? 3)

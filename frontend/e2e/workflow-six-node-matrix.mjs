@@ -283,7 +283,7 @@ async function assertNodeCannotRunStandalone(page, selector) {
 async function runWorkflowSelectedNodeMatrix(page, marker, liveLlmAvailable) {
   await closeRunPanel(page)
   await assertNodeCannotRunStandalone(page, '.coze-node.node-start')
-  await runSelectedNode(page, '.coze-node.node-condition', { USER_INPUT: 'kb' }, 'route')
+  await assertNodeCannotRunStandalone(page, '.coze-node.node-condition')
   await runSelectedNode(page, '.coze-node.node-knowledge', {}, `KB_SIX_NODE_${marker}`)
   if (liveLlmAvailable) {
     await runSelectedNode(page, '.coze-node.node-llm', { 'kb.answer': 'KB fixture' }, `LLM_MATRIX_${marker}`)

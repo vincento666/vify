@@ -20,7 +20,8 @@ try {
     assert(!runText.includes(forbidden), `Expected run panel to remove ${forbidden}`)
   }
   assert(runText.includes('对话试运行'), 'Expected chatflow run panel title')
-  assert(runText.includes('运行参数'), 'Expected collapsible runtime fields')
+  assert(runText.includes('对话设置'), 'Expected header settings action')
+  assert(!runText.includes('运行参数'), 'Expected runtime fields removed from chat body')
   assert(await runPanel.getByRole('button', { name: '发送消息', exact: true }).count() === 1, 'Expected chat composer send action')
 
   await runPanel.getByRole('button', { name: '关闭试运行', exact: true }).click()

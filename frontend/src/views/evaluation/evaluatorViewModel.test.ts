@@ -5,9 +5,9 @@ import { describeEvaluatorType, keywordConfigFromText } from './evaluatorViewMod
 
 describe('evaluator view model', () => {
   it('normalizes evaluator labels and keyword config', () => {
-    expect(describeEvaluatorType('EXACT_MATCH')).toBe('Exact Match')
-    expect(describeEvaluatorType('CONTAINS_KEYWORDS')).toBe('Contains Keywords')
-    expect(describeEvaluatorType('LLM_JUDGE')).toBe('LLM Judge')
+    expect(describeEvaluatorType('EXACT_MATCH')).toBe('精确匹配')
+    expect(describeEvaluatorType('CONTAINS_KEYWORDS')).toBe('包含关键词')
+    expect(describeEvaluatorType('LLM_JUDGE')).toBe('LLM 裁判')
     expect(keywordConfigFromText(' refund, policy, refund ')).toEqual({
       keywords: ['refund', 'policy'],
       matchMode: 'all',

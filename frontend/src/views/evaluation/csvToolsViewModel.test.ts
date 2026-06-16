@@ -7,6 +7,6 @@ describe('csv tools view model', () => {
   it('accepts csv filenames and explains required columns', () => {
     expect(acceptedCsvName('cases.csv')).toBe(true)
     expect(acceptedCsvName('cases.txt')).toBe(false)
-    expect(csvImportHint()).toContain('input, expectedOutput, tags')
+    expect(csvImportHint()).toContain('input、expectedOutput、tags')
   })
 })

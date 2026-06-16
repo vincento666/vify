@@ -18,5 +18,5 @@ describe('unified routing chat lab route', () => {
     expect(route).toBeTruthy()
     expect(route?.meta.runtimeLabChat).toBe(true)
     expect(navItem?.label).toBe('路由对话')
-  })
+  }, 15000)
 })

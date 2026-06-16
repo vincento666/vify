@@ -3,5 +3,5 @@ export function acceptedCsvName(name: string): boolean {
 }
 
 export function csvImportHint(): string {
-  return 'CSV columns: input, expectedOutput, tags. Use | to separate multiple tags.'
+  return 'CSV 列：input、expectedOutput、tags。多个标签使用 | 分隔。'
 }

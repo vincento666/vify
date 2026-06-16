@@ -21,16 +21,16 @@ export function formatRunSummary(run: RunSummaryInput) {
   return {
     scoreText: `${(run.aggregateScore * 100).toFixed(1)}%`,
     passRateText: `${(run.passRate * 100).toFixed(1)}%`,
-    failedText: `${run.failedCases} failed`,
+    failedText: `${run.failedCases} 失败`,
   }
 }
 
 export function runSummaryMetricItems(run: RunSummaryInput) {
   const summary = formatRunSummary(run)
   return [
-    { label: 'Score', value: summary.scoreText },
-    { label: 'Pass', value: summary.passRateText },
-    { label: 'Failed', value: String(run.failedCases) },
+    { label: '分数', value: summary.scoreText },
+    { label: '通过率', value: summary.passRateText },
+    { label: '失败', value: String(run.failedCases) },
   ]
 }
 

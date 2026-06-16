@@ -1,4 +1,5 @@
 import { get, post, del } from '@/utils/request'
+import { hostFetch } from '@/host/request'
 
 export interface ChatSession {
   id: number
@@ -51,18 +52,19 @@ export function streamMessage(
   onDelta: (text: string) => void,
   onDone: (finishReason: string, latencyMs: number) => void,
   onError: (msg: string) => void,
+  variables: Record<string, unknown> = {},
 ): AbortController {
   const ctrl = new AbortController()
 
   ;(async () => {
     try {
-      const resp = await fetch(`/api/v1/chat/sessions/${sessionId}/messages`, {
+      const resp = await hostFetch(`/v1/chat/sessions/${sessionId}/messages`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'text/event-stream',
         },
-        body: JSON.stringify({ content, stream: true }),
+        body: JSON.stringify({ content, stream: true, variables }),
         signal: ctrl.signal,
       })
 

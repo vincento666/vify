@@ -5,28 +5,26 @@
         <h2>评测</h2>
         <p>用评测集、评估器和实验运行验证 Agent 质量变化</p>
       </div>
-      <el-button type="primary">新建实验</el-button>
     </header>
 
-    <el-tabs v-model="activeTab" class="evaluation-tabs">
-      <el-tab-pane
+    <a-tabs v-model:activeKey="activeTab" class="evaluation-tabs">
+      <a-tab-pane
         v-for="tab in EVALUATION_TABS"
         :key="tab.key"
-        :name="tab.key"
         :disabled="tab.disabled"
       >
-        <template #label>
+        <template #tab>
           <span>{{ tab.label }}</span>
         </template>
-      </el-tab-pane>
-    </el-tabs>
+      </a-tab-pane>
+    </a-tabs>
 
     <section class="tab-summary">
       <div>
         <h3>{{ activeTabMeta.cnLabel }}</h3>
         <p>{{ activeTabMeta.description }}</p>
       </div>
-      <el-tag v-if="activeTabMeta.disabled" type="info" effect="plain">MVP 后开放</el-tag>
+      <a-tag v-if="activeTabMeta.disabled" color="default">MVP 后开放</a-tag>
     </section>
 
     <ExperimentsPanel v-if="activeTab === 'experiments'" />
@@ -43,6 +41,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useRoute } from 'vue-router'
 
 import { EVALUATION_TABS, getActiveEvaluationTab, type EvaluationTabKey } from './evaluationTabs'
 import EvalSetsPanel from './EvalSetsPanel.vue'
@@ -51,66 +50,63 @@ import CompareAnalysisPanel from './CompareAnalysisPanel.vue'
 import ExperimentsPanel from './ExperimentsPanel.vue'
 import RunRecordsPanel from './RunRecordsPanel.vue'
 
-const activeTab = ref<EvaluationTabKey>(getActiveEvaluationTab(undefined))
+const route = useRoute()
+const activeTab = ref<EvaluationTabKey>(getActiveEvaluationTab(String(route.query.tab || route.meta.defaultEvaluationTab || '')))
 const activeTabMeta = computed(() => EVALUATION_TABS.find((tab) => tab.key === activeTab.value) || EVALUATION_TABS[0])
 </script>
 
 <style scoped>
 .evaluation-page {
-  min-height: calc(100vh - 112px);
+  min-height: calc(100vh - 7rem);
 }
 
 .evaluation-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 18px;
+  margin-bottom: 1.125rem;
 }
 
 .evaluation-header h2 {
-  margin: 0 0 4px;
-  color: var(--el-text-color-primary);
-  font-size: 20px;
+  margin: 0 0 var(--space-1);
+  color: var(--color-text-primary);
+  font-size: var(--text-xl);
 }
 
 .evaluation-header p,
 .tab-summary p,
 .empty-panel p {
   margin: 0;
-  color: var(--el-text-color-secondary);
-  font-size: 13px;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
   line-height: 1.6;
 }
 
 .evaluation-tabs {
-  margin-bottom: 14px;
+  margin-bottom: 0.875rem;
 }
 
 .tab-summary {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 14px;
-  padding: 14px 0;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  gap: 0.875rem;
+  padding: 0.875rem 0;
+  border-bottom: 0.0625rem solid var(--color-border-default);
 }
 
 .tab-summary h3,
 .empty-panel h3 {
-  margin: 0 0 6px;
-  color: var(--el-text-color-primary);
-  font-size: 16px;
+  margin: 0 0 0.375rem;
+  color: var(--color-text-primary);
+  font-size: var(--text-md);
 }
 
 .empty-panel {
-  min-height: 300px;
+  min-height: 18.75rem;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
-  gap: 14px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  gap: 0.875rem;
+  border-bottom: 0.0625rem solid var(--color-border-default);
 }
 
 .disabled-panel {

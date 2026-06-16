@@ -39,12 +39,12 @@ describe('hify rem governance', () => {
     expect(matches).toEqual([])
   })
 
-  it('bridges Element Plus component sizing through hify rem tokens', () => {
-    const css = readProjectFile('src/styles/element-override.css')
+  it('bridges Ant Design Vue component sizing through hify theme tokens', () => {
+    const antDesign = readProjectFile('src/app/ant-design.ts')
 
-    expect(css).toMatch(/--el-component-size:\s*var\(--control-height-md\);/)
-    expect(css).toMatch(/--el-component-size-small:\s*var\(--control-height-sm\);/)
-    expect(css).toMatch(/--el-component-size-large:\s*var\(--control-height-lg\);/)
-    expect(css).toMatch(/--el-dialog-width:\s*var\(--dialog-width-md\);/)
+    expect(antDesign).toContain('hifyAntTheme')
+    expect(antDesign).toContain('borderRadius: 6')
+    expect(antDesign).toContain('fontSize: 14')
+    expect(antDesign).toContain('PingFang SC')
   })
 })

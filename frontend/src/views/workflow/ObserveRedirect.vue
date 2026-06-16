@@ -17,7 +17,7 @@ const router = useRouter()
 async function redirectToComposer() {
   const runId = normalizeObserveRedirectRunId(route.query.runId)
   if (!runId) {
-    await router.replace('/workflows')
+    await router.replace({ name: 'HifyWorkflows' })
     return
   }
 
@@ -25,7 +25,7 @@ async function redirectToComposer() {
     const detail = await getObserveRun(runId)
     await router.replace(buildObserveComposerRedirect({ runId, detail }))
   } catch {
-    await router.replace('/workflows')
+    await router.replace({ name: 'HifyWorkflows' })
   }
 }
 

@@ -18,30 +18,38 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 try {
   await page.goto(`${baseUrl}/evaluation`, { waitUntil: 'networkidle' })
   await assertBodyIncludes(page, '评测')
-  await assertBodyIncludes(page, 'Experiments')
-  await assertBodyIncludes(page, 'Eval Sets')
-  await assertBodyIncludes(page, 'Evaluators')
-  await assertBodyIncludes(page, 'Run Records')
-  await assertBodyIncludes(page, 'Compare Analysis')
-  await assertBodyIncludes(page, '先跑一次 Agent 实验')
+  await assertBodyIncludes(page, '实验')
+  await assertBodyIncludes(page, '评测集')
+  await assertBodyIncludes(page, '评估器')
+  await assertBodyIncludes(page, '运行记录')
+  await assertBodyIncludes(page, '对比分析')
+  await page.getByTestId('create-experiment').waitFor({ state: 'visible', timeout: 5000 })
+  const emptyStateCount = await page.locator('.empty-panel', { hasText: '先跑一次目标实验' }).count()
+  const experimentCardCount = await page.locator('.experiment-card').count()
+  assert(
+    emptyStateCount === 1 || experimentCardCount > 0,
+    'Expected experiments tab to show either the empty-state guidance or existing experiment cards',
+  )
 
-  const compareTab = page.getByRole('tab', { name: 'Compare Analysis' })
+  const compareTab = page.getByRole('tab', { name: '对比分析' })
   await compareTab.waitFor({ state: 'visible', timeout: 5000 })
-  const compareClass = await compareTab.getAttribute('class')
-  assert(compareClass?.includes('is-disabled'), 'Expected Compare Analysis tab to be disabled in MVP')
+  await compareTab.click()
+  await page.getByTestId('compare-base-run').waitFor({ state: 'visible', timeout: 5000 })
+  await page.getByTestId('compare-candidate-run').waitFor({ state: 'visible', timeout: 5000 })
+  await page.getByTestId('run-compare').waitFor({ state: 'visible', timeout: 5000 })
 
   if (screenshotPath) {
     await page.screenshot({ path: screenshotPath, fullPage: true })
   }
 
-  await page.getByRole('tab', { name: 'Eval Sets' }).click()
-  await assertBodyIncludes(page, '整理回归用例')
+  await page.getByRole('tab', { name: '评测集' }).click()
+  await assertBodyIncludes(page, '维护可复用的回归用例')
 
-  await page.getByRole('tab', { name: 'Evaluators' }).click()
-  await assertBodyIncludes(page, '定义可解释评分规则')
+  await page.getByRole('tab', { name: '评估器' }).click()
+  await assertBodyIncludes(page, '定义可解释的打分规则')
 
-  await page.getByRole('tab', { name: 'Run Records' }).click()
-  await assertBodyIncludes(page, '暂无运行记录')
+  await page.getByRole('tab', { name: '运行记录' }).click()
+  await page.getByRole('heading', { name: '运行记录' }).waitFor({ state: 'visible', timeout: 5000 })
 
   console.log('PASS evaluation workbench shell e2e')
 } finally {

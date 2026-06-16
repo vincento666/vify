@@ -1,4 +1,5 @@
 import { del, get, post, put } from '@/utils/request'
+import { hostFetch } from '@/host/request'
 
 export interface PageResult<T> {
   list: T[]
@@ -23,12 +24,36 @@ export interface EvalSet {
   name: string
   description: string
   caseCount: number
+  latestVersion?: string
+  versionCount?: number
+  draftChanged?: boolean
   createdAt: string
   updatedAt: string
 }
 
 export interface EvalSetDetail extends EvalSet {
   cases: EvalCase[]
+  fieldSchema?: EvalSetField[]
+}
+
+export interface EvalSetField {
+  key: string
+  label: string
+  contentType: string
+  required: boolean
+  displayOrder: number
+}
+
+export interface EvalSetVersion {
+  id: number
+  evalSetId: number
+  version: string
+  description: string
+  schemaSnapshot: Array<Record<string, unknown>>
+  caseSnapshot: Array<Record<string, unknown>>
+  caseCount: number
+  createdBy: string
+  createdAt: string
 }
 
 export type EvaluatorType = 'EXACT_MATCH' | 'CONTAINS_KEYWORDS' | 'LLM_JUDGE'
@@ -49,6 +74,31 @@ export interface EvaluatorSampleResult {
   reason: string
 }
 
+export interface LlmEvaluatorDebugResult extends EvaluatorSampleResult {
+  modelConfigId: number
+  debugPrompt: string
+  rawOutput: string
+}
+
+export interface EvaluatorVersion {
+  id: number
+  evaluatorId: number
+  version: string
+  evaluatorType: EvaluatorType
+  configSnapshot: Record<string, unknown>
+  inputSchema: Array<Record<string, unknown>>
+  description: string
+  createdAt: string
+}
+
+export interface EvaluatorPreset {
+  key: string
+  name: string
+  description: string
+  enabled: boolean
+  config: Record<string, unknown>
+}
+
 export type EvaluationTargetType = 'AGENT' | 'WORKFLOW' | 'CHATFLOW'
 
 export interface EvaluationExperiment {
@@ -57,9 +107,33 @@ export interface EvaluationExperiment {
   targetType: EvaluationTargetType
   targetId: number
   evalSetId: number
+  evalSetVersionId?: number | null
   evaluatorIds: number[]
+  evaluatorVersionIds: number[]
+  targetFieldMapping: Record<string, string>
+  evaluatorFieldMapping: Record<string, string>
+  itemConcurrency: number
+  itemRetryCount: number
   status: string
   latestRunId: number | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface EvalSetRelatedExperiment {
+  id: number
+  name: string
+  targetType: EvaluationTargetType
+  targetId: number
+  evalSetId: number
+  evalSetVersionId: number | null
+  evalSetVersion: string
+  status: string
+  latestRunId: number | null
+  latestRunStatus: string
+  latestRunScore: number | null
+  latestRunPassRate: number | null
+  latestRunFinishedAt: string | null
   createdAt: string
   updatedAt: string
 }
@@ -71,6 +145,11 @@ export interface EvaluationCaseResult {
   input: string
   expectedOutput: string
   targetOutput: string
+  targetType: EvaluationTargetType | ''
+  targetRunId: number | null
+  targetStatus: string
+  targetDebugUrl: string
+  targetEvidenceSummary: Record<string, unknown>
   status: 'PASSED' | 'FAILED'
   score: number
   evaluatorResults: Array<Record<string, unknown>>
@@ -131,6 +210,21 @@ export const updateEvalSet = (id: number, data: { name?: string; description?: s
 export const deleteEvalSet = (id: number) =>
   del<void>(`/v1/eval-sets/${id}`)
 
+export const submitEvalSetVersion = (id: number, data?: { description?: string }) =>
+  post<EvalSetVersion>(`/v1/eval-sets/${id}/versions`, data || {})
+
+export const listEvalSetVersions = (id: number) =>
+  get<PageResult<EvalSetVersion>>(`/v1/eval-sets/${id}/versions`)
+
+export const listEvalSetRelatedExperiments = (id: number) =>
+  get<PageResult<EvalSetRelatedExperiment>>(`/v1/eval-sets/${id}/related-experiments`)
+
+export const listEvalSetFields = (id: number) =>
+  get<PageResult<EvalSetField>>(`/v1/eval-sets/${id}/fields`)
+
+export const updateEvalSetFields = (id: number, fields: EvalSetField[]) =>
+  put<PageResult<EvalSetField>>(`/v1/eval-sets/${id}/fields`, { fields })
+
 export const createEvalCase = (evalSetId: number, data: {
   input: string
   expectedOutput: string
@@ -151,7 +245,7 @@ export const deleteEvalCase = (id: number) =>
 export const importEvalCasesCsv = (evalSetId: number, file: File) => {
   const form = new FormData()
   form.append('file', file)
-  return fetch(`/api/v1/eval-sets/${evalSetId}/cases/import-csv`, {
+  return hostFetch(`/v1/eval-sets/${evalSetId}/cases/import-csv`, {
     method: 'POST',
     body: form,
   }).then(r => r.json()).then(res => {
@@ -162,6 +256,15 @@ export const importEvalCasesCsv = (evalSetId: number, file: File) => {
 
 export const listEvaluators = (params?: { page?: number; pageSize?: number; name?: string }) =>
   get<PageResult<Evaluator>>('/v1/evaluators', params)
+
+export const listEvaluatorPresets = () =>
+  get<PageResult<EvaluatorPreset>>('/v1/evaluators/presets')
+
+export const publishEvaluatorVersion = (id: number, data?: { description?: string }) =>
+  post<EvaluatorVersion>(`/v1/evaluators/${id}/versions`, data || {})
+
+export const listEvaluatorVersions = (id: number) =>
+  get<PageResult<EvaluatorVersion>>(`/v1/evaluators/${id}/versions`)
 
 export const createEvaluator = (data: { name: string; type: EvaluatorType; config: Record<string, unknown> }) =>
   post<Evaluator>('/v1/evaluators', data)
@@ -184,6 +287,14 @@ export const testEvaluatorDraft = (data: {
 export const testEvaluator = (id: number, data: { expectedOutput?: string; actualOutput: string }) =>
   post<EvaluatorSampleResult>(`/v1/evaluators/${id}/test`, data)
 
+export const debugLlmEvaluator = (data: {
+  modelConfigId: number
+  prompt: string
+  expectedOutput?: string
+  actualOutput: string
+  passingScore?: number
+}) => post<LlmEvaluatorDebugResult>('/v1/evaluators/llm-debug', data)
+
 export const listEvaluationExperiments = (params?: { page?: number; pageSize?: number; name?: string }) =>
   get<PageResult<EvaluationExperiment>>('/v1/evaluation-experiments', params)
 
@@ -192,7 +303,13 @@ export const createEvaluationExperiment = (data: {
   targetType: EvaluationTargetType
   targetId: number
   evalSetId: number
+  evalSetVersionId?: number | null
   evaluatorIds: number[]
+  evaluatorVersionIds?: number[]
+  targetFieldMapping?: Record<string, string>
+  evaluatorFieldMapping?: Record<string, string>
+  itemConcurrency?: number
+  itemRetryCount?: number
 }) => post<EvaluationExperiment>('/v1/evaluation-experiments', data)
 
 export const runEvaluationExperiment = (id: number) =>
@@ -211,7 +328,7 @@ export const rerunEvaluationCaseResult = (runId: number, caseResultId: number) =
   post<EvaluationRun>(`/v1/evaluation-runs/${runId}/case-results/${caseResultId}/rerun`, {})
 
 export const exportEvaluationRunCsv = async (id: number) => {
-  const response = await fetch(`/api/v1/evaluation-runs/${id}/export-csv`)
+  const response = await hostFetch(`/v1/evaluation-runs/${id}/export-csv`)
   if (!response.ok) throw new Error('CSV export failed')
   return response.blob()
 }

@@ -14,7 +14,7 @@ describe('experiment run view model', () => {
     expect(formatRunSummary({ aggregateScore: 0.875, passRate: 0.5, failedCases: 2 })).toEqual({
       scoreText: '87.5%',
       passRateText: '50.0%',
-      failedText: '2 failed',
+      failedText: '2 失败',
     })
     expect(runStatusTone('COMPLETED')).toBe('success')
     expect(runStatusTone('FAILED')).toBe('danger')
@@ -28,9 +28,9 @@ describe('experiment run view model', () => {
 
   it('exposes compact report metrics for run record headers', () => {
     expect(runSummaryMetricItems({ aggregateScore: 0.875, passRate: 0.5, failedCases: 2 })).toEqual([
-      { label: 'Score', value: '87.5%' },
-      { label: 'Pass', value: '50.0%' },
-      { label: 'Failed', value: '2' },
+      { label: '分数', value: '87.5%' },
+      { label: '通过率', value: '50.0%' },
+      { label: '失败', value: '2' },
     ])
   })
 })

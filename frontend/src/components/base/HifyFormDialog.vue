@@ -1,35 +1,39 @@
 <template>
-  <el-dialog
-    v-model="visible"
+  <a-modal
+    v-model:open="visible"
     :title="title"
     :width="width"
-    :close-on-click-modal="false"
+    :mask-closable="false"
     destroy-on-close
-    @closed="onClosed"
+    @after-close="onClosed"
   >
-    <el-form
+    <a-form
       ref="formRef"
       :model="formData"
       :rules="rules"
-      :label-width="labelWidth"
-      label-position="right"
+      :label-col="{ style: { width: labelWidth } }"
       @submit.prevent
     >
       <slot :form="formData" :mode="mode" />
-    </el-form>
+    </a-form>
 
     <template #footer>
-      <el-button @click="visible = false">取消</el-button>
-      <el-button type="primary" :loading="submitting" @click="onSubmit">
+      <a-button @click="visible = false">取消</a-button>
+      <a-button type="primary" :loading="submitting" @click="onSubmit">
         {{ mode === 'edit' ? '保存' : '确认' }}
-      </el-button>
+      </a-button>
     </template>
-  </el-dialog>
+  </a-modal>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import type { FormInstance, FormRules } from 'element-plus'
+
+type FormRules = Record<string, unknown>
+type FormInstance = {
+  validate: () => Promise<unknown>
+  resetFields: () => void
+}
 
 interface Props {
   title: string

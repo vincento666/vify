@@ -6,6 +6,7 @@ import type {
   RuntimeLabTraceNode,
   RuntimeLabTurn,
   RuntimeLabUsage,
+  RuntimeLabTemporaryModelPayload,
 } from '@/api/runtimeLab'
 
 export interface AirlineSopScenario {
@@ -56,6 +57,54 @@ export interface RuntimeLabConfigSummary {
   secretLabel: string
   availableLabel: string
   bindingRows: string[]
+}
+
+export interface RuntimeLabLocalSettings {
+  arbitratorMode: string
+  arbitratorModelConfigId: number | null
+  arbitratorModel: string
+  fallbackModelConfigId: number | null
+  fallbackModel: string
+  baseUrl: string
+  temporaryModel: RuntimeLabTemporaryModelSettings
+  temporaryFallbackModel: RuntimeLabTemporaryModelSettings
+  apiKeyConfigured: boolean
+  arbitratorAvailable: boolean
+  fallbackAgentEnabled: boolean
+  fallbackAgentType: string
+  fallbackAgentId: number | null
+  strongAcceptThreshold: number
+  classifierMinConfidence: number
+  candidateTopK: number
+  llmArbitrationRequiredForNonHardStop: boolean
+  faqKeywordMinScore: number
+  faqKeywordMinMargin: number
+  faqSemanticMinScore: number
+  faqSemanticMinMargin: number
+  ragMinScore: number
+  ragLexicalAcceptThreshold: number
+  faqExactEnabled: boolean
+  faqSemanticEnabled: boolean
+  faqTopK: number
+  faqRerank: boolean
+  faqKnowledgeBaseIds: number[]
+  ragEnabled: boolean
+  ragRetrievalMode: string
+  ragTopK: number
+  ragRerank: boolean
+  ragKnowledgeBaseIds: number[]
+  handoffEnabled: boolean
+  handoffQueue: string
+}
+
+export interface RuntimeLabTemporaryModelSettings {
+  enabled: boolean
+  model: string
+  baseUrl: string
+  apiKey: string
+  temperature: number
+  maxTokens: number
+  topP: number
 }
 
 export interface RuntimeLabFunnelSummary {
@@ -333,6 +382,104 @@ export function buildRuntimeLabConfigSummary(config: RuntimeLabConfig | null): R
   }
 }
 
+export function buildRuntimeLabLocalSettings(config: RuntimeLabConfig | null): RuntimeLabLocalSettings {
+  const thresholds = config?.thresholds || {}
+  const faq = config?.faq || { knowledgeBaseIds: [] }
+  const rag = config?.rag || { knowledgeBaseIds: [] }
+  const fallbackAgent = config?.fallbackAgent
+  return {
+    arbitratorMode: config?.arbitrator.mode || 'fake',
+    arbitratorModelConfigId: null,
+    arbitratorModel: config?.arbitrator.model || '',
+    fallbackModelConfigId: null,
+    fallbackModel: config?.arbitrator.fallbackModel || '',
+    baseUrl: config?.arbitrator.baseUrl || '',
+    temporaryModel: defaultTemporaryModelSettings({
+      model: config?.arbitrator.model || '',
+      baseUrl: config?.arbitrator.baseUrl || '',
+    }),
+    temporaryFallbackModel: defaultTemporaryModelSettings({
+      model: config?.arbitrator.fallbackModel || '',
+      baseUrl: config?.arbitrator.baseUrl || '',
+    }),
+    apiKeyConfigured: config?.arbitrator.apiKeyConfigured === true,
+    arbitratorAvailable: config?.arbitrator.available === true,
+    fallbackAgentEnabled: fallbackAgent?.enabled === true,
+    fallbackAgentType: fallbackAgent?.type || 'fake',
+    fallbackAgentId: fallbackAgent?.agentId ?? null,
+    strongAcceptThreshold: finiteNumber(thresholds.strongAcceptThreshold, 0.9),
+    classifierMinConfidence: finiteNumber(thresholds.classifierMinConfidence, 0.6),
+    candidateTopK: Math.max(1, Math.round(finiteNumber(thresholds.candidateTopK, 5))),
+    llmArbitrationRequiredForNonHardStop: thresholds.llmArbitrationRequiredForNonHardStop !== false,
+    faqKeywordMinScore: finiteNumber(thresholds.faqKeywordMinScore, 0.72),
+    faqKeywordMinMargin: finiteNumber(thresholds.faqKeywordMinMargin, 0.08),
+    faqSemanticMinScore: finiteNumber(thresholds.faqSemanticMinScore, 0.72),
+    faqSemanticMinMargin: finiteNumber(thresholds.faqSemanticMinMargin, 0.08),
+    ragMinScore: finiteNumber(thresholds.ragMinScore, 0.72),
+    ragLexicalAcceptThreshold: finiteNumber(thresholds.ragLexicalAcceptThreshold, 0.42),
+    faqExactEnabled: faq.exactEnabled !== false,
+    faqSemanticEnabled: faq.semanticEnabled !== false,
+    faqTopK: Math.max(1, Math.round(finiteNumber(faq.topK, 3))),
+    faqRerank: faq.rerank === true,
+    faqKnowledgeBaseIds: Array.isArray(faq.knowledgeBaseIds) ? [...faq.knowledgeBaseIds] : [],
+    ragEnabled: rag.enabled !== false,
+    ragRetrievalMode: rag.retrievalMode || 'hybrid',
+    ragTopK: Math.max(1, Math.round(finiteNumber(rag.topK, 5))),
+    ragRerank: rag.rerank === true,
+    ragKnowledgeBaseIds: Array.isArray(rag.knowledgeBaseIds) ? [...rag.knowledgeBaseIds] : [],
+    handoffEnabled: config?.handoff?.enabled !== false,
+    handoffQueue: config?.handoff?.queue || 'general',
+  }
+}
+
+export function defaultTemporaryModelSettings(
+  seed: Partial<RuntimeLabTemporaryModelSettings> = {},
+): RuntimeLabTemporaryModelSettings {
+  return {
+    enabled: seed.enabled ?? false,
+    model: seed.model ?? '',
+    baseUrl: seed.baseUrl ?? '',
+    apiKey: seed.apiKey ?? '',
+    temperature: finiteNumber(seed.temperature, 0),
+    maxTokens: Math.max(1, Math.round(finiteNumber(seed.maxTokens, 360))),
+    topP: finiteNumber(seed.topP, 1),
+  }
+}
+
+export function buildRuntimeLabRouteSettingsPayload(settings: RuntimeLabLocalSettings) {
+  const temporaryModel = temporaryModelPayload(settings.temporaryModel)
+  const temporaryFallbackModel = temporaryModelPayload(settings.temporaryFallbackModel)
+  return {
+    arbitrator: {
+      mode: settings.arbitratorMode,
+      model: temporaryModel?.model || settings.arbitratorModel,
+      fallbackModel: temporaryFallbackModel?.model || settings.fallbackModel,
+      modelConfigId: temporaryModel ? null : settings.arbitratorModelConfigId,
+      fallbackModelConfigId: temporaryFallbackModel ? null : settings.fallbackModelConfigId,
+      ...(temporaryModel ? { temporaryModel } : {}),
+      ...(temporaryFallbackModel ? { temporaryFallbackModel } : {}),
+    },
+    thresholds: {
+      strongAcceptThreshold: settings.strongAcceptThreshold,
+      classifierMinConfidence: settings.classifierMinConfidence,
+      candidateTopK: settings.candidateTopK,
+    },
+  }
+}
+
+function temporaryModelPayload(settings: RuntimeLabTemporaryModelSettings): RuntimeLabTemporaryModelPayload | null {
+  if (!settings.enabled) return null
+  return {
+    enabled: true,
+    model: settings.model.trim(),
+    baseUrl: settings.baseUrl.trim(),
+    apiKey: settings.apiKey,
+    temperature: settings.temperature,
+    maxTokens: Math.max(1, Math.round(settings.maxTokens)),
+    topP: settings.topP,
+  }
+}
+
 export function buildRuntimeLabBoundScenarios(config: RuntimeLabConfig | null): RuntimeLabBoundScenarioRow[] {
   if (!config) return []
   return config.sopBindings.map((binding) => {
@@ -539,15 +686,31 @@ function routeSteps(decision: RuntimeLabRouteDecision): RuntimeLabDebugStep[] {
 
 function normalizeUsage(value: unknown): RuntimeLabUsage {
   const raw = objectValue(value)
-  const inputTokens = numberValue(raw?.inputTokens)
-  const outputTokens = numberValue(raw?.outputTokens)
-  const totalTokens = numberValue(raw?.totalTokens) || inputTokens + outputTokens
+  const inputTokens = usageNumber(raw, 'inputTokens', 'input_tokens', 'prompt_tokens', 'promptTokens')
+    || estimateUsageTokens(raw?.promptChars)
+  const outputTokens = usageNumber(raw, 'outputTokens', 'output_tokens', 'completion_tokens', 'completionTokens')
+    || estimateUsageTokens(raw?.completionChars)
+  const totalTokens = usageNumber(raw, 'totalTokens', 'total_tokens', 'totalTokens') || inputTokens + outputTokens
   return {
     inputTokens,
     outputTokens,
     totalTokens,
-    estimated: raw?.estimated === true,
+    estimated: raw?.estimated === true || Boolean(raw?.promptChars || raw?.completionChars),
   }
+}
+
+function usageNumber(raw: Record<string, unknown> | null, ...keys: string[]): number {
+  if (!raw) return 0
+  for (const key of keys) {
+    const value = numberValue(raw[key])
+    if (value > 0) return value
+  }
+  return 0
+}
+
+function estimateUsageTokens(value: unknown): number {
+  const chars = numberValue(value)
+  return chars > 0 ? Math.max(1, Math.round(chars / 4)) : 0
 }
 
 function stringValue(value: unknown): string {
@@ -557,6 +720,11 @@ function stringValue(value: unknown): string {
 function numberValue(value: unknown): number {
   const parsed = Number(value)
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
+}
+
+function finiteNumber(value: unknown, fallback: number): number {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : fallback
 }
 
 function objectValue(value: unknown): Record<string, unknown> | null {

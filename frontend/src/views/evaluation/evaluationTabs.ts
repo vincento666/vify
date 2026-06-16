@@ -11,31 +11,31 @@ export interface EvaluationTab {
 export const EVALUATION_TABS: EvaluationTab[] = [
   {
     key: 'experiments',
-    label: 'Experiments',
+    label: '实验',
     cnLabel: '实验',
     description: '验证 Agent 目标变更是否可以发布',
   },
   {
     key: 'eval-sets',
-    label: 'Eval Sets',
+    label: '评测集',
     cnLabel: '评测集',
     description: '维护可复用的回归用例',
   },
   {
     key: 'evaluators',
-    label: 'Evaluators',
+    label: '评估器',
     cnLabel: '评估器',
     description: '定义可解释的打分规则',
   },
   {
     key: 'runs',
-    label: 'Run Records',
+    label: '运行记录',
     cnLabel: '运行记录',
     description: '查看历史运行与报告',
   },
   {
     key: 'compare',
-    label: 'Compare Analysis',
+    label: '对比分析',
     cnLabel: '对比分析',
     description: '比较两次运行的提升与回退',
     disabled: false,

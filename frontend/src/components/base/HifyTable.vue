@@ -1,47 +1,40 @@
 <template>
   <div class="hify-table-wrap">
-    <el-table
-      v-loading="loading"
-      :data="rows"
-      :row-style="rowStyle"
-      stripe
-      style="width: 100%"
+    <a-table
+      class="hify-table"
+      :columns="antColumns"
+      :data-source="rows"
+      :loading="loading"
+      :pagination="false"
+      :custom-row="customRow"
+      :row-key="rowKey"
+      size="middle"
     >
-      <template v-for="col in visibleColumns">
-        <el-table-column
-          v-if="col.slot"
-          :key="`slot-${col.slot}`"
-          :label="col.label"
-          :width="normalizeElementTableSize(col.width)"
-          :min-width="normalizeElementTableSize(col.minWidth)"
-        >
-          <template #default="scope">
-            <slot :name="col.slot" v-bind="scope" />
-          </template>
-        </el-table-column>
-        <el-table-column
-          v-else
-          :key="`prop-${col.prop}`"
-          :prop="col.prop"
-          :label="col.label"
-          :width="normalizeElementTableSize(col.width)"
-          :min-width="normalizeElementTableSize(col.minWidth)"
-          :show-overflow-tooltip="col.ellipsis ?? true"
+      <template #bodyCell="{ column, record, index }">
+        <slot
+          v-if="column.customSlot"
+          :name="column.customSlot"
+          :row="record"
+          :column="column"
+          :index="index"
+          :$index="index"
         />
+        <template v-else>
+          {{ displayCellValue(record, column.dataIndex) }}
+        </template>
       </template>
-    </el-table>
-
-    <el-empty v-if="!loading && rows.length === 0" class="hify-table-empty" description="暂无数据" />
+    </a-table>
 
     <div v-if="showPagination && total > 0" class="hify-table-pagination">
-      <el-pagination
-        :current-page="page"
+      <a-pagination
+        :current="page"
         :page-size="pageSize"
         :total="total"
-        :page-sizes="[10, 20, 50]"
-        layout="total, sizes, prev, pager, next"
-        @current-change="onPageChange"
-        @size-change="onSizeChange"
+        :page-size-options="['10', '20', '50']"
+        :show-total="showTotal"
+        show-size-changer
+        @change="onPageChange"
+        @showSizeChange="onSizeChange"
       />
     </div>
   </div>
@@ -71,11 +64,13 @@ interface Props {
   api: (params: { page: number; pageSize: number }) => Promise<PageResult>
   showPagination?: boolean
   rowStyle?: Record<string, string>
+  rowKey?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
   showPagination: true,
   rowStyle: () => ({}),
+  rowKey: 'id',
 })
 
 const rows = ref<Record<string, unknown>[]>([])
@@ -93,6 +88,43 @@ const visibleColumns = computed(() =>
   props.columns.filter(col => !(isNarrow.value && col.hideOnNarrow))
 )
 
+interface AntTableColumn {
+  title: string
+  dataIndex?: string
+  key: string
+  width?: number | string
+  minWidth?: number | string
+  ellipsis?: boolean
+  customSlot?: string
+}
+
+const antColumns = computed<AntTableColumn[]>(() =>
+  visibleColumns.value.map((col) => ({
+    title: col.label,
+    dataIndex: col.prop,
+    key: col.slot ?? col.prop ?? col.label,
+    width: normalizeElementTableSize(col.width),
+    minWidth: normalizeElementTableSize(col.minWidth),
+    ellipsis: col.ellipsis ?? true,
+    customSlot: col.slot,
+  }))
+)
+
+const rowKey = (row: Record<string, unknown>) => {
+  const value = row[props.rowKey]
+  return typeof value === 'string' || typeof value === 'number' ? value : JSON.stringify(row)
+}
+
+const customRow = () => ({
+  style: props.rowStyle,
+})
+
+const displayCellValue = (record: Record<string, unknown>, dataIndex: unknown) => {
+  if (typeof dataIndex !== 'string') return ''
+  const value = record[dataIndex]
+  return value == null ? '' : String(value)
+}
+
 const load = async () => {
   loading.value = true
   try {
@@ -104,8 +136,17 @@ const load = async () => {
   }
 }
 
-const onPageChange = (v: number) => { page.value = v; load() }
-const onSizeChange = (v: number) => { pageSize.value = v; page.value = 1; load() }
+const onPageChange = (nextPage: number, nextPageSize?: number) => {
+  page.value = nextPage
+  if (nextPageSize) pageSize.value = nextPageSize
+  load()
+}
+const onSizeChange = (_current: number, nextPageSize: number) => {
+  pageSize.value = nextPageSize
+  page.value = 1
+  load()
+}
+const showTotal = (nextTotal: number) => `共 ${nextTotal} 条`
 
 const refresh = () => { page.value = 1; load() }
 
@@ -120,9 +161,14 @@ defineExpose({ refresh })
   gap: var(--space-4);
 }
 
-.hify-table-empty :deep(.el-empty__image) {
-  width: 5rem;
+.hify-table {
+  width: 100%;
 }
+
+.hify-table :deep(.ant-empty-image) {
+  height: 5rem;
+}
+
 .hify-table-pagination {
   display: flex;
   justify-content: flex-end;

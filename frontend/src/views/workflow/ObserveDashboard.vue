@@ -133,7 +133,7 @@ async function loadObserve() {
 async function selectRun(runId: number) {
   selectedRun.value = await getObserveRun(runId)
   if (normalizeObserveRunIdQuery(route.query.runId as string | string[] | undefined) !== runId) {
-    await router.replace({ path: '/observe', query: { ...route.query, runId: String(runId) } })
+    await router.replace({ name: 'HifyObserve', query: { ...route.query, runId: String(runId) } })
   }
 }
 

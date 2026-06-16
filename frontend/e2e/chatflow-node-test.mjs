@@ -65,11 +65,19 @@ try {
 
   await page.goto(`${baseUrl}/chatflows/${chatflow.id}/canvas`, { waitUntil: 'networkidle' })
   await page.locator('.coze-node.node-message').click()
-  await page.getByLabel('试运行当前节点').click()
+  const configPanel = page.getByTestId('node-config-panel')
+  await configPanel.waitFor({ state: 'visible', timeout: 5000 })
+  await configPanel.getByLabel('试运行当前节点').click()
 
   const drawer = page.locator('[data-testid="node-test-drawer"]')
   await drawer.waitFor({ state: 'visible', timeout: 5000 })
   const drawerText = await drawer.innerText()
+  for (const label of ['试运行', '查看日志', '试运行输入']) {
+    assert(drawerText.includes(label), `Expected chatflow node drawer to include ${label}, got ${drawerText}`)
+  }
+  for (const label of ['JSON模式', 'AI 补全']) {
+    assert(!drawerText.includes(label), `Expected chatflow node drawer not to include ${label}, got ${drawerText}`)
+  }
   assert(drawerText.includes('sys.query'), 'Expected sys.query fixture row')
   assert(drawerText.includes('sys.conversation_id'), 'Expected sys.conversation_id fixture row')
   assert(drawerText.includes('sys.user_id'), 'Expected sys.user_id fixture row')

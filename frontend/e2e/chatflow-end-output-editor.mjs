@@ -41,7 +41,8 @@ try {
   await inlinePicker.waitFor({ state: 'visible', timeout: 5000 })
   assert(await inlinePicker.locator('.variable-source-icon, svg, small').count() === 0, 'Inline variable picker should not render icons or descriptions')
   const inlinePickerText = await inlinePicker.innerText()
-  assert(inlinePickerText.includes('sys.query'), `END answer inline picker should expose upstream start query, got ${inlinePickerText}`)
+  assert(inlinePickerText.includes('output'), `END answer inline picker should expose local output variable names, got ${inlinePickerText}`)
+  assert(!inlinePickerText.includes('sys.query'), `END answer inline picker should not expose upstream start variables, got ${inlinePickerText}`)
   assert(!inlinePickerText.includes('{{'), `Inline variable picker should omit reference paths, got ${inlinePickerText}`)
   await answerTextarea.fill('112')
 

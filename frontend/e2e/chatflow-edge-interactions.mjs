@@ -73,16 +73,23 @@ try {
   await palette.waitFor({ state: 'visible', timeout: 5000 })
 
   const boxes = await page.evaluate(() => {
-    const button = document.querySelector('[data-testid="edge-insert-button"]')?.getBoundingClientRect()
-    const panel = document.querySelector('[data-testid="edge-insert-palette"]')?.getBoundingClientRect()
+    const buttonElement = document.querySelector('[data-testid="edge-insert-button"]')
+    const panelElement = document.querySelector('[data-testid="edge-insert-palette"]')
+    const button = buttonElement?.getBoundingClientRect()
+    const panel = panelElement?.getBoundingClientRect()
     return {
-      button: button ? { left: button.left, width: button.width } : null,
-      panel: panel ? { left: panel.left } : null,
+      button: button ? { left: button.left, top: button.top, right: button.right, bottom: button.bottom, width: button.width, height: button.height } : null,
+      panel: panel ? { left: panel.left, top: panel.top, right: panel.right, bottom: panel.bottom, width: panel.width, height: panel.height } : null,
+      buttonZIndex: buttonElement ? Number(window.getComputedStyle(buttonElement).zIndex || 0) : 0,
+      panelZIndex: panelElement ? Number(window.getComputedStyle(panelElement).zIndex || 0) : 0,
     }
   })
   assert(boxes.button && boxes.panel, `Expected edge insert button and palette boxes, got ${JSON.stringify(boxes)}`)
-  const buttonCenterX = boxes.button.left + boxes.button.width / 2
-  assert(Math.abs(boxes.panel.left - buttonCenterX) <= 2, `Expected palette left edge to align with button center: ${JSON.stringify(boxes)}`)
+  const overlapX = Math.max(0, Math.min(boxes.button.right, boxes.panel.right) - Math.max(boxes.button.left, boxes.panel.left))
+  const overlapY = Math.max(0, Math.min(boxes.button.bottom, boxes.panel.bottom) - Math.max(boxes.button.top, boxes.panel.top))
+  assert(overlapX * overlapY === 0, `Expected edge insert palette not to overlap plus button: ${JSON.stringify(boxes)}`)
+  assert(boxes.panel.left >= boxes.button.right + 4, `Expected edge insert palette to open away from plus button: ${JSON.stringify(boxes)}`)
+  assert(boxes.panelZIndex > boxes.buttonZIndex, `Expected palette z-index above plus button: ${JSON.stringify(boxes)}`)
 
   await palette.getByRole('button', { name: '大模型', exact: true }).click()
   await page.locator('.vue-flow__node[data-id="llm_1"]').waitFor({ state: 'visible', timeout: 5000 })

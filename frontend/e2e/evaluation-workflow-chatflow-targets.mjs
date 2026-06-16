@@ -85,19 +85,48 @@ async function assertBodyIncludes(page, text) {
   assert(body.includes(text), `Expected page body to include: ${text}`)
 }
 
+async function unwrapResponse(response, label) {
+  assert(response.ok(), `${label} HTTP ${response.status()}`)
+  const payload = await response.json()
+  assert(payload.code === 200, `${label} API ${payload.message}`)
+  return payload.data
+}
+
+async function selectOnlyEvaluator(page, evaluatorName) {
+  const rows = page.locator('.evaluator-selection-row')
+  const count = await rows.count()
+  for (let index = 0; index < count; index += 1) {
+    const row = rows.nth(index)
+    const checkbox = row.locator('input[type="checkbox"]')
+    const isTarget = (await row.innerText()).includes(evaluatorName)
+    await checkbox.setChecked(isTarget)
+  }
+}
+
 async function createAndRunExperiment(page, targetType, targetName, evalSetName, evaluatorName, experimentName) {
   await page.getByTestId('create-experiment').click()
   await page.getByTestId('experiment-name').fill(experimentName)
+  await page.getByTestId('experiment-step-next').click()
+  await page.getByTestId('experiment-eval-set').selectOption({ label: `${evalSetName}（1 条用例）` })
+  await page.getByTestId('experiment-step-next').click()
   await page.getByTestId('experiment-target-type').selectOption(targetType)
   await page.getByTestId('experiment-target').selectOption({ label: targetName })
-  await page.getByTestId('experiment-eval-set').selectOption({ label: `${evalSetName} (1 cases)` })
-  await page.locator('label', { hasText: evaluatorName }).locator('input[type="checkbox"]').setChecked(true)
-  await page.getByTestId('save-run-experiment').click()
-  await page.locator('.el-dialog', { hasText: '创建实验' }).waitFor({ state: 'hidden', timeout: 10000 })
+  await page.getByTestId('experiment-step-next').click()
+  await selectOnlyEvaluator(page, evaluatorName)
+  await page.getByTestId('experiment-step-next').click()
   await assertBodyIncludes(page, experimentName)
-  await assertBodyIncludes(page, 'COMPLETED')
-  await assertBodyIncludes(page, '100.0%')
-  await assertBodyIncludes(page, '0 failed')
+  await assertBodyIncludes(page, targetType)
+  const runResponse = page.waitForResponse((response) =>
+    response.url().includes('/api/v1/evaluation-experiments/')
+      && response.url().endsWith('/runs')
+      && response.request().method() === 'POST',
+  )
+  await page.getByTestId('save-run-experiment').click()
+  const run = await unwrapResponse(await runResponse, `run ${targetType} experiment`)
+  assert(run.status === 'COMPLETED', `Expected completed ${targetType} run, got ${run.status}`)
+  assert(run.passRate === 1, `Expected 100% ${targetType} pass rate, got ${run.passRate}`)
+  assert(run.failedCases === 0, `Expected 0 failed ${targetType} cases, got ${run.failedCases}`)
+  await page.locator('.experiment-card', { hasText: experimentName }).waitFor({ state: 'visible', timeout: 10000 })
 }
 
 const data = await seed()
@@ -106,8 +135,6 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 
 try {
   await page.goto(`${baseUrl}/evaluation`, { waitUntil: 'networkidle' })
-  await assertBodyIncludes(page, 'Workflow')
-  await assertBodyIncludes(page, 'Chatflow')
 
   await createAndRunExperiment(
     page,

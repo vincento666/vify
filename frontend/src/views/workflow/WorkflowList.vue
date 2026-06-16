@@ -7,64 +7,73 @@
         <h2 class="page-title">工作流</h2>
         <p class="page-desc">管理智能客服分类等工作流配置</p>
       </div>
-      <el-button type="primary" @click="$router.push('/workflows/create')">
-        <el-icon><Plus /></el-icon>新建工作流
-      </el-button>
+      <a-button type="primary" @click="$router.push({ name: 'HifyWorkflowsCreate' })">
+        <template #icon><PlusOutlined /></template>
+        新建工作流
+      </a-button>
     </div>
 
-    <el-table :data="workflows" v-loading="loading" class="workflow-table" stripe>
-      <el-table-column prop="name" label="名称" :min-width="workflowTableColumnWidths.name">
-        <template #default="{ row }">
+    <a-table :data-source="workflows" :loading="loading" class="workflow-table" row-key="id" :pagination="false" size="middle">
+      <a-table-column data-index="name" title="名称" :width="workflowTableColumnWidths.name">
+        <template #default="{ record: row }">
           <div class="wf-name">
-            <el-icon class="wf-icon"><Share /></el-icon>
+            <ShareAltOutlined class="wf-icon" />
             <span>{{ row.name }}</span>
           </div>
         </template>
-      </el-table-column>
-      <el-table-column prop="description" label="描述" :min-width="workflowTableColumnWidths.description" show-overflow-tooltip />
-      <el-table-column prop="status" label="状态" :width="workflowTableColumnWidths.status">
-        <template #default="{ row }">
-          <el-tag :type="row.status === 'PUBLISHED' ? 'success' : row.status === 'DISABLED' ? 'danger' : 'info'" size="small">
+      </a-table-column>
+      <a-table-column data-index="description" title="描述" :width="workflowTableColumnWidths.description" ellipsis />
+      <a-table-column data-index="status" title="状态" :width="workflowTableColumnWidths.status">
+        <template #default="{ record: row }">
+          <a-tag :color="statusColor(row.status)">
             {{ statusLabel(row.status) }}
-          </el-tag>
+          </a-tag>
         </template>
-      </el-table-column>
-      <el-table-column label="更新时间" :width="workflowTableColumnWidths.updatedAt">
-        <template #default="{ row }">{{ formatTime(row.updatedAt || row.createdAt) }}</template>
-      </el-table-column>
-      <el-table-column label="操作" :width="workflowTableColumnWidths.actions" fixed="right">
-        <template #default="{ row }">
-          <el-button size="small" @click="viewDetail(row)">查看</el-button>
-          <el-button size="small" type="primary" plain @click="$router.push(`/workflows/${row.id}/canvas`)">画布</el-button>
-          <el-popconfirm title="确认删除这个工作流？" @confirm="handleDelete(row.id)">
-            <template #reference>
-              <el-button size="small" type="danger">删除</el-button>
-            </template>
-          </el-popconfirm>
+      </a-table-column>
+      <a-table-column title="更新时间" :width="workflowTableColumnWidths.updatedAt">
+        <template #default="{ record: row }">{{ formatTime(row.updatedAt || row.createdAt) }}</template>
+      </a-table-column>
+      <a-table-column title="操作" :width="workflowTableColumnWidths.actions" fixed="right">
+        <template #default="{ record: row }">
+          <div class="action-buttons">
+            <a-button size="small" @click="viewDetail(row)">查看</a-button>
+            <a-button size="small" type="primary" ghost @click="$router.push({ name: 'HifyWorkflowsCanvas', params: { id: row.id } })">画布</a-button>
+            <a-popconfirm title="确认删除这个工作流？" ok-text="确认" cancel-text="取消" @confirm="handleDelete(row.id)">
+              <a-button size="small" danger>删除</a-button>
+            </a-popconfirm>
+          </div>
         </template>
-      </el-table-column>
-    </el-table>
+      </a-table-column>
+    </a-table>
 
     <!-- 详情抽屉 -->
-    <el-drawer v-model="drawerVisible" title="工作流详情" size="37.5rem" direction="rtl">
+    <a-drawer v-model:open="drawerVisible" width="37.5rem" placement="right" :closable="false" @close="drawerVisible = false">
+      <template #title>
+        <div class="drawer-title">
+          <span>工作流详情</span>
+          <button type="button" class="drawer-close-button" aria-label="关闭工作流详情" @click="drawerVisible = false">
+            <CloseOutlined />
+          </button>
+        </div>
+      </template>
       <div v-if="detail" class="detail-panel">
         <div class="detail-meta">
-          <el-descriptions :column="2" border>
-            <el-descriptions-item label="名称">{{ detail.name }}</el-descriptions-item>
-            <el-descriptions-item label="状态">
-              <el-tag :type="detail.status === 'PUBLISHED' ? 'success' : 'info'" size="small">
+          <a-descriptions :column="2" bordered size="small">
+            <a-descriptions-item label="名称">{{ detail.name }}</a-descriptions-item>
+            <a-descriptions-item label="状态">
+              <a-tag :color="statusColor(detail.status)">
                 {{ statusLabel(detail.status) }}
-              </el-tag>
-            </el-descriptions-item>
-            <el-descriptions-item label="描述" :span="2">{{ detail.description || '-' }}</el-descriptions-item>
-          </el-descriptions>
+              </a-tag>
+            </a-descriptions-item>
+            <a-descriptions-item label="描述" :span="2">{{ detail.description || '-' }}</a-descriptions-item>
+          </a-descriptions>
         </div>
 
         <div class="detail-section">
           <h4>节点 ({{ detail.nodes.length }})</h4>
           <div v-for="node in detail.nodes" :key="node.nodeKey" class="node-card">
             <div class="node-header">
-              <el-tag :type="nodeTypeColor(node.type)" size="small" effect="dark">{{ node.type }}</el-tag>
+              <a-tag :color="nodeTypeColor(node.type)">{{ node.type }}</a-tag>
               <span class="node-key">{{ node.nodeKey }}</span>
               <span class="node-name">{{ node.name }}</span>
             </div>
@@ -78,21 +87,21 @@
           <h4>连线 ({{ detail.edges.length }})</h4>
           <div v-for="(edge, i) in detail.edges" :key="i" class="edge-row">
             <span class="edge-source">{{ edge.sourceNodeKey }}</span>
-            <el-icon><Right /></el-icon>
+            <RightOutlined />
             <span class="edge-target">{{ edge.targetNodeKey }}</span>
-            <el-tag v-if="edge.condition" size="small" type="warning">{{ edge.condition }}</el-tag>
-            <el-tag v-else size="small" type="info">无条件</el-tag>
+            <a-tag v-if="edge.condition" color="warning">{{ edge.condition }}</a-tag>
+            <a-tag v-else color="default">无条件</a-tag>
           </div>
         </div>
       </div>
-    </el-drawer>
+    </a-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Plus, Share, Right } from '@element-plus/icons-vue'
+import { message } from 'ant-design-vue'
+import { CloseOutlined, PlusOutlined, RightOutlined, ShareAltOutlined } from '@ant-design/icons-vue'
 import { listWorkflows, getWorkflow, deleteWorkflow, type WorkflowListItem, type WorkflowDetail } from '@/api/workflow'
 import WorkflowModuleTabs from './WorkflowModuleTabs.vue'
 
@@ -101,14 +110,12 @@ const workflows = ref<WorkflowListItem[]>([])
 const drawerVisible = ref(false)
 const detail = ref<WorkflowDetail | null>(null)
 
-// Element Plus table column props parse CSS unit strings as pixel integers,
-// so rem strings collapse columns. Keep these numeric props scoped here.
 const workflowTableColumnWidths = {
-  name: 220,
-  description: 260,
-  status: 110,
-  updatedAt: 180,
-  actions: 230,
+  name: '13.75rem',
+  description: '16.25rem',
+  status: '6.875rem',
+  updatedAt: '11.25rem',
+  actions: '14.375rem',
 }
 
 async function fetchList() {
@@ -129,7 +136,7 @@ async function viewDetail(row: WorkflowListItem) {
 
 async function handleDelete(id: number) {
   await deleteWorkflow(id)
-  ElMessage.success('已删除')
+  message.success('已删除')
   fetchList()
 }
 
@@ -137,12 +144,16 @@ function statusLabel(s: string) {
   return { DRAFT: '草稿', PUBLISHED: '已发布', DISABLED: '已禁用' }[s] || s
 }
 
+function statusColor(s: string) {
+  return { DRAFT: 'default', PUBLISHED: 'success', DISABLED: 'error' }[s] || 'default'
+}
+
 function nodeTypeColor(type: string) {
   const map: Record<string, string> = {
-    START: 'success', END: 'danger', LLM: 'primary', CONDITION: 'warning',
-    KNOWLEDGE: '', API_CALL: 'info'
+    START: 'success', END: 'error', LLM: 'processing', CONDITION: 'warning',
+    KNOWLEDGE: 'default', API_CALL: 'cyan'
   }
-  return map[type] || ''
+  return map[type] || 'default'
 }
 
 function formatTime(t: string) {
@@ -162,47 +173,73 @@ onMounted(fetchList)
   align-items: flex-start;
   margin-bottom: var(--space-5);
 }
-.page-title { margin: 0 0 var(--space-1); font-size: var(--text-lg); font-weight: 600; color: var(--el-text-color-primary); }
-.page-desc { margin: 0; font-size: var(--text-sm); color: var(--el-text-color-secondary); }
+.page-title { margin: 0 0 var(--space-1); font-size: var(--text-lg); font-weight: 600; color: var(--color-text-primary); }
+.page-desc { margin: 0; font-size: var(--text-sm); color: var(--color-text-secondary); }
 
 .workflow-table { width: 100%; }
 
 .wf-name { display: flex; align-items: center; gap: var(--space-2); }
-.wf-icon { color: var(--el-color-primary); }
+.wf-icon { color: var(--color-primary-600); }
+.action-buttons { display: flex; align-items: center; gap: var(--space-2); }
 
 .detail-section { margin-top: var(--space-5); }
-.detail-section h4 { margin: 0 0 var(--space-3); font-size: var(--text-sm); font-weight: 600; color: var(--el-text-color-primary); }
+.detail-section h4 { margin: 0 0 var(--space-3); font-size: var(--text-sm); font-weight: 600; color: var(--color-text-primary); }
 
 .node-card {
-  border: 1px solid var(--el-border-color-light);
+  border: 1px solid var(--color-border-default);
   border-radius: var(--radius-sm);
   padding: 0.625rem 0.75rem;
   margin-bottom: var(--space-2);
-  background: var(--el-fill-color-extra-light);
+  background: var(--color-bg-page);
 }
 .node-header { display: flex; align-items: center; gap: var(--space-2); }
-.node-key { font-family: monospace; font-size: var(--text-xs); color: var(--el-text-color-secondary); }
-.node-name { font-size: var(--text-sm); color: var(--el-text-color-primary); }
+.node-key { font-family: monospace; font-size: var(--text-xs); color: var(--color-text-secondary); }
+.node-name { font-size: var(--text-sm); color: var(--color-text-primary); }
 .node-config {
   margin-top: var(--space-2);
   padding: var(--space-2);
-  background: var(--el-fill-color);
+  background: var(--color-bg-hover);
   border-radius: var(--radius-xs);
   overflow: auto;
   max-height: 7.5rem;
 }
-.node-config pre { margin: 0; font-size: 0.6875rem; line-height: 1.5; color: var(--el-text-color-regular); }
+.node-config pre { margin: 0; font-size: 0.6875rem; line-height: 1.5; color: var(--color-text-secondary); }
 
 .edge-row {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   padding: 0.375rem 0;
-  border-bottom: 1px solid var(--el-border-color-extra-light);
+  border-bottom: 1px solid var(--color-border-default);
   font-size: var(--text-sm);
 }
-.edge-source { font-family: monospace; color: var(--el-color-primary); }
-.edge-target { font-family: monospace; color: var(--el-color-success); }
+.edge-source { font-family: monospace; color: var(--color-primary-600); }
+.edge-target { font-family: monospace; color: var(--color-success-600); }
 
 .detail-meta { margin-bottom: var(--space-4); }
+
+.drawer-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.drawer-close-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.drawer-close-button:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
 </style>

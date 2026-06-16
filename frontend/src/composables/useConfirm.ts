@@ -1,5 +1,25 @@
-import { ElMessageBox } from 'element-plus'
+import { Modal } from 'ant-design-vue'
 import { notifySuccess } from '@/utils/notify'
+
+const confirmCancelledError = () =>
+  Object.assign(new Error('confirm cancelled'), { code: 'CONFIRM_CANCELLED' })
+
+function confirmWarning(content: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    Modal.confirm({
+      title: '确认操作',
+      content,
+      okText: '确认',
+      cancelText: '取消',
+      onOk: () => {
+        resolve()
+      },
+      onCancel: () => {
+        reject(confirmCancelledError())
+      },
+    })
+  })
+}
 
 export function useConfirm() {
   const confirm = async (
@@ -7,11 +27,7 @@ export function useConfirm() {
     apiFn: () => Promise<unknown>,
     successMsg = '操作成功'
   ): Promise<boolean> => {
-    await ElMessageBox.confirm(message, '确认操作', {
-      confirmButtonText: '确认',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
+    await confirmWarning(message)
     await apiFn()
     notifySuccess(successMsg)
     return true

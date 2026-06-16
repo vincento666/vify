@@ -1,3 +1,5 @@
+import type { RouteLocationRaw } from 'vue-router'
+
 export interface ObserveRedirectDetail {
   flowType?: string | null
   workflowId?: number | string | null
@@ -15,13 +17,16 @@ export function buildObserveComposerRedirect({
 }: {
   runId: number
   detail: ObserveRedirectDetail | null | undefined
-}): string {
+}): RouteLocationRaw {
   const ownerId = Number(detail?.workflowId || 0)
   if (!Number.isInteger(runId) || runId <= 0 || !Number.isInteger(ownerId) || ownerId <= 0) {
-    return '/workflows'
+    return { name: 'HifyWorkflows' }
   }
 
   const flowType = String(detail?.flowType || '').toUpperCase()
-  const scope = flowType === 'CHATFLOW' ? 'chatflows' : 'workflows'
-  return `/${scope}/${ownerId}/canvas?runId=${runId}&debug=1`
+  return {
+    name: flowType === 'CHATFLOW' ? 'HifyChatflowsCanvas' : 'HifyWorkflowsCanvas',
+    params: { id: ownerId },
+    query: { runId: String(runId), debug: '1' },
+  }
 }

@@ -20,9 +20,11 @@ try {
   await page.locator('[data-testid="node-config-panel"]').waitFor({ state: 'visible', timeout: 5000 })
 
   const panel = page.locator('[data-testid="node-config-panel"]')
-  await panel.locator('input').nth(0).fill('意图识别')
-  await panel.locator('textarea').fill('请识别 {{start.USER_INPUT}} 的用户意图')
-  await panel.locator('input').nth(1).fill('intent')
+  await panel.getByRole('button', { name: '编辑节点名称', exact: true }).click()
+  await panel.getByRole('textbox', { name: '节点名称', exact: true }).fill('意图识别')
+  await panel.getByRole('button', { name: '确认节点名称', exact: true }).click()
+  await panel.getByPlaceholder('输入用户提示词，可使用 {{variable}} 引用参数').fill('请识别 {{start.USER_INPUT}} 的用户意图')
+  await panel.locator('[data-testid="output-parameter-row"]').first().getByPlaceholder('变量名').fill('intent')
 
   await page.locator('.canvas-actions').getByRole('button', { name: '保存', exact: true }).click()
   await page.waitForURL('**/workflows/*/canvas', { timeout: 10000 })
@@ -30,8 +32,8 @@ try {
 
   await page.locator('.coze-node', { hasText: '意图识别' }).click()
   await page.locator('[data-testid="node-config-panel"]').waitFor({ state: 'visible', timeout: 5000 })
-  const promptValue = await panel.locator('textarea').inputValue()
-  const outputValue = await panel.locator('input').nth(1).inputValue()
+  const promptValue = await panel.getByPlaceholder('输入用户提示词，可使用 {{variable}} 引用参数').inputValue()
+  const outputValue = await panel.locator('[data-testid="output-parameter-row"]').first().getByPlaceholder('变量名').inputValue()
 
   assert(promptValue.includes('{{start.USER_INPUT}}'), 'Expected prompt config to persist after reopen')
   assert(outputValue === 'intent', 'Expected output variable config to persist after reopen')

@@ -12,7 +12,13 @@ describe('evaluation tabs', () => {
       'runs',
       'compare',
     ])
-    expect(EVALUATION_TABS[0].label).toBe('Experiments')
+    expect(EVALUATION_TABS.map((tab) => tab.label)).toEqual([
+      '实验',
+      '评测集',
+      '评估器',
+      '运行记录',
+      '对比分析',
+    ])
     expect(EVALUATION_TABS[4].disabled).toBe(false)
   })
 

@@ -5,7 +5,7 @@
         <h1>API Resource</h1>
         <p>配置 HTTP 接口，测试后包装成工作流可调用的业务工具。</p>
       </div>
-      <el-button @click="router.push('/workflows')">返回工作流</el-button>
+      <a-button @click="router.push({ name: 'HifyWorkflows' })">返回工作流</a-button>
     </header>
 
     <section class="api-resource-grid">
@@ -14,23 +14,23 @@
           <strong>技术资源</strong>
           <span>HTTP endpoint</span>
         </div>
-        <el-input v-model="resourceForm.name" data-testid="api-resource-name" placeholder="资源名称" />
+        <a-input v-model:value="resourceForm.name" data-testid="api-resource-name" placeholder="资源名称" />
         <div class="method-row">
-          <el-select v-model="resourceForm.method" data-testid="api-resource-method" aria-label="请求方法">
-            <el-option label="GET" value="GET" />
-            <el-option label="POST" value="POST" />
-            <el-option label="PUT" value="PUT" />
-            <el-option label="DELETE" value="DELETE" />
-          </el-select>
-          <el-input v-model="resourceForm.endpoint" data-testid="api-resource-endpoint" placeholder="https://api.example.com/orders/{{orderId}}" />
+          <a-select :virtual="false" v-model:value="resourceForm.method" data-testid="api-resource-method" aria-label="请求方法">
+            <a-select-option value="GET">GET</a-select-option>
+            <a-select-option value="POST">POST</a-select-option>
+            <a-select-option value="PUT">PUT</a-select-option>
+            <a-select-option value="DELETE">DELETE</a-select-option>
+          </a-select>
+          <a-input v-model:value="resourceForm.endpoint" data-testid="api-resource-endpoint" placeholder="https://api.example.com/orders/{{orderId}}" />
         </div>
-        <el-input v-model="resourceForm.description" placeholder="说明" />
-        <el-input v-model="headersText" type="textarea" :rows="3" data-testid="api-resource-headers" placeholder='[{"name":"X-Token","value":"secret","sensitive":true}]' />
-        <el-input v-model="inputSchemaText" type="textarea" :rows="5" data-testid="api-resource-input-schema" placeholder='{"type":"object","properties":{"orderId":{"type":"string"}},"required":["orderId"]}' />
-        <el-input v-model="testPayloadText" type="textarea" :rows="3" data-testid="api-resource-test-payload" placeholder='{"orderId":"A-100"}' />
+        <a-input v-model:value="resourceForm.description" placeholder="说明" />
+        <a-textarea v-model:value="headersText" :rows="3" data-testid="api-resource-headers" placeholder='[{"name":"X-Token","value":"secret","sensitive":true}]' />
+        <a-textarea v-model:value="inputSchemaText" :rows="5" data-testid="api-resource-input-schema" placeholder='{"type":"object","properties":{"orderId":{"type":"string"}},"required":["orderId"]}' />
+        <a-textarea v-model:value="testPayloadText" :rows="3" data-testid="api-resource-test-payload" placeholder='{"orderId":"A-100"}' />
         <div class="panel-actions">
-          <el-button native-type="submit" type="primary" :loading="savingResource" data-testid="api-resource-create">创建资源</el-button>
-          <el-button :disabled="!selectedResource" :loading="testingResource" data-testid="api-resource-test" @click="testSelectedResource">测试调用</el-button>
+          <a-button html-type="submit" type="primary" :loading="savingResource" data-testid="api-resource-create">创建资源</a-button>
+          <a-button :disabled="!selectedResource" :loading="testingResource" data-testid="api-resource-test" @click="testSelectedResource">测试调用</a-button>
         </div>
         <pre v-if="testResult" class="result-box" data-testid="api-resource-test-result">{{ JSON.stringify(testResult, null, 2) }}</pre>
       </form>
@@ -40,23 +40,24 @@
           <strong>业务工具</strong>
           <span>Tool Builder Lite</span>
         </div>
-        <el-select v-model="toolForm.apiResourceId" data-testid="api-tool-resource" placeholder="选择 API Resource">
-          <el-option
+        <a-select :virtual="false" v-model:value="toolForm.apiResourceId" data-testid="api-tool-resource" placeholder="选择 API Resource">
+          <a-select-option
             v-for="resource in resources"
             :key="resource.id"
-            :label="resource.name"
             :value="resource.id"
-          />
-        </el-select>
-        <el-input v-model="toolForm.name" data-testid="api-tool-name" placeholder="工具名称，例如 lookup_order_api" />
-        <el-input v-model="toolForm.displayName" placeholder="显示名" />
-        <el-input v-model="toolForm.description" placeholder="说明" />
+          >
+            {{ resource.name }}
+          </a-select-option>
+        </a-select>
+        <a-input v-model:value="toolForm.name" data-testid="api-tool-name" placeholder="工具名称，例如 lookup_order_api" />
+        <a-input v-model:value="toolForm.displayName" placeholder="显示名" />
+        <a-input v-model:value="toolForm.description" placeholder="说明" />
         <label class="model-callable-row">
           <span>模型可调用</span>
-          <el-switch v-model="toolForm.modelCallable" data-testid="api-tool-model-callable" />
+          <a-switch v-model:checked="toolForm.modelCallable" data-testid="api-tool-model-callable" />
         </label>
         <div class="panel-actions">
-          <el-button native-type="submit" type="primary" :disabled="!toolForm.apiResourceId" :loading="savingTool" data-testid="api-tool-create">创建 Tool</el-button>
+          <a-button html-type="submit" type="primary" :disabled="!toolForm.apiResourceId" :loading="savingTool" data-testid="api-tool-create">创建 Tool</a-button>
         </div>
         <div class="tool-list" data-testid="api-tool-list">
           <button
@@ -101,7 +102,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { message } from 'ant-design-vue'
 
 import {
   createApiResource,
@@ -187,7 +188,7 @@ async function submitResource() {
       timeoutMs: 30000,
       enabled: true,
     })
-    ElMessage.success('API Resource 已创建')
+    message.success('API Resource 已创建')
     await loadData()
     const created = resources.value.find((item) => Number(item.id) === Number(resource.id))
     if (created) selectResource(created)
@@ -223,7 +224,7 @@ async function submitTool() {
       retryCount: 0,
       errorBehavior: 'fail',
     })
-    ElMessage.success('Tool 已创建')
+    message.success('Tool 已创建')
     await loadData()
   } finally {
     savingTool.value = false

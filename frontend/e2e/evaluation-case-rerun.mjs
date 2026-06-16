@@ -87,19 +87,22 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 
 try {
   await page.goto(`${baseUrl}/evaluation`, { waitUntil: 'networkidle' })
-  await page.getByRole('tab', { name: 'Run Records' }).click()
-  const runCard = page.locator('.run-card', { hasText: `Experiment #${seeded.experiment.id}` })
+  await page.getByRole('tab', { name: '运行记录' }).click()
+  const runCard = page.locator('.run-card').filter({
+    has: page.locator('p').filter({ hasText: new RegExp(`^实验 #${seeded.experiment.id}$`) }),
+  })
+  await runCard.waitFor({ state: 'visible', timeout: 10000 })
+  assert(await runCard.count() === 1, `Expected one run card for experiment ${seeded.experiment.id}`)
   await runCard.getByRole('button', { name: '查看报告' }).click()
 
   const report = page.locator('.report-panel')
-  await report.locator('.summary-metrics').getByText('1 failed', { exact: true }).waitFor({ state: 'visible', timeout: 10000 })
+  const failedMetric = report.locator('.metric-item').filter({ hasText: '失败' }).locator('strong')
+  await failedMetric.getByText('1', { exact: true }).waitFor({ state: 'visible', timeout: 10000 })
   await report.getByText('Workflow says refund only').waitFor({ state: 'visible', timeout: 10000 })
   await page.getByTestId('rerun-case-result').click()
-  await page.waitForFunction(() => document.querySelector('.report-panel')?.textContent?.includes('0 failed'), null, {
-    timeout: 10000,
-  })
+  await failedMetric.getByText('0', { exact: true }).waitFor({ state: 'visible', timeout: 10000 })
   const reportText = await report.innerText()
-  assert(reportText.includes('Pass 100.0%'), 'Expected rerun report to show 100% pass rate')
+  assert(reportText.includes('通过率 100.0%'), 'Expected rerun report to show 100% pass rate')
   assert(reportText.includes('PASSED'), 'Expected rerun case status to be PASSED')
 
   if (screenshotPath) {

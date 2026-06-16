@@ -1,6 +1,6 @@
 import { get, post, put, del } from '@/utils/request'
 
-export type ProviderType = 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'AZURE_OPENAI' | 'OLLAMA' | 'OPENAI_COMPATIBLE'
+export type ProviderType = 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'AZURE_OPENAI' | 'OLLAMA' | 'OPENAI_COMPATIBLE' | 'DEEPSEEK'
 export type HealthStatus = 'UP' | 'DOWN' | 'DEGRADED' | 'UNKNOWN'
 
 export interface ProviderHealth {
@@ -14,7 +14,9 @@ export interface ModelConfig {
   id: number
   name: string
   modelId: string
-  enabled: number
+  displayName?: string
+  description?: string
+  enabled: boolean
 }
 
 export interface ProviderVO {
@@ -61,6 +63,21 @@ export interface ConnectionTestResult {
   errorMessage: string | null
 }
 
+export interface ModelConnectivityUsage {
+  inputTokens: number
+  outputTokens: number
+  totalTokens: number
+}
+
+export interface ModelConnectivityTestResult {
+  ok: boolean
+  model: string
+  elapsedMs: number
+  usage: ModelConnectivityUsage
+  replyPreview: string | null
+  error: string | null
+}
+
 export interface PageResult<T> {
   list: T[]
   total: number
@@ -85,3 +102,6 @@ export const deleteProvider = (id: number) =>
 
 export const testConnection = (id: number) =>
   post<ConnectionTestResult>(`/v1/providers/${id}/test-connection`, {})
+
+export const testProviderModelConnectivity = (providerId: number, modelConfigId: number) =>
+  post<ModelConnectivityTestResult>(`/v1/providers/${providerId}/models/${modelConfigId}/connectivity`, {})

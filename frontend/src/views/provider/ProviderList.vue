@@ -8,7 +8,7 @@
       </div>
       <div class="page-header-actions">
         <button class="btn-primary" @click="dialogRef?.open()">
-          <el-icon><Plus /></el-icon>
+          <span class="button-icon"><PlusOutlined /></span>
           新增提供商
         </button>
       </div>
@@ -19,64 +19,89 @@
       <HifyTable
         :columns="columns"
         :api="fetchProviders"
-        :row-style="{ height: '52px' }"
+        :row-style="providerTableRowStyle"
         ref="tableRef"
       >
         <!-- 启用状态列 -->
         <template #status="{ row }">
-          <el-tag :type="row.enabled ? 'success' : 'info'" size="small">
+          <a-tag :color="row.enabled ? 'success' : 'default'" class="hify-tag">
             {{ row.enabled ? '启用' : '禁用' }}
-          </el-tag>
+          </a-tag>
         </template>
         <!-- 健康状态列 -->
         <template #health="{ row }">
           <template v-if="row.health">
-            <el-tag :type="healthTagType(row.health.status)" size="small">
+            <a-tag :color="healthTagType(row.health.status)" class="hify-tag">
               {{ healthLabel(row.health.status) }}
-            </el-tag>
+            </a-tag>
             <span v-if="row.health.latencyMs != null" class="latency-ms">
               {{ row.health.latencyMs }}ms
             </span>
           </template>
-          <el-tag v-else type="info" size="small">未知</el-tag>
+          <a-tag v-else color="default" class="hify-tag">未知</a-tag>
         </template>
         <!-- 模型数列 -->
         <template #models="{ row }">
-          <el-popover
+          <a-popover
             v-if="row.models && row.models.length > 0"
-            placement="bottom-start"
-            :width="300"
+            placement="bottomLeft"
             trigger="click"
+            :overlay-style="{ width: providerModelPopoverWidth }"
           >
-            <template #reference>
-              <span class="model-count-link">{{ enabledModelCount(row) }} 个</span>
-            </template>
-            <div class="model-list-popup">
-              <div class="model-list-title">已配置模型（{{ row.models.length }} 个）</div>
-              <div
-                v-for="m in row.models"
-                :key="m.id"
-                class="model-list-item"
-              >
-                <span>{{ m.displayName || m.modelId }}</span>
-                <el-tag :type="m.enabled ? 'success' : 'info'" size="small">
-                  {{ m.enabled ? '启用' : '禁用' }}
-                </el-tag>
+            <template #content>
+              <div class="model-list-popup">
+                <div class="model-list-title">已配置模型（{{ row.models.length }} 个）</div>
+                <div
+                  v-for="m in row.models"
+                  :key="m.id"
+                  class="model-list-item"
+                  :data-testid="`provider-model-row-${m.id}`"
+                >
+                  <div class="model-list-main">
+                    <div class="model-list-line">
+                      <span class="model-list-name">{{ m.displayName || m.modelId }}</span>
+                      <a-tag :color="m.enabled ? 'success' : 'default'" class="hify-tag">
+                        {{ m.enabled ? '启用' : '禁用' }}
+                      </a-tag>
+                    </div>
+                    <div
+                      v-if="modelTestResults[modelTestKey(row.id, m.id)]"
+                      class="model-test-result"
+                      :class="modelTestResults[modelTestKey(row.id, m.id)]?.ok ? 'success' : 'failure'"
+                      :data-testid="`provider-model-test-result-${m.id}`"
+                    >
+                      <span class="status-icon">
+                        <CheckCircleOutlined v-if="modelTestResults[modelTestKey(row.id, m.id)]?.ok" />
+                        <CloseCircleOutlined v-else />
+                      </span>
+                      <span>{{ modelTestResultText(modelTestResults[modelTestKey(row.id, m.id)]!) }}</span>
+                    </div>
+                  </div>
+                  <a-button
+                    type="link"
+                    size="small"
+                    :loading="testingModelKey === modelTestKey(row.id, m.id)"
+                    :disabled="!m.enabled"
+                    :data-testid="`provider-model-test-${m.id}`"
+                    @click.stop="onTestModelConnection(row, m)"
+                  >测试</a-button>
+                </div>
               </div>
-            </div>
-          </el-popover>
+            </template>
+            <span class="model-count-link">{{ enabledModelCount(row) }} 个</span>
+          </a-popover>
           <span v-else class="text-muted">0 个</span>
         </template>
         <!-- 操作列 -->
         <template #action="{ row }">
-          <el-button type="primary" link size="small" @click="dialogRef?.open(row)">编辑</el-button>
-          <el-button
-            type="warning" link size="small"
-            style="margin-left: 4px;"
+          <a-button type="link" size="small" @click="dialogRef?.open(row)">编辑</a-button>
+          <a-button
+            type="link" size="small"
+            class="provider-action-link"
             :loading="testingId === row.id"
             @click="onTestConnection(row)"
-          >测试</el-button>
-          <el-button type="danger" link size="small" style="margin-left: 4px;" @click="onDelete(row)">删除</el-button>
+          >测试</a-button>
+          <a-button type="link" danger size="small" class="provider-action-link" @click="onDelete(row)">删除</a-button>
         </template>
       </HifyTable>
     </div>
@@ -86,28 +111,26 @@
       ref="dialogRef"
       :title="dialogTitle"
       :rules="rules"
-      width="520px"
-      label-width="100px"
+      width="32.5rem"
+      label-width="6.25rem"
       @submit="onSubmit"
     >
       <template #default="{ form }">
-        <el-form-item label="名称" prop="name">
-          <el-input v-model="form.name" placeholder="请输入提供商名称" />
-        </el-form-item>
-        <el-form-item label="类型" prop="type">
-          <el-select v-model="form.type" placeholder="请选择类型" style="width: 100%">
-            <el-option v-for="t in providerTypes" :key="t.value" :label="t.label" :value="t.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="API Key">
-          <el-input v-model="form.apiKey" type="password" placeholder="留空表示不修改" show-password />
-        </el-form-item>
-        <el-form-item label="Base URL" prop="baseUrl">
-          <el-input v-model="form.baseUrl" placeholder="https://api.openai.com/v1" />
-        </el-form-item>
-        <el-form-item label="描述">
-          <el-input v-model="form.description" placeholder="可选" />
-        </el-form-item>
+        <a-form-item label="名称" name="name">
+          <a-input v-model:value="form.name" placeholder="请输入提供商名称" />
+        </a-form-item>
+        <a-form-item label="类型" name="type">
+          <a-select v-model:value="form.type" :options="providerTypes" placeholder="请选择类型" class="full-width-control" />
+        </a-form-item>
+        <a-form-item label="API Key">
+          <a-input-password v-model:value="form.apiKey" placeholder="留空表示不修改" />
+        </a-form-item>
+        <a-form-item label="Base URL" name="baseUrl">
+          <a-input v-model:value="form.baseUrl" placeholder="https://api.openai.com/v1" />
+        </a-form-item>
+        <a-form-item label="描述">
+          <a-input v-model:value="form.description" placeholder="可选" />
+        </a-form-item>
       </template>
     </HifyFormDialog>
   </div>
@@ -115,13 +138,11 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { ElMessage } from 'element-plus'
-import type { FormRules } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { CheckCircleOutlined, CloseCircleOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import HifyTable from '@/components/base/HifyTable.vue'
 import HifyFormDialog from '@/components/base/HifyFormDialog.vue'
 import { useConfirm } from '@/composables/useConfirm'
-import { notifySuccess } from '@/utils/notify'
+import { notifyError, notifySuccess } from '@/utils/notify'
 import type { TableColumn } from '@/components/base/HifyTable.vue'
 import {
   getProviderList,
@@ -129,8 +150,13 @@ import {
   updateProvider,
   deleteProvider,
   testConnection,
+  testProviderModelConnectivity,
 } from '@/api/provider'
-import type { ProviderVO, HealthStatus } from '@/api/provider'
+import type { ModelConfig, ModelConnectivityTestResult, ProviderVO, HealthStatus } from '@/api/provider'
+
+type FormRules = Record<string, unknown>
+const providerTableRowStyle = { height: '3.25rem' }
+const providerModelPopoverWidth = '25rem'
 
 const providerTypes = [
   { label: 'OpenAI',            value: 'OPENAI' },
@@ -149,10 +175,10 @@ const fetchProviders = async ({ page, pageSize }: { page: number; pageSize: numb
 
 // ── 健康状态工具 ───────────────────────────────────────────
 const healthTagType = (status: HealthStatus) => {
-  const map: Record<HealthStatus, 'success' | 'danger' | 'warning' | 'info'> = {
-    UP: 'success', DOWN: 'danger', DEGRADED: 'warning', UNKNOWN: 'info',
+  const map: Record<HealthStatus, string> = {
+    UP: 'success', DOWN: 'error', DEGRADED: 'warning', UNKNOWN: 'default',
   }
-  return map[status] ?? 'info'
+  return map[status] ?? 'default'
 }
 const healthLabel = (status: HealthStatus) => {
   const map: Record<HealthStatus, string> = {
@@ -224,68 +250,133 @@ const onDelete = async (row: ProviderVO) => {
 
 // ── 连通性测试 ─────────────────────────────────────────────
 const testingId = ref<number | null>(null)
+const testingModelKey = ref<string | null>(null)
+const modelTestResults = ref<Record<string, ModelConnectivityTestResult>>({})
 
 const onTestConnection = async (row: ProviderVO) => {
   testingId.value = row.id
   try {
     const result = await testConnection(row.id)
     if (result.success) {
-      ElMessage.success(`连接成功，延迟 ${result.latencyMs}ms，发现 ${result.modelCount} 个模型`)
+      notifySuccess(`连接成功，延迟 ${result.latencyMs}ms，发现 ${result.modelCount} 个模型`)
     } else {
-      ElMessage.error(`连接失败：${result.errorMessage}`)
+      notifyError(`连接失败：${result.errorMessage}`)
     }
   } finally {
     testingId.value = null
   }
 }
+
+const modelTestKey = (providerId: number, modelConfigId: number) =>
+  `${providerId}:${modelConfigId}`
+
+const onTestModelConnection = async (row: ProviderVO, model: ModelConfig) => {
+  const key = modelTestKey(row.id, model.id)
+  testingModelKey.value = key
+  try {
+    modelTestResults.value = {
+      ...modelTestResults.value,
+      [key]: await testProviderModelConnectivity(row.id, model.id),
+    }
+  } finally {
+    testingModelKey.value = null
+  }
+}
+
+const modelTestResultText = (result: ModelConnectivityTestResult) => {
+  if (!result.ok) {
+    return `连通性测试失败：${result.error || '未知错误'}`
+  }
+  return `连通性测试成功：${result.model} · ${result.elapsedMs}ms · total ${result.usage.totalTokens}`
+}
 </script>
 
 <style scoped>
-.page-header { margin-bottom: 16px; }
+.page-header { margin-bottom: var(--space-4); }
 
-.provider-card :deep(.el-table th.el-table__cell) {
+.provider-card :deep(.ant-table-thead > tr > th) {
   background-color: var(--color-bg-page);
 }
-.provider-card :deep(.el-table__row:hover > td) {
+.provider-card :deep(.ant-table-tbody > tr:hover > td) {
   background-color: var(--color-bg-hover) !important;
 }
 .provider-card :deep(.hify-table-pagination) {
-  padding-top: 12px;
-  border-top: 1px solid var(--color-border-default);
+  padding-top: var(--space-3);
+  border-top: 0.0625rem solid var(--color-border-default);
   justify-content: flex-end;
 }
 
+.button-icon,
+.status-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.full-width-control {
+  width: 100%;
+}
+
 .latency-ms {
-  margin-left: 6px;
-  font-size: 12px;
+  margin-left: 0.375rem;
+  font-size: var(--text-xs);
   color: var(--color-text-secondary);
 }
 
 .model-count-link {
   color: var(--color-primary);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 .model-count-link:hover { text-decoration: underline; }
 
 .text-muted {
   color: var(--color-text-tertiary);
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
-.model-list-popup { padding: 4px 0; }
+.provider-action-link {
+  margin-left: var(--space-1);
+}
+
+.model-list-popup { padding: var(--space-1) 0; }
 .model-list-title {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--color-text-secondary);
-  margin-bottom: 8px;
-  padding-bottom: 6px;
+  margin-bottom: var(--space-2);
+  padding-bottom: 0.375rem;
   border-bottom: 1px solid var(--color-border-default);
 }
 .model-list-item {
   display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  font-size: var(--text-sm);
+}
+.model-list-main {
+  min-width: 0;
+  flex: 1;
+}
+.model-list-line {
+  display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 0;
-  font-size: 13px;
+  gap: var(--space-2);
 }
+.model-list-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.model-test-result {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  line-height: 1.35;
+}
+.model-test-result.success { color: var(--color-success); }
+.model-test-result.failure { color: var(--color-danger); }
 </style>
