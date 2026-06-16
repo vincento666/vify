@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 import hashlib
+import json
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +33,16 @@ MVP_DEMO_STORY_IDS = (
     "chatflow_block_resume_recommendation",
 )
 MVP_DEMO_KNOWLEDGE_NAME = "073 MVP Demo Airline Service Knowledge"
+MVP_DEMO_HOST_CONTEXT: dict[str, Any] = {
+    "actorId": "mvp-demo-operator",
+    "actorName": "MVP Demo Operator",
+    "tenantId": "mvp-demo-tenant",
+    "orgId": "mvp-demo-org",
+    "roles": ["customer_service_operator"],
+    "permissions": ["customer_assistant:read", "customer_assistant:operate"],
+    "source": "mvp-demo-shell",
+    "locale": "zh-CN",
+}
 
 
 @dataclass(frozen=True)
@@ -206,6 +217,7 @@ def write_mvp_demo_env(path: Path, result: MvpDemoSeedResult) -> None:
         "HIFY_MVP_DEMO_CUSTOMER_SESSION_IDS": ",".join(str(item) for item in result.customer_session_ids),
         "HIFY_MVP_DEMO_KNOWLEDGE_BASE_IDS": ",".join(str(item) for item in result.knowledge_base_ids),
         "HIFY_MVP_DEMO_STORY_IDS": ",".join(result.story_ids),
+        "HIFY_MVP_DEMO_HOST_CONTEXT_JSON": _compact_json(MVP_DEMO_HOST_CONTEXT),
         "HIFY_CUSTOMER_ASSISTANT_WORKER_PROFILES_JSON": default_customer_assistant_worker_profiles_json(),
     }
     existing_lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
@@ -229,12 +241,15 @@ def verify_mvp_demo_topology(session: Session, *, env_text: str | None = None) -
     _ensure_seed_tables(session)
     story_rows = _demo_story_sessions(session)
     story_report = {
-        story_id: _verify_story(session, int(row["id"])) if row is not None else _missing_story_report()
+        story_id: _verify_story(session, int(row["id"]), dict(row.get("context_json") or {}))
+        if row is not None
+        else _missing_story_report()
         for story_id, row in story_rows.items()
     }
     missing_stories = [story_id for story_id, row in story_rows.items() if row is None]
     chatflow_report = _verify_airline_chatflow_bindings(session)
     knowledge_report = _verify_demo_knowledge(session)
+    host_context_report = _verify_demo_host_context(story_report, env_text)
     security_report = {
         "secretFreeEnv": _text_is_secret_free(env_text or ""),
         "envChecked": env_text is not None,
@@ -267,6 +282,12 @@ def verify_mvp_demo_topology(session: Session, *, env_text: str | None = None) -
             knowledge_report,
         ),
         _check(
+            "demo_host_context",
+            host_context_report["allStoriesScoped"] and (env_text is None or host_context_report["envConfigured"]),
+            f"Seeded stories scoped to {MVP_DEMO_HOST_CONTEXT['tenantId']}",
+            host_context_report,
+        ),
+        _check(
             "secret_free_env",
             security_report["secretFreeEnv"],
             "Generated demo env text does not contain secret-looking values.",
@@ -285,6 +306,7 @@ def verify_mvp_demo_topology(session: Session, *, env_text: str | None = None) -
         "stories": story_report,
         "chatflowBindings": chatflow_report,
         "knowledge": knowledge_report,
+        "hostContext": host_context_report,
         "security": security_report,
     }
 
@@ -362,7 +384,7 @@ def _demo_story_sessions(session: Session) -> dict[str, dict[str, Any] | None]:
     return by_story
 
 
-def _verify_story(session: Session, session_id: int) -> dict[str, Any]:
+def _verify_story(session: Session, session_id: int, context: dict[str, Any]) -> dict[str, Any]:
     task_table = Base.metadata.tables["customer_assistant_task"]
     event_table = Base.metadata.tables["customer_assistant_event"]
     action_table = Base.metadata.tables["customer_assistant_proposed_action"]
@@ -375,6 +397,7 @@ def _verify_story(session: Session, session_id: int) -> dict[str, Any]:
     action_rows = session.execute(
         sa.select(action_table).where(action_table.c.session_id == session_id, action_table.c.deleted.is_(False))
     ).mappings().all()
+    host_context = dict(context.get("hostContext") or {})
     return {
         "sessionId": session_id,
         "taskCount": len(task_rows),
@@ -382,6 +405,8 @@ def _verify_story(session: Session, session_id: int) -> dict[str, Any]:
         "pendingActionCount": sum(1 for row in action_rows if row.get("status") == "PENDING"),
         "taskKeys": [str(row.get("task_key") or "") for row in task_rows],
         "taskStatuses": sorted({str(row.get("status") or "") for row in task_rows}),
+        "hostTenantId": str(host_context.get("tenantId") or ""),
+        "hostOrgId": str(host_context.get("orgId") or ""),
     }
 
 
@@ -393,6 +418,23 @@ def _missing_story_report() -> dict[str, Any]:
         "pendingActionCount": 0,
         "taskKeys": [],
         "taskStatuses": [],
+        "hostTenantId": "",
+        "hostOrgId": "",
+    }
+
+
+def _verify_demo_host_context(story_report: Mapping[str, dict[str, Any]], env_text: str | None) -> dict[str, Any]:
+    tenant_id = str(MVP_DEMO_HOST_CONTEXT["tenantId"])
+    story_tenants = {
+        story_id: str(story.get("hostTenantId") or "")
+        for story_id, story in story_report.items()
+    }
+    return {
+        "tenantId": tenant_id,
+        "orgId": str(MVP_DEMO_HOST_CONTEXT["orgId"]),
+        "storyTenantIds": story_tenants,
+        "allStoriesScoped": all(value == tenant_id for value in story_tenants.values()),
+        "envConfigured": env_text is not None and "HIFY_MVP_DEMO_HOST_CONTEXT_JSON=" in env_text,
     }
 
 
@@ -467,6 +509,10 @@ def _text_is_secret_free(text: str) -> bool:
     if "SK-" in upper:
         return False
     return not any(marker in upper for marker in ("API_KEY=", "TOKEN=", "SECRET=", "PASSWORD="))
+
+
+def _compact_json(value: Mapping[str, Any]) -> str:
+    return json.dumps(dict(value), ensure_ascii=False, separators=(",", ":"))
 
 
 def _seed_customer_story(
@@ -558,6 +604,7 @@ def _upsert_demo_session(
         "openingMessage": story.opening_message,
         "knowledgeBaseIds": [knowledge_base_id],
         "retrievalSettings": {"mode": "faq", "topK": 3},
+        "hostContext": dict(MVP_DEMO_HOST_CONTEXT),
         "chatflowBindings": {
             key: chatflow_bindings[key]
             for key in sorted(chatflow_bindings)

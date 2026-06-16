@@ -10,6 +10,6 @@
 
 ## 079.2 Seeded Browser Storyline Gate
 
-- [ ] Add browser UAT that maps all seeded stories to visible workbench states.
-- [ ] Run browser/frontend gates and save screenshots.
-- [ ] Commit completed 079.2 slice.
+- [x] Add browser UAT that maps all seeded stories to visible workbench states.
+- [x] Run browser/frontend gates and save screenshots.
+- [x] Commit completed 079.2 slice.
