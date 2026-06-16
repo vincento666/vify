@@ -267,6 +267,13 @@ def list_demo_stories(
     return success(service.list_demo_stories())
 
 
+@router.get("/demo-stories/metrics")
+def get_demo_story_metrics(
+    service: CustomerAssistantService = Depends(get_customer_assistant_service),
+) -> dict[str, Any]:
+    return success(service.get_demo_story_metrics())
+
+
 @router.get("/worker-profiles")
 def list_worker_profiles(
     service: CustomerAssistantService = Depends(get_customer_assistant_service),

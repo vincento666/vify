@@ -51,6 +51,10 @@ try {
 
   const stories = await api(page, '/customer-assistant/demo-stories')
   assert(stories.list.length >= 2, `Expected at least two seeded stories, got ${stories.list.length}`)
+  const metrics = await api(page, '/customer-assistant/demo-stories/metrics')
+  assert(metrics.storyCount >= stories.list.length, `Expected metrics story count to cover stories, got ${metrics.storyCount}`)
+  assert(metrics.sessionCount >= stories.list.length, `Expected metrics session count to cover stories, got ${metrics.sessionCount}`)
+  assert(metrics.humanConfirmation.pending >= 1, 'Expected seeded demo metrics to include pending confirmations')
   const first = stories.list[0]
   const second = stories.list[1]
 
@@ -58,6 +62,11 @@ try {
     waitUntil: 'networkidle',
   })
   await page.getByTestId('customer-assistant-workspace').waitFor({ state: 'visible', timeout: 10000 })
+  const demoMetrics = page.getByTestId('customer-assistant-demo-metrics')
+  await demoMetrics.getByText('演示总览').waitFor({ state: 'visible', timeout: 10000 })
+  await demoMetrics.getByText(new RegExp(`${metrics.storyCount} 条故事`)).waitFor({ state: 'visible', timeout: 10000 })
+  await demoMetrics.getByText('人工采纳率').waitFor({ state: 'visible', timeout: 10000 })
+  await demoMetrics.getByText('待确认动作').waitFor({ state: 'visible', timeout: 10000 })
   await waitForStory(page, second)
   let url = new URL(page.url())
   assert(url.searchParams.get('story') === second.storyId, `Expected story query ${second.storyId}, got ${url}`)

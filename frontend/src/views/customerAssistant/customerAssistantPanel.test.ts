@@ -91,6 +91,15 @@ describe('CustomerAssistantPanel UI contract', () => {
     expect(metricsPanel).not.toContain('compactPayload')
   })
 
+  it('renders aggregate seeded demo metrics above the story picker', () => {
+    const storyStrip = section(content, 'customer-assistant-demo-stories')
+
+    expect(storyStrip).toContain('data-testid="customer-assistant-demo-metrics"')
+    expect(storyStrip).toContain('demoStoryMetricsSummary.tiles')
+    expect(storyStrip).toContain('演示总览')
+    expect(content).toContain('loadDemoStoryMetrics')
+  })
+
   it('distinguishes proposed task commands from executable actions', () => {
     expect(content).toContain('isProposedTaskCommand')
     expect(content).toContain('确认任务变更')

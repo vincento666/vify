@@ -110,6 +110,28 @@ describe('customer-assistant frontend API client', () => {
     expect(requestMocks.get).toHaveBeenCalledWith('/v1/customer-assistant/demo-stories')
   })
 
+  it('loads seeded demo story observability metrics', async () => {
+    requestMocks.get.mockResolvedValueOnce({
+      storyCount: 3,
+      sessionCount: 3,
+      taskStatusCounts: { WAITING: 1, COMPLETED: 2 },
+      proposedActionStatusCounts: { PENDING: 3 },
+      humanConfirmation: { pending: 3, adopted: 0, terminal: 0, adoptionRate: 0 },
+      eventCounts: { total: 12, byType: { task_created: 3 }, bySource: { demo_seed: 3 } },
+      workerEventCounts: { total: 4, byType: { worker_started: 2 } },
+      recentFailureReasons: [],
+      stories: [{ storyId: 'refund_baggage_parallel', title: '退票 + 行李额', sessionId: 7 }],
+    })
+
+    const { getCustomerAssistantDemoStoryMetrics } = await import('./customerAssistant')
+
+    await expect(getCustomerAssistantDemoStoryMetrics()).resolves.toMatchObject({
+      storyCount: 3,
+      humanConfirmation: { pending: 3 },
+    })
+    expect(requestMocks.get).toHaveBeenCalledWith('/v1/customer-assistant/demo-stories/metrics')
+  })
+
   it('lists worker profile catalog entries for the workbench', async () => {
     requestMocks.get.mockResolvedValueOnce({
       list: [{ profileId: 'refund_ticket_chatflow', taskKey: 'refund_ticket' }],

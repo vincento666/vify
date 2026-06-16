@@ -1,7 +1,7 @@
 import type {
   CustomerAssistantEvent,
+  CustomerAssistantObservabilityMetrics,
   CustomerAssistantProposedAction,
-  CustomerAssistantSessionMetrics,
   CustomerAssistantTask,
   CustomerAssistantTaskControlType,
   CustomerAssistantTurnResult,
@@ -335,7 +335,7 @@ export function formatOperatorAdvisoryEvidence(
 }
 
 export function formatCustomerAssistantMetrics(
-  metrics: CustomerAssistantSessionMetrics | null,
+  metrics: CustomerAssistantObservabilityMetrics | null,
 ): CustomerAssistantMetricsSummary {
   const adoptionRate = metrics?.humanConfirmation.adoptionRate ?? 0
   const pending = metrics?.humanConfirmation.pending ?? 0

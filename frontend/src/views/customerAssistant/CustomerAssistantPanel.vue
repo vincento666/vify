@@ -41,6 +41,27 @@
           {{ selectedDemoStory.customerName }} · {{ selectedDemoStory.maskedPhone }}
         </a-tag>
       </div>
+      <div class="demo-story-metrics" data-testid="customer-assistant-demo-metrics">
+        <div class="demo-story-metrics-header">
+          <span>演示总览</span>
+          <a-tag v-if="demoStoryMetricsLoading" color="processing">加载中</a-tag>
+          <a-tag v-else-if="demoStoryMetrics" color="blue">
+            {{ demoStoryMetrics.storyCount }} 条故事 · {{ demoStoryMetrics.sessionCount }} 会话
+          </a-tag>
+          <a-tag v-if="demoStoryMetricsError" color="warning">{{ demoStoryMetricsError }}</a-tag>
+        </div>
+        <div class="demo-story-metrics-grid">
+          <div
+            v-for="tile in demoStoryMetricsSummary.tiles"
+            :key="`demo-${tile.key}`"
+            class="metric-tile"
+            :class="tile.tone"
+          >
+            <span>{{ tile.label }}</span>
+            <strong>{{ tile.value }}</strong>
+          </div>
+        </div>
+      </div>
       <div class="demo-story-list">
         <a-button
           v-for="story in demoStories"
@@ -611,10 +632,12 @@ import { computed, onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
+  getCustomerAssistantDemoStoryMetrics,
   listCustomerAssistantDemoStories,
   listCustomerAssistantWorkerProfiles,
   updateCustomerAssistantWorkerProfile,
   type CustomerAssistantDemoStory,
+  type CustomerAssistantDemoStoryMetrics,
   type CustomerAssistantProposedAction,
   type CustomerAssistantTaskControlType,
   type CustomerAssistantWorkerProfile,
@@ -671,10 +694,13 @@ const taskControlLoadingKey = ref<string | null>(null)
 const expandedEventKeys = ref<string[]>([])
 const runtimeState = ref(createCustomerAssistantRuntimeState())
 const demoStories = ref<CustomerAssistantDemoStory[]>([])
+const demoStoryMetrics = ref<CustomerAssistantDemoStoryMetrics | null>(null)
 const selectedDemoStoryId = ref<string | null>(null)
 const demoStoriesLoading = ref(false)
+const demoStoryMetricsLoading = ref(false)
 const demoStoryLoadingId = ref<string | null>(null)
 const demoStoryError = ref<string | null>(null)
+const demoStoryMetricsError = ref<string | null>(null)
 const workerProfiles = ref<CustomerAssistantWorkerProfile[]>([])
 const workerProfilesLoading = ref(false)
 const workerProfileError = ref<string | null>(null)
@@ -696,6 +722,7 @@ const workspace = computed(() => ({
   taskSummary: summarizeCustomerAssistantTasks(runtimeState.value.tasks, workerProfiles.value),
 }))
 const metricsSummary = computed(() => formatCustomerAssistantMetrics(workspace.value.metrics))
+const demoStoryMetricsSummary = computed(() => formatCustomerAssistantMetrics(demoStoryMetrics.value))
 const selectedDemoStory = computed(() =>
   demoStories.value.find((story) => story.storyId === selectedDemoStoryId.value) ?? null,
 )
@@ -722,6 +749,7 @@ const turnStatusColor = computed(() => {
 
 onMounted(() => {
   void loadDemoStories()
+  void loadDemoStoryMetrics()
   void loadWorkerProfiles()
 })
 
@@ -910,6 +938,18 @@ async function loadDemoStories() {
   }
 }
 
+async function loadDemoStoryMetrics() {
+  demoStoryMetricsLoading.value = true
+  demoStoryMetricsError.value = null
+  try {
+    demoStoryMetrics.value = await getCustomerAssistantDemoStoryMetrics()
+  } catch (error) {
+    demoStoryMetricsError.value = error instanceof Error ? error.message : '演示指标加载失败'
+  } finally {
+    demoStoryMetricsLoading.value = false
+  }
+}
+
 async function loadWorkerProfiles() {
   workerProfilesLoading.value = true
   workerProfileError.value = null
@@ -956,6 +996,7 @@ async function proposeTaskControl(taskId: number, controlType: CustomerAssistant
       controlType,
       taskControlReason(controlType),
     )
+    void loadDemoStoryMetrics()
     message.success('已生成待确认任务控制')
   } catch (error) {
     catchCustomerAssistantError(error, '生成任务控制失败')
@@ -1009,6 +1050,7 @@ async function submitTurn(actor: 'customer' | 'operator', text: string) {
         },
       },
     )
+    void loadDemoStoryMetrics()
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : '客服助手调用失败'
     setRuntimeError(errorMessage)
@@ -1037,6 +1079,7 @@ async function confirmAction(actionId: number) {
   actionLoadingId.value = actionId
   try {
     runtimeState.value = await confirmCustomerAssistantRuntimeAction(runtimeState.value, actionId)
+    void loadDemoStoryMetrics()
   } catch (error) {
     catchCustomerAssistantError(error, '确认动作失败')
   } finally {
@@ -1048,6 +1091,7 @@ async function rejectAction(actionId: number) {
   actionLoadingId.value = actionId
   try {
     runtimeState.value = await rejectCustomerAssistantRuntimeAction(runtimeState.value, actionId)
+    void loadDemoStoryMetrics()
   } catch (error) {
     catchCustomerAssistantError(error, '拒绝动作失败')
   } finally {
@@ -1059,6 +1103,7 @@ async function executeAction(actionId: number) {
   actionLoadingId.value = actionId
   try {
     runtimeState.value = await executeCustomerAssistantRuntimeAction(runtimeState.value, actionId)
+    void loadDemoStoryMetrics()
   } catch (error) {
     catchCustomerAssistantError(error, '执行动作失败')
   } finally {
@@ -1115,6 +1160,27 @@ async function executeAction(actionId: number) {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+}
+
+.demo-story-metrics {
+  display: grid;
+  gap: 0.625rem;
+}
+
+.demo-story-metrics-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  color: #344054;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.demo-story-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 0.5rem;
 }
 
 .demo-story-list {

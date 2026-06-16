@@ -126,6 +126,70 @@ class CustomerAssistantService:
         stories.sort(key=_demo_story_sort_key)
         return {"list": stories, "total": len(stories)}
 
+    def get_demo_story_metrics(self) -> dict[str, Any]:
+        rows = self._repository.list_demo_sessions("073")
+        story_rows: list[dict[str, Any]] = []
+        task_status_counts: dict[str, int] = {}
+        action_status_counts: dict[str, int] = {}
+        event_type_counts: dict[str, int] = {}
+        event_source_counts: dict[str, int] = {}
+        worker_event_type_counts: dict[str, int] = {}
+        event_total = 0
+        worker_event_total = 0
+        recent_failure_reasons: list[dict[str, Any]] = []
+        for row in rows:
+            story = _format_demo_story(row, self._repository)
+            session_id = int(story["sessionId"])
+            tasks = self._repository.list_tasks(session_id)
+            actions = self._repository.list_proposed_actions(session_id)
+            events = self._repository.list_events(session_id)
+            metrics = _session_metrics_payload(session_id, tasks, actions, events)
+            worker_event_counts = dict(metrics["workerEventCounts"])
+            story_rows.append(
+                {
+                    "storyId": story["storyId"],
+                    "title": story["title"],
+                    "sessionId": session_id,
+                    "sessionStatus": story["sessionStatus"],
+                    "taskCount": story["taskCount"],
+                    "pendingActionCount": story["pendingActionCount"],
+                    "taskStatusCounts": metrics["taskStatusCounts"],
+                    "proposedActionStatusCounts": metrics["proposedActionStatusCounts"],
+                    "humanConfirmation": metrics["humanConfirmation"],
+                    "eventCount": metrics["eventCounts"]["total"],
+                    "workerEventCount": worker_event_counts["total"],
+                    "recentFailureReasons": metrics["recentFailureReasons"],
+                }
+            )
+            _merge_counts(task_status_counts, dict(metrics["taskStatusCounts"]))
+            _merge_counts(action_status_counts, dict(metrics["proposedActionStatusCounts"]))
+            _merge_counts(event_type_counts, dict(metrics["eventCounts"]["byType"]))
+            _merge_counts(event_source_counts, dict(metrics["eventCounts"]["bySource"]))
+            _merge_counts(worker_event_type_counts, dict(worker_event_counts["byType"]))
+            event_total += int(metrics["eventCounts"]["total"])
+            worker_event_total += int(worker_event_counts["total"])
+            for failure in metrics["recentFailureReasons"]:
+                recent_failure_reasons.append({**failure, "storyId": story["storyId"]})
+        story_rows.sort(key=_demo_story_sort_key)
+        return {
+            "storyCount": len(story_rows),
+            "sessionCount": len(rows),
+            "taskStatusCounts": task_status_counts,
+            "proposedActionStatusCounts": action_status_counts,
+            "humanConfirmation": _human_confirmation(action_status_counts),
+            "eventCounts": {
+                "total": event_total,
+                "byType": event_type_counts,
+                "bySource": event_source_counts,
+            },
+            "workerEventCounts": {
+                "total": worker_event_total,
+                "byType": worker_event_type_counts,
+            },
+            "recentFailureReasons": recent_failure_reasons[-5:],
+            "stories": story_rows,
+        }
+
     def list_worker_profiles(self) -> dict[str, Any]:
         profiles = self._worker_profiles.list_profiles()
         return {"list": profiles, "total": len(profiles)}
@@ -702,33 +766,7 @@ class CustomerAssistantService:
         tasks = self._repository.list_tasks(session_id)
         actions = self._repository.list_proposed_actions(session_id)
         events = self._repository.list_events(session_id)
-        task_status_counts = _count_values(tasks, "status")
-        action_status_counts = _count_values(actions, "status")
-        event_type_counts = _count_values(events, "type")
-        event_source_counts = _count_values(events, "source")
-        adopted = action_status_counts.get("CONFIRMED", 0) + action_status_counts.get("EXECUTED", 0)
-        terminal = sum(
-            action_status_counts.get(status, 0)
-            for status in ("CONFIRMED", "REJECTED", "EXECUTED", "FAILED")
-        )
-        return {
-            "sessionId": session_id,
-            "taskStatusCounts": task_status_counts,
-            "proposedActionStatusCounts": action_status_counts,
-            "humanConfirmation": {
-                "pending": action_status_counts.get("PENDING", 0),
-                "adopted": adopted,
-                "terminal": terminal,
-                "adoptionRate": round(adopted / terminal, 3) if terminal else 0.0,
-            },
-            "eventCounts": {
-                "total": len(events),
-                "byType": event_type_counts,
-                "bySource": event_source_counts,
-            },
-            "workerEventCounts": _worker_event_counts(events),
-            "recentFailureReasons": _recent_failure_reasons(tasks),
-        }
+        return _session_metrics_payload(session_id, tasks, actions, events)
 
     def update_action(
         self,
@@ -1821,6 +1859,50 @@ def _count_values(rows: list[dict[str, Any]], key: str) -> dict[str, int]:
         value = str(row.get(key) or "UNKNOWN")
         counts[value] = counts.get(value, 0) + 1
     return counts
+
+
+def _merge_counts(target: dict[str, int], source: dict[str, int]) -> None:
+    for key, value in source.items():
+        target[key] = target.get(key, 0) + int(value)
+
+
+def _human_confirmation(action_status_counts: dict[str, int]) -> dict[str, Any]:
+    adopted = action_status_counts.get("CONFIRMED", 0) + action_status_counts.get("EXECUTED", 0)
+    terminal = sum(
+        action_status_counts.get(status, 0)
+        for status in ("CONFIRMED", "REJECTED", "EXECUTED", "FAILED")
+    )
+    return {
+        "pending": action_status_counts.get("PENDING", 0),
+        "adopted": adopted,
+        "terminal": terminal,
+        "adoptionRate": round(adopted / terminal, 3) if terminal else 0.0,
+    }
+
+
+def _session_metrics_payload(
+    session_id: int,
+    tasks: list[dict[str, Any]],
+    actions: list[dict[str, Any]],
+    events: list[dict[str, Any]],
+) -> dict[str, Any]:
+    task_status_counts = _count_values(tasks, "status")
+    action_status_counts = _count_values(actions, "status")
+    event_type_counts = _count_values(events, "type")
+    event_source_counts = _count_values(events, "source")
+    return {
+        "sessionId": session_id,
+        "taskStatusCounts": task_status_counts,
+        "proposedActionStatusCounts": action_status_counts,
+        "humanConfirmation": _human_confirmation(action_status_counts),
+        "eventCounts": {
+            "total": len(events),
+            "byType": event_type_counts,
+            "bySource": event_source_counts,
+        },
+        "workerEventCounts": _worker_event_counts(events),
+        "recentFailureReasons": _recent_failure_reasons(tasks),
+    }
 
 
 def _worker_event_counts(events: list[dict[str, Any]]) -> dict[str, Any]:

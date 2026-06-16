@@ -55,8 +55,11 @@ export interface CustomerAssistantWorkerProfile {
 
 export type CustomerAssistantWorkerProfileUpdatePayload = Omit<CustomerAssistantWorkerProfile, 'profileId'>
 
-export interface CustomerAssistantSessionMetrics {
+export interface CustomerAssistantSessionMetrics extends CustomerAssistantObservabilityMetrics {
   sessionId: number
+}
+
+export interface CustomerAssistantObservabilityMetrics {
   taskStatusCounts: Record<string, number>
   proposedActionStatusCounts: Record<string, number>
   humanConfirmation: {
@@ -74,12 +77,32 @@ export interface CustomerAssistantSessionMetrics {
     total: number
     byType: Record<string, number>
   }
-  recentFailureReasons: Array<{
-    taskId: number
-    taskType: string
-    source: string
-    reason: string
-  }>
+  recentFailureReasons: CustomerAssistantFailureReason[]
+}
+
+export interface CustomerAssistantFailureReason {
+  taskId: number
+  taskType: string
+  source: string
+  reason: string
+  storyId?: string
+}
+
+export interface CustomerAssistantDemoStoryMetricsStory extends CustomerAssistantObservabilityMetrics {
+  storyId: string
+  title: string
+  sessionId: number
+  sessionStatus: string
+  taskCount: number
+  pendingActionCount: number
+  eventCount: number
+  workerEventCount: number
+}
+
+export interface CustomerAssistantDemoStoryMetrics extends CustomerAssistantObservabilityMetrics {
+  storyCount: number
+  sessionCount: number
+  stories: CustomerAssistantDemoStoryMetricsStory[]
 }
 
 export interface CustomerAssistantProposedAction {
@@ -153,6 +176,9 @@ export const createCustomerAssistantSession = (context: Record<string, unknown> 
 
 export const listCustomerAssistantDemoStories = () =>
   get<CustomerAssistantListResult<CustomerAssistantDemoStory>>('/v1/customer-assistant/demo-stories')
+
+export const getCustomerAssistantDemoStoryMetrics = () =>
+  get<CustomerAssistantDemoStoryMetrics>('/v1/customer-assistant/demo-stories/metrics')
 
 export const listCustomerAssistantWorkerProfiles = () =>
   get<CustomerAssistantListResult<CustomerAssistantWorkerProfile>>('/v1/customer-assistant/worker-profiles')

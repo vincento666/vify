@@ -56,6 +56,25 @@ class CustomerAssistantDemoStoryApiTest(unittest.TestCase):
         self.assertEqual(data["list"][0]["status"], "PENDING")
         self.assertEqual(data["list"][0]["actionType"], "PROPOSED_TASK_COMMAND")
 
+    def test_returns_seeded_demo_story_observability_summary(self) -> None:
+        with TestClient(app) as client:
+            response = client.get("/api/v1/customer-assistant/demo-stories/metrics")
+
+        self.assertEqual(response.status_code, 200, response.text)
+        data = response.json()["data"]
+        self.assertEqual(data["storyCount"], len(MVP_DEMO_STORY_IDS))
+        self.assertEqual(data["sessionCount"], len(self._seed.customer_session_ids))
+        self.assertEqual([item["storyId"] for item in data["stories"]], list(MVP_DEMO_STORY_IDS))
+        self.assertGreaterEqual(sum(data["taskStatusCounts"].values()), 3)
+        self.assertGreaterEqual(data["proposedActionStatusCounts"]["PENDING"], 3)
+        self.assertGreaterEqual(data["humanConfirmation"]["pending"], 3)
+        self.assertIn("adoptionRate", data["humanConfirmation"])
+        self.assertGreater(data["eventCounts"]["total"], 0)
+        self.assertIn("workerEventCounts", data)
+        self.assertLessEqual(len(data["recentFailureReasons"]), 5)
+        self.assertNotIn("TK12345", str(data))
+        self.assertNotIn("13800000000", str(data))
+
     def _session_override(self) -> Generator[Session]:
         with self._factory() as session:
             yield session
