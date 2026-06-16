@@ -189,6 +189,7 @@ function runtimeEventRunStatus(event: RuntimeV2Event, fallback: string | undefin
   const payloadStatus = String(event.payload?.status || '').trim()
   if (payloadStatus && !String(event.nodeId || '').trim()) return normalizeRuntimeRunStatus(payloadStatus)
   if (eventType === 'workflow_run_completed') return 'SUCCEEDED'
+  if (eventType === 'workflow_run_cancelled') return 'CANCELLED'
   if (eventType === 'workflow_run_failed' || runtimeEventNodeStatus(event) === 'FAILED') return 'FAILED'
   return normalizeRuntimeRunStatus(fallback || 'RUNNING')
 }

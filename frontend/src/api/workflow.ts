@@ -171,6 +171,10 @@ export function getRuntimeV2Run(runId: number) {
   return get<any>(`/v1/runtime-runs/${runId}`)
 }
 
+export function cancelRuntimeV2Run(runId: number) {
+  return post<any>(`/v1/runtime-runs/${runId}/cancel`, {})
+}
+
 export function listRuntimeV2Events(runId: number, params?: { afterSequence?: number }) {
   return get<{ list: any[]; total: number }>(`/v1/runtime-runs/${runId}/events`, params)
 }

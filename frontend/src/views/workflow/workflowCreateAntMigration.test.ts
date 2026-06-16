@@ -49,4 +49,16 @@ describe('workflow create Ant migration', () => {
     expect(content).toContain('targetedPublishedRunResult')
     expect(content).toContain('versionId')
   })
+
+  it('exposes a runtime v2 cancel control in the debug dock', () => {
+    const content = readSource('src/views/workflow/WorkflowCreate.vue')
+    const dockStart = content.indexOf('data-testid="workflow-debug-dock"')
+    const dockEnd = content.indexOf('data-testid="debug-error-panel"', dockStart)
+    const debugDockHeader = content.slice(dockStart, dockEnd)
+
+    expect(content).toContain('cancelRuntimeV2Run')
+    expect(debugDockHeader).toContain('data-testid="debug-runtime-v2-cancel"')
+    expect(debugDockHeader).toContain('aria-label="取消运行"')
+    expect(debugDockHeader).toContain('@click="cancelCurrentRuntimeV2Run"')
+  })
 })

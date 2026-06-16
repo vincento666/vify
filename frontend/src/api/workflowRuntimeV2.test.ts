@@ -24,12 +24,14 @@ describe('workflow runtime v2 frontend API client', () => {
       getRuntimeV2Run,
       listRuntimeV2Events,
       listRuntimeV2Nodes,
+      cancelRuntimeV2Run,
       runChatflowV2,
       runWorkflowV2,
     } = await import('./workflow')
 
     await runWorkflowV2(12, { USER_INPUT: 'hello' }, 'workflow-key')
     await runChatflowV2(21, { message: 'hello' }, 'chatflow-key')
+    await cancelRuntimeV2Run(701)
     await getRuntimeV2Run(701)
     await listRuntimeV2Events(701, { afterSequence: 4 })
     await listRuntimeV2Nodes(701)
@@ -42,6 +44,7 @@ describe('workflow runtime v2 frontend API client', () => {
       input: { message: 'hello' },
       idempotencyKey: 'chatflow-key',
     })
+    expect(requestMocks.post).toHaveBeenNthCalledWith(3, '/v1/runtime-runs/701/cancel', {})
     expect(requestMocks.get).toHaveBeenNthCalledWith(1, '/v1/runtime-runs/701')
     expect(requestMocks.get).toHaveBeenNthCalledWith(2, '/v1/runtime-runs/701/events', { afterSequence: 4 })
     expect(requestMocks.get).toHaveBeenNthCalledWith(3, '/v1/runtime-runs/701/nodes')

@@ -3321,9 +3321,22 @@
         <div class="debug-dock-header">
           <div class="debug-dock-title">
             <strong>调试详情</strong>
-            <span v-if="lastTestRunId">当前运行 #{{ lastTestRunId }}</span>
+            <span v-if="lastTestRunId">当前运行 #{{ lastTestRunId }} · {{ lastTestRunStatus || 'RUNNING' }}</span>
           </div>
           <div class="debug-dock-actions">
+            <button
+              v-if="canCancelRuntimeV2Run"
+              type="button"
+              class="debug-cancel-run-button"
+              data-testid="debug-runtime-v2-cancel"
+              aria-label="取消运行"
+              :disabled="runtimeV2Cancelling"
+              :title="runtimeV2Cancelling ? '正在取消运行' : '取消当前运行'"
+              @click="cancelCurrentRuntimeV2Run"
+            >
+              <StopIcon aria-hidden="true" />
+              <span>{{ runtimeV2Cancelling ? '取消中' : '取消运行' }}</span>
+            </button>
             <button
               v-if="lastTestRunId"
               type="button"
@@ -3892,6 +3905,7 @@ import {
   Settings as SettingsIcon,
   Share2 as Share,
   SlidersHorizontal as Operation,
+  Square as StopIcon,
   Trash2,
   User,
   Wrench as Tools,
@@ -3905,6 +3919,7 @@ import '@vue-flow/core/dist/theme-default.css'
 import {
   createChatflow,
   createWorkflow,
+  cancelRuntimeV2Run,
   getChatflow,
   getChatflowRunDebug,
   getChatflowSession,
@@ -4307,9 +4322,11 @@ const lastTestRunGraphSnapshot = ref('')
 const workflowRunDebugDetail = ref<WorkflowRunDebugDetail | null>(null)
 const chatflowRunDebugDetail = ref<ChatflowRunDebugDetail | null>(null)
 const workflowRunDebugLoading = ref(false)
+const runtimeV2Cancelling = ref(false)
 const dirtySinceTestRun = ref(true)
 const RUNTIME_V2_POLL_DELAY_MS = 350
 const RUNTIME_V2_MAX_POLLS = 180
+const RUNTIME_V2_CANCELLABLE_STATUSES = new Set(['RUNNING', 'INTERRUPTED'])
 const openingText = ref('你好，我可以帮你处理订单、售后和产品咨询。')
 const guideQuestions = ref(['查订单进度', '申请退款', '咨询发票'])
 const chatflowHistorySettingsOpen = ref(false)
@@ -4789,6 +4806,12 @@ const workflowRunFlamegraphRows = computed(() => buildWorkflowRunFlamegraph(work
 const workflowRunNodeDetails = computed(() => workflowRunDebugDetail.value?.nodeDetails || [])
 const activeWorkflowDebugNode = computed(() => selectedRunNodeDetail(workflowRunNodeDetails.value))
 const activeRunNodeDetails = computed(() => isChatflowMode.value ? chatflowRunNodeDetails.value : workflowRunNodeDetails.value)
+const canCancelRuntimeV2Run = computed(() => {
+  const runId = Number(lastTestRunId.value || 0)
+  const runtimeVersion = String(testResult.value?.runtimeVersion || '').trim().toLowerCase()
+  const status = String(lastTestRunStatus.value || testResult.value?.status || '').trim().toUpperCase()
+  return runId > 0 && runtimeVersion === 'v2' && RUNTIME_V2_CANCELLABLE_STATUSES.has(status)
+})
 const runPathEdgeClassesById = computed(() => deriveRunPathEdgeClasses(graph.value.edges, activeRunNodeDetails.value))
 const nodeRunStateByKey = computed(() => {
   const map = new Map<string, WorkflowRunNodeDetail>()
@@ -8639,6 +8662,36 @@ async function observeRuntimeV2Run(
   return runtimeV2ResultPayload(detail, latestRun)
 }
 
+async function cancelCurrentRuntimeV2Run() {
+  const runId = Number(lastTestRunId.value || 0)
+  if (!runId || !canCancelRuntimeV2Run.value || runtimeV2Cancelling.value) return
+  const ownerType = isChatflowMode.value ? 'CHATFLOW' : 'WORKFLOW'
+  runtimeV2Cancelling.value = true
+  try {
+    const cancelled = await cancelRuntimeV2Run(runId) as RuntimeV2StartRef
+    const current = currentRuntimeV2DebugDetail(ownerType) || createRuntimeV2DebugDetail({
+      runId,
+      ownerType,
+      ownerId: workflowId.value,
+      status: lastTestRunStatus.value || 'RUNNING',
+    })
+    const detail = mergeRuntimeV2RunToDebugDetail(current, {
+      ...cancelled,
+      runId: Number(cancelled.runId || runId),
+      ownerType: cancelled.ownerType || ownerType,
+      ownerId: cancelled.ownerId || workflowId.value,
+    })
+    setRuntimeV2DebugDetail(ownerType, detail)
+    updateRuntimeV2RunState(ownerType, detail, cancelled)
+    await loadRuntimeV2DebugDetail(runId, ownerType)
+    message.success('已取消运行')
+  } catch (e: any) {
+    message.error(e?.message || '取消运行失败')
+  } finally {
+    runtimeV2Cancelling.value = false
+  }
+}
+
 function setRuntimeV2DebugDetail(ownerType: string, detail: WorkflowRunDebugDetail) {
   if (ownerType === 'CHATFLOW') {
     chatflowRunDebugDetail.value = detail as ChatflowRunDebugDetail
@@ -10945,6 +10998,25 @@ onUnmounted(() => {
   font-weight: 800;
 }
 
+.debug-dock-actions .debug-cancel-run-button {
+  width: auto;
+  gap: 0.375rem;
+  padding: 0 0.625rem;
+  color: #b42318;
+  font-weight: 800;
+}
+
+.debug-dock-actions .debug-cancel-run-button:hover:not(:disabled) {
+  border-color: #fecaca;
+  background: #fff5f5;
+  color: #981b1b;
+}
+
+.debug-dock-actions .debug-cancel-run-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
 .debug-close-button {
   font-size: 1.125rem;
   line-height: 1;
@@ -12149,6 +12221,7 @@ onUnmounted(() => {
 .config-header button svg,
 .section-icon-button svg,
 .output-row-icon svg,
+.debug-cancel-run-button svg,
 .debug-close-button svg {
   width: 0.875rem;
   height: 0.875rem;

@@ -91,4 +91,30 @@ describe('runtime v2 canvas debug projection', () => {
     })
     expect(summarizeWorkflowRunDebug(failed).statusLabel).toBe('FAILED')
   })
+
+  it('projects workflow run cancellation events into a terminal cancelled state', () => {
+    const started = createRuntimeV2DebugDetail({
+      runId: 802,
+      ownerType: 'CHATFLOW',
+      ownerId: 33,
+      status: 'RUNNING',
+    })
+
+    const cancelled = applyRuntimeV2EventsToDebugDetail(started, [
+      {
+        id: 7,
+        runId: 802,
+        sequence: 7,
+        type: 'workflow_run_cancelled',
+        payload: {
+          previousStatus: 'RUNNING',
+          reason: 'cancelled by operator',
+        },
+      },
+    ])
+
+    expect(cancelled.status).toBe('CANCELLED')
+    expect(cancelled.error).toBe('')
+    expect(summarizeWorkflowRunDebug(cancelled).statusLabel).toBe('CANCELLED')
+  })
 })
