@@ -3662,6 +3662,13 @@
                 <div class="workflow-node-evidence-row" data-testid="workflow-node-evidence-row">
                   {{ formatWorkflowNodeEvidence(activeWorkflowDebugNode) }}
                 </div>
+                <div
+                  v-if="formatWorkflowLlmFallbackEvidence(activeWorkflowDebugNode)"
+                  class="workflow-node-fallback-evidence"
+                  data-testid="workflow-node-fallback-evidence"
+                >
+                  {{ formatWorkflowLlmFallbackEvidence(activeWorkflowDebugNode) }}
+                </div>
                 <strong>输入</strong>
                 <pre>{{ formatWorkflowDebugValue(debugNodeInputs(activeWorkflowDebugNode)) }}</pre>
                 <strong>输出</strong>
@@ -4034,6 +4041,7 @@ import {
 import {
   buildWorkflowRunCallTree,
   buildWorkflowRunFlamegraph,
+  formatWorkflowLlmFallbackEvidence,
   formatWorkflowNodeEvidence,
   formatWorkflowDebugValue,
   summarizeWorkflowRunDebug,
@@ -12852,6 +12860,17 @@ onUnmounted(() => {
   color: #2e3346;
   font-weight: 800;
   line-height: 1.35;
+}
+
+.workflow-node-fallback-evidence {
+  padding: 0.5rem 0.625rem;
+  border: 0.0625rem solid #fde7c7;
+  border-left: 0.25rem solid #f59e0b;
+  border-radius: 0.375rem;
+  background: #fff7ed;
+  color: #7c2d12;
+  font-size: 0.75rem;
+  line-height: 1.45;
 }
 
 .model-provider-tag {

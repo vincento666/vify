@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildWorkflowRunCallTree,
   buildWorkflowRunFlamegraph,
+  formatWorkflowLlmFallbackEvidence,
   formatWorkflowNodeEvidence,
   summarizeWorkflowRunDebug,
 } from './workflowRunDebug'
@@ -76,5 +77,45 @@ describe('workflow run debug view model', () => {
       totalTokens: 2,
       usageEstimated: true,
     })).toEqual('Tokens 2 (estimated) · Cost - · 3ms · END')
+  })
+
+  it('formats workflow llm fallback evidence from structured node debug output', () => {
+    const fallbackEvidence = formatWorkflowLlmFallbackEvidence({
+      nodeKey: 'llm',
+      nodeType: 'LLM',
+      outputs: {
+        answer: 'fallback answer',
+        __debug: {
+          llm: {
+            requestModel: 'openrouter/primary',
+            fallbackModel: 'openrouter/fallback',
+            fallbackUsed: true,
+            fallbackReason: 'primary request failed with token sk-live-secret-123',
+            fallback: {
+              attempted: true,
+              attempts: [
+                {
+                  model: 'openrouter/primary',
+                  status: 'failed',
+                  reason: 'provider rejected apiKey=sk-live-secret-123',
+                },
+                {
+                  model: 'openrouter/fallback',
+                  status: 'succeeded',
+                },
+              ],
+            },
+          },
+        },
+      },
+    })
+
+    expect(fallbackEvidence).toContain('Fallback used')
+    expect(fallbackEvidence).toContain('request openrouter/primary')
+    expect(fallbackEvidence).toContain('fallback openrouter/fallback')
+    expect(fallbackEvidence).toContain('openrouter/primary failed')
+    expect(fallbackEvidence).toContain('openrouter/fallback succeeded')
+    expect(fallbackEvidence).toContain('[REDACTED]')
+    expect(fallbackEvidence).not.toContain('sk-live-secret-123')
   })
 })

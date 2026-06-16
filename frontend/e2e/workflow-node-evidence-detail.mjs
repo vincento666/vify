@@ -92,10 +92,58 @@ try {
   assert(String(JSON.stringify(llmDetail.inputs || {})).includes('node evidence payload'), `Expected node input detail: ${JSON.stringify(llmDetail)}`)
   assert(String(JSON.stringify(llmDetail.outputs || {})).includes('answer'), `Expected node output detail: ${JSON.stringify(llmDetail)}`)
 
+  await page.route(`**/api/v1/workflows/${workflow.id}/runs/${run.runId}/debug`, async (route) => {
+    const response = await route.fetch()
+    const payload = await response.json()
+    const nodeDetails = (payload.data.nodeDetails || []).map((node) => {
+      if (node.nodeKey !== 'llm_1') return node
+      return {
+        ...node,
+        outputs: {
+          ...(node.outputs || {}),
+          __debug: {
+            ...(node.outputs?.__debug || {}),
+            llm: {
+              requestModel: 'openrouter/primary-demo',
+              fallbackModel: 'openrouter/fallback-demo',
+              fallbackUsed: true,
+              fallbackReason: 'primary request failed with token sk-browser-secret-123',
+              fallback: {
+                attempted: true,
+                attempts: [
+                  {
+                    model: 'openrouter/primary-demo',
+                    status: 'failed',
+                    reason: 'provider rejected apiKey=sk-browser-secret-123',
+                  },
+                  {
+                    model: 'openrouter/fallback-demo',
+                    status: 'succeeded',
+                  },
+                ],
+              },
+            },
+          },
+        },
+      }
+    })
+    await route.fulfill({
+      response,
+      json: {
+        ...payload,
+        data: {
+          ...payload.data,
+          nodeDetails,
+        },
+      },
+    })
+  })
+
   await page.goto(`${baseUrl}/workflows/${workflow.id}/canvas?runId=${run.runId}&debug=1`, { waitUntil: 'networkidle' })
   const dock = page.getByTestId('workflow-debug-dock')
   await dock.getByText('调试详情', { exact: true }).waitFor({ state: 'visible', timeout: 8000 })
   await dock.getByTestId('workflow-run-call-tree').getByRole('button', { name: /llm_1/ }).click()
+  await dock.getByLabel('调试详情视图').selectOption('node')
   const evidence = dock.getByTestId('workflow-node-evidence-row').first()
   await evidence.waitFor({ state: 'visible', timeout: 8000 })
   const evidenceText = await evidence.innerText()
@@ -103,6 +151,16 @@ try {
   assert(evidenceText.includes('Cost'), `Expected cost in evidence row, got: ${evidenceText}`)
   assert(evidenceText.includes('ms'), `Expected latency in evidence row, got: ${evidenceText}`)
   assert(evidenceText.includes('LLM'), `Expected resource type in evidence row, got: ${evidenceText}`)
+  const fallbackEvidence = dock.getByTestId('workflow-node-fallback-evidence').first()
+  await fallbackEvidence.waitFor({ state: 'visible', timeout: 8000 })
+  const fallbackEvidenceText = await fallbackEvidence.innerText()
+  assert(fallbackEvidenceText.includes('Fallback used'), `Expected fallback status, got: ${fallbackEvidenceText}`)
+  assert(fallbackEvidenceText.includes('request openrouter/primary-demo'), `Expected primary model, got: ${fallbackEvidenceText}`)
+  assert(fallbackEvidenceText.includes('fallback openrouter/fallback-demo'), `Expected fallback model, got: ${fallbackEvidenceText}`)
+  assert(fallbackEvidenceText.includes('openrouter/primary-demo failed'), `Expected failed attempt, got: ${fallbackEvidenceText}`)
+  assert(fallbackEvidenceText.includes('openrouter/fallback-demo succeeded'), `Expected succeeded attempt, got: ${fallbackEvidenceText}`)
+  assert(fallbackEvidenceText.includes('[REDACTED]'), `Expected redacted secret marker, got: ${fallbackEvidenceText}`)
+  assert(!fallbackEvidenceText.includes('sk-browser-secret-123'), `Expected secret to be redacted, got: ${fallbackEvidenceText}`)
   const nodeDetailText = await dock.getByTestId('workflow-run-node-details').innerText()
   assert(nodeDetailText.includes('输入'), `Expected input section in node detail, got: ${nodeDetailText}`)
   assert(nodeDetailText.includes('node evidence payload'), `Expected rendered input payload in node detail, got: ${nodeDetailText}`)

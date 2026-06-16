@@ -116,6 +116,26 @@ export function formatWorkflowNodeEvidence(node: WorkflowRunNodeDetail | null | 
   return `${tokenLabel} · Cost ${cost} · ${latency}ms${resource ? ` · ${resource}` : ''}`
 }
 
+export function formatWorkflowLlmFallbackEvidence(node: WorkflowRunNodeDetail | null | undefined): string {
+  const llm = debugLlmPayload(node)
+  const fallback = llm?.fallback
+  if (!llm || (!llm.fallbackUsed && !fallback?.attempted)) return ''
+
+  const parts = [llm.fallbackUsed ? 'Fallback used' : 'Fallback attempted']
+  const models = [
+    llm.requestModel ? `request ${redactDebugText(llm.requestModel)}` : '',
+    llm.fallbackModel ? `fallback ${redactDebugText(llm.fallbackModel)}` : '',
+  ].filter(Boolean)
+  if (models.length) parts.push(models.join(' -> '))
+  if (llm.fallbackReason) parts.push(`reason ${redactDebugText(llm.fallbackReason)}`)
+
+  const attempts = Array.isArray(fallback?.attempts) ? fallback.attempts : []
+  if (attempts.length) {
+    parts.push(attempts.map(formatFallbackAttempt).join('; '))
+  }
+  return parts.join(' · ')
+}
+
 export function workflowRunNodeDetailKey(node: WorkflowRunNodeDetail, index: number): string {
   const id = node.id ?? ''
   if (id !== '') return `id:${String(id)}`
@@ -130,4 +150,25 @@ function visibleTraceNodes(detail: WorkflowRunDebugDetail | null | undefined): A
   return normalizeNodes(detail)
     .map((node, index) => ({ node, index }))
     .filter(({ node }) => !['START', 'END'].includes(String(node.nodeType || '').toUpperCase()))
+}
+
+function debugLlmPayload(node: WorkflowRunNodeDetail | null | undefined): Record<string, any> | null {
+  const outputs = node?.outputs || {}
+  const debug = outputs.__debug
+  const llm = debug?.llm
+  return llm && typeof llm === 'object' ? llm : null
+}
+
+function formatFallbackAttempt(attempt: Record<string, any>): string {
+  const model = redactDebugText(attempt.model || 'unknown model')
+  const status = redactDebugText(attempt.status || 'unknown')
+  const reason = attempt.reason ? ` (${redactDebugText(attempt.reason)})` : ''
+  return `${model} ${status}${reason}`
+}
+
+function redactDebugText(value: any): string {
+  return String(value)
+    .replace(/\b(api[-_]?key|token|authorization|password|secret|credential)s?\s*[:=]\s*[^,\s;)]+/gi, '$1=[REDACTED]')
+    .replace(/\bsk-[A-Za-z0-9_-]+/g, '[REDACTED]')
+    .replace(/\bBearer\s+[A-Za-z0-9._-]+/gi, 'Bearer [REDACTED]')
 }
