@@ -13,18 +13,18 @@
 - [x] Run unit/frontend/rem gates and save output.
 - [x] Run backend integration/contract gate and save output.
 - [x] Run browser UAT and save notes/screenshots.
-- [ ] Commit completed 074.1 slice.
+- [x] Commit completed 074.1 slice.
 
 ## 074.2 Human Task Control Loop
 
 - [x] Add RED tests for retry/cancel/resume task controls.
 - [x] Implement proposed task-control action API and UI affordances.
 - [x] Run full slice gates.
-- [ ] Commit completed 074.2 slice.
+- [x] Commit completed 074.2 slice.
 
 ## 074.3 Knowledge-Backed Operator Advisory
 
 - [x] Add RED tests for operator advisory using seeded knowledge and task ledger.
 - [x] Implement knowledge-backed advisory context.
 - [x] Run full slice gates.
-- [ ] Commit completed 074.3 slice.
+- [x] Commit completed 074.3 slice.
