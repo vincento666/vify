@@ -48,6 +48,33 @@ def initialise_database() -> None:
     _ensure_compatible_schema(engine)
 
 
+def check_database_schema(engine: Engine | None = None) -> None:
+    from app.core.schema import register_baseline_tables, tables_for_bind
+
+    register_baseline_tables()
+    target_engine = engine or get_engine()
+    inspector = sa.inspect(target_engine)
+    table_names = set(inspector.get_table_names())
+    expected_tables = tables_for_bind(target_engine)
+    missing_tables = sorted(table.name for table in expected_tables if table.name not in table_names)
+    missing_columns: list[str] = []
+    for table in expected_tables:
+        if table.name in missing_tables:
+            continue
+        actual_columns = {column["name"] for column in inspector.get_columns(table.name)}
+        for column in table.columns:
+            if column.name not in actual_columns:
+                missing_columns.append(f"{table.name}.{column.name}")
+    if not missing_tables and not missing_columns:
+        return
+    details: list[str] = []
+    if missing_tables:
+        details.append(f"missing tables: {', '.join(missing_tables)}")
+    if missing_columns:
+        details.append(f"missing columns: {', '.join(sorted(missing_columns))}")
+    raise RuntimeError(f"Database schema check failed: {'; '.join(details)}")
+
+
 def _ensure_compatible_schema(engine: Engine) -> None:
     inspector = sa.inspect(engine)
     table_names = inspector.get_table_names()

@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from app.api.routes.health import router as health_router
 from app.api.routes.runtime import router as runtime_router
 from app.core.config import get_settings
-from app.core.database import initialise_database
+from app.core.database import check_database_schema, initialise_database
 from app.core.exception_handlers import register_exception_handlers
 from app.core.logging import configure_logging
 from app.modules.agent.web.router import router as agent_router
@@ -42,12 +42,19 @@ configure_logging(settings.log_level)
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     if should_initialise_database_on_startup(settings):
         initialise_database()
+    elif should_check_database_schema_on_startup(settings):
+        check_database_schema()
     yield
 
 
 def should_initialise_database_on_startup(current_settings: object) -> bool:
     mode = str(getattr(current_settings, "persistence_mode", "local") or "local").strip().lower()
     return mode in {"local", "test"}
+
+
+def should_check_database_schema_on_startup(current_settings: object) -> bool:
+    mode = str(getattr(current_settings, "persistence_mode", "local") or "local").strip().lower()
+    return mode == "check"
 
 
 app = FastAPI(title=settings.app_name, version="0.0.1", lifespan=lifespan)
