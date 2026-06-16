@@ -34,7 +34,7 @@ const executedAction = {
   status: 'EXECUTED',
   result: {
     executorRef: 'refund_submit_mock',
-    audit: { semanticCode: 'REFUND_SUBMITTED_MOCK', orderNo: 'TK-100' },
+    audit: { semanticCode: 'REFUND_SUBMITTED_MOCK', orderNo: '[REDACTED]', executedAt: '2026-06-17T05:00:00' },
     error: null,
   },
 }
@@ -117,6 +117,30 @@ try {
       await route.fulfill({ json: envelope({ id: 12, status: 'ACTIVE', context: {} }) })
       return
     }
+    if (method === 'GET' && url.endsWith('/demo-stories')) {
+      await route.fulfill({ json: envelope({ list: [], total: 0 }) })
+      return
+    }
+    if (method === 'GET' && url.endsWith('/demo-stories/metrics')) {
+      await route.fulfill({
+        json: envelope({
+          storyCount: 0,
+          sessionCount: 0,
+          taskStatusCounts: {},
+          proposedActionStatusCounts: {},
+          humanConfirmation: { pending: 0, adopted: 0, terminal: 0, adoptionRate: 0 },
+          eventCounts: { total: 0, byType: {}, bySource: {} },
+          workerEventCounts: { total: 0, byType: {} },
+          recentFailureReasons: [],
+          stories: [],
+        }),
+      })
+      return
+    }
+    if (method === 'GET' && url.endsWith('/worker-profiles')) {
+      await route.fulfill({ json: envelope({ list: [], total: 0 }) })
+      return
+    }
     if (method === 'POST' && url.endsWith('/sessions/12/turns')) {
       await route.fulfill({ json: envelope(turnResult) })
       return
@@ -168,6 +192,12 @@ try {
 
   await page.getByLabel('执行已确认动作').click()
   await page.getByText('EXECUTED').waitFor({ state: 'visible', timeout: 10000 })
+  const receipt = page.getByTestId('operator-action-receipt')
+  await receipt.getByText('refund_submit_mock').waitFor({ state: 'visible', timeout: 10000 })
+  await receipt.getByText('REFUND_SUBMITTED_MOCK').waitFor({ state: 'visible', timeout: 10000 })
+  await receipt.getByText('[REDACTED]').waitFor({ state: 'visible', timeout: 10000 })
+  const receiptText = await receipt.textContent()
+  assert(!receiptText?.includes('TK-100'), `Execution receipt leaked raw order number: ${receiptText}`)
   const executeCalls = calls.filter((call) => call.method === 'POST' && call.url.endsWith('/proposed-actions/9/execute'))
   assert(
     executeCalls.length === 1,

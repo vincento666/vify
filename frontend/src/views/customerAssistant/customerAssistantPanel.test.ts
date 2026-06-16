@@ -106,6 +106,15 @@ describe('CustomerAssistantPanel UI contract', () => {
     expect(content).toContain(`:disabled="action.status !== 'CONFIRMED' || isProposedTaskCommand(action)"`)
   })
 
+  it('renders action execution receipts in the operator proposed-action panel', () => {
+    const actionPanel = section(content, 'operator-proposed-actions-panel')
+
+    expect(actionPanel).toContain('data-testid="operator-action-receipt"')
+    expect(actionPanel).toContain('formatCustomerAssistantActionReceipt(action)')
+    expect(actionPanel).toContain('receipt.auditRows')
+    expect(actionPanel).toContain('执行回执')
+  })
+
   it('renders retry cancel and resume task controls in the operator ledger', () => {
     const taskLedger = section(content, 'operator-task-ledger')
 

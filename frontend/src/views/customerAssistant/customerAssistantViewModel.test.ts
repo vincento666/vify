@@ -11,6 +11,7 @@ import {
 import {
   applyCustomerAssistantActionState,
   buildCustomerAssistantState,
+  formatCustomerAssistantActionReceipt,
   formatCustomerAssistantEvents,
   formatCustomerAssistantMetrics,
   formatOperatorAdvisoryEvidence,
@@ -163,6 +164,34 @@ describe('customer assistant view model', () => {
       status: 'CONFIRMED',
       title: '提交退票申请',
     })
+  })
+
+  it('formats executed proposed action receipts with sanitized audit values', () => {
+    const action: CustomerAssistantProposedAction = {
+      ...mockCustomerAssistantTurnResult.proposedActions[0],
+      status: 'EXECUTED',
+      result: {
+        executorRef: 'refund_submit_mock',
+        audit: {
+          semanticCode: 'REFUND_SUBMITTED_MOCK',
+          orderNo: '[REDACTED]',
+          executedAt: '2026-06-17T05:00:00',
+        },
+        error: null,
+      },
+    }
+
+    const receipt = formatCustomerAssistantActionReceipt(action)
+
+    expect(receipt).toMatchObject({
+      visible: true,
+      executorRef: 'refund_submit_mock',
+      semanticCode: 'REFUND_SUBMITTED_MOCK',
+      executedAt: '2026-06-17T05:00:00',
+      error: '',
+    })
+    expect(receipt.auditRows).toContainEqual({ key: 'orderNo', label: 'orderNo', value: '[REDACTED]' })
+    expect(JSON.stringify(receipt)).not.toContain('TK-100')
   })
 
   it('formats runtime events as compact operator timeline rows', () => {

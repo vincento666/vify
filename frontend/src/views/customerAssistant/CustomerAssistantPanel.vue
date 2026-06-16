@@ -488,6 +488,32 @@
               <a-tag v-if="isProposedTaskCommand(action)" color="blue">任务变更</a-tag>
               <a-tag :color="action.status === 'PENDING' ? 'warning' : 'default'">{{ action.status }}</a-tag>
               <code>{{ compactPayload(action.payload) }}</code>
+              <template
+                v-for="receipt in [formatCustomerAssistantActionReceipt(action)]"
+                :key="`receipt-${action.id}`"
+              >
+                <div
+                  v-if="receipt.visible"
+                  class="action-receipt"
+                  data-testid="operator-action-receipt"
+                >
+                  <div class="action-receipt-main">
+                    <a-tag color="success">执行回执</a-tag>
+                    <span>执行器 {{ receipt.executorRef }}</span>
+                    <span>结果 {{ receipt.semanticCode }}</span>
+                    <span v-if="receipt.executedAt">时间 {{ receipt.executedAt }}</span>
+                    <span v-if="receipt.error" class="receipt-error">错误 {{ receipt.error }}</span>
+                  </div>
+                  <div v-if="receipt.auditRows.length" class="action-receipt-audit">
+                    <span
+                      v-for="row in receipt.auditRows"
+                      :key="row.key"
+                    >
+                      {{ row.label }} <code>{{ row.value }}</code>
+                    </span>
+                  </div>
+                </div>
+              </template>
               <div
                 v-if="editingActionId === action.id"
                 class="action-edit-form"
@@ -679,6 +705,7 @@ import {
 import {
   applyCustomerAssistantDraftLocally,
   createCustomerAssistantDraftState,
+  formatCustomerAssistantActionReceipt,
   formatCustomerAssistantMetrics,
   formatCustomerAssistantTurnStatus,
   summarizeCustomerAssistantTasks,
@@ -1570,6 +1597,34 @@ async function executeAction(actionId: number) {
 
 .action-edit-actions {
   margin-top: 0;
+}
+
+.action-receipt {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.55rem;
+  border: 0.0625rem solid #d8eadf;
+  border-radius: 0.45rem;
+  background: #f7fcf8;
+}
+
+.action-receipt-main,
+.action-receipt-audit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  color: #3f4b5d;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.action-receipt-audit code {
+  color: #1f2937;
+}
+
+.receipt-error {
+  color: #b42318;
 }
 
 .edit-error {

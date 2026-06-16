@@ -107,6 +107,21 @@ export interface CustomerAssistantMetricsSummary {
   failures: CustomerAssistantFailureRow[]
 }
 
+export interface CustomerAssistantActionReceiptRow {
+  key: string
+  label: string
+  value: string
+}
+
+export interface CustomerAssistantActionReceipt {
+  visible: boolean
+  executorRef: string
+  semanticCode: string
+  executedAt: string
+  error: string
+  auditRows: CustomerAssistantActionReceiptRow[]
+}
+
 export interface CustomerAssistantRecommendationState {
   operatorRecommendation: string
   customerReplyDraft: string
@@ -269,6 +284,38 @@ export function applyCustomerAssistantActionState(
         proposedActions: item.proposedActions.map(update),
       })),
     },
+  }
+}
+
+export function formatCustomerAssistantActionReceipt(
+  action: CustomerAssistantProposedAction,
+): CustomerAssistantActionReceipt {
+  const result = asRecord(action.result)
+  const audit = asRecord(result?.audit)
+  const visible = action.status === 'EXECUTED' || action.status === 'FAILED'
+  if (!visible || !result) {
+    return {
+      visible: false,
+      executorRef: '',
+      semanticCode: '',
+      executedAt: '',
+      error: '',
+      auditRows: [],
+    }
+  }
+  return {
+    visible: true,
+    executorRef: stringField(result.executorRef, '未记录'),
+    semanticCode: stringField(audit?.semanticCode, action.status),
+    executedAt: stringField(audit?.executedAt, ''),
+    error: stringField(result.error, ''),
+    auditRows: Object.entries(audit ?? {})
+      .filter(([key, value]) => key !== 'semanticCode' && key !== 'executedAt' && value !== null && value !== undefined)
+      .map(([key, value]) => ({
+        key,
+        label: key,
+        value: receiptValue(value),
+      })),
   }
 }
 
@@ -519,6 +566,11 @@ function stringListField(value: unknown): string[] {
       typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean',
     )
     .map(String)
+}
+
+function receiptValue(value: unknown): string {
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return JSON.stringify(value)
 }
 
 function numberField(value: unknown): number {
