@@ -1,0 +1,83 @@
+# 028 Tasks
+
+- [x] 028.1 红测、实现、unit/e2e/UAT 证据
+- [x] 028.2 红测、实现、unit/e2e/UAT 证据
+- [x] 028.3 红测、实现、unit/e2e/UAT 证据
+- [x] 028.4 红测、实现、unit/e2e/UAT 证据
+- [x] 028.7 inline 变量建议浮层重构、回归门禁、浏览器 UAT
+- [x] 028.8 inline 变量作用域限制、本地变量引用、右删括号不反弹
+- [x] 028.9 END 返回模式与输出栏目分层、输出变量默认/删除/新增修正
+- [x] 028.10 END 回答内容独立栏目修正
+- [x] 028.11 END 输出变量上游引用映射控件与运行时映射
+- [x] 028 final gate 证据汇总
+
+## Evidence
+
+- RED unit: `artifacts/slices/028-workflow-chatflow-input-picker-model-hardening/028.1-inline-variable-trigger/red-unit.txt`
+- RED e2e:
+  - `artifacts/slices/028-workflow-chatflow-input-picker-model-hardening/028.1-inline-variable-trigger/red-e2e.txt`
+  - `artifacts/slices/028-workflow-chatflow-input-picker-model-hardening/028.2-variable-picker-left/red-e2e.txt`
+  - `artifacts/slices/028-workflow-chatflow-input-picker-model-hardening/028.3-model-search/red-e2e.txt`
+  - `artifacts/slices/028-workflow-chatflow-input-picker-model-hardening/028.4-model-parameters/red-e2e.txt`
+- Unit: `artifacts/slices/028-workflow-chatflow-input-picker-model-hardening/unit-inline.txt`
+- Focused e2e: `artifacts/slices/028-workflow-chatflow-input-picker-model-hardening/focused-e2e.txt`
+- Rem gate: `artifacts/slices/028-workflow-chatflow-input-picker-model-hardening/rem.txt`
+- Full unit: `artifacts/slices/028-workflow-chatflow-input-picker-model-hardening/full-unit.txt`
+- Build: `artifacts/slices/028-workflow-chatflow-input-picker-model-hardening/build.txt`
+- Browser UAT: `artifacts/slices/028-workflow-chatflow-input-picker-model-hardening/uat.md`
+- Correction: `artifacts/slices/028-workflow-chatflow-input-picker-model-hardening/028.5-model-parameter-slider-correction/`
+  - RED: `red-e2e.txt`
+  - E2E: `e2e.txt`
+  - Focused regression: `focused-e2e.txt`
+  - Rem: `rem.txt`
+  - Full unit: `full-unit.txt`
+  - Build: `build.txt`
+  - Browser UAT screenshot: `screenshots/model-parameter-slider.png`
+- Density correction: `artifacts/slices/028-workflow-chatflow-input-picker-model-hardening/028.6-model-parameter-number-density/`
+  - RED: `red-e2e.txt`
+  - E2E: `e2e.txt`
+  - Rem: `rem.txt`
+  - Build: `build.txt`
+- Inline suggestion correction: `artifacts/slices/028-workflow-chatflow-input-picker-model-hardening/028.7-inline-variable-suggestion-popover/`
+  - RED: `red-e2e.txt`
+  - Unit: `focused-unit.txt`, `full-unit.txt`
+  - E2E: `e2e-inline-position.txt`, `e2e-inline-trigger.txt`, `e2e-inline-trigger-regression.txt`, `e2e-form-selector.txt`, `e2e-workflow-variable.txt`, `e2e-chatflow-shared-variable-picker.txt`
+  - Rem: `rem.txt`
+  - Build: `build.txt`
+  - Browser UAT: `uat.md`, `screenshots/browser-uat-inline-variable-picker.png`
+- Inline scope and delete correction: `artifacts/slices/028-workflow-chatflow-input-picker-model-hardening/028.8-variable-scope-and-brace-delete/`
+  - RED: `red-unit.txt`
+  - Unit: `unit.txt`, `full-unit.txt`
+  - E2E: `e2e-inline-trigger.txt`, `e2e-inline-trigger-regression.txt`, `e2e-inline-position.txt`, `e2e-form-selector.txt`, `e2e-workflow-variable.txt`, `e2e-chatflow-shared-variable-picker.txt`
+  - Rem: `rem.txt`
+  - Build: `build.txt`
+  - Browser UAT: `uat.md`, `browser-uat-variable-scope-delete.png`
+- END output panel correction: `artifacts/slices/028-workflow-chatflow-input-picker-model-hardening/028.9-end-output-panel-refactor/`
+  - RED: `red-unit.txt`, `red-e2e.txt`
+  - Unit: `unit.txt`, `full-unit.txt`
+  - E2E: `e2e-end-output-editor.txt`, `e2e-end-panel-parity.txt`, `e2e-inline-trigger.txt`, `e2e-inline-trigger-regression.txt`, `e2e-inline-position.txt`, `e2e-workflow-variable.txt`, `e2e-chatflow-shared-variable-picker.txt`
+  - Rem: `rem.txt`
+  - Build: `build.txt`
+  - Browser UAT: `uat.md`, `browser-uat-end-output-panel.png`
+- END answer content correction: `artifacts/slices/028-workflow-chatflow-input-picker-model-hardening/028.10-end-answer-content-section/`
+  - RED: `red-unit.txt`, `red-e2e.txt`
+  - Unit: `unit.txt`, `full-unit.txt`
+  - E2E: `e2e-end-output-editor.txt`, `e2e-end-panel-parity.txt`, `e2e-inline-trigger.txt`, `e2e-inline-trigger-regression.txt`, `e2e-inline-position.txt`, `e2e-chatflow-shared-variable-picker.txt`
+  - Rem: `rem.txt`
+  - Build: `build.txt`
+  - Browser UAT: `uat.md`, `browser-uat-answer-content-section.png`
+- END output variable reference correction: `artifacts/slices/028-workflow-chatflow-input-picker-model-hardening/028.11-end-output-variable-reference/`
+  - RED: `red-unit-frontend.txt`, `red-unit-backend.txt`, `red-e2e.txt`
+  - Unit: `unit-frontend.txt`, `unit-backend.txt`, `full-unit.txt`
+  - Integration: `integration-chatflow-roundtrip.txt`
+  - E2E: `e2e-end-output-editor.txt`, `e2e-end-panel-parity.txt`, `e2e-inline-trigger.txt`, `e2e-variable-picker-left.txt`, `e2e-shared-variable-picker.txt`
+  - Rem: `rem.txt`
+  - Build: `build.txt`
+  - Browser UAT: `uat.md`, `browser-uat-end-output-variable-picker.png`
+- Local-only inline variable insertion correction: `artifacts/slices/083-workflow-chatflow-canvas-node-parity/`
+  - RED: inline insertion E2E added for LLM system prompt and MESSAGE content.
+  - Unit: `unit.txt`
+  - E2E: `e2e.txt`
+  - Rem: `rem.txt`
+  - Browser UAT: `uat.md`
+  - Fix: non-END inline text fields now use local input refs such as `{{input_1}}`, never `{{llm_1.input_1}}`.

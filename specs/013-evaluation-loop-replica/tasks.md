@@ -3,12 +3,15 @@
 ## 013.0 Product discovery baseline
 
 - [x] Attempt to deploy local Coze Loop and record the blocker.
-- [ ] Successfully deploy local Coze Loop to a browser-accessible URL.
-- [ ] Capture browser screenshots for Evaluation entry, Eval Set, Evaluator, Experiment, Run Report, failed-case drilldown, and empty/error states from the locally deployed Coze Loop frontend.
+- [x] Retry local Coze Loop deployment on 2026-06-02 and record Docker layer blocker.
+- [x] Successfully deploy local Coze Loop to a browser-accessible URL.
+- [x] Capture browser screenshots for Evaluation entry, Eval Set, Evaluator, Experiment, experiment detail/report shell, metrics empty state, validation feedback, and empty/error states from the locally deployed Coze Loop frontend.
 - [x] Save artifacts under `artifacts/slices/013-evaluation-loop-replica/discovery/`.
 - [x] Write provisional `product-reverse.md` with users, tasks, objects, actions, feedback, page states, and Hify adaptation decisions based on official docs and source inspection.
+- [x] Update provisional product reverse notes with Coze Loop source-confirmed experiment creation order: basic info -> eval set -> evaluation object -> evaluator -> confirm.
 - [x] Record fallback evidence if local Coze Loop cannot run.
-- [ ] Replace or supplement fallback evidence with local browser UAT evidence before using Coze Loop for pixel-level UI/UX replication.
+- [x] Replace or supplement fallback evidence with local browser UAT evidence before using Coze Loop for product-level UI/UX replication.
+- [ ] Capture a fully scored Coze failed-case drilldown after a local model and first-class evaluation target are configured.
 
 ## 013.1 Evaluation workbench shell
 
@@ -17,7 +20,7 @@
 - [x] Add `/evaluation` route and workbench shell.
 - [x] Add internal tabs: Experiments, Eval Sets, Evaluators, Run Records, Compare Analysis.
 - [x] Default to Experiments tab.
-- [x] Show Compare Analysis as an explicit empty/unavailable state in MVP.
+- [x] Show Compare Analysis as an explicit empty state before compare data exists; later 013.10 enables the action.
 - [x] Gates pass.
 
 ## 013.2 Eval Sets
@@ -47,7 +50,7 @@
 - [x] Keep Workflow and Chatflow target adapters out of MVP.
 - [x] Implement synchronous run execution over run-local copies of cases and evaluator config.
 - [x] Persist run status, progress, aggregate score, pass rate, failed count, and timestamps.
-- [x] Build Experiments tab create flow: target -> eval set -> evaluators -> review/run.
+- [x] Build Experiments tab create flow: basic info -> eval set -> Agent target -> evaluators -> review/run.
 - [x] Gates pass.
 
 ## 013.5 Result report and run records
@@ -64,6 +67,25 @@
 - [x] 013.6 CSV import and run export.
 - [x] 013.7 LLM judge evaluators.
 - [x] 013.8 Workflow and Chatflow target adapters.
-- [ ] Verify 013.8 target adapters expose Workflow/Chatflow type labels and deep links to the 011/012 full-page canvas/run evidence instead of embedding canvas UI inside Evaluation.
+- [x] Verify 013.8 target adapters expose Workflow/Chatflow type labels and deep links to the 011/012 full-page canvas/run evidence instead of embedding canvas UI inside Evaluation.
 - [x] 013.9 Selected-case rerun.
 - [x] 013.10 Compare analysis with score delta, pass-rate delta, newly failed cases, recovered cases, and unchanged failures.
+
+## Final Gate 2026-06-02
+
+- [x] Backend evaluation integration suite green.
+- [x] Backend contract suite green.
+- [x] Frontend unit suite green after correcting the Vitest command.
+- [x] Frontend production build green.
+- [x] E2E green for shell, eval sets, evaluators, LLM judge, Agent experiment, Workflow/Chatflow targets, run records report, selected-case rerun, compare analysis, and CSV import/export.
+- [x] Browser UAT screenshots saved under `artifacts/slices/013-evaluation-loop-replica/final-gate/screenshots/`.
+- [x] Final UAT summary saved at `artifacts/slices/013-evaluation-loop-replica/final-gate/uat.md`.
+
+## Target Adapter Recheck 2026-06-08
+
+- [x] Local Coze Loop Docker stack revalidated as healthy and browser-accessible at `http://localhost:8082`.
+- [x] Coze Loop Evaluation list/create surfaces re-reviewed from local browser DOM evidence.
+- [x] Hify Workflow target failed-case report exposes target type, status, run id, target output, evaluator reason, and Workflow canvas debug deep link.
+- [x] Browser UAT opened the target debug deep link and verified the Workflow run evidence page.
+- [x] Hify live LLM judge opt-in test passed with OpenRouter model `deepseek/deepseek-v4-flash`.
+- [ ] Coze Loop fully scored failed-case drilldown remains pending until the local Coze model config and first-class evaluation target are configured.

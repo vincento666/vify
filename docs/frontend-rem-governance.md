@@ -26,8 +26,11 @@ Scale points:
 - Use design tokens from `frontend/src/styles/tokens.css` where available.
 - New visual sizes should use `rem`, not raw `px`.
 - Repeated visual sizes should become semantic tokens first.
-- Element Plus props such as dialog width, drawer size, table column width, and
-  form label width should use rem strings.
+- Ant Design Vue props such as modal width, drawer size, table column width,
+  form label width, and upload trigger sizing should use rem strings where the
+  component accepts string dimensions.
+- Deferred workflow/chatflow Element Plus props may keep rem strings until the
+  workflow/chatflow migration slice is allowed.
 - Numeric icon/avatar sizes should become CSS classes with rem sizing.
 
 ## Allowed PX

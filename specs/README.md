@@ -23,6 +23,13 @@ defined in `docs/testing/acceptance-gates.md` before the next slice starts.
 | 10 | 026 | Workflow/Chatflow polish hardening for layout, lists, shared controls, config panels, and variable selectors |
 | 11 | 027 | Workflow/Chatflow config hardening for Start defaults, variable references, selectors, branches, and icon polish |
 | 12 | 035 | Productize Knowledge retrieval strategy, FAQ vector recall, vector-store adapters, and lifecycle UX |
+| 13 | 045-046 | Customer-assistant runtime MVP and operator panel baseline |
+| 14 | 047-052 | Customer-assistant actor persistence, live L1 events, restricted worker, proposed actions, eval data, and harness-compatible sub-agent contract |
+| 15 | 053-058 | Runtime v2 alignment, synthetic eval/LLM promotion, operator-turn mode, worker hardening, and Chatflow-first v2 transport spike |
+| 16 | 059, 060, 061 | Real customer-assistant worker async runtime, MySQL8/Weaviate persistence readiness where required, and async worker orchestration |
+| 17 | 062-066 | Shared Hify Workflow/Chatflow runtime v2 core, Chatflow facade, deterministic node pack, Workflow facade, and async Chatflow SOP worker adapter |
+| 18 | 067-069 | Cross-runtime observability gate, restricted ReAct worker standardization, and smooth Two-Stage ReAct customer-assistant runtime |
+| 19 | 070 | Realtime control or scale-out transport only after SSE/durable polling is proven insufficient |
 
 ## Directory Index
 
@@ -56,7 +63,49 @@ defined in `docs/testing/acceptance-gates.md` before the next slice starts.
 | 025-coze-node-config-panel-parity | Prioritize Coze-like Start/End/LLM panels and variable reference controls, then harden running-path, endpoint, and edge-insert canvas interactions |
 | 026-workflow-chatflow-polish-hardening | Harden Workflow/Chatflow layout, lists, shared controls, config panels, and variable selector polish |
 | 027-workflow-chatflow-config-hardening | Harden Start defaults, variable references, floating selectors, branch conditions, and workflow icon buttons |
+| 028-workflow-chatflow-input-picker-model-hardening | Harden variable-reference input pickers and LLM model/parameter controls |
+| 029-isolated-runtime-router-lab | Isolated runtime router lab for safer routing experiments |
+| 030-runtime-semantic-routing-arbitration | Semantic routing arbitration for runtime decisions |
+| 031-chatflow-sop-adapter-contract | Adapter contract for Chatflow-backed SOP execution |
+| 032-chatflow-sop-integration | Real Chatflow SOP integration through the adapter contract |
+| 033-runtime-fallback-policy | Runtime handoff and fallback policy foundation |
+| 034-unified-routing-chat-lab | Unified routing chat lab across direct and fallback paths |
 | 035-knowledge-retrieval-productization | Productize Knowledge retrieval with selectable recall modes, FAQ vectorization, adapter boundaries, and lifecycle UX |
+| 036-runtime-faq-exact-answer-gate | Exact FAQ answer gate for runtime fallback paths |
+| 037-runtime-faq-embedding-answer-gate | Embedding-based FAQ answer gate for runtime fallback paths |
+| 038-runtime-rag-answer-gate | RAG answer gate for runtime fallback paths |
+| 039-runtime-controlled-agent-fallback | Controlled agent fallback with policy boundaries |
+| 040-runtime-fallback-e2e-lab-acceptance | E2E and lab acceptance for runtime fallback behavior |
+| 041-runtime-policy-config-observability | Runtime policy configuration and observability |
+| 042-runtime-policy-release-governance | Runtime policy release governance |
+| 043-frontend-module-capsule-adapter-refactor | Frontend module capsule adapter refactor |
+| 044-frontend-ant-design-vue-migration | Frontend migration to Ant Design Vue |
+| 045-customer-assistant-runtime-mvp | ToB customer-assistant runtime MVP with task ledger and parallel workers |
+| 046-customer-assistant-operator-panel-mvp | Customer-assistant operator panel MVP in the main menu |
+| 047-customer-assistant-llm-shadow-and-actor | Actor persistence and opt-in LLM shadow mode for customer assistant |
+| 048-customer-assistant-live-l1-events-sse | True execution-time L1 customer-assistant events over SSE |
+| 049-customer-assistant-restricted-react-worker | Restricted task-bound ReAct worker for customer assistant |
+| 050-customer-assistant-proposed-action-execution-lifecycle | Proposed-action confirmation and mock execution lifecycle |
+| 051-customer-assistant-eval-data-foundation | Evaluation data path and initial golden cases for customer assistant |
+| 052-customer-assistant-harness-compatible-sub-agent | Harness-compatible eventful customer-assistant sub-agent contract |
+| 053-workflow-chatflow-runtime-v2-event-alignment | Workflow/Chatflow runtime v2 event and async lifecycle alignment |
+| 054-customer-assistant-synthetic-eval-and-llm-promotion | Synthetic eval, Chatflow/SOP data readiness, and LLM promotion gate |
+| 055-customer-assistant-llm-primary-path-mvp | Opt-in customer-assistant LLM primary path with deterministic fallback |
+| 056-customer-assistant-worker-runtime-hardening | Worker timeout, cancellation, and async ref hardening for customer assistant |
+| 057-customer-assistant-operator-turn-mode | Operator recommendation-only turn mode and proposed task command flow |
+| 058-realtime-runtime-transport-and-workflow-chatflow-v2-spike | Realtime transport decision and Chatflow-first runtime v2 spike |
+| 059-customer-assistant-worker-async-runtime-mvp | Durable async runtime for one customer-assistant worker path |
+| 060-mysql8-weaviate-demo-migration | Demo migration to MySQL8 primary DB plus Weaviate vector store |
+| 061-customer-assistant-async-worker-orchestration | Customer-assistant task orchestration over real async worker refs |
+| 062-hify-workflow-chatflow-shared-runtime-v2-core | Shared runtime v2 core for Hify Workflow and Chatflow |
+| 063-hify-chatflow-runtime-v2-facade-mvp | Chatflow facade over the shared Hify runtime v2 core |
+| 064-hify-runtime-v2-core-node-coverage-pack-1 | First deterministic node coverage pack for Hify runtime v2 core |
+| 065-hify-workflow-runtime-v2-facade-mvp | Hify Workflow facade over the shared runtime v2 core |
+| 066-customer-assistant-async-chatflow-sop-worker-adapter | Customer-assistant Chatflow SOP worker using Chatflow v2 when compatible |
+| 067-cross-runtime-observability-and-regression-gate | Cross-runtime observability and regression gate across assistant, workers, and Hify runtime v2 |
+| 068-restricted-react-worker-runtime-standardization | Standardized bounded ReAct worker runtime with tool policy and events |
+| 069-customer-assistant-two-stage-react-runtime-mvp | Smooth opt-in Two-Stage ReAct runtime for customer assistant |
+| 070-realtime-control-and-scale-out-transport | Late-stage realtime control and scale-out transport decision/spike |
 
 ## Required Files Per Spec
 

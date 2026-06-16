@@ -11,6 +11,7 @@ Add the next group of high-value Workflow and Chatflow nodes after the existing 
 - It does not implement Dify-style Task Stack or cross-flow dynamic intent switching.
 - It does not implement full Coze node form depth unless the field is backed by runtime behavior.
 - It does not hide runtime-heavy resource calls inside the LLM node unless their evidence, limits, and failure behavior are implemented.
+- It defines node-level streaming output semantics and config switches for Chatflow-visible message/model output, but it does not implement full public channel streaming delivery. Channel transport, Web/API delivery, and production observe aggregation are completed in 018/019.
 - It does not expose live Coze palette entries as runnable just because they appear in the add-node menu. Plugin, workflow/subflow, loop, batch, async, database CRUD, and knowledge write/search entries need explicit runtime contracts and gates before being enabled.
 
 ## Live Coze Palette Alignment
@@ -78,6 +79,37 @@ LLM-driven Chatflow nodes can expose a "chat history awareness" option:
 - History is read from Chatflow test/run profile, not from Workflow by default.
 - UI label must not confuse history with Global Variable.
 
+## Streaming Output Boundary
+
+Streaming is required for a customer-service Chatflow MVP because users expect model answers and message output to appear progressively. 015 includes node-level streaming controls and event semantics:
+
+- Supported nodes:
+  - existing LLM node when used in Chatflow profile.
+  - MESSAGE node.
+  - INFORMATION_COLLECTION follow-up output when the follow-up is LLM-generated.
+- Optional for Workflow runs: Workflow can show streaming in test/debug surfaces, but downstream Workflow nodes always receive the final accumulated output value, never partial chunks.
+- Config fields:
+  - `streamOutput`: inherit, enabled, disabled.
+  - `streamTarget`: message, debug-only. Chatflow defaults to message when the run/channel supports streaming.
+  - `fallbackMode`: aggregate when streaming is unsupported or provider fails to stream.
+- Runtime events:
+  - `message_delta`: user-visible text chunk.
+  - `message_done`: final user-visible message content.
+  - `llm_delta`: model-visible/debug chunk for LLM nodes when not directly user-visible.
+  - `stream_error`: stream failed and either fell back to aggregate output or failed the node according to node error policy.
+- Downstream contract:
+  - Partial chunks are events only.
+  - Node outputs and downstream variable references are populated only after the final accumulated value is available.
+  - JSON output mode does not expose partial JSON as a downstream variable; it emits debug chunks and parses only the final accumulated content.
+- UI behavior:
+  - Right panel shows a streaming switch only on nodes whose runtime can emit stream events.
+  - Node-test drawer can display progressive chunks and still render the final `输出` block.
+  - Full Chatflow test panel can display user-visible streaming while preserving final run evidence.
+- Transport boundary:
+  - 015 defines and tests events in local run/test surfaces.
+  - 018 persists streaming events into Chatflow session timelines.
+  - 019 maps streaming events to Web/API/channel delivery.
+
 ## Node Contracts
 
 ### CODE
@@ -137,8 +169,8 @@ LLM-driven Chatflow nodes can expose a "chat history awareness" option:
 
 - Scope: Chatflow only.
 - Product equivalent: Dify Answer node; Coze stream Message event for message/end-like output nodes.
-- Config: content template, variable references, output format, optional stream flag.
-- Runtime: emits a message event and continues immediately.
+- Config: content template, variable references, output format, streaming mode, fallback mode.
+- Runtime: emits message events and continues immediately after the final message value is produced.
 - Output: emitted content, message id if available.
 - Does not trigger interrupt/resume and does not wait for user input.
 
@@ -173,7 +205,7 @@ LLM-driven Chatflow nodes can expose a "chat history awareness" option:
   - Extracts fields through LLM/fake extractor.
   - Merges extracted values with previous collected state.
   - Detects missing required fields.
-  - Emits focused follow-up message/question when incomplete.
+  - Emits focused follow-up message/question when incomplete, optionally through streaming message events.
   - Continues collection after resume until complete or max rounds.
   - On completion, outputs structured collected data; optional advanced direct writes can target Conversation/User variables.
 - Output:
@@ -210,6 +242,7 @@ JSON_PARSE is separate from VARIABLE_ASSIGN:
 
 - MESSAGE sends content and continues immediately.
 - QUESTION sends content and waits for user reply.
+- MESSAGE can stream user-visible chunks; QUESTION may stream only its question text before emitting the interrupt event.
 - They may share UI components, but remain separate node types because QUESTION changes runtime control flow, output variables, and branch ports.
 - Dify Answer is treated as equivalent to Hify MESSAGE, not QUESTION.
 - Coze Message events represent output from message/end-like nodes; Coze Interrupt events represent waiting behavior and resume contract.
@@ -219,6 +252,10 @@ JSON_PARSE is separate from VARIABLE_ASSIGN:
 New Chatflow nodes use the shared run records plus profile-level events:
 
 - `message`: emitted by MESSAGE and by INFORMATION_COLLECTION follow-up output.
+- `message_delta`: emitted when MESSAGE, Chatflow LLM output, or INFORMATION_COLLECTION follow-up streams user-visible chunks.
+- `message_done`: emitted when the final user-visible message is complete.
+- `llm_delta`: emitted for debug/model-visible streaming chunks when not directly user-visible.
+- `stream_error`: emitted when a streaming provider/path fails before final aggregation.
 - `interrupt`: emitted by QUESTION, HUMAN_INPUT, and incomplete INFORMATION_COLLECTION.
 - `resume`: resumes the same flow run from an interrupt event.
 - `done`: emitted when the flow completes.
@@ -242,8 +279,8 @@ INTENT_RECOGNITION is LLM-driven semantic routing, not a rule-only condition:
 | 015.1 Data transform nodes | CODE, TEXT_PROCESS, JSON_PARSE work in Workflow and Chatflow | RED: transform tests fail; Unit: executors/parsers; Integration: run records; E2E: canvas run; UAT: outputs visible |
 | 015.2 Variable aggregation and assignment | VARIABLE_AGGREGATION normalizes upstream values; VARIABLE_ASSIGN writes current supported scopes and shows scope selector | RED: aggregation/assignment tests fail; Unit: aggregator and scope resolver; Integration: persisted/mock variables; E2E: aggregate or assign then use; UAT: selector visible |
 | 015.3 LLM intent branch | INTENT_RECOGNITION creates dynamic ports and routes by fake/LLM intent | RED: branch test fails; Unit: intent picker; Integration: node run; E2E: branch output; UAT: correct branch state |
-| 015.4 Chat message/question/input | MESSAGE, QUESTION, HUMAN_INPUT render and pause/continue as runtime supports | RED: interrupt tests fail; Unit: event model; Integration: resume contract; E2E: ask/answer; UAT: wait states visible |
-| 015.5 Smart info collection | INFORMATION_COLLECTION supports multi-turn slot filling with history option | RED: slot-fill test fails; Unit: slot merger; Integration: checkpoint/mock state; E2E: missing-field follow-up; UAT: completion visible |
+| 015.4 Chat message/question/input | MESSAGE, QUESTION, HUMAN_INPUT render and pause/continue as runtime supports; MESSAGE supports streaming config and final aggregation | RED: interrupt/streaming tests fail; Unit: event model; Integration: resume contract; E2E: ask/answer/stream; UAT: wait and stream states visible |
+| 015.5 Smart info collection | INFORMATION_COLLECTION supports multi-turn slot filling with history option and optional streaming follow-up output | RED: slot-fill test fails; Unit: slot merger; Integration: checkpoint/mock state; E2E: missing-field follow-up; UAT: completion and streaming follow-up visible |
 
 ## Evidence
 

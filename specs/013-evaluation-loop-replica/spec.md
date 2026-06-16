@@ -66,7 +66,7 @@ This is a product replica, not only a technical API replica. The spec must answe
 
 - The first visible task is "run or inspect an experiment".
 - Resource management appears as tabs and secondary actions, not as separate top-level navigation.
-- The experiment create flow asks for target, eval set, evaluators, and run options in that order.
+- The experiment create flow is progressive and follows the Coze Loop product rhythm adapted to Hify: basic info, eval set, Agent target, evaluator, review/run.
 
 ### Progressive Disclosure
 
@@ -85,14 +85,15 @@ This is a product replica, not only a technical API replica. The spec must answe
 
 1. User opens Evaluation and lands on Experiments.
 2. User clicks create experiment.
-3. User selects one Agent target.
+3. User enters basic experiment info.
 4. User selects an Eval Set.
-5. User selects one or more Evaluators.
-6. User reviews a compact run summary and starts the run.
-7. Hify creates a Run Record and shows progress.
-8. User opens the result report.
-9. User filters failed cases, inspects input, output, expected answer, score, and evaluator reason.
-10. User decides whether the Agent change can ship or needs investigation.
+5. User selects one Agent target.
+6. User selects one or more Evaluators.
+7. User reviews a compact run summary and starts the run.
+8. Hify creates a Run Record and shows progress.
+9. User opens the result report.
+10. User filters failed cases, inspects input, output, expected answer, score, and evaluator reason.
+11. User decides whether the Agent change can ship or needs investigation.
 
 ## Coze Loop Product Discovery Gate
 
@@ -170,9 +171,34 @@ The 2026-06-01 Coze canvas live audit affects 013 only at the target-link bounda
 - Chatflow cases map eval input to `USER_INPUT` or `sys.query` plus conversation profile variables from 012.
 - Result reports link back to the target canvas/run evidence when debugging is needed.
 
+## Evaluation Navigation Depth
+
+Hify uses the global left sidebar for module navigation and the Evaluation
+top-level tabs for Evaluation object navigation. This corresponds to Coze
+Loop's Evaluation entry plus its nested Evaluation pages, but Hify renders the
+nested Evaluation pages as tabs because this project does not have a dedicated
+secondary left menu inside modules.
+
+Run status, case status, date range, search, and similar controls are filters,
+not another navigation level. They should use labeled filter fields, selects,
+or explicit filter controls rather than segmented tab-like controls.
+
 ## Evidence
 
 - Coze Loop public reference: Evaluation is organized around eval sets, evaluators, and experiments.
 - Coze Loop local discovery evidence: `artifacts/slices/013-evaluation-loop-replica/discovery/`.
+- Local Coze Loop browser UI/UX evidence is available as of `local-deploy-success-2026-06-02.md`.
+- Local Coze Loop browser UI/UX was revalidated on 2026-06-08 with the Docker
+  stack healthy at `http://localhost:8082`; DOM summaries are saved under
+  `artifacts/slices/013-evaluation-loop-replica/discovery/coze-loop-live-2026-06-08/`.
+- Screenshot baseline: `artifacts/slices/013-evaluation-loop-replica/discovery/screenshots/coze-loop-local-2026-06-02/`.
+- Local browser coverage includes login/register, Evaluation navigation, Eval Set list/create/detail, Evaluator list and Code/LLM create pages, Experiment list/create/confirm/detail, metrics empty state, and validation feedback.
+- A fully scored Coze failed-case drilldown was not captured because the local reference model and first-class evaluation target were not configured; Hify failed-case report requirements remain derived from the local experiment detail surface plus source-level Coze detail components and the 2026-06-08 local list/create DOM review.
+- Hify target-evidence Browser UAT for Workflow target reports passed on 2026-06-08:
+  `artifacts/slices/023-integration-architecture-deepening/023.7/uat.md`.
+- Hify live LLM judge opt-in verification passed with OpenRouter
+  `deepseek/deepseek-v4-flash`; the API key is not stored in repo artifacts.
 - Workflow/Chatflow canvas live audit used for adapter boundary: `artifacts/research/coze-workflow/spec-011-015-live-audit-20260601.md`.
 - Slice evidence: `artifacts/slices/013-evaluation-loop-replica/{slice-id}/`.
+- Final high-spec gate evidence: `artifacts/slices/013-evaluation-loop-replica/final-gate/uat.md`.
+- Hify browser UAT screenshots: `artifacts/slices/013-evaluation-loop-replica/final-gate/screenshots/browser-uat-experiments.png`, `browser-uat-run-report.png`, and `browser-uat-compare-analysis.png`.

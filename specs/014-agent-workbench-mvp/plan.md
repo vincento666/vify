@@ -32,6 +32,9 @@ Add a workbench feature area under `frontend/src/views/agent/`:
 
 - `AgentWorkbench.vue`: route page and layout.
 - `AgentWorkbenchShell.vue`: header, section navigation, responsive preview slot.
+- `AgentPersonaColumn.vue`: Coze-like `人设与回复逻辑` authoring surface, prompt helper toolbar, and prompt template cards.
+- `AgentOrchestrationColumn.vue`: Coze-like `编排` stack for model, skills, knowledge, memory, and conversation experience.
+- `AgentPreviewDebugColumn.vue`: Coze-like `预览与调试` chat preview, process/log controls, and composer.
 - `AgentCoreEditor.vue`: identity, model, instructions, generation settings.
 - `AgentCapabilityPanel.vue`: capability cards, selectors, and deep links to linked Workflow/Chatflow canvas routes.
 - `AgentRuntimeSummary.vue`: mirrors backend mode precedence.
@@ -49,6 +52,16 @@ The existing `AgentList.vue` should stay as the list entry. It may route create
 and edit actions to the workbench instead of opening the old dialog once the
 workbench is ready. During implementation, keep the modal path available until
 the replacement passes gates.
+
+After 014.17, the desktop shell should be reorganized from the current
+section-navigation-first layout to a Coze-aligned three-column layout:
+
+1. Persona/reply logic column.
+2. Orchestration column.
+3. Preview/debug column.
+
+The existing section keys can remain as internal state, mobile tabs, or compact
+anchors, but they should no longer occupy the primary left column on desktop.
 
 ## Routes
 
@@ -75,7 +88,7 @@ The workbench should surface this as product language, for example:
 
 - "Workflow mode: this workflow will run before the model answers."
 - "RAG mode: the selected knowledge base will be searched before answering."
-- "Direct mode with tools: the model may call bound MCP tools."
+- "LLM mode with tools: the model may call bound MCP tools."
 - "Tools are configured, but workflow mode currently takes priority."
 
 ## Preview Strategy
@@ -92,6 +105,14 @@ Do not add a separate unsaved draft execution endpoint in the first milestone.
 
 After versioning lands, preview can target draft, latest saved, or released
 Agent versions. Until then, preview targets the saved draft Agent.
+
+After 014.24, the preview UI treats chat entry as real conversation content:
+the opening message is an assistant bubble, starter questions are right-bottom
+aligned content-fit bubbles, user bubbles are light blue and content-fit, reset
+is an icon beside the preview title, and the composer uses an upper textarea
+plus lower icon action toolbar without a middle divider. Debug details focus
+the panel on open and use only preview-run-backed data rather than fabricated
+token/log metrics.
 
 ## Backend Strategy
 
@@ -173,6 +194,19 @@ out of scope.
 1. Add owner/access and sharing controls.
 2. Add catalog/marketplace shell for approved Agents.
 3. Add usage, quality, and release telemetry.
+
+### Milestone 5: Coze Detail Alignment
+
+1. Reorganize the workbench into the observed Coze three-column desktop layout.
+2. Move persona/reply logic into the left column with prompt helper actions and
+   template cards.
+3. Move model, skills, knowledge, memory, and conversation experience into the
+   middle orchestration column.
+4. Keep preview/debug always visible on the right.
+5. Connect draft autosave, preview/test, version snapshot, release, publish, and
+   observe/deep links into one visible lifecycle.
+6. Preserve full-page Workflow/Chatflow canvas deep links rather than embedding
+   flow canvases in the Agent detail page.
 
 ## Sequencing And Non-Scope Notes
 

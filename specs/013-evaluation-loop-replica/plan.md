@@ -37,28 +37,31 @@
 
 ## MVP API Shape
 
-- `GET /api/v1/evaluation/eval-sets`
-- `POST /api/v1/evaluation/eval-sets`
-- `GET /api/v1/evaluation/eval-sets/{id}`
-- `PUT /api/v1/evaluation/eval-sets/{id}`
-- `GET /api/v1/evaluation/evaluators`
-- `POST /api/v1/evaluation/evaluators`
-- `POST /api/v1/evaluation/evaluators/{id}/test`
-- `GET /api/v1/evaluation/experiments`
-- `POST /api/v1/evaluation/experiments`
-- `POST /api/v1/evaluation/experiments/{id}/runs`
-- `GET /api/v1/evaluation/runs`
-- `GET /api/v1/evaluation/runs/{id}`
+- `GET /api/v1/eval-sets`
+- `POST /api/v1/eval-sets`
+- `GET /api/v1/eval-sets/{id}`
+- `PUT /api/v1/eval-sets/{id}`
+- `POST /api/v1/eval-sets/{id}/cases`
+- `PUT /api/v1/eval-cases/{id}`
+- `GET /api/v1/evaluators`
+- `POST /api/v1/evaluators`
+- `POST /api/v1/evaluators/test`
+- `POST /api/v1/evaluators/{id}/test`
+- `GET /api/v1/evaluation-experiments`
+- `POST /api/v1/evaluation-experiments`
+- `POST /api/v1/evaluation-experiments/{id}/runs`
+- `GET /api/v1/evaluation-runs`
+- `GET /api/v1/evaluation-runs/{id}`
 
-Exact endpoint names may be refined during implementation, but the product objects must remain stable.
+Endpoint names follow the implemented module resources while preserving the Hify `/api/v1/...` envelope.
 
 ## Later API Shape
 
-- `POST /api/v1/evaluation/eval-sets/{id}/cases/import`
-- `POST /api/v1/evaluation/eval-sets/{id}/versions`
-- `POST /api/v1/evaluation/runs/{id}/rerun`
-- `GET /api/v1/evaluation/runs/{id}/export`
-- `GET /api/v1/evaluation/compare?leftRunId=...&rightRunId=...`
+- `POST /api/v1/eval-sets/{id}/cases/import-csv`
+- `GET /api/v1/evaluation-runs/{id}/export-csv`
+- `POST /api/v1/evaluation-runs/{runId}/case-results/{caseResultId}/rerun`
+- `GET /api/v1/evaluation-runs/compare?baseRunId=...&candidateRunId=...`
+- `POST /api/v1/eval-sets/{id}/versions`
 
 ## Evaluator Types
 
@@ -90,10 +93,11 @@ Exact endpoint names may be refined during implementation, but the product objec
 - Experiments tab is default.
 - Experiment list shows target, latest run status, score, pass rate, failed cases, updated time, and actions.
 - Create experiment flow is task ordered:
-  1. Select target.
+  1. Basic info.
   2. Select eval set.
-  3. Select evaluators.
-  4. Review and run.
+  3. Select Agent target.
+  4. Select evaluators.
+  5. Review and run.
 - Detail view uses progressive disclosure:
   - summary first.
   - failed cases next.
@@ -116,6 +120,29 @@ Before implementation slices, run Coze Loop locally when feasible:
   - what Hify will copy as product behavior.
   - what Hify will intentionally not copy.
 
+Current local deployment status as of 2026-06-02:
+
+- Coze Loop source clone and compose config succeeded.
+- The initial Docker/OrbStack ClickHouse layerdb blocker was resolved by moving the stale unreferenced layer directory out of Docker's overlay2 layerdb.
+- The official Docker Compose stack is browser-accessible at `http://localhost:8082`.
+- Browser screenshots are saved under `artifacts/slices/013-evaluation-loop-replica/discovery/screenshots/coze-loop-local-2026-06-02/`.
+- Pixel/UI/UX-level claims are limited to captured pages. A fully scored Coze failed-case run was not captured because the local reference model and evaluation target were not configured.
+
+2026-06-08 recheck:
+
+- The local Coze Loop Docker Compose stack is healthy and browser-accessible at
+  `http://localhost:8082`.
+- Additional local Evaluation DOM evidence was captured under
+  `artifacts/slices/013-evaluation-loop-replica/discovery/coze-loop-live-2026-06-08/`.
+- The recheck confirms Coze's Evaluation information architecture around Eval
+  Sets, Evaluators, Experiments, progressive experiment creation, and LLM
+  evaluator workbench basics.
+- The recheck does not close the fully scored Coze failed-case drilldown gap.
+  Coze's local model config still uses masked default Doubao/Ark placeholders.
+- Hify's own live judge path was validated with OpenRouter model
+  `deepseek/deepseek-v4-flash`, and Hify's Workflow target evidence deep link
+  passed Browser UAT in 023.7.
+
 ## Testing Strategy
 
 - Contract tests verify all Evaluation APIs return the existing envelope.
@@ -123,6 +150,7 @@ Before implementation slices, run Coze Loop locally when feasible:
 - Unit tests cover deterministic evaluator scoring, field validation, Agent target mapping, aggregation, and report filtering shape.
 - E2E tests cover the primary product path: create eval set, create evaluator, create experiment, run, inspect failed case.
 - Browser UAT must save screenshots for each slice that changes visible UI.
+- Final gate evidence for the completed 013 run is recorded in `artifacts/slices/013-evaluation-loop-replica/final-gate/uat.md`.
 
 ## ADR
 
@@ -136,6 +164,7 @@ Implement Evaluation as one top-level module with internal tabs for Experiments,
 - Hify should preserve a compact sidebar and avoid fragmenting related evaluation objects.
 - Coze Loop's eval-set/evaluator/experiment model is a useful product reference, but Hify must adapt it to its own Agent, Workflow, and Chatflow boundaries.
 - The first implementation must avoid building a full evaluation platform before one usable quality loop exists.
+- Coze Loop source and local browser UAT confirm a progressive experiment creation flow: basic info, eval set, evaluation object, evaluator, confirm.
 
 ### Alternatives Considered
 
@@ -154,6 +183,7 @@ Internal tabs preserve product cohesion and support task-first flow. The thin MV
 - The Experiments tab needs strong defaults and empty states.
 - Future trace and prompt features should plug into Evaluation without adding new top-level navigation.
 - Compare Analysis may be visible before it is functional, so the empty state must be explicit and not misleading.
+- Local browser evidence is now available for the main Evaluation surfaces; uncaptured scored failed-case drilldown remains a known reference gap.
 
 ### Follow-ups
 

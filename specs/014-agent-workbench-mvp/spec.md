@@ -30,6 +30,52 @@ Workbench because:
 - There is no first-class place for validation, dirty state, preview sessions,
   or launch readiness.
 
+## Live Coze Agent Detail Alignment
+
+The 2026-06-02 in-app browser audit of the Coze Agent detail page observed a
+three-column Agent authoring surface, captured at
+`artifacts/research/coze-agent-detail/spec-014-live-audit-20260602.md`.
+
+The Coze layout differs from Hify's current 014 shell in one important way:
+desktop Agent detail is not primarily "left navigation + center editor + right
+preview". It is:
+
+1. Left column: `人设与回复逻辑`
+   - persona and reply-logic authoring surface.
+   - prompt helper/action icons.
+   - prompt template cards with `推荐` / `个人` tabs and examples such as
+     `通用结构`, `任务执行`, and `角色扮演`.
+2. Middle column: `编排`
+   - model settings.
+   - skills: plugins/tools and workflows.
+   - knowledge: text, table, image/photo knowledge.
+   - memory: variables, database, long-term memory, file box.
+   - conversation experience: opening message, user question suggestions, and
+     shortcut commands.
+3. Right column: `预览与调试`
+   - always-visible preview chat.
+   - process/log/config controls.
+   - bot avatar/name, input composer, add action, microphone, and generated
+     content disclaimer.
+
+Header observations:
+
+- Back action, Agent avatar/name/edit action, Agent mode selector, autosave
+  timestamp, history/refresh-like utility action, and primary `发布`.
+- Visible mode label: `单 Agent（自主规划模式）`.
+- Draft state is communicated with autosave text, not only a manual save button.
+
+Implication for Hify:
+
+- Keep the Agent list as the entry point.
+- Keep the right preview/debug panel.
+- Reorganize desktop workbench toward Coze's left persona editor + middle
+  orchestration stack + right preview/debug.
+- Move section navigation into compact tabs, anchors, or a collapsible secondary
+  control so it does not consume the primary left column.
+- Workflow/Chatflow capability cards still open the full 011/012 canvas route;
+  do not embed the canvas inside the Agent detail columns.
+
 ## Scope And Priority
 
 The first implementation milestone prioritizes the smallest set of features that
@@ -57,6 +103,7 @@ single-Agent workbench.
 | P3 | Flow authoring link | Deep-link to mature 011/012 full-page Workflow/Chatflow canvas editing from the capability card. Inline embedding is allowed only as a full-screen route/split mode, not as a small card embed. |
 | P3 | Evaluation release gate | Connect 013 Evaluation so an Agent version can require passing experiments before release. |
 | P3 | Permissions, sharing, catalog, analytics | Add owner/access fields, share controls, catalog/marketplace shell, usage metrics, and quality telemetry. |
+| P3 | Coze three-column lifecycle alignment | Reorganize the workbench into persona/reply logic, orchestration, and preview/debug columns, then connect draft autosave, testing, versioning, and publishing into one lifecycle. |
 
 ## Explicit Non-Scope
 
@@ -121,14 +168,62 @@ Primary user story:
 | 014.14 Flow authoring link | User can open/edit linked Workflow or Chatflow from the Agent workbench after 011/012 are stable | RED: flow authoring route test fails; Unit: link/full-screen guard; Integration: graph save unaffected; E2E: open linked canvas route; UAT: deep-link or full-screen path works |
 | 014.15 Evaluation release gate | User can require selected 013 experiments to pass before release/publish | RED: release gate test fails; Unit: gate evaluator; Integration: evaluation result lookup; E2E: failed gate blocks release; UAT: gate status visible |
 | 014.16 Access, sharing, catalog, analytics | User can manage owner/access, share/catalog visibility, and inspect basic usage/quality telemetry | RED: access/analytics tests fail; Unit: policy summary; Integration: access records and metrics; E2E: share/inspect metrics; UAT: admin shell visible |
+| 014.17 Coze three-column lifecycle alignment | Agent detail desktop layout matches Coze's left persona/reply logic, middle orchestration stack, and right preview/debug lifecycle | RED: layout/lifecycle tests fail; Unit: shell state; Integration: existing Agent contracts unchanged; E2E: configure, preview, version, publish path; UAT: screenshots against Coze audit |
+| 014.19 Agent detail MVP trim and real-provider direct mode | Agent detail removes non-MVP Coze shell content, keeps release/access in the publish lifecycle dialog, and defaults direct preview/chat to the real configured provider | RED: shell trim and tool-policy E2E fail; Unit: Agent shell/tool policy; Integration: Agent/tool contracts; E2E: full Agent workbench matrix; UAT: browser screenshots and real model binding |
+| 014.20 Agent detail usability trim | Agent detail fixes persona editor sizing, preview empty-state styling, runtime wording, MCP selection density, and publish-dialog primary/advanced separation | RED: browser UAT visual checks fail; Unit: runtime wording; E2E: capability selection, lifecycle, publish, preview, tool policy; UAT: screenshots and browser metrics |
+| 014.21 Preview debug detail panel | Agent preview replaces shell header controls with a functional debug icon, opens a Coze-like right-side debug detail panel, and uses horizontal scrolling so the fourth column does not squeeze the existing three-column workbench | RED: debug layout squeezes columns; Unit: Agent shell tests; E2E: lifecycle/preview/publish; UAT: browser width metrics and screenshots |
+| 014.22 Agent configuration effective UAT | Agent workbench trims redundant LLM/runtime chrome, aligns icon buttons with the canvas toolbar system, and proves persona/orchestration settings are real through API and LLM-backed gates | RED: header/icon UI assertions fail; Unit: Agent helpers; E2E: lifecycle/core/runtime/preview/memory/chat-entry/version/capability/retrieval/tool/prompt/flow; UAT: browser visual metrics |
+| 014.23 Preview opening message and bottom starters | Workbench Preview shows the configured opening message as the first assistant line and keeps suggested starters bottom-aligned and visually distinct | RED: opening message absent from preview; Unit: Agent helper tests; E2E: chat-entry real LLM path; UAT: browser layout metrics |
+| 014.24 MCP/RAG runtime proof and preview composer polish | MCP tool policy and knowledge retrieval are proven effective, while Workbench Preview uses assistant opening bubbles, right-bottom starter bubbles, adaptive message widths, a two-part composer without a middle divider, and debug details backed by real preview-run data | RED: provider paging/tool-policy and preview visual assertions fail; Unit: Agent helpers; Integration: tool policy and RAG retrieval; E2E: tool policy, preview debug, core config, memory variables, and chat entry; UAT: browser layout metrics |
 
 ## UX Requirements
 
 - Workbench header shows Agent name, status, save state, back action, and primary
   save/test actions.
-- Section navigation is task-oriented: Overview, Instructions, Capabilities,
-  Preview. It may be tabs or a left rail, but must not hide the preview behind a
-  modal.
+- Desktop workbench uses three primary columns after 014.17:
+  - left: persona and reply logic.
+  - middle: orchestration stack.
+  - right: preview and debug.
+- After 014.19, the MVP Agent detail removes top anchor tabs from the desktop
+  surface. The header owns Agent name editing; the left persona column is pure
+  System Prompt / reply logic; `版本与发布`, `发布渠道`, `访问与分享`, and analytics
+  belong to the `发布` lifecycle dialog instead of the orchestration column.
+- After 014.20, runtime wording uses `LLM` / real-model language instead of
+  `Direct`; MCP tools are selected with a searchable collapsed multi-select;
+  tool policy remains available only as an advanced governance fold; publish
+  keeps version/API publishing as the primary path and folds evaluation/access
+  governance controls.
+- After 014.21, the preview header exposes a real debug icon action. Opening
+  `调试详情` adds a fourth right-side column with `调用树` and `火焰图` views. The
+  existing persona, orchestration, and preview columns must keep their current
+  widths; the workbench uses horizontal scrolling for the expanded four-column
+  state rather than squeezing the original columns.
+- After 014.22, the orchestration header is intentionally plain and does not
+  advertise default LLM/streaming mode as if it were an optional product mode.
+  Runtime notices are visible only for actual precedence conflicts. Header icon
+  buttons follow the Workflow/Chatflow canvas toolbar sizing and Element Plus
+  icon system. Draft-only preview target selection is hidden until stable
+  version targets exist.
+- After 014.23, Workbench Preview's empty conversation state shows the saved
+  opening message as the first assistant line. It does not restore the old
+  assistant intro card. Suggested starters remain distinct from the opening
+  message and are bottom-aligned in the preview conversation body.
+- After 014.24, the opening message is rendered as an assistant bubble. Suggested
+  starter bubbles are right-bottom aligned inside the preview conversation body
+  and each bubble width fits its text with a max-width cap for long content. The
+  preview composer is split into an upper message-input area and lower action
+  toolbar without a middle divider; textarea manual resize is disabled; send
+  and reset are icon-only controls, with reset beside the preview title and send
+  right-aligned in the composer toolbar. User message bubbles in Workbench
+  Preview and formal ChatView are light blue and content-width adaptive. The
+  debug detail panel receives focus when opened and must avoid fabricated
+  Coze-like metrics: it may display only data backed by the current preview run
+  or explicit runtime configuration, such as session/run id, request time,
+  first-response time, backend latency, finish reason, and input/output
+  character counts.
+- Section navigation is task-oriented but secondary after 014.17. It may be
+  compact tabs, anchors, or a collapsible rail, but it must not replace the
+  primary Coze-like persona column on desktop.
 - The editor area uses compact operational UI, not a marketing page.
 - Capability cards show current resource name, enabled/disabled/missing state,
   and next action.

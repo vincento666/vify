@@ -15,6 +15,7 @@
 - Use fake LLM adapters for RED/green tests first, then wire provider-backed LLM where provider contracts exist.
 - Reuse one content editor component for MESSAGE and QUESTION, but keep node types and runtime events separate.
 - Add a profile-level event model for Chatflow nodes instead of embedding message/interrupt branching into every executor.
+- Add node-level streaming controls for Chatflow LLM-visible output, MESSAGE, and INFORMATION_COLLECTION follow-ups; keep final accumulated node output as the only downstream variable value.
 
 ## Runtime Notes
 
@@ -22,6 +23,7 @@
 - QUESTION and HUMAN_INPUT require single-flow interrupt/resume, not cross-flow task switching.
 - INTENT_RECOGNITION uses dynamic branch ports like CONDITION, but branch selection comes from LLM semantic output.
 - MESSAGE maps to an output/message event and continues.
+- Streaming emits delta events for UI/debug, then a final message/output event used by downstream variables.
 - QUESTION/HUMAN_INPUT/unfinished INFORMATION_COLLECTION map to interrupt events and require resume.
 - INFO collection defaults to structured output; direct scope writes are advanced config and should reuse assignment infrastructure.
 - Palette labels should use user-facing Coze-aligned names where helpful: `代码`, `选择器`, `意图识别`, `变量聚合`, while preserving explicit internal node type names in tests and API payloads.

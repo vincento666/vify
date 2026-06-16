@@ -193,3 +193,12 @@
 - [x] Browser UAT evidence saved for Coze reference and Hify result.
 - [x] `spec.md`, `plan.md`, and `tasks.md` updated with final evidence.
 - [x] `specs/README.md` remains ordered and accurate.
+
+## 025.11 Canvas/node panel regression hardening
+
+- [x] RED: config-panel open/close zoom stability test fails before removing side-panel resize/refit.
+- [x] RED: edge insert palette occlusion test fails before palette offset/z-index fix.
+- [x] RED: inline variable insertion test verifies non-END node text fields insert local-only refs.
+- [x] Keep node config panel behavior aligned while preserving existing structured panel coverage for resource and transform nodes.
+- [x] Evidence: `artifacts/slices/083-workflow-chatflow-canvas-node-parity/`.
+- [x] Gates pass.

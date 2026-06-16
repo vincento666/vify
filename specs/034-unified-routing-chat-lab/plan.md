@@ -94,3 +94,39 @@ Strong triggers are treated as configurable templates on SOP manifests:
 The default classifier remains fake/deterministic for repeatable gates. A real
 LLM arbitrator can be injected through the constrained classifier adapter, and
 the route evidence must show whether the turn used `fake` or `llm` mode.
+
+## 034.13 Promotion Plan
+
+034.13 turns the successful airline SOP test corpus into a local development
+configuration that testers can inspect and use directly:
+
+- seed the 15 airline SOPs as published Chatflow workflows in the current
+  development database;
+- write only non-secret RuntimeLab binding/model settings into local `.env`;
+- keep provider API keys in process environment or provider config, never in
+  frontend payloads or committed files;
+- expose `/api/v1/runtime-lab/config` for frontend display of Chatflow IDs,
+  binding existence, arbitrator mode, and model;
+- render the config in the runtime-lab page alongside the existing intent scope
+  controls;
+- prove with browser UAT that the displayed bindings are not decorative by
+  completing a multi-SOP start/switch/resume path through the visible page.
+
+## 034.17 Inspector Plan
+
+034.17 promotes the runtime-lab page from a route transcript viewer to a
+Chatflow-bound debugging surface:
+
+- the frontend still does not author system configuration directly; it reads
+  `/api/v1/runtime-lab/config` and lets testers choose the current experiment
+  scope from the actually bound Chatflow SOPs;
+- configuration adjustment for the underlying SOP remains in the existing
+  Chatflow canvas, opened through each binding's `canvasPath`;
+- the right inspector reads
+  `/api/v1/runtime-lab/sessions/{session_id}/chatflow-trace`, which is derived
+  from RuntimeLab checkpoints, Chatflow session state, Chatflow events, and
+  workflow node run rows;
+- the trace panel is designed as the future anchor for FAQ/RAG/embedding
+  routing: explicit match, semantic recall, LLM arbitration, clarification,
+  FAQ/RAG fallback, and handoff can be added as neighboring lanes without
+  changing the center conversation flow.
