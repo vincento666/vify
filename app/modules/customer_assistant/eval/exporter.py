@@ -29,6 +29,10 @@ def export_candidate_cases_from_events(
             if command is None:
                 continue
             case_id = f"exported-{len(cases) + 1:03d}"
+            metadata: dict[str, Any] = {"events": [dict(event)]}
+            profile_refs = _profile_refs_from_task_recognition_payload(payload)
+            if profile_refs:
+                metadata["profileRefs"] = profile_refs
             cases.append(
                 CustomerAssistantEvalCase(
                     id=case_id,
@@ -42,7 +46,7 @@ def export_candidate_cases_from_events(
                         expected_task_type=_optional_str(command.get("taskType") or command.get("task_type")),
                     ),
                     source="exported",
-                    metadata={"events": [dict(event)]},
+                    metadata=metadata,
                 )
             )
             continue
@@ -117,6 +121,22 @@ def _first_command(value: Any) -> Mapping[str, Any] | None:
         if isinstance(command, Mapping):
             return command
     return None
+
+
+def _profile_refs_from_task_recognition_payload(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
+    refs: list[dict[str, Any]] = []
+    for container_key in ("baseline", "shadow"):
+        data = _mapping(payload.get(container_key))
+        commands = data.get("commands")
+        if not isinstance(commands, list):
+            continue
+        for command in commands:
+            if not isinstance(command, Mapping):
+                continue
+            profile_refs = _mapping(command.get("profileRefs") or command.get("profile_refs"))
+            if profile_refs:
+                refs.append(dict(profile_refs))
+    return refs
 
 
 def _mapping(value: Any) -> Mapping[str, Any]:

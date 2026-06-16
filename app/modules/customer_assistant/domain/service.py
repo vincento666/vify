@@ -51,7 +51,10 @@ from app.modules.customer_assistant.domain.worker_runtime import (
     worker_async_refs,
     worker_result_from_worker_run,
 )
-from app.modules.customer_assistant.domain.worker_profiles import CustomerAssistantWorkerProfileCatalog
+from app.modules.customer_assistant.domain.worker_profiles import (
+    CustomerAssistantWorkerProfile,
+    CustomerAssistantWorkerProfileCatalog,
+)
 from app.modules.customer_assistant.domain.workers import ChatflowSopWorker, RecommendationAggregator, StubQaWorker
 from app.modules.customer_assistant.infra.repository import CustomerAssistantRepository, IdempotencyConflict
 from app.modules.knowledge.infra.repository import KnowledgeBaseRepository
@@ -121,6 +124,25 @@ class CustomerAssistantService:
     def list_worker_profiles(self) -> dict[str, Any]:
         profiles = self._worker_profiles.list_profiles()
         return {"list": profiles, "total": len(profiles)}
+
+    def _profile_refs_for_task(self, task: TaskItem) -> dict[str, Any] | None:
+        profile = self._worker_profiles.resolve(task.task_key)
+        if profile is None:
+            return None
+        return _worker_profile_refs(profile)
+
+    def _profile_refs_for_command(self, command: TaskCommand) -> dict[str, Any] | None:
+        profile = self._worker_profiles.resolve(command.task_key)
+        if profile is None:
+            return None
+        return _worker_profile_refs(profile)
+
+    def _command_payload_with_profile_refs(self, command: TaskCommand) -> dict[str, Any]:
+        payload = _command_payload(command)
+        profile_refs = self._profile_refs_for_command(command)
+        if profile_refs:
+            payload["profileRefs"] = profile_refs
+        return payload
 
     def handle_turn(
         self,
@@ -865,14 +887,25 @@ class CustomerAssistantService:
             span_id = f"run-{run_id}:task-{task.id}:worker"
             if task.id is not None:
                 worker_spans[int(task.id)] = span_id
+            profile_refs = self._profile_refs_for_task(task)
+            task_started_payload: dict[str, Any] = {
+                "taskKey": task.task_key,
+                "workerType": task.worker_type,
+                "startedAt": _iso(datetime.now()),
+            }
+            worker_started_payload: dict[str, Any] = {
+                "taskKey": task.task_key,
+                "workerType": task.worker_type,
+                "spanId": span_id,
+                "startedAt": _iso(datetime.now()),
+            }
+            if profile_refs:
+                task_started_payload["profileRefs"] = profile_refs
+                worker_started_payload["profileRefs"] = profile_refs
             self._repository.append_event(
                 session_id,
                 "task_started",
-                {
-                    "taskKey": task.task_key,
-                    "workerType": task.worker_type,
-                    "startedAt": _iso(datetime.now()),
-                },
+                task_started_payload,
                 run_id=run_id,
                 task_id=task.id,
                 actor=actor,
@@ -880,12 +913,7 @@ class CustomerAssistantService:
             self._repository.append_event(
                 session_id,
                 "worker_started",
-                {
-                    "taskKey": task.task_key,
-                    "workerType": task.worker_type,
-                    "spanId": span_id,
-                    "startedAt": _iso(datetime.now()),
-                },
+                worker_started_payload,
                 run_id=run_id,
                 task_id=task.id,
                 visibility="debug",
@@ -1381,7 +1409,7 @@ class CustomerAssistantService:
     ) -> None:
         if not self._shadow_enabled(ShadowPhase.TASK_RECOGNITION):
             return
-        baseline = {"commands": [_command_payload(command) for command in commands]}
+        baseline = {"commands": [self._command_payload_with_profile_refs(command) for command in commands]}
         self._append_shadow_event(
             session_id,
             run_id,
@@ -1601,6 +1629,16 @@ def _format_task(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _worker_profile_refs(profile: CustomerAssistantWorkerProfile) -> dict[str, Any]:
+    return {
+        "profileId": profile.profile_id,
+        "modelPolicyRef": profile.model_policy_ref,
+        "promptRef": profile.prompt_ref,
+        "riskPolicyRef": profile.risk_policy_ref,
+        "toolRefs": list(profile.tool_refs),
+    }
+
+
 def _format_event(row: dict[str, Any]) -> dict[str, Any]:
     formatted = {
         "id": row["id"],
@@ -1659,12 +1697,13 @@ def _event_observability(event: dict[str, Any]) -> dict[str, Any]:
     payload = dict(event.get("payload") or {})
     payload_source = str(payload.get("source") or "")
     runtime_refs = dict(payload.get("chatflowRuntimeRefs") or payload.get("runtimeRefs") or {})
+    profile_refs = _profile_refs_from_payload(payload)
     worker_run_id = (
         payload.get("workerRunId")
         or dict(payload.get("workerAsyncRefs") or {}).get("workerRunId")
         or dict(payload.get("refs") or {}).get("workerRunId")
     )
-    return {
+    summary: dict[str, Any] = {
         "sourceKind": _summary_source_kind(str(event.get("source") or ""), payload_source),
         "eventMode": _summary_event_mode(event, payload_source),
         "correlationRefs": {
@@ -1676,11 +1715,15 @@ def _event_observability(event: dict[str, Any]) -> dict[str, Any]:
             "sourceSequence": _optional_int(payload.get("sourceSequence")) or _optional_int(event.get("sequence")),
         },
     }
+    if profile_refs:
+        summary["profileRefs"] = profile_refs
+    return summary
 
 
 def _worker_event_observability(event: dict[str, Any]) -> dict[str, Any]:
     payload = dict(event.get("payload") or {})
-    return {
+    profile_refs = _profile_refs_from_payload(payload)
+    summary: dict[str, Any] = {
         "sourceKind": _summary_source_kind(str(event.get("source") or ""), str(payload.get("source") or "")),
         "eventMode": "live",
         "correlationRefs": {
@@ -1690,6 +1733,14 @@ def _worker_event_observability(event: dict[str, Any]) -> dict[str, Any]:
             "sourceSequence": _optional_int(payload.get("sourceSequence")) or _optional_int(event.get("sequence")),
         },
     }
+    if profile_refs:
+        summary["profileRefs"] = profile_refs
+    return summary
+
+
+def _profile_refs_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    refs = payload.get("profileRefs")
+    return dict(refs) if isinstance(refs, dict) else {}
 
 
 def _summary_source_kind(source: str, payload_source: str) -> str:

@@ -19,6 +19,6 @@
 
 ## 075.3 Profile Evaluation Gate
 
-- [ ] Add RED eval/observe tests.
-- [ ] Include profile refs in relevant records/events.
-- [ ] Run gates and commit.
+- [x] Add RED eval/observe tests.
+- [x] Include profile refs in relevant records/events.
+- [x] Run gates and commit.

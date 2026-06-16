@@ -55,7 +55,7 @@ class CustomerAssistantWorkerProfileCatalog:
 
     def resolve(self, task_key: str) -> CustomerAssistantWorkerProfile | None:
         for profile in self._profiles:
-            if profile.task_key == task_key:
+            if _task_key_matches_profile(task_key, profile):
                 return profile
         return None
 
@@ -119,3 +119,7 @@ def _profile_from_mapping(item: dict[str, Any]) -> CustomerAssistantWorkerProfil
         risk_policy_ref=str(item.get("riskPolicyRef") or item.get("risk_policy_ref") or "manual_confirm"),
         enabled=bool(item.get("enabled", True)),
     )
+
+
+def _task_key_matches_profile(task_key: str, profile: CustomerAssistantWorkerProfile) -> bool:
+    return task_key == profile.task_key or task_key.startswith(f"{profile.task_key}:")

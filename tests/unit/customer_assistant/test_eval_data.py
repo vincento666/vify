@@ -33,6 +33,50 @@ class CustomerAssistantEvalDataTest(unittest.TestCase):
         self.assertEqual(cases[0].timing.run_elapsed_ms, 12)
         self.assertNotIn("13800138000", str(redacted))
 
+    def test_exports_profile_refs_as_first_class_metadata(self) -> None:
+        events = [
+            {
+                "type": "llm_shadow_diff_recorded",
+                "payload": {
+                    "phase": "task_recognition",
+                    "actor": "customer",
+                    "message": "我要退票",
+                    "baseline": {
+                        "commands": [
+                            {
+                                "taskKey": "refund_ticket",
+                                "businessKey": "TK-100",
+                                "profileRefs": {
+                                    "profileId": "refund_ticket_chatflow",
+                                    "modelPolicyRef": "customer_assistant_chatflow_default",
+                                    "promptRef": "refund_ticket_sop_prompt",
+                                    "riskPolicyRef": "manual_confirm",
+                                    "toolRefs": ["refund_policy_lookup"],
+                                },
+                            }
+                        ]
+                    },
+                    "shadow": {"commands": [{"taskKey": "refund_ticket", "businessKey": "TK-100"}]},
+                    "diff": {"matches": True},
+                },
+            }
+        ]
+
+        cases = export_candidate_cases_from_events(events)
+
+        self.assertEqual(
+            cases[0].metadata["profileRefs"],
+            [
+                {
+                    "profileId": "refund_ticket_chatflow",
+                    "modelPolicyRef": "customer_assistant_chatflow_default",
+                    "promptRef": "refund_ticket_sop_prompt",
+                    "riskPolicyRef": "manual_confirm",
+                    "toolRefs": ["refund_policy_lookup"],
+                }
+            ],
+        )
+
     def test_golden_cases_run_deterministic_report_without_live_llm(self) -> None:
         report = run_customer_assistant_eval(golden_cases())
 

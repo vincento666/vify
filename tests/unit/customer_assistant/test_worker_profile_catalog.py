@@ -44,6 +44,12 @@ class CustomerAssistantWorkerProfileCatalogTest(unittest.TestCase):
         self.assertEqual(catalog.resolve("refund_ticket").worker_ref, "configured_refund_stub")
         self.assertEqual(profiles[0]["toolRefs"], ["lookup_order"])
 
+    def test_resolves_business_scoped_task_key_to_profile_family(self) -> None:
+        profile = CustomerAssistantWorkerProfileCatalog.default().resolve("refund_ticket:MU5137-8899")
+
+        self.assertIsNotNone(profile)
+        self.assertEqual(profile.profile_id, "refund_ticket_chatflow")
+
     def test_default_json_is_secret_free(self) -> None:
         raw = default_customer_assistant_worker_profiles_json()
 
