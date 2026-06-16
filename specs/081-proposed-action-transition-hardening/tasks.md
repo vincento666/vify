@@ -9,8 +9,8 @@
 
 ## 081.2 Execute Claim Uses Atomic Transition
 
-- [ ] Add RED duplicate/stale execute service/API test.
-- [ ] Use conditional transition for `CONFIRMED -> EXECUTING`.
-- [ ] Preserve failed executor audit/error evidence.
-- [ ] Run focused gates and save evidence.
-- [ ] Commit completed 081.2 slice.
+- [x] Add RED duplicate/stale execute service/API test.
+- [x] Use conditional transition for `CONFIRMED -> EXECUTING`.
+- [x] Preserve failed executor audit/error evidence.
+- [x] Run focused gates and save evidence.
+- [x] Commit completed 081.2 slice.

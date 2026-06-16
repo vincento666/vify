@@ -912,7 +912,13 @@ class CustomerAssistantService:
         self._ensure_session(int(action["session_id"]))
         if action["status"] != "CONFIRMED":
             raise BizError(ErrorCode.BAD_REQUEST, "Only confirmed proposed actions can be executed")
-        executing = self._repository.update_proposed_action_status(action_id, "EXECUTING")
+        executing = self._repository.transition_proposed_action_status(
+            action_id,
+            expected_status="CONFIRMED",
+            next_status="EXECUTING",
+        )
+        if executing is None:
+            raise BizError(ErrorCode.BAD_REQUEST, "Only confirmed proposed actions can be executed")
         self._repository.append_event(
             int(executing["session_id"]),
             "proposed_action_executing",
