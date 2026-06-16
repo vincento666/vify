@@ -373,6 +373,14 @@ def list_proposed_actions(
     return success(service.list_proposed_actions(session_id))
 
 
+@router.get("/sessions/{session_id}/metrics")
+def get_session_metrics(
+    session_id: int,
+    service: CustomerAssistantService = Depends(get_customer_assistant_service),
+) -> dict[str, Any]:
+    return success(service.get_session_metrics(session_id))
+
+
 @router.patch("/proposed-actions/{action_id}")
 def update_action(
     action_id: int,

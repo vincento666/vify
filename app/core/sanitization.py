@@ -3,9 +3,14 @@ from __future__ import annotations
 import re
 from typing import Any
 
-SENSITIVE_KEYS = {"apikey", "secret", "password", "authorization", "bearertoken", "accesstoken"}
+SENSITIVE_KEYS = {"apikey", "secret", "password", "authorization", "bearertoken", "accesstoken", "token"}
 SENSITIVE_ASSIGNMENT_RE = re.compile(
-    r"(?i)\b(api[-_ ]?key|password|secret|authorization|bearer[-_ ]?token|access[-_ ]?token)\s*[:=]\s*([^\s,;]+)"
+    r"(?i)\b(api[-_ ]?key|password|secret|authorization|bearer[-_ ]?token|access[-_ ]?token|token)\s*[:=]\s*([^\s,;]+)"
+)
+PII_PATTERNS = (
+    re.compile(r"\b1[3-9]\d{9}\b"),
+    re.compile(r"\b[\w.+-]+@[\w.-]+\.\w+\b"),
+    re.compile(r"\b(?:CA|MU|TK|INV)[A-Z0-9-]{3,}\b"),
 )
 
 
@@ -23,7 +28,10 @@ def sanitize_value(value: Any) -> Any:
 
 
 def sanitize_text(value: str) -> str:
-    return SENSITIVE_ASSIGNMENT_RE.sub(lambda match: f"{match.group(1)}=***", value)
+    sanitized = SENSITIVE_ASSIGNMENT_RE.sub(lambda match: f"{match.group(1)}=***", value)
+    for pattern in PII_PATTERNS:
+        sanitized = pattern.sub("[REDACTED]", sanitized)
+    return sanitized
 
 
 def is_sensitive_key(key: str) -> bool:

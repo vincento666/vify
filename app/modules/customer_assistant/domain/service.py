@@ -4,6 +4,7 @@ from dataclasses import replace
 from datetime import datetime
 from typing import Any
 
+from app.core.sanitization import sanitize_text, sanitize_value
 from app.core.errors import BizError, ErrorCode
 from app.modules.customer_assistant.harness_adapter import (
     event_stream_ref,
@@ -670,6 +671,39 @@ class CustomerAssistantService:
         self._ensure_session(session_id)
         rows = self._repository.list_proposed_actions(session_id)
         return {"list": [_format_action(row) for row in rows], "total": len(rows)}
+
+    def get_session_metrics(self, session_id: int) -> dict[str, Any]:
+        self._ensure_session(session_id)
+        tasks = self._repository.list_tasks(session_id)
+        actions = self._repository.list_proposed_actions(session_id)
+        events = self._repository.list_events(session_id)
+        task_status_counts = _count_values(tasks, "status")
+        action_status_counts = _count_values(actions, "status")
+        event_type_counts = _count_values(events, "type")
+        event_source_counts = _count_values(events, "source")
+        adopted = action_status_counts.get("CONFIRMED", 0) + action_status_counts.get("EXECUTED", 0)
+        terminal = sum(
+            action_status_counts.get(status, 0)
+            for status in ("CONFIRMED", "REJECTED", "EXECUTED", "FAILED")
+        )
+        return {
+            "sessionId": session_id,
+            "taskStatusCounts": task_status_counts,
+            "proposedActionStatusCounts": action_status_counts,
+            "humanConfirmation": {
+                "pending": action_status_counts.get("PENDING", 0),
+                "adopted": adopted,
+                "terminal": terminal,
+                "adoptionRate": round(adopted / terminal, 3) if terminal else 0.0,
+            },
+            "eventCounts": {
+                "total": len(events),
+                "byType": event_type_counts,
+                "bySource": event_source_counts,
+            },
+            "workerEventCounts": _worker_event_counts(events),
+            "recentFailureReasons": _recent_failure_reasons(tasks),
+        }
 
     def update_action(
         self,
@@ -1643,6 +1677,66 @@ def _demo_story_sort_key(story: dict[str, Any]) -> tuple[int, str]:
         return (_MVP_DEMO_STORY_ORDER.index(story_id), story_id)
     except ValueError:
         return (len(_MVP_DEMO_STORY_ORDER), story_id)
+
+
+def _count_values(rows: list[dict[str, Any]], key: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        value = str(row.get(key) or "UNKNOWN")
+        counts[value] = counts.get(value, 0) + 1
+    return counts
+
+
+def _worker_event_counts(events: list[dict[str, Any]]) -> dict[str, Any]:
+    worker_events = [
+        row for row in events
+        if str(row.get("type") or "").startswith(("worker_", "task_"))
+        or str(row.get("source") or "") in {"chatflow_sop", "stub_qa", "react_worker"}
+    ]
+    return {
+        "total": len(worker_events),
+        "byType": _count_values(worker_events, "type"),
+    }
+
+
+def _recent_failure_reasons(tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    reasons: list[dict[str, Any]] = []
+    for task in tasks:
+        if str(task.get("status") or "") != "FAILED":
+            continue
+        last_result = sanitize_value(dict(task.get("last_result_json") or {}))
+        reason = _failure_reason_text(last_result)
+        if not reason:
+            continue
+        reasons.append(
+            {
+                "taskId": int(task["id"]),
+                "taskType": str(task.get("task_type") or "UNKNOWN"),
+                "source": str(task.get("worker_type") or "customer_assistant"),
+                "reason": sanitize_text(reason),
+            }
+        )
+    return reasons[-5:]
+
+
+def _failure_reason_text(value: Any) -> str:
+    if isinstance(value, dict):
+        for key in ("error", "message", "reason", "status"):
+            item = value.get(key)
+            if isinstance(item, str) and item.strip():
+                return item
+        for item in value.values():
+            nested = _failure_reason_text(item)
+            if nested:
+                return nested
+    if isinstance(value, list):
+        for item in value:
+            nested = _failure_reason_text(item)
+            if nested:
+                return nested
+    if isinstance(value, str):
+        return value
+    return ""
 
 
 def _format_task(row: dict[str, Any]) -> dict[str, Any]:
