@@ -60,6 +60,22 @@ describe('customer assistant view model', () => {
     })
   })
 
+  it('derives permitted operator task controls from task status', () => {
+    const summary = summarizeCustomerAssistantTasks([
+      { ...mockCustomerAssistantTasks.list[0], id: 1, status: 'RUNNING' },
+      { ...mockCustomerAssistantTasks.list[0], id: 2, status: 'WAITING' },
+      { ...mockCustomerAssistantTasks.list[0], id: 3, status: 'FAILED' },
+      { ...mockCustomerAssistantTasks.list[0], id: 4, status: 'COMPLETED' },
+    ])
+
+    expect(summary.items.map((item) => item.availableControls)).toEqual([
+      ['cancel'],
+      ['resume', 'cancel'],
+      ['retry'],
+      [],
+    ])
+  })
+
   it('keeps recommendation and customer draft as separate operator panel state', () => {
     const state = buildCustomerAssistantState({
       sessionId: 12,

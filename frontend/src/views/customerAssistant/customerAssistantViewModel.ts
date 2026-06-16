@@ -2,6 +2,7 @@ import type {
   CustomerAssistantEvent,
   CustomerAssistantProposedAction,
   CustomerAssistantTask,
+  CustomerAssistantTaskControlType,
   CustomerAssistantTurnResult,
 } from '@/api/customerAssistant'
 
@@ -24,6 +25,7 @@ export interface CustomerAssistantTaskRow {
   workerType: string
   missingFields: string[]
   proposedActions: CustomerAssistantProposedAction[]
+  availableControls: CustomerAssistantTaskControlType[]
   checkpoint: Record<string, unknown>
 }
 
@@ -150,6 +152,7 @@ export function summarizeCustomerAssistantTasks(tasks: CustomerAssistantTask[]):
       workerType: task.workerType,
       missingFields: taskMissingFields(task),
       proposedActions: [...task.proposedActions],
+      availableControls: availableTaskControls(task.status),
       checkpoint: { ...task.checkpoint },
     }
   })
@@ -296,6 +299,13 @@ function statusTone(status: string): CustomerAssistantTaskRow['statusTone'] {
   if (status === 'RUNNING' || status === 'PENDING') return 'processing'
   if (status === 'FAILED') return 'error'
   return 'default'
+}
+
+function availableTaskControls(status: string): CustomerAssistantTaskControlType[] {
+  if (status === 'RUNNING' || status === 'PENDING') return ['cancel']
+  if (status === 'WAITING') return ['resume', 'cancel']
+  if (status === 'FAILED') return ['retry']
+  return []
 }
 
 function taskMissingFields(task: CustomerAssistantTask): string[] {

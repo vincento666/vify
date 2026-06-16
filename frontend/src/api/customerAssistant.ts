@@ -28,6 +28,13 @@ export interface CustomerAssistantDemoStory {
   chatflowBindings?: Record<string, number>
 }
 
+export type CustomerAssistantTaskControlType = 'retry' | 'cancel' | 'resume'
+
+export interface CustomerAssistantTaskControlPayload {
+  controlType: CustomerAssistantTaskControlType
+  reason?: string
+}
+
 export interface CustomerAssistantProposedAction {
   id: number
   sessionId?: number
@@ -118,6 +125,16 @@ export const listCustomerAssistantEvents = (sessionId: number) =>
 export const listCustomerAssistantProposedActions = (sessionId: number) =>
   get<CustomerAssistantListResult<CustomerAssistantProposedAction>>(
     `/v1/customer-assistant/sessions/${sessionId}/proposed-actions`,
+  )
+
+export const proposeCustomerAssistantTaskControl = (
+  sessionId: number,
+  taskId: number,
+  payload: CustomerAssistantTaskControlPayload,
+) =>
+  post<CustomerAssistantProposedAction>(
+    `/v1/customer-assistant/sessions/${sessionId}/tasks/${taskId}/controls/propose`,
+    payload,
   )
 
 export const confirmCustomerAssistantAction = (actionId: number) =>

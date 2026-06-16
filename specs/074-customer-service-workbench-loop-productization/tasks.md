@@ -17,9 +17,10 @@
 
 ## 074.2 Human Task Control Loop
 
-- [ ] Add RED tests for retry/cancel/resume task controls.
-- [ ] Implement proposed task-control action API and UI affordances.
-- [ ] Run full slice gates and commit.
+- [x] Add RED tests for retry/cancel/resume task controls.
+- [x] Implement proposed task-control action API and UI affordances.
+- [x] Run full slice gates.
+- [ ] Commit completed 074.2 slice.
 
 ## 074.3 Knowledge-Backed Operator Advisory
 

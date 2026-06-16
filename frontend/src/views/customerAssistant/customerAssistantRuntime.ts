@@ -6,6 +6,7 @@ import {
   listCustomerAssistantEvents,
   listCustomerAssistantProposedActions,
   listCustomerAssistantTasks,
+  proposeCustomerAssistantTaskControl,
   rejectCustomerAssistantAction,
   sendCustomerAssistantTurn,
   type CustomerAssistantDemoStory,
@@ -14,6 +15,7 @@ import {
   type CustomerAssistantProposedAction,
   type CustomerAssistantSession,
   type CustomerAssistantTask,
+  type CustomerAssistantTaskControlType,
   type CustomerAssistantTurnPayload,
   type CustomerAssistantTurnResult,
 } from '@/api/customerAssistant'
@@ -159,6 +161,33 @@ export async function executeCustomerAssistantRuntimeAction(
     session: current.session,
     tasks: current.tasks,
     events: current.events,
+    loading: false,
+    error: null,
+  }
+}
+
+export async function proposeCustomerAssistantRuntimeTaskControl(
+  current: CustomerAssistantRuntimeState,
+  taskId: number,
+  controlType: CustomerAssistantTaskControlType,
+  reason = '',
+): Promise<CustomerAssistantRuntimeState> {
+  if (!current.session?.id) {
+    throw new Error('Customer assistant session is required before proposing a task control')
+  }
+  await proposeCustomerAssistantTaskControl(current.session.id, taskId, { controlType, reason })
+  const { tasks, events, proposedActions } = await refreshCustomerAssistantRuntimeLedgers(current.session.id)
+  const rebuilt = buildCustomerAssistantState({
+    sessionId: current.session.id,
+    tasks: tasks.list,
+    events: events.list,
+    proposedActions: proposedActions.list,
+  })
+  return {
+    ...rebuilt,
+    session: current.session,
+    tasks: tasks.list,
+    events: events.list,
     loading: false,
     error: null,
   }

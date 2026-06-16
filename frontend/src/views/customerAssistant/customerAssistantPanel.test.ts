@@ -83,4 +83,15 @@ describe('CustomerAssistantPanel UI contract', () => {
     expect(content).toContain('确认任务变更')
     expect(content).toContain(`:disabled="action.status !== 'CONFIRMED' || isProposedTaskCommand(action)"`)
   })
+
+  it('renders retry cancel and resume task controls in the operator ledger', () => {
+    const taskLedger = section(content, 'operator-task-ledger')
+
+    expect(taskLedger).toContain('data-testid="operator-task-controls"')
+    expect(taskLedger).toContain('proposeTaskControl')
+    expect(taskLedger).toContain('重试')
+    expect(taskLedger).toContain('取消')
+    expect(taskLedger).toContain('恢复')
+    expect(section(content, 'customer-conversation-lane')).not.toContain('proposeTaskControl')
+  })
 })

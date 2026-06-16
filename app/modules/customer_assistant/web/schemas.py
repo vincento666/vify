@@ -18,6 +18,14 @@ class CustomerAssistantTurnRequest(BaseModel):
     actor: CustomerAssistantActor = DEFAULT_CUSTOMER_ASSISTANT_ACTOR
 
 
+class CustomerAssistantTaskControlRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    control_type: Literal["retry", "cancel", "resume"] = Field(alias="controlType")
+    reason: str = ""
+    actor: CustomerAssistantActor = "operator"
+
+
 class CustomerAssistantSubAgentInput(BaseModel):
     message: str
     actor: CustomerAssistantActor = DEFAULT_CUSTOMER_ASSISTANT_ACTOR

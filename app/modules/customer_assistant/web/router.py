@@ -32,6 +32,7 @@ from app.modules.customer_assistant.infra.repository import CustomerAssistantRep
 from app.modules.customer_assistant.web.schemas import (
     CustomerAssistantSessionCreateRequest,
     CustomerAssistantSpawnSubAgentRequest,
+    CustomerAssistantTaskControlRequest,
     CustomerAssistantTurnRequest,
 )
 from app.modules.provider.api.facade import ProviderModelFacade
@@ -310,6 +311,24 @@ def list_tasks(
     service: CustomerAssistantService = Depends(get_customer_assistant_service),
 ) -> dict[str, Any]:
     return success(service.list_tasks(session_id))
+
+
+@router.post("/sessions/{session_id}/tasks/{task_id}/controls/propose")
+def propose_task_control(
+    session_id: int,
+    task_id: int,
+    request: CustomerAssistantTaskControlRequest,
+    service: CustomerAssistantService = Depends(get_customer_assistant_service),
+) -> dict[str, Any]:
+    return success(
+        service.propose_task_control(
+            session_id,
+            task_id,
+            request.control_type,
+            request.reason,
+            request.actor,
+        )
+    )
 
 
 @router.post("/sessions/{session_id}/worker-results/refresh")

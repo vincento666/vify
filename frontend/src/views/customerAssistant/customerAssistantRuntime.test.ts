@@ -14,6 +14,7 @@ const apiMocks = vi.hoisted(() => ({
   listCustomerAssistantEvents: vi.fn(),
   listCustomerAssistantProposedActions: vi.fn(),
   listCustomerAssistantTasks: vi.fn(),
+  proposeCustomerAssistantTaskControl: vi.fn(),
   rejectCustomerAssistantAction: vi.fn(),
   sendCustomerAssistantTurn: vi.fn(),
 }))
@@ -270,5 +271,61 @@ describe('customer assistant runtime integration', () => {
     expect(state.taskSummary.items[0].taskKey).toBe('refund_ticket')
     expect(state.proposedActions[0].title).toBe(mockCustomerAssistantTurnResult.proposedActions[0].title)
     expect(state.eventTimeline[0].title).toBe('run_started')
+  })
+
+  it('proposes a task control and refreshes ledgers', async () => {
+    const proposedControl = {
+      ...mockCustomerAssistantTurnResult.proposedActions[0],
+      id: 88,
+      actionType: 'PROPOSED_TASK_COMMAND',
+      title: '恢复任务：refund_ticket',
+      payload: { controlType: 'resume', taskCommand: { type: 'RESUME_TASK', taskKey: 'refund_ticket' } },
+      status: 'PENDING',
+    }
+    apiMocks.proposeCustomerAssistantTaskControl.mockResolvedValue(proposedControl)
+    apiMocks.listCustomerAssistantTasks.mockResolvedValue(mockCustomerAssistantTasks)
+    apiMocks.listCustomerAssistantEvents.mockResolvedValue({
+      list: [
+        ...mockCustomerAssistantEvents.list,
+        {
+          id: 778,
+          sessionId: 12,
+          sequence: 2,
+          type: 'task_control_proposed',
+          source: 'operator_advisory',
+          payload: { actionId: proposedControl.id },
+        },
+      ],
+      total: 2,
+    })
+    apiMocks.listCustomerAssistantProposedActions.mockResolvedValue({ list: [proposedControl], total: 1 })
+
+    const { createCustomerAssistantRuntimeState, proposeCustomerAssistantRuntimeTaskControl } = await import(
+      './customerAssistantRuntime'
+    )
+
+    const state = await proposeCustomerAssistantRuntimeTaskControl(
+      createCustomerAssistantRuntimeState({
+        session: { id: 12, status: 'ACTIVE' },
+        tasks: mockCustomerAssistantTasks.list,
+      }),
+      101,
+      'resume',
+      'customer supplied missing order number',
+    )
+
+    expect(apiMocks.proposeCustomerAssistantTaskControl).toHaveBeenCalledWith(12, 101, {
+      controlType: 'resume',
+      reason: 'customer supplied missing order number',
+    })
+    expect(apiMocks.listCustomerAssistantTasks).toHaveBeenCalledWith(12)
+    expect(apiMocks.listCustomerAssistantEvents).toHaveBeenCalledWith(12)
+    expect(apiMocks.listCustomerAssistantProposedActions).toHaveBeenCalledWith(12)
+    expect(state.proposedActions[0]).toMatchObject({
+      id: 88,
+      title: '恢复任务：refund_ticket',
+      status: 'PENDING',
+    })
+    expect(state.eventTimeline.some((event) => event.title === 'task_control_proposed')).toBe(true)
   })
 })

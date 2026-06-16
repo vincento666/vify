@@ -630,6 +630,77 @@ class CustomerAssistantService:
         rows = self._repository.list_proposed_actions(session_id)
         return {"list": [_format_action(row) for row in rows], "total": len(rows)}
 
+    def propose_task_control(
+        self,
+        session_id: int,
+        task_id: int,
+        control_type: str,
+        reason: str = "",
+        actor: CustomerAssistantActor = "operator",
+    ) -> dict[str, Any]:
+        self._ensure_session(session_id)
+        task = self._repository.get_task(task_id)
+        if task is None or int(task["session_id"]) != session_id:
+            raise BizError(ErrorCode.NOT_FOUND, "Customer assistant task not found")
+        _ensure_task_control_allowed(task, control_type)
+        command = _task_control_command(task, control_type, reason)
+        action_key = f"task-control:{session_id}:{task_id}:{control_type}:{task.get('version') or 1}"
+        input_payload = {
+            "tool": "task_control",
+            "controlType": control_type,
+            "reason": reason,
+            "actor": actor,
+            "taskId": task_id,
+            "taskVersion": task.get("version") or 1,
+        }
+        run, replayed = self._repository.create_run(
+            session_id=session_id,
+            idempotency_key=action_key,
+            request_hash=_task_control_request_hash(input_payload),
+            input_payload=input_payload,
+        )
+        row = self._repository.upsert_proposed_action(
+            session_id=session_id,
+            run_id=int(run["id"]),
+            task_id=task_id,
+            action_key=action_key,
+            action_type="PROPOSED_TASK_COMMAND",
+            title=f"{_task_control_label(control_type)}：{task['task_key']}",
+            payload={
+                "turnMode": CustomerAssistantTurnMode.OPERATOR_APPLY_TASK_COMMAND.value,
+                "requiresConfirmation": True,
+                "controlType": control_type,
+                "reason": reason,
+                "taskCommand": _command_payload(command),
+            },
+        )
+        self._repository.append_event(
+            session_id,
+            "task_control_proposed",
+            {
+                "actionId": int(row["id"]),
+                "controlType": control_type,
+                "taskId": task_id,
+                "taskKey": task["task_key"],
+                "requiresConfirmation": True,
+            },
+            run_id=int(run["id"]),
+            task_id=task_id,
+            source="operator_advisory",
+            actor=actor,
+        )
+        if not replayed:
+            self._repository.complete_run(
+                int(run["id"]),
+                {
+                    "status": "PROPOSED",
+                    "actionId": int(row["id"]),
+                    "controlType": control_type,
+                    "taskId": task_id,
+                },
+            )
+        return _format_action(row)
+
     def list_events_after(self, session_id: int, after_sequence: int) -> list[dict[str, Any]]:
         self._ensure_session(session_id)
         rows = self._repository.list_events_after(session_id, after_sequence)
@@ -1757,6 +1828,52 @@ def _task_command_from_proposed_payload(command: dict[str, Any]) -> TaskCommand:
         reason=str(command.get("reason") or "operator_confirmed"),
         input_snapshot=dict(command.get("inputSnapshot") or command.get("input_snapshot") or {}),
     )
+
+
+def _ensure_task_control_allowed(task: dict[str, Any], control_type: str) -> None:
+    available = _available_task_controls(str(task.get("status") or ""))
+    if control_type not in available:
+        raise BizError(
+            ErrorCode.BAD_REQUEST,
+            f"Task control {control_type} is not allowed for status {task.get('status')}",
+        )
+
+
+def _available_task_controls(status: str) -> tuple[str, ...]:
+    if status == TaskStatus.RUNNING.value or status == TaskStatus.PENDING.value:
+        return ("cancel",)
+    if status == TaskStatus.WAITING.value:
+        return ("resume", "cancel")
+    if status == TaskStatus.FAILED.value:
+        return ("retry",)
+    return ()
+
+
+def _task_control_command(task: dict[str, Any], control_type: str, reason: str) -> TaskCommand:
+    command_type = TaskCommandType.CANCEL_TASK if control_type == "cancel" else TaskCommandType.RESUME_TASK
+    return TaskCommand(
+        type=command_type,
+        task_key=str(task["task_key"]),
+        task_type=str(task["task_type"]),
+        business_key=str(task["business_key"]),
+        worker_type=str(task["worker_type"]),
+        worker_ref=str(task["worker_ref"]),
+        reason=reason or f"operator_{control_type}_control",
+        input_snapshot=dict(task.get("input_snapshot_json") or {}),
+    )
+
+
+def _task_control_label(control_type: str) -> str:
+    return {
+        "retry": "重试任务",
+        "cancel": "取消任务",
+        "resume": "恢复任务",
+    }.get(control_type, "任务控制")
+
+
+def _task_control_request_hash(payload: dict[str, Any]) -> str:
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 def _confidence(value: Any) -> float:

@@ -31,6 +31,30 @@ try {
   const proposedActions = await page.getByTestId('operator-proposed-actions-panel').innerText()
   assert(proposedActions.includes('并行处理退票与行李额确认'), 'Expected seeded proposed action in panel')
 
+  const refundTaskRow = page
+    .getByTestId('operator-task-ledger')
+    .locator('.task-row')
+    .filter({ hasText: 'refund_ticket:MU5137-8899' })
+    .first()
+  await refundTaskRow.getByRole('button', { name: '取消' }).click()
+  const actionPanel = page.getByTestId('operator-proposed-actions-panel')
+  await actionPanel.getByText(/取消任务：refund_ticket:MU5137-8899/).waitFor({ state: 'visible', timeout: 10000 })
+  const cancelActionRow = actionPanel
+    .locator('.action-row')
+    .filter({ hasText: '取消任务：refund_ticket:MU5137-8899' })
+    .first()
+  await cancelActionRow.locator('button').filter({ hasText: '确认任务变更' }).click()
+  await refundTaskRow.getByText('CANCELLED').waitFor({ state: 'visible', timeout: 10000 })
+
+  await storyStrip.getByRole('button', { name: /发票申请中途切航班动态/ }).click()
+  await page.getByText(/Session #/).waitFor({ state: 'visible', timeout: 10000 })
+  const invoiceTaskRow = page
+    .getByTestId('operator-task-ledger')
+    .locator('.task-row')
+    .filter({ hasText: 'invoice_apply:CA1301-20231027-8899' })
+    .first()
+  await invoiceTaskRow.getByRole('button', { name: '恢复' }).waitFor({ state: 'visible', timeout: 10000 })
+
   const stripText = await storyStrip.innerText()
   assert(stripText.includes('1 待确认'), 'Expected story picker to expose pending action count')
 

@@ -105,4 +105,22 @@ describe('customer-assistant frontend API client', () => {
     expect(requestMocks.post).toHaveBeenNthCalledWith(2, '/v1/customer-assistant/proposed-actions/10/reject')
     expect(requestMocks.post).toHaveBeenNthCalledWith(3, '/v1/customer-assistant/proposed-actions/11/execute')
   })
+
+  it('proposes task controls through the session task endpoint', async () => {
+    requestMocks.post.mockResolvedValueOnce({ id: 42, status: 'PENDING' })
+
+    const { proposeCustomerAssistantTaskControl } = await import('./customerAssistant')
+
+    await expect(
+      proposeCustomerAssistantTaskControl(12, 101, {
+        controlType: 'resume',
+        reason: 'customer supplied missing order number',
+      }),
+    ).resolves.toEqual({ id: 42, status: 'PENDING' })
+
+    expect(requestMocks.post).toHaveBeenCalledWith('/v1/customer-assistant/sessions/12/tasks/101/controls/propose', {
+      controlType: 'resume',
+      reason: 'customer supplied missing order number',
+    })
+  })
 })

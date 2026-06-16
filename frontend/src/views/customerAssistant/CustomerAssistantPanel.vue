@@ -188,6 +188,30 @@
               </div>
               <a-tag :color="statusColor(task.statusTone)">{{ task.status }}</a-tag>
               <p v-if="task.missingFields.length">缺失：{{ task.missingFields.join('、') }}</p>
+              <div
+                v-if="task.availableControls.length"
+                class="task-controls"
+                data-testid="operator-task-controls"
+              >
+                <a-tooltip
+                  v-for="control in task.availableControls"
+                  :key="control"
+                  :title="taskControlTooltip(control)"
+                >
+                  <a-button
+                    size="small"
+                    :danger="control === 'cancel'"
+                    :loading="taskControlLoadingKey === `${task.id}:${control}`"
+                    @click="proposeTaskControl(task.id, control)"
+                  >
+                    <CloseOutlined v-if="control === 'cancel'" />
+                    <ThunderboltOutlined v-else />
+                    <span v-if="control === 'retry'">重试</span>
+                    <span v-else-if="control === 'cancel'">取消</span>
+                    <span v-else>恢复</span>
+                  </a-button>
+                </a-tooltip>
+              </div>
             </div>
           </div>
         </section>
@@ -361,6 +385,7 @@ import {
   listCustomerAssistantDemoStories,
   type CustomerAssistantDemoStory,
   type CustomerAssistantProposedAction,
+  type CustomerAssistantTaskControlType,
 } from '@/api/customerAssistant'
 import {
   BulbOutlined,
@@ -384,6 +409,7 @@ import {
   createCustomerAssistantRuntimeState,
   executeCustomerAssistantRuntimeAction,
   loadCustomerAssistantDemoStory,
+  proposeCustomerAssistantRuntimeTaskControl,
   rejectCustomerAssistantRuntimeAction,
   sendCustomerAssistantRuntimeTurn,
 } from './customerAssistantRuntime'
@@ -399,6 +425,7 @@ const operatorInput = ref('请给我处置建议')
 const draftApplied = ref(false)
 const sendingSource = ref<'customer' | 'operator' | null>(null)
 const actionLoadingId = ref<number | null>(null)
+const taskControlLoadingKey = ref<string | null>(null)
 const expandedEventKeys = ref<string[]>([])
 const runtimeState = ref(createCustomerAssistantRuntimeState())
 const demoStories = ref<CustomerAssistantDemoStory[]>([])
@@ -470,6 +497,18 @@ function actionConfirmTooltip(action: CustomerAssistantProposedAction) {
   return isProposedTaskCommand(action) ? '确认任务变更' : '确认拟议动作'
 }
 
+function taskControlTooltip(control: CustomerAssistantTaskControlType) {
+  if (control === 'retry') return '生成重试任务的待确认动作'
+  if (control === 'cancel') return '生成取消任务的待确认动作'
+  return '生成恢复任务的待确认动作'
+}
+
+function taskControlReason(control: CustomerAssistantTaskControlType) {
+  if (control === 'retry') return 'operator retry requested from workbench'
+  if (control === 'cancel') return 'operator cancel requested from workbench'
+  return 'operator resume requested from workbench'
+}
+
 async function loadDemoStories() {
   demoStoriesLoading.value = true
   demoStoryError.value = null
@@ -496,6 +535,23 @@ async function loadDemoStory(storyId: string) {
     message.error(errorMessage)
   } finally {
     demoStoryLoadingId.value = null
+  }
+}
+
+async function proposeTaskControl(taskId: number, controlType: CustomerAssistantTaskControlType) {
+  taskControlLoadingKey.value = `${taskId}:${controlType}`
+  try {
+    runtimeState.value = await proposeCustomerAssistantRuntimeTaskControl(
+      runtimeState.value,
+      taskId,
+      controlType,
+      taskControlReason(controlType),
+    )
+    message.success('已生成待确认任务控制')
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '生成任务控制失败')
+  } finally {
+    taskControlLoadingKey.value = null
   }
 }
 
@@ -856,6 +912,12 @@ async function executeAction(actionId: number) {
   margin: 0;
   color: #8a5a00;
   font-size: 0.8125rem;
+}
+
+.task-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
 }
 
 .panel-copy,
