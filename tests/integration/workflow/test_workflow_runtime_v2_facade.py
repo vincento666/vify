@@ -4,7 +4,12 @@ from datetime import datetime
 
 from fastapi.testclient import TestClient
 
+from app.core.database import get_session_factory
 from app.main import app
+from app.modules.workflow.domain.runtime_v2 import WorkflowRuntimeV2Service
+from app.modules.workflow.infra.chatflow_state_repository import ChatflowStateRepository
+from app.modules.workflow.infra.publish_repository import WorkflowPublishRepository
+from app.modules.workflow.infra.repository import WorkflowRepository
 
 
 class WorkflowRuntimeV2FacadeTest(unittest.TestCase):
@@ -94,6 +99,59 @@ class WorkflowRuntimeV2FacadeTest(unittest.TestCase):
         self.assertEqual(data["versionId"], version["id"])
         self.assertEqual(data["version"], version["version"])
 
+    def test_workflow_v2_knowledge_uses_published_snapshot_and_real_faq_answer(self) -> None:
+        with TestClient(app) as client:
+            kb_id = _create_knowledge_base_with_faq(client)
+            workflow = _create_knowledge_workflow(client, kb_id)
+            version = client.post(f"/api/v1/workflows/{workflow['id']}/publish").json()["data"]
+            _replace_workflow_message(client, workflow["id"], message="draft-edited")
+            started = client.post(
+                f"/api/v1/workflows/{workflow['id']}/runs-v2",
+                json={"input": {"sys.query": "workflow v2 refund knowledge"}},
+            ).json()["data"]
+            terminal = _wait_for_result(client, started["resultRef"])
+            events = client.get(started["eventsRef"]).json()["data"]["list"]
+            nodes = client.get(started["nodesRef"]).json()["data"]["list"]
+
+        self.assertEqual(terminal["status"], "SUCCEEDED")
+        self.assertEqual(terminal["output"]["answer"], "Workflow v2 published FAQ answer.")
+        self.assertNotIn("Knowledge mock:", str(terminal))
+        self.assertEqual(terminal["versionId"], version["id"])
+        self.assertEqual(terminal["version"], version["version"])
+        self.assertTrue(
+            any(
+                event["type"] == "workflow_node_completed"
+                and event.get("nodeId") == "knowledge_1"
+                and event["payload"]["nodeType"] == "KNOWLEDGE"
+                for event in events
+            ),
+            events,
+        )
+        knowledge_node = next(node for node in nodes if node["nodeKey"] == "knowledge_1")
+        self.assertEqual(knowledge_node["status"], "COMPLETED")
+
+    def test_workflow_v2_knowledge_without_facade_fails_explicitly_not_mock(self) -> None:
+        with TestClient(app) as client:
+            kb_id = _create_knowledge_base_with_faq(client)
+            workflow = _create_knowledge_workflow(client, kb_id)
+            client.post(f"/api/v1/workflows/{workflow['id']}/publish")
+
+        with get_session_factory()() as session:
+            service = WorkflowRuntimeV2Service(
+                WorkflowRepository(session),
+                ChatflowStateRepository(session),
+                WorkflowPublishRepository(session),
+                completion_delay_seconds=0,
+                knowledge_facade=None,
+            )
+            started = service.start_run(int(workflow["id"]), {"sys.query": "workflow v2 refund knowledge"})
+            service.complete_run(int(started["runId"]))
+            result = service.get_result(int(started["runId"]))
+
+        self.assertEqual(result["status"], "FAILED")
+        self.assertIn("requires KnowledgeFacade", result["error"])
+        self.assertNotIn("Knowledge mock:", str(result))
+
     def test_legacy_workflow_run_response_stays_compatible(self) -> None:
         with TestClient(app) as client:
             workflow = _create_workflow(client, message="legacy")
@@ -157,6 +215,63 @@ def _create_question_message_workflow(client: TestClient, *, message: str) -> di
             "description": "",
             "nodes": _question_message_nodes(message),
             "edges": _question_message_edges(),
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["data"]
+
+
+def _create_knowledge_base_with_faq(client: TestClient) -> int:
+    created = client.post(
+        "/api/v1/knowledge-bases",
+        json={"name": f"Workflow V2 Knowledge KB {time.time_ns()}", "description": "workflow v2 knowledge fixture"},
+    )
+    assert created.status_code == 200, created.text
+    kb_id = int(created.json()["data"]["id"])
+    faq = client.post(
+        f"/api/v1/knowledge-bases/{kb_id}/faqs",
+        json={
+            "question": "How does workflow v2 answer published knowledge?",
+            "answer": "Workflow v2 published FAQ answer.",
+            "alternativeQuestions": ["workflow v2 refund knowledge"],
+            "keywords": ["refund", "workflow", "knowledge"],
+            "category": "workflow-v2",
+            "priority": 20,
+            "enabled": True,
+            "metadata": {},
+            "source": "test",
+        },
+    )
+    assert faq.status_code == 200, faq.text
+    return kb_id
+
+
+def _create_knowledge_workflow(client: TestClient, kb_id: int) -> dict[str, object]:
+    response = client.post(
+        "/api/v1/workflows",
+        json={
+            "name": f"Workflow V2 Knowledge {time.time_ns()}",
+            "description": "published runtime v2 knowledge fixture",
+            "nodes": [
+                {"nodeKey": "start", "type": "START", "name": "Start", "config": {}},
+                {
+                    "nodeKey": "knowledge_1",
+                    "type": "KNOWLEDGE",
+                    "name": "Knowledge",
+                    "config": {
+                        "knowledgeBaseId": kb_id,
+                        "query": "{{start.sys.query}}",
+                        "topK": 3,
+                        "retrievalMode": "faq",
+                        "outputVariable": "answer",
+                    },
+                },
+                {"nodeKey": "end", "type": "END", "name": "End", "config": {"outputVariable": "answer"}},
+            ],
+            "edges": [
+                {"sourceNodeKey": "start", "targetNodeKey": "knowledge_1", "condition": None},
+                {"sourceNodeKey": "knowledge_1", "targetNodeKey": "end", "condition": None},
+            ],
         },
     )
     assert response.status_code == 200, response.text

@@ -10,7 +10,7 @@
 
 ## 080.2 Workflow V2 Published Knowledge Snapshot
 
-- [ ] Add RED public-API integration test for Workflow v2 `KNOWLEDGE`.
-- [ ] Thread knowledge facade through Workflow v2 service/background runner.
-- [ ] Run focused gates and browser/debug evidence if needed.
-- [ ] Commit completed 080.2 slice.
+- [x] Add RED public-API integration test for Workflow v2 `KNOWLEDGE`.
+- [x] Thread knowledge facade through Workflow v2 service/background runner.
+- [x] Run focused gates and browser/debug evidence if needed.
+- [x] Commit completed 080.2 slice.

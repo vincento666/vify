@@ -43,6 +43,7 @@ from app.modules.customer_assistant.web.schemas import (
     CustomerAssistantTaskControlRequest,
     CustomerAssistantTurnRequest,
 )
+from app.modules.knowledge.api.facade import KnowledgeFacade
 from app.modules.provider.api.facade import ProviderModelFacade
 from app.modules.runtime_lab.domain.chatflow_adapter import ChatflowSopRuntimeAdapter
 from app.modules.runtime_lab.domain.sop_adapter import FakeSopRuntimeAdapter
@@ -215,6 +216,7 @@ def _customer_assistant_sop_adapter(session: Session, bindings: dict[str, int]):
         runtime_v2_service=ChatflowRuntimeV2Service(
             WorkflowRepository(session),
             ChatflowStateRepository(session),
+            knowledge_facade=KnowledgeFacade(session),
         ),
     )
 

@@ -508,6 +508,8 @@ class ChatflowRuntimeV2Service:
             elif node_type == "INFORMATION_COLLECTION":
                 output = InformationCollectionNodeExecutor().execute(node, context)
             elif node_type == "KNOWLEDGE":
+                if self._knowledge_facade is None:
+                    raise ValueError("Runtime v2 KNOWLEDGE node requires KnowledgeFacade")
                 output = KnowledgeNodeExecutor(self._knowledge_facade).execute(node, context)
             elif node_type == "END":
                 output = EndNodeExecutor().execute(node, context)
