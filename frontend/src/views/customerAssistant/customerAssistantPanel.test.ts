@@ -156,6 +156,23 @@ describe('CustomerAssistantPanel UI contract', () => {
     expect(taskLedger).toContain('task.profile.toolRefs')
   })
 
+  it('renders the configured worker profile catalog as a dedicated operator panel', () => {
+    const profilePanel = section(content, 'operator-worker-profile-config-panel')
+
+    expect(profilePanel).toContain('workerProfiles')
+    expect(profilePanel).toContain('profile.taskType')
+    expect(profilePanel).toContain('profile.taskKey')
+    expect(profilePanel).toContain('profile.workerType')
+    expect(profilePanel).toContain('profile.workerRef')
+    expect(profilePanel).toContain('profile.modelPolicyRef')
+    expect(profilePanel).toContain('profile.promptRef')
+    expect(profilePanel).toContain('profile.toolRefs')
+    expect(profilePanel).toContain('profile.riskPolicyRef')
+    expect(profilePanel).toContain('startEditWorkerProfile')
+    expect(profilePanel).toContain('saveEditedWorkerProfile')
+    expect(section(content, 'customer-conversation-lane')).not.toContain('operator-worker-profile-config-panel')
+  })
+
   it('renders worker profile edit controls in the operator task ledger', () => {
     const taskLedger = section(content, 'operator-task-ledger')
 

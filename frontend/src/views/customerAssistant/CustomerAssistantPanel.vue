@@ -250,6 +250,123 @@
           </div>
         </section>
 
+        <section class="workspace-panel compact-panel" data-testid="operator-worker-profile-config-panel">
+          <div class="panel-heading">
+            <span class="panel-heading-title">
+              <RobotOutlined />
+              Worker 配置
+            </span>
+            <div class="heading-meta">
+              <a-tag v-if="workerProfileError" color="warning">配置未加载</a-tag>
+              <a-tag v-else-if="workerProfilesLoading" color="processing">配置加载中</a-tag>
+              <span class="panel-count">{{ workerProfiles.length }}</span>
+            </div>
+          </div>
+          <div class="worker-profile-catalog">
+            <div
+              v-if="workerProfiles.length === 0"
+              class="empty-compact"
+              data-testid="operator-worker-profile-empty-state"
+            >
+              {{ workerProfilesLoading ? '正在加载 Worker 配置' : workerProfileError || '暂无 Worker 配置' }}
+            </div>
+            <div
+              v-for="profile in workerProfiles"
+              :key="profile.profileId"
+              class="worker-profile-row"
+              :class="{ disabled: !profile.enabled }"
+              data-testid="operator-worker-profile-row"
+            >
+              <div class="worker-profile-main">
+                <strong>{{ profile.taskType }} · {{ profile.taskKey }}</strong>
+                <span>{{ profile.workerType }} · {{ profile.workerRef }}</span>
+              </div>
+              <div class="worker-profile-meta">
+                <a-tag color="blue">{{ profile.profileId }}</a-tag>
+                <a-tag :color="profile.enabled ? 'success' : 'default'">{{ profile.enabled ? '启用' : '停用' }}</a-tag>
+                <span>模型 {{ profile.modelPolicyRef }}</span>
+                <span>提示词 {{ profile.promptRef }}</span>
+                <span>风险 {{ profile.riskPolicyRef }}</span>
+                <span>工具 {{ profile.toolRefs.length ? profile.toolRefs.join('、') : '无' }}</span>
+              </div>
+              <div
+                v-if="editingWorkerProfileCatalogId === profile.profileId && editingWorkerProfileForm"
+                class="worker-profile-edit-form"
+                data-testid="operator-worker-profile-catalog-edit-form"
+              >
+                <div class="worker-profile-grid">
+                  <a-input
+                    v-model:value="editingWorkerProfileForm.taskKey"
+                    aria-label="任务键"
+                    placeholder="任务键"
+                  />
+                  <a-input
+                    v-model:value="editingWorkerProfileForm.taskType"
+                    aria-label="任务类型"
+                    placeholder="任务类型"
+                  />
+                  <a-input
+                    v-model:value="editingWorkerProfileForm.workerType"
+                    aria-label="Worker 类型"
+                    placeholder="Worker 类型"
+                  />
+                  <a-input
+                    v-model:value="editingWorkerProfileForm.workerRef"
+                    aria-label="Worker 引用"
+                    placeholder="Worker 引用"
+                  />
+                  <a-input
+                    v-model:value="editingWorkerProfileForm.modelPolicyRef"
+                    aria-label="模型策略"
+                    placeholder="模型策略"
+                  />
+                  <a-input
+                    v-model:value="editingWorkerProfileForm.promptRef"
+                    aria-label="提示词引用"
+                    placeholder="提示词引用"
+                  />
+                  <a-input
+                    v-model:value="editingWorkerProfileForm.riskPolicyRef"
+                    aria-label="风险策略"
+                    placeholder="风险策略"
+                  />
+                  <a-checkbox v-model:checked="editingWorkerProfileForm.enabled">启用</a-checkbox>
+                  <a-input
+                    v-model:value="editingWorkerProfileToolRefs"
+                    class="worker-profile-tools"
+                    aria-label="工具引用"
+                    placeholder="工具引用，逗号分隔"
+                  />
+                </div>
+                <p v-if="editingWorkerProfileError" class="edit-error">{{ editingWorkerProfileError }}</p>
+                <div class="panel-actions action-edit-actions">
+                  <a-button
+                    size="small"
+                    type="primary"
+                    :loading="workerProfileSavingId === editingWorkerProfileId"
+                    @click="saveEditedWorkerProfile"
+                  >
+                    <CheckOutlined />
+                    保存配置
+                  </a-button>
+                  <a-button size="small" @click="cancelEditWorkerProfile">
+                    <CloseOutlined />
+                    取消配置
+                  </a-button>
+                </div>
+              </div>
+              <div class="panel-actions worker-profile-actions">
+                <a-tooltip title="配置 Worker Profile">
+                  <a-button size="small" aria-label="配置 Worker Profile" @click="startEditWorkerProfileCatalog(profile)">
+                    <EditOutlined />
+                    配置
+                  </a-button>
+                </a-tooltip>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section class="workspace-panel compact-panel" data-testid="operator-task-ledger">
           <div class="panel-heading">
             <span class="panel-heading-title">
@@ -782,6 +899,7 @@ const workerProfiles = ref<CustomerAssistantWorkerProfile[]>([])
 const workerProfilesLoading = ref(false)
 const workerProfileError = ref<string | null>(null)
 const editingWorkerProfileTaskId = ref<number | null>(null)
+const editingWorkerProfileCatalogId = ref<string | null>(null)
 const editingWorkerProfileId = ref<string | null>(null)
 const editingWorkerProfileForm = ref<CustomerAssistantWorkerProfileUpdatePayload | null>(null)
 const editingWorkerProfileToolRefs = ref('')
@@ -922,7 +1040,18 @@ function workerProfileForTask(task: CustomerAssistantTaskRow) {
 function startEditWorkerProfile(task: CustomerAssistantTaskRow) {
   const profile = workerProfileForTask(task)
   if (!profile) return
+  startEditWorkerProfileForm(profile)
   editingWorkerProfileTaskId.value = task.id
+}
+
+function startEditWorkerProfileCatalog(profile: CustomerAssistantWorkerProfile) {
+  startEditWorkerProfileForm(profile)
+  editingWorkerProfileCatalogId.value = profile.profileId
+}
+
+function startEditWorkerProfileForm(profile: CustomerAssistantWorkerProfile) {
+  editingWorkerProfileTaskId.value = null
+  editingWorkerProfileCatalogId.value = null
   editingWorkerProfileId.value = profile.profileId
   editingWorkerProfileForm.value = {
     taskKey: profile.taskKey,
@@ -941,6 +1070,7 @@ function startEditWorkerProfile(task: CustomerAssistantTaskRow) {
 
 function cancelEditWorkerProfile() {
   editingWorkerProfileTaskId.value = null
+  editingWorkerProfileCatalogId.value = null
   editingWorkerProfileId.value = null
   editingWorkerProfileForm.value = null
   editingWorkerProfileToolRefs.value = ''
@@ -1441,6 +1571,7 @@ async function executeAction(actionId: number) {
 .task-list,
 .action-list,
 .progress-list,
+.worker-profile-catalog,
 .audit-list,
 .recognition-evidence-list,
 .advisory-evidence-list {
@@ -1475,6 +1606,7 @@ async function executeAction(actionId: number) {
 
 .task-row,
 .action-row,
+.worker-profile-row,
 .audit-row,
 .recognition-evidence-row,
 .advisory-evidence-row {
@@ -1486,8 +1618,13 @@ async function executeAction(actionId: number) {
   background: #fbfcff;
 }
 
+.worker-profile-row.disabled {
+  background: #f6f7f9;
+}
+
 .task-row > div:first-child,
 .action-row > div:first-child,
+.worker-profile-main,
 .audit-main,
 .recognition-main,
 .advisory-main {
@@ -1498,6 +1635,7 @@ async function executeAction(actionId: number) {
 
 .task-row span,
 .action-row span,
+.worker-profile-row span,
 .audit-row span,
 .recognition-evidence-row span,
 .advisory-evidence-row span {
@@ -1514,6 +1652,16 @@ async function executeAction(actionId: number) {
 }
 
 .task-profile {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  color: #4d5b70;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.worker-profile-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
@@ -1583,6 +1731,10 @@ async function executeAction(actionId: number) {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
+}
+
+.worker-profile-actions {
+  margin-top: 0;
 }
 
 .metrics-grid {
