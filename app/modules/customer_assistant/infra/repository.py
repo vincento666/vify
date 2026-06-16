@@ -620,6 +620,42 @@ class CustomerAssistantRepository:
         ).mappings().one()
         return dict(row)
 
+    def transition_proposed_action_status(
+        self,
+        action_id: int,
+        *,
+        expected_status: str,
+        next_status: str,
+        result: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        now = datetime.now()
+        values: dict[str, Any] = {"status": next_status, "updated_at": now}
+        if next_status == "CONFIRMED":
+            values["confirmed_at"] = now
+        if next_status == "REJECTED":
+            values["rejected_at"] = now
+        if result is not None:
+            values["result_json"] = result
+        update_result = self._session.execute(
+            self._action_table.update()
+            .where(
+                self._action_table.c.id == action_id,
+                self._action_table.c.status == expected_status,
+                self._action_table.c.deleted.is_(False),
+            )
+            .values(**values)
+        )
+        self._session.commit()
+        if update_result.rowcount == 0:
+            return None
+        row = self._session.execute(
+            sa.select(self._action_table).where(
+                self._action_table.c.id == action_id,
+                self._action_table.c.deleted.is_(False),
+            )
+        ).mappings().one()
+        return dict(row)
+
     def update_proposed_action(
         self,
         action_id: int,

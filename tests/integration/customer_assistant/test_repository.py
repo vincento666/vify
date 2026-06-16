@@ -123,6 +123,42 @@ class CustomerAssistantRepositoryTest(unittest.TestCase):
             self.assertEqual(second_event["sequence"], 2)
             self.assertEqual([event["sequence"] for event in repository.list_worker_events(int(worker_run["id"]))], [1, 2])
 
+    def test_conditional_proposed_action_transition_rejects_stale_status(self) -> None:
+        with _session() as session:
+            repository = CustomerAssistantRepository(session)
+            assistant_session = repository.create_session(context={"customerId": "C-200"})
+            run, _ = repository.create_run(
+                int(assistant_session["id"]),
+                idempotency_key="transition-1",
+                request_hash="transition-hash",
+                input_payload={"message": "我要退票"},
+            )
+            action = repository.upsert_proposed_action(
+                session_id=int(assistant_session["id"]),
+                run_id=int(run["id"]),
+                task_id=None,
+                action_key="transition:submit_refund:TK-200",
+                action_type="submit_refund",
+                title="提交退票申请",
+                payload={"orderNo": "TK-200"},
+            )
+
+            confirmed = repository.transition_proposed_action_status(
+                int(action["id"]),
+                expected_status="PENDING",
+                next_status="CONFIRMED",
+            )
+            stale = repository.transition_proposed_action_status(
+                int(action["id"]),
+                expected_status="PENDING",
+                next_status="EXECUTING",
+            )
+            current = repository.get_proposed_action(int(action["id"]))
+
+        self.assertIsNotNone(confirmed)
+        self.assertIsNone(stale)
+        self.assertEqual(current["status"], "CONFIRMED")
+
 
 def _session() -> Session:
     tmp_dir = tempfile.TemporaryDirectory()
