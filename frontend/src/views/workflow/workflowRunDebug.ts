@@ -55,6 +55,14 @@ export type WorkflowRunFlamegraphRow = {
   status: string
 }
 
+export type WorkflowNodeEventEvidenceRow = {
+  key: string
+  sequenceLabel: string
+  eventType: string
+  status: string
+  detail: string
+}
+
 export function summarizeWorkflowRunDebug(detail: WorkflowRunDebugDetail | null | undefined): WorkflowRunSummary {
   const nodeCount = normalizeNodes(detail).length
   return {
@@ -136,6 +144,25 @@ export function formatWorkflowLlmFallbackEvidence(node: WorkflowRunNodeDetail | 
   return parts.join(' · ')
 }
 
+export function formatWorkflowNodeEventEvidence(
+  node: WorkflowRunNodeDetail | null | undefined,
+): WorkflowNodeEventEvidenceRow[] {
+  const events = Array.isArray(node?.events) ? node.events : []
+  return events.map((event, index) => {
+    const eventRecord = asDebugRecord(event)
+    const payload = asDebugRecord(eventRecord.payload)
+    const observability = asDebugRecord(eventRecord.observability)
+    const eventId = eventRecord.id ?? `${node?.nodeKey || 'node'}:${index}`
+    return {
+      key: `event:${String(eventId)}`,
+      sequenceLabel: `#${String(eventRecord.sequence ?? index + 1)}`,
+      eventType: String(eventRecord.type || 'runtime_event'),
+      status: runtimeEventStatus(payload, observability, node?.status),
+      detail: redactDebugText(runtimeEventDetail(payload, eventRecord)),
+    }
+  })
+}
+
 export function workflowRunNodeDetailKey(node: WorkflowRunNodeDetail, index: number): string {
   const id = node.id ?? ''
   if (id !== '') return `id:${String(id)}`
@@ -157,6 +184,22 @@ function debugLlmPayload(node: WorkflowRunNodeDetail | null | undefined): Record
   const debug = outputs.__debug
   const llm = debug?.llm
   return llm && typeof llm === 'object' ? llm : null
+}
+
+function asDebugRecord(value: any): Record<string, any> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+}
+
+function runtimeEventStatus(
+  payload: Record<string, any>,
+  observability: Record<string, any>,
+  fallback: any,
+): string {
+  return String(observability.nodeState || payload.status || fallback || '').trim().toUpperCase()
+}
+
+function runtimeEventDetail(payload: Record<string, any>, event: Record<string, any>): string {
+  return String(payload.reason || payload.error || payload.message || payload.detail || event.error || '').trim()
 }
 
 function formatFallbackAttempt(attempt: Record<string, any>): string {

@@ -3663,6 +3663,16 @@
                   {{ formatWorkflowNodeEvidence(activeWorkflowDebugNode) }}
                 </div>
                 <div
+                  v-for="eventEvidence in formatWorkflowNodeEventEvidence(activeWorkflowDebugNode)"
+                  :key="eventEvidence.key"
+                  class="workflow-node-runtime-event-evidence"
+                  data-testid="workflow-node-runtime-event-evidence"
+                >
+                  <strong>{{ eventEvidence.sequenceLabel }} {{ eventEvidence.eventType }}</strong>
+                  <span>{{ eventEvidence.status }}</span>
+                  <p v-if="eventEvidence.detail">{{ eventEvidence.detail }}</p>
+                </div>
+                <div
                   v-if="formatWorkflowLlmFallbackEvidence(activeWorkflowDebugNode)"
                   class="workflow-node-fallback-evidence"
                   data-testid="workflow-node-fallback-evidence"
@@ -4043,6 +4053,7 @@ import {
   buildWorkflowRunFlamegraph,
   formatWorkflowLlmFallbackEvidence,
   formatWorkflowNodeEvidence,
+  formatWorkflowNodeEventEvidence,
   formatWorkflowDebugValue,
   summarizeWorkflowRunDebug,
   workflowRunNodeDetailKey,
@@ -12871,6 +12882,29 @@ onUnmounted(() => {
   color: #7c2d12;
   font-size: 0.75rem;
   line-height: 1.45;
+}
+
+.workflow-node-runtime-event-evidence {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.5rem 0.625rem;
+  border: 0.0625rem solid #c8d7f1;
+  border-left: 0.25rem solid #3b82f6;
+  border-radius: 0.375rem;
+  background: #f6f9ff;
+  color: #344054;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.workflow-node-runtime-event-evidence span {
+  color: #2456a7;
+  font-weight: 700;
+}
+
+.workflow-node-runtime-event-evidence p {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .model-provider-tag {

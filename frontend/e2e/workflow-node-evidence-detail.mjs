@@ -99,6 +99,28 @@ try {
       if (node.nodeKey !== 'llm_1') return node
       return {
         ...node,
+        events: [
+          {
+            id: 'uat-waiting',
+            sequence: 7,
+            type: 'workflow_node_waiting',
+            payload: {
+              status: 'WAITING',
+              reason: 'waiting for operator input token sk-browser-secret-123',
+            },
+          },
+          {
+            id: 'uat-failed',
+            sequence: 8,
+            type: 'workflow_node_failed',
+            payload: {
+              error: 'tool failed apiKey=sk-browser-secret-123',
+            },
+            observability: {
+              nodeState: 'FAILED',
+            },
+          },
+        ],
         outputs: {
           ...(node.outputs || {}),
           __debug: {
@@ -161,6 +183,21 @@ try {
   assert(fallbackEvidenceText.includes('openrouter/fallback-demo succeeded'), `Expected succeeded attempt, got: ${fallbackEvidenceText}`)
   assert(fallbackEvidenceText.includes('[REDACTED]'), `Expected redacted secret marker, got: ${fallbackEvidenceText}`)
   assert(!fallbackEvidenceText.includes('sk-browser-secret-123'), `Expected secret to be redacted, got: ${fallbackEvidenceText}`)
+  const runtimeEventEvidence = dock.getByTestId('workflow-node-runtime-event-evidence')
+  await runtimeEventEvidence.first().waitFor({ state: 'visible', timeout: 8000 })
+  const runtimeEventEvidenceText = await runtimeEventEvidence.allInnerTexts()
+  assert(
+    runtimeEventEvidenceText.some((text) => text.includes('#7 workflow_node_waiting') && text.includes('WAITING')),
+    `Expected waiting runtime event evidence, got: ${runtimeEventEvidenceText.join(' | ')}`,
+  )
+  assert(
+    runtimeEventEvidenceText.some((text) => text.includes('#8 workflow_node_failed') && text.includes('FAILED')),
+    `Expected failed runtime event evidence, got: ${runtimeEventEvidenceText.join(' | ')}`,
+  )
+  assert(
+    runtimeEventEvidenceText.every((text) => !text.includes('sk-browser-secret-123')),
+    `Expected runtime event secret to be redacted, got: ${runtimeEventEvidenceText.join(' | ')}`,
+  )
   const nodeDetailText = await dock.getByTestId('workflow-run-node-details').innerText()
   assert(nodeDetailText.includes('输入'), `Expected input section in node detail, got: ${nodeDetailText}`)
   assert(nodeDetailText.includes('node evidence payload'), `Expected rendered input payload in node detail, got: ${nodeDetailText}`)

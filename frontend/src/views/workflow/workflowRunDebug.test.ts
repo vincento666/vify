@@ -5,6 +5,7 @@ import {
   buildWorkflowRunFlamegraph,
   formatWorkflowLlmFallbackEvidence,
   formatWorkflowNodeEvidence,
+  formatWorkflowNodeEventEvidence,
   summarizeWorkflowRunDebug,
 } from './workflowRunDebug'
 
@@ -117,5 +118,52 @@ describe('workflow run debug view model', () => {
     expect(fallbackEvidence).toContain('openrouter/fallback succeeded')
     expect(fallbackEvidence).toContain('[REDACTED]')
     expect(fallbackEvidence).not.toContain('sk-live-secret-123')
+  })
+
+  it('formats runtime v2 node event evidence with redacted details', () => {
+    const rows = formatWorkflowNodeEventEvidence({
+      nodeKey: 'question_1',
+      nodeType: 'QUESTION',
+      status: 'WAITING',
+      events: [
+        {
+          id: 1,
+          sequence: 4,
+          type: 'workflow_node_waiting',
+          payload: {
+            status: 'WAITING',
+            reason: 'waiting for operator input token sk-live-secret-123',
+          },
+        },
+        {
+          id: 2,
+          sequence: 5,
+          type: 'workflow_node_failed',
+          payload: {
+            error: 'tool failed apiKey=sk-live-secret-123',
+          },
+          observability: {
+            nodeState: 'FAILED',
+          },
+        },
+      ],
+    })
+
+    expect(rows).toEqual([
+      {
+        key: 'event:1',
+        sequenceLabel: '#4',
+        eventType: 'workflow_node_waiting',
+        status: 'WAITING',
+        detail: 'waiting for operator input token [REDACTED]',
+      },
+      {
+        key: 'event:2',
+        sequenceLabel: '#5',
+        eventType: 'workflow_node_failed',
+        status: 'FAILED',
+        detail: 'tool failed apiKey=[REDACTED]',
+      },
+    ])
   })
 })
