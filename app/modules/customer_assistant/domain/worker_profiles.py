@@ -43,15 +43,20 @@ class CustomerAssistantWorkerProfileCatalog:
 
     @classmethod
     def from_json(cls, raw: str | None) -> CustomerAssistantWorkerProfileCatalog:
-        text = (raw or "").strip()
-        if not text:
-            return cls.default()
-        parsed = json.loads(text)
-        items = parsed.get("profiles") if isinstance(parsed, dict) else parsed
-        if not isinstance(items, list):
-            return cls.default()
-        profiles = [_profile_from_mapping(item) for item in items if isinstance(item, dict)]
-        return cls(profiles or list(default_customer_assistant_worker_profiles()))
+        return cls(_profiles_from_json(raw))
+
+    @classmethod
+    def from_json_with_overrides(
+        cls,
+        raw: str | None,
+        overrides: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    ) -> CustomerAssistantWorkerProfileCatalog:
+        override_profiles = [
+            _profile_from_mapping(item)
+            for item in overrides
+            if isinstance(item, dict)
+        ]
+        return cls(_merge_profile_overrides(_profiles_from_json(raw), override_profiles))
 
     def resolve(self, task_key: str) -> CustomerAssistantWorkerProfile | None:
         for profile in self._profiles:
@@ -61,6 +66,39 @@ class CustomerAssistantWorkerProfileCatalog:
 
     def list_profiles(self) -> list[dict[str, Any]]:
         return [profile.to_dict() for profile in self._profiles]
+
+
+def _profiles_from_json(raw: str | None) -> list[CustomerAssistantWorkerProfile]:
+    text = (raw or "").strip()
+    if not text:
+        return list(default_customer_assistant_worker_profiles())
+    parsed = json.loads(text)
+    items = parsed.get("profiles") if isinstance(parsed, dict) else parsed
+    if not isinstance(items, list):
+        return list(default_customer_assistant_worker_profiles())
+    profiles = [_profile_from_mapping(item) for item in items if isinstance(item, dict)]
+    return profiles or list(default_customer_assistant_worker_profiles())
+
+
+def _merge_profile_overrides(
+    base_profiles: list[CustomerAssistantWorkerProfile],
+    override_profiles: list[CustomerAssistantWorkerProfile],
+) -> list[CustomerAssistantWorkerProfile]:
+    merged = list(base_profiles)
+    for override in override_profiles:
+        replaced = False
+        next_profiles: list[CustomerAssistantWorkerProfile] = []
+        for profile in merged:
+            if profile.profile_id == override.profile_id or profile.task_key == override.task_key:
+                if not replaced and override.enabled:
+                    next_profiles.append(override)
+                replaced = True
+                continue
+            next_profiles.append(profile)
+        if not replaced and override.enabled:
+            next_profiles.append(override)
+        merged = next_profiles
+    return merged
 
 
 def default_customer_assistant_worker_profiles() -> tuple[CustomerAssistantWorkerProfile, ...]:
@@ -104,6 +142,10 @@ def default_customer_assistant_worker_profiles() -> tuple[CustomerAssistantWorke
 def default_customer_assistant_worker_profiles_json() -> str:
     payload = {"profiles": [profile.to_dict() for profile in default_customer_assistant_worker_profiles()]}
     return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+
+
+def customer_assistant_worker_profile_from_mapping(item: dict[str, Any]) -> CustomerAssistantWorkerProfile:
+    return _profile_from_mapping(item)
 
 
 def _profile_from_mapping(item: dict[str, Any]) -> CustomerAssistantWorkerProfile:

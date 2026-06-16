@@ -128,6 +128,16 @@ describe('CustomerAssistantPanel UI contract', () => {
     expect(taskLedger).toContain('task.profile.toolRefs')
   })
 
+  it('renders worker profile edit controls in the operator task ledger', () => {
+    const taskLedger = section(content, 'operator-task-ledger')
+
+    expect(taskLedger).toContain('data-testid="operator-worker-profile-edit-form"')
+    expect(taskLedger).toContain('startEditWorkerProfile')
+    expect(taskLedger).toContain('saveEditedWorkerProfile')
+    expect(content).toContain('updateCustomerAssistantWorkerProfile')
+    expect(section(content, 'customer-conversation-lane')).not.toContain('operator-worker-profile-edit-form')
+  })
+
   it('renders task recognition evidence as a dedicated operator panel', () => {
     const evidencePanel = section(content, 'operator-recognition-evidence-panel')
 

@@ -56,6 +56,7 @@ from app.modules.customer_assistant.domain.worker_runtime import (
 from app.modules.customer_assistant.domain.worker_profiles import (
     CustomerAssistantWorkerProfile,
     CustomerAssistantWorkerProfileCatalog,
+    customer_assistant_worker_profile_from_mapping,
 )
 from app.modules.customer_assistant.domain.workers import ChatflowSopWorker, RecommendationAggregator, StubQaWorker
 from app.modules.customer_assistant.infra.repository import CustomerAssistantRepository, IdempotencyConflict
@@ -128,6 +129,16 @@ class CustomerAssistantService:
     def list_worker_profiles(self) -> dict[str, Any]:
         profiles = self._worker_profiles.list_profiles()
         return {"list": profiles, "total": len(profiles)}
+
+    def upsert_worker_profile(self, profile_id: str, profile_payload: dict[str, Any]) -> dict[str, Any]:
+        profile = customer_assistant_worker_profile_from_mapping(
+            {
+                **profile_payload,
+                "profileId": profile_id,
+            }
+        )
+        _validate_worker_profile(profile)
+        return self._repository.upsert_worker_profile(profile.profile_id, profile.to_dict())
 
     def _profile_refs_for_task(self, task: TaskItem) -> dict[str, Any] | None:
         profile = self._worker_profiles.resolve(task.task_key)
@@ -1880,6 +1891,22 @@ def _worker_profile_refs(profile: CustomerAssistantWorkerProfile) -> dict[str, A
         "riskPolicyRef": profile.risk_policy_ref,
         "toolRefs": list(profile.tool_refs),
     }
+
+
+def _validate_worker_profile(profile: CustomerAssistantWorkerProfile) -> None:
+    missing = [
+        field_name
+        for field_name, value in {
+            "profileId": profile.profile_id,
+            "taskKey": profile.task_key,
+            "taskType": profile.task_type,
+            "workerType": profile.worker_type,
+            "workerRef": profile.worker_ref,
+        }.items()
+        if not str(value or "").strip()
+    ]
+    if missing:
+        raise BizError(ErrorCode.BAD_REQUEST, f"Missing worker profile fields: {', '.join(missing)}")
 
 
 def _format_event(row: dict[str, Any]) -> dict[str, Any]:

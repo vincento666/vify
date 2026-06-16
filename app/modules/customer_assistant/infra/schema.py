@@ -159,6 +159,28 @@ def register_customer_assistant_tables(metadata: sa.MetaData | None = None) -> N
             sa.Index("idx_customer_assistant_action_status", "session_id", "status"),
         )
 
+    if "customer_assistant_worker_profile" not in target.tables:
+        sa.Table(
+            "customer_assistant_worker_profile",
+            target,
+            id_column(),
+            sa.Column("profile_id", sa.String(120), nullable=False),
+            sa.Column("task_key", sa.String(120), nullable=False),
+            sa.Column("task_type", sa.String(60), nullable=False),
+            sa.Column("worker_type", sa.String(60), nullable=False),
+            sa.Column("worker_ref", sa.String(160), nullable=False, server_default=""),
+            sa.Column("model_policy_ref", sa.String(160), nullable=False, server_default="default"),
+            sa.Column("prompt_ref", sa.String(160), nullable=False, server_default="default"),
+            sa.Column("tool_refs", sa.JSON(), nullable=True),
+            sa.Column("risk_policy_ref", sa.String(160), nullable=False, server_default="manual_confirm"),
+            sa.Column("enabled", sa.Boolean(), nullable=False, server_default=sa.true()),
+            deleted_column(),
+            *timestamps(),
+            sa.UniqueConstraint("profile_id", name="idx_customer_assistant_worker_profile_id"),
+            sa.Index("idx_customer_assistant_worker_profile_task", "task_key"),
+            sa.Index("idx_customer_assistant_worker_profile_enabled", "enabled"),
+        )
+
 
 def customer_assistant_tables() -> list[sa.Table]:
     register_customer_assistant_tables()
@@ -170,5 +192,6 @@ def customer_assistant_tables() -> list[sa.Table]:
         "customer_assistant_worker_run",
         "customer_assistant_worker_event",
         "customer_assistant_proposed_action",
+        "customer_assistant_worker_profile",
     ]
     return [Base.metadata.tables[name] for name in names]

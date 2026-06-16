@@ -27,6 +27,7 @@ class CustomerAssistantRepository:
         self._worker_run_table = Base.metadata.tables["customer_assistant_worker_run"]
         self._worker_event_table = Base.metadata.tables["customer_assistant_worker_event"]
         self._action_table = Base.metadata.tables["customer_assistant_proposed_action"]
+        self._worker_profile_table = Base.metadata.tables["customer_assistant_worker_profile"]
         self._ensure_tables()
 
     @property
@@ -72,6 +73,42 @@ class CustomerAssistantRepository:
             if context.get("demoSeed") == demo_seed:
                 demo_rows.append(item)
         return demo_rows
+
+    def list_worker_profile_overrides(self) -> list[dict[str, Any]]:
+        rows = self._session.execute(
+            sa.select(self._worker_profile_table)
+            .where(self._worker_profile_table.c.deleted.is_(False))
+            .order_by(self._worker_profile_table.c.id.asc())
+        ).mappings().all()
+        return [_worker_profile_row_to_payload(dict(row)) for row in rows]
+
+    def upsert_worker_profile(self, profile_id: str, profile: dict[str, Any]) -> dict[str, Any]:
+        now = datetime.now()
+        values = _worker_profile_values(profile_id, profile, now)
+        existing = self._session.execute(
+            sa.select(self._worker_profile_table).where(
+                self._worker_profile_table.c.profile_id == profile_id,
+                self._worker_profile_table.c.deleted.is_(False),
+            )
+        ).mappings().one_or_none()
+        if existing:
+            self._session.execute(
+                self._worker_profile_table.update()
+                .where(self._worker_profile_table.c.id == existing["id"])
+                .values(**values)
+            )
+            self._session.commit()
+            row = self._session.execute(
+                sa.select(self._worker_profile_table).where(self._worker_profile_table.c.id == existing["id"])
+            ).mappings().one()
+            return _worker_profile_row_to_payload(dict(row))
+        row = insert_and_fetch(
+            self._session,
+            self._worker_profile_table,
+            values,
+        )
+        self._session.commit()
+        return _worker_profile_row_to_payload(row)
 
     def create_run(
         self,
@@ -764,3 +801,36 @@ def _redact_payload(value: Any) -> Any:
     if isinstance(value, list):
         return [_redact_payload(item) for item in value]
     return value
+
+
+def _worker_profile_values(profile_id: str, profile: dict[str, Any], now: datetime) -> dict[str, Any]:
+    return {
+        "profile_id": profile_id,
+        "task_key": str(profile.get("taskKey") or profile.get("task_key") or ""),
+        "task_type": str(profile.get("taskType") or profile.get("task_type") or ""),
+        "worker_type": str(profile.get("workerType") or profile.get("worker_type") or ""),
+        "worker_ref": str(profile.get("workerRef") or profile.get("worker_ref") or ""),
+        "model_policy_ref": str(profile.get("modelPolicyRef") or profile.get("model_policy_ref") or "default"),
+        "prompt_ref": str(profile.get("promptRef") or profile.get("prompt_ref") or "default"),
+        "tool_refs": list(profile.get("toolRefs") or profile.get("tool_refs") or []),
+        "risk_policy_ref": str(profile.get("riskPolicyRef") or profile.get("risk_policy_ref") or "manual_confirm"),
+        "enabled": bool(profile.get("enabled", True)),
+        "deleted": False,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
+def _worker_profile_row_to_payload(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "profileId": row["profile_id"],
+        "taskKey": row["task_key"],
+        "taskType": row["task_type"],
+        "workerType": row["worker_type"],
+        "workerRef": row["worker_ref"],
+        "modelPolicyRef": row.get("model_policy_ref") or "default",
+        "promptRef": row.get("prompt_ref") or "default",
+        "toolRefs": list(row.get("tool_refs") or []),
+        "riskPolicyRef": row.get("risk_policy_ref") or "manual_confirm",
+        "enabled": bool(row.get("enabled", True)),
+    }

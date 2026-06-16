@@ -32,6 +32,20 @@ class CustomerAssistantProposedActionUpdateRequest(BaseModel):
     actor: CustomerAssistantActor = "operator"
 
 
+class CustomerAssistantWorkerProfileUpsertRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    task_key: str = Field(alias="taskKey", min_length=1)
+    task_type: str = Field(alias="taskType", min_length=1)
+    worker_type: str = Field(alias="workerType", min_length=1)
+    worker_ref: str = Field(alias="workerRef", min_length=1)
+    model_policy_ref: str = Field(default="default", alias="modelPolicyRef")
+    prompt_ref: str = Field(default="default", alias="promptRef")
+    tool_refs: list[str] = Field(default_factory=list, alias="toolRefs")
+    risk_policy_ref: str = Field(default="manual_confirm", alias="riskPolicyRef")
+    enabled: bool = True
+
+
 class CustomerAssistantSubAgentInput(BaseModel):
     message: str
     actor: CustomerAssistantActor = DEFAULT_CUSTOMER_ASSISTANT_ACTOR

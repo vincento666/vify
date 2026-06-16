@@ -125,6 +125,44 @@ describe('customer-assistant frontend API client', () => {
     expect(requestMocks.get).toHaveBeenCalledWith('/v1/customer-assistant/worker-profiles')
   })
 
+  it('updates worker profile catalog entries through the patch endpoint', async () => {
+    requestMocks.patch.mockResolvedValueOnce({
+      profileId: 'refund_ticket_chatflow',
+      taskKey: 'refund_ticket',
+      workerRef: 'runtime_configured_refund',
+    })
+
+    const { updateCustomerAssistantWorkerProfile } = await import('./customerAssistant')
+
+    await expect(
+      updateCustomerAssistantWorkerProfile('refund_ticket_chatflow', {
+        taskKey: 'refund_ticket',
+        taskType: 'REFUND',
+        workerType: 'chatflow_sop',
+        workerRef: 'runtime_configured_refund',
+        modelPolicyRef: 'demo-model-v2',
+        promptRef: 'runtime-refund-prompt',
+        toolRefs: ['lookup_order', 'refund_policy_lookup'],
+        riskPolicyRef: 'manual_confirm_high_risk',
+        enabled: true,
+      }),
+    ).resolves.toMatchObject({ workerRef: 'runtime_configured_refund' })
+    expect(requestMocks.patch).toHaveBeenCalledWith(
+      '/v1/customer-assistant/worker-profiles/refund_ticket_chatflow',
+      {
+        taskKey: 'refund_ticket',
+        taskType: 'REFUND',
+        workerType: 'chatflow_sop',
+        workerRef: 'runtime_configured_refund',
+        modelPolicyRef: 'demo-model-v2',
+        promptRef: 'runtime-refund-prompt',
+        toolRefs: ['lookup_order', 'refund_policy_lookup'],
+        riskPolicyRef: 'manual_confirm_high_risk',
+        enabled: true,
+      },
+    )
+  })
+
   it('confirms, rejects, and executes proposed actions through explicit endpoints', async () => {
     requestMocks.post
       .mockResolvedValueOnce({ id: 9, status: 'CONFIRMED' })

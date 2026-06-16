@@ -263,6 +263,78 @@
                 <span>提示词 {{ task.profile.promptRef }}</span>
                 <span>风险 {{ task.profile.riskPolicyRef }}</span>
                 <span v-if="task.profile.toolRefs.length">工具 {{ task.profile.toolRefs.join('、') }}</span>
+                <a-tooltip title="配置任务 Worker">
+                  <a-button size="small" aria-label="配置任务 Worker" @click="startEditWorkerProfile(task)">
+                    <EditOutlined />
+                    配置
+                  </a-button>
+                </a-tooltip>
+              </div>
+              <div
+                v-if="editingWorkerProfileTaskId === task.id && editingWorkerProfileForm"
+                class="worker-profile-edit-form"
+                data-testid="operator-worker-profile-edit-form"
+              >
+                <div class="worker-profile-grid">
+                  <a-input
+                    v-model:value="editingWorkerProfileForm.taskKey"
+                    aria-label="任务键"
+                    placeholder="任务键"
+                  />
+                  <a-input
+                    v-model:value="editingWorkerProfileForm.taskType"
+                    aria-label="任务类型"
+                    placeholder="任务类型"
+                  />
+                  <a-input
+                    v-model:value="editingWorkerProfileForm.workerType"
+                    aria-label="Worker 类型"
+                    placeholder="Worker 类型"
+                  />
+                  <a-input
+                    v-model:value="editingWorkerProfileForm.workerRef"
+                    aria-label="Worker 引用"
+                    placeholder="Worker 引用"
+                  />
+                  <a-input
+                    v-model:value="editingWorkerProfileForm.modelPolicyRef"
+                    aria-label="模型策略"
+                    placeholder="模型策略"
+                  />
+                  <a-input
+                    v-model:value="editingWorkerProfileForm.promptRef"
+                    aria-label="提示词引用"
+                    placeholder="提示词引用"
+                  />
+                  <a-input
+                    v-model:value="editingWorkerProfileForm.riskPolicyRef"
+                    aria-label="风险策略"
+                    placeholder="风险策略"
+                  />
+                  <a-checkbox v-model:checked="editingWorkerProfileForm.enabled">启用</a-checkbox>
+                  <a-input
+                    v-model:value="editingWorkerProfileToolRefs"
+                    class="worker-profile-tools"
+                    aria-label="工具引用"
+                    placeholder="工具引用，逗号分隔"
+                  />
+                </div>
+                <p v-if="editingWorkerProfileError" class="edit-error">{{ editingWorkerProfileError }}</p>
+                <div class="panel-actions action-edit-actions">
+                  <a-button
+                    size="small"
+                    type="primary"
+                    :loading="workerProfileSavingId === editingWorkerProfileId"
+                    @click="saveEditedWorkerProfile"
+                  >
+                    <CheckOutlined />
+                    保存配置
+                  </a-button>
+                  <a-button size="small" @click="cancelEditWorkerProfile">
+                    <CloseOutlined />
+                    取消配置
+                  </a-button>
+                </div>
               </div>
               <a-tag :color="statusColor(task.statusTone)">{{ task.status }}</a-tag>
               <p v-if="task.missingFields.length">缺失：{{ task.missingFields.join('、') }}</p>
@@ -541,10 +613,12 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   listCustomerAssistantDemoStories,
   listCustomerAssistantWorkerProfiles,
+  updateCustomerAssistantWorkerProfile,
   type CustomerAssistantDemoStory,
   type CustomerAssistantProposedAction,
   type CustomerAssistantTaskControlType,
   type CustomerAssistantWorkerProfile,
+  type CustomerAssistantWorkerProfileUpdatePayload,
 } from '@/api/customerAssistant'
 import {
   BulbOutlined,
@@ -604,6 +678,12 @@ const demoStoryError = ref<string | null>(null)
 const workerProfiles = ref<CustomerAssistantWorkerProfile[]>([])
 const workerProfilesLoading = ref(false)
 const workerProfileError = ref<string | null>(null)
+const editingWorkerProfileTaskId = ref<number | null>(null)
+const editingWorkerProfileId = ref<string | null>(null)
+const editingWorkerProfileForm = ref<CustomerAssistantWorkerProfileUpdatePayload | null>(null)
+const editingWorkerProfileToolRefs = ref('')
+const editingWorkerProfileError = ref<string | null>(null)
+const workerProfileSavingId = ref<string | null>(null)
 const editingActionId = ref<number | null>(null)
 const editingActionTitle = ref('')
 const editingActionPayload = ref('')
@@ -727,6 +807,86 @@ function taskControlReason(control: CustomerAssistantTaskControlType) {
   if (control === 'retry') return 'operator retry requested from workbench'
   if (control === 'cancel') return 'operator cancel requested from workbench'
   return 'operator resume requested from workbench'
+}
+
+function workerProfileForTask(task: CustomerAssistantTaskRow) {
+  return workerProfiles.value.find((profile) => profile.profileId === task.profile?.profileId)
+}
+
+function startEditWorkerProfile(task: CustomerAssistantTaskRow) {
+  const profile = workerProfileForTask(task)
+  if (!profile) return
+  editingWorkerProfileTaskId.value = task.id
+  editingWorkerProfileId.value = profile.profileId
+  editingWorkerProfileForm.value = {
+    taskKey: profile.taskKey,
+    taskType: profile.taskType,
+    workerType: profile.workerType,
+    workerRef: profile.workerRef,
+    modelPolicyRef: profile.modelPolicyRef,
+    promptRef: profile.promptRef,
+    toolRefs: [...profile.toolRefs],
+    riskPolicyRef: profile.riskPolicyRef,
+    enabled: profile.enabled,
+  }
+  editingWorkerProfileToolRefs.value = profile.toolRefs.join(', ')
+  editingWorkerProfileError.value = null
+}
+
+function cancelEditWorkerProfile() {
+  editingWorkerProfileTaskId.value = null
+  editingWorkerProfileId.value = null
+  editingWorkerProfileForm.value = null
+  editingWorkerProfileToolRefs.value = ''
+  editingWorkerProfileError.value = null
+}
+
+async function saveEditedWorkerProfile() {
+  const profileId = editingWorkerProfileId.value
+  const form = editingWorkerProfileForm.value
+  if (!profileId || !form) return
+  const payload: CustomerAssistantWorkerProfileUpdatePayload = {
+    ...form,
+    toolRefs: normalizeWorkerProfileToolRefs(editingWorkerProfileToolRefs.value),
+  }
+  const missing = [
+    payload.taskKey,
+    payload.taskType,
+    payload.workerType,
+    payload.workerRef,
+  ].some((value) => !value.trim())
+  if (missing) {
+    editingWorkerProfileError.value = '任务键、类型、Worker 类型和 Worker 引用不能为空'
+    return
+  }
+  workerProfileSavingId.value = profileId
+  try {
+    const updated = await updateCustomerAssistantWorkerProfile(profileId, payload)
+    workerProfiles.value = upsertWorkerProfile(workerProfiles.value, updated)
+    cancelEditWorkerProfile()
+    message.success('已保存任务配置')
+  } catch (error) {
+    editingWorkerProfileError.value = error instanceof Error ? error.message : '保存任务配置失败'
+    workerProfileError.value = editingWorkerProfileError.value
+    message.error(editingWorkerProfileError.value)
+  } finally {
+    workerProfileSavingId.value = null
+  }
+}
+
+function normalizeWorkerProfileToolRefs(value: string) {
+  return value
+    .split(/[,\n，、]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function upsertWorkerProfile(
+  profiles: CustomerAssistantWorkerProfile[],
+  profile: CustomerAssistantWorkerProfile,
+) {
+  const next = profiles.filter((item) => item.profileId !== profile.profileId && item.taskKey !== profile.taskKey)
+  return [profile, ...next]
 }
 
 async function loadDemoStories() {
@@ -1199,6 +1359,26 @@ async function executeAction(actionId: number) {
   color: #4d5b70;
   font-size: 0.75rem;
   line-height: 1.45;
+}
+
+.worker-profile-edit-form {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.6rem;
+  border: 0.0625rem dashed #b8c7dc;
+  border-radius: 0.45rem;
+  background: #f7fbff;
+}
+
+.worker-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.worker-profile-tools {
+  grid-column: 1 / -1;
 }
 
 .recognition-profile {

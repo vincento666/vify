@@ -53,6 +53,8 @@ export interface CustomerAssistantWorkerProfile {
   enabled: boolean
 }
 
+export type CustomerAssistantWorkerProfileUpdatePayload = Omit<CustomerAssistantWorkerProfile, 'profileId'>
+
 export interface CustomerAssistantSessionMetrics {
   sessionId: number
   taskStatusCounts: Record<string, number>
@@ -154,6 +156,11 @@ export const listCustomerAssistantDemoStories = () =>
 
 export const listCustomerAssistantWorkerProfiles = () =>
   get<CustomerAssistantListResult<CustomerAssistantWorkerProfile>>('/v1/customer-assistant/worker-profiles')
+
+export const updateCustomerAssistantWorkerProfile = (
+  profileId: string,
+  payload: CustomerAssistantWorkerProfileUpdatePayload,
+) => patch<CustomerAssistantWorkerProfile>(`/v1/customer-assistant/worker-profiles/${profileId}`, payload)
 
 export const sendCustomerAssistantTurn = (sessionId: number, payload: CustomerAssistantTurnPayload) => {
   const { message, idempotencyKey, actor } = payload

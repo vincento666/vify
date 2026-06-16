@@ -108,6 +108,50 @@ class CustomerAssistantWorkerProfileApiTest(unittest.TestCase):
         self.assertEqual(command["profileRefs"]["toolRefs"], ["lookup_order"])
         self.assertEqual(command["profileRefs"]["riskPolicyRef"], "manual_confirm")
 
+    def test_persisted_profile_override_updates_catalog_and_routing(self) -> None:
+        payload = {
+            "taskKey": "refund_ticket",
+            "taskType": "REFUND",
+            "workerType": "chatflow_sop",
+            "workerRef": "runtime_configured_refund",
+            "modelPolicyRef": "demo-model-v2",
+            "promptRef": "runtime-refund-prompt",
+            "toolRefs": ["lookup_order", "refund_policy_lookup"],
+            "riskPolicyRef": "manual_confirm_high_risk",
+            "enabled": True,
+        }
+
+        with TestClient(app) as client:
+            patched = client.patch(
+                "/api/v1/customer-assistant/worker-profiles/configured_refund_stub",
+                json=payload,
+            )
+            self.assertEqual(patched.status_code, 200, patched.text)
+            self.assertEqual(patched.json()["data"]["workerRef"], "runtime_configured_refund")
+
+            profiles = client.get("/api/v1/customer-assistant/worker-profiles").json()["data"]["list"]
+            profile = next(item for item in profiles if item["profileId"] == "configured_refund_stub")
+            self.assertEqual(profile["modelPolicyRef"], "demo-model-v2")
+            self.assertEqual(profile["toolRefs"], ["lookup_order", "refund_policy_lookup"])
+
+            created = client.post("/api/v1/customer-assistant/sessions", json={"context": {}})
+            session_id = int(created.json()["data"]["id"])
+            turn = client.post(
+                f"/api/v1/customer-assistant/sessions/{session_id}/turns",
+                json={"message": "我要退票", "idempotencyKey": "configured-refund-v2"},
+            )
+            self.assertEqual(turn.status_code, 200, turn.text)
+            tasks = client.get(f"/api/v1/customer-assistant/sessions/{session_id}/tasks").json()["data"]["list"]
+            events = client.get(f"/api/v1/customer-assistant/sessions/{session_id}/events").json()["data"]["list"]
+
+        self.assertEqual(tasks[0]["workerRef"], "runtime_configured_refund")
+        task_recognized = next(event for event in events if event["type"] == "task_recognized")
+        profile_refs = task_recognized["payload"]["commands"][0]["profileRefs"]
+        self.assertEqual(profile_refs["profileId"], "configured_refund_stub")
+        self.assertEqual(profile_refs["modelPolicyRef"], "demo-model-v2")
+        self.assertEqual(profile_refs["promptRef"], "runtime-refund-prompt")
+        self.assertEqual(profile_refs["riskPolicyRef"], "manual_confirm_high_risk")
+
     def _session_override(self) -> Generator[Session]:
         with self._factory() as session:
             yield session

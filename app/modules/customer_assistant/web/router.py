@@ -42,6 +42,7 @@ from app.modules.customer_assistant.web.schemas import (
     CustomerAssistantSpawnSubAgentRequest,
     CustomerAssistantTaskControlRequest,
     CustomerAssistantTurnRequest,
+    CustomerAssistantWorkerProfileUpsertRequest,
 )
 from app.modules.knowledge.api.facade import KnowledgeFacade
 from app.modules.provider.api.facade import ProviderModelFacade
@@ -119,9 +120,13 @@ def build_customer_assistant_service(
     shadow_settings = CustomerAssistantShadowSettings.from_settings(settings)
     llm_runtime_settings = CustomerAssistantLlmRuntimeSettings.from_settings(settings)
     workers = _customer_assistant_workers(session, settings)
-    worker_profiles = CustomerAssistantWorkerProfileCatalog.from_json(settings.customer_assistant_worker_profiles_json)
+    repository = CustomerAssistantRepository(session)
+    worker_profiles = CustomerAssistantWorkerProfileCatalog.from_json_with_overrides(
+        settings.customer_assistant_worker_profiles_json,
+        repository.list_worker_profile_overrides(),
+    )
     return CustomerAssistantService(
-        CustomerAssistantRepository(session),
+        repository,
         core=ControlledReActCore(
             DeterministicTaskRecognitionController(worker_profiles),
             CustomerAssistantActionPolicy(),
@@ -263,6 +268,16 @@ def list_worker_profiles(
     service: CustomerAssistantService = Depends(get_customer_assistant_service),
 ) -> dict[str, Any]:
     return success(service.list_worker_profiles())
+
+
+@router.patch("/worker-profiles/{profile_id}")
+def update_worker_profile(
+    profile_id: str,
+    request: CustomerAssistantWorkerProfileUpsertRequest,
+    _access: RequestContext = Depends(require_customer_assistant_operate),
+    service: CustomerAssistantService = Depends(get_customer_assistant_service),
+) -> dict[str, Any]:
+    return success(service.upsert_worker_profile(profile_id, request.model_dump(by_alias=True)))
 
 
 @router.post("/sessions/{session_id}/turns")
