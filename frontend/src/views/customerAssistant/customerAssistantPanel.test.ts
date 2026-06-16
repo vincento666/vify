@@ -125,4 +125,11 @@ describe('CustomerAssistantPanel UI contract', () => {
     expect(taskLedger).toContain('task.profile.riskPolicyRef')
     expect(taskLedger).toContain('task.profile.toolRefs')
   })
+
+  it('deep-links and auto-opens seeded demo stories through the route query', () => {
+    expect(content).toContain("from 'vue-router'")
+    expect(content).toContain('customerAssistantStoryIdFromQuery')
+    expect(content).toContain('selectCustomerAssistantDemoStoryToOpen')
+    expect(content).toContain('syncSelectedDemoStoryRoute')
+  })
 })

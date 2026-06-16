@@ -467,6 +467,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   listCustomerAssistantDemoStories,
   listCustomerAssistantWorkerProfiles,
@@ -504,6 +505,11 @@ import {
   updateCustomerAssistantRuntimeAction,
 } from './customerAssistantRuntime'
 import {
+  buildCustomerAssistantStoryQuery,
+  customerAssistantStoryIdFromQuery,
+  selectCustomerAssistantDemoStoryToOpen,
+} from './customerAssistantStoryLinks'
+import {
   applyCustomerAssistantDraftLocally,
   createCustomerAssistantDraftState,
   formatCustomerAssistantMetrics,
@@ -532,6 +538,8 @@ const editingActionId = ref<number | null>(null)
 const editingActionTitle = ref('')
 const editingActionPayload = ref('')
 const editingActionError = ref<string | null>(null)
+const route = useRoute()
+const router = useRouter()
 
 const workspace = computed(() => ({
   ...runtimeState.value,
@@ -657,6 +665,14 @@ async function loadDemoStories() {
   try {
     const result = await listCustomerAssistantDemoStories()
     demoStories.value = result.list
+    const storyId = selectCustomerAssistantDemoStoryToOpen(
+      result.list,
+      customerAssistantStoryIdFromQuery(route.query),
+      selectedDemoStoryId.value,
+    )
+    if (storyId) {
+      await loadDemoStory(storyId)
+    }
   } catch (error) {
     demoStoryError.value = error instanceof Error ? error.message : '演示故事加载失败'
   } finally {
@@ -683,6 +699,7 @@ async function loadDemoStory(storyId: string) {
   try {
     runtimeState.value = await loadCustomerAssistantDemoStory(storyId)
     selectedDemoStoryId.value = storyId
+    syncSelectedDemoStoryRoute(storyId)
     draftApplied.value = false
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : '演示故事加载失败'
@@ -691,6 +708,13 @@ async function loadDemoStory(storyId: string) {
   } finally {
     demoStoryLoadingId.value = null
   }
+}
+
+function syncSelectedDemoStoryRoute(storyId: string) {
+  if (customerAssistantStoryIdFromQuery(route.query) === storyId) return
+  void router
+    .replace({ query: buildCustomerAssistantStoryQuery(route.query, storyId) })
+    .catch(() => undefined)
 }
 
 async function proposeTaskControl(taskId: number, controlType: CustomerAssistantTaskControlType) {
