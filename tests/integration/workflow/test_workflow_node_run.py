@@ -4,6 +4,7 @@ from typing import Any
 
 from fastapi import Depends
 from fastapi.testclient import TestClient
+import httpx
 from sqlalchemy.orm import Session
 
 from app.core.database import get_session
@@ -46,6 +47,36 @@ class WorkflowNodeRunIntegrationTest(unittest.TestCase):
         self.assertEqual([event["type"] for event in data["output"]["events"]], ["llm_delta", "message_done", "node_usage"])
         self.assertGreater(data["output"]["__usage"]["totalTokens"], 0)
         self.assertEqual(data["input"], {"userMessage": "node fixture"})
+
+    def test_selected_llm_node_run_exposes_fallback_debug(self) -> None:
+        fake_client = _FallbackOpenAIChatClient()
+        app.dependency_overrides[get_workflow_service] = _service_override(
+            fake_client,
+            model_extra_params={"fallbackModel": "xiaomi/mimo-v2-fallback"},
+        )
+
+        with TestClient(app) as client:
+            workflow = _create_node_run_workflow(client)
+            response = client.post(
+                f"/api/v1/workflows/{workflow['id']}/nodes/llm/runs",
+                json={"input": {"userMessage": "node fixture"}},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()["data"]
+        self.assertEqual(data["status"], "SUCCEEDED")
+        self.assertEqual(data["output"]["answer"], "FALLBACK_NODE_RESPONSE")
+        self.assertEqual([payload["model"] for payload in fake_client.captured_payloads], [
+            "xiaomi/mimo-v2-flash",
+            "xiaomi/mimo-v2-fallback",
+        ])
+        debug = data["output"]["__debug"]["llm"]
+        self.assertEqual(debug["model"], "xiaomi/mimo-v2-fallback")
+        self.assertEqual(debug["requestModel"], "xiaomi/mimo-v2-flash")
+        self.assertEqual(debug["fallbackModel"], "xiaomi/mimo-v2-fallback")
+        self.assertTrue(debug["fallbackUsed"])
+        self.assertIn("模型服务网络不可达", debug["fallbackReason"])
+        self.assertEqual(debug["fallback"]["attempts"][-1], {"model": "xiaomi/mimo-v2-fallback", "status": "succeeded"})
 
     def test_selected_node_run_rejects_missing_node(self) -> None:
         fake_client = FakeOpenAIChatClient(response_payload=_assistant_payload("NODE_ONLY_RESPONSE"))
@@ -94,13 +125,17 @@ class WorkflowNodeRunIntegrationTest(unittest.TestCase):
         self.assertIn("previous refund message", captured_prompt)
 
 
-def _service_override(fake_client: FakeOpenAIChatClient, flow_type: str = "WORKFLOW"):
+def _service_override(
+    fake_client: FakeOpenAIChatClient,
+    flow_type: str = "WORKFLOW",
+    model_extra_params: dict[str, Any] | None = None,
+):
     def override(session: Session = Depends(get_session)) -> WorkflowService:
         return WorkflowService(
             WorkflowRepository(session),
             flow_type=flow_type,
             agent_repository=_AgentRepositoryStub(),
-            model_facade=_ModelFacadeStub(),
+            model_facade=_ModelFacadeStub(extra_params=model_extra_params),
             llm_client_factory=lambda _config: fake_client,
         )
 
@@ -193,6 +228,9 @@ class _AgentRepositoryStub:
 
 
 class _ModelFacadeStub:
+    def __init__(self, extra_params: dict[str, Any] | None = None) -> None:
+        self._extra_params = extra_params or {}
+
     def get_enabled_model_config(self, model_config_id: int) -> ModelConfigDto:
         return ModelConfigDto(
             id=model_config_id,
@@ -203,8 +241,21 @@ class _ModelFacadeStub:
             name="Mimo Flash",
             model_id="xiaomi/mimo-v2-flash",
             context_size=128000,
-            extra_params={},
+            extra_params=self._extra_params,
         )
+
+
+class _FallbackOpenAIChatClient(FakeOpenAIChatClient):
+    def complete(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self.captured_payload = payload
+        self.captured_payloads.append(payload)
+        if payload.get("model") == "xiaomi/mimo-v2-flash":
+            raise httpx.ConnectError("[Errno 8] nodename nor servname provided, or not known")
+        return {
+            "model": str(payload.get("model") or ""),
+            "choices": [{"message": {"role": "assistant", "content": "FALLBACK_NODE_RESPONSE"}, "finish_reason": "stop"}],
+            "usage": {"total_tokens": 3},
+        }
 
 
 if __name__ == "__main__":

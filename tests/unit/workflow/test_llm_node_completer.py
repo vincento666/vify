@@ -182,6 +182,48 @@ class LlmNodeCompleterTest(unittest.TestCase):
         self.assertEqual(client_factory.base_urls, ["https://openrouter.ai/api/v1"])
         self.assertEqual(client_factory.payloads[0]["model"], "xiaomi/mimo-v2-flash")
 
+    def test_agent_backed_completer_records_sanitized_fallback_attempts(self) -> None:
+        client_factory = _FallbackClientFactory()
+        completer = _AgentBackedWorkflowLlmCompleter(
+            agent={"system_prompt": "", "temperature": 0.1, "max_tokens": 64},
+            model_config=ModelConfigDto(
+                id=1,
+                provider_id=1,
+                provider_type="OPENAI",
+                provider_base_url="https://openrouter.ai/api/v1",
+                provider_auth_config={"api_key": "integration-test-key"},
+                name="Primary",
+                model_id="primary-model",
+                context_size=4096,
+                extra_params={"fallbackModel": "fallback-model"},
+            ),
+            model_facade=None,
+            request_builder=OpenAIChatRequestBuilder(),
+            parser=OpenAIAdapterParser(),
+            llm_client_factory=client_factory,
+        )
+
+        result = completer.complete_prompt("hello")
+        debug = completer.consume_last_call_debug()
+
+        self.assertEqual(result, "fallback ok")
+        self.assertEqual(client_factory.payload_models, ["primary-model", "fallback-model"])
+        self.assertEqual(debug["model"], "fallback-model")
+        self.assertEqual(
+            debug["fallback"],
+            {
+                "attempted": True,
+                "attempts": [
+                    {
+                        "model": "primary-model",
+                        "status": "failed",
+                        "reason": "模型服务网络不可达，请检查模型服务 Base URL、网络/DNS 或代理配置",
+                    },
+                    {"model": "fallback-model", "status": "succeeded"},
+                ],
+            },
+        )
+
 
 class _FailingLlmClient:
     def complete(self, _payload: dict[str, object]) -> dict[str, object]:
@@ -202,6 +244,24 @@ class _RecordingClientFactory:
         return {
             "choices": [{"message": {"role": "assistant", "content": "ok"}, "finish_reason": "stop"}],
             "usage": {"total_tokens": 1},
+        }
+
+
+class _FallbackClientFactory:
+    def __init__(self) -> None:
+        self.payload_models: list[str] = []
+
+    def __call__(self, _config: object) -> "_FallbackClientFactory":
+        return self
+
+    def complete(self, payload: dict[str, object]) -> dict[str, object]:
+        model = str(payload["model"])
+        self.payload_models.append(model)
+        if model == "primary-model":
+            raise httpx.ConnectError("[Errno 8] nodename nor servname provided, or not known")
+        return {
+            "choices": [{"message": {"role": "assistant", "content": "fallback ok"}, "finish_reason": "stop"}],
+            "usage": {"total_tokens": 2},
         }
 
 

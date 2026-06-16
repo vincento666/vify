@@ -947,11 +947,11 @@ class _AgentBackedWorkflowLlmCompleter:
             extra_params=self._extra_params(options, model_config),
         )
         started_at = perf_counter()
-        response = self._complete_with_fallback(payload, model_config)
+        response, fallback_debug = self._complete_with_fallback(payload, model_config)
         elapsed_ms = int((perf_counter() - started_at) * 1000)
         result = self._parser.parse_chat_response(response)
         self._last_call_debug = {
-            "model": str(response.get("model") or payload.get("model") or model_config.model_id),
+            "model": str(response.get("model") or fallback_debug.get("effectiveModel") or payload.get("model") or model_config.model_id),
             "elapsedMs": elapsed_ms,
             "input": _redact_llm_payload(payload),
             "output": {
@@ -960,6 +960,16 @@ class _AgentBackedWorkflowLlmCompleter:
             },
             "usage": _usage_from_llm_response(response, payload, result.content),
         }
+        if fallback_debug:
+            self._last_call_debug.update(
+                {
+                    "requestModel": fallback_debug["requestModel"],
+                    "fallbackModel": fallback_debug["fallbackModel"],
+                    "fallbackUsed": True,
+                    "fallbackReason": fallback_debug["fallbackReason"],
+                    "fallback": fallback_debug["fallback"],
+                }
+            )
         return result.content
 
     def supports_tool_calls(self) -> bool:
@@ -1074,20 +1084,38 @@ class _AgentBackedWorkflowLlmCompleter:
             )
         )
 
-    def _complete_with_fallback(self, payload: dict[str, Any], model_config: ModelConfigDto) -> dict[str, Any]:
+    def _complete_with_fallback(self, payload: dict[str, Any], model_config: ModelConfigDto) -> tuple[dict[str, Any], dict[str, Any]]:
         client = self._llm_client(model_config)
+        request_model = str(payload.get("model") or model_config.model_id)
         try:
-            return client.complete(payload)
+            return client.complete(payload), {}
         except Exception as exc:
             fallback_model = self._fallback_model(model_config)
             if not fallback_model or fallback_model == payload.get("model"):
                 raise WorkflowExecutionError(f"LLM provider request failed: {_provider_request_error_message(exc)}") from exc
+            primary_reason = _provider_request_error_message(exc)
+            attempts = [{"model": request_model, "status": "failed", "reason": primary_reason}]
             fallback_payload = dict(payload)
             fallback_payload["model"] = fallback_model
             try:
-                return client.complete(fallback_payload)
+                response = client.complete(fallback_payload)
             except Exception as fallback_exc:
+                attempts.append(
+                    {
+                        "model": fallback_model,
+                        "status": "failed",
+                        "reason": _provider_request_error_message(fallback_exc),
+                    }
+                )
                 raise WorkflowExecutionError(f"LLM provider request failed: {_provider_request_error_message(fallback_exc)}") from fallback_exc
+            attempts.append({"model": fallback_model, "status": "succeeded"})
+            return response, {
+                "requestModel": request_model,
+                "fallbackModel": fallback_model,
+                "fallbackReason": primary_reason,
+                "effectiveModel": fallback_model,
+                "fallback": {"attempted": True, "attempts": attempts},
+            }
 
     def _fallback_model(self, model_config: ModelConfigDto) -> str:
         extra_params = dict(model_config.extra_params or {})
