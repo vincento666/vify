@@ -157,7 +157,8 @@ class ChatflowSopWorkerV2AdapterTest(unittest.TestCase):
         self.assertEqual(waiting["taskSummaries"][0]["status"], "WAITING")
         self.assertIn("请提供订单号", waiting["customerReplyDraft"])
         self.assertIn("手提行李", baggage["customerReplyDraft"])
-        self.assertIn("order=订单号是 TK12345", resumed["customerReplyDraft"])
+        self.assertIn("order=订单号是 [REDACTED]", resumed["customerReplyDraft"])
+        self.assertNotIn("TK12345", resumed["customerReplyDraft"])
         by_key = {task["taskKey"]: task for task in tasks}
         self.assertEqual(by_key["refund_ticket"]["status"], "COMPLETED")
         self.assertEqual(by_key["refund_ticket"]["lastResult"]["evidence"]["runtimeVersion"], 2)

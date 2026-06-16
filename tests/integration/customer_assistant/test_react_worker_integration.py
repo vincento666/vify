@@ -55,7 +55,8 @@ class CustomerAssistantReactWorkerIntegrationTest(unittest.TestCase):
         event_types = [event["type"] for event in events]
         react_events = [event for event in events if event["source"] == "react_worker"]
         self.assertEqual(result["taskSummaries"][0]["workerType"], "react_worker")
-        self.assertIn("Order TK-100 is refundable.", result["operatorRecommendation"])
+        self.assertIn("Order [REDACTED] is refundable.", result["operatorRecommendation"])
+        self.assertNotIn("TK-100", result["operatorRecommendation"])
         self.assertIn("react_worker_started", event_types)
         self.assertIn("react_worker_completed", event_types)
         self.assertTrue(all(event["visibility"] == "debug" for event in react_events))

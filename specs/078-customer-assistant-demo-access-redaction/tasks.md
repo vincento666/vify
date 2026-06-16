@@ -8,9 +8,9 @@
 
 ## 078.2 Response Redaction And Ref Ownership
 
-- [ ] Add RED tests for response payload redaction and cross-tenant secondary refs.
-- [ ] Implement public response redaction and derived ownership checks.
-- [ ] Run backend/browser gates and commit.
+- [x] Add RED tests for response payload redaction and cross-tenant secondary refs.
+- [x] Implement public response redaction and derived ownership checks.
+- [x] Run backend/browser gates and commit.
 
 ## 078.3 Workbench Host Context UAT
 

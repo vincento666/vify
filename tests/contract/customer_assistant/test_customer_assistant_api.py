@@ -34,6 +34,22 @@ HOST_OPERATE_HEADERS = {
     **HOST_BASE_HEADERS,
     "X-Hify-Permissions": "customer_assistant:read,customer_assistant:operate",
 }
+HOST_B_BASE_HEADERS = {
+    **HOST_BASE_HEADERS,
+    "X-Hify-Actor-Id": "operator-078-b",
+    "X-Hify-Actor-Name": "Demo Operator B",
+    "X-Hify-Tenant-Id": "tenant-078-b",
+    "X-Hify-Org-Id": "org-078-b",
+    "X-Request-Id": "req-078-b",
+}
+HOST_B_READ_HEADERS = {
+    **HOST_B_BASE_HEADERS,
+    "X-Hify-Permissions": "customer_assistant:read",
+}
+HOST_B_OPERATE_HEADERS = {
+    **HOST_B_BASE_HEADERS,
+    "X-Hify-Permissions": "customer_assistant:read,customer_assistant:operate",
+}
 
 
 class CustomerAssistantApiContractTest(unittest.TestCase):
@@ -188,6 +204,155 @@ class CustomerAssistantApiContractTest(unittest.TestCase):
         self.assertNotIn("raw-api-token", serialized)
         self.assertIn("[REDACTED]", serialized)
         self.assertIn("***", serialized)
+
+    def test_cross_tenant_cannot_read_session_scoped_refs(self) -> None:
+        with TestClient(app) as client:
+            created = client.post(
+                "/api/v1/customer-assistant/sessions",
+                json={"context": {"customerId": "C-078-A"}},
+                headers=HOST_OPERATE_HEADERS,
+            )
+            session_id = created.json()["data"]["id"]
+            client.post(
+                f"/api/v1/customer-assistant/sessions/{session_id}/turns",
+                json={"message": "我要退票", "idempotencyKey": "tenant-a-session-refs"},
+                headers=HOST_OPERATE_HEADERS,
+            )
+            denied = [
+                client.get(f"/api/v1/customer-assistant/sessions/{session_id}/tasks", headers=HOST_B_READ_HEADERS),
+                client.get(f"/api/v1/customer-assistant/sessions/{session_id}/events", headers=HOST_B_READ_HEADERS),
+                client.get(
+                    f"/api/v1/customer-assistant/sessions/{session_id}/proposed-actions",
+                    headers=HOST_B_READ_HEADERS,
+                ),
+                client.get(f"/api/v1/customer-assistant/sessions/{session_id}/metrics", headers=HOST_B_READ_HEADERS),
+            ]
+
+        for response in denied:
+            self.assertEqual(response.status_code, 403, response.text)
+            self.assertEqual(response.json()["code"], 403)
+
+    def test_cross_tenant_cannot_read_run_action_or_worker_refs(self) -> None:
+        with TestClient(app) as client:
+            session_id = client.post(
+                "/api/v1/customer-assistant/sessions",
+                json={"context": {"customerId": "C-078-A"}},
+                headers=HOST_OPERATE_HEADERS,
+            ).json()["data"]["id"]
+            refund_turn = client.post(
+                f"/api/v1/customer-assistant/sessions/{session_id}/turns",
+                json={"message": "我要退票", "idempotencyKey": "tenant-a-run-ref"},
+                headers=HOST_OPERATE_HEADERS,
+            ).json()["data"]
+            client.post(
+                f"/api/v1/customer-assistant/sessions/{session_id}/turns",
+                json={"message": "订单号 TK-100 手机号 13800138000 乘机人 张三", "idempotencyKey": "tenant-a-action"},
+                headers=HOST_OPERATE_HEADERS,
+            )
+            action = client.post(
+                f"/api/v1/customer-assistant/sessions/{session_id}/turns",
+                json={"message": "确认", "idempotencyKey": "tenant-a-action-confirm"},
+                headers=HOST_OPERATE_HEADERS,
+            ).json()["data"]["proposedActions"][0]
+            baggage_turn = client.post(
+                f"/api/v1/customer-assistant/sessions/{session_id}/turns",
+                json={"message": "行李额度是多少", "idempotencyKey": "tenant-a-worker-ref"},
+                headers=HOST_OPERATE_HEADERS,
+            ).json()["data"]
+            worker_run_id = baggage_turn["taskSummaries"][0]["workerAsyncRefs"]["workerRunId"]
+
+            denied = [
+                client.get(f"/api/v1/customer-assistant/runs/{refund_turn['runId']}", headers=HOST_B_READ_HEADERS),
+                client.patch(
+                    f"/api/v1/customer-assistant/proposed-actions/{action['id']}",
+                    json={"title": "wrong tenant update", "actor": "operator"},
+                    headers=HOST_B_OPERATE_HEADERS,
+                ),
+                client.post(
+                    f"/api/v1/customer-assistant/proposed-actions/{action['id']}/confirm",
+                    headers=HOST_B_OPERATE_HEADERS,
+                ),
+                client.post(
+                    f"/api/v1/customer-assistant/proposed-actions/{action['id']}/reject",
+                    headers=HOST_B_OPERATE_HEADERS,
+                ),
+                client.get(f"/api/v1/customer-assistant/worker-runs/{worker_run_id}", headers=HOST_B_READ_HEADERS),
+                client.get(f"/api/v1/customer-assistant/worker-runs/{worker_run_id}/result", headers=HOST_B_READ_HEADERS),
+                client.get(f"/api/v1/customer-assistant/worker-runs/{worker_run_id}/events", headers=HOST_B_READ_HEADERS),
+                client.post(
+                    f"/api/v1/customer-assistant/worker-runs/{worker_run_id}/cancel",
+                    headers=HOST_B_OPERATE_HEADERS,
+                ),
+            ]
+
+        for response in denied:
+            self.assertEqual(response.status_code, 403, response.text)
+            self.assertEqual(response.json()["code"], 403)
+
+    def test_public_customer_assistant_responses_are_redacted(self) -> None:
+        sensitive_message = "订单号 TK-100 手机号 13800138000 邮箱 leak@example.com token=raw-turn-token"
+        with TestClient(app) as client:
+            session_id = client.post(
+                "/api/v1/customer-assistant/sessions",
+                json={"context": {"customerId": "C-078"}},
+                headers=HOST_OPERATE_HEADERS,
+            ).json()["data"]["id"]
+            first = client.post(
+                f"/api/v1/customer-assistant/sessions/{session_id}/turns",
+                json={"message": "我要退票", "idempotencyKey": "redact-start"},
+                headers=HOST_OPERATE_HEADERS,
+            )
+            client.post(
+                f"/api/v1/customer-assistant/sessions/{session_id}/turns",
+                json={"message": sensitive_message, "idempotencyKey": "redact-details"},
+                headers=HOST_OPERATE_HEADERS,
+            )
+            completed = client.post(
+                f"/api/v1/customer-assistant/sessions/{session_id}/turns",
+                json={"message": "确认", "idempotencyKey": "redact-confirm"},
+                headers=HOST_OPERATE_HEADERS,
+            )
+            replay = client.post(
+                f"/api/v1/customer-assistant/sessions/{session_id}/turns",
+                json={"message": "确认", "idempotencyKey": "redact-confirm"},
+                headers=HOST_OPERATE_HEADERS,
+            )
+            action_id = completed.json()["data"]["proposedActions"][0]["id"]
+            confirmed = client.post(
+                f"/api/v1/customer-assistant/proposed-actions/{action_id}/confirm",
+                headers=HOST_OPERATE_HEADERS,
+            )
+            executed = client.post(
+                f"/api/v1/customer-assistant/proposed-actions/{action_id}/execute",
+                headers=HOST_OPERATE_HEADERS,
+            )
+            tasks = client.get(f"/api/v1/customer-assistant/sessions/{session_id}/tasks", headers=HOST_READ_HEADERS)
+            events = client.get(f"/api/v1/customer-assistant/sessions/{session_id}/events", headers=HOST_READ_HEADERS)
+            actions = client.get(
+                f"/api/v1/customer-assistant/sessions/{session_id}/proposed-actions",
+                headers=HOST_READ_HEADERS,
+            )
+            run = client.get(f"/api/v1/customer-assistant/runs/{first.json()['data']['runId']}", headers=HOST_READ_HEADERS)
+
+        self.assertEqual(replay.status_code, 200, replay.text)
+        self.assertEqual(confirmed.status_code, 200, confirmed.text)
+        self.assertEqual(executed.status_code, 200, executed.text)
+        public_text = json.dumps(
+            {
+                "replay": replay.json()["data"],
+                "tasks": tasks.json()["data"],
+                "events": events.json()["data"],
+                "actions": actions.json()["data"],
+                "run": run.json()["data"],
+            },
+            ensure_ascii=False,
+        )
+        self.assertNotIn("13800138000", public_text)
+        self.assertNotIn("TK-100", public_text)
+        self.assertNotIn("leak@example.com", public_text)
+        self.assertNotIn("raw-turn-token", public_text)
+        self.assertIn("[REDACTED]", public_text)
+        self.assertIn("***", public_text)
 
     def test_bound_refund_sop_uses_chatflow_adapter_instead_of_fake_sop(self) -> None:
         app.dependency_overrides[get_settings] = lambda: Settings(runtime_lab_sop_chatflow_ids="refund_ticket:999")

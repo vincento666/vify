@@ -169,7 +169,7 @@ class CustomerAssistantService:
         except IdempotencyConflict as exc:
             raise BizError(ErrorCode.BAD_REQUEST, str(exc)) from exc
         if replayed:
-            payload = dict(run.get("response_payload") or {})
+            payload = sanitize_value(dict(run.get("response_payload") or {}))
             payload["replayed"] = True
             return payload
 
@@ -302,6 +302,7 @@ class CustomerAssistantService:
         if run is None:
             raise BizError(ErrorCode.NOT_FOUND, "Customer assistant run not found")
         session_id = int(run["session_id"])
+        self._ensure_session(session_id)
         events = [
             _format_event(row)
             for row in self._repository.list_events(session_id)
@@ -313,9 +314,9 @@ class CustomerAssistantService:
                 session_id=session_id,
                 status=_sub_agent_status(str(run["status"])),
             ),
-            "result": run.get("response_payload"),
+            "result": sanitize_value(run.get("response_payload") or {}),
             "events": events,
-            "warnings": run.get("warnings_json") or [],
+            "warnings": sanitize_value(run.get("warnings_json") or []),
             "startedAt": _iso(run.get("started_at")),
             "completedAt": _iso(run.get("completed_at")),
         }
@@ -385,8 +386,8 @@ class CustomerAssistantService:
         row = self._get_worker_run_row(worker_run_id)
         return {
             **_format_worker_run(row),
-            "result": row.get("result_payload") or {},
-            "error": row.get("error_json") or {},
+            "result": sanitize_value(row.get("result_payload") or {}),
+            "error": sanitize_value(row.get("error_json") or {}),
         }
 
     def list_worker_events(self, worker_run_id: str) -> dict[str, Any]:
@@ -409,6 +410,7 @@ class CustomerAssistantService:
         worker_run = self._repository.get_worker_run(numeric_worker_run_id)
         if worker_run is None:
             raise BizError(ErrorCode.NOT_FOUND, "Customer assistant worker run not found")
+        self._ensure_session(int(worker_run["session_id"]))
         return worker_run
 
     def _execute_turn_for_run(
@@ -719,6 +721,7 @@ class CustomerAssistantService:
         action = self._repository.get_proposed_action(action_id)
         if action is None:
             raise BizError(ErrorCode.NOT_FOUND, "Proposed action not found")
+        self._ensure_session(int(action["session_id"]))
         if action["status"] != "PENDING":
             raise BizError(ErrorCode.BAD_REQUEST, "Only pending proposed actions can be modified")
         if title is None and payload is None:
@@ -834,6 +837,7 @@ class CustomerAssistantService:
         action = self._repository.get_proposed_action(action_id)
         if action is None:
             raise BizError(ErrorCode.NOT_FOUND, "Proposed action not found")
+        self._ensure_session(int(action["session_id"]))
         if action["status"] != "PENDING":
             raise BizError(ErrorCode.BAD_REQUEST, "Only pending proposed actions can be confirmed")
         if action["action_type"] == "PROPOSED_TASK_COMMAND":
@@ -889,6 +893,7 @@ class CustomerAssistantService:
         action = self._repository.get_proposed_action(action_id)
         if action is None:
             raise BizError(ErrorCode.NOT_FOUND, "Proposed action not found")
+        self._ensure_session(int(action["session_id"]))
         if action["status"] != "PENDING":
             raise BizError(ErrorCode.BAD_REQUEST, "Only pending proposed actions can be rejected")
         updated = self._repository.update_proposed_action_status(action_id, "REJECTED")
@@ -904,6 +909,7 @@ class CustomerAssistantService:
         action = self._repository.get_proposed_action(action_id)
         if action is None:
             raise BizError(ErrorCode.NOT_FOUND, "Proposed action not found")
+        self._ensure_session(int(action["session_id"]))
         if action["status"] != "CONFIRMED":
             raise BizError(ErrorCode.BAD_REQUEST, "Only confirmed proposed actions can be executed")
         executing = self._repository.update_proposed_action_status(action_id, "EXECUTING")
@@ -1212,8 +1218,20 @@ class CustomerAssistantService:
         )
 
     def _ensure_session(self, session_id: int) -> None:
-        if self._repository.get_session(session_id) is None:
+        session = self._repository.get_session(session_id)
+        if session is None:
             raise BizError(ErrorCode.NOT_FOUND, "Customer assistant session not found")
+        self._ensure_session_owner(session)
+
+    def _ensure_session_owner(self, session: dict[str, Any]) -> None:
+        if self._request_context is None or _is_local_request_context(self._request_context):
+            return
+        context = dict(session.get("context_json") or {})
+        host_context = context.get("hostContext")
+        if not isinstance(host_context, dict):
+            raise BizError(ErrorCode.FORBIDDEN, "Customer assistant session belongs to another tenant")
+        if str(host_context.get("tenantId") or "") != self._request_context.tenant_id:
+            raise BizError(ErrorCode.FORBIDDEN, "Customer assistant session belongs to another tenant")
 
     def _select_task_commands(
         self,
@@ -1680,6 +1698,19 @@ def _should_record_host_context(request_context: RequestContext) -> bool:
     )
 
 
+def _is_local_request_context(request_context: RequestContext) -> bool:
+    return (
+        request_context.source == "local"
+        and request_context.actor_id == "local-user"
+        and request_context.actor_name in {"local-user", "Local User"}
+        and request_context.tenant_id == "local"
+        and request_context.org_id == "local"
+        and not request_context.roles
+        and not request_context.permissions
+        and not request_context.request_id
+    )
+
+
 def _format_demo_story(row: dict[str, Any], repository: CustomerAssistantRepository) -> dict[str, Any]:
     context = dict(row.get("context_json") or {})
     customer = dict(context.get("customer") or {})
@@ -1691,9 +1722,9 @@ def _format_demo_story(row: dict[str, Any], repository: CustomerAssistantReposit
         "title": str(context.get("storyTitle") or "未命名演示故事"),
         "sessionId": session_id,
         "sessionStatus": str(row.get("status") or "UNKNOWN"),
-        "customerName": str(customer.get("name") or "演示客户"),
-        "maskedPhone": str(customer.get("phone") or ""),
-        "openingMessage": str(context.get("openingMessage") or ""),
+        "customerName": sanitize_text(str(customer.get("name") or "演示客户")),
+        "maskedPhone": sanitize_text(str(customer.get("phone") or "")),
+        "openingMessage": sanitize_text(str(context.get("openingMessage") or "")),
         "taskCount": len(tasks),
         "pendingActionCount": sum(1 for action in actions if str(action.get("status")) == "PENDING"),
         "knowledgeBaseIds": [int(item) for item in list(context.get("knowledgeBaseIds") or [])],
@@ -1770,21 +1801,21 @@ def _failure_reason_text(value: Any) -> str:
 
 
 def _format_task(row: dict[str, Any]) -> dict[str, Any]:
-    last_result = row.get("last_result_json") or {}
+    last_result = sanitize_value(row.get("last_result_json") or {})
     return {
         "id": row["id"],
         "sessionId": row["session_id"],
         "taskKey": row["task_key"],
         "taskType": row["task_type"],
-        "businessKey": row["business_key"],
+        "businessKey": sanitize_text(str(row["business_key"])),
         "shortId": row["short_id"],
         "status": row["status"],
         "workerType": row["worker_type"],
         "workerRef": row["worker_ref"],
-        "checkpoint": row.get("checkpoint_json") or {},
+        "checkpoint": sanitize_value(row.get("checkpoint_json") or {}),
         "lastResult": last_result,
         "workerAsyncRefs": last_result.get("workerAsyncRefs") or _unsupported_worker_async_refs(),
-        "proposedActions": row.get("proposed_actions_json") or [],
+        "proposedActions": sanitize_value(row.get("proposed_actions_json") or []),
         "version": row.get("version") or 1,
     }
 
@@ -1812,7 +1843,7 @@ def _format_event(row: dict[str, Any]) -> dict[str, Any]:
         "taskId": row.get("task_id"),
         "parentSpanId": row.get("parent_span_id"),
         "spanId": row.get("span_id"),
-        "payload": row.get("payload") or {},
+        "payload": sanitize_value(row.get("payload") or {}),
         "createdAt": _iso(row.get("created_at")),
     }
     formatted["observability"] = _event_observability(formatted)
@@ -1846,7 +1877,7 @@ def _format_worker_event(row: dict[str, Any]) -> dict[str, Any]:
         "visibility": row["visibility"],
         "source": row["source"],
         "actor": row.get("actor") or "system",
-        "payload": row.get("payload") or {},
+        "payload": sanitize_value(row.get("payload") or {}),
         "createdAt": _iso(row.get("created_at")),
     }
     formatted["observability"] = _worker_event_observability(formatted)
@@ -1930,12 +1961,12 @@ def _format_action(row: dict[str, Any]) -> dict[str, Any]:
         "sessionId": row["session_id"],
         "runId": row["run_id"],
         "taskId": row.get("task_id"),
-        "actionKey": row["action_key"],
+        "actionKey": sanitize_text(str(row["action_key"])),
         "actionType": row["action_type"],
         "title": row["title"],
-        "payload": row.get("payload") or {},
+        "payload": sanitize_value(row.get("payload") or {}),
         "status": row["status"],
-        "result": row.get("result_json") or {},
+        "result": sanitize_value(row.get("result_json") or {}),
     }
 
 
@@ -1944,11 +1975,11 @@ def _turn_result_payload(result: AssistantTurnResult, *, replayed: bool) -> dict
         "runId": result.run_id,
         "sessionId": result.session_id,
         "replyType": result.reply_type,
-        "operatorRecommendation": result.operator_recommendation,
-        "customerReplyDraft": result.customer_reply_draft,
+        "operatorRecommendation": sanitize_text(result.operator_recommendation),
+        "customerReplyDraft": sanitize_text(result.customer_reply_draft),
         "taskSummaries": result.task_summaries,
         "proposedActions": result.proposed_actions,
-        "warnings": result.warnings,
+        "warnings": sanitize_value(result.warnings),
         "events": result.events,
         "replayed": replayed,
     }
