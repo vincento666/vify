@@ -14,5 +14,5 @@
 
 ## 078.3 Workbench Host Context UAT
 
-- [ ] Add or extend browser UAT for host-configured customer-assistant workbench and SSE behavior.
-- [ ] Run browser/frontend gates and commit.
+- [x] Add or extend browser UAT for host-configured customer-assistant workbench and SSE behavior.
+- [x] Run browser/frontend gates and commit.

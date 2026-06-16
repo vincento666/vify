@@ -1,5 +1,5 @@
 import type { CustomerAssistantEvent } from '@/api/customerAssistant'
-import { resolveApiUrl } from '@/host/request'
+import { buildHostHeaders, resolveApiUrl } from '@/host/request'
 
 export interface CustomerAssistantEventStreamOptions {
   afterSequence?: number
@@ -17,28 +17,85 @@ export function openCustomerAssistantEventStream(
   options: CustomerAssistantEventStreamOptions,
 ): CustomerAssistantEventStream {
   let lastSequence = options.afterSequence ?? 0
+  let closed = false
+  const controller = new AbortController()
   const url = resolveApiUrl(
     `/v1/customer-assistant/sessions/${sessionId}/events/stream?afterSequence=${lastSequence}`,
   )
-  const source = new EventSource(url)
-
-  source.addEventListener('customer_assistant_event', (message) => {
-    try {
-      const event = JSON.parse(message.data) as CustomerAssistantEvent
-      lastSequence = Math.max(lastSequence, Number(event.sequence || 0))
-      options.onEvent(event)
-    } catch (error) {
-      options.onError?.(toStreamError(error))
-    }
+  void consumeCustomerAssistantEventStream(url, controller.signal, (event) => {
+    lastSequence = Math.max(lastSequence, Number(event.sequence || 0))
+    options.onEvent(event)
+  }, (error) => {
+    if (!closed) options.onError?.(toStreamError(error))
   })
-  source.onerror = () => {
-    options.onError?.(new Error('Customer assistant event stream failed'))
-  }
 
   return {
-    close: () => source.close(),
+    close: () => {
+      closed = true
+      controller.abort()
+    },
     lastSequence: () => lastSequence,
   }
+}
+
+async function consumeCustomerAssistantEventStream(
+  url: string,
+  signal: AbortSignal,
+  onEvent: (event: CustomerAssistantEvent) => void,
+  onError: (error: unknown) => void,
+) {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        ...buildHostHeaders(),
+        Accept: 'text/event-stream',
+      },
+      signal,
+    })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    if (!response.body) throw new Error('missing stream body')
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      buffer = consumeBufferedFrames(buffer, onEvent)
+    }
+    buffer += decoder.decode()
+    consumeBufferedFrames(`${buffer}\n\n`, onEvent)
+  } catch (error) {
+    if (isAbortError(error)) return
+    onError(error)
+  }
+}
+
+function consumeBufferedFrames(buffer: string, onEvent: (event: CustomerAssistantEvent) => void): string {
+  const normalized = buffer.replace(/\r\n/g, '\n')
+  const frames = normalized.split('\n\n')
+  const rest = frames.pop() ?? ''
+  for (const frame of frames) {
+    const event = parseCustomerAssistantEventFrame(frame)
+    if (event) onEvent(event)
+  }
+  return rest
+}
+
+function parseCustomerAssistantEventFrame(frame: string): CustomerAssistantEvent | null {
+  let eventType = 'message'
+  const data: string[] = []
+  for (const line of frame.split('\n')) {
+    if (!line || line.startsWith(':')) continue
+    if (line.startsWith('event:')) eventType = line.slice('event:'.length).trim()
+    if (line.startsWith('data:')) data.push(line.slice('data:'.length).trimStart())
+  }
+  if (eventType !== 'customer_assistant_event' || data.length === 0) return null
+  return JSON.parse(data.join('\n')) as CustomerAssistantEvent
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError'
 }
 
 function toStreamError(error: unknown): Error {
