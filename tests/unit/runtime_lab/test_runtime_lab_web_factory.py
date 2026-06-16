@@ -1,8 +1,17 @@
 import unittest
+from unittest.mock import patch
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 
 from app.core.config import Settings
 from app.modules.runtime_lab.domain.classifier import LlmConstrainedIntentClassifier
-from app.modules.runtime_lab.web.router import _runtime_lab_chatflow_bindings, _runtime_lab_intent_classifier
+from app.modules.workflow.domain.runtime_v2 import ChatflowRuntimeV2Service
+from app.modules.runtime_lab.web.router import (
+    _runtime_lab_chatflow_bindings,
+    _runtime_lab_intent_classifier,
+    get_runtime_lab_service,
+)
 
 
 class RuntimeLabWebFactoryTest(unittest.TestCase):
@@ -62,3 +71,21 @@ class RuntimeLabWebFactoryTest(unittest.TestCase):
         assert gate is not None
         proposal = gate.propose("行李可能超重，能不能提前买一点额度", active_task=None, suspended_tasks=[])
         self.assertIsNone(proposal)
+
+    def test_chatflow_sop_binding_wires_runtime_v2_service_by_default(self) -> None:
+        engine = create_engine("sqlite:///:memory:")
+        with Session(engine) as session:
+            with (
+                patch(
+                    "app.modules.runtime_lab.web.router.get_settings",
+                    return_value=Settings(runtime_lab_sop_chatflow_ids="refund_ticket:42"),
+                ),
+                patch(
+                    "app.modules.runtime_lab.web.router.RuntimePolicyResolver.resolve",
+                    return_value={"policySnapshot": {}},
+                ),
+            ):
+                service = get_runtime_lab_service(session)
+
+        adapter = service._adapter
+        self.assertIsInstance(adapter._runtime_v2_service, ChatflowRuntimeV2Service)

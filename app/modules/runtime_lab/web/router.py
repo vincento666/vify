@@ -52,6 +52,7 @@ from app.modules.runtime_policy.domain.service import RuntimePolicyProfileServic
 from app.modules.runtime_policy.infra.repository import RuntimePolicyRepository
 from app.modules.runtime_policy.web.schemas import RuntimePolicyProfileRequest
 from app.modules.provider.api.facade import ProviderModelFacade
+from app.modules.workflow.domain.runtime_v2 import ChatflowRuntimeV2Service
 from app.modules.workflow.domain.service import WorkflowService
 from app.modules.workflow.infra.chatflow_state_repository import ChatflowStateRepository
 from app.modules.workflow.infra.repository import WorkflowRepository
@@ -98,18 +99,25 @@ def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeL
             policy_thresholds=policy_thresholds,
         )
     use_mock_workflow_llm = settings.runtime_lab_intent_arbitrator_mode.strip().lower() == "fake"
+    workflow_repository = WorkflowRepository(session)
+    chatflow_state_repository = ChatflowStateRepository(session)
     workflow_service = WorkflowService(
-        WorkflowRepository(session),
+        workflow_repository,
         flow_type="CHATFLOW",
         agent_repository=None if use_mock_workflow_llm else AgentRepository(session),
         model_facade=None if use_mock_workflow_llm else ProviderModelFacade(session),
-        chatflow_state_repository=ChatflowStateRepository(session),
+        chatflow_state_repository=chatflow_state_repository,
         preferred_llm_agent_name=RUNTIME_LAB_AIRLINE_LLM_AGENT_NAME,
     )
     adapter = ChatflowSopRuntimeAdapter(
         workflow_service,
         sop_chatflow_ids=bindings,
         fallback_adapter=FakeSopRuntimeAdapter(),
+        runtime_v2_service=ChatflowRuntimeV2Service(
+            workflow_repository,
+            chatflow_state_repository,
+            knowledge_facade=KnowledgeFacade(session),
+        ),
     )
     return RuntimeLabService(
         RuntimeLabRepository(session),

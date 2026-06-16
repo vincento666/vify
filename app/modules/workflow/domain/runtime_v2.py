@@ -347,16 +347,36 @@ class ChatflowRuntimeV2Service:
             payload={"resumeData": resume_data, "idempotencyKey": idempotency_key},
             checkpoint_id=int(checkpoint["id"]),
         )
-        output = self._run_from_node(
-            chatflow_id=chatflow_id,
-            run_id=run_id,
-            session_id=session_id,
-            node_key=pending_node_key,
-            context=context,
-            input_data=input_data,
-            nodes=runtime_definition.get("nodes") if runtime_definition else None,
-            edges=runtime_definition.get("edges") if runtime_definition else None,
-        )
+        try:
+            output = self._run_from_node(
+                chatflow_id=chatflow_id,
+                run_id=run_id,
+                session_id=session_id,
+                node_key=pending_node_key,
+                context=context,
+                input_data=input_data,
+                nodes=runtime_definition.get("nodes") if runtime_definition else None,
+                edges=runtime_definition.get("edges") if runtime_definition else None,
+            )
+        except _RuntimeV2Interrupt as interrupted:
+            self._state_repository.mark_checkpoint_completed(int(checkpoint["id"]))
+            self._repository.finish_run(run_id, "INTERRUPTED", output=interrupted.output)
+            self._state_repository.update_session_status(
+                chatflow_id=chatflow_id,
+                session_id=session_id,
+                status="waiting",
+                current_run_id=run_id,
+                variables=interrupted.variable_scopes,
+            )
+            self._append_event(
+                session_id=session_id,
+                chatflow_id=chatflow_id,
+                run_id=run_id,
+                event_type="workflow_run_interrupted",
+                node_key=interrupted.node_key,
+                payload={"output": interrupted.output},
+            )
+            return self.get_result(run_id)
         self._state_repository.mark_checkpoint_completed(int(checkpoint["id"]))
         self._repository.finish_run(run_id, "SUCCEEDED", output=output)
         self._state_repository.update_session_status(
