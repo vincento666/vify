@@ -31,6 +31,13 @@ try {
   const proposedActions = await page.getByTestId('operator-proposed-actions-panel').innerText()
   assert(proposedActions.includes('并行处理退票与行李额确认'), 'Expected seeded proposed action in panel')
 
+  await page.getByLabel('坐席侧内部追问').fill('退票和行李额可以并行处理吗？')
+  await page.getByRole('button', { name: /追问助手/ }).click()
+  await page
+    .getByTestId('operator-recommendation-panel')
+    .getByText(/执行写操作前分别确认/)
+    .waitFor({ state: 'visible', timeout: 10000 })
+
   const refundTaskRow = page
     .getByTestId('operator-task-ledger')
     .locator('.task-row')

@@ -53,6 +53,7 @@ from app.modules.customer_assistant.domain.worker_runtime import (
 )
 from app.modules.customer_assistant.domain.workers import ChatflowSopWorker, RecommendationAggregator, StubQaWorker
 from app.modules.customer_assistant.infra.repository import CustomerAssistantRepository, IdempotencyConflict
+from app.modules.knowledge.infra.repository import KnowledgeBaseRepository
 from app.modules.runtime_lab.domain.sop_adapter import FakeSopRuntimeAdapter
 
 
@@ -486,7 +487,7 @@ class CustomerAssistantService:
         actor: CustomerAssistantActor,
         turn_mode: CustomerAssistantTurnMode,
     ) -> AssistantTurnResult:
-        context_pack = self._operator_advisory_context_pack(session_id)
+        context_pack = self._operator_advisory_context_pack(session_id, message)
         self._repository.append_event(
             session_id,
             "operator_advisory_context_packed",
@@ -495,6 +496,7 @@ class CustomerAssistantService:
                 "taskCount": len(context_pack["taskSummaries"]),
                 "eventCount": context_pack["eventCount"],
                 "evidenceCount": len(context_pack["evidence"]),
+                "knowledgeSnippetCount": len(context_pack["knowledgeSnippets"]),
                 "warnings": list(context_pack["warnings"]),
             },
             run_id=run_id,
@@ -543,15 +545,24 @@ class CustomerAssistantService:
             events=events,
         )
 
-    def _operator_advisory_context_pack(self, session_id: int) -> dict[str, Any]:
+    def _operator_advisory_context_pack(self, session_id: int, message: str) -> dict[str, Any]:
         task_summaries = [_format_task(row) for row in self._repository.list_tasks(session_id)]
         event_rows = self._repository.list_events(session_id)
         event_summary = [_operator_event_summary(row) for row in event_rows[-8:]]
         evidence = _operator_evidence_from_tasks(task_summaries)
+        session_row = self._repository.get_session(session_id)
+        session_context = dict((session_row or {}).get("context_json") or {})
+        knowledge_snippets = _operator_knowledge_snippets(
+            KnowledgeBaseRepository(self._repository.session),
+            session_context,
+            task_summaries,
+            message,
+        )
         warnings: list[str] = []
         if not task_summaries:
             warnings.append("Task ledger context missing; operator recommendation is read-only.")
-        warnings.append("Knowledge snippets unavailable for operator advisory context.")
+        if not knowledge_snippets:
+            warnings.append("Knowledge snippets unavailable for operator advisory context.")
         if not evidence:
             warnings.append("Chatflow/SOP metadata unavailable for operator advisory context.")
         warnings.append("Harness advisory summaries unavailable for operator advisory context.")
@@ -560,6 +571,7 @@ class CustomerAssistantService:
             "eventSummary": event_summary,
             "eventCount": len(event_rows),
             "evidence": evidence,
+            "knowledgeSnippets": knowledge_snippets,
             "warnings": warnings,
         }
 
@@ -1944,6 +1956,93 @@ def _operator_evidence_from_tasks(task_summaries: list[dict[str, Any]]) -> list[
     return evidence
 
 
+def _operator_knowledge_snippets(
+    repository: KnowledgeBaseRepository,
+    session_context: dict[str, Any],
+    task_summaries: list[dict[str, Any]],
+    message: str,
+) -> list[dict[str, Any]]:
+    knowledge_base_ids = _operator_knowledge_base_ids(session_context)
+    if not knowledge_base_ids:
+        return []
+    terms = _operator_knowledge_terms(message, task_summaries)
+    snippets: list[dict[str, Any]] = []
+    for knowledge_base_id in knowledge_base_ids:
+        for faq in repository.list_enabled_faqs(knowledge_base_id):
+            score = _operator_faq_score(faq, terms)
+            if score <= 0 and terms:
+                continue
+            snippets.append(
+                {
+                    "knowledgeBaseId": knowledge_base_id,
+                    "faqId": int(faq["id"]),
+                    "question": str(faq.get("question") or ""),
+                    "answer": str(faq.get("answer") or ""),
+                    "category": str(faq.get("category") or ""),
+                    "score": score,
+                }
+            )
+    snippets.sort(key=lambda item: (-int(item["score"]), str(item["question"])))
+    return snippets[:3]
+
+
+def _operator_knowledge_base_ids(session_context: dict[str, Any]) -> list[int]:
+    ids: list[int] = []
+    for item in list(session_context.get("knowledgeBaseIds") or []):
+        try:
+            parsed = int(item)
+        except (TypeError, ValueError):
+            continue
+        if parsed > 0:
+            ids.append(parsed)
+    return ids
+
+
+def _operator_knowledge_terms(message: str, task_summaries: list[dict[str, Any]]) -> set[str]:
+    haystack = " ".join(
+        [
+            message,
+            *[str(task.get("taskKey") or "") for task in task_summaries],
+            *[str(task.get("taskType") or "") for task in task_summaries],
+            *[str(task.get("workerRef") or "") for task in task_summaries],
+        ]
+    ).lower()
+    candidates = {
+        "退票",
+        "退款",
+        "refund",
+        "行李",
+        "行李额",
+        "baggage",
+        "发票",
+        "invoice",
+        "航班动态",
+        "flight",
+        "等待输入",
+        "恢复",
+        "resume",
+        "改签",
+        "change",
+        "订单号",
+    }
+    return {term for term in candidates if term.lower() in haystack}
+
+
+def _operator_faq_score(faq: dict[str, Any], terms: set[str]) -> int:
+    if not terms:
+        return int(faq.get("priority") or 0)
+    faq_keywords = " ".join(str(item) for item in list(faq.get("keywords") or []))
+    haystack = " ".join(
+        [
+            str(faq.get("question") or ""),
+            str(faq.get("answer") or ""),
+            str(faq.get("category") or ""),
+            faq_keywords,
+        ]
+    ).lower()
+    return sum(1 for term in terms if term.lower() in haystack)
+
+
 def _operator_advisory_recommendation(
     message: str,
     context_pack: dict[str, Any],
@@ -1952,6 +2051,7 @@ def _operator_advisory_recommendation(
     task_summaries = list(context_pack.get("taskSummaries") or [])
     event_summary = list(context_pack.get("eventSummary") or [])
     evidence = list(context_pack.get("evidence") or [])
+    knowledge_snippets = list(context_pack.get("knowledgeSnippets") or [])
     warnings = list(context_pack.get("warnings") or [])
     lines = [f"Operator recommendation for: {message}"]
     if task_summaries:
@@ -1971,6 +2071,12 @@ def _operator_advisory_recommendation(
             for item in evidence
         ]
         lines.append(f"- SOP/Chatflow evidence: {'; '.join(evidence_lines)}")
+    if knowledge_snippets:
+        snippet_lines = [
+            f"{item.get('question')}: {item.get('answer')}"
+            for item in knowledge_snippets
+        ]
+        lines.append(f"- knowledge snippets: {'; '.join(snippet_lines)}")
     if proposed_actions:
         titles = ", ".join(str(action.get("title") or action.get("actionType")) for action in proposed_actions)
         lines.append(f"- proposed_task_command: {titles}; pending explicit operator confirmation.")

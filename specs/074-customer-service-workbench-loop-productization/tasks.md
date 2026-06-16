@@ -24,6 +24,7 @@
 
 ## 074.3 Knowledge-Backed Operator Advisory
 
-- [ ] Add RED tests for operator advisory using seeded knowledge and task ledger.
-- [ ] Implement knowledge-backed advisory context.
-- [ ] Run full slice gates and commit.
+- [x] Add RED tests for operator advisory using seeded knowledge and task ledger.
+- [x] Implement knowledge-backed advisory context.
+- [x] Run full slice gates.
+- [ ] Commit completed 074.3 slice.
