@@ -2246,14 +2246,20 @@ def _operator_evidence_from_tasks(task_summaries: list[dict[str, Any]]) -> list[
     for task in task_summaries:
         last_result = dict(task.get("lastResult") or {})
         result_evidence = dict(last_result.get("evidence") or {})
-        if result_evidence:
-            evidence.append(
-                {
-                    "taskKey": task.get("taskKey"),
-                    "sopId": result_evidence.get("sopId"),
-                    "currentStep": result_evidence.get("currentStep"),
-                }
-            )
+        checkpoint = dict(task.get("checkpoint") or {})
+        worker_type = str(task.get("workerType") or "").lower()
+        if not result_evidence and worker_type not in {"chatflow_sop", "chatflow", "workflow"} and not checkpoint:
+            continue
+        evidence.append(
+            {
+                "taskKey": task.get("taskKey"),
+                "sopId": result_evidence.get("sopId") or task.get("workerRef") or task.get("workerType"),
+                "currentStep": result_evidence.get("currentStep")
+                or checkpoint.get("currentStep")
+                or checkpoint.get("pendingStep")
+                or task.get("status"),
+            }
+        )
     return evidence
 
 

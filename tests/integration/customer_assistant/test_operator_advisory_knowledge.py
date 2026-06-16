@@ -28,10 +28,13 @@ class CustomerAssistantOperatorAdvisoryKnowledgeTest(unittest.TestCase):
 
         self.assertIn("可以并行处理", result["operatorRecommendation"])
         self.assertIn("退票和行李额", result["operatorRecommendation"])
+        self.assertIn("SOP/Chatflow evidence", result["operatorRecommendation"])
         self.assertIn("执行写操作前分别确认", result["operatorRecommendation"])
         self.assertFalse(any("Knowledge snippets unavailable" in warning for warning in result["warnings"]))
+        self.assertFalse(any("Chatflow/SOP metadata unavailable" in warning for warning in result["warnings"]))
         packed = next(event for event in events if event["type"] == "operator_advisory_context_packed")
         self.assertGreaterEqual(packed["payload"]["knowledgeSnippetCount"], 1)
+        self.assertGreaterEqual(packed["payload"]["evidenceCount"], 1)
 
 
 def _seeded_session() -> Session:

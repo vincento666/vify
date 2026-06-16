@@ -37,6 +37,7 @@ describe('CustomerAssistantPanel UI contract', () => {
       'operator-recognition-evidence-panel',
       'operator-task-ledger',
       'operator-recommendation-panel',
+      'operator-advisory-evidence-panel',
       'operator-draft-panel',
       'operator-proposed-actions-panel',
       'operator-event-timeline',
@@ -136,6 +137,17 @@ describe('CustomerAssistantPanel UI contract', () => {
     expect(evidencePanel).toContain('recognition.riskPolicyRef')
     expect(evidencePanel).toContain('operator-recognition-empty-state')
     expect(section(content, 'operator-event-timeline')).not.toContain('recognition.profileId')
+  })
+
+  it('renders operator advisory knowledge evidence as a dedicated panel', () => {
+    const evidencePanel = section(content, 'operator-advisory-evidence-panel')
+
+    expect(evidencePanel).toContain('workspace.operatorAdvisoryEvidence')
+    expect(evidencePanel).toContain('advisory.knowledgeSnippetCount')
+    expect(evidencePanel).toContain('advisory.taskCount')
+    expect(evidencePanel).toContain('advisory.warnings')
+    expect(evidencePanel).toContain('operator-advisory-empty-state')
+    expect(section(content, 'operator-event-timeline')).not.toContain('advisory.knowledgeSnippetCount')
   })
 
   it('deep-links and auto-opens seeded demo stories through the route query', () => {

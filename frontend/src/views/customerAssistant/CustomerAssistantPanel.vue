@@ -304,6 +304,40 @@
           <p class="panel-copy">{{ workspace.recommendation.operatorRecommendation || '暂无坐席建议' }}</p>
         </section>
 
+        <section class="workspace-panel compact-panel" data-testid="operator-advisory-evidence-panel">
+          <div class="panel-heading">
+            <span class="panel-heading-title">
+              <DashboardOutlined />
+              追问证据
+            </span>
+            <span class="panel-count">{{ workspace.operatorAdvisoryEvidence.length }}</span>
+          </div>
+          <div class="advisory-evidence-list">
+            <div
+              v-if="workspace.operatorAdvisoryEvidence.length === 0"
+              class="empty-compact"
+              data-testid="operator-advisory-empty-state"
+            >
+              暂无坐席追问证据
+            </div>
+            <div
+              v-for="advisory in workspace.operatorAdvisoryEvidence"
+              :key="advisory.key"
+              class="advisory-evidence-row"
+            >
+              <div class="advisory-main">
+                <strong>{{ advisory.sequenceLabel }} {{ advisory.turnMode }}</strong>
+                <span>任务 {{ advisory.taskCount }} · 事件 {{ advisory.eventCount }}</span>
+              </div>
+              <div class="advisory-metrics">
+                <a-tag color="blue">SOP {{ advisory.evidenceCount }}</a-tag>
+                <a-tag color="green">知识 {{ advisory.knowledgeSnippetCount }}</a-tag>
+              </div>
+              <p v-if="advisory.warnings.length">提示：{{ advisory.warnings.join('；') }}</p>
+            </div>
+          </div>
+        </section>
+
         <section class="workspace-panel compact-panel" data-testid="operator-draft-panel">
           <div class="panel-heading">
             <span class="panel-heading-title">
@@ -1090,7 +1124,8 @@ async function executeAction(actionId: number) {
 .task-list,
 .action-list,
 .progress-list,
-.recognition-evidence-list {
+.recognition-evidence-list,
+.advisory-evidence-list {
   display: grid;
   gap: 0.625rem;
 }
@@ -1122,7 +1157,8 @@ async function executeAction(actionId: number) {
 
 .task-row,
 .action-row,
-.recognition-evidence-row {
+.recognition-evidence-row,
+.advisory-evidence-row {
   display: grid;
   gap: 0.5rem;
   padding: 0.65rem;
@@ -1133,7 +1169,8 @@ async function executeAction(actionId: number) {
 
 .task-row > div:first-child,
 .action-row > div:first-child,
-.recognition-main {
+.recognition-main,
+.advisory-main {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
@@ -1141,12 +1178,14 @@ async function executeAction(actionId: number) {
 
 .task-row span,
 .action-row span,
-.recognition-evidence-row span {
+.recognition-evidence-row span,
+.advisory-evidence-row span {
   color: #667085;
   font-size: 0.75rem;
 }
 
-.task-row p {
+.task-row p,
+.advisory-evidence-row p {
   margin: 0;
   color: #8a5a00;
   font-size: 0.8125rem;
@@ -1170,6 +1209,12 @@ async function executeAction(actionId: number) {
   color: #4d5b70;
   font-size: 0.75rem;
   line-height: 1.45;
+}
+
+.advisory-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
 }
 
 .task-controls {

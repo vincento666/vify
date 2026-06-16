@@ -13,6 +13,7 @@ import {
   buildCustomerAssistantState,
   formatCustomerAssistantEvents,
   formatCustomerAssistantMetrics,
+  formatOperatorAdvisoryEvidence,
   formatTaskRecognitionEvidence,
   summarizeCustomerAssistantTasks,
 } from './customerAssistantViewModel'
@@ -259,6 +260,71 @@ describe('customer assistant view model', () => {
     expect(state.recognitionEvidence[0]).toMatchObject({
       taskKey: 'refund_ticket',
       profileId: 'refund_ticket_chatflow',
+    })
+  })
+
+  it('formats operator advisory evidence without exposing raw customer context', () => {
+    const rows = formatOperatorAdvisoryEvidence([
+      {
+        id: 601,
+        sessionId: 12,
+        runId: 41,
+        sequence: 9,
+        type: 'operator_advisory_context_packed',
+        source: 'operator_advisory',
+        actor: 'operator',
+        payload: {
+          turnMode: 'operator_recommendation',
+          taskCount: 2,
+          eventCount: 8,
+          evidenceCount: 2,
+          knowledgeSnippetCount: 1,
+          message: '客户手机号 13800138000，订单 TK-100',
+          warnings: ['Harness advisory summaries unavailable for operator advisory context.'],
+        },
+      },
+    ])
+
+    expect(rows).toEqual([
+      {
+        key: 'advisory-601',
+        sequenceLabel: '#9',
+        turnMode: 'operator_recommendation',
+        taskCount: 2,
+        eventCount: 8,
+        evidenceCount: 2,
+        knowledgeSnippetCount: 1,
+        warnings: ['Harness advisory summaries unavailable for operator advisory context.'],
+      },
+    ])
+    expect(JSON.stringify(rows)).not.toContain('13800138000')
+    expect(JSON.stringify(rows)).not.toContain('TK-100')
+  })
+
+  it('includes operator advisory evidence in the built operator state', () => {
+    const state = buildCustomerAssistantState({
+      sessionId: 12,
+      events: [
+        {
+          id: 601,
+          sessionId: 12,
+          sequence: 9,
+          type: 'operator_advisory_context_packed',
+          payload: {
+            turnMode: 'operator_recommendation',
+            taskCount: 2,
+            eventCount: 8,
+            evidenceCount: 2,
+            knowledgeSnippetCount: 1,
+            warnings: [],
+          },
+        },
+      ],
+    })
+
+    expect(state.operatorAdvisoryEvidence[0]).toMatchObject({
+      taskCount: 2,
+      knowledgeSnippetCount: 1,
     })
   })
 

@@ -70,6 +70,17 @@ export interface CustomerAssistantRecognitionEvidenceRow {
   riskPolicyRef: string
 }
 
+export interface CustomerAssistantOperatorAdvisoryEvidenceRow {
+  key: string
+  sequenceLabel: string
+  turnMode: string
+  taskCount: number
+  eventCount: number
+  evidenceCount: number
+  knowledgeSnippetCount: number
+  warnings: string[]
+}
+
 export interface CustomerAssistantProgressStage {
   key: 'recognizing' | 'workers' | 'recommendation' | 'ready'
   label: string
@@ -131,6 +142,7 @@ export interface CustomerAssistantState {
   proposedActions: CustomerAssistantProposedAction[]
   eventTimeline: CustomerAssistantEventRow[]
   recognitionEvidence: CustomerAssistantRecognitionEvidenceRow[]
+  operatorAdvisoryEvidence: CustomerAssistantOperatorAdvisoryEvidenceRow[]
   progressStages: CustomerAssistantProgressStage[]
   replayed: boolean
 }
@@ -182,6 +194,7 @@ export function buildCustomerAssistantState(input: BuildCustomerAssistantStateIn
     proposedActions: [...(input.proposedActions ?? turn?.proposedActions ?? [])],
     eventTimeline: formatCustomerAssistantEvents(events),
     recognitionEvidence: formatTaskRecognitionEvidence(events),
+    operatorAdvisoryEvidence: formatOperatorAdvisoryEvidence(events),
     progressStages: deriveCustomerAssistantProgressStages(events),
     replayed: Boolean(turn?.replayed),
   }
@@ -297,6 +310,27 @@ export function formatTaskRecognitionEvidence(
         },
       ]
     })
+  })
+}
+
+export function formatOperatorAdvisoryEvidence(
+  events: CustomerAssistantEvent[],
+): CustomerAssistantOperatorAdvisoryEvidenceRow[] {
+  return events.flatMap((event) => {
+    if (event.type !== 'operator_advisory_context_packed') return []
+    const payload = asRecord(event.payload) ?? {}
+    return [
+      {
+        key: `advisory-${event.id}`,
+        sequenceLabel: `#${event.sequence}`,
+        turnMode: stringField(payload.turnMode, 'operator_recommendation'),
+        taskCount: numberField(payload.taskCount),
+        eventCount: numberField(payload.eventCount),
+        evidenceCount: numberField(payload.evidenceCount),
+        knowledgeSnippetCount: numberField(payload.knowledgeSnippetCount),
+        warnings: stringListField(payload.warnings),
+      },
+    ]
   })
 }
 
@@ -485,6 +519,11 @@ function stringListField(value: unknown): string[] {
       typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean',
     )
     .map(String)
+}
+
+function numberField(value: unknown): number {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : 0
 }
 
 function workerRoute(command: Record<string, unknown>): string {
