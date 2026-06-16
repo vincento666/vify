@@ -9,6 +9,9 @@ from app.core.db_write import insert_and_fetch
 from app.modules.customer_assistant.infra.schema import customer_assistant_tables, register_customer_assistant_tables
 
 
+_SEQUENCE_RETRY_ATTEMPTS = 3
+
+
 class IdempotencyConflict(RuntimeError):
     pass
 
@@ -268,30 +271,37 @@ class CustomerAssistantRepository:
         parent_span_id: str | None = None,
         span_id: str | None = None,
     ) -> dict[str, Any]:
-        now = datetime.now()
-        sequence = self._next_event_sequence(session_id)
-        row = insert_and_fetch(
-            self._session,
-            self._event_table,
-            {
-                "session_id": session_id,
-                "run_id": run_id,
-                "sequence": sequence,
-                "type": event_type,
-                "visibility": visibility,
-                "source": source,
-                "actor": actor,
-                "task_id": task_id,
-                "parent_span_id": parent_span_id,
-                "span_id": span_id,
-                "payload": payload or {},
-                "deleted": False,
-                "created_at": now,
-                "updated_at": now,
-            },
-        )
-        self._session.commit()
-        return row
+        for attempt in range(_SEQUENCE_RETRY_ATTEMPTS):
+            now = datetime.now()
+            sequence = self._next_event_sequence(session_id)
+            try:
+                row = insert_and_fetch(
+                    self._session,
+                    self._event_table,
+                    {
+                        "session_id": session_id,
+                        "run_id": run_id,
+                        "sequence": sequence,
+                        "type": event_type,
+                        "visibility": visibility,
+                        "source": source,
+                        "actor": actor,
+                        "task_id": task_id,
+                        "parent_span_id": parent_span_id,
+                        "span_id": span_id,
+                        "payload": payload or {},
+                        "deleted": False,
+                        "created_at": now,
+                        "updated_at": now,
+                    },
+                )
+                self._session.commit()
+                return row
+            except sa.exc.IntegrityError as exc:
+                self._session.rollback()
+                if attempt == _SEQUENCE_RETRY_ATTEMPTS - 1 or not _is_sequence_conflict(exc):
+                    raise
+        raise RuntimeError("Could not append customer assistant event after sequence retries")
 
     def list_events(self, session_id: int) -> list[dict[str, Any]]:
         rows = self._session.execute(
@@ -463,26 +473,33 @@ class CustomerAssistantRepository:
         source: str = "customer_assistant_worker",
         actor: str = "system",
     ) -> dict[str, Any]:
-        now = datetime.now()
-        sequence = self._next_worker_event_sequence(worker_run_id)
-        row = insert_and_fetch(
-            self._session,
-            self._worker_event_table,
-            {
-                "worker_run_id": worker_run_id,
-                "sequence": sequence,
-                "type": event_type,
-                "visibility": visibility,
-                "source": source,
-                "actor": actor,
-                "payload": _redact_payload(payload or {}),
-                "deleted": False,
-                "created_at": now,
-                "updated_at": now,
-            },
-        )
-        self._session.commit()
-        return row
+        for attempt in range(_SEQUENCE_RETRY_ATTEMPTS):
+            now = datetime.now()
+            sequence = self._next_worker_event_sequence(worker_run_id)
+            try:
+                row = insert_and_fetch(
+                    self._session,
+                    self._worker_event_table,
+                    {
+                        "worker_run_id": worker_run_id,
+                        "sequence": sequence,
+                        "type": event_type,
+                        "visibility": visibility,
+                        "source": source,
+                        "actor": actor,
+                        "payload": _redact_payload(payload or {}),
+                        "deleted": False,
+                        "created_at": now,
+                        "updated_at": now,
+                    },
+                )
+                self._session.commit()
+                return row
+            except sa.exc.IntegrityError as exc:
+                self._session.rollback()
+                if attempt == _SEQUENCE_RETRY_ATTEMPTS - 1 or not _is_sequence_conflict(exc):
+                    raise
+        raise RuntimeError("Could not append customer assistant worker event after sequence retries")
 
     def list_worker_events(self, worker_run_id: int) -> list[dict[str, Any]]:
         rows = self._session.execute(
@@ -649,6 +666,13 @@ _SECRET_KEYS = {"api_key", "apikey", "authorization", "password", "secret", "tok
 
 def _worker_run_public_id(worker_run_id: int) -> str:
     return f"customer-assistant-worker-run-{worker_run_id}"
+
+
+def _is_sequence_conflict(exc: sa.exc.IntegrityError) -> bool:
+    message = str(exc.orig).lower()
+    return "sequence" in message and (
+        "customer_assistant_event" in message or "customer_assistant_worker_event" in message
+    )
 
 
 def _redact_payload(value: Any) -> Any:

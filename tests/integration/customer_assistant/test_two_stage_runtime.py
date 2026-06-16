@@ -59,6 +59,59 @@ class CustomerAssistantTwoStageRuntimeTest(unittest.TestCase):
         self.assertIn("可免费携带一件手提行李", result["customerReplyDraft"])
         self.assertIn("two_stage_primary_selected", [event["type"] for event in events])
 
+    def test_primary_records_sanitized_react_progression_and_keeps_three_stage_contract(self) -> None:
+        with _session() as session:
+            service = CustomerAssistantService(
+                CustomerAssistantRepository(session),
+                scheduler=LocalWorkerScheduler({"stub_qa": _CountingWorker()}),
+                llm_runtime_settings=CustomerAssistantLlmRuntimeSettings(
+                    mode=CustomerAssistantLlmRuntimeMode.TWO_STAGE_PRIMARY_WITH_FALLBACK
+                ),
+            )
+            assistant_session = service.create_session()
+
+            result = service.handle_turn(int(assistant_session["id"]), "行李额度是多少", "two-stage-react-progress")
+            events = service.list_events(int(assistant_session["id"]))["list"]
+
+        event_types = [event["type"] for event in events]
+        progression = [
+            event
+            for event in events
+            if event["type"]
+            in {
+                "two_stage_plan_recorded",
+                "two_stage_action_recorded",
+                "two_stage_observation_recorded",
+            }
+        ]
+
+        self.assertEqual(
+            [event["type"] for event in progression],
+            ["two_stage_plan_recorded", "two_stage_action_recorded", "two_stage_observation_recorded"],
+        )
+        self.assertEqual([event["payload"]["reactStep"] for event in progression], ["plan", "action", "observation"])
+        self.assertEqual(
+            [event["payload"]["legacyStage"] for event in progression],
+            ["task_recognition", "task_execute_parallel", "task_execute_parallel"],
+        )
+        self.assertTrue(all(event["visibility"] == "debug" for event in progression))
+        self.assertNotIn("chainOfThought", str(progression))
+
+        plan_payload = progression[0]["payload"]
+        action_payload = progression[1]["payload"]
+        observation_payload = progression[2]["payload"]
+        self.assertEqual(plan_payload["summary"]["commands"][0]["taskKey"], "baggage_qa")
+        self.assertEqual(action_payload["summary"]["workerDispatchCount"], 1)
+        self.assertEqual(observation_payload["summary"]["workerResultCount"], 1)
+        self.assertEqual(observation_payload["summary"]["taskStatuses"], [{"taskKey": "baggage_qa", "status": "COMPLETED"}])
+
+        final = next(event for event in events if event["type"] == "two_stage_primary_selected")
+        self.assertEqual(final["payload"]["reactStep"], "final")
+        self.assertEqual(final["payload"]["legacyStage"], "generate_recommendation")
+        self.assertIn("task_recognized", event_types)
+        self.assertIn("recommendation_generated", event_types)
+        self.assertIn("可免费携带一件手提行李", result["customerReplyDraft"])
+
     def test_primary_falls_back_when_finalizer_rewrites_waiting_prompt(self) -> None:
         with _session() as session:
             service = CustomerAssistantService(

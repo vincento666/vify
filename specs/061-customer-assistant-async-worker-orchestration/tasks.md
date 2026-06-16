@@ -60,6 +60,18 @@
 - [x] Run customer-assistant backend gates.
 - [x] Run Browser UAT for one pending-worker scenario.
 
+## 061.7 Async Runtime Audit Closure 2026-06-16
+
+- [x] RED: multiple async workers were not batch-started before the join
+      deadline, and the unset default wait deadline made a slow async worker look
+      blocking.
+- [x] Batch-start async-capable worker runs before joining.
+- [x] Return `RUNNING` plus real worker refs for slow low-risk workers when the
+      default deadline is exceeded.
+- [x] Preserve sync-friendly `chatflow_sop` default behavior and public
+      customer-assistant error code compatibility.
+- [x] Run focused and customer-assistant backend gates.
+
 Evidence:
 
 - RED: `artifacts/slices/061-customer-assistant-async-worker-orchestration/red.txt`
@@ -68,3 +80,13 @@ Evidence:
 - API refresh contract: `artifacts/slices/061-customer-assistant-async-worker-orchestration/contract-refresh-api.txt`
 - Backend gates: `artifacts/slices/061-customer-assistant-async-worker-orchestration/backend-gates.txt`
 - Browser UAT: `artifacts/slices/061-customer-assistant-async-worker-orchestration/uat.md`
+- Audit RED:
+  `artifacts/slices/061-customer-assistant-async-worker-orchestration/061-audit-async-fanout-default/red.txt`
+- Audit focused integration:
+  `artifacts/slices/061-customer-assistant-async-worker-orchestration/061-audit-async-fanout-default/integration-focused.txt`
+- Audit customer-assistant integration:
+  `artifacts/slices/061-customer-assistant-async-worker-orchestration/061-audit-async-fanout-default/integration-customer-assistant.txt`
+- Audit unit/contract:
+  `artifacts/slices/061-customer-assistant-async-worker-orchestration/061-audit-async-fanout-default/unit-contract.txt`
+- Audit lint:
+  `artifacts/slices/061-customer-assistant-async-worker-orchestration/061-audit-async-fanout-default/ruff.txt`

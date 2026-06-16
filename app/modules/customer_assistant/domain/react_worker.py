@@ -31,7 +31,7 @@ class ReactModelAction:
     customer_reply_draft: str = ""
 
     @classmethod
-    def tool_call(
+    def request_tool(
         cls,
         name: str,
         arguments: dict[str, Any],
@@ -90,7 +90,7 @@ class DeterministicReactWorkerModel:
     ) -> ReactModelAction:
         del message, iteration
         if observation is None:
-            return ReactModelAction.tool_call("lookup_order", {"orderNo": task.business_key})
+            return ReactModelAction.request_tool("lookup_order", {"orderNo": task.business_key})
         status = str(observation.get("status") or "unknown")
         return ReactModelAction.final(
             operator_recommendation=f"{task.business_key} lookup status: {status}",

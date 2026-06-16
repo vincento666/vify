@@ -64,6 +64,20 @@
 - [x] Verify operator advisory remains read-only.
 - [x] Verify unsafe action still becomes proposed action.
 
+## 069.6 Main Runtime ReAct Progression Audit Gap
+
+- [x] RED: Two-Stage primary path did not record sanitized main-runtime
+      plan/action/observation progression.
+- [x] Emit debug-only `two_stage_plan_recorded`,
+      `two_stage_action_recorded`, and `two_stage_observation_recorded`
+      events derived from the controlled core observation.
+- [x] Add `reactStep=final` and `legacyStage=generate_recommendation` to
+      Two-Stage final selection/fallback/shadow decision events.
+- [x] Preserve existing `task_recognized`, worker/recommendation events, and
+      response schema.
+- [x] Prove no raw chain-of-thought field is persisted in the progression
+      payloads.
+
 ## 069 Evidence
 
 - RED: `artifacts/slices/069-customer-assistant-two-stage-react-runtime-mvp/red.txt`
@@ -74,3 +88,17 @@
 - E2E: `artifacts/slices/069-customer-assistant-two-stage-react-runtime-mvp/e2e.txt`
 - Browser UAT: `artifacts/slices/069-customer-assistant-two-stage-react-runtime-mvp/uat.md`
 - Promotion threshold: `artifacts/slices/069-customer-assistant-two-stage-react-runtime-mvp/equivalence-threshold.md`
+- 069.6 RED:
+  `artifacts/slices/069-customer-assistant-two-stage-react-runtime-mvp/069.6/red.txt`
+- 069.6 Focused:
+  `artifacts/slices/069-customer-assistant-two-stage-react-runtime-mvp/069.6/focused.txt`
+- 069.6 Integration:
+  `artifacts/slices/069-customer-assistant-two-stage-react-runtime-mvp/069.6/integration.txt`
+- 069.6 Customer-assistant focused gate:
+  `artifacts/slices/069-customer-assistant-two-stage-react-runtime-mvp/069.6/customer-assistant-focused.txt`
+- 069.6 Customer-assistant integration gate:
+  `artifacts/slices/069-customer-assistant-two-stage-react-runtime-mvp/069.6/customer-assistant-integration-all.txt`
+- 069.6 Customer-assistant unit gate:
+  `artifacts/slices/069-customer-assistant-two-stage-react-runtime-mvp/069.6/customer-assistant-unit-all.txt`
+- 069.6 Ruff:
+  `artifacts/slices/069-customer-assistant-two-stage-react-runtime-mvp/069.6/ruff.txt`

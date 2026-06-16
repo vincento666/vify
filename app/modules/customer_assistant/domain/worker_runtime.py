@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import dataclass
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor, TimeoutError
+from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError
+from time import monotonic
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -14,6 +16,16 @@ from app.modules.customer_assistant.infra.repository import CustomerAssistantRep
 
 
 WORKER_RUN_PREFIX = "customer-assistant-worker-run-"
+DEFAULT_WAIT_DEADLINE_SECONDS = 0.1
+
+
+@dataclass(frozen=True)
+class _StartedWorkerRun:
+    task: TaskItem
+    worker_run_id: int
+    wait_deadline_seconds: float
+    future: Future[WorkerResult] | None = None
+    immediate_result: WorkerResult | None = None
 
 
 class CustomerAssistantWorkerRuntime:
@@ -30,7 +42,7 @@ class CustomerAssistantWorkerRuntime:
         self._workers = workers
         self._session_factory = session_factory
         self._async_worker_types = async_worker_types or {"stub_qa"}
-        self._wait_deadline_seconds = task_timeout_seconds if wait_deadline_seconds is None else wait_deadline_seconds
+        self._wait_deadline_seconds = wait_deadline_seconds
         self._task_timeout_seconds = task_timeout_seconds
         self._executor = ThreadPoolExecutor(max_workers=max(1, max_concurrency))
 
@@ -47,6 +59,48 @@ class CustomerAssistantWorkerRuntime:
         message: str,
         actor: str,
     ) -> WorkerResult:
+        return self.start_many_and_wait(
+            repository,
+            session_id=session_id,
+            parent_run_id=parent_run_id,
+            tasks=[task],
+            message=message,
+            actor=actor,
+        )[0]
+
+    def start_many_and_wait(
+        self,
+        repository: CustomerAssistantRepository,
+        *,
+        session_id: int,
+        parent_run_id: int,
+        tasks: list[TaskItem],
+        message: str,
+        actor: str,
+    ) -> list[WorkerResult]:
+        started = [
+            self._start_worker_run(
+                repository,
+                session_id=session_id,
+                parent_run_id=parent_run_id,
+                task=task,
+                message=message,
+                actor=actor,
+            )
+            for task in tasks
+        ]
+        return self._join_started_worker_runs(repository, started)
+
+    def _start_worker_run(
+        self,
+        repository: CustomerAssistantRepository,
+        *,
+        session_id: int,
+        parent_run_id: int,
+        task: TaskItem,
+        message: str,
+        actor: str,
+    ) -> _StartedWorkerRun:
         worker_run, replayed = repository.create_worker_run(
             session_id=session_id,
             parent_run_id=parent_run_id,
@@ -69,35 +123,118 @@ class CustomerAssistantWorkerRuntime:
             },
         )
         worker_run_id = int(worker_run["id"])
+        wait_deadline_seconds = self._wait_deadline_for(task)
         if replayed and str(worker_run["status"]) in _TERMINAL_WORKER_STATUSES:
-            return worker_result_from_worker_run(task, worker_run, refs=worker_async_refs(worker_run_id))
+            return _StartedWorkerRun(
+                task=task,
+                worker_run_id=worker_run_id,
+                wait_deadline_seconds=wait_deadline_seconds,
+                immediate_result=worker_result_from_worker_run(task, worker_run, refs=worker_async_refs(worker_run_id)),
+            )
+        if replayed and str(worker_run["status"]) == "RUNNING":
+            return _StartedWorkerRun(
+                task=task,
+                worker_run_id=worker_run_id,
+                wait_deadline_seconds=wait_deadline_seconds,
+                immediate_result=self._pending_result(
+                    repository,
+                    task,
+                    worker_run_id,
+                    wait_deadline_seconds=wait_deadline_seconds,
+                ),
+            )
         repository.mark_worker_running(worker_run_id)
         future = self._executor.submit(self._execute_worker_run, worker_run_id, task, message)
-        try:
-            return future.result(timeout=self._wait_deadline_seconds)
-        except TimeoutError:
-            refs = worker_async_refs(worker_run_id)
-            repository.append_worker_event(
-                worker_run_id,
-                "worker_run_pending",
-                {"workerRunId": refs["workerRunId"], "status": "RUNNING", "waitDeadlineSeconds": self._wait_deadline_seconds},
-            )
-            return WorkerResult(
-                task_id=int(task.id or 0),
-                worker_type=task.worker_type,
-                status=TaskStatus.RUNNING,
-                worker_run_id=str(refs["workerRunId"]),
-                worker_async_refs=refs,
-                operator_recommendation=f"required worker evidence is pending for {task.task_key}",
-                customer_reply_draft="我正在继续处理，请稍等。",
-                events=[
-                    {
-                        "type": "worker_run_pending",
-                        "source": "customer_assistant_worker",
-                        "payload": {"workerRunId": refs["workerRunId"], "status": "RUNNING"},
-                    }
-                ],
-            )
+        return _StartedWorkerRun(
+            task=task,
+            worker_run_id=worker_run_id,
+            wait_deadline_seconds=wait_deadline_seconds,
+            future=future,
+        )
+
+    def _join_started_worker_runs(
+        self,
+        repository: CustomerAssistantRepository,
+        started: list[_StartedWorkerRun],
+    ) -> list[WorkerResult]:
+        results: list[WorkerResult] = []
+        join_started = monotonic()
+        for worker_run in started:
+            if worker_run.immediate_result is not None:
+                results.append(worker_run.immediate_result)
+                continue
+            future = worker_run.future
+            if future is None:
+                results.append(
+                    self._pending_result(
+                        repository,
+                        worker_run.task,
+                        worker_run.worker_run_id,
+                        wait_deadline_seconds=worker_run.wait_deadline_seconds,
+                    )
+                )
+                continue
+            remaining = worker_run.wait_deadline_seconds - (monotonic() - join_started)
+            if remaining <= 0 and not future.done():
+                results.append(
+                    self._pending_result(
+                        repository,
+                        worker_run.task,
+                        worker_run.worker_run_id,
+                        wait_deadline_seconds=worker_run.wait_deadline_seconds,
+                    )
+                )
+                continue
+            try:
+                results.append(future.result(timeout=max(0.0, remaining)))
+            except TimeoutError:
+                results.append(
+                    self._pending_result(
+                        repository,
+                        worker_run.task,
+                        worker_run.worker_run_id,
+                        wait_deadline_seconds=worker_run.wait_deadline_seconds,
+                    )
+                )
+        return results
+
+    def _pending_result(
+        self,
+        repository: CustomerAssistantRepository,
+        task: TaskItem,
+        worker_run_id: int,
+        *,
+        wait_deadline_seconds: float,
+    ) -> WorkerResult:
+        refs = worker_async_refs(worker_run_id)
+        repository.append_worker_event(
+            worker_run_id,
+            "worker_run_pending",
+            {"workerRunId": refs["workerRunId"], "status": "RUNNING", "waitDeadlineSeconds": wait_deadline_seconds},
+        )
+        return WorkerResult(
+            task_id=int(task.id or 0),
+            worker_type=task.worker_type,
+            status=TaskStatus.RUNNING,
+            worker_run_id=str(refs["workerRunId"]),
+            worker_async_refs=refs,
+            operator_recommendation=f"required worker evidence is pending for {task.task_key}",
+            customer_reply_draft="我正在继续处理，请稍等。",
+            events=[
+                {
+                    "type": "worker_run_pending",
+                    "source": "customer_assistant_worker",
+                    "payload": {"workerRunId": refs["workerRunId"], "status": "RUNNING"},
+                }
+            ],
+        )
+
+    def _wait_deadline_for(self, task: TaskItem) -> float:
+        if self._wait_deadline_seconds is not None:
+            return self._wait_deadline_seconds
+        if task.worker_type == "chatflow_sop":
+            return self._task_timeout_seconds
+        return DEFAULT_WAIT_DEADLINE_SECONDS
 
     def _execute_worker_run(self, worker_run_id: int, task: TaskItem, message: str) -> WorkerResult:
         with self._session_factory() as session:

@@ -61,6 +61,9 @@ Out of scope:
 - Waiting Chatflow/worker prompts are authoritative for customer drafts. The
   finalizer may explain them to the operator but must not change the concrete
   fields/questions requested by the worker.
+- Two-Stage modes may persist debug-only structured plan/action/observation/final
+  summaries mapped to the legacy three-stage contract, but must not persist raw
+  chain-of-thought/internal reasoning.
 - Raw chain-of-thought/internal reasoning must not be persisted or displayed;
   only structured stage summaries and decisions may be emitted.
 - Opt-in primary rollout must be controlled by explicit config and must remain
@@ -78,6 +81,9 @@ Out of scope:
   recommendations, drafts, and proposed actions.
 - Two-Stage final output is schema-compatible with current
   `generate_recommendation`.
+- Two-Stage main-runtime events expose sanitized plan/action/observation/final
+  progression while preserving `task_recognition -> task_execute_parallel ->
+  generate_recommendation` semantics.
 - Waiting-node final output preserves Chatflow/worker prompt text in the
   customer draft.
 - Existing customer/operator UAT behavior remains consistent.

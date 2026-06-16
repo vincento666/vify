@@ -5,7 +5,6 @@ from app.modules.customer_assistant.domain.models import TaskItem, TaskStatus
 from app.modules.customer_assistant.domain.react_worker import (
     FakeReactWorkerModel,
     ReactModelAction,
-    ReactToolCall,
     RestrictedReactWorker,
 )
 from app.modules.customer_assistant.domain.tool_policy import ReactToolPolicy
@@ -35,7 +34,7 @@ class CustomerAssistantReactWorkerTest(unittest.TestCase):
             config=_config(),
             model=FakeReactWorkerModel(
                 [
-                    ReactModelAction.tool_call("lookup_order", {"orderNo": "TK-100"}),
+                    ReactModelAction.request_tool("lookup_order", {"orderNo": "TK-100"}),
                     ReactModelAction.final(
                         operator_recommendation="Order TK-100 is refundable.",
                         customer_reply_draft="订单 TK-100 可按规则退票。",
@@ -71,7 +70,7 @@ class CustomerAssistantReactWorkerTest(unittest.TestCase):
 
         worker = RestrictedReactWorker(
             config=_config(),
-            model=FakeReactWorkerModel([ReactModelAction.tool_call("delete_order", {"orderNo": "TK-100"})]),
+            model=FakeReactWorkerModel([ReactModelAction.request_tool("delete_order", {"orderNo": "TK-100"})]),
             tools={"delete_order": forbidden},
         )
 
@@ -85,7 +84,7 @@ class CustomerAssistantReactWorkerTest(unittest.TestCase):
         worker = RestrictedReactWorker(
             config=_config(allowed_tools=("lookup_order", "submit_refund")),
             model=FakeReactWorkerModel(
-                [ReactModelAction.tool_call("submit_refund", {"orderNo": "TK-100"}, risk="write")]
+                [ReactModelAction.request_tool("submit_refund", {"orderNo": "TK-100"}, risk="write")]
             ),
             tools={"submit_refund": lambda _args: {"shouldNotExecute": True}},
         )
@@ -101,12 +100,12 @@ class CustomerAssistantReactWorkerTest(unittest.TestCase):
     def test_max_iterations_and_timeout_are_enforced(self) -> None:
         looping = RestrictedReactWorker(
             config=_config(max_iterations=1),
-            model=FakeReactWorkerModel([ReactModelAction.tool_call("lookup_order", {"orderNo": "TK-100"})]),
+            model=FakeReactWorkerModel([ReactModelAction.request_tool("lookup_order", {"orderNo": "TK-100"})]),
             tools={"lookup_order": lambda _args: {"status": "refundable"}},
         )
         slow = RestrictedReactWorker(
             config=_config(timeout_ms=1),
-            model=FakeReactWorkerModel([ReactModelAction.tool_call("lookup_order", {"orderNo": "TK-100"})]),
+            model=FakeReactWorkerModel([ReactModelAction.request_tool("lookup_order", {"orderNo": "TK-100"})]),
             tools={"lookup_order": lambda _args: _slow_result()},
         )
 

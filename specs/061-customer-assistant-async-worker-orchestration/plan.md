@@ -39,6 +39,11 @@ define the join rule:
 
 Dispatch must be idempotent for the same task state/version and worker request.
 
+Audit closure note: the runtime start phase is separated from the join phase for
+customer-assistant async workers. The service first creates/submits all eligible
+worker runs, then joins them against their configured wait deadlines, so parallel
+dispatch is observable and not a hidden serial loop.
+
 ## Waiting Recommendation
 
 If a worker returns `WAITING`, the assistant turn still returns a completed
@@ -60,6 +65,10 @@ customer-facing prompt.
 
 Existing `handle_turn` may still return a recommendation in simple cases. The
 new behavior must be additive for workers that exceed the wait deadline.
+
+Unset wait deadlines default to a short async-friendly window for the low-risk
+worker path, while `chatflow_sop` preserves the legacy sync-friendly default
+unless a caller explicitly configures a shorter deadline.
 
 ## Non-goals
 

@@ -6,8 +6,6 @@ from typing import Any, Iterable, Mapping
 
 from app.modules.customer_assistant.eval.schemas import (
     CustomerAssistantEvalCase,
-    RecommendationEval,
-    SafetyEval,
     TaskRecognitionEval,
     TimingEval,
 )

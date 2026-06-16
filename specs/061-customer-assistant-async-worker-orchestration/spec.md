@@ -104,3 +104,14 @@ silently rewrite a concrete node prompt into a different customer request.
 061 is complete when customer-assistant task orchestration can genuinely observe
 one async worker lifecycle without waiting for every worker to finish before the
 turn can return.
+
+## Audit Closure 2026-06-16
+
+Async fan-out must batch-start all eligible customer-assistant worker runs before
+joining on the wait deadline. A turn that creates multiple async-capable tasks
+must not hide a serial `start -> wait -> start -> wait` loop behind worker refs.
+
+When no wait deadline is configured, low-risk async workers use a short default
+deadline and return `RUNNING` plus real worker refs if they are still executing.
+`chatflow_sop` keeps its existing sync-friendly default wait unless an explicit
+short deadline is configured, preserving the current SOP compatibility contract.

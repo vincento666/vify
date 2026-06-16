@@ -59,15 +59,8 @@ class ChatflowSopWorker:
             evidence=evidence,
             proposed_actions=proposed_actions,
             checkpoint=result.checkpoint.to_dict(),
-            events=[
-                {
-                    "type": "worker_result_received",
-                    "source": "chatflow_sop",
-                    "payload": event,
-                }
-                for event in result.events
-            ],
-            error=result.error,
+            events=_chatflow_worker_events(result.events),
+            error=_chatflow_error(result.error),
         )
 
 
@@ -141,6 +134,56 @@ def _chatflow_meta(checkpoint: dict[str, Any]) -> dict[str, Any]:
         return {}
     meta = scoped_variables.get("__chatflow")
     return dict(meta) if isinstance(meta, dict) else {}
+
+
+def _chatflow_error(error: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not error:
+        return None
+    normalized = dict(error)
+    if normalized.get("code") == "CHATFLOW_V2_START_FAILED":
+        normalized.setdefault("runtimeCode", normalized["code"])
+        normalized["code"] = "CHATFLOW_START_FAILED"
+    return normalized
+
+
+def _chatflow_worker_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    live_events: list[dict[str, Any]] = []
+    compatibility_events: list[dict[str, Any]] = []
+    for event in events:
+        projected = dict(event)
+        source = str(projected.get("source") or "chatflow_sop")
+        if source == "chatflow_runtime_v2":
+            live_events.append(
+                {
+                    "type": str(projected.get("type") or "chatflow_runtime_event"),
+                    "source": source,
+                    "payload": _chatflow_live_event_payload(projected),
+                }
+            )
+        compatibility_events.append(
+            {
+                "type": "worker_result_received",
+                "source": "chatflow_sop",
+                "payload": projected,
+            }
+        )
+    return [*live_events, *compatibility_events]
+
+
+def _chatflow_live_event_payload(event: dict[str, Any]) -> dict[str, Any]:
+    payload = {
+        "type": str(event.get("type") or ""),
+        "sourceKind": "chatflow",
+        "eventMode": "live",
+        "runtimeRunId": event.get("runtimeRunId"),
+        "sourceEventId": event.get("sourceEventId"),
+        "sourceSequence": event.get("sourceSequence"),
+        "nodeKey": str(event.get("nodeKey") or ""),
+        "callerContext": dict(event.get("callerContext") or {}),
+    }
+    if event.get("checkpointId") is not None:
+        payload["checkpointId"] = event.get("checkpointId")
+    return payload
 
 
 def _task_status(status: SopExecutionStatus) -> TaskStatus:

@@ -1,5 +1,6 @@
 import unittest
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -190,6 +191,73 @@ class CustomerAssistantWorkersTest(unittest.TestCase):
             self.assertEqual(refreshed["tasks"][0]["status"], "COMPLETED")
             self.assertIn("手提行李", refreshed["tasks"][0]["lastResult"]["customerReplyDraft"])
 
+    def test_async_worker_default_deadline_returns_pending_refs_for_slow_worker(self) -> None:
+        with _session() as session:
+            factory = sessionmaker(bind=session.get_bind(), autoflush=False, autocommit=False, expire_on_commit=False)
+            workers = {"stub_qa": _SlowWorker(sleep_seconds=0.45)}
+            service = CustomerAssistantService(
+                CustomerAssistantRepository(session),
+                scheduler=LocalWorkerScheduler(workers),
+                async_worker_runtime=CustomerAssistantWorkerRuntime(
+                    workers=workers,
+                    session_factory=factory,
+                    task_timeout_seconds=1.0,
+                ),
+            )
+            assistant_session = service.create_session()
+
+            started_at = time.monotonic()
+            result = service.handle_turn(int(assistant_session["id"]), "行李额度是多少", "default-pending-1")
+            elapsed = time.monotonic() - started_at
+            summary = result["taskSummaries"][0]
+            refs = summary["workerAsyncRefs"]
+            worker_run = service.get_worker_run(refs["workerRunId"])
+
+            self.assertLess(elapsed, 0.3)
+            self.assertEqual(summary["status"], "RUNNING")
+            self.assertTrue(refs["supported"])
+            self.assertTrue(refs["workerRunId"].startswith("customer-assistant-worker-run-"))
+            self.assertEqual(worker_run["status"], "RUNNING")
+            self.assertIn("required worker evidence is pending", " ".join(result["warnings"]))
+
+            time.sleep(0.5)
+
+    def test_async_workers_are_batch_started_before_join_deadline(self) -> None:
+        with _session() as session:
+            factory = sessionmaker(bind=session.get_bind(), autoflush=False, autocommit=False, expire_on_commit=False)
+            probe = _BatchStartProbe(expected=2)
+            workers = {
+                "chatflow_sop": _BatchStartWorker(probe),
+                "stub_qa": _BatchStartWorker(probe),
+            }
+            service = CustomerAssistantService(
+                CustomerAssistantRepository(session),
+                scheduler=LocalWorkerScheduler(workers),
+                async_worker_runtime=CustomerAssistantWorkerRuntime(
+                    workers=workers,
+                    session_factory=factory,
+                    async_worker_types={"chatflow_sop", "stub_qa"},
+                    wait_deadline_seconds=0.08,
+                    task_timeout_seconds=1.0,
+                    max_concurrency=2,
+                ),
+            )
+            assistant_session = service.create_session()
+
+            result = service.handle_turn(int(assistant_session["id"]), "我要退票，也想问行李额", "fanout-batch-start-1")
+            starts = probe.started_at_by_task()
+            start_gap = abs(starts["refund_ticket"] - starts["baggage_qa"])
+            summaries = {summary["taskKey"]: summary for summary in result["taskSummaries"]}
+
+            self.assertEqual(set(starts), {"refund_ticket", "baggage_qa"})
+            self.assertLess(start_gap, 0.05)
+            self.assertEqual(summaries["refund_ticket"]["status"], "RUNNING")
+            self.assertEqual(summaries["baggage_qa"]["status"], "RUNNING")
+            self.assertTrue(summaries["refund_ticket"]["workerAsyncRefs"]["supported"])
+            self.assertTrue(summaries["baggage_qa"]["workerAsyncRefs"]["supported"])
+
+            time.sleep(0.2)
+
     def test_async_worker_waiting_prompt_becomes_customer_draft(self) -> None:
         with _session() as session:
             factory = sessionmaker(bind=session.get_bind(), autoflush=False, autocommit=False, expire_on_commit=False)
@@ -256,6 +324,41 @@ class _SlowWorker:
             worker_type=task.worker_type,
             status=TaskStatus.COMPLETED,
             customer_reply_draft="经济舱通常可免费携带一件手提行李，托运行李额以客票规则和航司政策为准。",
+        )
+
+
+class _BatchStartProbe:
+    def __init__(self, expected: int) -> None:
+        self._expected = expected
+        self._lock = threading.Lock()
+        self._started_at_by_task: dict[str, float] = {}
+        self.all_started = threading.Event()
+
+    def record_started(self, task_key: str) -> None:
+        with self._lock:
+            self._started_at_by_task.setdefault(task_key, time.monotonic())
+            if len(self._started_at_by_task) >= self._expected:
+                self.all_started.set()
+
+    def started_at_by_task(self) -> dict[str, float]:
+        with self._lock:
+            return dict(self._started_at_by_task)
+
+
+class _BatchStartWorker:
+    def __init__(self, probe: _BatchStartProbe) -> None:
+        self._probe = probe
+
+    def run(self, task: TaskItem, message: str) -> WorkerResult:
+        self._probe.record_started(task.task_key)
+        self._probe.all_started.wait(timeout=1.0)
+        time.sleep(0.12)
+        return WorkerResult(
+            task_id=int(task.id or 0),
+            worker_type=task.worker_type,
+            status=TaskStatus.COMPLETED,
+            operator_recommendation=f"completed {task.task_key}: {message}",
+            customer_reply_draft=f"completed {task.task_key}",
         )
 
 

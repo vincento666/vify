@@ -29,6 +29,22 @@ If Stage 2 has no action, final recommendation is returned.
 Stage 2 is limited to allowlisted commands/workers. Raw internal reasoning is
 not persisted or displayed.
 
+## Progression Telemetry
+
+Two-Stage modes record debug-only structured progression events:
+
+```text
+plan        -> legacy task_recognition
+action      -> legacy task_execute_parallel
+observation -> legacy task_execute_parallel
+final       -> legacy generate_recommendation
+```
+
+The payloads contain compact command, worker-dispatch, worker-result, and task
+status summaries only. They must not contain raw chain-of-thought or hidden
+reasoning fields, and they do not replace existing `task_recognized`,
+worker/recommendation, or API response fields.
+
 ## Finalize Contract
 
 The Two-Stage final step is the compatible replacement for the existing

@@ -35,7 +35,7 @@ class CustomerAssistantReactWorkerIntegrationTest(unittest.TestCase):
                             config=_config(),
                             model=FakeReactWorkerModel(
                                 [
-                                    ReactModelAction.tool_call("lookup_order", {"orderNo": "TK-100"}),
+                                    ReactModelAction.request_tool("lookup_order", {"orderNo": "TK-100"}),
                                     ReactModelAction.final(
                                         operator_recommendation="Order TK-100 is refundable.",
                                         customer_reply_draft="订单 TK-100 可退票。",
@@ -71,7 +71,7 @@ class CustomerAssistantReactWorkerIntegrationTest(unittest.TestCase):
                             config=_config(allowed_tools=("submit_refund",)),
                             model=FakeReactWorkerModel(
                                 [
-                                    ReactModelAction.tool_call(
+                                    ReactModelAction.request_tool(
                                         "submit_refund",
                                         {"orderNo": "TK-100"},
                                         risk="write",

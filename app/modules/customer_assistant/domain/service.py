@@ -837,22 +837,21 @@ class CustomerAssistantService:
     ) -> list[WorkerResult]:
         if self._async_worker_runtime is None:
             return self._scheduler.run(ready_tasks, message)
-        async_results: list[WorkerResult] = []
+        async_tasks: list[TaskItem] = []
         legacy_tasks: list[TaskItem] = []
         for task in ready_tasks:
             if self._async_worker_runtime.supports(task):
-                async_results.append(
-                    self._async_worker_runtime.start_and_wait(
-                        self._repository,
-                        session_id=session_id,
-                        parent_run_id=run_id,
-                        task=task,
-                        message=message,
-                        actor=actor,
-                    )
-                )
+                async_tasks.append(task)
             else:
                 legacy_tasks.append(task)
+        async_results = self._async_worker_runtime.start_many_and_wait(
+            self._repository,
+            session_id=session_id,
+            parent_run_id=run_id,
+            tasks=async_tasks,
+            message=message,
+            actor=actor,
+        )
         return sorted([*async_results, *self._scheduler.run(legacy_tasks, message)], key=lambda result: result.task_id)
 
     def _finalize(
@@ -904,6 +903,7 @@ class CustomerAssistantService:
             task_summaries,
             proposed_actions,
             result,
+            observation,
         )
         recommendation_completed_at = datetime.now()
         recommendation_timing = {
@@ -1164,6 +1164,7 @@ class CustomerAssistantService:
         task_summaries: list[dict[str, Any]],
         proposed_actions: list[dict[str, Any]],
         baseline_result: AssistantTurnResult,
+        observation: CoreObservation,
     ) -> AssistantTurnResult:
         mode = self._llm_runtime_settings.mode
         if mode not in {
@@ -1171,7 +1172,9 @@ class CustomerAssistantService:
             CustomerAssistantLlmRuntimeMode.TWO_STAGE_PRIMARY_WITH_FALLBACK,
         }:
             return baseline_result
-        input_pack = _two_stage_input_pack(task_summaries, proposed_actions, baseline_result)
+        progression = _two_stage_react_progression(observation, task_summaries)
+        self._record_two_stage_react_progression(session_id, run_id, actor, progression)
+        input_pack = _two_stage_input_pack(task_summaries, proposed_actions, baseline_result, progression)
         candidate = self._two_stage_runtime.finalize(input_pack, baseline_result)
         validation_error = _two_stage_validation_error(candidate, input_pack)
         diff = _recommendation_diff(
@@ -1188,6 +1191,8 @@ class CustomerAssistantService:
                 "two_stage_shadow_completed",
                 {
                     "schemaVersion": "customer_assistant.two_stage_shadow/1",
+                    "reactStep": "final",
+                    "legacyStage": "generate_recommendation",
                     "equivalence": {"passed": validation_error == "" and promotion_gate["passed"], "differences": diff},
                     "promotionGate": promotion_gate,
                     "sideEffects": {"extraWorkerDispatches": 0, "extraToolCalls": 0},
@@ -1205,6 +1210,8 @@ class CustomerAssistantService:
                 "two_stage_fallback",
                 {
                     "schemaVersion": "customer_assistant.two_stage_fallback/1",
+                    "reactStep": "final",
+                    "legacyStage": "generate_recommendation",
                     "reason": fallback_reason,
                     "equivalence": {"passed": False, "differences": diff},
                     "promotionGate": promotion_gate,
@@ -1220,6 +1227,8 @@ class CustomerAssistantService:
             "two_stage_primary_selected",
             {
                 "schemaVersion": "customer_assistant.two_stage_primary/1",
+                "reactStep": "final",
+                "legacyStage": "generate_recommendation",
                 "equivalence": {"passed": True, "differences": diff},
                 "promotionGate": promotion_gate,
             },
@@ -1234,6 +1243,25 @@ class CustomerAssistantService:
             customer_reply_draft=str(candidate["customerReplyDraft"]),
             warnings=[*baseline_result.warnings, *list(candidate.get("warnings") or [])],
         )
+
+    def _record_two_stage_react_progression(
+        self,
+        session_id: int,
+        run_id: int,
+        actor: CustomerAssistantActor,
+        progression: list[dict[str, Any]],
+    ) -> None:
+        for step in progression:
+            self._repository.append_event(
+                session_id,
+                f"two_stage_{step['reactStep']}_recorded",
+                step,
+                run_id=run_id,
+                visibility="debug",
+                source="two_stage_react",
+                actor=actor,
+                span_id=f"run-{run_id}:two-stage:{step['reactStep']}",
+            )
 
     def _record_task_recognition_shadow(
         self,
@@ -1820,6 +1848,7 @@ def _two_stage_input_pack(
     task_summaries: list[dict[str, Any]],
     proposed_actions: list[dict[str, Any]],
     baseline_result: AssistantTurnResult,
+    react_progression: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     waiting_prompts = [
         prompt
@@ -1836,6 +1865,7 @@ def _two_stage_input_pack(
             "customerReplyDraft": baseline_result.customer_reply_draft,
             "warnings": list(baseline_result.warnings),
         },
+        "reactProgression": [dict(step) for step in react_progression or []],
         "waitingPrompts": waiting_prompts,
         "safety": {
             "directWritesAllowed": False,
@@ -1843,6 +1873,48 @@ def _two_stage_input_pack(
             "rawChainOfThoughtAllowed": False,
         },
     }
+
+
+def _two_stage_react_progression(
+    observation: CoreObservation,
+    task_summaries: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    commands = [_compact_command(_command_payload(command)) for command in observation.commands]
+    worker_results = list(observation.action_result.get("workerResults") or [])
+    task_statuses = [
+        {"taskKey": str(task.get("taskKey") or ""), "status": str(task.get("status") or "")}
+        for task in task_summaries
+    ]
+    return [
+        {
+            "schemaVersion": "customer_assistant.two_stage_react_progression/1",
+            "reactStep": "plan",
+            "legacyStage": "task_recognition",
+            "summary": {
+                "commandCount": len(commands),
+                "commands": commands,
+            },
+        },
+        {
+            "schemaVersion": "customer_assistant.two_stage_react_progression/1",
+            "reactStep": "action",
+            "legacyStage": "task_execute_parallel",
+            "summary": {
+                "commandCount": len(commands),
+                "commands": commands,
+                "workerDispatchCount": len(worker_results),
+            },
+        },
+        {
+            "schemaVersion": "customer_assistant.two_stage_react_progression/1",
+            "reactStep": "observation",
+            "legacyStage": "task_execute_parallel",
+            "summary": {
+                "workerResultCount": len(worker_results),
+                "taskStatuses": task_statuses,
+            },
+        },
+    ]
 
 
 def _two_stage_validation_error(candidate: Any, input_pack: dict[str, Any]) -> str:

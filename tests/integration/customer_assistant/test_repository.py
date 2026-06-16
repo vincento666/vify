@@ -1,6 +1,8 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -75,6 +77,51 @@ class CustomerAssistantRepositoryTest(unittest.TestCase):
                 repository.get_run_by_idempotency(int(assistant_session["id"]), "turn-1")["response_payload"],
                 {"runId": run["id"]},
             )
+
+    def test_append_event_recovers_from_stale_sequence_after_concurrent_writer(self) -> None:
+        with _session() as session:
+            repository = CustomerAssistantRepository(session)
+            assistant_session = repository.create_session(context={"customerId": "C-100"})
+            repository.append_event(
+                session_id=int(assistant_session["id"]),
+                event_type="run_started",
+                payload={"message": "first"},
+            )
+
+            with patch.object(repository, "_next_event_sequence", side_effect=[1, 2]):
+                second_event = repository.append_event(
+                    session_id=int(assistant_session["id"]),
+                    event_type="task_added",
+                    payload={"message": "second"},
+                )
+
+            self.assertEqual(second_event["sequence"], 2)
+            self.assertEqual([event["sequence"] for event in repository.list_events(int(assistant_session["id"]))], [1, 2])
+
+    def test_append_worker_event_recovers_from_stale_sequence_after_concurrent_writer(self) -> None:
+        with _session() as session:
+            repository = CustomerAssistantRepository(session)
+            assistant_session = repository.create_session(context={"customerId": "C-100"})
+            worker_run, _ = repository.create_worker_run(
+                session_id=int(assistant_session["id"]),
+                parent_run_id=1,
+                task_id=1,
+                worker_type="stub_qa",
+                worker_ref="stub_qa",
+                idempotency_key="worker-run-1",
+                request_hash="hash-1",
+                input_payload={"message": "first"},
+            )
+
+            with patch.object(repository, "_next_worker_event_sequence", side_effect=[1, 2]):
+                second_event = repository.append_worker_event(
+                    int(worker_run["id"]),
+                    "worker_run_started",
+                    {"workerRunId": worker_run["id"]},
+                )
+
+            self.assertEqual(second_event["sequence"], 2)
+            self.assertEqual([event["sequence"] for event in repository.list_worker_events(int(worker_run["id"]))], [1, 2])
 
 
 def _session() -> Session:
