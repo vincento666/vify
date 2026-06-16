@@ -24,7 +24,8 @@ In scope:
 
 - ChatflowSopWorker can start a Chatflow v2 run for compatible graphs;
 - worker state stores Chatflow runtime refs;
-- Chatflow v2 events can be summarized into customer-assistant events;
+- Chatflow v2 events can be passed through as first-class live worker events
+  and summarized into customer-assistant compatibility events;
 - v1 fallback for unsupported graphs or missing v2 capability;
 - resume of waiting Chatflow v2 checkpoint where supported.
 - compatibility with the existing SOP multi-level router calling Chatflow SOP
@@ -80,8 +81,14 @@ result state across those routed tasks.
 - Worker timeout/cancel requests must propagate to Chatflow v2 cancellation or
   explicit cancellation-unsupported events.
 - V1 fallback must not emit fake Chatflow v2 refs or live v2 progress events.
+- Unexpected Chatflow v2 start failures exposed through the legacy SOP adapter
+  port must remain `CHATFLOW_START_FAILED` compatible while preserving the
+  richer v2 detail code as diagnostic metadata.
 - Chatflow event summaries exposed to the customer-assistant timeline must be
   redacted and source-labelled.
+- Chatflow runtime v2 node events exposed through the worker adapter must remain
+  first-class live events before any compatibility summary, with `runtimeRunId`,
+  `sourceEventId`, `sourceSequence`, and SOP router caller context preserved.
 - When Chatflow blocks on `QUESTION`, `HUMAN_INPUT`, or incomplete
   `INFORMATION_COLLECTION`, the Chatflow node's prompt/follow-up is the
   authoritative customer draft source for that turn.
@@ -128,7 +135,13 @@ or a generic prompt, but that fallback must be explicit in events/diagnostics.
   levels.
 - Customer-assistant task ledger and operator timeline show Chatflow v2 progress
   summaries.
+- Chatflow v2 internal node events stream and persist through the worker adapter
+  before the final compatibility summary, while raw runtime v2 events remain
+  fetchable from runtime event APIs.
 - Existing v1 SOP tests remain green.
+- Existing Chatflow/SOP callers that branch on `CHATFLOW_START_FAILED` can still
+  handle v2 start failures, while diagnostics still identify
+  `CHATFLOW_V2_START_FAILED`.
 
 ## MVP Exit
 

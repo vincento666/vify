@@ -25,6 +25,8 @@
 
 - [x] Store Chatflow runtime refs in worker/task state.
 - [x] Project Chatflow progress summaries into customer-assistant timeline.
+- [x] Project Chatflow runtime v2 node events as first-class live worker events
+      before compatibility summaries.
 - [x] Project blocking node prompt/followup/pendingPrompt into waiting
       recommendation evidence.
 - [x] Propagate actor/source/session/task metadata into refs/events where
@@ -33,6 +35,7 @@
       `intent_key`, `task_id`, and `session_id`.
 - [x] Redact Chatflow event summaries before exposing them in assistant timeline.
 - [x] Preserve raw Chatflow refs for debug.
+- [x] Prove raw runtime v2 node events remain fetchable from runtime event APIs.
 
 ## 066.3 Resume
 
@@ -54,6 +57,10 @@
       separate task context and checkpoints.
 - [x] Prove one routed task can use Chatflow v2 while another routed task falls
       back to v1 in the same session.
+- [x] Prove v2 start failures preserve the legacy `CHATFLOW_START_FAILED`
+      adapter contract while exposing `runtimeCode=CHATFLOW_V2_START_FAILED`.
+- [x] Prove the RuntimeLab SOP router old adapter path handles v2 start failure
+      without creating an active task and records the compatible ERROR payload.
 
 ## 066.5 Browser UAT
 
@@ -79,6 +86,18 @@
 - Browser UAT:
   `artifacts/slices/066-customer-assistant-async-chatflow-sop-worker-adapter/uat.md`
   and `artifacts/slices/066-customer-assistant-async-chatflow-sop-worker-adapter/screenshots/browser-uat-chatflow-sop-v2.png`
+- Live node event RED:
+  `artifacts/slices/066-customer-assistant-async-chatflow-sop-worker-adapter/live-node-events/red.txt`
+- Live node event backend gate:
+  `artifacts/slices/066-customer-assistant-async-chatflow-sop-worker-adapter/live-node-events/integration.txt`
+- Runtime v2 API gate:
+  `artifacts/slices/066-customer-assistant-async-chatflow-sop-worker-adapter/live-node-events/runtime-v2.txt`
+- Slice A RED:
+  `artifacts/slices/066-customer-assistant-async-chatflow-sop-worker-adapter/slice-a-contract-compat/red.txt`
+- Slice A focused green:
+  `artifacts/slices/066-customer-assistant-async-chatflow-sop-worker-adapter/slice-a-contract-compat/focused.txt`
+- Slice A backend focused gate:
+  `artifacts/slices/066-customer-assistant-async-chatflow-sop-worker-adapter/slice-a-contract-compat/backend-focused.txt`
 
 Note: customer-assistant deterministic routing currently exposes one Chatflow SOP
 (`refund_ticket`) plus non-SOP baggage QA. The same-session coexistence proof

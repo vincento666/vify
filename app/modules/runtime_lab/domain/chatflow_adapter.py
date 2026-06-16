@@ -78,9 +78,9 @@ class ChatflowSopRuntimeAdapter:
             if "Unsupported runtime v2 graph" in message:
                 fallback = {"type": "chatflow_v2_fallback", "chatflowId": chatflow_id, "reason": message}
                 return self._start_sop_v1(request, chatflow_id, fallback_events=[fallback])
-            return _failure(request, "CHATFLOW_V2_START_FAILED", message)
+            return _failure(request, "CHATFLOW_START_FAILED", message, runtime_code="CHATFLOW_V2_START_FAILED")
         except Exception as exc:
-            return _failure(request, "CHATFLOW_V2_START_FAILED", str(exc))
+            return _failure(request, "CHATFLOW_START_FAILED", str(exc), runtime_code="CHATFLOW_V2_START_FAILED")
 
     def continue_sop(self, request: SopExecutionRequest) -> SopExecutionResult:
         return self._resume_or_run(request, fallback_operation="continue")
@@ -670,7 +670,13 @@ def _reply(status: SopExecutionStatus, pending_prompt: str, output: Mapping[str,
     return str(final or "Chatflow SOP 已完成。")
 
 
-def _failure(request: SopExecutionRequest, code: str, message: str) -> SopExecutionResult:
+def _failure(
+    request: SopExecutionRequest,
+    code: str,
+    message: str,
+    *,
+    runtime_code: str = "",
+) -> SopExecutionResult:
     checkpoint = _checkpoint(
         request,
         chatflow_id=0,
@@ -683,6 +689,9 @@ def _failure(request: SopExecutionRequest, code: str, message: str) -> SopExecut
         collected={},
         resume_mode="failure",
     )
+    error = {"code": code, "message": message}
+    if runtime_code:
+        error["runtimeCode"] = runtime_code
     return SopExecutionResult(
         status=SopExecutionStatus.FAILED,
         current_step="",
@@ -692,7 +701,7 @@ def _failure(request: SopExecutionRequest, code: str, message: str) -> SopExecut
         collected={},
         business_refs={},
         events=[],
-        error={"code": code, "message": message},
+        error=error,
     )
 
 
@@ -712,10 +721,14 @@ def _with_prefixed_events(result: SopExecutionResult, events: list[dict[str, Any
 
 def _project_events(run: Mapping[str, Any]) -> list[dict[str, Any]]:
     events: list[dict[str, Any]] = []
+    caller_context: dict[str, Any] = {}
     for event in _as_list(run.get("events")):
         if not isinstance(event, Mapping):
             continue
         payload = _as_mapping(event.get("payload"))
+        event_context = dict(payload.get("callerContext") or {})
+        if event_context:
+            caller_context = event_context
         projected = {
             "type": str(event.get("type") or ""),
             "source": "chatflow_runtime_v2",
@@ -723,7 +736,7 @@ def _project_events(run: Mapping[str, Any]) -> list[dict[str, Any]]:
             "sourceEventId": _int(event.get("id")),
             "sourceSequence": _int(event.get("sequence")),
             "nodeKey": str(event.get("nodeId") or event.get("nodeKey") or ""),
-            "callerContext": dict(payload.get("callerContext") or {}),
+            "callerContext": dict(caller_context),
         }
         checkpoint_id = event.get("checkpointId")
         if checkpoint_id is not None:

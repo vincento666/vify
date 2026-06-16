@@ -49,6 +49,48 @@ class ChatflowSopWorkerV2AdapterTest(unittest.TestCase):
         self.assertEqual(started["payload"]["callerContext"]["route_id"], "route-a")
         self.assertEqual(started["payload"]["callerContext"]["task_id"], "501")
 
+    def test_chatflow_v2_node_events_are_first_class_worker_events_before_compatibility_summary(self) -> None:
+        with TestClient(app) as client:
+            chatflow = _create_message_chatflow(client, content="v2 sop node events")
+            with _session() as session:
+                worker = ChatflowSopWorker(_adapter(session, {"refund_ticket": chatflow["id"]}))
+                result = worker.run(
+                    _task(
+                        task_id=511,
+                        session_id=88,
+                        task_key="refund_ticket",
+                        worker_ref="refund_ticket",
+                        input_snapshot={
+                            "route_id": "route-live",
+                            "route_turn_id": "turn-live",
+                            "intent_key": "refund",
+                        },
+                    ),
+                    "我要退票",
+                )
+
+            event_types = [event["type"] for event in result.events]
+            first_summary_index = event_types.index("worker_result_received")
+            node_started_index = event_types.index("workflow_node_started")
+            status_changed_index = event_types.index("node_status_changed")
+
+            self.assertLess(node_started_index, first_summary_index)
+            self.assertLess(status_changed_index, first_summary_index)
+            node_event = result.events[node_started_index]
+            self.assertEqual(node_event["source"], "chatflow_runtime_v2")
+            self.assertEqual(node_event["payload"]["eventMode"], "live")
+            self.assertEqual(node_event["payload"]["sourceKind"], "chatflow")
+            self.assertEqual(node_event["payload"]["callerContext"]["route_id"], "route-live")
+            self.assertGreater(node_event["payload"]["sourceEventId"], 0)
+            self.assertGreater(node_event["payload"]["sourceSequence"], 0)
+            self.assertEqual(node_event["payload"]["runtimeRunId"], result.evidence["chatflowRuntimeRefs"]["runId"])
+
+            events_response = client.get(f"/api/v1/runtime-runs/{node_event['payload']['runtimeRunId']}/events")
+            self.assertEqual(events_response.status_code, 200, events_response.text)
+            api_event_types = [event["type"] for event in events_response.json()["data"]["list"]]
+            self.assertIn("workflow_node_started", api_event_types)
+            self.assertIn("node_status_changed", api_event_types)
+
     def test_unsupported_chatflow_sop_falls_back_to_v1_without_fake_v2_refs(self) -> None:
         with TestClient(app) as client:
             chatflow = _create_message_chatflow(client, content="fallback", node_type="LLM")

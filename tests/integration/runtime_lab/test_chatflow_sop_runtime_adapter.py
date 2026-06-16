@@ -70,6 +70,22 @@ class ChatflowSopRuntimeAdapterIntegrationTest(unittest.TestCase):
         self.assertEqual(result.error["code"], "CHATFLOW_START_FAILED")
         self.assertIn("primary model rate limited", result.error["message"])
 
+    def test_v2_start_failure_keeps_legacy_start_failed_contract_with_runtime_code(self) -> None:
+        adapter = ChatflowSopRuntimeAdapter(
+            _FailingWorkflowService(),
+            sop_chatflow_ids={"refund_ticket": 1},
+            runtime_v2_service=_FailingRuntimeV2Service(),
+        )
+
+        result = adapter.start_sop(_request(message="我要退票"))
+
+        self.assertEqual(result.status, SopExecutionStatus.FAILED)
+        self.assertIsNotNone(result.error)
+        assert result.error is not None
+        self.assertEqual(result.error["code"], "CHATFLOW_START_FAILED")
+        self.assertEqual(result.error["runtimeCode"], "CHATFLOW_V2_START_FAILED")
+        self.assertIn("runtime v2 queue unavailable", result.error["message"])
+
     def test_start_sop_passes_inherited_collected_values_to_chatflow(self) -> None:
         stamp = time.time_ns()
         with TestClient(app) as client:
@@ -216,6 +232,11 @@ def _adapter(chatflow_id: int) -> ChatflowSopRuntimeAdapter:
 class _FailingWorkflowService:
     def execute(self, *_args: object, **_kwargs: object) -> dict[str, object]:
         raise RuntimeError("primary model rate limited")
+
+
+class _FailingRuntimeV2Service:
+    def start_run(self, *_args: object, **_kwargs: object) -> dict[str, object]:
+        raise RuntimeError("runtime v2 queue unavailable")
 
 
 class _InterruptedConfirmWorkflowService:

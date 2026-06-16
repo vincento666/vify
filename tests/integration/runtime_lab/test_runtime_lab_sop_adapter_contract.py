@@ -6,6 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.database import Base
+from app.modules.runtime_lab.domain.chatflow_adapter import ChatflowSopRuntimeAdapter
 from app.modules.runtime_lab.domain.service import RuntimeLabService
 from app.modules.runtime_lab.domain.sop_adapter import (
     FakeSopRuntimeAdapter,
@@ -53,6 +54,30 @@ class RuntimeLabSopAdapterContractIntegrationTest(unittest.TestCase):
             self.assertIsNone(turn.active_task)
             self.assertEqual(repository.list_tasks(session_id), [])
             self.assertEqual(repository.list_events(session_id)[-1]["event_type"], "ERROR")
+
+    def test_legacy_multi_level_router_path_handles_v2_start_failure_as_start_failed(self) -> None:
+        with _session() as session:
+            repository = RuntimeLabRepository(session)
+            adapter = ChatflowSopRuntimeAdapter(
+                _NeverCalledWorkflowService(),
+                sop_chatflow_ids={"refund_ticket": 1},
+                runtime_v2_service=_FailingRuntimeV2Service(),
+            )
+            service = RuntimeLabService(repository, adapter=adapter)
+            runtime_session = service.create_session()
+            session_id = int(runtime_session["id"])
+
+            turn = service.handle_message(session_id, "我要退票")
+            events = repository.list_events(session_id)
+
+            self.assertIn("SOP执行失败", turn.reply)
+            self.assertIsNone(turn.active_task)
+            self.assertEqual(repository.list_tasks(session_id), [])
+            self.assertEqual(events[-1]["event_type"], "ERROR")
+            error = events[-1]["payload"]["error"]
+            self.assertEqual(error["code"], "CHATFLOW_START_FAILED")
+            self.assertEqual(error["runtimeCode"], "CHATFLOW_V2_START_FAILED")
+            self.assertIn("runtime v2 queue unavailable", error["message"])
 
 
 class _RecordingSopRuntimeAdapter(FakeSopRuntimeAdapter):
@@ -104,6 +129,16 @@ class _FailingStartAdapter(FakeSopRuntimeAdapter):
             events=[{"type": "SOP_FAILED", "sopId": request.sop_id}],
             error={"code": "ADAPTER_FAILED", "message": "adapter down"},
         )
+
+
+class _FailingRuntimeV2Service:
+    def start_run(self, *_args: object, **_kwargs: object) -> dict[str, object]:
+        raise RuntimeError("runtime v2 queue unavailable")
+
+
+class _NeverCalledWorkflowService:
+    def execute(self, *_args: object, **_kwargs: object) -> dict[str, object]:
+        raise AssertionError("legacy v1 workflow service should not run on v2 start failure")
 
 
 def _session() -> Session:

@@ -14,6 +14,9 @@ check graph v2 compatibility
 Do not mix node-level v1/v2 execution.
 V2 SOP run start must be idempotent for the same assistant task, binding,
 checkpoint/request hash, and worker request.
+Unexpected v2 start failures crossing the legacy SOP adapter port are
+normalized to the legacy `CHATFLOW_START_FAILED` contract and keep the richer
+`CHATFLOW_V2_START_FAILED` diagnostic code as metadata.
 
 The SOP router remains the owner of multi-intent switching, suspend/resume, and
 fallback policy. Chatflow v2 is only the execution target selected by the
@@ -45,7 +48,8 @@ Compatibility scenarios:
 ## Event Projection
 
 Chatflow runtime events remain Chatflow runtime events. Customer Assistant should
-project summaries:
+pass live runtime v2 node events through as first-class worker events, then
+project compatibility summaries:
 
 - worker started;
 - Chatflow run started;
@@ -58,6 +62,11 @@ project summaries:
 Projected summaries must carry source labels and redact payloads. Raw Chatflow
 refs may remain available for debug, but v1 fallback must not fabricate v2 refs
 or v2 live events.
+
+First-class live Chatflow events must be ordered before the compatibility
+`worker_result_received` summaries and preserve runtime correlation refs:
+`runtimeRunId`, `sourceEventId`, `sourceSequence`, node key, and SOP router
+caller context.
 
 ## Blocking Node Recommendation
 
