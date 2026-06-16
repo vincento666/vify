@@ -5,8 +5,10 @@ from datetime import UTC, datetime
 from typing import Any
 
 import sqlalchemy as sa
+from sqlalchemy.dialects import mysql
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.schema import CreateTable
 
 from app.core.database import Base, _ensure_compatible_schema
 from app.core.schema import register_baseline_tables
@@ -15,6 +17,139 @@ from app.modules.runtime_lab.infra.schema import register_runtime_lab_tables
 
 
 MYSQL8_TEST_DATABASE_URL = os.getenv("HIFY_MYSQL8_TEST_DATABASE_URL")
+
+
+class Mysql8RuntimeV2DemoPersistenceContractTest(unittest.TestCase):
+    def test_mvp_demo_table_set_includes_worker_profile_overrides_and_compiles_for_mysql8(self) -> None:
+        register_baseline_tables()
+        register_runtime_lab_tables()
+        register_customer_assistant_tables()
+
+        self.assertIn("customer_assistant_worker_profile", set(_TABLE_NAMES))
+
+        dialect = mysql.dialect()
+        compiled_tables = {
+            table.name: str(CreateTable(table).compile(dialect=dialect))
+            for table in _tables(_TABLE_NAMES)
+        }
+
+        self.assertIn("JSON", compiled_tables["customer_assistant_worker_profile"])
+        self.assertIn("JSON", compiled_tables["customer_assistant_session"])
+        self.assertNotIn("VECTOR", "\n".join(compiled_tables.values()).upper())
+
+    def test_demo_anchor_profile_and_text_payloads_round_trip_locally(self) -> None:
+        register_baseline_tables()
+        register_runtime_lab_tables()
+        register_customer_assistant_tables()
+        engine = sa.create_engine("sqlite:///:memory:", future=True)
+        now = datetime.now(UTC).replace(tzinfo=None)
+
+        try:
+            Base.metadata.create_all(
+                bind=engine,
+                tables=_tables(
+                    [
+                        "customer_assistant_session",
+                        "customer_assistant_worker_profile",
+                        "runtime_lab_session",
+                        "runtime_lab_task",
+                        "runtime_lab_checkpoint",
+                    ]
+                ),
+            )
+            with engine.begin() as connection:
+                session_id = _insert(
+                    connection,
+                    "customer_assistant_session",
+                    status="ACTIVE",
+                    context_json={
+                        "demoSeed": "073",
+                        "demoSeedKey": "refund_baggage_parallel",
+                        "storyId": "refund_baggage_parallel",
+                        "storyTitle": "退票 + 行李额并行处理",
+                        "hostContext": {"tenantId": "demo-airline", "orgId": "ops-cn"},
+                    },
+                    version=1,
+                    created_at=now,
+                    updated_at=now,
+                )
+                profile_id = _insert(
+                    connection,
+                    "customer_assistant_worker_profile",
+                    tenant_id="demo-airline",
+                    org_id="ops-cn",
+                    profile_id="refund-ticket-runtime-v2",
+                    task_key="refund_ticket",
+                    task_type="refund_ticket",
+                    worker_type="chatflow",
+                    worker_ref="runtime-v2-chatflow",
+                    model_policy_ref="mvp-demo-qwen",
+                    prompt_ref="refund-policy-v2",
+                    tool_refs=["refund_policy", "submit_refund"],
+                    risk_policy_ref="manual_confirm",
+                    enabled=True,
+                    created_at=now,
+                    updated_at=now,
+                )
+                runtime_session_id = _insert(
+                    connection,
+                    "runtime_lab_session",
+                    status="ACTIVE",
+                    active_task_id=None,
+                    version=1,
+                    created_at=now,
+                    updated_at=now,
+                )
+                task_id = _insert(
+                    connection,
+                    "runtime_lab_task",
+                    session_id=runtime_session_id,
+                    sop_id="refund-ticket",
+                    status="SUSPENDED",
+                    current_step="collect_order_no",
+                    resume_summary="等待订单号后继续退票并同步行李额说明",
+                    business_refs={"customerAssistantSessionId": session_id, "storyId": "refund_baggage_parallel"},
+                    created_at=now,
+                    updated_at=now,
+                )
+                checkpoint_id = _insert(
+                    connection,
+                    "runtime_lab_checkpoint",
+                    session_id=runtime_session_id,
+                    task_id=task_id,
+                    sop_id="refund-ticket",
+                    current_step="collect_order_no",
+                    pending_prompt="请补充订单号，系统会继续处理退票。",
+                    collected={"ticket": {"orderNo": "TK-111"}},
+                    scoped_variables={"profileId": "refund-ticket-runtime-v2"},
+                    status="ACTIVE",
+                    created_at=now,
+                    updated_at=now,
+                )
+
+            with engine.connect() as connection:
+                self.assertEqual(
+                    "refund_baggage_parallel",
+                    _read_json(connection, "customer_assistant_session", session_id, "context_json")[
+                        "demoSeedKey"
+                    ],
+                )
+                self.assertEqual(
+                    ["refund_policy", "submit_refund"],
+                    _read_json(connection, "customer_assistant_worker_profile", profile_id, "tool_refs"),
+                )
+                self.assertEqual(
+                    "等待订单号后继续退票并同步行李额说明",
+                    _read_json(connection, "runtime_lab_task", task_id, "resume_summary"),
+                )
+                self.assertEqual(
+                    "TK-111",
+                    _read_json(connection, "runtime_lab_checkpoint", checkpoint_id, "collected")[
+                        "ticket"
+                    ]["orderNo"],
+                )
+        finally:
+            engine.dispose()
 
 
 @unittest.skipUnless(MYSQL8_TEST_DATABASE_URL, "set HIFY_MYSQL8_TEST_DATABASE_URL for MySQL8 integration")
@@ -297,6 +432,24 @@ class Mysql8RuntimeV2CustomerAssistantPersistenceTest(unittest.TestCase):
                 created_at=now,
                 updated_at=now,
             )
+            ids["customer_assistant_worker_profile"] = _insert(
+                connection,
+                "customer_assistant_worker_profile",
+                tenant_id="demo-airline",
+                org_id="ops-cn",
+                profile_id=f"refund-profile:{token}",
+                task_key="refund_ticket",
+                task_type="refund_ticket",
+                worker_type="react",
+                worker_ref="refund-react-worker",
+                model_policy_ref="mvp-demo-qwen",
+                prompt_ref="refund-policy-v2",
+                tool_refs=["refund_policy", "submit_refund"],
+                risk_policy_ref="manual_confirm",
+                enabled=True,
+                created_at=now,
+                updated_at=now,
+            )
 
         with self.engine.connect() as connection:
             self.assertEqual(
@@ -354,6 +507,15 @@ class Mysql8RuntimeV2CustomerAssistantPersistenceTest(unittest.TestCase):
                     "payload",
                 )["amount"]["value"],
             )
+            self.assertEqual(
+                ["refund_policy", "submit_refund"],
+                _read_json(
+                    connection,
+                    "customer_assistant_worker_profile",
+                    ids["customer_assistant_worker_profile"],
+                    "tool_refs",
+                ),
+            )
 
         self._assert_duplicate_rejected(
             "chatflow_event",
@@ -400,6 +562,23 @@ class Mysql8RuntimeV2CustomerAssistantPersistenceTest(unittest.TestCase):
             created_at=now,
             updated_at=now,
         )
+        self._assert_duplicate_rejected(
+            "customer_assistant_worker_profile",
+            tenant_id="demo-airline",
+            org_id="ops-cn",
+            profile_id=f"refund-profile:{token}",
+            task_key="refund_ticket",
+            task_type="refund_ticket",
+            worker_type="react",
+            worker_ref="refund-react-worker",
+            model_policy_ref="mvp-demo-qwen",
+            prompt_ref="refund-policy-v2",
+            tool_refs=["duplicate"],
+            risk_policy_ref="manual_confirm",
+            enabled=True,
+            created_at=now,
+            updated_at=now,
+        )
 
     def _assert_duplicate_rejected(self, table_name: str, **values: Any) -> None:
         table = Base.metadata.tables[table_name]
@@ -432,6 +611,7 @@ _TABLE_NAMES = [
     "customer_assistant_worker_run",
     "customer_assistant_worker_event",
     "customer_assistant_proposed_action",
+    "customer_assistant_worker_profile",
 ]
 
 
