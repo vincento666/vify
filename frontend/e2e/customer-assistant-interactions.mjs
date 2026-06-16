@@ -29,6 +29,16 @@ const pendingAction = {
   status: 'PENDING',
 }
 
+const executedAction = {
+  ...confirmedAction,
+  status: 'EXECUTED',
+  result: {
+    executorRef: 'refund_submit_mock',
+    audit: { semanticCode: 'REFUND_SUBMITTED_MOCK', orderNo: 'TK-100' },
+    error: null,
+  },
+}
+
 const turnResult = {
   runId: 31,
   sessionId: 12,
@@ -74,7 +84,14 @@ const confirmedMetrics = {
   humanConfirmation: { pending: 0, adopted: 1, terminal: 1, adoptionRate: 1 },
 }
 
+const executedMetrics = {
+  ...pendingMetrics,
+  proposedActionStatusCounts: { EXECUTED: 1 },
+  humanConfirmation: { pending: 0, adopted: 1, terminal: 1, adoptionRate: 1 },
+}
+
 let actionConfirmed = false
+let actionExecuted = false
 
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
@@ -89,6 +106,11 @@ try {
     if (method === 'POST' && url.endsWith('/proposed-actions/9/confirm')) {
       actionConfirmed = true
       await route.fulfill({ json: envelope(confirmedAction) })
+      return
+    }
+    if (method === 'POST' && url.endsWith('/proposed-actions/9/execute')) {
+      actionExecuted = true
+      await route.fulfill({ json: envelope(executedAction) })
       return
     }
     if (method === 'POST' && url.endsWith('/sessions')) {
@@ -108,11 +130,12 @@ try {
       return
     }
     if (method === 'GET' && url.endsWith('/sessions/12/proposed-actions')) {
-      await route.fulfill({ json: envelope({ list: [pendingAction], total: 1 }) })
+      const visibleAction = actionExecuted ? executedAction : actionConfirmed ? confirmedAction : pendingAction
+      await route.fulfill({ json: envelope({ list: [visibleAction], total: 1 }) })
       return
     }
     if (method === 'GET' && url.endsWith('/sessions/12/metrics')) {
-      await route.fulfill({ json: envelope(actionConfirmed ? confirmedMetrics : pendingMetrics) })
+      await route.fulfill({ json: envelope(actionExecuted ? executedMetrics : actionConfirmed ? confirmedMetrics : pendingMetrics) })
       return
     }
     await route.fulfill({ status: 404, json: { code: 404, message: 'unexpected call', data: null } })
@@ -137,9 +160,18 @@ try {
   await page.getByLabel('确认拟议动作').click()
   await page.getByText('CONFIRMED').waitFor({ state: 'visible', timeout: 10000 })
   assert(await page.getByLabel('确认拟议动作').isDisabled(), 'Confirmed action should disable confirm control')
+  assert(!(await page.getByLabel('执行已确认动作').isDisabled()), 'Confirmed action should enable execute control')
   assert(
     calls.some((call) => call.method === 'POST' && call.url.endsWith('/proposed-actions/9/confirm')),
     'Expected confirm action API call',
+  )
+
+  await page.getByLabel('执行已确认动作').click()
+  await page.getByText('EXECUTED').waitFor({ state: 'visible', timeout: 10000 })
+  const executeCalls = calls.filter((call) => call.method === 'POST' && call.url.endsWith('/proposed-actions/9/execute'))
+  assert(
+    executeCalls.length === 1,
+    `Expected one execute action API call, got ${executeCalls.length}`,
   )
 
   if (screenshotPath) {
