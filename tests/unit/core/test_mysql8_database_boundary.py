@@ -89,6 +89,27 @@ class Mysql8DatabaseBoundaryTest(unittest.TestCase):
 
         self.assertEqual([], offenders)
 
+    def test_live_llm_artifacts_do_not_retain_sqlite_evidence(self) -> None:
+        artifact_roots = [
+            PROJECT_ROOT / "artifacts/slices/135-openrouter-deepseek-v4-flash-live-gate/135.1",
+            PROJECT_ROOT / "artifacts/slices/136-runtime-v2-openrouter-live-acceptance/136.1",
+        ]
+        existing_roots = [root for root in artifact_roots if root.exists()]
+        if not existing_roots:
+            self.skipTest("live LLM artifact directories are not present in this checkout")
+
+        forbidden_markers = ("disposable SQLite", "SQLite database", "sqlite://", "hify.db", "hify-uat.db")
+        offenders: list[str] = []
+        for root in existing_roots:
+            for path in root.rglob("*"):
+                if not path.is_file() or path.suffix not in {".md", ".txt", ".json"}:
+                    continue
+                content = path.read_text(encoding="utf-8")
+                if any(marker in content for marker in forbidden_markers):
+                    offenders.append(str(path.relative_to(PROJECT_ROOT)))
+
+        self.assertEqual([], offenders)
+
     def test_product_live_and_demo_specs_do_not_prescribe_sqlite_runtime(self) -> None:
         checked_paths = [
             PROJECT_ROOT / "specs/129-mysql8-one-click-demo-seed-gate/spec.md",
