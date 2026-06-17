@@ -1,0 +1,32 @@
+184.0 Spec Sign-Off Evidence
+
+Date: 2026-06-17
+
+Scope:
+- Created specs/184-ai-assistant-harness-core-mvp/spec.md
+- Created specs/184-ai-assistant-harness-core-mvp/plan.md
+- Created specs/184-ai-assistant-harness-core-mvp/tasks.md
+- Limited this spec to AI Assistant Harness Core PRD Phase 0 through Phase 3.
+- Deferred Phase 4 through Phase 7 to follow-up specs 185 through 188.
+- Recorded persistence constraint: MySQL8 only; no SQLite or PostgreSQL paths
+  for this module.
+
+Local context inspected:
+- docs/ai-assistant-harness-core-prd.md
+- specs/045-customer-assistant-runtime-mvp/spec.md
+- specs/045-customer-assistant-runtime-mvp/plan.md
+- specs/045-customer-assistant-runtime-mvp/tasks.md
+- app/main.py
+- pyproject.toml
+
+Latest spec check:
+- Command: rtk /bin/zsh -lc 'for d in specs/[0-9][0-9][0-9]-*; do basename "$d"; done | sort -n | tail -40'
+- Result: latest visible spec id was 183-final-openrouter-live-gate-revalidation, so 184-ai-assistant-harness-core-mvp is the next spec id.
+
+Gate notes:
+- RED/unit/integration/contract/E2E/UAT are not applicable for the documentation-only sign-off slice.
+- 184.1 starts the first production-code TDD cycle.
+
+Residual risk:
+- docs/ai-assistant-harness-core-prd.md is currently untracked input context and was not staged by this slice.
+- Existing unrelated runtime_lab working-tree changes were not touched.
