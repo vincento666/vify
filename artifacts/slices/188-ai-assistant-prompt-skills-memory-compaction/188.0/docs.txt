@@ -1,9 +1,63 @@
-188.0 docs sign-off created for AI Assistant Phase 5.
+# 188.0 Documentation Sign-Off Evidence
 
-Scope:
-- backend-only deterministic prompt/skills/memory/compaction MVP;
-- no frontend visual work;
-- no live LLM gates by default;
-- future OpenRouter probes must use environment variables only;
-- MySQL8-only persistence boundary retained for later slices.
+## Scope
 
+Documentation-only planning for
+`specs/188-ai-assistant-prompt-skills-memory-compaction`.
+
+Allowed paths touched:
+
+- `specs/188-ai-assistant-prompt-skills-memory-compaction/spec.md`
+- `specs/188-ai-assistant-prompt-skills-memory-compaction/plan.md`
+- `specs/188-ai-assistant-prompt-skills-memory-compaction/tasks.md`
+- `artifacts/slices/188-ai-assistant-prompt-skills-memory-compaction/188.0/docs.txt`
+- `artifacts/slices/188-ai-assistant-prompt-skills-memory-compaction/188.0/red.txt`
+
+## Context Inspected
+
+- `specs/184-ai-assistant-harness-core-mvp/spec.md`
+- `specs/184-ai-assistant-harness-core-mvp/plan.md`
+- `specs/187-ai-assistant-tool-scheduler-rwmutex/spec.md`
+- `specs/187-ai-assistant-tool-scheduler-rwmutex/plan.md`
+- `specs/187-ai-assistant-tool-scheduler-rwmutex/tasks.md`
+- `artifacts/slices/187-ai-assistant-tool-scheduler-rwmutex/187.0/docs.txt`
+- `artifacts/slices/187-ai-assistant-tool-scheduler-rwmutex/187.0/red.txt`
+- `app/modules/ai_assistant/domain/prompt.py`
+- `app/modules/ai_assistant/domain/tools.py`
+- `app/modules/ai_assistant/infra/schema.py`
+- `app/modules/ai_assistant/web/router.py`
+- `app/modules/ai_assistant/web/schemas.py`
+- `artifacts/slices/188-ai-assistant-prompt-skills-memory-compaction/188.1/red-unit.txt`
+
+## Findings
+
+- Spec 184 deferred PRD Phase 5 as prompt, skills, memory, and compaction.
+- Spec 187 records the earlier 186 semantic reservation and uses 187 for Phase
+  4 scheduler/RWMutex work.
+- The user requested the next id
+  `188-ai-assistant-prompt-skills-memory-compaction` after 187 was committed.
+- Current `PromptAssembler` has a small deterministic layer stack:
+  `base`, `tools`, `run_state`, `user_message`.
+- Current `ToolRegistry` already has typed manifests, risk metadata, and
+  read/write resource declarations.
+- Current AI Assistant schema has session `context_json` and run/event/tool JSON
+  payloads, but no dedicated memory table.
+- Existing dirty files under `app/modules/customer_assistant/**` were observed
+  before this docs slice and were not edited.
+- An ignored `188.1/red-unit.txt` artifact already exists and shows a failing
+  prompt assembler unit expecting `PromptMemoryItem`; it was inspected but not
+  edited.
+
+## Validation
+
+- Documentation declares backend-first scope only.
+- Documentation declares no frontend visual changes and no remScaleClosure gate
+  unless a future implementation changes frontend visuals.
+- Documentation declares MySQL8-only persistence and test evidence.
+- Documentation declares deterministic/no live LLM behavior by default.
+- Documentation declares OpenRouter optional, env-gated, and skipped by default.
+- Documentation declares no credentials or provider secrets in repo artifacts.
+- Documentation declares customer-assistant dirty files out of scope.
+
+Final command validation was run after file creation and is summarized in the
+turn response.

@@ -1,0 +1,30 @@
+# 188.0 RED Evidence
+
+This is a documentation-only sign-off slice. No implementation RED test was
+created or run because the user explicitly limited this turn to documentation.
+
+Required implementation RED evidence is planned for 188.1:
+
+- prompt assembler unit RED for required layer order;
+- skill registry unit RED for listing and deterministic activation;
+- MySQL8 integration RED for working memory persistence and reload;
+- MySQL8 integration RED for compaction summary persistence and reload;
+- contract RED for safe prompt/skill/memory/compaction metadata;
+- backend E2E RED for a later run receiving persisted memory and compaction
+  context.
+
+Expected evidence path:
+
+```text
+artifacts/slices/188-ai-assistant-prompt-skills-memory-compaction/188.1/red.txt
+```
+
+Pre-existing ignored evidence observed but not modified:
+
+```text
+artifacts/slices/188-ai-assistant-prompt-skills-memory-compaction/188.1/red-unit.txt
+```
+
+That existing artifact shows a failing prompt assembler test importing
+`PromptMemoryItem`. It may be useful for 188.1, but it must be rerun and saved
+as current RED evidence before any implementation task is marked complete.
