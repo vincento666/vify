@@ -1018,6 +1018,9 @@ class CustomerAssistantService:
             "proposed_action_confirmed",
             {"actionId": action_id, "actionType": updated["action_type"]},
             run_id=int(updated["run_id"]),
+            task_id=updated.get("task_id"),
+            source="operator_advisory",
+            actor="operator",
         )
         return _format_action(updated)
 
@@ -1075,6 +1078,8 @@ class CustomerAssistantService:
             "proposed_action_confirmed",
             {"actionId": int(action["id"]), "actionType": updated["action_type"]},
             run_id=run_id,
+            task_id=updated.get("task_id"),
+            source="operator_advisory",
             actor="operator",
         )
         return _format_action(updated)
@@ -1092,6 +1097,9 @@ class CustomerAssistantService:
             "proposed_action_rejected",
             {"actionId": action_id, "actionType": updated["action_type"]},
             run_id=int(updated["run_id"]),
+            task_id=updated.get("task_id"),
+            source="operator_advisory",
+            actor="operator",
         )
         return _format_action(updated)
 
@@ -1114,6 +1122,9 @@ class CustomerAssistantService:
             "proposed_action_executing",
             {"actionId": action_id, "actionType": executing["action_type"]},
             run_id=int(executing["run_id"]),
+            task_id=executing.get("task_id"),
+            source="operator_advisory",
+            actor="operator",
         )
         result = self._action_executor_registry.execute(
             str(executing["action_type"]),
@@ -1136,6 +1147,9 @@ class CustomerAssistantService:
                 "result": result_payload,
             },
             run_id=int(updated["run_id"]),
+            task_id=updated.get("task_id"),
+            source="operator_advisory",
+            actor="operator",
         )
         return _format_action(updated)
 
