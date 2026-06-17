@@ -1,0 +1,10 @@
+OK artifacts/slices/184-ai-assistant-harness-core-mvp/184.1/red.txt
+OK artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt
+OK artifacts/slices/184-ai-assistant-harness-core-mvp/184.3/red.txt
+OK artifacts/slices/184-ai-assistant-harness-core-mvp/184.4/red-backend.txt
+OK artifacts/slices/184-ai-assistant-harness-core-mvp/184.4/red-frontend.txt
+OK artifacts/slices/187-ai-assistant-tool-scheduler-rwmutex/187.1/red-unit.txt
+OK artifacts/slices/187-ai-assistant-tool-scheduler-rwmutex/187.1/red-contract.txt
+OK artifacts/slices/188-ai-assistant-prompt-skills-memory-compaction/188.1/red-unit.txt
+OK artifacts/slices/189-ai-assistant-customer-assistant-subagent-bridge/189.1/red.txt
+OK artifacts/slices/190-ai-assistant-observability-benchmark/190.1/red.txt
