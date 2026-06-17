@@ -1,0 +1,13 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/vincento/work/develop/hify
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1 item
+
+tests/integration/mysql8/test_mysql8_runtime_v2_customer_assistant_persistence.py s [100%]
+
+=========================== short test summary info ============================
+SKIPPED [1] tests/integration/mysql8/test_mysql8_runtime_v2_customer_assistant_persistence.py:519: set HIFY_MYSQL8_TEST_DATABASE_URL for MySQL8 integration
+============================== 1 skipped in 0.17s ==============================

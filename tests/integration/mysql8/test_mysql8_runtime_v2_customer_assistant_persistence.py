@@ -20,6 +20,20 @@ MYSQL8_TEST_DATABASE_URL = os.getenv("HIFY_MYSQL8_TEST_DATABASE_URL")
 
 
 class Mysql8RuntimeV2DemoPersistenceContractTest(unittest.TestCase):
+    def test_local_gate_declares_all_required_mvp_persistence_surfaces(self) -> None:
+        register_baseline_tables()
+        register_runtime_lab_tables()
+        register_customer_assistant_tables()
+
+        covered_tables = set(_TABLE_NAMES)
+        required_tables = set(_REQUIRED_MVP_SURFACE_COLUMNS)
+
+        self.assertEqual([], sorted(required_tables - covered_tables))
+        for table_name, column_names in _REQUIRED_MVP_SURFACE_COLUMNS.items():
+            table = Base.metadata.tables[table_name]
+            missing_columns = [column_name for column_name in column_names if column_name not in table.c]
+            self.assertEqual([], missing_columns, table_name)
+
     def test_mvp_demo_table_set_includes_worker_profile_overrides_and_compiles_for_mysql8(self) -> None:
         register_baseline_tables()
         register_runtime_lab_tables()
@@ -32,10 +46,29 @@ class Mysql8RuntimeV2DemoPersistenceContractTest(unittest.TestCase):
             table.name: str(CreateTable(table).compile(dialect=dialect))
             for table in _tables(_TABLE_NAMES)
         }
+        compiled_column_types = {
+            table.name: {
+                column.name: column.type.compile(dialect=dialect).upper()
+                for column in table.columns
+            }
+            for table in _tables(_TABLE_NAMES)
+        }
 
         self.assertIn("JSON", compiled_tables["customer_assistant_worker_profile"])
         self.assertIn("JSON", compiled_tables["customer_assistant_session"])
         self.assertNotIn("VECTOR", "\n".join(compiled_tables.values()).upper())
+        for table_name, column_names in _MYSQL8_JSON_COLUMNS.items():
+            for column_name in column_names:
+                self.assertEqual("JSON", compiled_column_types[table_name][column_name])
+        for table_name, column_names in _MYSQL8_DATETIME_COLUMNS.items():
+            for column_name in column_names:
+                self.assertEqual("DATETIME", compiled_column_types[table_name][column_name])
+        for table_name, column_names in _MYSQL8_TEXT_COLUMNS.items():
+            for column_name in column_names:
+                self.assertIn("TEXT", compiled_column_types[table_name][column_name])
+        for table_name, column_names in _MYSQL8_BOOLEAN_COLUMNS.items():
+            for column_name in column_names:
+                self.assertIn(compiled_column_types[table_name][column_name], {"BOOL", "BOOLEAN"})
 
     def test_demo_anchor_profile_and_text_payloads_round_trip_locally(self) -> None:
         register_baseline_tables()
@@ -47,17 +80,128 @@ class Mysql8RuntimeV2DemoPersistenceContractTest(unittest.TestCase):
         try:
             Base.metadata.create_all(
                 bind=engine,
-                tables=_tables(
-                    [
-                        "customer_assistant_session",
-                        "customer_assistant_worker_profile",
-                        "runtime_lab_session",
-                        "runtime_lab_task",
-                        "runtime_lab_checkpoint",
-                    ]
-                ),
+                tables=_tables(_TABLE_NAMES),
             )
             with engine.begin() as connection:
+                workflow_id = _insert(
+                    connection,
+                    "workflow",
+                    name="local-runtime-v2-demo",
+                    description="local mysql8 compatibility gate",
+                    flow_type="CHATFLOW",
+                    status="PUBLISHED",
+                    created_at=now,
+                    updated_at=now,
+                )
+                workflow_run_id = _insert(
+                    connection,
+                    "workflow_run",
+                    workflow_id=workflow_id,
+                    status="COMPLETED",
+                    input={"customerMessage": "我要退票，也想查行李额"},
+                    output={"route": "customer_assistant", "taskCount": 2},
+                    error="",
+                    elapsed_ms=42,
+                    finished_at=now,
+                    created_at=now,
+                    updated_at=now,
+                )
+                node_run_id = _insert(
+                    connection,
+                    "workflow_node_run",
+                    workflow_run_id=workflow_run_id,
+                    node_key="collect_order",
+                    node_type="FORM",
+                    status="WAITING",
+                    inputs={"required": ["orderNo"]},
+                    outputs={"prompt": "请补充订单号"},
+                    error="",
+                    elapsed_ms=7,
+                    finished_at=None,
+                    created_at=now,
+                    updated_at=now,
+                )
+                published_version_id = _insert(
+                    connection,
+                    "workflow_published_version",
+                    workflow_id=workflow_id,
+                    flow_type="CHATFLOW",
+                    version=1,
+                    snapshot={
+                        "nodes": [
+                            {
+                                "nodeKey": "knowledge_1",
+                                "type": "KNOWLEDGE",
+                                "config": {"query": "行李额"},
+                            }
+                        ],
+                        "edges": [],
+                    },
+                    validation={"warnings": [], "nodeCount": 1},
+                    active=True,
+                    created_at=now,
+                    updated_at=now,
+                )
+                chatflow_session_id = _insert(
+                    connection,
+                    "chatflow_session",
+                    session_id="local-mysql8-demo",
+                    chatflow_id=workflow_id,
+                    conversation_id="conv-local-mysql8-demo",
+                    user_id="operator-demo",
+                    channel="web",
+                    channel_id="workbench",
+                    status="waiting",
+                    current_run_id=workflow_run_id,
+                    variables={
+                        "customer": {"phone": "138****0000", "orderNo": "TK-111"},
+                        "ledger": [{"task": "refund", "status": "waiting"}],
+                    },
+                    expires_at=now,
+                    created_at=now,
+                    updated_at=now,
+                )
+                chatflow_event_id = _insert(
+                    connection,
+                    "chatflow_event",
+                    session_id="local-mysql8-demo",
+                    chatflow_id=workflow_id,
+                    run_id=workflow_run_id,
+                    sequence=1,
+                    event_type="NODE_BLOCKED",
+                    node_key="collect_order",
+                    payload={"resume": {"required": ["orderNo"], "prompt": "请提供订单号"}},
+                    created_at=now,
+                    updated_at=now,
+                )
+                chatflow_checkpoint_id = _insert(
+                    connection,
+                    "chatflow_checkpoint",
+                    session_id="local-mysql8-demo",
+                    chatflow_id=workflow_id,
+                    run_id=workflow_run_id,
+                    event_id=chatflow_event_id,
+                    pending_node_key="collect_order",
+                    execution_context={"trace": [{"node": "start"}, {"node": "collect_order"}]},
+                    node_outputs={"start": {"ok": True}},
+                    variable_scopes={"session": {"customerTier": "gold"}},
+                    resume_schema={"type": "object", "required": ["orderNo"]},
+                    status="waiting",
+                    expires_at=now,
+                    created_at=now,
+                    updated_at=now,
+                )
+                channel_config_id = _insert(
+                    connection,
+                    "chatflow_channel_config",
+                    chatflow_id=workflow_id,
+                    channel_id="workbench",
+                    display_name="MVP Workbench",
+                    enabled=True,
+                    config={"entry": {"story": "refund-baggage"}, "riskPolicy": {"writes": "confirm"}},
+                    created_at=now,
+                    updated_at=now,
+                )
                 session_id = _insert(
                     connection,
                     "customer_assistant_session",
@@ -70,6 +214,105 @@ class Mysql8RuntimeV2DemoPersistenceContractTest(unittest.TestCase):
                         "hostContext": {"tenantId": "demo-airline", "orgId": "ops-cn"},
                     },
                     version=1,
+                    created_at=now,
+                    updated_at=now,
+                )
+                run_id = _insert(
+                    connection,
+                    "customer_assistant_run",
+                    session_id=session_id,
+                    idempotency_key="run:local-mysql8-demo",
+                    request_hash="hash-run-local-mysql8-demo",
+                    status="COMPLETED",
+                    input_payload={"customerMessage": "我要退票，也想查行李额"},
+                    response_payload={"tasksCreated": ["refund", "baggage"]},
+                    warnings_json=[{"code": "REQUIRES_CONFIRMATION"}],
+                    started_at=now,
+                    completed_at=now,
+                    created_at=now,
+                    updated_at=now,
+                )
+                customer_task_id = _insert(
+                    connection,
+                    "customer_assistant_task",
+                    session_id=session_id,
+                    task_key="refund:local-mysql8-demo",
+                    task_type="refund_ticket",
+                    business_key="TK-111",
+                    short_id="RF111",
+                    status="PENDING_CONFIRMATION",
+                    worker_type="react",
+                    worker_ref="refund-react-worker",
+                    checkpoint_json={"pendingTool": "submit_refund", "attempt": 1},
+                    input_snapshot_json={"ticket": {"orderNo": "TK-111"}},
+                    last_result_json={"recommendation": {"script": "建议先核验退票规则"}},
+                    proposed_actions_json=[{"actionKey": "submit:local-mysql8-demo", "risk": "write"}],
+                    completed_at=None,
+                    created_at=now,
+                    updated_at=now,
+                )
+                customer_event_id = _insert(
+                    connection,
+                    "customer_assistant_event",
+                    session_id=session_id,
+                    run_id=run_id,
+                    sequence=1,
+                    type="TASK_PROPOSED",
+                    visibility="operator",
+                    source="customer_assistant",
+                    actor="system",
+                    task_id=customer_task_id,
+                    parent_span_id="span-parent",
+                    span_id="span-task",
+                    payload={"taskKey": "refund:local-mysql8-demo", "risk": {"level": "medium"}},
+                    created_at=now,
+                    updated_at=now,
+                )
+                worker_run_id = _insert(
+                    connection,
+                    "customer_assistant_worker_run",
+                    session_id=session_id,
+                    parent_run_id=run_id,
+                    task_id=customer_task_id,
+                    worker_type="react",
+                    worker_ref="refund-react-worker",
+                    idempotency_key="worker:local-mysql8-demo",
+                    request_hash="hash-worker-local-mysql8-demo",
+                    status="SUCCEEDED",
+                    input_payload={"taskKey": "refund:local-mysql8-demo", "tools": ["refund_policy"]},
+                    result_payload={"toolCalls": [{"name": "refund_policy", "ok": True}]},
+                    error_json=None,
+                    queued_at=now,
+                    started_at=now,
+                    completed_at=now,
+                    created_at=now,
+                    updated_at=now,
+                )
+                worker_event_id = _insert(
+                    connection,
+                    "customer_assistant_worker_event",
+                    worker_run_id=worker_run_id,
+                    sequence=1,
+                    type="TOOL_CALL",
+                    visibility="debug",
+                    source="customer_assistant_worker",
+                    actor="system",
+                    payload={"tool": {"name": "refund_policy", "arguments": {"orderNo": "TK-111"}}},
+                    created_at=now,
+                    updated_at=now,
+                )
+                proposed_action_id = _insert(
+                    connection,
+                    "customer_assistant_proposed_action",
+                    session_id=session_id,
+                    run_id=run_id,
+                    task_id=customer_task_id,
+                    action_key="submit:local-mysql8-demo",
+                    action_type="submit_refund",
+                    title="提交退票申请",
+                    payload={"orderNo": "TK-111", "amount": {"currency": "CNY", "value": 1280}},
+                    status="PENDING",
+                    result_json={"audit": {"pending": True}},
                     created_at=now,
                     updated_at=now,
                 )
@@ -126,8 +369,65 @@ class Mysql8RuntimeV2DemoPersistenceContractTest(unittest.TestCase):
                     created_at=now,
                     updated_at=now,
                 )
+                runtime_event_id = _insert(
+                    connection,
+                    "runtime_lab_event",
+                    session_id=runtime_session_id,
+                    sequence=1,
+                    event_type="TASK_SUSPENDED",
+                    payload={"checkpointId": checkpoint_id, "reason": "missing_order"},
+                    created_at=now,
+                    updated_at=now,
+                )
+                command_id = _insert(
+                    connection,
+                    "runtime_lab_command",
+                    session_id=runtime_session_id,
+                    idempotency_key="resume:local-mysql8-demo",
+                    request_hash="hash-local-mysql8-demo",
+                    response_payload={"routeDecision": {"action": "RESUME_TASK"}, "taskId": task_id},
+                    created_at=now,
+                )
 
             with engine.connect() as connection:
+                self.assertEqual(
+                    "customer_assistant",
+                    _read_json(connection, "workflow_run", workflow_run_id, "output")["route"],
+                )
+                self.assertEqual(
+                    "请补充订单号",
+                    _read_json(connection, "workflow_node_run", node_run_id, "outputs")["prompt"],
+                )
+                self.assertEqual(
+                    "KNOWLEDGE",
+                    _read_json(connection, "workflow_published_version", published_version_id, "snapshot")[
+                        "nodes"
+                    ][0]["type"],
+                )
+                self.assertEqual(
+                    "138****0000",
+                    _read_json(connection, "chatflow_session", chatflow_session_id, "variables")["customer"][
+                        "phone"
+                    ],
+                )
+                self.assertEqual(
+                    ["orderNo"],
+                    _read_json(connection, "chatflow_checkpoint", chatflow_checkpoint_id, "resume_schema")[
+                        "required"
+                    ],
+                )
+                self.assertEqual(
+                    "orderNo",
+                    _read_json(connection, "chatflow_event", chatflow_event_id, "payload")["resume"][
+                        "required"
+                    ][0],
+                )
+                self.assertEqual(
+                    "confirm",
+                    _read_json(connection, "chatflow_channel_config", channel_config_id, "config")[
+                        "riskPolicy"
+                    ]["writes"],
+                )
                 self.assertEqual(
                     "refund_baggage_parallel",
                     _read_json(connection, "customer_assistant_session", session_id, "context_json")[
@@ -139,6 +439,45 @@ class Mysql8RuntimeV2DemoPersistenceContractTest(unittest.TestCase):
                     _read_json(connection, "customer_assistant_worker_profile", profile_id, "tool_refs"),
                 )
                 self.assertEqual(
+                    ["refund", "baggage"],
+                    _read_json(connection, "customer_assistant_run", run_id, "response_payload")[
+                        "tasksCreated"
+                    ],
+                )
+                self.assertEqual(
+                    "submit:local-mysql8-demo",
+                    _read_json(
+                        connection,
+                        "customer_assistant_task",
+                        customer_task_id,
+                        "proposed_actions_json",
+                    )[0]["actionKey"],
+                )
+                self.assertEqual(
+                    "medium",
+                    _read_json(connection, "customer_assistant_event", customer_event_id, "payload")[
+                        "risk"
+                    ]["level"],
+                )
+                self.assertEqual(
+                    "refund_policy",
+                    _read_json(connection, "customer_assistant_worker_run", worker_run_id, "result_payload")[
+                        "toolCalls"
+                    ][0]["name"],
+                )
+                self.assertEqual(
+                    "refund_policy",
+                    _read_json(connection, "customer_assistant_worker_event", worker_event_id, "payload")[
+                        "tool"
+                    ]["name"],
+                )
+                self.assertEqual(
+                    1280,
+                    _read_json(connection, "customer_assistant_proposed_action", proposed_action_id, "payload")[
+                        "amount"
+                    ]["value"],
+                )
+                self.assertEqual(
                     "等待订单号后继续退票并同步行李额说明",
                     _read_json(connection, "runtime_lab_task", task_id, "resume_summary"),
                 )
@@ -147,6 +486,16 @@ class Mysql8RuntimeV2DemoPersistenceContractTest(unittest.TestCase):
                     _read_json(connection, "runtime_lab_checkpoint", checkpoint_id, "collected")[
                         "ticket"
                     ]["orderNo"],
+                )
+                self.assertEqual(
+                    "missing_order",
+                    _read_json(connection, "runtime_lab_event", runtime_event_id, "payload")["reason"],
+                )
+                self.assertEqual(
+                    "RESUME_TASK",
+                    _read_json(connection, "runtime_lab_command", command_id, "response_payload")[
+                        "routeDecision"
+                    ]["action"],
                 )
         finally:
             engine.dispose()
@@ -181,6 +530,34 @@ class Mysql8RuntimeV2CustomerAssistantPersistenceTest(unittest.TestCase):
                 description="runtime v2 mysql8 persistence smoke",
                 flow_type="CHATFLOW",
                 status="PUBLISHED",
+                created_at=now,
+                updated_at=now,
+            )
+            ids["workflow_run"] = _insert(
+                connection,
+                "workflow_run",
+                workflow_id=ids["workflow"],
+                status="COMPLETED",
+                input={"customerMessage": "我要退票，也想查行李额"},
+                output={"route": "customer_assistant", "taskCount": 2},
+                error="",
+                elapsed_ms=42,
+                finished_at=now,
+                created_at=now,
+                updated_at=now,
+            )
+            ids["workflow_node_run"] = _insert(
+                connection,
+                "workflow_node_run",
+                workflow_run_id=ids["workflow_run"],
+                node_key="collect_order",
+                node_type="FORM",
+                status="WAITING",
+                inputs={"required": ["orderNo"]},
+                outputs={"prompt": "请补充订单号"},
+                error="",
+                elapsed_ms=7,
+                finished_at=None,
                 created_at=now,
                 updated_at=now,
             )
@@ -453,6 +830,16 @@ class Mysql8RuntimeV2CustomerAssistantPersistenceTest(unittest.TestCase):
 
         with self.engine.connect() as connection:
             self.assertEqual(
+                "customer_assistant",
+                _read_json(connection, "workflow_run", ids["workflow_run"], "output")["route"],
+            )
+            self.assertEqual(
+                "请补充订单号",
+                _read_json(connection, "workflow_node_run", ids["workflow_node_run"], "outputs")[
+                    "prompt"
+                ],
+            )
+            self.assertEqual(
                 "138****0000",
                 _read_json(connection, "chatflow_session", ids["chatflow_session"], "variables")["customer"]["phone"],
             )
@@ -592,8 +979,14 @@ class Mysql8RuntimeV2CustomerAssistantPersistenceTest(unittest.TestCase):
             connection.close()
 
 
+register_baseline_tables()
+register_runtime_lab_tables()
+register_customer_assistant_tables()
+
 _TABLE_NAMES = [
     "workflow",
+    "workflow_run",
+    "workflow_node_run",
     "workflow_published_version",
     "chatflow_session",
     "chatflow_event",
@@ -613,6 +1006,76 @@ _TABLE_NAMES = [
     "customer_assistant_proposed_action",
     "customer_assistant_worker_profile",
 ]
+
+_REQUIRED_MVP_SURFACE_COLUMNS = {
+    "workflow": ["flow_type", "status", "created_at", "updated_at"],
+    "workflow_run": ["input", "output", "error", "finished_at"],
+    "workflow_node_run": ["inputs", "outputs", "error", "finished_at"],
+    "workflow_published_version": ["snapshot", "validation", "active"],
+    "chatflow_session": ["current_run_id", "variables", "expires_at"],
+    "chatflow_event": ["run_id", "sequence", "payload", "checkpoint_id"],
+    "chatflow_checkpoint": [
+        "execution_context",
+        "node_outputs",
+        "variable_scopes",
+        "resume_schema",
+    ],
+    "chatflow_channel_config": ["config", "enabled"],
+    "runtime_lab_session": ["status", "active_task_id", "version"],
+    "runtime_lab_task": ["resume_summary", "business_refs", "suspended_at", "completed_at"],
+    "runtime_lab_checkpoint": ["pending_prompt", "collected", "scoped_variables"],
+    "runtime_lab_event": ["sequence", "payload"],
+    "runtime_lab_command": ["response_payload", "created_at"],
+    "customer_assistant_session": ["context_json", "version"],
+    "customer_assistant_run": ["input_payload", "response_payload", "warnings_json"],
+    "customer_assistant_task": [
+        "checkpoint_json",
+        "input_snapshot_json",
+        "last_result_json",
+        "proposed_actions_json",
+    ],
+    "customer_assistant_event": ["run_id", "sequence", "payload", "actor"],
+    "customer_assistant_worker_run": ["input_payload", "result_payload", "error_json"],
+    "customer_assistant_worker_event": ["sequence", "payload"],
+    "customer_assistant_proposed_action": ["payload", "result_json"],
+    "customer_assistant_worker_profile": ["tool_refs", "enabled"],
+}
+
+_MYSQL8_JSON_COLUMNS = {
+    table_name: [
+        column_name
+        for column_name in column_names
+        if isinstance(Base.metadata.tables[table_name].c[column_name].type, sa.JSON)
+    ]
+    for table_name, column_names in _REQUIRED_MVP_SURFACE_COLUMNS.items()
+}
+
+_MYSQL8_DATETIME_COLUMNS = {
+    table_name: [
+        column_name
+        for column_name in column_names
+        if isinstance(Base.metadata.tables[table_name].c[column_name].type, sa.DateTime)
+    ]
+    for table_name, column_names in _REQUIRED_MVP_SURFACE_COLUMNS.items()
+}
+
+_MYSQL8_TEXT_COLUMNS = {
+    table_name: [
+        column_name
+        for column_name in column_names
+        if isinstance(Base.metadata.tables[table_name].c[column_name].type, sa.Text)
+    ]
+    for table_name, column_names in _REQUIRED_MVP_SURFACE_COLUMNS.items()
+}
+
+_MYSQL8_BOOLEAN_COLUMNS = {
+    table_name: [
+        column_name
+        for column_name in column_names
+        if isinstance(Base.metadata.tables[table_name].c[column_name].type, sa.Boolean)
+    ]
+    for table_name, column_names in _REQUIRED_MVP_SURFACE_COLUMNS.items()
+}
 
 
 def _tables(names: list[str]) -> list[sa.Table]:

@@ -1,0 +1,38 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/vincento/work/develop/hify
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 4 items
+
+tests/integration/mysql8/test_mysql8_runtime_v2_customer_assistant_persistence.py . [ 25%]
+F.s                                                                      [100%]
+
+=================================== FAILURES ===================================
+_ Mysql8RuntimeV2DemoPersistenceContractTest.test_local_gate_declares_all_required_mvp_persistence_surfaces _
+
+self = <test_mysql8_runtime_v2_customer_assistant_persistence.Mysql8RuntimeV2DemoPersistenceContractTest testMethod=test_local_gate_declares_all_required_mvp_persistence_surfaces>
+
+    def test_local_gate_declares_all_required_mvp_persistence_surfaces(self) -> None:
+        register_baseline_tables()
+        register_runtime_lab_tables()
+        register_customer_assistant_tables()
+    
+        covered_tables = set(_TABLE_NAMES)
+        required_tables = set(_REQUIRED_MVP_SURFACE_COLUMNS)
+    
+>       self.assertEqual([], sorted(required_tables - covered_tables))
+E       AssertionError: Lists differ: [] != ['workflow_node_run', 'workflow_run']
+E       
+E       Second list contains 2 additional elements.
+E       First extra element 0:
+E       'workflow_node_run'
+E       
+E       - []
+E       + ['workflow_node_run', 'workflow_run']
+
+tests/integration/mysql8/test_mysql8_runtime_v2_customer_assistant_persistence.py:31: AssertionError
+=========================== short test summary info ============================
+FAILED tests/integration/mysql8/test_mysql8_runtime_v2_customer_assistant_persistence.py::Mysql8RuntimeV2DemoPersistenceContractTest::test_local_gate_declares_all_required_mvp_persistence_surfaces
+==================== 1 failed, 2 passed, 1 skipped in 0.31s ====================
