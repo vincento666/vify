@@ -24,6 +24,8 @@ class AiAssistantRepository:
         self._message_table = Base.metadata.tables["ai_assistant_message"]
         self._event_table = Base.metadata.tables["ai_assistant_event"]
         self._tool_call_table = Base.metadata.tables["ai_assistant_tool_call"]
+        self._approval_table = Base.metadata.tables["ai_assistant_approval"]
+        self._proposed_action_table = Base.metadata.tables["ai_assistant_proposed_action"]
 
     def create_session(self, title: str = "", context: dict[str, Any] | None = None) -> dict[str, Any]:
         now = datetime.now()
@@ -254,6 +256,109 @@ class AiAssistantRepository:
             .order_by(self._tool_call_table.c.id.asc())
         ).mappings().all()
         return [dict(row) for row in rows]
+
+    def create_approval(
+        self,
+        *,
+        run_id: int,
+        session_id: int,
+        tool_name: str,
+        risk_level: str,
+        input_payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        now = datetime.now()
+        row = insert_and_fetch(
+            self._session,
+            self._approval_table,
+            {
+                "session_id": session_id,
+                "run_id": run_id,
+                "tool_name": tool_name,
+                "risk_level": risk_level,
+                "input_payload": input_payload,
+                "status": "PENDING",
+                "decided_by": None,
+                "decision_reason": None,
+                "decided_at": None,
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        self._session.commit()
+        return row
+
+    def list_pending_approvals(self) -> list[dict[str, Any]]:
+        rows = self._session.execute(
+            sa.select(self._approval_table)
+            .where(
+                self._approval_table.c.status == "PENDING",
+                self._approval_table.c.deleted.is_(False),
+            )
+            .order_by(self._approval_table.c.id.asc())
+        ).mappings().all()
+        return [dict(row) for row in rows]
+
+    def get_approval(self, approval_id: int) -> dict[str, Any] | None:
+        row = self._session.execute(
+            sa.select(self._approval_table).where(
+                self._approval_table.c.id == approval_id,
+                self._approval_table.c.deleted.is_(False),
+            )
+        ).mappings().one_or_none()
+        return dict(row) if row else None
+
+    def decide_approval(self, approval_id: int, status: str, actor_id: str, reason: str = "") -> dict[str, Any]:
+        now = datetime.now()
+        self._session.execute(
+            self._approval_table.update()
+            .where(
+                self._approval_table.c.id == approval_id,
+                self._approval_table.c.deleted.is_(False),
+            )
+            .values(
+                status=status,
+                decided_by=actor_id,
+                decision_reason=reason,
+                decided_at=now,
+                updated_at=now,
+            )
+        )
+        self._session.commit()
+        updated = self.get_approval(approval_id)
+        if updated is None:
+            raise KeyError(f"AI Assistant approval disappeared: {approval_id}")
+        return updated
+
+    def create_proposed_action(
+        self,
+        *,
+        run_id: int,
+        session_id: int,
+        approval_id: int,
+        action_type: str,
+        title: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        now = datetime.now()
+        row = insert_and_fetch(
+            self._session,
+            self._proposed_action_table,
+            {
+                "session_id": session_id,
+                "run_id": run_id,
+                "approval_id": approval_id,
+                "action_type": action_type,
+                "title": title,
+                "payload": payload,
+                "status": "PENDING",
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        self._session.commit()
+        return row
 
     def _next_event_sequence(self, run_id: int) -> int:
         current = self._session.execute(
