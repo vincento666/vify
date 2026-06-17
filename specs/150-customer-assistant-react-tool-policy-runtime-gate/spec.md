@@ -19,7 +19,8 @@ showing it as evidence.
   confirmation for `lookup_order`, even though it is otherwise a read tool.
 - A manually confirmed tool call must return a `WAITING` worker result with a
   pending proposed action and must not execute the underlying tool.
-- Unknown policy refs keep the current default behavior for compatibility.
+- Unknown policy refs kept the current default behavior for compatibility in
+  slice 150. Slice 158 supersedes this and rejects unsupported refs.
 
 ## Non-Goals
 
@@ -37,8 +38,8 @@ showing it as evidence.
   profile with `toolPolicyRef=manual_confirm_lookup_tools` completes instead of
   waiting for proposed action confirmation.
 - Focused unit and integration tests pass after implementation.
-- The default `strict-read-before-write` and unknown refs remain compatible with
-  existing green tests.
+- The default `strict-read-before-write` remains compatible with existing green
+  tests; unknown refs are rejected by slice 158.
 - Focused ruff passes for the touched backend domain and test files.
 
 ## Evidence

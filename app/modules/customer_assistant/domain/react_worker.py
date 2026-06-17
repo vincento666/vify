@@ -6,7 +6,11 @@ from time import monotonic
 from typing import Any, Callable, Literal, Protocol
 
 from app.modules.customer_assistant.domain.models import TaskItem, TaskStatus, WorkerResult
-from app.modules.customer_assistant.domain.tool_policy import ReactToolPolicy, react_tool_policy_for_ref
+from app.modules.customer_assistant.domain.tool_policy import (
+    ReactToolPolicy,
+    UnsupportedReactToolPolicyError,
+    react_tool_policy_for_ref,
+)
 from app.modules.customer_assistant.domain.worker_registry import ReactWorkerConfig
 
 ReactTool = Callable[[dict[str, Any]], dict[str, Any]]
@@ -282,11 +286,30 @@ class ConfigurableRestrictedReactWorker:
                     )
                 ],
             )
-        return RestrictedReactWorker(
-            config=config,
-            model=self._model_factory(config),
-            tools=self._tools,
-        ).run(task, message)
+        try:
+            return RestrictedReactWorker(
+                config=config,
+                model=self._model_factory(config),
+                tools=self._tools,
+            ).run(task, message)
+        except UnsupportedReactToolPolicyError as exc:
+            return WorkerResult(
+                task_id=int(task.id or 0),
+                worker_type=task.worker_type,
+                status=TaskStatus.FAILED,
+                operator_recommendation=str(exc),
+                evidence={"workerRef": config.worker_ref, "workerConfigRefs": _worker_config_refs(config)},
+                error={"code": "UNSUPPORTED_TOOL_POLICY_REF", "message": str(exc)},
+                events=[
+                    _event(
+                        "react_worker_failed",
+                        {
+                            "code": "UNSUPPORTED_TOOL_POLICY_REF",
+                            "toolPolicyRef": config.tool_policy_ref,
+                        },
+                    )
+                ],
+            )
 
 
 def _event(event_type: str, payload: dict[str, Any]) -> dict[str, Any]:

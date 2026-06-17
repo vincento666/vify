@@ -7,7 +7,10 @@ from app.modules.customer_assistant.domain.react_worker import (
     ReactModelAction,
     RestrictedReactWorker,
 )
-from app.modules.customer_assistant.domain.tool_policy import ReactToolPolicy
+from app.modules.customer_assistant.domain.tool_policy import (
+    ReactToolPolicy,
+    react_tool_policy_for_ref,
+)
 from app.modules.customer_assistant.domain.worker_registry import (
     ReactWorkerConfig,
     ReactWorkerRegistry,
@@ -152,6 +155,13 @@ class CustomerAssistantReactWorkerTest(unittest.TestCase):
         self.assertFalse(executed)
         self.assertEqual(result.proposed_actions[0]["actionType"], "lookup_order")
         self.assertNotIn("react_tool_call_completed", event_types)
+
+    def test_unknown_tool_policy_ref_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "unknown-tool-policy"):
+            react_tool_policy_for_ref(
+                policy_ref="unknown-tool-policy",
+                allowed_tools=("lookup_order",),
+            )
 
     def test_max_iterations_and_timeout_are_enforced(self) -> None:
         looping = RestrictedReactWorker(

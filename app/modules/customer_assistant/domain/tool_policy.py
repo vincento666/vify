@@ -1,3 +1,20 @@
+SUPPORTED_CUSTOMER_ASSISTANT_TOOL_POLICY_REFS = frozenset(
+    {
+        "customer_assistant_worker_tool_default",
+        "customer_assistant_react_default",
+        "strict-read-before-write",
+        "manual_confirm_lookup_tools",
+        "refund_policy_tools",
+        "read_only_knowledge_tools",
+    }
+)
+_DEFAULT_BEHAVIOR_POLICY_REFS = SUPPORTED_CUSTOMER_ASSISTANT_TOOL_POLICY_REFS - {"manual_confirm_lookup_tools"}
+
+
+class UnsupportedReactToolPolicyError(ValueError):
+    pass
+
+
 class ReactToolPolicy:
     def __init__(
         self,
@@ -21,9 +38,22 @@ class ReactToolPolicy:
 
 
 def react_tool_policy_for_ref(*, policy_ref: str, allowed_tools: tuple[str, ...]) -> ReactToolPolicy:
-    if policy_ref == "manual_confirm_lookup_tools":
+    normalized_ref = str(policy_ref or "").strip()
+    if normalized_ref == "manual_confirm_lookup_tools":
         return ReactToolPolicy(
             allowed_tools=allowed_tools,
             manual_confirm_tools=("lookup_order",),
         )
-    return ReactToolPolicy(allowed_tools=allowed_tools)
+    if normalized_ref in _DEFAULT_BEHAVIOR_POLICY_REFS:
+        return ReactToolPolicy(allowed_tools=allowed_tools)
+    raise UnsupportedReactToolPolicyError(
+        f"Unsupported toolPolicyRef: {policy_ref}. Supported tool policies: {', '.join(supported_tool_policy_refs())}"
+    )
+
+
+def is_supported_tool_policy_ref(policy_ref: str) -> bool:
+    return str(policy_ref or "").strip() in SUPPORTED_CUSTOMER_ASSISTANT_TOOL_POLICY_REFS
+
+
+def supported_tool_policy_refs() -> tuple[str, ...]:
+    return tuple(sorted(SUPPORTED_CUSTOMER_ASSISTANT_TOOL_POLICY_REFS))

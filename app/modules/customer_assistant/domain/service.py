@@ -38,6 +38,7 @@ from app.modules.customer_assistant.domain.shadow import (
     parse_recommendation_shadow_output,
     parse_task_recognition_shadow_output,
 )
+from app.modules.customer_assistant.domain.tool_policy import is_supported_tool_policy_ref, supported_tool_policy_refs
 from app.modules.customer_assistant.domain.two_stage import (
     TWO_STAGE_EQUIVALENCE_MIN_PASS_RATE,
     TWO_STAGE_EQUIVALENCE_SUITE,
@@ -2373,6 +2374,12 @@ def _validate_worker_profile(profile: CustomerAssistantWorkerProfile) -> None:
     ]
     if blank_refs:
         raise BizError(ErrorCode.BAD_REQUEST, f"Blank worker profile refs: {', '.join(blank_refs)}")
+    if not is_supported_tool_policy_ref(profile.tool_policy_ref):
+        supported = ", ".join(supported_tool_policy_refs())
+        raise BizError(
+            ErrorCode.BAD_REQUEST,
+            f"Unsupported toolPolicyRef: {profile.tool_policy_ref}. Supported tool policies: {supported}",
+        )
     normalized_tool_refs = [str(tool_ref or "").strip() for tool_ref in profile.tool_refs]
     if any(not tool_ref for tool_ref in normalized_tool_refs):
         raise BizError(ErrorCode.BAD_REQUEST, "Invalid toolRefs: blank values are not allowed")

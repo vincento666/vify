@@ -555,6 +555,11 @@ class CustomerAssistantApiContractTest(unittest.TestCase):
         self.assertIn("worker_run_completed", [row["type"] for row in event_rows])
 
     def test_customer_reply_draft_becomes_confirmable_delivery_action(self) -> None:
+        app.dependency_overrides[get_settings] = lambda: Settings(
+            runtime_lab_sop_chatflow_ids=None,
+            customer_assistant_stub_qa_delay_seconds=0,
+            customer_assistant_worker_wait_deadline_seconds=1.0,
+        )
         with TestClient(app) as client:
             created = client.post(
                 "/api/v1/customer-assistant/sessions",
@@ -653,9 +658,9 @@ class CustomerAssistantApiContractTest(unittest.TestCase):
     def test_pending_async_worker_can_be_refreshed_through_api(self) -> None:
         app.dependency_overrides[get_settings] = lambda: Settings(
             runtime_lab_sop_chatflow_ids=None,
-            customer_assistant_stub_qa_delay_seconds=0.12,
+            customer_assistant_stub_qa_delay_seconds=0.5,
             customer_assistant_worker_wait_deadline_seconds=0.01,
-            customer_assistant_worker_timeout_seconds=1.0,
+            customer_assistant_worker_timeout_seconds=2.0,
         )
         with TestClient(app) as client:
             session_id = client.post("/api/v1/customer-assistant/sessions", json={}).json()["data"]["id"]
@@ -665,7 +670,7 @@ class CustomerAssistantApiContractTest(unittest.TestCase):
             ).json()["data"]
             refs = turn["taskSummaries"][0]["workerAsyncRefs"]
             worker_started = client.get(refs["workerStatusRef"]).json()["data"]
-            time.sleep(0.18)
+            time.sleep(0.65)
             refreshed = client.post(f"/api/v1/customer-assistant/sessions/{session_id}/worker-results/refresh")
 
         self.assertEqual(turn["taskSummaries"][0]["status"], "RUNNING")
