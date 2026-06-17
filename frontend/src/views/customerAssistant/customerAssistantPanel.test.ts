@@ -182,6 +182,8 @@ describe('CustomerAssistantPanel UI contract', () => {
     expect(taskLedger).toContain('task.workerAsyncRefs.workerRunId')
     expect(taskLedger).toContain('refreshWorkerResults')
     expect(taskLedger).toContain('刷新结果')
+    expect(taskLedger).toContain('cancelWorkerRun')
+    expect(taskLedger).toContain('请求取消')
   })
 
   it('renders pending proposed action edit controls in the operator panel', () => {

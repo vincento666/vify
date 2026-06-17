@@ -10,6 +10,7 @@ import {
 
 const apiMocks = vi.hoisted(() => ({
   askCustomerAssistantOperatorKnowledgeQuestion: vi.fn(),
+  cancelCustomerAssistantWorkerRun: vi.fn(),
   confirmCustomerAssistantAction: vi.fn(),
   createCustomerAssistantSession: vi.fn(),
   deliverCustomerAssistantAction: vi.fn(),
@@ -602,6 +603,54 @@ describe('customer assistant runtime integration', () => {
     expect(apiMocks.refreshCustomerAssistantWorkerResults).toHaveBeenCalledWith(12)
     expect(apiMocks.listCustomerAssistantTasks).toHaveBeenCalledWith(12)
     expect(refreshed.taskSummary.items[0].status).toBe('COMPLETED')
+  })
+
+  it('requests worker cancellation and refreshes unsupported cancellation evidence', async () => {
+    apiMocks.cancelCustomerAssistantWorkerRun.mockResolvedValue({
+      workerRunId: 'customer-assistant-worker-run-42',
+      status: 'cancel_unsupported',
+      cancellation: { supported: false },
+    })
+    apiMocks.listCustomerAssistantTasks.mockResolvedValue(mockCustomerAssistantTasks)
+    apiMocks.listCustomerAssistantEvents.mockResolvedValue({
+      list: [
+        ...mockCustomerAssistantEvents.list,
+        {
+          id: 779,
+          sessionId: 12,
+          sequence: 3,
+          type: 'worker_cancel_unsupported',
+          source: 'customer_assistant_worker',
+          actor: 'operator',
+          payload: { workerRunId: 'customer-assistant-worker-run-42', supported: false },
+        },
+      ],
+      total: 2,
+    })
+    apiMocks.listCustomerAssistantProposedActions.mockResolvedValue({
+      list: mockCustomerAssistantTurnResult.proposedActions,
+      total: 1,
+    })
+
+    const { cancelCustomerAssistantRuntimeWorkerRun, createCustomerAssistantRuntimeState } = await import(
+      './customerAssistantRuntime'
+    )
+
+    const state = await cancelCustomerAssistantRuntimeWorkerRun(
+      createCustomerAssistantRuntimeState({
+        session: { id: 12, status: 'ACTIVE' },
+        tasks: mockCustomerAssistantTasks.list,
+      }),
+      'customer-assistant-worker-run-42',
+    )
+
+    expect(apiMocks.cancelCustomerAssistantWorkerRun).toHaveBeenCalledWith('customer-assistant-worker-run-42')
+    expect(apiMocks.listCustomerAssistantTasks).toHaveBeenCalledWith(12)
+    expect(apiMocks.listCustomerAssistantEvents).toHaveBeenCalledWith(12)
+    expect(apiMocks.listCustomerAssistantProposedActions).toHaveBeenCalledWith(12)
+    expect(apiMocks.getCustomerAssistantSessionMetrics).toHaveBeenCalledWith(12)
+    expect(apiMocks.listCustomerAssistantOperatorAudit).toHaveBeenCalledWith(12)
+    expect(state.eventTimeline.some((event) => event.title === 'worker_cancel_unsupported')).toBe(true)
   })
 
   it('loads a seeded demo story into the workbench state', async () => {

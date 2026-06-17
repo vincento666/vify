@@ -1,5 +1,6 @@
 import {
   askCustomerAssistantOperatorKnowledgeQuestion,
+  cancelCustomerAssistantWorkerRun,
   confirmCustomerAssistantAction,
   createCustomerAssistantSession,
   deliverCustomerAssistantAction,
@@ -350,6 +351,46 @@ export async function refreshCustomerAssistantRuntimeWorkerResults(
     operatorKnowledgeQa: null,
     operatorKnowledgeQaLoading: false,
     operatorKnowledgeQaError: null,
+    subAgentRun: current.subAgentRun,
+    subAgentLoading: false,
+    subAgentError: null,
+    loading: false,
+    error: null,
+  }
+}
+
+export async function cancelCustomerAssistantRuntimeWorkerRun(
+  current: CustomerAssistantRuntimeState,
+  workerRunId: string,
+): Promise<CustomerAssistantRuntimeState> {
+  if (!current.session?.id) {
+    throw new Error('Customer assistant session is required before cancelling a worker run')
+  }
+  const normalizedWorkerRunId = workerRunId.trim()
+  if (!normalizedWorkerRunId) {
+    throw new Error('Worker run id is required before cancelling a worker run')
+  }
+  await cancelCustomerAssistantWorkerRun(normalizedWorkerRunId)
+  const { tasks, events, proposedActions, metrics, operatorAudit } = await refreshCustomerAssistantRuntimeLedgers(
+    current.session.id,
+  )
+  const rebuilt = buildCustomerAssistantState({
+    sessionId: current.session.id,
+    tasks: tasks.list,
+    events: events.list,
+    proposedActions: proposedActions.list,
+    operatorAudit,
+  })
+  return {
+    ...rebuilt,
+    session: current.session,
+    tasks: tasks.list,
+    events: events.list,
+    metrics,
+    operatorAudit,
+    operatorKnowledgeQa: current.operatorKnowledgeQa,
+    operatorKnowledgeQaLoading: false,
+    operatorKnowledgeQaError: current.operatorKnowledgeQaError,
     subAgentRun: current.subAgentRun,
     subAgentLoading: false,
     subAgentError: null,

@@ -666,6 +666,17 @@
                     刷新结果
                   </a-button>
                 </a-tooltip>
+                <a-tooltip v-if="task.workerAsyncRefs.workerRunId" title="请求取消 Worker">
+                  <a-button
+                    size="small"
+                    danger
+                    :loading="workerCancelLoadingRunId === task.workerAsyncRefs.workerRunId"
+                    @click="cancelWorkerRun(task.workerAsyncRefs.workerRunId)"
+                  >
+                    <CloseOutlined />
+                    请求取消
+                  </a-button>
+                </a-tooltip>
               </div>
               <div
                 v-if="editingWorkerProfileTaskId === task.id && editingWorkerProfileForm"
@@ -1172,6 +1183,7 @@ import {
 import {
   askCustomerAssistantRuntimeOperatorKnowledgeQuestion,
   buildCustomerAssistantSessionInboxRows,
+  cancelCustomerAssistantRuntimeWorkerRun,
   confirmCustomerAssistantRuntimeAction,
   createCustomerAssistantRuntimeState,
   deliverCustomerAssistantRuntimeAction,
@@ -1232,6 +1244,7 @@ const editingWorkerProfileToolRefs = ref('')
 const editingWorkerProfileError = ref<string | null>(null)
 const workerProfileSavingId = ref<string | null>(null)
 const workerRefreshLoadingTaskId = ref<number | null>(null)
+const workerCancelLoadingRunId = ref<string | null>(null)
 const subAgentLoading = ref(false)
 const editingActionId = ref<number | null>(null)
 const editingActionTitle = ref('')
@@ -1659,6 +1672,19 @@ async function refreshWorkerResults(taskId: number) {
     catchCustomerAssistantError(error, '刷新 Worker 结果失败')
   } finally {
     workerRefreshLoadingTaskId.value = null
+  }
+}
+
+async function cancelWorkerRun(workerRunId: string) {
+  workerCancelLoadingRunId.value = workerRunId
+  try {
+    runtimeState.value = await cancelCustomerAssistantRuntimeWorkerRun(runtimeState.value, workerRunId)
+    void loadDemoStoryMetrics()
+    message.warning('Worker 取消请求已记录，当前运行时不支持协作取消')
+  } catch (error) {
+    catchCustomerAssistantError(error, '请求取消 Worker 失败')
+  } finally {
+    workerCancelLoadingRunId.value = null
   }
 }
 

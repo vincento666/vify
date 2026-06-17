@@ -169,6 +169,22 @@ describe('customer-assistant frontend API client', () => {
     expect(requestMocks.get).toHaveBeenCalledWith('/v1/customer-assistant/sessions/7/operator-audit')
   })
 
+  it('requests cancellation for a worker run', async () => {
+    requestMocks.post.mockResolvedValueOnce({
+      workerRunId: 'worker-run-301',
+      status: 'cancel_unsupported',
+      cancellation: { supported: false },
+    })
+
+    const { cancelCustomerAssistantWorkerRun } = await import('./customerAssistant')
+
+    await expect(cancelCustomerAssistantWorkerRun('worker-run-301')).resolves.toMatchObject({
+      workerRunId: 'worker-run-301',
+      status: 'cancel_unsupported',
+    })
+    expect(requestMocks.post).toHaveBeenCalledWith('/v1/customer-assistant/worker-runs/worker-run-301/cancel', {})
+  })
+
   it('asks a session-scoped operator knowledge question', async () => {
     requestMocks.post.mockResolvedValueOnce({
       sessionId: 7,

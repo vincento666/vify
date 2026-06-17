@@ -78,6 +78,32 @@ const completedEvents = [
   },
 ]
 
+const cancelledEvents = [
+  ...baseEvents,
+  {
+    id: 941,
+    sessionId: 41,
+    runId: 71,
+    sequence: 2,
+    type: 'worker_cancel_requested',
+    visibility: 'operator',
+    source: 'customer_assistant_worker',
+    taskId: 301,
+    payload: { workerRunId: 'worker-run-301', supported: false },
+  },
+  {
+    id: 942,
+    sessionId: 41,
+    runId: 71,
+    sequence: 3,
+    type: 'worker_cancel_unsupported',
+    visibility: 'operator',
+    source: 'customer_assistant_worker',
+    taskId: 301,
+    payload: { workerRunId: 'worker-run-301', supported: false },
+  },
+]
+
 const turnResult = {
   runId: 71,
   sessionId: 41,
@@ -113,6 +139,7 @@ const completedMetrics = {
 }
 
 let refreshed = false
+let cancelled = false
 
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1366, height: 900 } })
@@ -149,12 +176,26 @@ try {
       await route.fulfill({ json: envelope({ consumed: 1 }) })
       return
     }
+    if (method === 'POST' && url.endsWith('/worker-runs/worker-run-301/cancel')) {
+      cancelled = true
+      await route.fulfill({
+        json: envelope({
+          workerRunId: 'worker-run-301',
+          status: 'cancel_unsupported',
+          cancellation: {
+            supported: false,
+            reason: 'Cooperative cancellation is not supported for this customer-assistant worker.',
+          },
+        }),
+      })
+      return
+    }
     if (method === 'GET' && url.endsWith('/sessions/41/tasks')) {
       await route.fulfill({ json: envelope({ list: [refreshed ? completedTask : pendingTask], total: 1 }) })
       return
     }
     if (method === 'GET' && url.endsWith('/sessions/41/events')) {
-      const events = refreshed ? completedEvents : baseEvents
+      const events = refreshed ? completedEvents : cancelled ? cancelledEvents : baseEvents
       await route.fulfill({ json: envelope({ list: events, total: events.length }) })
       return
     }
@@ -164,6 +205,10 @@ try {
     }
     if (method === 'GET' && url.endsWith('/sessions/41/metrics')) {
       await route.fulfill({ json: envelope(refreshed ? completedMetrics : pendingMetrics) })
+      return
+    }
+    if (method === 'GET' && url.endsWith('/sessions/41/operator-audit')) {
+      await route.fulfill({ json: envelope({ sessionId: 41, list: [], total: 0 }) })
       return
     }
     await route.fulfill({ status: 404, json: { code: 404, message: 'unexpected call', data: null } })
@@ -180,6 +225,11 @@ try {
     state: 'visible',
     timeout: 10000,
   })
+  await taskRow.getByRole('button', { name: '请求取消' }).click()
+  await page.getByTestId('operator-event-timeline').getByText('worker_cancel_unsupported').waitFor({
+    state: 'visible',
+    timeout: 10000,
+  })
   await taskRow.getByRole('button', { name: '刷新结果' }).click()
   await taskRow.getByText('COMPLETED').waitFor({ state: 'visible', timeout: 10000 })
   await page.getByTestId('operator-event-timeline').getByText('task_completed').waitFor({
@@ -191,6 +241,10 @@ try {
     call.method === 'POST' && call.url.endsWith('/sessions/41/worker-results/refresh')
   ))
   assert(refreshCalls.length === 1, `Expected one worker refresh call, got ${refreshCalls.length}`)
+  const cancelCalls = calls.filter((call) => (
+    call.method === 'POST' && call.url.endsWith('/worker-runs/worker-run-301/cancel')
+  ))
+  assert(cancelCalls.length === 1, `Expected one worker cancel call, got ${cancelCalls.length}`)
 
   if (screenshotPath) {
     await page.screenshot({ path: screenshotPath, fullPage: true })

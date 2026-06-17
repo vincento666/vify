@@ -277,6 +277,14 @@ export interface CustomerAssistantSubAgentRun {
   completedAt?: string | null
 }
 
+export interface CustomerAssistantWorkerCancelResult {
+  workerRunId: string
+  runId?: number
+  parentRunId?: number
+  status: string
+  cancellation?: Record<string, unknown>
+}
+
 export interface CustomerAssistantTurnPayload {
   message: string
   idempotencyKey?: string
@@ -359,6 +367,9 @@ export const askCustomerAssistantOperatorKnowledgeQuestion = (
 
 export const refreshCustomerAssistantWorkerResults = (sessionId: number) =>
   post<{ consumed: number }>(`/v1/customer-assistant/sessions/${sessionId}/worker-results/refresh`)
+
+export const cancelCustomerAssistantWorkerRun = (workerRunId: string) =>
+  post<CustomerAssistantWorkerCancelResult>(`/v1/customer-assistant/worker-runs/${workerRunId}/cancel`, {})
 
 export const proposeCustomerAssistantTaskControl = (
   sessionId: number,
