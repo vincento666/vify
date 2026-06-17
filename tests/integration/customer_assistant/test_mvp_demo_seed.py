@@ -1,5 +1,6 @@
 import importlib
 import importlib.util
+import json
 import os
 import tempfile
 import unittest
@@ -50,6 +51,33 @@ class MvpDemoSeedTest(unittest.TestCase):
                 self.assertGreaterEqual(int(action_count), 1)
                 self.assertGreaterEqual(int(knowledge_count), 1)
 
+    def test_seeded_customer_assistant_demo_tasks_use_productized_worker_routes(self) -> None:
+        spec = _find_mvp_seed_spec()
+        self.assertIsNotNone(spec, "expected app.modules.demo.mvp_seed module")
+        module = importlib.import_module("app.modules.demo.mvp_seed")
+
+        with _temp_database():
+            with get_session_factory()() as session:
+                module.seed_mvp_demo(session)
+
+                task_table = Base.metadata.tables["customer_assistant_task"]
+                task_rows = [
+                    dict(row)
+                    for row in session.execute(
+                        sa.select(
+                            task_table.c.task_key,
+                            task_table.c.worker_type,
+                            task_table.c.worker_ref,
+                        ).order_by(task_table.c.task_key.asc())
+                    ).mappings()
+                ]
+
+        serialized = json.dumps(task_rows, ensure_ascii=False, sort_keys=True)
+        flight_status = next(row for row in task_rows if row["task_key"] == "flight_status:CA1301")
+        self.assertEqual(flight_status["worker_type"], "chatflow_sop")
+        self.assertEqual(flight_status["worker_ref"], "flight_status")
+        self.assertNotIn("stub_qa", serialized)
+
     def test_env_writer_is_idempotent_and_secret_free(self) -> None:
         spec = _find_mvp_seed_spec()
         self.assertIsNotNone(spec, "expected app.modules.demo.mvp_seed module")
@@ -83,6 +111,9 @@ class MvpDemoSeedTest(unittest.TestCase):
             self.assertIn("manual_confirm", content)
             self.assertNotIn("OPENROUTER_API_KEY", content)
             self.assertNotIn("sk-", content)
+            self.assertNotIn("stub_qa", content)
+            self.assertNotIn("baggage_allowance_stub", content)
+            self.assertNotIn("fake_stub_qa_model", content)
 
 
 class _temp_database:

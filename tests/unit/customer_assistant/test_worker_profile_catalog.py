@@ -56,3 +56,16 @@ class CustomerAssistantWorkerProfileCatalogTest(unittest.TestCase):
         self.assertIn("refund_ticket", raw)
         self.assertNotIn("api_key", raw.lower())
         self.assertNotIn("token", raw.lower())
+
+    def test_default_mvp_profiles_do_not_expose_legacy_stub_markers(self) -> None:
+        raw = default_customer_assistant_worker_profiles_json()
+        catalog = CustomerAssistantWorkerProfileCatalog.default()
+        baggage = catalog.resolve("baggage_qa")
+
+        self.assertIsNotNone(baggage)
+        self.assertEqual(baggage.profile_id, "baggage_service_chatflow")
+        self.assertEqual(baggage.worker_type, "chatflow_sop")
+        self.assertEqual(baggage.worker_ref, "baggage_service")
+        self.assertNotIn("stub_qa", raw)
+        self.assertNotIn("baggage_allowance_stub", raw)
+        self.assertNotIn("fake_stub_qa_model", raw)

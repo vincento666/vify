@@ -1,3 +1,4 @@
+import json
 import unittest
 import tempfile
 import threading
@@ -13,6 +14,7 @@ from app.modules.customer_assistant.domain.models import TaskItem, TaskStatus, W
 from app.modules.customer_assistant.domain.scheduler import LocalWorkerScheduler
 from app.modules.customer_assistant.domain.service import CustomerAssistantService
 from app.modules.customer_assistant.domain.worker_runtime import CustomerAssistantWorkerRuntime
+from app.modules.customer_assistant.domain.worker_profiles import CustomerAssistantWorkerProfileCatalog
 from app.modules.customer_assistant.domain.workers import ChatflowSopWorker, RecommendationAggregator, StubQaWorker
 from app.modules.customer_assistant.infra.repository import CustomerAssistantRepository
 from app.modules.customer_assistant.infra.schema import (
@@ -44,6 +46,32 @@ class CustomerAssistantWorkersTest(unittest.TestCase):
         self.assertEqual(completed.status, TaskStatus.COMPLETED)
         self.assertEqual(completed.proposed_actions[0]["actionType"], "submit_refund")
         self.assertEqual(completed.proposed_actions[0]["payload"]["orderNo"], "TK-100")
+
+    def test_default_baggage_profile_runs_deterministic_chatflow_worker_without_stub_evidence(self) -> None:
+        profile = CustomerAssistantWorkerProfileCatalog.default().resolve("baggage_qa")
+        self.assertIsNotNone(profile)
+        self.assertEqual(profile.worker_type, "chatflow_sop")
+        self.assertEqual(profile.worker_ref, "baggage_service")
+
+        result = ChatflowSopWorker(FakeSopRuntimeAdapter()).run(
+            _task(2, profile.task_key, profile.worker_type, profile.worker_ref),
+            "行李额多少？",
+        )
+
+        serialized = json.dumps(
+            {
+                "workerType": result.worker_type,
+                "evidence": result.evidence,
+                "events": result.events,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        self.assertEqual(result.worker_type, "chatflow_sop")
+        self.assertEqual(result.status, TaskStatus.WAITING)
+        self.assertIn("行李", result.customer_reply_draft)
+        self.assertEqual(result.evidence["sopId"], "baggage_service")
+        self.assertNotIn("stub_qa", serialized)
 
     def test_stub_qa_and_aggregator_return_separate_operator_and_customer_text(self) -> None:
         qa_result = StubQaWorker().run(_task(2, "baggage_qa", "stub_qa", "baggage_allowance"), "行李额多少？")
@@ -116,6 +144,7 @@ class CustomerAssistantWorkersTest(unittest.TestCase):
                     wait_deadline_seconds=0.05,
                     task_timeout_seconds=0.01,
                 ),
+                worker_profiles=_legacy_stub_baggage_profiles(),
             )
             assistant_session = service.create_session()
 
@@ -171,6 +200,7 @@ class CustomerAssistantWorkersTest(unittest.TestCase):
                     wait_deadline_seconds=0.01,
                     task_timeout_seconds=1.0,
                 ),
+                worker_profiles=_legacy_stub_baggage_profiles(),
             )
             assistant_session = service.create_session()
 
@@ -203,6 +233,7 @@ class CustomerAssistantWorkersTest(unittest.TestCase):
                     session_factory=factory,
                     task_timeout_seconds=1.0,
                 ),
+                worker_profiles=_legacy_stub_baggage_profiles(),
             )
             assistant_session = service.create_session()
 
@@ -270,6 +301,7 @@ class CustomerAssistantWorkersTest(unittest.TestCase):
                     session_factory=factory,
                     wait_deadline_seconds=0.05,
                 ),
+                worker_profiles=_legacy_stub_baggage_profiles(),
             )
             assistant_session = service.create_session()
 
@@ -298,6 +330,27 @@ def _task(
         worker_type=worker_type,
         worker_ref=worker_ref,
         checkpoint=checkpoint or {},
+    )
+
+
+def _legacy_stub_baggage_profiles() -> CustomerAssistantWorkerProfileCatalog:
+    return CustomerAssistantWorkerProfileCatalog.from_json(
+        json.dumps(
+            {
+                "profiles": [
+                    {
+                        "profileId": "legacy_baggage_stub",
+                        "taskKey": "baggage_qa",
+                        "taskType": "QA",
+                        "workerType": "stub_qa",
+                        "workerRef": "baggage_allowance",
+                        "modelPolicyRef": "legacy_stub_qa_model",
+                        "promptRef": "baggage_allowance_prompt",
+                        "riskPolicyRef": "read_only",
+                    }
+                ]
+            }
+        )
     )
 
 
