@@ -307,11 +307,11 @@ def submit_turn(
 def spawn_sub_agent(
     request: CustomerAssistantSpawnSubAgentRequest,
     background_tasks: BackgroundTasks,
-    _access: RequestContext = Depends(require_customer_assistant_operate),
+    request_context: RequestContext = Depends(require_customer_assistant_operate),
     session: Session = Depends(get_session),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
-    service = build_customer_assistant_service(session, settings)
+    service = build_customer_assistant_service(session, settings, request_context=request_context)
     arguments = request.arguments
     spawned = service.spawn_sub_agent(
         session_id=arguments.session_id,
@@ -329,6 +329,7 @@ def spawn_sub_agent(
         arguments.input.message,
         arguments.input.actor,
         arguments.event_level,
+        request_context,
     )
     return success(spawned)
 
@@ -341,9 +342,10 @@ def _run_spawned_sub_agent_background(
     message: str,
     actor: str,
     event_level: str,
+    request_context: RequestContext,
 ) -> None:
     with session_factory() as session:
-        service = build_customer_assistant_service(session, settings)
+        service = build_customer_assistant_service(session, settings, request_context=request_context)
         service.run_spawned_sub_agent(run_id, session_id, message, actor, event_level)
 
 

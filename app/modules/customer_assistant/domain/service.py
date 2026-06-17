@@ -323,6 +323,18 @@ class CustomerAssistantService:
             source="harness",
             actor=actor,
         )
+        if self._request_context is not None and _should_record_host_context(self._request_context):
+            self._repository.append_event(
+                session_id,
+                "session_context_snapshot",
+                {
+                    "subAgentRunId": sub_agent_run_public_id(run_id),
+                    "hostContext": sanitize_value(self._request_context.audit_metadata()),
+                },
+                run_id=run_id,
+                source="harness",
+                actor=actor,
+            )
         self._repository.append_event(
             session_id,
             "sub_agent_progress",
