@@ -97,6 +97,12 @@ class LiveAcceptanceResult:
 LiveRunner = Callable[[LiveReactAcceptanceConfig], LiveAcceptanceResult]
 
 
+class LiveModelPoolError(RuntimeError):
+    def __init__(self, message: str, attempts: list[dict[str, str]]) -> None:
+        super().__init__(message)
+        self.attempts = list(attempts)
+
+
 def load_live_react_acceptance_config(
     env: dict[str, str] | os._Environ[str] | None = None,
     output_dir: Path | None = None,
@@ -538,11 +544,16 @@ class _LiveTwoStageFinalizer(TwoStageFinalizer):
             "customerReplyDraft": baseline_result.customer_reply_draft,
             "warnings": list(baseline_result.warnings),
         }
+        target = {
+            "schemaVersion": TWO_STAGE_FINAL_SCHEMA_VERSION,
+            **baseline,
+        }
         prompt = (
             "Return strict JSON only for Hify customer-assistant Two-Stage ReAct finalization. "
-            "You must preserve the baseline final recommendation exactly so the promotion gate can compare it. "
+            "You must copy the exact target JSON object. Do not translate, summarize, reorder, or rewrite any string. "
             f"Required schemaVersion: {TWO_STAGE_FINAL_SCHEMA_VERSION}\n"
             f"Input pack: {json.dumps(input_pack, ensure_ascii=False)}\n"
+            f"Exact target JSON: {json.dumps(target, ensure_ascii=False)}\n"
             f"Baseline final: {json.dumps(baseline, ensure_ascii=False)}"
         )
 
@@ -559,12 +570,16 @@ class _LiveTwoStageFinalizer(TwoStageFinalizer):
                 raise ValueError("warnings must be a list")
             return content
 
-        content, attempts, success_model = self._pool.complete_json(
-            phase="two_stage_final",
-            prompt=prompt,
-            max_tokens=1400,
-            validate=validate,
-        )
+        try:
+            content, attempts, success_model = self._pool.complete_json(
+                phase="two_stage_final",
+                prompt=prompt,
+                max_tokens=1400,
+                validate=validate,
+            )
+        except LiveModelPoolError as exc:
+            self.attempts.extend(exc.attempts)
+            raise
         self.attempts.extend(attempts)
         self.success_model = success_model
         return _json_object(content)
@@ -596,15 +611,20 @@ class _LiveReactToolModel(ReactWorkerModel):
 
         tool = _react_tool_definition(self._tool_name)
         prompt = (
-            f"Use the provided tool `{self._tool_name}` for the customer-assistant ReAct worker. "
+            f"Return a tool call to `{self._tool_name}` for the customer-assistant ReAct worker. "
             f"Task business key: {task.business_key}. Customer message: {message}. "
-            "Do not answer directly."
+            f"The tool arguments must be JSON with orderNo set to `{task.business_key}`. "
+            "Do not answer directly and do not emit plain text."
         )
-        tool_call, attempts, success_model = self._pool.complete_tool_call(
-            phase=f"react_{self._tool_name}",
-            prompt=prompt,
-            tool=tool,
-        )
+        try:
+            tool_call, attempts, success_model = self._pool.complete_tool_call(
+                phase=f"react_{self._tool_name}",
+                prompt=prompt,
+                tool=tool,
+            )
+        except LiveModelPoolError as exc:
+            self.attempts.extend(exc.attempts)
+            raise
         self.attempts.extend(attempts)
         self.success_model = success_model
         args = dict(tool_call.arguments)
@@ -658,7 +678,7 @@ class _ModelPoolChat:
                 return validated, attempts, model
             except Exception as exc:  # noqa: BLE001 - model fallback must record live provider/schema failures.
                 attempts.append({"phase": phase, "model": model, "status": "failed", "error": str(exc)[:300]})
-        raise RuntimeError(f"No model passed phase {phase}: {attempts}")
+        raise LiveModelPoolError(f"No model passed phase {phase}: {attempts}", attempts)
 
     def complete_tool_call(
         self,
@@ -697,7 +717,7 @@ class _ModelPoolChat:
                 return selected, attempts, model
             except Exception as exc:  # noqa: BLE001 - model fallback must record live provider/schema failures.
                 attempts.append({"phase": phase, "model": model, "status": "failed", "error": str(exc)[:300]})
-        raise RuntimeError(f"No model returned required tool call for phase {phase}: {attempts}")
+        raise LiveModelPoolError(f"No model returned required tool call for phase {phase}: {attempts}", attempts)
 
 
 class _ReactTaskCore:

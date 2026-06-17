@@ -1,5 +1,6 @@
 import importlib
 import os
+from types import SimpleNamespace
 import tempfile
 import unittest
 from pathlib import Path
@@ -238,6 +239,78 @@ class CustomerAssistantLiveReactAcceptanceGateTest(unittest.TestCase):
             self.assertIn("react_worker_tool_call_policy_and_event_echo", content)
             self.assertIn("proposed_action_safety_boundaries", content)
             self.assertNotIn("unit-api-key", content)
+
+    def test_two_stage_prompt_includes_exact_target_json_for_live_model_copying(self) -> None:
+        module = _load_gate_module(self)
+        config = module.LiveReactAcceptanceConfig(
+            enabled=True,
+            provider_type="OPENAI_COMPATIBLE",
+            base_url="https://example.test/v1",
+            api_key="unit-api-key",
+            model_pool=("unit-model",),
+        )
+        finalizer = module._LiveTwoStageFinalizer(config)
+
+        class CapturingPool:
+            def complete_json(self, *, phase, prompt, max_tokens, validate):
+                self.prompt = prompt
+                self.max_tokens = max_tokens
+                self.phase = phase
+                self.validated = validate(
+                    """{"schemaVersion":"customer_assistant.two_stage_final/1","operatorRecommendation":"请核对行李规则。","customerReplyDraft":"您的行李额度请以订单规则为准。","warnings":["manual-check"]}"""
+                )
+                return self.validated, [{"phase": phase, "model": "unit-model", "status": "passed"}], "unit-model"
+
+        pool = CapturingPool()
+        finalizer._pool = pool
+
+        result = finalizer.finalize(
+            {"task": "baggage_qa"},
+            SimpleNamespace(
+                operator_recommendation="请核对行李规则。",
+                customer_reply_draft="您的行李额度请以订单规则为准。",
+                warnings=["manual-check"],
+            ),
+        )
+
+        self.assertEqual(result["operatorRecommendation"], "请核对行李规则。")
+        self.assertIn("Exact target JSON", pool.prompt)
+        self.assertLess(pool.prompt.index("Exact target JSON"), pool.prompt.index("Baseline final:"))
+
+    def test_live_model_pool_failures_preserve_attempt_evidence(self) -> None:
+        module = _load_gate_module(self)
+        attempts = [
+            {
+                "phase": "react_lookup_order",
+                "model": "deepseek/deepseek-v4-flash",
+                "status": "failed",
+                "error": "model did not return tool_calls",
+            }
+        ]
+        config = module.LiveReactAcceptanceConfig(
+            enabled=True,
+            provider_type="OPENAI_COMPATIBLE",
+            base_url="https://example.test/v1",
+            api_key="unit-api-key",
+            model_pool=("deepseek/deepseek-v4-flash",),
+        )
+
+        class FailingPool:
+            def complete_tool_call(self, *, phase, prompt, tool):
+                raise module.LiveModelPoolError(f"No model returned required tool call for phase {phase}", attempts)
+
+        model = module._LiveReactToolModel(config, tool_name="lookup_order", risk="read")
+        model._pool = FailingPool()
+
+        with self.assertRaises(module.LiveModelPoolError):
+            model.next_action(
+                task=SimpleNamespace(business_key="TK-100"),
+                message="查 TK-100",
+                observation=None,
+                iteration=1,
+            )
+
+        self.assertEqual(model.attempts, attempts)
 
 
 def _load_gate_module(test_case: unittest.TestCase):
