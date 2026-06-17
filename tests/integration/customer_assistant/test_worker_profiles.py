@@ -160,6 +160,53 @@ class CustomerAssistantWorkerProfileApiTest(unittest.TestCase):
         self.assertEqual(profile_refs["promptRef"], "runtime-refund-prompt")
         self.assertEqual(profile_refs["riskPolicyRef"], "manual_confirm_high_risk")
 
+    def test_invalid_worker_profile_update_is_rejected_without_persisting_override(self) -> None:
+        valid_payload = {
+            "taskKey": "refund_ticket",
+            "taskType": "REFUND",
+            "workerType": "chatflow_sop",
+            "workerRef": "runtime_configured_refund",
+            "modelPolicyRef": "demo-model-v2",
+            "promptRef": "runtime-refund-prompt",
+            "toolRefs": ["lookup_order", "refund_policy_lookup"],
+            "toolPolicyRef": "strict-read-before-write",
+            "riskPolicyRef": "manual_confirm_high_risk",
+            "outputSchemaRef": "refund_worker_result_v2",
+            "enabled": True,
+        }
+        invalid_cases = [
+            ({"workerType": "raect_worker"}, "Supported worker types"),
+            ({"modelPolicyRef": ""}, "modelPolicyRef"),
+            ({"promptRef": " "}, "promptRef"),
+            ({"toolPolicyRef": ""}, "toolPolicyRef"),
+            ({"riskPolicyRef": ""}, "riskPolicyRef"),
+            ({"outputSchemaRef": ""}, "outputSchemaRef"),
+            ({"toolRefs": ["lookup_order", "", "lookup_order"]}, "toolRefs"),
+        ]
+
+        with TestClient(app) as client:
+            baseline = client.get("/api/v1/customer-assistant/worker-profiles").json()["data"]["list"][0]
+
+            for override, expected_message in invalid_cases:
+                with self.subTest(override=override):
+                    rejected = client.patch(
+                        "/api/v1/customer-assistant/worker-profiles/configured_refund_stub",
+                        json={**valid_payload, **override},
+                    )
+                    self.assertEqual(rejected.status_code, 400, rejected.text)
+                    self.assertIn(expected_message, rejected.json()["message"])
+
+                    profiles = client.get("/api/v1/customer-assistant/worker-profiles").json()["data"]["list"]
+                    profile = next(item for item in profiles if item["profileId"] == "configured_refund_stub")
+                    self.assertEqual(profile["workerType"], baseline["workerType"])
+                    self.assertEqual(profile["workerRef"], baseline["workerRef"])
+                    self.assertEqual(profile["modelPolicyRef"], baseline["modelPolicyRef"])
+                    self.assertEqual(profile["promptRef"], baseline["promptRef"])
+                    self.assertEqual(profile["toolRefs"], baseline["toolRefs"])
+                    self.assertEqual(profile["toolPolicyRef"], baseline["toolPolicyRef"])
+                    self.assertEqual(profile["riskPolicyRef"], baseline["riskPolicyRef"])
+                    self.assertEqual(profile["outputSchemaRef"], baseline["outputSchemaRef"])
+
     def test_worker_profile_overrides_are_scoped_by_host_tenant(self) -> None:
         tenant_a_headers = _host_headers("tenant-profile-a")
         tenant_b_headers = _host_headers("tenant-profile-b")

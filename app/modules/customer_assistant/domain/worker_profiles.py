@@ -167,18 +167,32 @@ def _profile_from_mapping(item: dict[str, Any]) -> CustomerAssistantWorkerProfil
         task_type=str(item.get("taskType") or item.get("task_type") or ""),
         worker_type=str(item.get("workerType") or item.get("worker_type") or ""),
         worker_ref=str(item.get("workerRef") or item.get("worker_ref") or ""),
-        model_policy_ref=str(item.get("modelPolicyRef") or item.get("model_policy_ref") or "default"),
-        prompt_ref=str(item.get("promptRef") or item.get("prompt_ref") or "default"),
+        model_policy_ref=_string_config_ref(item, "modelPolicyRef", "model_policy_ref", "default"),
+        prompt_ref=_string_config_ref(item, "promptRef", "prompt_ref", "default"),
         tool_refs=tuple(str(tool) for tool in list(item.get("toolRefs") or item.get("tool_refs") or [])),
-        tool_policy_ref=str(
-            item.get("toolPolicyRef") or item.get("tool_policy_ref") or "customer_assistant_worker_tool_default"
+        tool_policy_ref=_string_config_ref(
+            item,
+            "toolPolicyRef",
+            "tool_policy_ref",
+            "customer_assistant_worker_tool_default",
         ),
-        risk_policy_ref=str(item.get("riskPolicyRef") or item.get("risk_policy_ref") or "manual_confirm"),
-        output_schema_ref=str(
-            item.get("outputSchemaRef") or item.get("output_schema_ref") or "customer_assistant_worker_result_v1"
+        risk_policy_ref=_string_config_ref(item, "riskPolicyRef", "risk_policy_ref", "manual_confirm"),
+        output_schema_ref=_string_config_ref(
+            item,
+            "outputSchemaRef",
+            "output_schema_ref",
+            "customer_assistant_worker_result_v1",
         ),
         enabled=bool(item.get("enabled", True)),
     )
+
+
+def _string_config_ref(item: dict[str, Any], camel_key: str, snake_key: str, default: str) -> str:
+    if camel_key in item:
+        return "" if item[camel_key] is None else str(item[camel_key])
+    if snake_key in item:
+        return "" if item[snake_key] is None else str(item[snake_key])
+    return default
 
 
 def _task_key_matches_profile(task_key: str, profile: CustomerAssistantWorkerProfile) -> bool:

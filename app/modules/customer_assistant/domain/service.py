@@ -2322,6 +2322,9 @@ def _worker_profile_refs(profile: CustomerAssistantWorkerProfile) -> dict[str, A
     }
 
 
+SUPPORTED_CUSTOMER_ASSISTANT_WORKER_TYPES = frozenset({"chatflow_sop", "stub_qa", "react_worker"})
+
+
 def _validate_worker_profile(profile: CustomerAssistantWorkerProfile) -> None:
     missing = [
         field_name
@@ -2336,6 +2339,37 @@ def _validate_worker_profile(profile: CustomerAssistantWorkerProfile) -> None:
     ]
     if missing:
         raise BizError(ErrorCode.BAD_REQUEST, f"Missing worker profile fields: {', '.join(missing)}")
+    worker_type = str(profile.worker_type or "").strip()
+    if worker_type not in SUPPORTED_CUSTOMER_ASSISTANT_WORKER_TYPES:
+        supported = ", ".join(sorted(SUPPORTED_CUSTOMER_ASSISTANT_WORKER_TYPES))
+        raise BizError(
+            ErrorCode.BAD_REQUEST,
+            f"Unsupported workerType: {profile.worker_type}. Supported worker types: {supported}",
+        )
+    blank_refs = [
+        field_name
+        for field_name, value in {
+            "modelPolicyRef": profile.model_policy_ref,
+            "promptRef": profile.prompt_ref,
+            "toolPolicyRef": profile.tool_policy_ref,
+            "riskPolicyRef": profile.risk_policy_ref,
+            "outputSchemaRef": profile.output_schema_ref,
+        }.items()
+        if not str(value or "").strip()
+    ]
+    if blank_refs:
+        raise BizError(ErrorCode.BAD_REQUEST, f"Blank worker profile refs: {', '.join(blank_refs)}")
+    normalized_tool_refs = [str(tool_ref or "").strip() for tool_ref in profile.tool_refs]
+    if any(not tool_ref for tool_ref in normalized_tool_refs):
+        raise BizError(ErrorCode.BAD_REQUEST, "Invalid toolRefs: blank values are not allowed")
+    duplicate_tool_refs = sorted(
+        tool_ref for tool_ref in set(normalized_tool_refs) if normalized_tool_refs.count(tool_ref) > 1
+    )
+    if duplicate_tool_refs:
+        raise BizError(
+            ErrorCode.BAD_REQUEST,
+            f"Invalid toolRefs: duplicate values are not allowed: {', '.join(duplicate_tool_refs)}",
+        )
 
 
 def _format_event(row: dict[str, Any]) -> dict[str, Any]:
