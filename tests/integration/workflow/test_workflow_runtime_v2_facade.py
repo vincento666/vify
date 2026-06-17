@@ -62,10 +62,38 @@ class WorkflowRuntimeV2FacadeTest(unittest.TestCase):
         self.assertEqual([node["status"] for node in debug["nodeDetails"]], ["SUCCEEDED", "SUCCEEDED"])
         self.assertTrue(any(event["type"] == "workflow_node_completed" for event in debug["events"]))
 
-    def test_workflow_v2_rejects_unsupported_graph_without_partial_execution(self) -> None:
+    def test_workflow_v2_executes_llm_node_with_runtime_events(self) -> None:
         with TestClient(app) as client:
             workflow = _create_workflow(client, message="unsupported", node_type="LLM")
             client.post(f"/api/v1/workflows/{workflow['id']}/publish")
+            started = client.post(
+                f"/api/v1/workflows/{workflow['id']}/runs-v2",
+                json={"input": {"sys.query": "hello runtime v2 llm"}},
+            ).json()["data"]
+            terminal = _wait_for_result(client, started["resultRef"])
+            events = client.get(started["eventsRef"]).json()["data"]["list"]
+            nodes = client.get(started["nodesRef"]).json()["data"]["list"]
+
+        self.assertEqual(terminal["status"], "SUCCEEDED")
+        self.assertEqual(terminal["output"], {"final": "LLM mock: unsupported"})
+        self.assertTrue(
+            any(
+                event["type"] == "workflow_node_completed"
+                and event.get("nodeId") == "middle_1"
+                and event["payload"]["nodeType"] == "LLM"
+                for event in events
+            ),
+            events,
+        )
+        llm_node = next(node for node in nodes if node["nodeKey"] == "middle_1")
+        self.assertEqual(llm_node["status"], "COMPLETED")
+        self.assertEqual(llm_node["outputs"]["content"], "LLM mock: unsupported")
+
+    def test_workflow_v2_rejects_unsupported_graph_without_partial_execution(self) -> None:
+        with TestClient(app) as client:
+            workflow = _create_branching_message_workflow(client)
+            published = client.post(f"/api/v1/workflows/{workflow['id']}/publish")
+            self.assertEqual(published.status_code, 200, published.text)
             response = client.post(
                 f"/api/v1/workflows/{workflow['id']}/runs-v2",
                 json={"input": {"sys.query": "hello"}},
@@ -73,7 +101,7 @@ class WorkflowRuntimeV2FacadeTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
         payload = response.json()
-        self.assertIn("unsupportedNodes", payload["message"])
+        self.assertIn("unsupportedPatterns", payload["message"])
         self.assertNotIn("eventStreamRef", payload)
 
     def test_workflow_v2_resume_uses_published_snapshot_after_draft_edit(self) -> None:
@@ -200,6 +228,45 @@ def _create_workflow(client: TestClient, *, message: str, node_type: str = "MESS
             "edges": [
                 {"sourceNodeKey": "start", "targetNodeKey": "middle_1", "condition": None},
                 {"sourceNodeKey": "middle_1", "targetNodeKey": "end", "condition": None},
+            ],
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["data"]
+
+
+def _create_branching_message_workflow(client: TestClient) -> dict[str, object]:
+    response = client.post(
+        "/api/v1/workflows",
+        json={
+            "name": f"Workflow V2 Branching Unsupported {datetime.now().timestamp()}",
+            "description": "runtime v2 rejects non-condition branching before partial execution",
+            "nodes": [
+                {"nodeKey": "start", "type": "START", "name": "Start", "config": {}},
+                {
+                    "nodeKey": "message_a",
+                    "type": "MESSAGE",
+                    "name": "Message A",
+                    "config": {"content": "branch a", "outputVariable": "content"},
+                },
+                {
+                    "nodeKey": "message_b",
+                    "type": "MESSAGE",
+                    "name": "Message B",
+                    "config": {"content": "branch b", "outputVariable": "content"},
+                },
+                {
+                    "nodeKey": "end",
+                    "type": "END",
+                    "name": "End",
+                    "config": {"outputVariable": "final", "output": "{{message_a.content}}"},
+                },
+            ],
+            "edges": [
+                {"sourceNodeKey": "start", "targetNodeKey": "message_a", "condition": None},
+                {"sourceNodeKey": "start", "targetNodeKey": "message_b", "condition": None},
+                {"sourceNodeKey": "message_a", "targetNodeKey": "end", "condition": None},
+                {"sourceNodeKey": "message_b", "targetNodeKey": "end", "condition": None},
             ],
         },
     )

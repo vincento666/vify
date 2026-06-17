@@ -53,7 +53,7 @@ class ChatflowRuntimeV2FacadeTest(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         payload = response.json()
         self.assertEqual(payload["code"], 400)
-        self.assertIn("unsupportedNodes", payload["message"])
+        self.assertIn("unsupportedPatterns", payload["message"])
         self.assertNotIn("eventStreamRef", payload)
 
     def test_resume_is_idempotent_for_same_checkpoint_and_input(self) -> None:
@@ -89,12 +89,30 @@ def _create_unsupported_chatflow(client: TestClient) -> dict[str, object]:
             "description": "",
             "nodes": [
                 {"nodeKey": "start", "type": "START", "name": "Start", "config": {}},
-                {"nodeKey": "llm_1", "type": "LLM", "name": "LLM", "config": {}},
-                {"nodeKey": "end", "type": "END", "name": "End", "config": {"outputVariable": "final", "output": "done"}},
+                {
+                    "nodeKey": "message_a",
+                    "type": "MESSAGE",
+                    "name": "Message A",
+                    "config": {"content": "branch a", "outputVariable": "content"},
+                },
+                {
+                    "nodeKey": "message_b",
+                    "type": "MESSAGE",
+                    "name": "Message B",
+                    "config": {"content": "branch b", "outputVariable": "content"},
+                },
+                {
+                    "nodeKey": "end",
+                    "type": "END",
+                    "name": "End",
+                    "config": {"outputVariable": "final", "output": "{{message_a.content}}"},
+                },
             ],
             "edges": [
-                {"sourceNodeKey": "start", "targetNodeKey": "llm_1", "condition": None},
-                {"sourceNodeKey": "llm_1", "targetNodeKey": "end", "condition": None},
+                {"sourceNodeKey": "start", "targetNodeKey": "message_a", "condition": None},
+                {"sourceNodeKey": "start", "targetNodeKey": "message_b", "condition": None},
+                {"sourceNodeKey": "message_a", "targetNodeKey": "end", "condition": None},
+                {"sourceNodeKey": "message_b", "targetNodeKey": "end", "condition": None},
             ],
         },
     )

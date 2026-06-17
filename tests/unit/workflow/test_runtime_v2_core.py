@@ -14,52 +14,55 @@ class RuntimeV2CoreTest(unittest.TestCase):
         self.assertEqual(chatflow_refs["ownerType"], "CHATFLOW")
         self.assertEqual(chatflow_refs["resultRef"], "/api/v1/runtime-runs/12/result")
 
-    def test_compatibility_checker_rejects_whole_graph_without_node_level_mixing(self) -> None:
+    def test_compatibility_checker_rejects_unknown_nodes_and_unsupported_patterns(self) -> None:
         result = RuntimeV2CompatibilityChecker.check(
             nodes=[
                 {"nodeKey": "start", "type": "START"},
-                {"nodeKey": "llm_1", "type": "LLM"},
+                {"nodeKey": "tool_1", "type": "TOOL_CALL"},
                 {"nodeKey": "end", "type": "END"},
             ],
             edges=[
-                {"sourceNodeKey": "start", "targetNodeKey": "llm_1"},
+                {"sourceNodeKey": "start", "targetNodeKey": "tool_1"},
                 {"sourceNodeKey": "start", "targetNodeKey": "end"},
             ],
         )
 
         self.assertFalse(result["supported"])
         self.assertEqual(result["fallbackScope"], "whole_graph")
-        self.assertIn({"nodeKey": "llm_1", "nodeType": "LLM"}, result["unsupportedNodes"])
+        self.assertIn({"nodeKey": "tool_1", "nodeType": "TOOL_CALL"}, result["unsupportedNodes"])
         self.assertIn("branching_edges", result["unsupportedPatterns"])
 
-    def test_compatibility_checker_accepts_knowledge_but_still_rejects_llm(self) -> None:
+    def test_compatibility_checker_accepts_knowledge_and_llm_but_still_rejects_tool_call(self) -> None:
         supported = RuntimeV2CompatibilityChecker.check(
             nodes=[
                 {"nodeKey": "start", "type": "START"},
                 {"nodeKey": "knowledge_1", "type": "KNOWLEDGE"},
+                {"nodeKey": "llm_1", "type": "LLM"},
                 {"nodeKey": "end", "type": "END"},
             ],
             edges=[
                 {"sourceNodeKey": "start", "targetNodeKey": "knowledge_1"},
-                {"sourceNodeKey": "knowledge_1", "targetNodeKey": "end"},
+                {"sourceNodeKey": "knowledge_1", "targetNodeKey": "llm_1"},
+                {"sourceNodeKey": "llm_1", "targetNodeKey": "end"},
             ],
         )
         rejected = RuntimeV2CompatibilityChecker.check(
             nodes=[
                 {"nodeKey": "start", "type": "START"},
-                {"nodeKey": "llm_1", "type": "LLM"},
+                {"nodeKey": "tool_1", "type": "TOOL_CALL"},
                 {"nodeKey": "end", "type": "END"},
             ],
             edges=[
-                {"sourceNodeKey": "start", "targetNodeKey": "llm_1"},
-                {"sourceNodeKey": "llm_1", "targetNodeKey": "end"},
+                {"sourceNodeKey": "start", "targetNodeKey": "tool_1"},
+                {"sourceNodeKey": "tool_1", "targetNodeKey": "end"},
             ],
         )
 
         self.assertTrue(supported["supported"], supported)
         self.assertIn("KNOWLEDGE", supported["supportedNodeTypes"])
+        self.assertIn("LLM", supported["supportedNodeTypes"])
         self.assertFalse(rejected["supported"])
-        self.assertIn({"nodeKey": "llm_1", "nodeType": "LLM"}, rejected["unsupportedNodes"])
+        self.assertIn({"nodeKey": "tool_1", "nodeType": "TOOL_CALL"}, rejected["unsupportedNodes"])
 
 
 if __name__ == "__main__":

@@ -93,15 +93,28 @@ class ChatflowSopWorkerV2AdapterTest(unittest.TestCase):
             self.assertIn("workflow_node_started", api_event_types)
             self.assertIn("node_status_changed", api_event_types)
 
-    def test_unsupported_chatflow_sop_falls_back_to_v1_without_fake_v2_refs(self) -> None:
+    def test_llm_chatflow_sop_uses_v2_refs_without_falling_back(self) -> None:
         with TestClient(app) as client:
-            chatflow = _create_message_chatflow(client, content="fallback", node_type="LLM")
+            chatflow = _create_message_chatflow(client, content="llm v2", node_type="LLM")
             with _session() as session:
                 worker = ChatflowSopWorker(_adapter(session, {"refund_ticket": chatflow["id"]}))
                 result = worker.run(_task(task_id=502, session_id=78, task_key="refund_ticket", worker_ref="refund_ticket"), "我要退票")
 
         self.assertEqual(result.status, TaskStatus.COMPLETED)
         self.assertIn("LLM mock", result.customer_reply_draft)
+        self.assertEqual(result.evidence["runtimeVersion"], 2)
+        self.assertIn("chatflowRuntimeRefs", result.evidence)
+        self.assertTrue(any(event["payload"]["type"] == "chatflow_v2_selected" for event in result.events))
+        self.assertFalse(any(event["payload"]["type"] == "chatflow_v2_fallback" for event in result.events))
+
+    def test_unsupported_chatflow_sop_falls_back_to_v1_without_fake_v2_refs(self) -> None:
+        with TestClient(app) as client:
+            chatflow = _create_branching_message_chatflow(client)
+            with _session() as session:
+                worker = ChatflowSopWorker(_adapter(session, {"refund_ticket": chatflow["id"]}))
+                result = worker.run(_task(task_id=512, session_id=78, task_key="refund_ticket", worker_ref="refund_ticket"), "我要退票")
+
+        self.assertEqual(result.status, TaskStatus.COMPLETED)
         self.assertNotIn("chatflowRuntimeRefs", result.evidence)
         self.assertTrue(any(event["payload"]["type"] == "chatflow_v2_fallback" for event in result.events))
 
@@ -268,6 +281,45 @@ def _create_message_chatflow(client: TestClient, *, content: str, node_type: str
             "edges": [
                 {"sourceNodeKey": "start", "targetNodeKey": "middle_1", "condition": None},
                 {"sourceNodeKey": "middle_1", "targetNodeKey": "end", "condition": None},
+            ],
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["data"]
+
+
+def _create_branching_message_chatflow(client: TestClient) -> dict[str, object]:
+    response = client.post(
+        "/api/v1/chatflows",
+        json={
+            "name": f"066 Chatflow SOP Branching {time.time_ns()}",
+            "description": "runtime v2 fallback fixture",
+            "nodes": [
+                {"nodeKey": "start", "type": "START", "name": "Start", "config": {}},
+                {
+                    "nodeKey": "message_a",
+                    "type": "MESSAGE",
+                    "name": "Message A",
+                    "config": {"content": "fallback branch a", "outputVariable": "content"},
+                },
+                {
+                    "nodeKey": "message_b",
+                    "type": "MESSAGE",
+                    "name": "Message B",
+                    "config": {"content": "fallback branch b", "outputVariable": "content"},
+                },
+                {
+                    "nodeKey": "end",
+                    "type": "END",
+                    "name": "End",
+                    "config": {"outputVariable": "final", "output": "{{message_a.content}}"},
+                },
+            ],
+            "edges": [
+                {"sourceNodeKey": "start", "targetNodeKey": "message_a", "condition": None},
+                {"sourceNodeKey": "start", "targetNodeKey": "message_b", "condition": None},
+                {"sourceNodeKey": "message_a", "targetNodeKey": "end", "condition": None},
+                {"sourceNodeKey": "message_b", "targetNodeKey": "end", "condition": None},
             ],
         },
     )

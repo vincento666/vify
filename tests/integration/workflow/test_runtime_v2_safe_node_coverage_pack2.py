@@ -110,28 +110,31 @@ class RuntimeV2SafeNodeCoveragePack2Test(unittest.TestCase):
             [
                 {"nodeKey": "start", "type": "START", "config": {}},
                 {"nodeKey": "exec_1", "type": "EXECUTE_WORKFLOW", "config": {}},
+                {"nodeKey": "llm_1", "type": "LLM", "config": {"prompt": "summarize"}},
                 {"nodeKey": "handoff_1", "type": "TRANSFER_TO_HUMAN", "config": {}},
                 {"nodeKey": "end", "type": "END", "config": {}},
             ],
             [
                 {"sourceNodeKey": "start", "targetNodeKey": "exec_1"},
-                {"sourceNodeKey": "exec_1", "targetNodeKey": "handoff_1"},
+                {"sourceNodeKey": "exec_1", "targetNodeKey": "llm_1"},
+                {"sourceNodeKey": "llm_1", "targetNodeKey": "handoff_1"},
                 {"sourceNodeKey": "handoff_1", "targetNodeKey": "end"},
             ],
         )
         rejected = RuntimeV2CompatibilityChecker.check(
             [
                 {"nodeKey": "start", "type": "START", "config": {}},
-                {"nodeKey": "llm_1", "type": "LLM", "config": {}},
+                {"nodeKey": "tool_1", "type": "TOOL_CALL", "config": {}},
             ],
-            [{"sourceNodeKey": "start", "targetNodeKey": "llm_1"}],
+            [{"sourceNodeKey": "start", "targetNodeKey": "tool_1"}],
         )
 
         self.assertTrue(supported["supported"], supported)
         self.assertIn("EXECUTE_WORKFLOW", supported["supportedNodeTypes"])
+        self.assertIn("LLM", supported["supportedNodeTypes"])
         self.assertIn("TRANSFER_TO_HUMAN", supported["supportedNodeTypes"])
         self.assertFalse(rejected["supported"])
-        self.assertEqual(rejected["unsupportedNodes"][0]["nodeType"], "LLM")
+        self.assertEqual(rejected["unsupportedNodes"][0]["nodeType"], "TOOL_CALL")
 
 
 def _create_execute_workflow_chatflow(client: TestClient) -> dict[str, object]:
@@ -237,4 +240,3 @@ def _wait_for_result(
 
 if __name__ == "__main__":
     unittest.main()
-

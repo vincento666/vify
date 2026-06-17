@@ -17,10 +17,12 @@ from app.modules.workflow.domain.engine import (
     IntentRecognitionNodeExecutor,
     JsonParseNodeExecutor,
     KnowledgeNodeExecutor,
+    LlmNodeExecutor,
     TextProcessNodeExecutor,
     VariableAggregationNodeExecutor,
     VariableAssignNodeExecutor,
     WorkflowInterrupt,
+    WorkflowLlmCompleter,
     _mapped_arguments,
     _mapped_output,
     _target_workflow_id,
@@ -37,6 +39,7 @@ _SUPPORTED_CORE_NODE_TYPES = {
     "MESSAGE",
     "QUESTION",
     "HUMAN_INPUT",
+    "LLM",
     "TEXT_PROCESS",
     "JSON_PARSE",
     "VARIABLE_ASSIGN",
@@ -142,6 +145,7 @@ class ChatflowRuntimeV2Service:
         use_chatflow_session: bool = True,
         publish_repository: WorkflowPublishRepository | None = None,
         knowledge_facade: KnowledgeFacade | None = None,
+        llm_completer: WorkflowLlmCompleter | None = None,
     ) -> None:
         self._repository = repository
         self._state_repository = state_repository
@@ -151,6 +155,7 @@ class ChatflowRuntimeV2Service:
         self._use_chatflow_session = use_chatflow_session
         self._publish_repository = publish_repository
         self._knowledge_facade = knowledge_facade
+        self._llm_completer = llm_completer
 
     def start_run(
         self,
@@ -581,6 +586,8 @@ class ChatflowRuntimeV2Service:
                 output = IntentRecognitionNodeExecutor().execute(node, context)
             elif node_type == "INFORMATION_COLLECTION":
                 output = InformationCollectionNodeExecutor().execute(node, context)
+            elif node_type == "LLM":
+                output = LlmNodeExecutor(self._llm_completer, self._knowledge_facade).execute(node, context)
             elif node_type == "KNOWLEDGE":
                 if self._knowledge_facade is None:
                     raise ValueError("Runtime v2 KNOWLEDGE node requires KnowledgeFacade")
@@ -991,6 +998,7 @@ class WorkflowRuntimeV2Service(ChatflowRuntimeV2Service):
         *,
         completion_delay_seconds: float = 0.45,
         knowledge_facade: KnowledgeFacade | None = None,
+        llm_completer: WorkflowLlmCompleter | None = None,
     ) -> None:
         super().__init__(
             repository,
@@ -1001,6 +1009,7 @@ class WorkflowRuntimeV2Service(ChatflowRuntimeV2Service):
             use_chatflow_session=False,
             publish_repository=publish_repository,
             knowledge_facade=knowledge_facade,
+            llm_completer=llm_completer,
         )
 
 
