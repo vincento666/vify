@@ -209,6 +209,14 @@ export interface CustomerAssistantActionReceipt {
   auditRows: CustomerAssistantActionReceiptRow[]
 }
 
+export interface CustomerAssistantActionDecisionReceipt {
+  visible: boolean
+  tone: 'success' | 'error' | 'default'
+  statusLabel: string
+  note: string
+  reason: string
+}
+
 export interface CustomerAssistantRecommendationState {
   operatorRecommendation: string
   customerReplyDraft: string
@@ -423,6 +431,23 @@ export function formatCustomerAssistantActionReceipt(
         label: key,
         value: receiptValue(value),
       })),
+  }
+}
+
+export function formatCustomerAssistantActionDecisionReceipt(
+  action: CustomerAssistantProposedAction,
+): CustomerAssistantActionDecisionReceipt {
+  const result = asRecord(action.result)
+  const decision = asRecord(result?.decision)
+  const note = stringField(decision?.note, '')
+  const reason = stringField(decision?.reason, '')
+  const visible = ['CONFIRMED', 'REJECTED'].includes(action.status) && Boolean(note || reason)
+  return {
+    visible,
+    tone: action.status === 'REJECTED' ? 'error' : visible ? 'success' : 'default',
+    statusLabel: action.status === 'REJECTED' ? '已拒绝' : action.status === 'CONFIRMED' ? '已确认' : '',
+    note,
+    reason,
   }
 }
 

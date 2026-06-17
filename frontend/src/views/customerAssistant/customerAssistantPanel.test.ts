@@ -153,6 +153,17 @@ describe('CustomerAssistantPanel UI contract', () => {
     expect(actionPanel).toContain('执行回执')
   })
 
+  it('renders action decision receipts in the operator proposed-action panel', () => {
+    const actionPanel = section(content, 'operator-proposed-actions-panel')
+
+    expect(actionPanel).toContain('data-testid="operator-action-decision-receipt"')
+    expect(actionPanel).toContain('formatCustomerAssistantActionDecisionReceipt(action)')
+    expect(actionPanel).toContain('decisionReceipt.note')
+    expect(actionPanel).toContain('decisionReceipt.reason')
+    expect(actionPanel).toContain('决策回执')
+    expect(section(content, 'customer-conversation-lane')).not.toContain('operator-action-decision-receipt')
+  })
+
   it('renders retry cancel and resume task controls in the operator ledger', () => {
     const taskLedger = section(content, 'operator-task-ledger')
 

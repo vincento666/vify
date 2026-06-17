@@ -924,6 +924,23 @@
                   </div>
                 </div>
               </template>
+              <template
+                v-for="decisionReceipt in [formatCustomerAssistantActionDecisionReceipt(action)]"
+                :key="`decision-${action.id}`"
+              >
+                <div
+                  v-if="decisionReceipt.visible"
+                  class="action-receipt"
+                  data-testid="operator-action-decision-receipt"
+                >
+                  <div class="action-receipt-main">
+                    <a-tag :color="decisionReceipt.tone">决策回执</a-tag>
+                    <span>状态 {{ decisionReceipt.statusLabel }}</span>
+                    <span v-if="decisionReceipt.note">备注 {{ decisionReceipt.note }}</span>
+                    <span v-if="decisionReceipt.reason">原因 {{ decisionReceipt.reason }}</span>
+                  </div>
+                </div>
+              </template>
               <div
                 v-if="editingActionId === action.id"
                 class="action-edit-form"
@@ -1153,6 +1170,7 @@ import {
 import {
   applyCustomerAssistantDraftLocally,
   createCustomerAssistantDraftState,
+  formatCustomerAssistantActionDecisionReceipt,
   formatCustomerAssistantActionReceipt,
   formatCustomerAssistantEvalSurface,
   formatCustomerAssistantMetrics,

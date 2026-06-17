@@ -33,11 +33,21 @@ const rejectAction = {
 
 let confirmStatus = 'PENDING'
 let rejectStatus = 'PENDING'
+let confirmDecision = null
+let rejectDecision = null
 
 function visibleActions() {
   return [
-    { ...confirmAction, status: confirmStatus },
-    { ...rejectAction, status: rejectStatus },
+    {
+      ...confirmAction,
+      status: confirmStatus,
+      result: confirmDecision ? { decision: confirmDecision } : undefined,
+    },
+    {
+      ...rejectAction,
+      status: rejectStatus,
+      result: rejectDecision ? { decision: rejectDecision } : undefined,
+    },
   ]
 }
 
@@ -69,12 +79,18 @@ try {
 
     if (method === 'POST' && url.endsWith('/proposed-actions/9/confirm')) {
       confirmStatus = 'CONFIRMED'
-      await route.fulfill({ json: envelope({ ...confirmAction, status: confirmStatus, result: { decision: body } }) })
+      confirmDecision = body
+      await route.fulfill({
+        json: envelope({ ...confirmAction, status: confirmStatus, result: { decision: confirmDecision } }),
+      })
       return
     }
     if (method === 'POST' && url.endsWith('/proposed-actions/10/reject')) {
       rejectStatus = 'REJECTED'
-      await route.fulfill({ json: envelope({ ...rejectAction, status: rejectStatus, result: { decision: body } }) })
+      rejectDecision = body
+      await route.fulfill({
+        json: envelope({ ...rejectAction, status: rejectStatus, result: { decision: rejectDecision } }),
+      })
       return
     }
     if (method === 'POST' && url.endsWith('/sessions')) {
@@ -149,10 +165,18 @@ try {
   const confirmRow = page.getByTestId('operator-proposed-actions-panel').locator('.action-row').filter({ hasText: '#9' })
   await confirmRow.getByLabel('确认备注').fill('客户已电话确认退票')
   await confirmRow.getByLabel('确认拟议动作').click()
+  await confirmRow.getByTestId('operator-action-decision-receipt').getByText('客户已电话确认退票').waitFor({
+    state: 'visible',
+    timeout: 10000,
+  })
 
   const rejectRow = page.getByTestId('operator-proposed-actions-panel').locator('.action-row').filter({ hasText: '#10' })
   await rejectRow.getByLabel('拒绝原因').fill('客户撤销退票申请')
   await rejectRow.getByLabel('拒绝拟议动作').click()
+  await rejectRow.getByTestId('operator-action-decision-receipt').getByText('客户撤销退票申请').waitFor({
+    state: 'visible',
+    timeout: 10000,
+  })
 
   const confirmCall = calls.find((call) => call.method === 'POST' && call.url.endsWith('/proposed-actions/9/confirm'))
   const rejectCall = calls.find((call) => call.method === 'POST' && call.url.endsWith('/proposed-actions/10/reject'))

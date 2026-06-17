@@ -12,6 +12,7 @@ import {
   applyCustomerAssistantActionState,
   buildCustomerAssistantState,
   formatCustomerAssistantActionReceipt,
+  formatCustomerAssistantActionDecisionReceipt,
   formatCustomerAssistantEvents,
   formatCustomerAssistantEvalSurface,
   formatCustomerAssistantMetrics,
@@ -220,6 +221,36 @@ describe('customer assistant view model', () => {
     })
     expect(receipt.auditRows).toContainEqual({ key: 'orderNo', label: 'orderNo', value: '[REDACTED]' })
     expect(JSON.stringify(receipt)).not.toContain('TK-100')
+  })
+
+  it('formats confirmed and rejected proposed action decision receipts', () => {
+    const confirmedReceipt = formatCustomerAssistantActionDecisionReceipt({
+      ...mockCustomerAssistantTurnResult.proposedActions[0],
+      status: 'CONFIRMED',
+      result: { decision: { note: '客户已电话确认退票' } },
+    })
+    const rejectedReceipt = formatCustomerAssistantActionDecisionReceipt({
+      ...mockCustomerAssistantTurnResult.proposedActions[0],
+      status: 'REJECTED',
+      result: { decision: { reason: '客户撤销退票申请' } },
+    })
+    const pendingReceipt = formatCustomerAssistantActionDecisionReceipt(mockCustomerAssistantTurnResult.proposedActions[0])
+
+    expect(confirmedReceipt).toMatchObject({
+      visible: true,
+      tone: 'success',
+      statusLabel: '已确认',
+      note: '客户已电话确认退票',
+      reason: '',
+    })
+    expect(rejectedReceipt).toMatchObject({
+      visible: true,
+      tone: 'error',
+      statusLabel: '已拒绝',
+      note: '',
+      reason: '客户撤销退票申请',
+    })
+    expect(pendingReceipt.visible).toBe(false)
   })
 
   it('formats runtime events as compact operator timeline rows', () => {
