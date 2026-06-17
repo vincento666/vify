@@ -263,7 +263,9 @@ describe('customer-assistant frontend API client', () => {
         modelPolicyRef: 'demo-model-v2',
         promptRef: 'runtime-refund-prompt',
         toolRefs: ['lookup_order', 'refund_policy_lookup'],
+        toolPolicyRef: 'strict-read-before-write',
         riskPolicyRef: 'manual_confirm_high_risk',
+        outputSchemaRef: 'refund_react_result_v2',
         enabled: true,
       }),
     ).resolves.toMatchObject({ workerRef: 'runtime_configured_refund' })
@@ -277,7 +279,9 @@ describe('customer-assistant frontend API client', () => {
         modelPolicyRef: 'demo-model-v2',
         promptRef: 'runtime-refund-prompt',
         toolRefs: ['lookup_order', 'refund_policy_lookup'],
+        toolPolicyRef: 'strict-read-before-write',
         riskPolicyRef: 'manual_confirm_high_risk',
+        outputSchemaRef: 'refund_react_result_v2',
         enabled: true,
       },
     )

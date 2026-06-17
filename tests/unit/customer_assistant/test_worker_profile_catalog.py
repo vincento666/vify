@@ -44,6 +44,34 @@ class CustomerAssistantWorkerProfileCatalogTest(unittest.TestCase):
         self.assertEqual(catalog.resolve("refund_ticket").worker_ref, "configured_refund_stub")
         self.assertEqual(profiles[0]["toolRefs"], ["lookup_order"])
 
+    def test_json_override_exposes_skill_policy_refs(self) -> None:
+        raw = json.dumps(
+            {
+                "profiles": [
+                    {
+                        "profileId": "configured_refund_react",
+                        "taskKey": "refund_ticket",
+                        "taskType": "REFUND",
+                        "workerType": "react_worker",
+                        "workerRef": "configured_refund_react",
+                        "modelPolicyRef": "demo-react-model",
+                        "promptRef": "demo-react-prompt",
+                        "toolRefs": ["lookup_order"],
+                        "toolPolicyRef": "strict-read-before-write",
+                        "riskPolicyRef": "manual_confirm_high_risk",
+                        "outputSchemaRef": "refund_react_result_v2",
+                    }
+                ]
+            }
+        )
+
+        profile = CustomerAssistantWorkerProfileCatalog.from_json(raw).resolve("refund_ticket")
+
+        self.assertIsNotNone(profile)
+        assert profile is not None
+        self.assertEqual(profile.tool_policy_ref, "strict-read-before-write")
+        self.assertEqual(profile.output_schema_ref, "refund_react_result_v2")
+
     def test_resolves_business_scoped_task_key_to_profile_family(self) -> None:
         profile = CustomerAssistantWorkerProfileCatalog.default().resolve("refund_ticket:MU5137-8899")
 

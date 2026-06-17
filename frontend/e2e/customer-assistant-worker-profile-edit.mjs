@@ -31,7 +31,9 @@ const defaultRefundProfile = {
   modelPolicyRef: 'customer_assistant_chatflow_default',
   promptRef: 'refund_ticket_sop_prompt',
   toolRefs: ['refund_policy_lookup'],
+  toolPolicyRef: 'refund_policy_tools',
   riskPolicyRef: 'manual_confirm',
+  outputSchemaRef: 'customer_assistant_worker_result_v1',
   enabled: true,
 }
 
@@ -65,13 +67,27 @@ const configuredProfile = {
   modelPolicyRef: `demo-model-uat-${stamp}`,
   promptRef: `runtime-refund-prompt-${stamp}`,
   toolRefs: ['lookup_order', 'refund_policy_lookup'],
+  toolPolicyRef: `strict-read-before-write-${stamp}`,
   riskPolicyRef: 'manual_confirm_high_risk',
+  outputSchemaRef: `refund-react-result-${stamp}`,
   enabled: true,
 }
 
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 let cleanupError = null
+const profilePatchPayloads = []
+
+page.on('request', (request) => {
+  if (request.method() !== 'PATCH' || !request.url().includes(`/api/v1/customer-assistant/worker-profiles/${profileId}`)) {
+    return
+  }
+  try {
+    profilePatchPayloads.push(request.postDataJSON())
+  } catch {
+    profilePatchPayloads.push(null)
+  }
+})
 
 try {
   const hostParam = encodeURIComponent(JSON.stringify(hostContext))
@@ -89,12 +105,36 @@ try {
   await refundTaskRow.getByLabel('Worker 引用').fill(configuredProfile.workerRef)
   await refundTaskRow.getByLabel('模型策略').fill(configuredProfile.modelPolicyRef)
   await refundTaskRow.getByLabel('提示词引用').fill(configuredProfile.promptRef)
+  await refundTaskRow.getByLabel('工具策略引用').fill(configuredProfile.toolPolicyRef)
   await refundTaskRow.getByLabel('风险策略').fill(configuredProfile.riskPolicyRef)
+  await refundTaskRow.getByLabel('输出 Schema 引用').fill(configuredProfile.outputSchemaRef)
   await refundTaskRow.getByLabel('工具引用').fill(configuredProfile.toolRefs.join(', '))
   await refundTaskRow.getByRole('button', { name: /保存配置/ }).click()
 
   await refundTaskRow.getByText(configuredProfile.modelPolicyRef).waitFor({ state: 'visible', timeout: 10000 })
+  await refundTaskRow.getByText(configuredProfile.toolPolicyRef).waitFor({ state: 'visible', timeout: 10000 })
   await refundTaskRow.getByText(configuredProfile.riskPolicyRef).waitFor({ state: 'visible', timeout: 10000 })
+  await refundTaskRow.getByText(configuredProfile.outputSchemaRef).waitFor({ state: 'visible', timeout: 10000 })
+
+  const savedPayload = profilePatchPayloads.find((payload) => payload?.workerRef === configuredProfile.workerRef)
+  assert(savedPayload, 'Expected browser save to submit a worker profile PATCH payload')
+  for (const key of [
+    'taskKey',
+    'taskType',
+    'workerType',
+    'workerRef',
+    'modelPolicyRef',
+    'promptRef',
+    'toolRefs',
+    'toolPolicyRef',
+    'riskPolicyRef',
+    'outputSchemaRef',
+    'enabled',
+  ]) {
+    assert(Object.hasOwn(savedPayload, key), `Expected PATCH payload to include ${key}`)
+  }
+  assert(savedPayload.toolPolicyRef === configuredProfile.toolPolicyRef, 'Expected tool policy ref in PATCH payload')
+  assert(savedPayload.outputSchemaRef === configuredProfile.outputSchemaRef, 'Expected output schema ref in PATCH payload')
 
   const profiles = await api(page, '/customer-assistant/worker-profiles')
   assert(profiles.ok, `Expected worker profile list success, got ${profiles.status}`)
@@ -103,6 +143,14 @@ try {
   assert(
     updatedProfile.modelPolicyRef === configuredProfile.modelPolicyRef,
     `Expected persisted model policy ${configuredProfile.modelPolicyRef}`,
+  )
+  assert(
+    updatedProfile.toolPolicyRef === configuredProfile.toolPolicyRef,
+    `Expected persisted tool policy ${configuredProfile.toolPolicyRef}`,
+  )
+  assert(
+    updatedProfile.outputSchemaRef === configuredProfile.outputSchemaRef,
+    `Expected persisted output schema ${configuredProfile.outputSchemaRef}`,
   )
 
   const created = await api(page, '/customer-assistant/sessions', {
@@ -130,7 +178,9 @@ try {
   const recognized = events.body.data.list.find((event) => event.type === 'task_recognized')
   const profileRefs = recognized?.payload?.commands?.[0]?.profileRefs
   assert(profileRefs?.modelPolicyRef === configuredProfile.modelPolicyRef, 'Expected configured model refs in recognition event')
+  assert(profileRefs?.toolPolicyRef === configuredProfile.toolPolicyRef, 'Expected configured tool policy refs in recognition event')
   assert(profileRefs?.riskPolicyRef === configuredProfile.riskPolicyRef, 'Expected configured risk refs in recognition event')
+  assert(profileRefs?.outputSchemaRef === configuredProfile.outputSchemaRef, 'Expected configured output schema refs in recognition event')
 
   await page.mouse.move(260, 260)
   await page.waitForTimeout(500)

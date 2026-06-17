@@ -298,7 +298,9 @@ class CustomerAssistantWorkerProfileApiTest(unittest.TestCase):
             "modelPolicyRef": "demo-react-model",
             "promptRef": "demo-react-prompt",
             "toolRefs": ["lookup_order"],
+            "toolPolicyRef": "strict-read-before-write",
             "riskPolicyRef": "manual_confirm_high_risk",
+            "outputSchemaRef": "refund_react_result_v2",
             "enabled": True,
         }
 
@@ -308,6 +310,8 @@ class CustomerAssistantWorkerProfileApiTest(unittest.TestCase):
                 json=payload,
             )
             self.assertEqual(patched.status_code, 200, patched.text)
+            self.assertEqual(patched.json()["data"]["toolPolicyRef"], "strict-read-before-write")
+            self.assertEqual(patched.json()["data"]["outputSchemaRef"], "refund_react_result_v2")
 
             created = client.post("/api/v1/customer-assistant/sessions", json={"context": {}})
             session_id = int(created.json()["data"]["id"])
@@ -323,8 +327,10 @@ class CustomerAssistantWorkerProfileApiTest(unittest.TestCase):
         self.assertEqual(config_refs["workerRef"], "configured_refund_react")
         self.assertEqual(config_refs["modelPolicyRef"], "demo-react-model")
         self.assertEqual(config_refs["promptRef"], "demo-react-prompt")
+        self.assertEqual(config_refs["toolPolicyRef"], "strict-read-before-write")
         self.assertEqual(config_refs["toolRefs"], ["lookup_order"])
         self.assertEqual(config_refs["riskPolicyRef"], "manual_confirm_high_risk")
+        self.assertEqual(config_refs["outputSchemaRef"], "refund_react_result_v2")
 
     def _session_override(self) -> Generator[Session]:
         with self._factory() as session:

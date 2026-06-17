@@ -45,6 +45,9 @@ def react_worker_registry_from_profiles(
             model_policy_ref=str(profile.get("modelPolicyRef") or profile.get("model_policy_ref") or "default"),
             prompt_ref=str(profile.get("promptRef") or profile.get("prompt_ref") or "default"),
             risk_policy_ref=str(profile.get("riskPolicyRef") or profile.get("risk_policy_ref") or "manual_confirm"),
+            output_schema_ref=str(
+                profile.get("outputSchemaRef") or profile.get("output_schema_ref") or "customer_assistant_worker_result_v1"
+            ),
         )
         configs = _replace_config(configs, config)
     return ReactWorkerRegistry(configs)

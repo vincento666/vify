@@ -832,6 +832,18 @@ class CustomerAssistantRepository:
                 "ALTER TABLE customer_assistant_worker_profile "
                 "ADD COLUMN org_id VARCHAR(120) NOT NULL DEFAULT 'local'"
             )
+        if "tool_policy_ref" not in columns:
+            statements.append(
+                "ALTER TABLE customer_assistant_worker_profile "
+                "ADD COLUMN tool_policy_ref VARCHAR(160) NOT NULL "
+                "DEFAULT 'customer_assistant_worker_tool_default'"
+            )
+        if "output_schema_ref" not in columns:
+            statements.append(
+                "ALTER TABLE customer_assistant_worker_profile "
+                "ADD COLUMN output_schema_ref VARCHAR(160) NOT NULL "
+                "DEFAULT 'customer_assistant_worker_result_v1'"
+            )
         if not statements:
             return
         with bind.begin() as connection:
@@ -914,7 +926,13 @@ def _worker_profile_values(
         "model_policy_ref": str(profile.get("modelPolicyRef") or profile.get("model_policy_ref") or "default"),
         "prompt_ref": str(profile.get("promptRef") or profile.get("prompt_ref") or "default"),
         "tool_refs": list(profile.get("toolRefs") or profile.get("tool_refs") or []),
+        "tool_policy_ref": str(
+            profile.get("toolPolicyRef") or profile.get("tool_policy_ref") or "customer_assistant_worker_tool_default"
+        ),
         "risk_policy_ref": str(profile.get("riskPolicyRef") or profile.get("risk_policy_ref") or "manual_confirm"),
+        "output_schema_ref": str(
+            profile.get("outputSchemaRef") or profile.get("output_schema_ref") or "customer_assistant_worker_result_v1"
+        ),
         "enabled": bool(profile.get("enabled", True)),
         "deleted": False,
         "created_at": now,
@@ -932,6 +950,8 @@ def _worker_profile_row_to_payload(row: dict[str, Any]) -> dict[str, Any]:
         "modelPolicyRef": row.get("model_policy_ref") or "default",
         "promptRef": row.get("prompt_ref") or "default",
         "toolRefs": list(row.get("tool_refs") or []),
+        "toolPolicyRef": row.get("tool_policy_ref") or "customer_assistant_worker_tool_default",
         "riskPolicyRef": row.get("risk_policy_ref") or "manual_confirm",
+        "outputSchemaRef": row.get("output_schema_ref") or "customer_assistant_worker_result_v1",
         "enabled": bool(row.get("enabled", True)),
     }

@@ -1032,7 +1032,7 @@ _REQUIRED_MVP_SURFACE_COLUMNS = {
     "customer_assistant_worker_run": ["input_payload", "result_payload", "error_json"],
     "customer_assistant_worker_event": ["sequence", "payload"],
     "customer_assistant_proposed_action": ["payload", "result_json"],
-    "customer_assistant_worker_profile": ["tool_refs", "enabled"],
+    "customer_assistant_worker_profile": ["tool_refs", "tool_policy_ref", "output_schema_ref", "enabled"],
 }
 
 _MYSQL8_JSON_COLUMNS = {

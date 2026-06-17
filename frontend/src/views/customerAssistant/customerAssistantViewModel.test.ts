@@ -80,7 +80,9 @@ describe('customer assistant view model', () => {
         modelPolicyRef: 'customer_assistant_chatflow_default',
         promptRef: 'refund_ticket_sop_prompt',
         toolRefs: ['refund_policy_lookup'],
+        toolPolicyRef: 'refund_policy_tools',
         riskPolicyRef: 'manual_confirm',
+        outputSchemaRef: 'customer_assistant_worker_result_v1',
         enabled: true,
       },
     ])
@@ -90,7 +92,9 @@ describe('customer assistant view model', () => {
       modelPolicyRef: 'customer_assistant_chatflow_default',
       promptRef: 'refund_ticket_sop_prompt',
       toolRefs: ['refund_policy_lookup'],
+      toolPolicyRef: 'refund_policy_tools',
       riskPolicyRef: 'manual_confirm',
+      outputSchemaRef: 'customer_assistant_worker_result_v1',
     })
   })
 
@@ -113,7 +117,9 @@ describe('customer assistant view model', () => {
           modelPolicyRef: 'customer_assistant_chatflow_default',
           promptRef: 'refund_ticket_sop_prompt',
           toolRefs: ['refund_policy_lookup'],
+          toolPolicyRef: 'refund_policy_tools',
           riskPolicyRef: 'manual_confirm',
+          outputSchemaRef: 'customer_assistant_worker_result_v1',
           enabled: true,
         },
       ],

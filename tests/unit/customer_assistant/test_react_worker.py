@@ -45,7 +45,9 @@ class CustomerAssistantReactWorkerTest(unittest.TestCase):
                     "modelPolicyRef": "demo-react-model",
                     "promptRef": "demo-react-prompt",
                     "toolRefs": ["lookup_order"],
+                    "toolPolicyRef": "strict-read-before-write",
                     "riskPolicyRef": "manual_confirm_high_risk",
+                    "outputSchemaRef": "refund_react_result_v2",
                 }
             ]
         )
@@ -57,7 +59,9 @@ class CustomerAssistantReactWorkerTest(unittest.TestCase):
         self.assertEqual(config.allowed_tools, ("lookup_order",))
         self.assertEqual(config.model_policy_ref, "demo-react-model")
         self.assertEqual(config.prompt_ref, "demo-react-prompt")
+        self.assertEqual(config.tool_policy_ref, "strict-read-before-write")
         self.assertEqual(config.risk_policy_ref, "manual_confirm_high_risk")
+        self.assertEqual(config.output_schema_ref, "refund_react_result_v2")
 
     def test_read_only_fake_model_completes_with_summarized_events(self) -> None:
         worker = RestrictedReactWorker(

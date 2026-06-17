@@ -43,7 +43,9 @@ export interface CustomerAssistantTaskProfile {
   modelPolicyRef: string
   promptRef: string
   toolRefs: string[]
+  toolPolicyRef: string
   riskPolicyRef: string
+  outputSchemaRef: string
 }
 
 export interface CustomerAssistantTaskSummaryModel {
@@ -364,7 +366,9 @@ function taskProfile(profile: CustomerAssistantWorkerProfile): CustomerAssistant
     modelPolicyRef: profile.modelPolicyRef,
     promptRef: profile.promptRef,
     toolRefs: [...profile.toolRefs],
+    toolPolicyRef: profile.toolPolicyRef ?? 'customer_assistant_worker_tool_default',
     riskPolicyRef: profile.riskPolicyRef,
+    outputSchemaRef: profile.outputSchemaRef ?? 'customer_assistant_worker_result_v1',
   }
 }
 

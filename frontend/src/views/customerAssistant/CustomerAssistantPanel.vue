@@ -512,7 +512,9 @@
                 <a-tag :color="profile.enabled ? 'success' : 'default'">{{ profile.enabled ? '启用' : '停用' }}</a-tag>
                 <span>模型 {{ profile.modelPolicyRef }}</span>
                 <span>提示词 {{ profile.promptRef }}</span>
+                <span>工具策略 {{ profile.toolPolicyRef }}</span>
                 <span>风险 {{ profile.riskPolicyRef }}</span>
+                <span>输出 {{ profile.outputSchemaRef }}</span>
                 <span>工具 {{ profile.toolRefs.length ? profile.toolRefs.join('、') : '无' }}</span>
               </div>
               <div
@@ -552,9 +554,19 @@
                     placeholder="提示词引用"
                   />
                   <a-input
+                    v-model:value="editingWorkerProfileForm.toolPolicyRef"
+                    aria-label="工具策略引用"
+                    placeholder="工具策略引用"
+                  />
+                  <a-input
                     v-model:value="editingWorkerProfileForm.riskPolicyRef"
                     aria-label="风险策略"
                     placeholder="风险策略"
+                  />
+                  <a-input
+                    v-model:value="editingWorkerProfileForm.outputSchemaRef"
+                    aria-label="输出 Schema 引用"
+                    placeholder="输出 Schema 引用"
                   />
                   <a-checkbox v-model:checked="editingWorkerProfileForm.enabled">启用</a-checkbox>
                   <a-input
@@ -625,7 +637,9 @@
                 <a-tag color="blue">{{ task.profile.profileId }}</a-tag>
                 <span>模型 {{ task.profile.modelPolicyRef }}</span>
                 <span>提示词 {{ task.profile.promptRef }}</span>
+                <span>工具策略 {{ task.profile.toolPolicyRef }}</span>
                 <span>风险 {{ task.profile.riskPolicyRef }}</span>
+                <span>输出 {{ task.profile.outputSchemaRef }}</span>
                 <span v-if="task.profile.toolRefs.length">工具 {{ task.profile.toolRefs.join('、') }}</span>
                 <a-tooltip title="配置任务 Worker">
                   <a-button size="small" aria-label="配置任务 Worker" @click="startEditWorkerProfile(task)">
@@ -690,9 +704,19 @@
                     placeholder="提示词引用"
                   />
                   <a-input
+                    v-model:value="editingWorkerProfileForm.toolPolicyRef"
+                    aria-label="工具策略引用"
+                    placeholder="工具策略引用"
+                  />
+                  <a-input
                     v-model:value="editingWorkerProfileForm.riskPolicyRef"
                     aria-label="风险策略"
                     placeholder="风险策略"
+                  />
+                  <a-input
+                    v-model:value="editingWorkerProfileForm.outputSchemaRef"
+                    aria-label="输出 Schema 引用"
+                    placeholder="输出 Schema 引用"
                   />
                   <a-checkbox v-model:checked="editingWorkerProfileForm.enabled">启用</a-checkbox>
                   <a-input
@@ -1467,7 +1491,9 @@ function startEditWorkerProfileForm(profile: CustomerAssistantWorkerProfile) {
     modelPolicyRef: profile.modelPolicyRef,
     promptRef: profile.promptRef,
     toolRefs: [...profile.toolRefs],
+    toolPolicyRef: profile.toolPolicyRef ?? 'customer_assistant_worker_tool_default',
     riskPolicyRef: profile.riskPolicyRef,
+    outputSchemaRef: profile.outputSchemaRef ?? 'customer_assistant_worker_result_v1',
     enabled: profile.enabled,
   }
   editingWorkerProfileToolRefs.value = profile.toolRefs.join(', ')

@@ -54,7 +54,9 @@ export interface CustomerAssistantWorkerProfile {
   modelPolicyRef: string
   promptRef: string
   toolRefs: string[]
+  toolPolicyRef: string
   riskPolicyRef: string
+  outputSchemaRef: string
   enabled: boolean
 }
 

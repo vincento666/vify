@@ -2302,8 +2302,10 @@ def _worker_profile_refs(profile: CustomerAssistantWorkerProfile) -> dict[str, A
         "profileId": profile.profile_id,
         "modelPolicyRef": profile.model_policy_ref,
         "promptRef": profile.prompt_ref,
+        "toolPolicyRef": profile.tool_policy_ref,
         "riskPolicyRef": profile.risk_policy_ref,
         "toolRefs": list(profile.tool_refs),
+        "outputSchemaRef": profile.output_schema_ref,
     }
 
 

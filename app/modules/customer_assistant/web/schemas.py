@@ -51,7 +51,9 @@ class CustomerAssistantWorkerProfileUpsertRequest(BaseModel):
     model_policy_ref: str = Field(default="default", alias="modelPolicyRef")
     prompt_ref: str = Field(default="default", alias="promptRef")
     tool_refs: list[str] = Field(default_factory=list, alias="toolRefs")
+    tool_policy_ref: str = Field(default="customer_assistant_worker_tool_default", alias="toolPolicyRef")
     risk_policy_ref: str = Field(default="manual_confirm", alias="riskPolicyRef")
+    output_schema_ref: str = Field(default="customer_assistant_worker_result_v1", alias="outputSchemaRef")
     enabled: bool = True
 
 

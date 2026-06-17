@@ -15,7 +15,9 @@ class CustomerAssistantWorkerProfile:
     model_policy_ref: str = "default"
     prompt_ref: str = "default"
     tool_refs: tuple[str, ...] = ()
+    tool_policy_ref: str = "customer_assistant_worker_tool_default"
     risk_policy_ref: str = "manual_confirm"
+    output_schema_ref: str = "customer_assistant_worker_result_v1"
     enabled: bool = True
 
     def to_dict(self) -> dict[str, Any]:
@@ -28,7 +30,9 @@ class CustomerAssistantWorkerProfile:
             "modelPolicyRef": self.model_policy_ref,
             "promptRef": self.prompt_ref,
             "toolRefs": list(self.tool_refs),
+            "toolPolicyRef": self.tool_policy_ref,
             "riskPolicyRef": self.risk_policy_ref,
+            "outputSchemaRef": self.output_schema_ref,
             "enabled": self.enabled,
         }
 
@@ -114,7 +118,9 @@ def default_customer_assistant_worker_profiles() -> tuple[CustomerAssistantWorke
             model_policy_ref="customer_assistant_chatflow_default",
             prompt_ref="refund_ticket_sop_prompt",
             tool_refs=("refund_policy_lookup",),
+            tool_policy_ref="refund_policy_tools",
             risk_policy_ref="manual_confirm",
+            output_schema_ref="customer_assistant_worker_result_v1",
         ),
         CustomerAssistantWorkerProfile(
             profile_id="baggage_service_chatflow",
@@ -125,7 +131,9 @@ def default_customer_assistant_worker_profiles() -> tuple[CustomerAssistantWorke
             model_policy_ref="customer_assistant_chatflow_default",
             prompt_ref="baggage_service_sop_prompt",
             tool_refs=(),
+            tool_policy_ref="read_only_knowledge_tools",
             risk_policy_ref="read_only",
+            output_schema_ref="customer_assistant_worker_result_v1",
         ),
         CustomerAssistantWorkerProfile(
             profile_id="refund_status_react",
@@ -136,7 +144,9 @@ def default_customer_assistant_worker_profiles() -> tuple[CustomerAssistantWorke
             model_policy_ref="fake_react_worker_model",
             prompt_ref="refund_status_react_prompt",
             tool_refs=("lookup_order", "submit_refund"),
+            tool_policy_ref="customer_assistant_react_default",
             risk_policy_ref="manual_confirm_high_risk",
+            output_schema_ref="customer_assistant_worker_result_v1",
         ),
     )
 
@@ -160,7 +170,13 @@ def _profile_from_mapping(item: dict[str, Any]) -> CustomerAssistantWorkerProfil
         model_policy_ref=str(item.get("modelPolicyRef") or item.get("model_policy_ref") or "default"),
         prompt_ref=str(item.get("promptRef") or item.get("prompt_ref") or "default"),
         tool_refs=tuple(str(tool) for tool in list(item.get("toolRefs") or item.get("tool_refs") or [])),
+        tool_policy_ref=str(
+            item.get("toolPolicyRef") or item.get("tool_policy_ref") or "customer_assistant_worker_tool_default"
+        ),
         risk_policy_ref=str(item.get("riskPolicyRef") or item.get("risk_policy_ref") or "manual_confirm"),
+        output_schema_ref=str(
+            item.get("outputSchemaRef") or item.get("output_schema_ref") or "customer_assistant_worker_result_v1"
+        ),
         enabled=bool(item.get("enabled", True)),
     )
 
