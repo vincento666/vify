@@ -33,6 +33,10 @@ class RuntimeV2SharedCoreTest(unittest.TestCase):
         self.assertEqual(first_payload["input"]["api_key"], "[REDACTED]")
         self.assertEqual(first_payload["callerContext"]["sopKey"], "refund_ticket")
         self.assertIn("node_status_changed", [event["type"] for event in events])
+        for event in events:
+            if event["type"] in {"workflow_node_started", "node_status_changed", "workflow_run_completed"}:
+                self.assertEqual(event["payload"]["callerContext"]["sopKey"], "refund_ticket", event["type"])
+                self.assertEqual(event["payload"]["callerContext"]["routeTurnId"], "turn-1", event["type"])
         first_summary = events[0]["observability"]
         self.assertEqual(first_summary["sourceKind"], "chatflow")
         self.assertEqual(first_summary["eventMode"], "live")

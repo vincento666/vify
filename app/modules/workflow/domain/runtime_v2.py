@@ -922,6 +922,10 @@ class ChatflowRuntimeV2Service:
         payload: dict[str, Any] | None = None,
         checkpoint_id: int | None = None,
     ) -> dict[str, Any]:
+        event_payload = {
+            **_runtime_event_debug_metadata(dict(self._run_or_404(run_id).get("input") or {})),
+            **(payload or {}),
+        }
         return self._state_repository.append_event(
             session_id=session_id,
             chatflow_id=chatflow_id,
@@ -932,7 +936,7 @@ class ChatflowRuntimeV2Service:
                 level="L1",
                 source=f"{self._owner_type.lower()}_runtime_v2",
                 actor="system",
-                **(payload or {}),
+                **event_payload,
             ),
             checkpoint_id=checkpoint_id,
         )
@@ -1113,6 +1117,20 @@ def _with_runtime_metadata(
 def _runtime_metadata(input_data: dict[str, Any]) -> dict[str, Any]:
     metadata = input_data.get("_runtimeV2")
     return dict(metadata) if isinstance(metadata, dict) else {}
+
+
+def _runtime_event_debug_metadata(input_data: dict[str, Any]) -> dict[str, Any]:
+    metadata = _runtime_metadata(input_data)
+    event_metadata: dict[str, Any] = {}
+    caller_context = input_data.get("callerContext") or input_data.get("caller_context")
+    if isinstance(caller_context, dict):
+        event_metadata["callerContext"] = dict(caller_context)
+    if metadata.get("definitionSource"):
+        event_metadata["definitionSource"] = metadata.get("definitionSource")
+    if metadata.get("versionId") is not None:
+        event_metadata["versionId"] = metadata.get("versionId")
+        event_metadata["version"] = metadata.get("version")
+    return event_metadata
 
 
 def _runtime_definition(input_data: dict[str, Any]) -> dict[str, Any]:
@@ -1309,6 +1327,10 @@ def _runtime_event_payload(**payload: Any) -> dict[str, Any]:
     caller_context = {}
     if isinstance(input_payload, dict):
         caller_context = dict(input_payload.get("callerContext") or input_payload.get("caller_context") or {})
+    if not caller_context:
+        direct_caller_context = payload.get("callerContext") or payload.get("caller_context")
+        if isinstance(direct_caller_context, dict):
+            caller_context = dict(direct_caller_context)
     return {
         "schemaVersion": "runtime.v2.event/1",
         **_redact_payload(payload),

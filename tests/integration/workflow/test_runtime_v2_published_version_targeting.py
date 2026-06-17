@@ -27,6 +27,7 @@ class RuntimeV2PublishedVersionTargetingTest(unittest.TestCase):
             targeted_debug = client.get(
                 f"/api/v1/workflows/{workflow['id']}/runs/{targeted_started['runId']}/debug"
             ).json()["data"]
+            targeted_events = client.get(targeted_started["eventsRef"]).json()["data"]["list"]
 
         self.assertEqual(active_started["versionId"], publish_v2["id"])
         self.assertEqual(active_started["version"], 2)
@@ -38,6 +39,7 @@ class RuntimeV2PublishedVersionTargetingTest(unittest.TestCase):
         self.assertEqual(targeted_result["versionId"], publish_v1["id"])
         self.assertEqual(targeted_debug["versionId"], publish_v1["id"])
         self.assertEqual(targeted_debug["version"], 1)
+        _assert_published_version_event_metadata(targeted_events, publish_v1)
 
     def test_chatflow_v2_can_run_active_or_targeted_published_version(self) -> None:
         with TestClient(app) as client:
@@ -115,6 +117,7 @@ class RuntimeV2PublishedVersionTargetingTest(unittest.TestCase):
                 json={"resumeData": {"answer": "yes"}, "idempotencyKey": f"target-resume-{time.time_ns()}"},
             ).json()["data"]
             debug = client.get(f"/api/v1/workflows/{workflow['id']}/runs/{started['runId']}/debug").json()["data"]
+            events = client.get(started["eventsRef"]).json()["data"]["list"]
 
         self.assertEqual(started["versionId"], publish_v1["id"])
         self.assertEqual(started["version"], 1)
@@ -123,6 +126,7 @@ class RuntimeV2PublishedVersionTargetingTest(unittest.TestCase):
         self.assertEqual(resumed["output"], {"final": "target-v1 answer=yes"})
         self.assertEqual(resumed["versionId"], publish_v1["id"])
         self.assertEqual(debug["versionId"], publish_v1["id"])
+        _assert_published_version_event_metadata(events, publish_v1)
 
 
 def _wait_for_result(
@@ -140,6 +144,31 @@ def _wait_for_result(
             return latest
         time.sleep(0.1)
     raise AssertionError(f"Timed out waiting for {wanted_status}; latest={latest}")
+
+
+def _assert_published_version_event_metadata(events: list[dict[str, object]], published: dict[str, object]) -> None:
+    lifecycle_types = {
+        "workflow_run_started",
+        "workflow_node_started",
+        "workflow_node_waiting",
+        "node_status_changed",
+        "workflow_run_resumed",
+        "workflow_node_completed",
+        "workflow_run_interrupted",
+        "workflow_run_completed",
+    }
+    checked = 0
+    for event in events:
+        if event["type"] not in lifecycle_types:
+            continue
+        payload = event["payload"]
+        assert isinstance(payload, dict)
+        checked += 1
+        assert payload.get("definitionSource") == "published", event["type"]
+        assert payload.get("versionId") == published["id"], event["type"]
+        assert payload.get("version") == published["version"], event["type"]
+        assert "definition" not in payload, event["type"]
+    assert checked > 0
 
 
 def _create_linear_flow(client: TestClient, base_url: str, output: str) -> dict[str, object]:
