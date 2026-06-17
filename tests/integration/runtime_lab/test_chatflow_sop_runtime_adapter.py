@@ -10,9 +10,10 @@ from app.modules.runtime_lab.domain.chatflow_adapter import (
     ChatflowSopRuntimeAdapter,
     _business_values_from_text,
     _collected,
+    _resume_data,
     _runtime_input,
 )
-from app.modules.runtime_lab.domain.sop_adapter import SopExecutionRequest, SopExecutionStatus
+from app.modules.runtime_lab.domain.sop_adapter import SopCheckpoint, SopExecutionRequest, SopExecutionStatus
 from app.modules.workflow.domain.service import WorkflowService
 from app.modules.workflow.infra.chatflow_state_repository import ChatflowStateRepository
 from app.modules.workflow.infra.repository import WorkflowRepository
@@ -198,6 +199,21 @@ class ChatflowSopRuntimeAdapterIntegrationTest(unittest.TestCase):
         self.assertNotIn("conversation", runtime_input)
         self.assertEqual(runtime_input["inherited_context"]["passenger_name"], "张三")
 
+    def test_resume_data_merges_current_turn_business_slots_without_context_defaults(self) -> None:
+        started_checkpoint = _adapter_checkpoint(
+            collected={},
+        )
+
+        resume_data = _resume_data(
+            _request(
+                message="手机号 13900000001",
+                checkpoint=started_checkpoint,
+            )
+        )
+
+        self.assertEqual(resume_data["answer"], "手机号 13900000001")
+        self.assertEqual(resume_data["collected"], {"phone": "13900000001"})
+
     def test_group_booking_confirm_with_missing_required_slots_stays_interruptible_collect(self) -> None:
         adapter = ChatflowSopRuntimeAdapter(
             _InterruptedConfirmWorkflowService(),
@@ -277,6 +293,18 @@ def _request(
             "channel": "runtime-lab",
             **(metadata or {}),
         },
+    )
+
+
+def _adapter_checkpoint(collected: dict[str, Any]) -> SopCheckpoint:
+    return SopCheckpoint(
+        sop_runtime_id="chatflow:1:1:1",
+        current_node_id="info_order",
+        current_step="info_order",
+        pending_prompt="请提供手机号。",
+        collected=dict(collected),
+        scoped_variables={"__chatflow": {}},
+        version=1,
     )
 
 

@@ -49,7 +49,11 @@ class OpenRouterProductChatPathsAcceptanceTest(unittest.TestCase):
             )
             tool_agent_id = _seed_agent(self.api_key, self.base_url, self.model, tool_bound=True)
 
-            direct = _send(client, direct_agent_id, "Return exactly this marker: HIFY_DIRECT_LIVE")
+            direct = _send(
+                client,
+                direct_agent_id,
+                "Reply with one concise customer-service sentence that includes marker HIFY_DIRECT_LIVE.",
+            )
             rag = _send(
                 client,
                 rag_agent_id,
@@ -161,7 +165,7 @@ def _seed_agent(
                 name="OpenRouter live model",
                 model_id=model,
                 context_size=4096,
-                extra_params={"temperature": 0},
+                extra_params={"temperature": 0, "reasoning": {"effort": "none", "exclude": True}},
                 enabled=True,
                 deleted=False,
                 created_at=now,
@@ -172,7 +176,7 @@ def _seed_agent(
             agent.insert().values(
                 name=f"OpenRouter live agent {time.time_ns()}",
                 description="",
-                system_prompt="Follow the user's marker instructions exactly.",
+                system_prompt="Keep QA markers unchanged when a customer-service acceptance prompt includes one.",
                 model_config_id=model_id,
                 temperature=0,
                 max_tokens=512,
@@ -250,8 +254,12 @@ def _create_live_workflow(client: TestClient) -> dict[str, object]:
                     "type": "LLM",
                     "name": "Live LLM",
                     "config": {
-                        "prompt": "Return exactly HIFY_WORKFLOW_NODE_LIVE for {{start.userMessage}}",
+                        "prompt": (
+                            "Write one concise workflow confirmation for {{start.userMessage}} "
+                            "and include marker HIFY_WORKFLOW_NODE_LIVE."
+                        ),
                         "outputVariable": "answer",
+                        "reasoning": {"effort": "none", "exclude": True},
                     },
                 },
                 {"nodeKey": "end", "type": "END", "name": "End", "config": {"outputVariable": "answer"}},

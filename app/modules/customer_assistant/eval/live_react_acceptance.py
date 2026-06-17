@@ -341,7 +341,7 @@ class CustomerAssistantLiveReactAcceptanceRunner:
             with _customer_assistant_session(config.database_url) as session:
                 service = CustomerAssistantService(
                     CustomerAssistantRepository(session),
-                    core=cast(Any, _ReactTaskCore(message_business_key="TK-100")),
+                    core=cast(Any, _ReactTaskCore(message_business_key="TK-200")),
                     scheduler=LocalWorkerScheduler(
                         {
                             "react_worker": RestrictedReactWorker(
@@ -354,7 +354,7 @@ class CustomerAssistantLiveReactAcceptanceRunner:
                 )
                 assistant_session = service.create_session({"liveGate": LIVE_GATE_NAME})
                 write_session_id = int(assistant_session["id"])
-                write_result = service.handle_turn(write_session_id, "提交 TK-100 退票", idempotency_key="live-react-write")
+                write_result = service.handle_turn(write_session_id, "提交 TK-200 退票", idempotency_key="live-react-write")
                 write_events = service.list_events(write_session_id)["list"]
 
             read_event_types = [str(event.get("type") or "") for event in read_events]

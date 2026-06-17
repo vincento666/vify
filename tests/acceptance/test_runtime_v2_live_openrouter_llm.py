@@ -112,7 +112,7 @@ def _seed_live_agent(api_key: str, base_url: str, model: str) -> int:
                 "name": "Runtime V2 OpenRouter live model",
                 "model_id": model,
                 "context_size": 128000,
-                "extra_params": {"temperature": 0},
+                "extra_params": {"temperature": 0, "reasoning": {"effort": "none", "exclude": True}},
                 "enabled": True,
                 "deleted": False,
                 "created_at": now,
@@ -125,7 +125,7 @@ def _seed_live_agent(api_key: str, base_url: str, model: str) -> int:
             {
                 "name": f"Runtime V2 OpenRouter live agent {time.time_ns()}",
                 "description": "",
-                "system_prompt": "Follow marker instructions exactly for runtime v2 live acceptance.",
+                "system_prompt": "You are a workflow QA assistant that keeps acceptance markers unchanged.",
                 "model_config_id": model_config_id,
                 "temperature": 0,
                 "max_tokens": 256,
@@ -154,8 +154,8 @@ def _create_live_llm_workflow(client: TestClient, marker: str) -> dict[str, Any]
                     "type": "LLM",
                     "name": "Live LLM",
                     "config": {
-                        "systemPrompt": "You are a strict acceptance test assistant.",
-                        "prompt": f"Return exactly this marker and nothing else: {marker}",
+                        "systemPrompt": "You are a workflow QA assistant that keeps acceptance markers unchanged.",
+                        "prompt": f"Write one concise workflow completion sentence that includes marker {marker}.",
                         "outputVariable": "answer",
                         "temperature": 0,
                         "maxTokens": 160,

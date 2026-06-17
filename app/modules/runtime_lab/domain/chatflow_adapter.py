@@ -282,8 +282,11 @@ def _caller_context(request: SopExecutionRequest) -> dict[str, str]:
 
 def _resume_data(request: SopExecutionRequest) -> dict[str, Any]:
     data: dict[str, Any] = {"answer": request.message}
+    collected = _business_values_from_message(request.message)
     if request.checkpoint is not None and request.checkpoint.collected:
-        data["collected"] = dict(request.checkpoint.collected)
+        collected = {**request.checkpoint.collected, **collected}
+    if collected:
+        data["collected"] = collected
     return data
 
 

@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.core.database import Base, get_session, get_session_factory, initialise_database
+from app.core.db_write import insert_and_get_id
 from app.core.schema import register_baseline_tables
 from app.main import app
 from app.modules.agent.infra.repository import AgentRepository
@@ -214,10 +215,10 @@ def _live_chatflow_nodes(case: LiveSopCase) -> list[dict[str, Any]]:
             "type": "LLM",
             "name": f"{case.display_name}办理摘要",
             "config": {
-                "systemPrompt": "你是民航客服业务办理助手。必须严格返回用户要求的验收标记。",
+                "systemPrompt": "你是民航客服业务办理助手。必须保留验收标记原文，不要改写。",
                 "prompt": (
                     f"业务：{case.display_name}。手机号：{{{{info_order.phone}}}}。"
-                    f"请只输出 {case.marker}。"
+                    f"请用一句中文办理摘要回复，并包含验收标记 {case.marker}。"
                 ),
                 "temperature": 0,
                 "maxTokens": 1200,
@@ -252,47 +253,53 @@ def _seed_default_live_agent(api_key: str, base_url: str, model: str) -> int:
     agent = Base.metadata.tables["agent"]
     now = datetime.now()
     with get_session_factory()() as session:
-        provider_id = session.execute(
-            provider.insert().values(
-                name=f"RuntimeLab live provider {time.time_ns()}",
-                type="OPENAI_COMPATIBLE",
-                base_url=base_url,
-                auth_config={"api_key": api_key},
-                description="runtime-lab live Chatflow LLM acceptance provider",
-                enabled=True,
-                deleted=False,
-                created_at=now,
-                updated_at=now,
-            ).returning(provider.c.id)
-        ).scalar_one()
-        model_id = session.execute(
-            model_config.insert().values(
-                provider_id=provider_id,
-                name="RuntimeLab live model",
-                model_id=model,
-                context_size=4096,
-                extra_params={"temperature": 0, "reasoning": {"effort": "none", "exclude": True}},
-                enabled=True,
-                deleted=False,
-                created_at=now,
-                updated_at=now,
-            ).returning(model_config.c.id)
-        ).scalar_one()
-        agent_id = session.execute(
-            agent.insert().values(
-                name=f"RuntimeLab live Chatflow agent {time.time_ns()}",
-                description="runtime-lab live LLM SOP acceptance agent",
-                system_prompt="",
-                model_config_id=model_id,
-                temperature=0,
-                max_tokens=128,
-                max_context_turns=6,
-                enabled=True,
-                deleted=False,
-                created_at=now,
-                updated_at=now,
-            ).returning(agent.c.id)
-        ).scalar_one()
+        provider_id = insert_and_get_id(
+            session,
+            provider,
+            {
+                "name": f"RuntimeLab live provider {time.time_ns()}",
+                "type": "OPENAI_COMPATIBLE",
+                "base_url": base_url,
+                "auth_config": {"api_key": api_key},
+                "description": "runtime-lab live Chatflow LLM acceptance provider",
+                "enabled": True,
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        model_id = insert_and_get_id(
+            session,
+            model_config,
+            {
+                "provider_id": provider_id,
+                "name": "RuntimeLab live model",
+                "model_id": model,
+                "context_size": 4096,
+                "extra_params": {"temperature": 0, "reasoning": {"effort": "none", "exclude": True}},
+                "enabled": True,
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        agent_id = insert_and_get_id(
+            session,
+            agent,
+            {
+                "name": f"RuntimeLab live Chatflow agent {time.time_ns()}",
+                "description": "runtime-lab live LLM SOP acceptance agent",
+                "system_prompt": "",
+                "model_config_id": model_id,
+                "temperature": 0,
+                "max_tokens": 128,
+                "max_context_turns": 6,
+                "enabled": True,
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
         session.commit()
         return int(agent_id)
 

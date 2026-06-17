@@ -36,10 +36,11 @@ class OpenRouterLlmAcceptanceTest(unittest.TestCase):
                     },
                     {
                         "role": "user",
-                        "content": "Return only this token: HIFY_LLM_OK",
+                        "content": "Reply with one short QA sentence that includes this token: HIFY_LLM_OK",
                     },
                 ],
                 "temperature": 0,
+                "reasoning": {"effort": "none", "exclude": True},
             }
         )
         parsed_chat = self.parser.parse_chat_response(chat_result)
@@ -57,6 +58,7 @@ class OpenRouterLlmAcceptanceTest(unittest.TestCase):
                 "tools": [_lookup_order_tool()],
                 "tool_choice": {"type": "function", "function": {"name": "lookup_order"}},
                 "temperature": 0,
+                "reasoning": {"effort": "none", "exclude": True},
             }
         )
         parsed_first_round = self.parser.parse_chat_response(first_round)
@@ -92,6 +94,7 @@ class OpenRouterLlmAcceptanceTest(unittest.TestCase):
                     },
                 ],
                 "temperature": 0,
+                "reasoning": {"effort": "none", "exclude": True},
             }
         )
         parsed_second_round = self.parser.parse_chat_response(second_round)
