@@ -33,6 +33,7 @@ describe('CustomerAssistantPanel UI contract', () => {
       'customer-conversation-lane',
       'operator-conversation-lane',
       'operator-progress-checklist',
+      'operator-sub-agent-control',
       'operator-metrics-panel',
       'operator-recognition-evidence-panel',
       'operator-knowledge-qa-panel',
@@ -78,10 +79,16 @@ describe('CustomerAssistantPanel UI contract', () => {
   })
 
   it('renders progress checklist and keeps timeline collapsed by default', () => {
-    expect(content).toContain('data-testid="operator-progress-checklist"')
-    expect(content).toContain('workspace.progressStages')
-    expect(content).toContain('stage.label')
+    const progressPanel = section(content, 'operator-progress-checklist')
+
+    expect(progressPanel).toContain('data-testid="operator-sub-agent-control"')
+    expect(progressPanel).toContain('workspace.progressStages')
+    expect(progressPanel).toContain('stage.label')
+    expect(progressPanel).toContain('spawnSubAgent')
+    expect(progressPanel).toContain('subAgentLoading')
+    expect(progressPanel).toContain('subAgentStatusLabel')
     expect(content).toContain('const expandedEventKeys = ref<string[]>([])')
+    expect(section(content, 'customer-conversation-lane')).not.toContain('operator-sub-agent-control')
   })
 
   it('renders observability metrics in the operator panel without raw payload details', () => {

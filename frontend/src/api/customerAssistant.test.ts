@@ -60,6 +60,43 @@ describe('customer-assistant frontend API client', () => {
     })
   })
 
+  it('spawns and reads customer-assistant sub-agent harness runs', async () => {
+    requestMocks.post.mockResolvedValueOnce({
+      runId: 90,
+      sessionId: 12,
+      subAgentRunId: 'customer-assistant-run-90',
+      status: 'running',
+    })
+    requestMocks.get.mockResolvedValueOnce({
+      runId: 90,
+      sessionId: 12,
+      subAgentRunId: 'customer-assistant-run-90',
+      status: 'completed',
+    })
+
+    const { getCustomerAssistantSubAgentRun, spawnCustomerAssistantSubAgent } = await import('./customerAssistant')
+
+    await spawnCustomerAssistantSubAgent(12, {
+      message: '请启动后台助手核对当前会话',
+      actor: 'operator',
+    })
+    await getCustomerAssistantSubAgentRun(90)
+
+    expect(requestMocks.post).toHaveBeenCalledWith('/v1/customer-assistant/harness/spawn-sub-agent', {
+      tool: 'spawn_sub_agent',
+      arguments: {
+        agentType: 'customer_assistant',
+        sessionId: 12,
+        input: {
+          message: '请启动后台助手核对当前会话',
+          actor: 'operator',
+        },
+        eventLevel: 'L1',
+      },
+    })
+    expect(requestMocks.get).toHaveBeenCalledWith('/v1/customer-assistant/runs/90')
+  })
+
   it('lists task and event ledgers', async () => {
     requestMocks.get
       .mockResolvedValueOnce({ list: [], total: 0 })

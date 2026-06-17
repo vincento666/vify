@@ -4,6 +4,7 @@ import {
   createCustomerAssistantSession,
   executeCustomerAssistantAction,
   getCustomerAssistantSessionMetrics,
+  getCustomerAssistantSubAgentRun,
   listCustomerAssistantDemoStories,
   listCustomerAssistantEvents,
   listCustomerAssistantOperatorAudit,
@@ -13,6 +14,7 @@ import {
   rejectCustomerAssistantAction,
   refreshCustomerAssistantWorkerResults,
   sendCustomerAssistantTurn,
+  spawnCustomerAssistantSubAgent,
   updateCustomerAssistantAction,
   type CustomerAssistantActionUpdatePayload,
   type CustomerAssistantDemoStory,
@@ -23,6 +25,7 @@ import {
   type CustomerAssistantProposedAction,
   type CustomerAssistantSession,
   type CustomerAssistantSessionMetrics,
+  type CustomerAssistantSubAgentRun,
   type CustomerAssistantTask,
   type CustomerAssistantTaskControlType,
   type CustomerAssistantTurnPayload,
@@ -46,6 +49,9 @@ export interface CustomerAssistantRuntimeState extends CustomerAssistantState {
   operatorKnowledgeQa: CustomerAssistantOperatorKnowledgeQaResult | null
   operatorKnowledgeQaLoading: boolean
   operatorKnowledgeQaError: string | null
+  subAgentRun: CustomerAssistantSubAgentRun | null
+  subAgentLoading: boolean
+  subAgentError: string | null
   loading: boolean
   error: string | null
 }
@@ -55,6 +61,7 @@ export interface CreateCustomerAssistantRuntimeStateInput extends BuildCustomerA
   metrics?: CustomerAssistantSessionMetrics | null
   operatorAudit?: CustomerAssistantOperatorAudit | null
   operatorKnowledgeQa?: CustomerAssistantOperatorKnowledgeQaResult | null
+  subAgentRun?: CustomerAssistantSubAgentRun | null
 }
 
 export interface SendCustomerAssistantRuntimeTurnOptions {
@@ -79,6 +86,9 @@ export function createCustomerAssistantRuntimeState(
     operatorKnowledgeQa: input.operatorKnowledgeQa ?? null,
     operatorKnowledgeQaLoading: false,
     operatorKnowledgeQaError: null,
+    subAgentRun: input.subAgentRun ?? null,
+    subAgentLoading: false,
+    subAgentError: null,
     loading: false,
     error: null,
   }
@@ -156,6 +166,9 @@ export async function loadCustomerAssistantDemoStory(storyId: string): Promise<C
     operatorKnowledgeQa: null,
     operatorKnowledgeQaLoading: false,
     operatorKnowledgeQaError: null,
+    subAgentRun: null,
+    subAgentLoading: false,
+    subAgentError: null,
     loading: false,
     error: null,
   }
@@ -224,6 +237,9 @@ export async function proposeCustomerAssistantRuntimeTaskControl(
     operatorKnowledgeQa: null,
     operatorKnowledgeQaLoading: false,
     operatorKnowledgeQaError: null,
+    subAgentRun: current.subAgentRun,
+    subAgentLoading: false,
+    subAgentError: null,
     loading: false,
     error: null,
   }
@@ -256,6 +272,9 @@ export async function refreshCustomerAssistantRuntimeWorkerResults(
     operatorKnowledgeQa: null,
     operatorKnowledgeQaLoading: false,
     operatorKnowledgeQaError: null,
+    subAgentRun: current.subAgentRun,
+    subAgentLoading: false,
+    subAgentError: null,
     loading: false,
     error: null,
   }
@@ -291,6 +310,47 @@ export async function askCustomerAssistantRuntimeOperatorKnowledgeQuestion(
   }
 }
 
+export async function spawnCustomerAssistantRuntimeSubAgent(
+  current: CustomerAssistantRuntimeState,
+  message = '请启动后台助手核对当前会话',
+): Promise<CustomerAssistantRuntimeState> {
+  if (!current.session?.id) {
+    throw new Error('Customer assistant session is required before spawning a sub-agent')
+  }
+  const normalizedMessage = message.trim() || '请启动后台助手核对当前会话'
+  const spawned = await spawnCustomerAssistantSubAgent(current.session.id, {
+    message: normalizedMessage,
+    actor: 'operator',
+  })
+  const subAgentRun = await pollCustomerAssistantSubAgentRun(spawned.runId)
+  const { tasks, events, proposedActions, metrics, operatorAudit } = await refreshCustomerAssistantRuntimeLedgers(
+    current.session.id,
+  )
+  const rebuilt = buildCustomerAssistantState({
+    sessionId: current.session.id,
+    tasks: tasks.list,
+    events: events.list,
+    proposedActions: proposedActions.list,
+    operatorAudit,
+  })
+  return {
+    ...rebuilt,
+    session: current.session,
+    tasks: tasks.list,
+    events: events.list,
+    metrics,
+    operatorAudit,
+    operatorKnowledgeQa: current.operatorKnowledgeQa,
+    operatorKnowledgeQaLoading: false,
+    operatorKnowledgeQaError: current.operatorKnowledgeQaError,
+    subAgentRun,
+    subAgentLoading: false,
+    subAgentError: null,
+    loading: false,
+    error: null,
+  }
+}
+
 function fromTurnResult(
   session: CustomerAssistantSession,
   payload: CustomerAssistantTurnPayload,
@@ -320,6 +380,9 @@ function fromTurnResult(
     operatorKnowledgeQa: null,
     operatorKnowledgeQaLoading: false,
     operatorKnowledgeQaError: null,
+    subAgentRun: null,
+    subAgentLoading: false,
+    subAgentError: null,
     loading: false,
     error: null,
   }
@@ -365,6 +428,9 @@ export function mergeCustomerAssistantLiveEvent(
     operatorKnowledgeQa: current.operatorKnowledgeQa,
     operatorKnowledgeQaLoading: current.operatorKnowledgeQaLoading,
     operatorKnowledgeQaError: current.operatorKnowledgeQaError,
+    subAgentRun: current.subAgentRun,
+    subAgentLoading: current.subAgentLoading,
+    subAgentError: current.subAgentError,
     loading: current.loading,
     error: current.error,
   }
@@ -448,6 +514,9 @@ async function applyRuntimeActionResult(
     operatorKnowledgeQa: null,
     operatorKnowledgeQaLoading: false,
     operatorKnowledgeQaError: null,
+    subAgentRun: current.subAgentRun,
+    subAgentLoading: false,
+    subAgentError: null,
     loading: false,
     error: null,
   }
@@ -475,9 +544,25 @@ async function applyRuntimeActionResult(
     events: events.list,
     metrics,
     operatorAudit,
+    subAgentRun: current.subAgentRun,
+    subAgentLoading: false,
+    subAgentError: null,
   }
 }
 
 function emptyCustomerAssistantOperatorAudit(sessionId: number | null): CustomerAssistantOperatorAudit {
   return { sessionId: sessionId ?? 0, list: [], total: 0 }
+}
+
+async function pollCustomerAssistantSubAgentRun(runId: number): Promise<CustomerAssistantSubAgentRun> {
+  let latest = await getCustomerAssistantSubAgentRun(runId)
+  for (let attempt = 0; attempt < 8 && latest.status === 'running'; attempt += 1) {
+    await delay(150)
+    latest = await getCustomerAssistantSubAgentRun(runId)
+  }
+  return latest
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => globalThis.setTimeout(resolve, ms))
 }

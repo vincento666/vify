@@ -184,6 +184,23 @@
               <span>{{ stage.label }}</span>
             </div>
           </div>
+          <div class="sub-agent-control" data-testid="operator-sub-agent-control">
+            <div class="sub-agent-meta">
+              <span>后台子智能体</span>
+              <a-tag :color="subAgentStatusColor">{{ subAgentStatusLabel }}</a-tag>
+            </div>
+            <small v-if="runtimeState.subAgentRun">Run {{ runtimeState.subAgentRun.subAgentRunId }}</small>
+            <small v-else>并行核对当前会话任务和坐席建议</small>
+            <a-button
+              size="small"
+              :loading="subAgentLoading"
+              :disabled="!workspace.sessionId"
+              @click="spawnSubAgent"
+            >
+              <RobotOutlined />
+              启动子智能体
+            </a-button>
+          </div>
         </section>
 
         <section class="workspace-panel compact-panel" data-testid="operator-metrics-panel">
@@ -1013,6 +1030,7 @@ import {
   rejectCustomerAssistantRuntimeAction,
   refreshCustomerAssistantRuntimeWorkerResults,
   sendCustomerAssistantRuntimeTurn,
+  spawnCustomerAssistantRuntimeSubAgent,
   updateCustomerAssistantRuntimeAction,
 } from './customerAssistantRuntime'
 import {
@@ -1060,6 +1078,7 @@ const editingWorkerProfileToolRefs = ref('')
 const editingWorkerProfileError = ref<string | null>(null)
 const workerProfileSavingId = ref<string | null>(null)
 const workerRefreshLoadingTaskId = ref<number | null>(null)
+const subAgentLoading = ref(false)
 const editingActionId = ref<number | null>(null)
 const editingActionTitle = ref('')
 const editingActionPayload = ref('')
@@ -1105,6 +1124,22 @@ const turnStatusColor = computed(() => {
   if (turnStatus.value.kind === 'failed') return 'error'
   if (turnStatus.value.kind === 'loading') return 'processing'
   if (turnStatus.value.kind === 'replayed') return 'blue'
+  return 'default'
+})
+const subAgentStatusLabel = computed(() => {
+  if (subAgentLoading.value || runtimeState.value.subAgentLoading) return '运行中'
+  if (runtimeState.value.subAgentError) return '失败'
+  const status = runtimeState.value.subAgentRun?.status
+  if (status === 'completed') return '已完成'
+  if (status === 'failed') return '失败'
+  if (status === 'running') return '运行中'
+  return '未启动'
+})
+const subAgentStatusColor = computed(() => {
+  if (subAgentLoading.value || runtimeState.value.subAgentLoading) return 'processing'
+  if (runtimeState.value.subAgentError || runtimeState.value.subAgentRun?.status === 'failed') return 'error'
+  if (runtimeState.value.subAgentRun?.status === 'completed') return 'success'
+  if (runtimeState.value.subAgentRun?.status === 'running') return 'processing'
   return 'default'
 })
 
@@ -1388,6 +1423,38 @@ async function refreshWorkerResults(taskId: number) {
     catchCustomerAssistantError(error, '刷新 Worker 结果失败')
   } finally {
     workerRefreshLoadingTaskId.value = null
+  }
+}
+
+async function spawnSubAgent() {
+  if (!runtimeState.value.session?.id) {
+    message.warning('请先打开演示故事或发起会话')
+    return
+  }
+  subAgentLoading.value = true
+  runtimeState.value = {
+    ...runtimeState.value,
+    subAgentLoading: true,
+    subAgentError: null,
+  }
+  try {
+    runtimeState.value = await spawnCustomerAssistantRuntimeSubAgent(runtimeState.value)
+    void loadDemoStoryMetrics()
+    message.success('后台子智能体已完成核对')
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : '后台子智能体启动失败'
+    runtimeState.value = {
+      ...runtimeState.value,
+      subAgentLoading: false,
+      subAgentError: errorMessage,
+    }
+    catchCustomerAssistantError(error, errorMessage)
+  } finally {
+    subAgentLoading.value = false
+    runtimeState.value = {
+      ...runtimeState.value,
+      subAgentLoading: false,
+    }
   }
 }
 
@@ -1792,6 +1859,33 @@ async function executeAction(actionId: number) {
 .progress-row.complete {
   color: #16794c;
   font-weight: 600;
+}
+
+.sub-agent-control {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.65rem;
+  padding: 0.6rem;
+  border: 0.0625rem solid #d9e6f7;
+  border-radius: 0.45rem;
+  background: #f7fbff;
+}
+
+.sub-agent-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: #344054;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.sub-agent-control small {
+  color: #667085;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  word-break: break-word;
 }
 
 .task-row,

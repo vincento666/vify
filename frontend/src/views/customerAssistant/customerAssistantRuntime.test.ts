@@ -14,6 +14,7 @@ const apiMocks = vi.hoisted(() => ({
   createCustomerAssistantSession: vi.fn(),
   executeCustomerAssistantAction: vi.fn(),
   getCustomerAssistantSessionMetrics: vi.fn(),
+  getCustomerAssistantSubAgentRun: vi.fn(),
   listCustomerAssistantDemoStories: vi.fn(),
   listCustomerAssistantEvents: vi.fn(),
   listCustomerAssistantOperatorAudit: vi.fn(),
@@ -23,6 +24,7 @@ const apiMocks = vi.hoisted(() => ({
   rejectCustomerAssistantAction: vi.fn(),
   refreshCustomerAssistantWorkerResults: vi.fn(),
   sendCustomerAssistantTurn: vi.fn(),
+  spawnCustomerAssistantSubAgent: vi.fn(),
   updateCustomerAssistantAction: vi.fn(),
 }))
 
@@ -565,5 +567,79 @@ describe('customer assistant runtime integration', () => {
     expect(answered.events).toBe(initial.events)
     expect(answered.operatorKnowledgeQa).not.toBeNull()
     expect(answered.operatorKnowledgeQa!.answer).toContain('可以并行处理')
+  })
+
+  it('spawns a sub-agent for the current session and refreshes workbench ledgers', async () => {
+    apiMocks.spawnCustomerAssistantSubAgent.mockResolvedValue({
+      runId: 90,
+      sessionId: 12,
+      subAgentRunId: 'customer-assistant-run-90',
+      status: 'running',
+    })
+    apiMocks.getCustomerAssistantSubAgentRun.mockResolvedValue({
+      runId: 90,
+      sessionId: 12,
+      subAgentRunId: 'customer-assistant-run-90',
+      status: 'completed',
+      result: { customerReplyDraft: '后台助手已完成核对。' },
+      events: [
+        {
+          id: 790,
+          sessionId: 12,
+          sequence: 9,
+          type: 'sub_agent_completed',
+          source: 'harness',
+          actor: 'operator',
+          payload: { subAgentRunId: 'customer-assistant-run-90' },
+        },
+      ],
+    })
+    apiMocks.listCustomerAssistantTasks.mockResolvedValue(mockCustomerAssistantTasks)
+    apiMocks.listCustomerAssistantEvents.mockResolvedValue({
+      list: [
+        ...mockCustomerAssistantEvents.list,
+        {
+          id: 790,
+          sessionId: 12,
+          sequence: 9,
+          type: 'sub_agent_completed',
+          source: 'harness',
+          actor: 'operator',
+          payload: { subAgentRunId: 'customer-assistant-run-90' },
+        },
+      ],
+      total: 2,
+    })
+    apiMocks.listCustomerAssistantProposedActions.mockResolvedValue({
+      list: mockCustomerAssistantTurnResult.proposedActions,
+      total: 1,
+    })
+
+    const { createCustomerAssistantRuntimeState, spawnCustomerAssistantRuntimeSubAgent } = await import(
+      './customerAssistantRuntime'
+    )
+
+    const state = await spawnCustomerAssistantRuntimeSubAgent(
+      createCustomerAssistantRuntimeState({
+        session: { id: 12, status: 'ACTIVE' },
+        tasks: mockCustomerAssistantTasks.list,
+        events: mockCustomerAssistantEvents.list,
+        operatorAudit: mockCustomerAssistantOperatorAudit,
+        metrics: mockCustomerAssistantMetrics,
+      }),
+      '请启动后台助手核对当前会话',
+    )
+
+    expect(apiMocks.spawnCustomerAssistantSubAgent).toHaveBeenCalledWith(12, {
+      message: '请启动后台助手核对当前会话',
+      actor: 'operator',
+    })
+    expect(apiMocks.getCustomerAssistantSubAgentRun).toHaveBeenCalledWith(90)
+    expect(apiMocks.listCustomerAssistantTasks).toHaveBeenCalledWith(12)
+    expect(apiMocks.listCustomerAssistantEvents).toHaveBeenCalledWith(12)
+    expect(apiMocks.listCustomerAssistantProposedActions).toHaveBeenCalledWith(12)
+    expect(apiMocks.listCustomerAssistantOperatorAudit).toHaveBeenCalledWith(12)
+    expect(state.subAgentRun?.status).toBe('completed')
+    expect(state.eventTimeline.some((event) => event.title === 'sub_agent_completed')).toBe(true)
   })
 })

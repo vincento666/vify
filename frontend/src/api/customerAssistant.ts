@@ -253,9 +253,31 @@ export interface CustomerAssistantTurnResult {
   replayed: boolean
 }
 
+export interface CustomerAssistantSubAgentRun {
+  subAgentRunId: string
+  runId: number
+  sessionId: number
+  agentType: string
+  status: string
+  eventStreamRef?: string
+  resultRef?: string
+  cancellation?: Record<string, unknown>
+  workerAsyncRefs?: CustomerAssistantWorkerAsyncRefs
+  result?: Record<string, unknown>
+  events?: CustomerAssistantEvent[]
+  warnings?: unknown[]
+  startedAt?: string | null
+  completedAt?: string | null
+}
+
 export interface CustomerAssistantTurnPayload {
   message: string
   idempotencyKey?: string
+  actor?: 'customer' | 'operator' | 'system'
+}
+
+export interface CustomerAssistantSubAgentPayload {
+  message: string
   actor?: 'customer' | 'operator' | 'system'
 }
 
@@ -284,6 +306,23 @@ export const sendCustomerAssistantTurn = (sessionId: number, payload: CustomerAs
     ...(actor ? { actor } : {}),
   })
 }
+
+export const spawnCustomerAssistantSubAgent = (sessionId: number, payload: CustomerAssistantSubAgentPayload) =>
+  post<CustomerAssistantSubAgentRun>('/v1/customer-assistant/harness/spawn-sub-agent', {
+    tool: 'spawn_sub_agent',
+    arguments: {
+      agentType: 'customer_assistant',
+      sessionId,
+      input: {
+        message: payload.message,
+        actor: payload.actor ?? 'operator',
+      },
+      eventLevel: 'L1',
+    },
+  })
+
+export const getCustomerAssistantSubAgentRun = (runId: number) =>
+  get<CustomerAssistantSubAgentRun>(`/v1/customer-assistant/runs/${runId}`)
 
 export const listCustomerAssistantTasks = (sessionId: number) =>
   get<CustomerAssistantListResult<CustomerAssistantTask>>(`/v1/customer-assistant/sessions/${sessionId}/tasks`)
