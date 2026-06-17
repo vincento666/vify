@@ -1,35 +1,22 @@
-import tempfile
 import unittest
-from pathlib import Path
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
-from app.core.database import Base
 from app.core.errors import BizError
 from app.modules.runtime_policy.domain.governance import RuntimePolicyReleaseService
 from app.modules.runtime_policy.infra.repository import RuntimePolicyRepository
 from app.modules.runtime_policy.infra.schema import register_runtime_policy_tables
 from tests.contract.test_runtime_policy_profile_api import _profile_payload
+from tests.support.mysql import mysql8_unittest_database
 
 
 class RuntimePolicyReleaseServiceTest(unittest.TestCase):
     def setUp(self) -> None:
-        self._tmp_dir = tempfile.TemporaryDirectory()
-        db_path = Path(self._tmp_dir.name) / "runtime_policy_release.db"
-        self._engine = create_engine(f"sqlite:///{db_path}", future=True)
-        register_runtime_policy_tables()
-        Base.metadata.create_all(bind=self._engine)
-        self._factory = sessionmaker(
-            bind=self._engine,
-            autoflush=False,
-            autocommit=False,
-            expire_on_commit=False,
+        self._database = mysql8_unittest_database(
+            self,
+            "runtime_policy_release_unit",
+            register=register_runtime_policy_tables,
         )
-
-    def tearDown(self) -> None:
-        self._engine.dispose()
-        self._tmp_dir.cleanup()
+        assert self._database.session_factory is not None
+        self._factory = self._database.session_factory
 
     def test_activate_requires_approval_even_after_evaluation_passes(self) -> None:
         with self._factory() as session:

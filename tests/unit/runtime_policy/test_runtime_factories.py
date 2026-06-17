@@ -1,15 +1,12 @@
 import json
-import tempfile
 from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime
-from pathlib import Path
 import time
 import unittest
 from unittest.mock import patch
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
 from app.core.config import Settings
 from app.core.database import Base
@@ -23,6 +20,7 @@ from app.modules.runtime_policy.domain.factories import (
     build_fallback_agent_from_snapshot,
 )
 from tests.contract.test_runtime_policy_profile_api import _profile_payload
+from tests.support.mysql import mysql8_session
 
 
 class RuntimePolicyRuntimeFactoryTest(unittest.TestCase):
@@ -178,19 +176,8 @@ def _snapshot() -> dict[str, object]:
 
 @contextmanager
 def _agent_session() -> Generator[Session, None, None]:
-    tmp_dir = tempfile.TemporaryDirectory()
-    db_path = Path(tmp_dir.name) / "runtime_policy_existing_agent.db"
-    engine = create_engine(f"sqlite:///{db_path}", future=True)
-    register_baseline_tables()
-    Base.metadata.create_all(bind=engine)
-    factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
-    session = factory()
-    try:
+    with mysql8_session("runtime_policy_existing_agent", register=register_baseline_tables) as session:
         yield session
-    finally:
-        session.close()
-        engine.dispose()
-        tmp_dir.cleanup()
 
 
 def _seed_agent(session: Session, *, system_prompt: str) -> int:

@@ -163,6 +163,26 @@ class Mysql8DatabaseBoundaryTest(unittest.TestCase):
 
         self.assertEqual([], offenders)
 
+    def test_runtime_customer_workflow_unit_tests_do_not_use_sqlite_databases(self) -> None:
+        checked_roots = [
+            PROJECT_ROOT / "tests" / "unit" / "customer_assistant",
+            PROJECT_ROOT / "tests" / "unit" / "runtime_lab",
+            PROJECT_ROOT / "tests" / "unit" / "runtime_policy",
+            PROJECT_ROOT / "tests" / "unit" / "workflow",
+        ]
+        forbidden_markers = ("sqlite://", "sqlite:///", "sqlite3", "aiosqlite")
+
+        offenders: list[str] = []
+        for root in checked_roots:
+            if not root.exists():
+                continue
+            for path in root.rglob("*.py"):
+                content = path.read_text(encoding="utf-8")
+                if any(marker in content for marker in forbidden_markers):
+                    offenders.append(str(path.relative_to(PROJECT_ROOT)))
+
+        self.assertEqual([], offenders)
+
     def test_mysql8_test_harness_requires_disposable_databases(self) -> None:
         content = (PROJECT_ROOT / "tests/support/mysql.py").read_text(encoding="utf-8")
 

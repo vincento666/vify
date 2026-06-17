@@ -1,10 +1,8 @@
 import unittest
 from unittest.mock import patch
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
-
 from app.core.config import Settings
+from app.core.schema import register_baseline_tables
 from app.modules.runtime_lab.domain.classifier import LlmConstrainedIntentClassifier
 from app.modules.workflow.domain.runtime_v2 import ChatflowRuntimeV2Service
 from app.modules.runtime_lab.web.router import (
@@ -12,6 +10,7 @@ from app.modules.runtime_lab.web.router import (
     _runtime_lab_intent_classifier,
     get_runtime_lab_service,
 )
+from tests.support.mysql import mysql8_session
 
 
 class RuntimeLabWebFactoryTest(unittest.TestCase):
@@ -73,8 +72,7 @@ class RuntimeLabWebFactoryTest(unittest.TestCase):
         self.assertIsNone(proposal)
 
     def test_chatflow_sop_binding_wires_runtime_v2_service_by_default(self) -> None:
-        engine = create_engine("sqlite:///:memory:")
-        with Session(engine) as session:
+        with mysql8_session("runtime_lab_web_factory", register=register_baseline_tables) as session:
             with (
                 patch(
                     "app.modules.runtime_lab.web.router.get_settings",
