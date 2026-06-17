@@ -50,6 +50,22 @@ describe('workflow create Ant migration', () => {
     expect(content).toContain('versionId')
   })
 
+  it('exposes runtime v2 version test controls and result evidence beside published-run testing', () => {
+    const content = readSource('src/views/workflow/WorkflowCreate.vue')
+    const versionListStart = content.indexOf('data-testid="workflow-version-list"')
+    const versionListEnd = content.indexOf('</section>', versionListStart)
+    const versionList = content.slice(versionListStart, versionListEnd)
+
+    expect(versionList).toContain('data-testid="workflow-version-run"')
+    expect(versionList).toContain('data-testid="workflow-version-run-v2"')
+    expect(versionList).toContain('Runtime v2 测试')
+    expect(versionList).toContain('runPublishedVersionWithRuntimeV2(version.id)')
+    expect(content).toContain('targetedRuntimeV2RunResult')
+    expect(content).toContain('Runtime v2 版本 v')
+    expect(content).toContain('versionId')
+    expect(content).toContain('debugRef')
+  })
+
   it('exposes a runtime v2 cancel control in the debug dock', () => {
     const content = readSource('src/views/workflow/WorkflowCreate.vue')
     const dockStart = content.indexOf('data-testid="workflow-debug-dock"')

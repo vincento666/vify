@@ -3842,6 +3842,14 @@
                 测试运行
               </button>
               <button
+                type="button"
+                data-testid="workflow-version-run-v2"
+                :disabled="targetedRuntimeV2RunLoadingId === version.id"
+                @click="runPublishedVersionWithRuntimeV2(version.id)"
+              >
+                Runtime v2 测试
+              </button>
+              <button
                 v-if="version.canRollback"
                 type="button"
                 :disabled="rollingBackVersionId === version.id"
@@ -3856,6 +3864,17 @@
             · Run #{{ targetedPublishedRunResult.runId }}
             · {{ targetedPublishedRunResult.status }}
             · versionId {{ targetedPublishedRunResult.versionId }}
+          </p>
+          <p
+            v-if="targetedRuntimeV2RunResult"
+            class="targeted-runtime-v2-run-result"
+            data-testid="workflow-version-run-v2-result"
+          >
+            Runtime v2 版本 v{{ targetedRuntimeV2RunResult.version }}
+            · Run #{{ targetedRuntimeV2RunResult.runId }}
+            · {{ targetedRuntimeV2RunResult.status }}
+            · versionId {{ targetedRuntimeV2RunResult.versionId }}
+            · debugRef {{ targetedRuntimeV2RunResult.debugRef || targetedRuntimeV2RunResult.resultRef || targetedRuntimeV2RunResult.eventsRef }}
           </p>
         </section>
 
@@ -4314,6 +4333,8 @@ const workflowVersions = ref<WorkflowVersionLike[]>([])
 const rollingBackVersionId = ref(0)
 const targetedPublishedRunLoadingId = ref(0)
 const targetedPublishedRunResult = ref<Record<string, any> | null>(null)
+const targetedRuntimeV2RunLoadingId = ref(0)
+const targetedRuntimeV2RunResult = ref<Record<string, any> | null>(null)
 const workflowStatus = ref('DRAFT')
 const lastTestRunStatus = ref('')
 const lastTestRunId = ref(0)
@@ -8983,6 +9004,31 @@ async function runPublishedVersion(versionId: number) {
     message.error(e?.message || '运行发布版本失败')
   } finally {
     targetedPublishedRunLoadingId.value = 0
+  }
+}
+
+async function runPublishedVersionWithRuntimeV2(versionId: number) {
+  if (!workflowId.value) return
+  const ownerType = isChatflowMode.value ? 'CHATFLOW' : 'WORKFLOW'
+  targetedRuntimeV2RunLoadingId.value = versionId
+  targetedRuntimeV2RunResult.value = null
+  try {
+    const runner = isChatflowMode.value ? runChatflowV2 : runWorkflowV2
+    const started = await runner(
+      workflowId.value,
+      publishedVersionRunInput(),
+      runtimeV2IdempotencyKey(ownerType, workflowId.value),
+      versionId,
+    ) as Record<string, any>
+    targetedRuntimeV2RunResult.value = {
+      ...started,
+      debugRef: started.debugRef || started.eventsRef || started.resultRef || '',
+    }
+    message.success('已启动 Runtime v2 版本测试')
+  } catch (e: any) {
+    message.error(e?.message || 'Runtime v2 版本测试失败')
+  } finally {
+    targetedRuntimeV2RunLoadingId.value = 0
   }
 }
 
@@ -15251,7 +15297,7 @@ onUnmounted(() => {
 
 .version-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
   align-items: center;
   gap: 0.75rem;
   padding: 0.625rem 0;
@@ -15281,7 +15327,8 @@ onUnmounted(() => {
   cursor: pointer;
 }
 
-.targeted-published-run-result {
+.targeted-published-run-result,
+.targeted-runtime-v2-run-result {
   margin: 0.5rem 0 0;
   padding: 0.5rem;
   border: 0.0625rem solid #dbe8ff;

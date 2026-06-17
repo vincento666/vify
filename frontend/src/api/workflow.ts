@@ -63,10 +63,11 @@ export function runWorkflow(id: number, input: Record<string, any>) {
   return post<any>(`/v1/workflows/${id}/runs`, { input })
 }
 
-export function runWorkflowV2(id: number, input: Record<string, any>, idempotencyKey?: string) {
+export function runWorkflowV2(id: number, input: Record<string, any>, idempotencyKey?: string, versionId?: number) {
   return post<any>(`/v1/workflows/${id}/runs-v2`, {
     input,
     ...(idempotencyKey ? { idempotencyKey } : {}),
+    ...(typeof versionId === 'number' ? { versionId } : {}),
   })
 }
 
@@ -121,10 +122,11 @@ export function runChatflow(id: number, input: Record<string, any>) {
   return post<any>(`/v1/chatflows/${id}/runs`, { input })
 }
 
-export function runChatflowV2(id: number, input: Record<string, any>, idempotencyKey?: string) {
+export function runChatflowV2(id: number, input: Record<string, any>, idempotencyKey?: string, versionId?: number) {
   return post<any>(`/v1/chatflows/${id}/runs-v2`, {
     input,
     ...(idempotencyKey ? { idempotencyKey } : {}),
+    ...(typeof versionId === 'number' ? { versionId } : {}),
   })
 }
 
