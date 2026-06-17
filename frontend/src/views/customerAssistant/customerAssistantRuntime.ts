@@ -2,6 +2,7 @@ import {
   askCustomerAssistantOperatorKnowledgeQuestion,
   confirmCustomerAssistantAction,
   createCustomerAssistantSession,
+  deliverCustomerAssistantAction,
   executeCustomerAssistantAction,
   getCustomerAssistantSessionMetrics,
   getCustomerAssistantSubAgentRun,
@@ -261,6 +262,14 @@ export async function executeCustomerAssistantRuntimeAction(
   actionId: number,
 ): Promise<CustomerAssistantRuntimeState> {
   const action = await executeCustomerAssistantAction(actionId)
+  return applyRuntimeActionResult(current, action)
+}
+
+export async function deliverCustomerAssistantRuntimeAction(
+  current: CustomerAssistantRuntimeState,
+  actionId: number,
+): Promise<CustomerAssistantRuntimeState> {
+  const action = await deliverCustomerAssistantAction(actionId)
   return applyRuntimeActionResult(current, action)
 }
 

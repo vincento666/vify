@@ -12,6 +12,7 @@ const apiMocks = vi.hoisted(() => ({
   askCustomerAssistantOperatorKnowledgeQuestion: vi.fn(),
   confirmCustomerAssistantAction: vi.fn(),
   createCustomerAssistantSession: vi.fn(),
+  deliverCustomerAssistantAction: vi.fn(),
   executeCustomerAssistantAction: vi.fn(),
   getCustomerAssistantSessionMetrics: vi.fn(),
   getCustomerAssistantSubAgentRun: vi.fn(),
@@ -437,6 +438,72 @@ describe('customer assistant runtime integration', () => {
     })
     expect(executed.taskSummary.items[0].status).toBe('COMPLETED')
     expect(executed.eventTimeline.some((event) => event.title === 'proposed_action_executed')).toBe(true)
+  })
+
+  it('delivers a confirmed customer reply draft and refreshes ledgers', async () => {
+    const draftAction = {
+      ...mockCustomerAssistantTurnResult.proposedActions[0],
+      id: 91,
+      actionType: 'send_customer_message',
+      title: '发送客户回复草稿',
+      payload: { draft: '您好，已为您核对退票规则。' },
+      status: 'CONFIRMED',
+    }
+    const sentAction = {
+      ...draftAction,
+      status: 'SENT',
+      result: {
+        delivery: {
+          channel: 'mock_customer_channel',
+          messageId: 'msg-91',
+          deliveredAt: '2026-06-17T09:00:00Z',
+        },
+        error: null,
+      },
+    }
+    apiMocks.deliverCustomerAssistantAction.mockResolvedValue(sentAction)
+    apiMocks.listCustomerAssistantTasks.mockResolvedValue(mockCustomerAssistantTasks)
+    apiMocks.listCustomerAssistantEvents.mockResolvedValue({
+      list: [
+        ...mockCustomerAssistantEvents.list,
+        {
+          id: 783,
+          sessionId: 12,
+          sequence: 2,
+          type: 'draft_delivery_sent',
+          source: 'draft_delivery_outbox',
+          actor: 'operator',
+          payload: { actionId: 91, status: 'SENT' },
+        },
+      ],
+      total: 2,
+    })
+    apiMocks.listCustomerAssistantProposedActions.mockResolvedValue({ list: [sentAction], total: 1 })
+
+    const { createCustomerAssistantRuntimeState, deliverCustomerAssistantRuntimeAction } = await import(
+      './customerAssistantRuntime'
+    )
+    const initial = createCustomerAssistantRuntimeState({
+      session: { id: 12, status: 'ACTIVE' },
+      turnResult: {
+        ...mockCustomerAssistantTurnResult,
+        proposedActions: [draftAction],
+      },
+    })
+
+    const delivered = await deliverCustomerAssistantRuntimeAction(initial, draftAction.id)
+
+    expect(apiMocks.deliverCustomerAssistantAction).toHaveBeenCalledWith(91)
+    expect(apiMocks.listCustomerAssistantTasks).toHaveBeenCalledWith(12)
+    expect(apiMocks.listCustomerAssistantEvents).toHaveBeenCalledWith(12)
+    expect(apiMocks.listCustomerAssistantProposedActions).toHaveBeenCalledWith(12)
+    expect(apiMocks.getCustomerAssistantSessionMetrics).toHaveBeenCalledWith(12)
+    expect(delivered.proposedActions[0]).toMatchObject({
+      id: 91,
+      status: 'SENT',
+      result: { delivery: { messageId: 'msg-91' } },
+    })
+    expect(delivered.eventTimeline.some((event) => event.title === 'draft_delivery_sent')).toBe(true)
   })
 
   it('refreshes ledgers after confirming a proposed task command', async () => {

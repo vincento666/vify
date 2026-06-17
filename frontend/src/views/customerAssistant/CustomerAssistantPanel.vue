@@ -885,7 +885,7 @@
                 :key="`receipt-${action.id}`"
               >
                 <div
-                  v-if="receipt.visible"
+                  v-if="receipt.visible && !isCustomerReplyDraftAction(action)"
                   class="action-receipt"
                   data-testid="operator-action-receipt"
                 >
@@ -903,6 +903,24 @@
                     >
                       {{ row.label }} <code>{{ row.value }}</code>
                     </span>
+                  </div>
+                </div>
+              </template>
+              <template
+                v-for="receipt in [formatDraftDeliveryReceipt(action)]"
+                :key="`delivery-${action.id}`"
+              >
+                <div
+                  v-if="receipt.visible"
+                  class="action-receipt"
+                  data-testid="operator-draft-delivery-receipt"
+                >
+                  <div class="action-receipt-main">
+                    <a-tag :color="receipt.status === 'FAILED' ? 'error' : 'success'">投递回执</a-tag>
+                    <span>渠道 {{ receipt.channel }}</span>
+                    <span v-if="receipt.messageId">消息 {{ receipt.messageId }}</span>
+                    <span v-if="receipt.deliveredAt">时间 {{ receipt.deliveredAt }}</span>
+                    <span v-if="receipt.error" class="receipt-error">错误 {{ receipt.error }}</span>
                   </div>
                 </div>
               </template>
@@ -976,12 +994,24 @@
                     拒绝
                   </a-button>
                 </a-tooltip>
+                <a-tooltip title="外发已确认客户回复草稿">
+                  <a-button
+                    size="small"
+                    aria-label="外发客户回复草稿"
+                    :disabled="!isDeliverableDraftAction(action)"
+                    :loading="actionLoadingId === action.id"
+                    @click="deliverAction(action.id)"
+                  >
+                    <SendOutlined />
+                    外发草稿
+                  </a-button>
+                </a-tooltip>
                 <a-tooltip title="执行已确认动作">
                   <a-button
                     size="small"
                     type="primary"
                     aria-label="执行已确认动作"
-                    :disabled="action.status !== 'CONFIRMED' || isProposedTaskCommand(action)"
+                    :disabled="action.status !== 'CONFIRMED' || isProposedTaskCommand(action) || isCustomerReplyDraftAction(action)"
                     :loading="actionLoadingId === action.id"
                     @click="executeAction(action.id)"
                   >
@@ -1084,6 +1114,7 @@ import {
   buildCustomerAssistantSessionInboxRows,
   confirmCustomerAssistantRuntimeAction,
   createCustomerAssistantRuntimeState,
+  deliverCustomerAssistantRuntimeAction,
   executeCustomerAssistantRuntimeAction,
   loadCustomerAssistantDemoStory,
   proposeCustomerAssistantRuntimeTaskControl,
@@ -1262,6 +1293,28 @@ function compactPayload(payload: Record<string, unknown>) {
 
 function isProposedTaskCommand(action: CustomerAssistantProposedAction) {
   return action.actionType === 'PROPOSED_TASK_COMMAND'
+}
+
+function isCustomerReplyDraftAction(action: CustomerAssistantProposedAction) {
+  return String(action.actionType).toLowerCase() === 'send_customer_message'
+}
+
+function isDeliverableDraftAction(action: CustomerAssistantProposedAction) {
+  return isCustomerReplyDraftAction(action) && action.status === 'CONFIRMED'
+}
+
+function formatDraftDeliveryReceipt(action: CustomerAssistantProposedAction) {
+  const result = recordValue(action.result)
+  const delivery = recordValue(result.delivery)
+  const visible = isCustomerReplyDraftAction(action) && ['SENT', 'FAILED'].includes(action.status)
+  return {
+    visible,
+    status: action.status,
+    channel: stringValue(delivery.channel, 'mock_customer_channel'),
+    messageId: stringValue(delivery.messageId || delivery.message_id, ''),
+    deliveredAt: stringValue(delivery.deliveredAt || delivery.delivered_at, ''),
+    error: stringValue(result.error, ''),
+  }
 }
 
 function actionConfirmLabel(action: CustomerAssistantProposedAction) {
@@ -1679,6 +1732,28 @@ async function executeAction(actionId: number) {
   } finally {
     actionLoadingId.value = null
   }
+}
+
+async function deliverAction(actionId: number) {
+  actionLoadingId.value = actionId
+  try {
+    runtimeState.value = await deliverCustomerAssistantRuntimeAction(runtimeState.value, actionId)
+    void loadDemoStoryMetrics()
+    message.success('客户回复草稿已外发')
+  } catch (error) {
+    catchCustomerAssistantError(error, '外发客户回复草稿失败')
+  } finally {
+    actionLoadingId.value = null
+  }
+}
+
+function recordValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function stringValue(value: unknown, fallback: string) {
+  const normalized = String(value ?? '').trim()
+  return normalized || fallback
 }
 </script>
 

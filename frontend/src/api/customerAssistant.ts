@@ -372,5 +372,8 @@ export const rejectCustomerAssistantAction = (actionId: number) =>
 export const executeCustomerAssistantAction = (actionId: number) =>
   post<CustomerAssistantProposedAction>(`/v1/customer-assistant/proposed-actions/${actionId}/execute`)
 
+export const deliverCustomerAssistantAction = (actionId: number) =>
+  post<CustomerAssistantProposedAction>(`/v1/customer-assistant/proposed-actions/${actionId}/deliver`, {})
+
 export const updateCustomerAssistantAction = (actionId: number, payload: CustomerAssistantActionUpdatePayload) =>
   patch<CustomerAssistantProposedAction>(`/v1/customer-assistant/proposed-actions/${actionId}`, payload)

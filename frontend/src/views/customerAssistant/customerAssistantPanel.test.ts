@@ -91,6 +91,17 @@ describe('CustomerAssistantPanel UI contract', () => {
     expect(section(content, 'customer-conversation-lane')).not.toContain('operator-sub-agent-control')
   })
 
+  it('renders draft delivery controls only in the operator proposed-action panel', () => {
+    const actionPanel = section(content, 'operator-proposed-actions-panel')
+
+    expect(actionPanel).toContain('deliverAction(action.id)')
+    expect(actionPanel).toContain('isDeliverableDraftAction(action)')
+    expect(actionPanel).toContain('外发草稿')
+    expect(actionPanel).toContain('operator-draft-delivery-receipt')
+    expect(actionPanel).toContain('receipt.visible && !isCustomerReplyDraftAction(action)')
+    expect(section(content, 'customer-conversation-lane')).not.toContain('外发草稿')
+  })
+
   it('renders observability metrics in the operator panel without raw payload details', () => {
     const metricsPanel = section(content, 'operator-metrics-panel')
 
@@ -126,8 +137,11 @@ describe('CustomerAssistantPanel UI contract', () => {
 
   it('distinguishes proposed task commands from executable actions', () => {
     expect(content).toContain('isProposedTaskCommand')
+    expect(content).toContain('isCustomerReplyDraftAction')
     expect(content).toContain('确认任务变更')
-    expect(content).toContain(`:disabled="action.status !== 'CONFIRMED' || isProposedTaskCommand(action)"`)
+    expect(content).toContain(
+      `:disabled="action.status !== 'CONFIRMED' || isProposedTaskCommand(action) || isCustomerReplyDraftAction(action)"`,
+    )
   })
 
   it('renders action execution receipts in the operator proposed-action panel', () => {

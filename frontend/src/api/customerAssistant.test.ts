@@ -97,6 +97,24 @@ describe('customer-assistant frontend API client', () => {
     expect(requestMocks.get).toHaveBeenCalledWith('/v1/customer-assistant/runs/90')
   })
 
+  it('delivers confirmed customer reply draft actions', async () => {
+    requestMocks.post.mockResolvedValueOnce({
+      id: 91,
+      actionType: 'send_customer_message',
+      status: 'SENT',
+      result: { delivery: { channel: 'mock_customer_channel', messageId: 'msg-91' } },
+    })
+
+    const { deliverCustomerAssistantAction } = await import('./customerAssistant')
+
+    await expect(deliverCustomerAssistantAction(91)).resolves.toMatchObject({
+      id: 91,
+      status: 'SENT',
+    })
+
+    expect(requestMocks.post).toHaveBeenCalledWith('/v1/customer-assistant/proposed-actions/91/deliver', {})
+  })
+
   it('lists task and event ledgers', async () => {
     requestMocks.get
       .mockResolvedValueOnce({ list: [], total: 0 })
