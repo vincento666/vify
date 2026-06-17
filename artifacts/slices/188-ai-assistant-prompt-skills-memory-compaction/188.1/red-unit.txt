@@ -1,0 +1,14 @@
+.F                                                                       [100%]
+=================================== FAILURES ===================================
+_ AiAssistantPromptAssemblerTest.test_prompt_layers_include_project_skills_memory_and_compaction _
+
+self = <tests.unit.ai_assistant.test_prompt_assembler.AiAssistantPromptAssemblerTest testMethod=test_prompt_layers_include_project_skills_memory_and_compaction>
+
+    def test_prompt_layers_include_project_skills_memory_and_compaction(self) -> None:
+>       from app.modules.ai_assistant.domain.prompt import PromptAssembler, PromptMemoryItem
+E       ImportError: cannot import name 'PromptMemoryItem' from 'app.modules.ai_assistant.domain.prompt' (/Users/vincento/work/develop/hify/app/modules/ai_assistant/domain/prompt.py)
+
+tests/unit/ai_assistant/test_prompt_assembler.py:26: ImportError
+=========================== short test summary info ============================
+FAILED tests/unit/ai_assistant/test_prompt_assembler.py::AiAssistantPromptAssemblerTest::test_prompt_layers_include_project_skills_memory_and_compaction
+1 failed, 1 passed in 0.02s

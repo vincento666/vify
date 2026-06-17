@@ -1,0 +1,9 @@
+188.0 docs sign-off created for AI Assistant Phase 5.
+
+Scope:
+- backend-only deterministic prompt/skills/memory/compaction MVP;
+- no frontend visual work;
+- no live LLM gates by default;
+- future OpenRouter probes must use environment variables only;
+- MySQL8-only persistence boundary retained for later slices.
+
