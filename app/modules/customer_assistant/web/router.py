@@ -41,6 +41,7 @@ from app.modules.customer_assistant.domain.worker_profiles import CustomerAssist
 from app.modules.customer_assistant.infra.repository import CustomerAssistantRepository
 from app.modules.customer_assistant.web.schemas import (
     CustomerAssistantOperatorKnowledgeQaRequest,
+    CustomerAssistantProposedActionDecisionRequest,
     CustomerAssistantProposedActionUpdateRequest,
     CustomerAssistantSessionCreateRequest,
     CustomerAssistantSpawnSubAgentRequest,
@@ -544,19 +545,24 @@ def stream_events(
 @router.post("/proposed-actions/{action_id}/confirm")
 def confirm_action(
     action_id: int,
+    decision: CustomerAssistantProposedActionDecisionRequest | None = None,
     _access: RequestContext = Depends(require_customer_assistant_operate),
     service: CustomerAssistantService = Depends(get_customer_assistant_service),
 ) -> dict[str, Any]:
-    return success(service.confirm_action(action_id))
+    return success(service.confirm_action(action_id, note=decision.note if decision else None))
 
 
 @router.post("/proposed-actions/{action_id}/reject")
 def reject_action(
     action_id: int,
+    decision: CustomerAssistantProposedActionDecisionRequest | None = None,
     _access: RequestContext = Depends(require_customer_assistant_operate),
     service: CustomerAssistantService = Depends(get_customer_assistant_service),
 ) -> dict[str, Any]:
-    return success(service.reject_action(action_id))
+    reason = None
+    if decision is not None:
+        reason = decision.reason or decision.note
+    return success(service.reject_action(action_id, reason=reason))
 
 
 @router.post("/proposed-actions/{action_id}/execute")

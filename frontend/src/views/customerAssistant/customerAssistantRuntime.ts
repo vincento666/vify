@@ -17,6 +17,7 @@ import {
   sendCustomerAssistantTurn,
   spawnCustomerAssistantSubAgent,
   updateCustomerAssistantAction,
+  type CustomerAssistantActionDecisionPayload,
   type CustomerAssistantActionUpdatePayload,
   type CustomerAssistantDemoStory,
   type CustomerAssistantDemoStoryMetrics,
@@ -244,16 +245,18 @@ export async function loadCustomerAssistantDemoStory(storyId: string): Promise<C
 export async function confirmCustomerAssistantRuntimeAction(
   current: CustomerAssistantRuntimeState,
   actionId: number,
+  payload?: CustomerAssistantActionDecisionPayload,
 ): Promise<CustomerAssistantRuntimeState> {
-  const action = await confirmCustomerAssistantAction(actionId)
+  const action = await confirmCustomerAssistantAction(actionId, payload)
   return applyRuntimeActionResult(current, action)
 }
 
 export async function rejectCustomerAssistantRuntimeAction(
   current: CustomerAssistantRuntimeState,
   actionId: number,
+  payload?: CustomerAssistantActionDecisionPayload,
 ): Promise<CustomerAssistantRuntimeState> {
-  const action = await rejectCustomerAssistantAction(actionId)
+  const action = await rejectCustomerAssistantAction(actionId, payload)
   return applyRuntimeActionResult(current, action)
 }
 

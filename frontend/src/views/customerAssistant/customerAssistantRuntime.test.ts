@@ -312,11 +312,19 @@ describe('customer assistant runtime integration', () => {
       turnResult: mockCustomerAssistantTurnResult,
     })
 
-    const confirmed = await confirmCustomerAssistantRuntimeAction(initial, pending.id)
-    const rejected = await rejectCustomerAssistantRuntimeAction(initial, pending.id)
+    const confirmed = await confirmCustomerAssistantRuntimeAction(initial, pending.id, {
+      note: 'customer confirmed',
+    })
+    const rejected = await rejectCustomerAssistantRuntimeAction(initial, pending.id, {
+      reason: 'duplicate request',
+    })
 
-    expect(apiMocks.confirmCustomerAssistantAction).toHaveBeenCalledWith(pending.id)
-    expect(apiMocks.rejectCustomerAssistantAction).toHaveBeenCalledWith(pending.id)
+    expect(apiMocks.confirmCustomerAssistantAction).toHaveBeenCalledWith(pending.id, {
+      note: 'customer confirmed',
+    })
+    expect(apiMocks.rejectCustomerAssistantAction).toHaveBeenCalledWith(pending.id, {
+      reason: 'duplicate request',
+    })
     expect(apiMocks.listCustomerAssistantTasks).toHaveBeenCalledWith(12)
     expect(apiMocks.listCustomerAssistantEvents).toHaveBeenCalledWith(12)
     expect(apiMocks.listCustomerAssistantProposedActions).toHaveBeenCalledWith(12)

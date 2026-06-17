@@ -1005,7 +1005,7 @@ class CustomerAssistantService:
             "tasks": [_format_task(row) for row in rows],
         }
 
-    def confirm_action(self, action_id: int) -> dict[str, Any]:
+    def confirm_action(self, action_id: int, *, note: str | None = None) -> dict[str, Any]:
         action = self._repository.get_proposed_action(action_id)
         if action is None:
             raise BizError(ErrorCode.NOT_FOUND, "Proposed action not found")
@@ -1013,18 +1013,23 @@ class CustomerAssistantService:
         if action["status"] != "PENDING":
             raise BizError(ErrorCode.BAD_REQUEST, "Only pending proposed actions can be confirmed")
         if action["action_type"] == "PROPOSED_TASK_COMMAND":
-            return self._confirm_proposed_task_command(action)
+            return self._confirm_proposed_task_command(action, note=note)
+        decision = _operator_decision_payload(note=note)
         updated = self._repository.transition_proposed_action_status(
             action_id,
             expected_status="PENDING",
             next_status="CONFIRMED",
+            result={"decision": decision} if decision else None,
         )
         if updated is None:
             raise BizError(ErrorCode.BAD_REQUEST, "Only pending proposed actions can be confirmed")
+        event_payload: dict[str, Any] = {"actionId": action_id, "actionType": updated["action_type"]}
+        if decision:
+            event_payload["decision"] = decision
         self._repository.append_event(
             int(updated["session_id"]),
             "proposed_action_confirmed",
-            {"actionId": action_id, "actionType": updated["action_type"]},
+            event_payload,
             run_id=int(updated["run_id"]),
             task_id=updated.get("task_id"),
             source="operator_advisory",
@@ -1032,11 +1037,12 @@ class CustomerAssistantService:
         )
         return _format_action(updated)
 
-    def _confirm_proposed_task_command(self, action: dict[str, Any]) -> dict[str, Any]:
+    def _confirm_proposed_task_command(self, action: dict[str, Any], *, note: str | None = None) -> dict[str, Any]:
         payload = dict(action.get("payload") or {})
         command = _task_command_from_proposed_payload(dict(payload.get("taskCommand") or {}))
         session_id = int(action["session_id"])
         run_id = int(action["run_id"])
+        decision = _operator_decision_payload(note=note)
         claimed = self._repository.transition_proposed_action_status(
             int(action["id"]),
             expected_status="PENDING",
@@ -1065,6 +1071,8 @@ class CustomerAssistantService:
             "applied": True,
             "taskCommand": _command_payload(command),
         }
+        if decision:
+            result_payload["decision"] = decision
         if worker_results or updated_tasks:
             result_payload["workerResultCount"] = len(worker_results)
             result_payload["updatedTaskIds"] = [task.id for task in updated_tasks]
@@ -1086,6 +1094,7 @@ class CustomerAssistantService:
                 "actionId": int(action["id"]),
                 "turnMode": CustomerAssistantTurnMode.OPERATOR_APPLY_TASK_COMMAND.value,
                 "taskCommand": _command_payload(command),
+                **({"decision": decision} if decision else {}),
             },
             run_id=run_id,
             source="operator_advisory",
@@ -1094,7 +1103,11 @@ class CustomerAssistantService:
         self._repository.append_event(
             session_id,
             "proposed_action_confirmed",
-            {"actionId": int(action["id"]), "actionType": updated["action_type"]},
+            {
+                "actionId": int(action["id"]),
+                "actionType": updated["action_type"],
+                **({"decision": decision} if decision else {}),
+            },
             run_id=run_id,
             task_id=updated.get("task_id"),
             source="operator_advisory",
@@ -1102,24 +1115,29 @@ class CustomerAssistantService:
         )
         return _format_action(updated)
 
-    def reject_action(self, action_id: int) -> dict[str, Any]:
+    def reject_action(self, action_id: int, *, reason: str | None = None) -> dict[str, Any]:
         action = self._repository.get_proposed_action(action_id)
         if action is None:
             raise BizError(ErrorCode.NOT_FOUND, "Proposed action not found")
         self._ensure_session(int(action["session_id"]))
         if action["status"] != "PENDING":
             raise BizError(ErrorCode.BAD_REQUEST, "Only pending proposed actions can be rejected")
+        decision = _operator_decision_payload(reason=reason)
         updated = self._repository.transition_proposed_action_status(
             action_id,
             expected_status="PENDING",
             next_status="REJECTED",
+            result={"decision": decision} if decision else None,
         )
         if updated is None:
             raise BizError(ErrorCode.BAD_REQUEST, "Only pending proposed actions can be rejected")
+        event_payload: dict[str, Any] = {"actionId": action_id, "actionType": updated["action_type"]}
+        if decision:
+            event_payload["decision"] = decision
         self._repository.append_event(
             int(updated["session_id"]),
             "proposed_action_rejected",
-            {"actionId": action_id, "actionType": updated["action_type"]},
+            event_payload,
             run_id=int(updated["run_id"]),
             task_id=updated.get("task_id"),
             source="operator_advisory",
@@ -2418,7 +2436,15 @@ def _operator_audit_summary(event_type: str, row: dict[str, Any], payload: dict[
     if event_type.startswith("proposed_action") or event_type == "proposed_task_command_confirmed":
         task_command = payload.get("taskCommand") if isinstance(payload.get("taskCommand"), dict) else {}
         action_type = payload.get("actionType") or task_command.get("type") or "action"
-        return sanitize_text(f"{action_type} {payload.get('status') or _OPERATOR_AUDIT_STATUS_BY_EVENT[event_type]}")
+        summary = f"{action_type} {payload.get('status') or _OPERATOR_AUDIT_STATUS_BY_EVENT[event_type]}"
+        decision = payload.get("decision") if isinstance(payload.get("decision"), dict) else {}
+        note = str(decision.get("note") or "").strip()
+        reason = str(decision.get("reason") or "").strip()
+        if note:
+            summary = f"{summary}; note: {note}"
+        if reason:
+            summary = f"{summary}; reason: {reason}"
+        return sanitize_text(summary)
     if event_type.startswith("draft_delivery"):
         delivery = payload.get("delivery") if isinstance(payload.get("delivery"), dict) else {}
         channel = delivery.get("channel") or payload.get("channel") or "mock_channel"
@@ -2445,6 +2471,24 @@ def _optional_audit_int(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _operator_decision_payload(*, note: str | None = None, reason: str | None = None) -> dict[str, str]:
+    payload: dict[str, str] = {}
+    normalized_note = _normalize_operator_decision_text(note)
+    normalized_reason = _normalize_operator_decision_text(reason)
+    if normalized_note:
+        payload["note"] = normalized_note
+    if normalized_reason:
+        payload["reason"] = normalized_reason
+    return payload
+
+
+def _normalize_operator_decision_text(value: str | None) -> str | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    return sanitize_text(text[:1000])
 
 
 def _format_worker_run(row: dict[str, Any]) -> dict[str, Any]:

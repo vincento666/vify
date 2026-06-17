@@ -40,6 +40,11 @@ export interface CustomerAssistantActionUpdatePayload {
   payload?: Record<string, unknown>
 }
 
+export interface CustomerAssistantActionDecisionPayload {
+  note?: string
+  reason?: string
+}
+
 export interface CustomerAssistantWorkerProfile {
   profileId: string
   taskKey: string
@@ -363,11 +368,15 @@ export const proposeCustomerAssistantTaskControl = (
     payload,
   )
 
-export const confirmCustomerAssistantAction = (actionId: number) =>
-  post<CustomerAssistantProposedAction>(`/v1/customer-assistant/proposed-actions/${actionId}/confirm`)
+export const confirmCustomerAssistantAction = (actionId: number, payload?: CustomerAssistantActionDecisionPayload) =>
+  payload === undefined
+    ? post<CustomerAssistantProposedAction>(`/v1/customer-assistant/proposed-actions/${actionId}/confirm`)
+    : post<CustomerAssistantProposedAction>(`/v1/customer-assistant/proposed-actions/${actionId}/confirm`, payload)
 
-export const rejectCustomerAssistantAction = (actionId: number) =>
-  post<CustomerAssistantProposedAction>(`/v1/customer-assistant/proposed-actions/${actionId}/reject`)
+export const rejectCustomerAssistantAction = (actionId: number, payload?: CustomerAssistantActionDecisionPayload) =>
+  payload === undefined
+    ? post<CustomerAssistantProposedAction>(`/v1/customer-assistant/proposed-actions/${actionId}/reject`)
+    : post<CustomerAssistantProposedAction>(`/v1/customer-assistant/proposed-actions/${actionId}/reject`, payload)
 
 export const executeCustomerAssistantAction = (actionId: number) =>
   post<CustomerAssistantProposedAction>(`/v1/customer-assistant/proposed-actions/${actionId}/execute`)

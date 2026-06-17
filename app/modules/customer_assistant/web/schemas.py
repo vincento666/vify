@@ -36,6 +36,11 @@ class CustomerAssistantProposedActionUpdateRequest(BaseModel):
     actor: CustomerAssistantActor = "operator"
 
 
+class CustomerAssistantProposedActionDecisionRequest(BaseModel):
+    note: str | None = Field(default=None, max_length=1000)
+    reason: str | None = Field(default=None, max_length=1000)
+
+
 class CustomerAssistantWorkerProfileUpsertRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 

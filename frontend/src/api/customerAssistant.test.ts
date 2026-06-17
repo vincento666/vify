@@ -292,12 +292,22 @@ describe('customer-assistant frontend API client', () => {
     const { confirmCustomerAssistantAction, executeCustomerAssistantAction, rejectCustomerAssistantAction } =
       await import('./customerAssistant')
 
-    await expect(confirmCustomerAssistantAction(9)).resolves.toEqual({ id: 9, status: 'CONFIRMED' })
-    await expect(rejectCustomerAssistantAction(10)).resolves.toEqual({ id: 10, status: 'REJECTED' })
+    await expect(confirmCustomerAssistantAction(9, { note: 'customer confirmed' })).resolves.toEqual({
+      id: 9,
+      status: 'CONFIRMED',
+    })
+    await expect(rejectCustomerAssistantAction(10, { reason: 'duplicate request' })).resolves.toEqual({
+      id: 10,
+      status: 'REJECTED',
+    })
     await expect(executeCustomerAssistantAction(11)).resolves.toEqual({ id: 11, status: 'EXECUTED' })
 
-    expect(requestMocks.post).toHaveBeenNthCalledWith(1, '/v1/customer-assistant/proposed-actions/9/confirm')
-    expect(requestMocks.post).toHaveBeenNthCalledWith(2, '/v1/customer-assistant/proposed-actions/10/reject')
+    expect(requestMocks.post).toHaveBeenNthCalledWith(1, '/v1/customer-assistant/proposed-actions/9/confirm', {
+      note: 'customer confirmed',
+    })
+    expect(requestMocks.post).toHaveBeenNthCalledWith(2, '/v1/customer-assistant/proposed-actions/10/reject', {
+      reason: 'duplicate request',
+    })
     expect(requestMocks.post).toHaveBeenNthCalledWith(3, '/v1/customer-assistant/proposed-actions/11/execute')
   })
 
