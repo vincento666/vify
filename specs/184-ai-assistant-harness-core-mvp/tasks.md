@@ -79,15 +79,15 @@
 
 ## 184.5 Final Aggregate Acceptance
 
-- [ ] Merge subagent reports and resolve cross-slice conflicts.
-- [ ] Rerun focused slice gates.
-- [ ] Run aggregate backend unit, RED, integration, contract, and E2E gates.
-- [ ] Run full frontend unit and `remScaleClosure`.
-- [ ] Run browser UAT for AI Assistant shell.
-- [ ] Save final evidence and screenshots under
+- [x] Merge subagent reports and resolve cross-slice conflicts.
+- [x] Rerun focused slice gates.
+- [x] Run aggregate backend unit, RED, integration, contract, and E2E gates.
+- [x] Run full frontend unit and `remScaleClosure`.
+- [x] Run browser UAT for AI Assistant shell.
+- [x] Save final evidence and screenshots under
       `artifacts/slices/184-ai-assistant-harness-core-mvp/184.5/`.
-- [ ] Record final residual risk list.
-- [ ] Mark the goal complete only after evidence and UAT are complete.
+- [x] Record final residual risk list.
+- [x] Mark the goal complete only after evidence and UAT are complete.
 
 ## Later Specs
 

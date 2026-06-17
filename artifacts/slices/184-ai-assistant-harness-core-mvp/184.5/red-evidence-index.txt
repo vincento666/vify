@@ -1,0 +1,64 @@
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.1/red-prompt.txt  964B
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.1/red.txt  4.2K
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt  10.8K
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.3/red.txt  805B
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.4/red-backend.txt  2.6K
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.4/red-frontend.txt  12.6K
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.1/red.txt:E       ModuleNotFoundError: No module named 'app.modules.ai_assistant'
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.1/red.txt:tests/unit/ai_assistant/test_tool_registry.py:6: ModuleNotFoundError
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.1/red.txt:E       ModuleNotFoundError: No module named 'app.modules.ai_assistant'
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.1/red.txt:tests/integration/ai_assistant/test_harness_repository.py:12: ModuleNotFoundError
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.1/red.txt:E       ModuleNotFoundError: No module named 'app.modules.ai_assistant'
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.1/red.txt:tests/integration/ai_assistant/test_harness_repository.py:47: ModuleNotFoundError
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.1/red.txt:E       ModuleNotFoundError: No module named 'app.modules.ai_assistant'
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.1/red.txt:tests/contract/test_ai_assistant_kernel_api.py:15: ModuleNotFoundError
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.1/red.txt:E       ModuleNotFoundError: No module named 'app.modules.ai_assistant'
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.1/red.txt:tests/e2e/test_ai_assistant_kernel_e2e.py:15: ModuleNotFoundError
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.1/red.txt:FAILED tests/unit/ai_assistant/test_tool_registry.py::AiAssistantToolRegistryTest::test_echo_context_manifest_is_read_only_and_dispatches
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.1/red.txt:FAILED tests/integration/ai_assistant/test_harness_repository.py::AiAssistantHarnessRepositoryTest::test_run_events_are_persisted_and_replayed_in_sequence
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.1/red.txt:FAILED tests/integration/ai_assistant/test_harness_repository.py::AiAssistantHarnessRepositoryTest::test_tool_call_persistence_records_input_output_status_and_duration
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.1/red.txt:FAILED tests/contract/test_ai_assistant_kernel_api.py::AiAssistantKernelApiContractTest::test_session_message_run_events_result_and_tools_contract
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.1/red.txt:FAILED tests/e2e/test_ai_assistant_kernel_e2e.py::AiAssistantKernelE2ETest::test_one_message_to_read_only_tool_to_final_result_replay
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.1/red.txt:5 failed, 1 warning in 0.64s
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.1/red-prompt.txt:E       ModuleNotFoundError: No module named 'app.modules.ai_assistant.domain.prompt'
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.1/red-prompt.txt:tests/unit/ai_assistant/test_prompt_assembler.py:6: ModuleNotFoundError
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.1/red-prompt.txt:FAILED tests/unit/ai_assistant/test_prompt_assembler.py::AiAssistantPromptAssemblerTest::test_minimal_prompt_layers_base_tools_state_and_message
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.1/red-prompt.txt:1 failed in 0.02s
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt:E       ModuleNotFoundError: No module named 'app.modules.ai_assistant.domain.permissions'
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt:tests/unit/ai_assistant/test_security_boundary.py:17: ModuleNotFoundError
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt:E       ModuleNotFoundError: No module named 'app.modules.ai_assistant.domain.permissions'
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt:tests/unit/ai_assistant/test_security_boundary.py:28: ModuleNotFoundError
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt:E       ModuleNotFoundError: No module named 'app.modules.ai_assistant.domain.sandbox'
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt:tests/unit/ai_assistant/test_security_boundary.py:39: ModuleNotFoundError
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt:E       ModuleNotFoundError: No module named 'app.modules.ai_assistant.domain.permissions'
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt:tests/unit/ai_assistant/test_security_boundary.py:6: ModuleNotFoundError
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt:E           TypeError: 'NoneType' object is not subscriptable
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt:tests/contract/test_ai_assistant_security_api.py:118: TypeError
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt:E           TypeError: 'NoneType' object is not subscriptable
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt:tests/contract/test_ai_assistant_security_api.py:93: TypeError
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt:E           TypeError: 'NoneType' object is not subscriptable
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt:tests/contract/test_ai_assistant_security_api.py:69: TypeError
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt:E           TypeError: 'NoneType' object is not subscriptable
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt:tests/contract/test_ai_assistant_security_api.py:48: TypeError
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt:E       AssertionError: 'COMPLETED' != 'DENIED'
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt:tests/contract/test_ai_assistant_security_api.py:145: AssertionError
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt:FAILED tests/unit/ai_assistant/test_security_boundary.py::AiAssistantSecurityBoundaryTest::test_high_risk_business_write_requires_approval_under_smart_approval
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt:FAILED tests/unit/ai_assistant/test_security_boundary.py::AiAssistantSecurityBoundaryTest::test_production_always_approve_is_denied
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt:FAILED tests/unit/ai_assistant/test_security_boundary.py::AiAssistantSecurityBoundaryTest::test_shell_like_command_is_denied_by_sandbox
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt:FAILED tests/unit/ai_assistant/test_security_boundary.py::AiAssistantSecurityBoundaryTest::test_smart_approval_allows_read_tools_without_manual_approval
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt:FAILED tests/contract/test_ai_assistant_security_api.py::AiAssistantSecurityApiContractTest::test_approved_approval_records_actor_and_decision
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt:FAILED tests/contract/test_ai_assistant_security_api.py::AiAssistantSecurityApiContractTest::test_denied_approval_records_decision_and_does_not_execute
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt:FAILED tests/contract/test_ai_assistant_security_api.py::AiAssistantSecurityApiContractTest::test_high_risk_business_write_pauses_with_approval_and_proposed_action
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt:FAILED tests/contract/test_ai_assistant_security_api.py::AiAssistantSecurityApiContractTest::test_smart_approval_read_only_tool_runs_without_approval
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt:FAILED tests/contract/test_ai_assistant_security_api.py::AiAssistantSecurityApiContractTest::test_unsafe_shell_command_is_blocked_by_sandbox_policy
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/red.txt:9 failed, 1 warning in 11.69s
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.4/red-backend.txt:E       TypeError: 'NoneType' object is not subscriptable
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.4/red-backend.txt:tests/contract/test_ai_assistant_inspector_api.py:56: TypeError
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.4/red-backend.txt:FAILED tests/contract/test_ai_assistant_inspector_api.py::AiAssistantInspectorApiContractTest::test_run_inspector_exposes_tasks_tool_calls_approvals_errors_and_timeline
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.4/red-backend.txt:1 failed, 1 warning in 7.37s
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.4/red-frontend.txt: ❯ src/views/aiAssistant/aiAssistantShell.test.ts (1 test | 1 failed) 28ms
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.4/red-frontend.txt: ❯ src/api/aiAssistant.test.ts (1 test | 1 failed) 102ms
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.4/red-frontend.txt: Test Files  2 failed (2)
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.4/red-frontend.txt:      Tests  2 failed (2)
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.4/red-frontend.txt:TypeError: listAiAssistantSessionRuns is not a function
+artifacts/slices/184-ai-assistant-harness-core-mvp/184.4/red-frontend.txt:AssertionError: expected '<template>\n  <section class="ai-shel…' to contain 'data-testid="ai-assistant-session-lis…'
