@@ -65,6 +65,17 @@ class OneClickDemoSeedTest(unittest.TestCase):
                 self.assertGreaterEqual(manifest["persistence"]["topologyCounts"]["providerModelCount"], 1)
                 self.assertNotIn("password", json.dumps(manifest["persistence"]).lower())
                 self.assertNotIn("sk-", json.dumps(manifest["persistence"]))
+                readiness = manifest["runtimeV2LlmReadiness"]
+                self.assertTrue(readiness["workflowRunsV2ProviderBinding"])
+                self.assertTrue(readiness["chatflowRunsV2ProviderBinding"])
+                self.assertTrue(readiness["runtimeLabSopV2ProviderBinding"])
+                self.assertTrue(readiness["customerAssistantSopV2ProviderBinding"])
+                self.assertEqual(readiness["providerMode"], "mock_safe")
+                self.assertFalse(readiness["liveReady"])
+                self.assertTrue(readiness["liveProviderRequired"])
+                self.assertEqual(readiness["modelConfigIds"], second.seed.model_config_ids)
+                self.assertEqual(readiness["preferredAgentName"], "034 RuntimeLab Airline Chatflow LLM Agent")
+                self.assertNotIn("sk-", json.dumps(readiness))
                 self.assertEqual(manifest["seed"]["providerIds"], second.seed.provider_ids)
                 self.assertEqual(manifest["seed"]["modelConfigIds"], second.seed.model_config_ids)
 

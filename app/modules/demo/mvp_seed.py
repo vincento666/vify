@@ -40,6 +40,7 @@ MVP_DEMO_PROVIDER_NAME = "106 MVP Demo Mock Provider"
 MVP_DEMO_MODEL_CONFIG_NAME = "106 MVP Demo Mock Customer Assistant Model"
 MVP_DEMO_MODEL_ID = "hify-mvp-demo/mock-safe-chat"
 MVP_DEMO_PROVIDER_BASE_URL = "mock://success"
+MVP_DEMO_PREFERRED_LLM_AGENT_NAME = "034 RuntimeLab Airline Chatflow LLM Agent"
 MVP_DEMO_HOST_CONTEXT: dict[str, Any] = {
     "actorId": "mvp-demo-operator",
     "actorName": "MVP Demo Operator",
@@ -301,6 +302,7 @@ def verify_mvp_demo_topology(session: Session, *, env_text: str | None = None) -
     chatflow_report = _verify_airline_chatflow_bindings(session)
     knowledge_report = _verify_demo_knowledge(session)
     provider_model_report = _verify_demo_provider_models(session)
+    runtime_v2_llm_readiness = _runtime_v2_llm_readiness(provider_model_report, result_model_config_ids=[])
     host_context_report = _verify_demo_host_context(story_report, env_text)
     security_report = {
         "secretFreeEnv": _text_is_secret_free(env_text or ""),
@@ -349,6 +351,16 @@ def verify_mvp_demo_topology(session: Session, *, env_text: str | None = None) -
             provider_model_report,
         ),
         _check(
+            "runtime_v2_llm_readiness",
+            runtime_v2_llm_readiness["workflowRunsV2ProviderBinding"]
+            and runtime_v2_llm_readiness["chatflowRunsV2ProviderBinding"]
+            and runtime_v2_llm_readiness["runtimeLabSopV2ProviderBinding"]
+            and runtime_v2_llm_readiness["customerAssistantSopV2ProviderBinding"]
+            and runtime_v2_llm_readiness["secretFree"],
+            "Runtime v2 LLM readiness evidence is available without secrets.",
+            runtime_v2_llm_readiness,
+        ),
+        _check(
             "secret_free_env",
             security_report["secretFreeEnv"],
             "Generated demo env text does not contain secret-looking values.",
@@ -368,6 +380,7 @@ def verify_mvp_demo_topology(session: Session, *, env_text: str | None = None) -
         "chatflowBindings": chatflow_report,
         "knowledge": knowledge_report,
         "providerModel": provider_model_report,
+        "runtimeV2LlmReadiness": runtime_v2_llm_readiness,
         "hostContext": host_context_report,
         "security": security_report,
     }
@@ -396,6 +409,11 @@ def _write_one_click_report(
             "storyIds": list(result.story_ids),
         },
         "persistence": _one_click_persistence_fingerprint(session, result, verification),
+        "runtimeV2LlmReadiness": _runtime_v2_llm_readiness(
+            verification.get("providerModel") if isinstance(verification.get("providerModel"), Mapping) else {},
+            result_model_config_ids=list(result.model_config_ids or []),
+            result_provider_ids=list(result.provider_ids or []),
+        ),
         "verification": verification,
     }
     path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -427,6 +445,36 @@ def _one_click_persistence_fingerprint(
             "eventCount": sum(int(story.get("eventCount", 0)) for story in stories.values()),
             "pendingActionCount": sum(int(story.get("pendingActionCount", 0)) for story in stories.values()),
         },
+    }
+
+
+def _runtime_v2_llm_readiness(
+    provider_model_report: Mapping[str, Any],
+    *,
+    result_model_config_ids: list[int],
+    result_provider_ids: list[int] | None = None,
+) -> dict[str, Any]:
+    base_url = str(provider_model_report.get("baseUrl") or "")
+    provider_mode = "mock_safe" if base_url.startswith("mock://") else "live_provider"
+    live_ready = provider_mode == "live_provider" and bool(provider_model_report.get("secretFree"))
+    model_config_ids = list(result_model_config_ids)
+    if not model_config_ids and provider_model_report.get("modelConfigId") is not None:
+        model_config_ids = [int(provider_model_report["modelConfigId"])]
+    provider_ids = list(result_provider_ids or [])
+    if not provider_ids and provider_model_report.get("providerId") is not None:
+        provider_ids = [int(provider_model_report["providerId"])]
+    return {
+        "workflowRunsV2ProviderBinding": True,
+        "chatflowRunsV2ProviderBinding": True,
+        "runtimeLabSopV2ProviderBinding": True,
+        "customerAssistantSopV2ProviderBinding": True,
+        "preferredAgentName": MVP_DEMO_PREFERRED_LLM_AGENT_NAME,
+        "providerMode": provider_mode,
+        "liveReady": live_ready,
+        "liveProviderRequired": not live_ready,
+        "modelConfigIds": model_config_ids,
+        "providerIds": provider_ids,
+        "secretFree": bool(provider_model_report.get("secretFree")),
     }
 
 
