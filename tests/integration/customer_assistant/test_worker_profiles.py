@@ -246,6 +246,86 @@ class CustomerAssistantWorkerProfileApiTest(unittest.TestCase):
         self.assertEqual(profiles[0]["modelPolicyRef"], "demo-model")
         self.assertEqual(task["workerRef"], "configured_refund_stub")
 
+    def test_react_worker_profile_tool_refs_constrain_runtime_policy(self) -> None:
+        payload = {
+            "taskKey": "refund_ticket",
+            "taskType": "REFUND",
+            "workerType": "react_worker",
+            "workerRef": "configured_refund_react",
+            "modelPolicyRef": "demo-react-model",
+            "promptRef": "demo-react-prompt",
+            "toolRefs": [],
+            "riskPolicyRef": "manual_confirm_high_risk",
+            "enabled": True,
+        }
+
+        with TestClient(app) as client:
+            patched = client.patch(
+                "/api/v1/customer-assistant/worker-profiles/configured_refund_stub",
+                json=payload,
+            )
+            self.assertEqual(patched.status_code, 200, patched.text)
+
+            created = client.post("/api/v1/customer-assistant/sessions", json={"context": {}})
+            session_id = int(created.json()["data"]["id"])
+            turn = client.post(
+                f"/api/v1/customer-assistant/sessions/{session_id}/turns",
+                json={"message": "我要退票", "idempotencyKey": "react-profile-tool-policy"},
+            )
+            self.assertEqual(turn.status_code, 200, turn.text)
+            tasks = client.get(f"/api/v1/customer-assistant/sessions/{session_id}/tasks").json()["data"]["list"]
+            events = client.get(f"/api/v1/customer-assistant/sessions/{session_id}/events").json()["data"]["list"]
+
+        task = tasks[0]
+        react_failures = [
+            event
+            for event in events
+            if event["type"] == "react_tool_call_failed" and event["source"] == "react_worker"
+        ]
+        self.assertEqual(task["workerType"], "react_worker")
+        self.assertEqual(task["workerRef"], "configured_refund_react")
+        self.assertEqual(task["status"], "FAILED")
+        self.assertEqual(task["lastResult"]["error"]["code"], "TOOL_NOT_ALLOWED")
+        self.assertEqual(react_failures[0]["payload"]["reason"], "not_allowed")
+        self.assertEqual(turn.json()["data"]["proposedActions"], [])
+
+    def test_react_worker_profile_refs_are_recorded_in_worker_evidence(self) -> None:
+        payload = {
+            "taskKey": "refund_ticket",
+            "taskType": "REFUND",
+            "workerType": "react_worker",
+            "workerRef": "configured_refund_react",
+            "modelPolicyRef": "demo-react-model",
+            "promptRef": "demo-react-prompt",
+            "toolRefs": ["lookup_order"],
+            "riskPolicyRef": "manual_confirm_high_risk",
+            "enabled": True,
+        }
+
+        with TestClient(app) as client:
+            patched = client.patch(
+                "/api/v1/customer-assistant/worker-profiles/configured_refund_stub",
+                json=payload,
+            )
+            self.assertEqual(patched.status_code, 200, patched.text)
+
+            created = client.post("/api/v1/customer-assistant/sessions", json={"context": {}})
+            session_id = int(created.json()["data"]["id"])
+            turn = client.post(
+                f"/api/v1/customer-assistant/sessions/{session_id}/turns",
+                json={"message": "我要退票", "idempotencyKey": "react-profile-evidence"},
+            )
+            self.assertEqual(turn.status_code, 200, turn.text)
+            task = client.get(f"/api/v1/customer-assistant/sessions/{session_id}/tasks").json()["data"]["list"][0]
+
+        config_refs = task["lastResult"]["evidence"]["workerConfigRefs"]
+        self.assertEqual(task["status"], "COMPLETED")
+        self.assertEqual(config_refs["workerRef"], "configured_refund_react")
+        self.assertEqual(config_refs["modelPolicyRef"], "demo-react-model")
+        self.assertEqual(config_refs["promptRef"], "demo-react-prompt")
+        self.assertEqual(config_refs["toolRefs"], ["lookup_order"])
+        self.assertEqual(config_refs["riskPolicyRef"], "manual_confirm_high_risk")
+
     def _session_override(self) -> Generator[Session]:
         with self._factory() as session:
             yield session

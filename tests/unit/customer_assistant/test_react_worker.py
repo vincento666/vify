@@ -8,7 +8,11 @@ from app.modules.customer_assistant.domain.react_worker import (
     RestrictedReactWorker,
 )
 from app.modules.customer_assistant.domain.tool_policy import ReactToolPolicy
-from app.modules.customer_assistant.domain.worker_registry import ReactWorkerConfig, ReactWorkerRegistry
+from app.modules.customer_assistant.domain.worker_registry import (
+    ReactWorkerConfig,
+    ReactWorkerRegistry,
+    react_worker_registry_from_profiles,
+)
 
 
 class CustomerAssistantReactWorkerTest(unittest.TestCase):
@@ -28,6 +32,32 @@ class CustomerAssistantReactWorkerTest(unittest.TestCase):
         self.assertTrue(policy.is_allowed("lookup_order"))
         self.assertFalse(policy.is_allowed("submit_refund"))
         self.assertTrue(policy.is_high_risk("submit_refund"))
+
+    def test_registry_derives_react_config_from_worker_profile_refs(self) -> None:
+        registry = react_worker_registry_from_profiles(
+            [
+                {
+                    "profileId": "configured_refund_react",
+                    "taskKey": "refund_ticket",
+                    "taskType": "REFUND",
+                    "workerType": "react_worker",
+                    "workerRef": "configured_refund_react",
+                    "modelPolicyRef": "demo-react-model",
+                    "promptRef": "demo-react-prompt",
+                    "toolRefs": ["lookup_order"],
+                    "riskPolicyRef": "manual_confirm_high_risk",
+                }
+            ]
+        )
+
+        config = registry.lookup("REFUND", "configured_refund_react")
+
+        self.assertIsNotNone(config)
+        assert config is not None
+        self.assertEqual(config.allowed_tools, ("lookup_order",))
+        self.assertEqual(config.model_policy_ref, "demo-react-model")
+        self.assertEqual(config.prompt_ref, "demo-react-prompt")
+        self.assertEqual(config.risk_policy_ref, "manual_confirm_high_risk")
 
     def test_read_only_fake_model_completes_with_summarized_events(self) -> None:
         worker = RestrictedReactWorker(

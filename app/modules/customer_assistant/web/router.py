@@ -33,8 +33,8 @@ from app.modules.customer_assistant.domain.shadow import (
     ProviderBackedCustomerAssistantShadowClient,
 )
 from app.modules.customer_assistant.domain.workers import ChatflowSopWorker, StubQaWorker
-from app.modules.customer_assistant.domain.react_worker import default_restricted_react_worker
-from app.modules.customer_assistant.domain.worker_registry import default_react_worker_registry
+from app.modules.customer_assistant.domain.react_worker import configurable_restricted_react_worker
+from app.modules.customer_assistant.domain.worker_registry import react_worker_registry_from_profiles
 from app.modules.customer_assistant.domain.worker import TaskWorker
 from app.modules.customer_assistant.domain.worker_runtime import CustomerAssistantWorkerRuntime
 from app.modules.customer_assistant.domain.worker_profiles import CustomerAssistantWorkerProfileCatalog
@@ -123,13 +123,13 @@ def build_customer_assistant_service(
 ) -> CustomerAssistantService:
     shadow_settings = CustomerAssistantShadowSettings.from_settings(settings)
     llm_runtime_settings = CustomerAssistantLlmRuntimeSettings.from_settings(settings)
-    workers = _customer_assistant_workers(session, settings)
     repository = CustomerAssistantRepository(session)
     tenant_id, org_id = customer_assistant_worker_profile_scope(request_context)
     worker_profiles = CustomerAssistantWorkerProfileCatalog.from_json_with_overrides(
         settings.customer_assistant_worker_profiles_json,
         repository.list_worker_profile_overrides(tenant_id=tenant_id, org_id=org_id),
     )
+    workers = _customer_assistant_workers(session, settings, worker_profiles=worker_profiles)
     return CustomerAssistantService(
         repository,
         core=ControlledReActCore(
@@ -158,17 +158,21 @@ def _customer_assistant_scheduler(session: Session, settings: Settings) -> Local
     return LocalWorkerScheduler(_customer_assistant_workers(session, settings))
 
 
-def _customer_assistant_workers(session: Session, settings: Settings) -> dict[str, TaskWorker]:
+def _customer_assistant_workers(
+    session: Session,
+    settings: Settings,
+    *,
+    worker_profiles: CustomerAssistantWorkerProfileCatalog | None = None,
+) -> dict[str, TaskWorker]:
     bindings = _customer_assistant_chatflow_bindings(settings.runtime_lab_sop_chatflow_ids)
     adapter = _customer_assistant_sop_adapter(session, bindings)
-    react_registry = default_react_worker_registry()
-    refund_status_worker = react_registry.lookup("refund_status", "refund_status_react")
+    profile_catalog = worker_profiles or CustomerAssistantWorkerProfileCatalog.from_json(settings.customer_assistant_worker_profiles_json)
+    react_registry = react_worker_registry_from_profiles(profile_catalog.list_profiles())
     workers = {
         "chatflow_sop": ChatflowSopWorker(adapter),
         "stub_qa": StubQaWorker(delay_seconds=settings.customer_assistant_stub_qa_delay_seconds),
+        "react_worker": configurable_restricted_react_worker(react_registry),
     }
-    if refund_status_worker is not None:
-        workers["react_worker"] = default_restricted_react_worker(refund_status_worker)
     return workers
 
 

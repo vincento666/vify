@@ -115,6 +115,7 @@ class RestrictedReactWorker:
     def run(self, task: TaskItem, message: str) -> WorkerResult:
         started = monotonic()
         events = [_event("react_worker_started", {"taskKey": task.task_key, "workerRef": task.worker_ref})]
+        worker_config_refs = _worker_config_refs(self._config)
         observation: dict[str, Any] | None = None
         for iteration in range(1, self._config.max_iterations + 1):
             events.append(_event("react_iteration_started", {"iteration": iteration, "phase": "plan"}))
@@ -145,6 +146,7 @@ class RestrictedReactWorker:
                     evidence={
                         "workerRef": self._config.worker_ref,
                         "iterations": iteration,
+                        "workerConfigRefs": worker_config_refs,
                         "structuredOutput": _structured_final(action, iteration),
                     },
                     events=events,
@@ -175,6 +177,7 @@ class RestrictedReactWorker:
                     evidence={
                         "workerRef": self._config.worker_ref,
                         "iterations": iteration,
+                        "workerConfigRefs": worker_config_refs,
                         "sideEffect": "proposed-write",
                     },
                     events=events,
@@ -212,10 +215,52 @@ class RestrictedReactWorker:
             worker_type=task.worker_type,
             status=TaskStatus.FAILED,
             operator_recommendation=message,
-            evidence={"workerRef": self._config.worker_ref},
+            evidence={"workerRef": self._config.worker_ref, "workerConfigRefs": _worker_config_refs(self._config)},
             events=events,
             error={"code": code, "message": message},
         )
+
+
+class ConfigurableRestrictedReactWorker:
+    def __init__(
+        self,
+        *,
+        registry: Any,
+        model_factory: Callable[[ReactWorkerConfig], ReactWorkerModel] | None = None,
+        tools: dict[str, ReactTool] | None = None,
+    ) -> None:
+        self._registry = registry
+        self._model_factory = model_factory or (lambda _config: DeterministicReactWorkerModel())
+        self._tools = dict(tools or _default_tools())
+
+    def run(self, task: TaskItem, message: str) -> WorkerResult:
+        config = self._registry.lookup(task.task_type, task.worker_ref)
+        if config is None:
+            return WorkerResult(
+                task_id=int(task.id or 0),
+                worker_type=task.worker_type,
+                status=TaskStatus.FAILED,
+                operator_recommendation=f"No ReAct worker config for {task.task_type}/{task.worker_ref}",
+                error={
+                    "code": "REACT_WORKER_CONFIG_NOT_FOUND",
+                    "message": f"No ReAct worker config for {task.task_type}/{task.worker_ref}",
+                },
+                events=[
+                    _event(
+                        "react_worker_failed",
+                        {
+                            "code": "REACT_WORKER_CONFIG_NOT_FOUND",
+                            "taskType": task.task_type,
+                            "workerRef": task.worker_ref,
+                        },
+                    )
+                ],
+            )
+        return RestrictedReactWorker(
+            config=config,
+            model=self._model_factory(config),
+            tools=self._tools,
+        ).run(task, message)
 
 
 def _event(event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -223,6 +268,19 @@ def _event(event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
         "type": event_type,
         "source": "react_worker",
         "payload": {"schemaVersion": EVENT_SCHEMA_VERSION, "level": "L2", **_redact_payload(payload)},
+    }
+
+
+def _worker_config_refs(config: ReactWorkerConfig) -> dict[str, Any]:
+    return {
+        "workerRef": config.worker_ref,
+        "workerType": config.worker_type,
+        "modelPolicyRef": config.model_policy_ref,
+        "promptRef": config.prompt_ref,
+        "toolPolicyRef": config.tool_policy_ref,
+        "toolRefs": list(config.allowed_tools),
+        "riskPolicyRef": config.risk_policy_ref,
+        "outputSchemaRef": config.output_schema_ref,
     }
 
 
@@ -288,5 +346,16 @@ def default_restricted_react_worker(config: ReactWorkerConfig) -> RestrictedReac
     return RestrictedReactWorker(
         config=config,
         model=DeterministicReactWorkerModel(),
-        tools={"lookup_order": lambda args: {"orderNo": args.get("orderNo"), "status": "refundable"}},
+        tools=_default_tools(),
     )
+
+
+def configurable_restricted_react_worker(registry: Any) -> ConfigurableRestrictedReactWorker:
+    return ConfigurableRestrictedReactWorker(
+        registry=registry,
+        tools=_default_tools(),
+    )
+
+
+def _default_tools() -> dict[str, ReactTool]:
+    return {"lookup_order": lambda args: {"orderNo": args.get("orderNo"), "status": "refundable"}}
