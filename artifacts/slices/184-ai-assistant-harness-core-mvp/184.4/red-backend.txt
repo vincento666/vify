@@ -1,0 +1,44 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ AiAssistantInspectorApiContractTest.test_run_inspector_exposes_tasks_tool_calls_approvals_errors_and_timeline _
+
+self = <tests.contract.test_ai_assistant_inspector_api.AiAssistantInspectorApiContractTest testMethod=test_run_inspector_exposes_tasks_tool_calls_approvals_errors_and_timeline>
+
+    def test_run_inspector_exposes_tasks_tool_calls_approvals_errors_and_timeline(self) -> None:
+        with TestClient(app) as client:
+            session_id = client.post("/api/v1/ai-assistant/sessions", json={"title": "Inspector"}).json()["data"][
+                "id"
+            ]
+            first = client.post(
+                f"/api/v1/ai-assistant/sessions/{session_id}/messages",
+                json={"message": "echo inspector", "idempotencyKey": "inspector-echo"},
+            )
+            second = client.post(
+                f"/api/v1/ai-assistant/sessions/{session_id}/messages",
+                json={
+                    "message": "update customer profile",
+                    "idempotencyKey": "inspector-waiting",
+                    "toolName": "update_customer_profile",
+                    "toolInput": {"customerId": "C-184"},
+                },
+            )
+            runs = client.get(f"/api/v1/ai-assistant/sessions/{session_id}/runs")
+            inspector = client.get(f"/api/v1/ai-assistant/runs/{second.json()['data']['runId']}/inspector")
+    
+        self.assertEqual(
+>           [run["id"] for run in runs.json()["data"]["list"]],
+                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            [second.json()["data"]["runId"], first.json()["data"]["runId"]],
+        )
+E       TypeError: 'NoneType' object is not subscriptable
+
+tests/contract/test_ai_assistant_inspector_api.py:56: TypeError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/vincento/work/develop/hify/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/contract/test_ai_assistant_inspector_api.py::AiAssistantInspectorApiContractTest::test_run_inspector_exposes_tasks_tool_calls_approvals_errors_and_timeline
+1 failed, 1 warning in 7.37s

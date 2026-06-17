@@ -1,20 +1,57 @@
 <template>
   <section class="ai-shell" data-testid="ai-assistant-shell">
-    <div class="ai-shell__side">
+    <aside class="ai-shell__side">
       <div class="ai-shell__brand">
         <ThunderboltOutlined />
         <span>AI Assistant</span>
       </div>
-      <button class="ai-session" :class="{ active: Boolean(sessionId) }">
-        <span class="ai-session__dot" />
-        <span>{{ sessionTitle }}</span>
+
+      <button class="ai-new-session" type="button" @click="createConversation">
+        <PlusOutlined />
+        <span>New Run</span>
       </button>
-    </div>
+
+      <section class="ai-session-list" data-testid="ai-assistant-session-list">
+        <button
+          v-for="session in sessions"
+          :key="session.id"
+          class="ai-session"
+          :class="{ active: session.id === sessionId }"
+          type="button"
+          data-testid="ai-assistant-session-row"
+          @click="selectSession(session.id)"
+        >
+          <span class="ai-session__dot" :class="{ statusPulse: session.id === sessionId && sending }" />
+          <span class="ai-session__content">
+            <strong>{{ session.title || 'AI Assistant' }}</strong>
+            <small>{{ session.status }}</small>
+          </span>
+        </button>
+      </section>
+
+      <section class="ai-run-list">
+        <header>Runs</header>
+        <button
+          v-for="run in runs"
+          :key="run.id"
+          class="ai-run"
+          :class="{ active: run.id === runId }"
+          type="button"
+          @click="loadRunInspector(run.id)"
+        >
+          <span class="ai-run__status" :class="statusClass(run.status)" />
+          <span class="ai-run__content">
+            <strong>#{{ run.id }} {{ run.status }}</strong>
+            <small>{{ runTitle(run) }}</small>
+          </span>
+        </button>
+      </section>
+    </aside>
 
     <main class="ai-console" data-testid="ai-assistant-conversation-window">
       <header class="ai-console__top">
         <div>
-          <h1>AI Assistant</h1>
+          <h1>{{ sessionTitle }}</h1>
           <p>{{ runStatusLabel }}</p>
         </div>
         <a-tag :color="statusTagColor">{{ runStatusLabel }}</a-tag>
@@ -56,7 +93,7 @@
           v-model:value="draft"
           class="ai-composer__input"
           :auto-size="{ minRows: 2, maxRows: 5 }"
-          placeholder="Ask the assistant to inspect, reason, or run a safe tool"
+          placeholder="Message AI Assistant"
         />
         <a-button
           class="ai-composer__send"
@@ -70,19 +107,101 @@
       </form>
     </main>
 
-    <aside class="ai-inspector">
-      <div class="ai-inspector__status">
-        <span class="ai-inspector__live" :class="{ streamPulse: sending }" />
-        <strong>{{ runStatusLabel }}</strong>
-      </div>
-      <div class="ai-inspector__metric">
-        <span>Events</span>
-        <strong>{{ timeline.length }}</strong>
-      </div>
-      <div class="ai-inspector__metric">
-        <span>Approvals</span>
-        <strong>{{ approvals.length }}</strong>
-      </div>
+    <aside class="ai-inspector" data-testid="ai-assistant-run-inspector">
+      <header class="ai-inspector__header">
+        <span class="ai-inspector__live" :class="{ statusPulse: sending || runStatus === 'WAITING_APPROVAL' }" />
+        <div>
+          <strong>{{ runStatusLabel }}</strong>
+          <small>{{ elapsedLabel }}</small>
+        </div>
+      </header>
+
+      <section class="ai-inspector__section">
+        <header>Tasks</header>
+        <article
+          v-for="task in inspector?.activeTasks || []"
+          :key="task.id"
+          class="ai-task"
+          data-testid="ai-assistant-task-row"
+        >
+          <span class="ai-task__dot" :class="statusClass(task.status)" />
+          <div>
+            <strong>{{ task.title }}</strong>
+            <small>{{ task.phase }}</small>
+          </div>
+        </article>
+      </section>
+
+      <section class="ai-inspector__section">
+        <header>Tool Calls</header>
+        <article
+          v-for="toolCall in inspector?.toolCalls || []"
+          :key="toolCall.id"
+          class="ai-inspector-row"
+          data-testid="ai-assistant-tool-call-row"
+        >
+          <ToolOutlined />
+          <div>
+            <strong>{{ toolCall.toolName }}</strong>
+            <small>{{ toolCall.status }} / {{ toolCall.durationMs }}ms</small>
+          </div>
+        </article>
+      </section>
+
+      <section class="ai-inspector__section">
+        <header>Approvals</header>
+        <article
+          v-for="approval in inspector?.approvalQueue || []"
+          :key="approval.id"
+          class="ai-approval"
+          data-testid="ai-assistant-approval-row"
+        >
+          <div>
+            <strong>{{ approval.toolName }}</strong>
+            <small>{{ approval.riskLevel }} / {{ approval.status }}</small>
+          </div>
+          <div v-if="approval.status === 'PENDING'" class="ai-approval__actions">
+            <a-button size="small" type="primary" @click="approve(approval.id)">Approve</a-button>
+            <a-button size="small" danger @click="deny(approval.id)">Deny</a-button>
+          </div>
+        </article>
+      </section>
+
+      <section class="ai-inspector__section">
+        <header>Recent Errors</header>
+        <article
+          v-for="error in inspector?.recentErrors || []"
+          :key="error.id"
+          class="ai-inspector-row danger"
+          data-testid="ai-assistant-recent-error-row"
+        >
+          <ExclamationCircleOutlined />
+          <div>
+            <strong>{{ error.title }}</strong>
+            <small>{{ error.summary }}</small>
+          </div>
+        </article>
+      </section>
+
+      <section class="ai-inspector__section">
+        <header>Usage</header>
+        <div class="ai-usage-grid">
+          <span>Input</span>
+          <strong>{{ inspector?.usage.inputTokens ?? 0 }}</strong>
+          <span>Output</span>
+          <strong>{{ inspector?.usage.outputTokens ?? 0 }}</strong>
+        </div>
+      </section>
+
+      <section class="ai-inspector__section" data-testid="ai-assistant-inspector-timeline">
+        <header>Timeline</header>
+        <ol class="ai-mini-timeline">
+          <li v-for="event in inspector?.eventTimeline || []" :key="event.id">
+            <span>{{ event.sequence }}</span>
+            <strong>{{ event.type }}</strong>
+          </li>
+        </ol>
+      </section>
     </aside>
   </section>
 </template>
@@ -93,6 +212,7 @@ import {
   ClockCircleOutlined,
   CodeOutlined,
   ExclamationCircleOutlined,
+  PlusOutlined,
   SendOutlined,
   ThunderboltOutlined,
   ToolOutlined,
@@ -103,25 +223,32 @@ import {
   approveAiAssistantApproval,
   createAiAssistantSession,
   denyAiAssistantApproval,
-  listAiAssistantApprovals,
+  getAiAssistantRunInspector,
   listAiAssistantRunEvents,
+  listAiAssistantSessionRuns,
+  listAiAssistantSessions,
   sendAiAssistantMessage,
-  type AiAssistantApproval,
   type AiAssistantEvent,
+  type AiAssistantRun,
+  type AiAssistantRunInspector,
+  type AiAssistantSession,
 } from '@/api/aiAssistant'
 import { buildAiAssistantTimeline, type AiAssistantTimelineKind } from './aiAssistantTimeline'
 
+const sessions = ref<AiAssistantSession[]>([])
+const runs = ref<AiAssistantRun[]>([])
 const sessionId = ref<number | null>(null)
-const sessionTitle = ref('New assistant run')
+const sessionTitle = ref('AI Assistant')
 const runId = ref<number | null>(null)
 const runStatus = ref('IDLE')
 const draft = ref('')
 const sending = ref(false)
 const events = ref<AiAssistantEvent[]>([])
-const approvals = ref<AiAssistantApproval[]>([])
+const inspector = ref<AiAssistantRunInspector | null>(null)
 
 const timeline = computed(() => buildAiAssistantTimeline(events.value))
 const runStatusLabel = computed(() => (sending.value ? 'Running' : runStatus.value))
+const elapsedLabel = computed(() => `${Math.max(0, Math.round((inspector.value?.usage.elapsedMs ?? 0) / 100) / 10)}s`)
 const statusTagColor = computed(() => {
   if (runStatus.value === 'WAITING_APPROVAL') return 'gold'
   if (runStatus.value === 'DENIED') return 'red'
@@ -130,47 +257,102 @@ const statusTagColor = computed(() => {
 })
 
 onMounted(async () => {
-  const session = await createAiAssistantSession({ title: 'AI Assistant' })
-  sessionId.value = session.id
-  sessionTitle.value = session.title || 'AI Assistant'
+  await loadSessions()
+  if (sessions.value.length === 0) {
+    await createConversation()
+    return
+  }
+  await selectSession(sessions.value[0].id)
 })
+
+async function loadSessions() {
+  sessions.value = (await listAiAssistantSessions()).list
+}
+
+async function createConversation() {
+  const session = await createAiAssistantSession({ title: 'AI Assistant' })
+  await loadSessions()
+  await selectSession(session.id)
+}
+
+async function selectSession(nextSessionId: number) {
+  const selected = sessions.value.find((session) => session.id === nextSessionId)
+  sessionId.value = nextSessionId
+  sessionTitle.value = selected?.title || 'AI Assistant'
+  await loadSessionRuns(nextSessionId)
+}
+
+async function loadSessionRuns(nextSessionId: number, preferredRunId?: number) {
+  runs.value = (await listAiAssistantSessionRuns(nextSessionId)).list
+  const nextRunId = preferredRunId ?? runs.value[0]?.id
+  if (!nextRunId) {
+    runId.value = null
+    runStatus.value = 'IDLE'
+    events.value = []
+    inspector.value = null
+    return
+  }
+  await loadRunInspector(nextRunId)
+}
+
+async function loadRunInspector(nextRunId: number) {
+  runId.value = nextRunId
+  const [eventList, runInspector] = await Promise.all([
+    listAiAssistantRunEvents(nextRunId),
+    getAiAssistantRunInspector(nextRunId),
+  ])
+  events.value = eventList.list
+  inspector.value = runInspector
+  runStatus.value = runInspector.run.status
+}
 
 async function submit() {
   const message = draft.value.trim()
-  if (!message || !sessionId.value) return
+  if (!message) return
+  if (!sessionId.value) {
+    await createConversation()
+  }
+  if (!sessionId.value) return
   sending.value = true
   try {
+    const asksForUpdate = message.toLowerCase().includes('update')
     const result = await sendAiAssistantMessage(sessionId.value, {
       message,
       idempotencyKey: `ui-${Date.now()}`,
       approvalMode: 'smart_approval',
-      toolName: message.toLowerCase().includes('update') ? 'update_customer_profile' : 'echo_context',
-      toolInput: message.toLowerCase().includes('update') ? { customerId: 'ui-customer', request: message } : undefined,
+      toolName: asksForUpdate ? 'update_customer_profile' : 'echo_context',
+      toolInput: asksForUpdate ? { customerId: 'ui-customer', request: message } : undefined,
     })
-    runId.value = result.runId
-    runStatus.value = result.status
     draft.value = ''
-    await refreshRun()
+    runStatus.value = result.status
+    await loadSessionRuns(result.sessionId, result.runId)
   } finally {
     sending.value = false
   }
 }
 
-async function refreshRun() {
-  if (runId.value) {
-    events.value = (await listAiAssistantRunEvents(runId.value)).list
-  }
-  approvals.value = (await listAiAssistantApprovals()).list
-}
-
 async function approve(approvalId: number) {
   await approveAiAssistantApproval(approvalId, { actorId: 'operator-ui' })
-  await refreshRun()
+  if (runId.value) await loadRunInspector(runId.value)
 }
 
 async function deny(approvalId: number) {
   await denyAiAssistantApproval(approvalId, { actorId: 'operator-ui', reason: 'Denied from UI' })
-  await refreshRun()
+  if (runId.value) await loadRunInspector(runId.value)
+}
+
+function runTitle(run: AiAssistantRun) {
+  const message = typeof run.input?.message === 'string' ? run.input.message : 'Assistant run'
+  return message.length > 42 ? `${message.slice(0, 39)}...` : message
+}
+
+function statusClass(status: string) {
+  return {
+    'status-done': status === 'COMPLETED' || status === 'APPROVED',
+    'status-waiting': status === 'WAITING_APPROVAL' || status === 'PENDING',
+    'status-danger': status === 'DENIED' || status === 'FAILED',
+    'status-running': status === 'RUNNING',
+  }
 }
 
 function eventIcon(kind: AiAssistantTimelineKind, tone: string) {
@@ -185,20 +367,21 @@ function eventIcon(kind: AiAssistantTimelineKind, tone: string) {
 .ai-shell {
   min-height: 42rem;
   display: grid;
-  grid-template-columns: 14rem minmax(0, 1fr) 16rem;
+  grid-template-columns: 15rem minmax(0, 1fr) 18rem;
   gap: 1rem;
   padding: 1rem;
-  background: #111319;
-  color: #edf0f7;
-  border-radius: 0.5rem;
+  background: var(--color-bg-page, #f8f9fc);
+  color: var(--color-text-primary, #0f1117);
+  border-radius: var(--radius-lg, 0.5rem);
 }
 
 .ai-shell__side,
 .ai-inspector,
 .ai-console {
   min-width: 0;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: #171a22;
+  border: 0.0625rem solid var(--color-border-default, #e3e6ef);
+  background: var(--color-bg-surface, #ffffff);
+  box-shadow: var(--shadow-xs, 0 0.0625rem 0.125rem rgba(15, 15, 30, 0.06));
 }
 
 .ai-shell__side,
@@ -206,40 +389,131 @@ function eventIcon(kind: AiAssistantTimelineKind, tone: string) {
   padding: 0.75rem;
 }
 
-.ai-shell__brand {
+.ai-shell__brand,
+.ai-new-session,
+.ai-session,
+.ai-run,
+.ai-console__top,
+.ai-event__head,
+.ai-inspector__header,
+.ai-inspector-row,
+.ai-task,
+.ai-approval {
   display: flex;
   align-items: center;
+}
+
+.ai-shell__brand {
   gap: 0.5rem;
   font-weight: 700;
   margin-bottom: 0.75rem;
 }
 
-.ai-session {
+.ai-new-session,
+.ai-session,
+.ai-run {
   width: 100%;
-  display: flex;
-  align-items: center;
   gap: 0.5rem;
-  padding: 0.625rem;
   color: inherit;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 0.375rem;
   text-align: left;
+  border: 0.0625rem solid var(--color-border-default, #e3e6ef);
+  border-radius: var(--radius-md, 0.375rem);
 }
 
-.ai-session.active {
-  border-color: rgba(88, 166, 255, 0.7);
+.ai-new-session {
+  justify-content: center;
+  padding: 0.5625rem;
+  margin-bottom: 0.75rem;
+  background: var(--color-bg-selected, #eef2ff);
+  color: var(--color-primary-600, #4f46e5);
+}
+
+.ai-session-list,
+.ai-run-list,
+.ai-inspector__section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ai-run-list {
+  margin-top: 1rem;
+}
+
+.ai-run-list header,
+.ai-inspector__section header {
+  color: var(--color-text-tertiary, #8b92a8);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.ai-session,
+.ai-run {
+  padding: 0.625rem;
+  background: var(--color-bg-surface, #ffffff);
+}
+
+.ai-session.active,
+.ai-run.active {
+  border-color: var(--color-primary-300, #a5b4fc);
+  background: var(--color-bg-selected, #eef2ff);
+}
+
+.ai-session__content,
+.ai-run__content {
+  min-width: 0;
+  display: grid;
+  gap: 0.125rem;
+}
+
+.ai-session__content strong,
+.ai-run__content strong,
+.ai-task strong,
+.ai-inspector-row strong,
+.ai-approval strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-session__content small,
+.ai-run__content small,
+.ai-task small,
+.ai-inspector-row small,
+.ai-approval small,
+.ai-inspector__header small {
+  color: var(--color-text-tertiary, #8b92a8);
 }
 
 .ai-session__dot,
+.ai-run__status,
 .ai-inspector__live,
-.ai-event__pulse {
+.ai-event__pulse,
+.ai-task__dot {
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 50%;
-  background: #2ea043;
+  background: var(--color-text-tertiary, #8b92a8);
   display: inline-block;
   flex: 0 0 auto;
+}
+
+.status-done,
+.ai-session__dot {
+  background: var(--color-success-500, #10b981);
+}
+
+.status-waiting {
+  background: var(--color-warning-500, #f59e0b);
+}
+
+.status-danger {
+  background: var(--color-danger-500, #ef4444);
+}
+
+.status-running {
+  background: var(--color-info-500, #3b82f6);
 }
 
 .ai-console {
@@ -248,11 +522,10 @@ function eventIcon(kind: AiAssistantTimelineKind, tone: string) {
 }
 
 .ai-console__top {
-  display: flex;
   justify-content: space-between;
   gap: 1rem;
   padding: 0.875rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 0.0625rem solid var(--color-border-default, #e3e6ef);
 }
 
 .ai-console__top h1 {
@@ -262,7 +535,7 @@ function eventIcon(kind: AiAssistantTimelineKind, tone: string) {
 
 .ai-console__top p {
   margin: 0.25rem 0 0;
-  color: #8b949e;
+  color: var(--color-text-secondary, #4b5268);
 }
 
 .ai-stream {
@@ -276,7 +549,7 @@ function eventIcon(kind: AiAssistantTimelineKind, tone: string) {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  color: #8b949e;
+  color: var(--color-text-tertiary, #8b92a8);
 }
 
 .ai-event {
@@ -294,55 +567,59 @@ function eventIcon(kind: AiAssistantTimelineKind, tone: string) {
 
 .ai-event__body {
   padding: 0.75rem;
-  background: #0f1218;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 0.5rem;
+  background: var(--color-bg-surface, #ffffff);
+  border: 0.0625rem solid var(--color-border-default, #e3e6ef);
+  border-radius: var(--radius-lg, 0.5rem);
 }
 
 .ai-event__head {
-  display: flex;
-  align-items: center;
   gap: 0.5rem;
   font-weight: 700;
 }
 
 .ai-event__head small {
   margin-left: auto;
-  color: #8b949e;
+  color: var(--color-text-tertiary, #8b92a8);
 }
 
 .ai-event__body p {
   margin: 0.5rem 0 0;
-  color: #c9d1d9;
+  color: var(--color-text-secondary, #4b5268);
 }
 
 .ai-event__payload {
   margin: 0.625rem 0 0;
   padding: 0.625rem;
   overflow: auto;
-  color: #c9d1d9;
-  background: #090b10;
-  border-radius: 0.375rem;
+  color: var(--color-text-secondary, #4b5268);
+  background: var(--color-bg-page, #f8f9fc);
+  border: 0.0625rem solid var(--color-border-default, #e3e6ef);
+  border-radius: var(--radius-md, 0.375rem);
   font-size: 0.75rem;
   line-height: 1.45;
 }
 
-.ai-event__actions {
+.ai-event__actions,
+.ai-approval__actions {
   display: flex;
   gap: 0.5rem;
   margin-top: 0.625rem;
 }
 
 .tone-waiting .ai-event__body {
-  border-color: rgba(210, 153, 34, 0.75);
+  border-color: var(--color-warning-500, #f59e0b);
+  background: var(--color-warning-50, #fffbeb);
 }
 
-.tone-danger .ai-event__body {
-  border-color: rgba(248, 81, 73, 0.75);
+.tone-danger .ai-event__body,
+.ai-inspector-row.danger {
+  border-color: var(--color-danger-500, #ef4444);
+  background: var(--color-danger-50, #fef2f2);
 }
 
 .tone-success .ai-event__body {
-  border-color: rgba(46, 160, 67, 0.75);
+  border-color: var(--color-success-500, #10b981);
+  background: var(--color-success-50, #ecfdf5);
 }
 
 .ai-composer {
@@ -350,7 +627,8 @@ function eventIcon(kind: AiAssistantTimelineKind, tone: string) {
   grid-template-columns: minmax(0, 1fr) 2.75rem;
   gap: 0.625rem;
   padding: 0.875rem 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 0.0625rem solid var(--color-border-default, #e3e6ef);
+  background: var(--color-bg-surface, #ffffff);
 }
 
 .ai-composer__input {
@@ -366,29 +644,91 @@ function eventIcon(kind: AiAssistantTimelineKind, tone: string) {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  overflow: auto;
 }
 
-.ai-inspector__status,
-.ai-inspector__metric {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.ai-inspector__header {
   gap: 0.75rem;
   padding: 0.625rem;
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 0.375rem;
+  background: var(--color-bg-selected, #eef2ff);
+  border-radius: var(--radius-md, 0.375rem);
 }
 
-.streamPulse {
+.ai-task,
+.ai-inspector-row,
+.ai-approval {
+  gap: 0.625rem;
+  padding: 0.625rem;
+  background: var(--color-bg-surface, #ffffff);
+  border: 0.0625rem solid var(--color-border-default, #e3e6ef);
+  border-radius: var(--radius-md, 0.375rem);
+}
+
+.ai-task > div,
+.ai-inspector-row > div,
+.ai-approval > div {
+  min-width: 0;
+  display: grid;
+  gap: 0.125rem;
+}
+
+.ai-approval {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.ai-usage-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.375rem 0.75rem;
+  padding: 0.625rem;
+  background: var(--color-bg-page, #f8f9fc);
+  border: 0.0625rem solid var(--color-border-default, #e3e6ef);
+  border-radius: var(--radius-md, 0.375rem);
+}
+
+.ai-usage-grid span {
+  color: var(--color-text-tertiary, #8b92a8);
+}
+
+.ai-mini-timeline {
+  display: grid;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ai-mini-timeline li {
+  display: grid;
+  grid-template-columns: 1.75rem minmax(0, 1fr);
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary, #4b5268);
+}
+
+.ai-mini-timeline span {
+  color: var(--color-text-tertiary, #8b92a8);
+}
+
+.ai-mini-timeline strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.streamPulse,
+.statusPulse {
   animation: ai-pulse 1.2s ease-in-out infinite;
 }
 
 @keyframes ai-pulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(88, 166, 255, 0.55);
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.35);
   }
   100% {
-    box-shadow: 0 0 0 0.625rem rgba(88, 166, 255, 0);
+    box-shadow: 0 0 0 0.625rem rgba(99, 102, 241, 0);
   }
 }
 

@@ -23,10 +23,20 @@ describe('AI Assistant shell UI contract', () => {
       'ai-assistant-event-card',
       'ai-assistant-composer',
       'ai-assistant-send',
+      'ai-assistant-session-list',
+      'ai-assistant-session-row',
+      'ai-assistant-run-inspector',
+      'ai-assistant-task-row',
+      'ai-assistant-tool-call-row',
+      'ai-assistant-approval-row',
+      'ai-assistant-recent-error-row',
+      'ai-assistant-inspector-timeline',
     ]) {
       expect(content).toContain(`data-testid="${testId}"`)
     }
     expect(content).toContain('buildAiAssistantTimeline')
+    expect(content).toContain('loadRunInspector')
+    expect(content).toContain('statusPulse')
     expect(content).toContain('streamPulse')
     expect(content).not.toContain('chain-of-thought')
   })

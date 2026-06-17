@@ -1,0 +1,438 @@
+> vitest run src/api/aiAssistant.test.ts src/views/aiAssistant/aiAssistantShell.test.ts
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ ❯ src/views/aiAssistant/aiAssistantShell.test.ts (1 test | 1 failed) 28ms
+   × AI Assistant shell UI contract > renders conversation timeline composer and execution echo regions 24ms
+     → expected '<template>\n  <section class="ai-shel…' to contain 'data-testid="ai-assistant-session-lis…'
+ ❯ src/api/aiAssistant.test.ts (1 test | 1 failed) 102ms
+   × ai assistant frontend API client > uses the ai-assistant session message event and approval endpoints 81ms
+     → listAiAssistantSessionRuns is not a function
+ Test Files  2 failed (2)
+      Tests  2 failed (2)
+   Start at  00:03:26
+   Duration  1.04s (transform 215ms, setup 0ms, collect 215ms, tests 131ms, environment 0ms, prepare 454ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/api/aiAssistant.test.ts > ai assistant frontend API client > uses the ai-assistant session message event and approval endpoints
+TypeError: listAiAssistantSessionRuns is not a function
+ ❯ src/api/aiAssistant.test.ts:53:11
+     51|     await denyAiAssistantApproval(8, { actorId: 'operator-ui', reason:…
+     52|     await listAiAssistantTools()
+     53|     await listAiAssistantSessionRuns(10)
+       |           ^
+     54|     await getAiAssistantRunInspector(20)
+     55| 
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+ FAIL  src/views/aiAssistant/aiAssistantShell.test.ts > AI Assistant shell UI contract > renders conversation timeline composer and execution echo regions
+AssertionError: expected '<template>\n  <section class="ai-shel…' to contain 'data-testid="ai-assistant-session-lis…'
+- Expected
++ Received
+- data-testid="ai-assistant-session-list"
++ <template>
++   <section class="ai-shell" data-testid="ai-assistant-shell">
++     <div class="ai-shell__side">
++       <div class="ai-shell__brand">
++         <ThunderboltOutlined />
++         <span>AI Assistant</span>
++       </div>
++       <button class="ai-session" :class="{ active: Boolean(sessionId) }">
++         <span class="ai-session__dot" />
++         <span>{{ sessionTitle }}</span>
++       </button>
++     </div>
++
++     <main class="ai-console" data-testid="ai-assistant-conversation-window">
++       <header class="ai-console__top">
++         <div>
++           <h1>AI Assistant</h1>
++           <p>{{ runStatusLabel }}</p>
++         </div>
++         <a-tag :color="statusTagColor">{{ runStatusLabel }}</a-tag>
++       </header>
++
++       <section class="ai-stream" data-testid="ai-assistant-event-stream">
++         <div v-if="timeline.length === 0" class="ai-empty">
++           <ClockCircleOutlined />
++           <span>Ready</span>
++         </div>
++         <article
++           v-for="item in timeline"
++           :key="item.id"
++           class="ai-event"
++           :class="[`tone-${item.tone}`, `kind-${item.kind}`]"
++           data-testid="ai-assistant-event-card"
++         >
++           <div class="ai-event__rail">
++             <span class="ai-event__pulse" :class="{ streamPulse: item.tone === 'running' || item.tone === 'waiting' }" />
++           </div>
++           <div class="ai-event__body">
++             <div class="ai-event__head">
++               <component :is="eventIcon(item.kind, item.tone)" />
++               <span>{{ item.title }}</span>
++               <small>#{{ item.sequence }}</small>
++             </div>
++             <p>{{ item.summary }}</p>
++             <pre v-if="item.payloadPreview !== '{}'" class="ai-event__payload">{{ item.payloadPreview }}</pre>
++             <div v-if="item.kind === 'approval' && item.approvalId" class="ai-event__actions">
++               <a-button size="small" type="primary" @click="approve(item.approvalId)">Approve</a-button>
++               <a-button size="small" danger @click="deny(item.approvalId)">Deny</a-button>
++             </div>
++           </div>
++         </article>
++       </section>
++
++       <form class="ai-composer" data-testid="ai-assistant-composer" @submit.prevent="submit">
++         <a-textarea
++           v-model:value="draft"
++           class="ai-composer__input"
++           :auto-size="{ minRows: 2, maxRows: 5 }"
++           placeholder="Ask the assistant to inspect, reason, or run a safe tool"
++         />
++         <a-button
++           class="ai-composer__send"
++           data-testid="ai-assistant-send"
++           type="primary"
++           html-type="submit"
++           :loading="sending"
++         >
++           <template #icon><SendOutlined /></template>
++         </a-button>
++       </form>
++     </main>
++
++     <aside class="ai-inspector">
++       <div class="ai-inspector__status">
++         <span class="ai-inspector__live" :class="{ streamPulse: sending }" />
++         <strong>{{ runStatusLabel }}</strong>
++       </div>
++       <div class="ai-inspector__metric">
++         <span>Events</span>
++         <strong>{{ timeline.length }}</strong>
++       </div>
++       <div class="ai-inspector__metric">
++         <span>Approvals</span>
++         <strong>{{ approvals.length }}</strong>
++       </div>
++     </aside>
++   </section>
++ </template>
++
++ <script setup lang="ts">
++ import {
++   CheckCircleOutlined,
++   ClockCircleOutlined,
++   CodeOutlined,
++   ExclamationCircleOutlined,
++   SendOutlined,
++   ThunderboltOutlined,
++   ToolOutlined,
++ } from '@ant-design/icons-vue'
++ import { computed, onMounted, ref } from 'vue'
++
++ import {
++   approveAiAssistantApproval,
++   createAiAssistantSession,
++   denyAiAssistantApproval,
++   listAiAssistantApprovals,
++   listAiAssistantRunEvents,
++   sendAiAssistantMessage,
++   type AiAssistantApproval,
++   type AiAssistantEvent,
++ } from '@/api/aiAssistant'
++ import { buildAiAssistantTimeline, type AiAssistantTimelineKind } from './aiAssistantTimeline'
++
++ const sessionId = ref<number | null>(null)
++ const sessionTitle = ref('New assistant run')
++ const runId = ref<number | null>(null)
++ const runStatus = ref('IDLE')
++ const draft = ref('')
++ const sending = ref(false)
++ const events = ref<AiAssistantEvent[]>([])
++ const approvals = ref<AiAssistantApproval[]>([])
++
++ const timeline = computed(() => buildAiAssistantTimeline(events.value))
++ const runStatusLabel = computed(() => (sending.value ? 'Running' : runStatus.value))
++ const statusTagColor = computed(() => {
++   if (runStatus.value === 'WAITING_APPROVAL') return 'gold'
++   if (runStatus.value === 'DENIED') return 'red'
++   if (runStatus.value === 'COMPLETED') return 'green'
++   return 'blue'
++ })
++
++ onMounted(async () => {
++   const session = await createAiAssistantSession({ title: 'AI Assistant' })
++   sessionId.value = session.id
++   sessionTitle.value = session.title || 'AI Assistant'
++ })
++
++ async function submit() {
++   const message = draft.value.trim()
++   if (!message || !sessionId.value) return
++   sending.value = true
++   try {
++     const result = await sendAiAssistantMessage(sessionId.value, {
++       message,
++       idempotencyKey: `ui-${Date.now()}`,
++       approvalMode: 'smart_approval',
++       toolName: message.toLowerCase().includes('update') ? 'update_customer_profile' : 'echo_context',
++       toolInput: message.toLowerCase().includes('update') ? { customerId: 'ui-customer', request: message } : undefined,
++     })
++     runId.value = result.runId
++     runStatus.value = result.status
++     draft.value = ''
++     await refreshRun()
++   } finally {
++     sending.value = false
++   }
++ }
++
++ async function refreshRun() {
++   if (runId.value) {
++     events.value = (await listAiAssistantRunEvents(runId.value)).list
++   }
++   approvals.value = (await listAiAssistantApprovals()).list
++ }
++
++ async function approve(approvalId: number) {
++   await approveAiAssistantApproval(approvalId, { actorId: 'operator-ui' })
++   await refreshRun()
++ }
++
++ async function deny(approvalId: number) {
++   await denyAiAssistantApproval(approvalId, { actorId: 'operator-ui', reason: 'Denied from UI' })
++   await refreshRun()
++ }
++
++ function eventIcon(kind: AiAssistantTimelineKind, tone: string) {
++   if (tone === 'danger') return ExclamationCircleOutlined
++   if (tone === 'success') return CheckCircleOutlined
++   if (kind === 'tool' || kind === 'tool-output') return ToolOutlined
++   return CodeOutlined
++ }
++ </script>
++
++ <style scoped>
++ .ai-shell {
++   min-height: 42rem;
++   display: grid;
++   grid-template-columns: 14rem minmax(0, 1fr) 16rem;
++   gap: 1rem;
++   padding: 1rem;
++   background: #111319;
++   color: #edf0f7;
++   border-radius: 0.5rem;
++ }
++
++ .ai-shell__side,
++ .ai-inspector,
++ .ai-console {
++   min-width: 0;
++   border: 1px solid rgba(255, 255, 255, 0.08);
++   background: #171a22;
++ }
++
++ .ai-shell__side,
++ .ai-inspector {
++   padding: 0.75rem;
++ }
++
++ .ai-shell__brand {
++   display: flex;
++   align-items: center;
++   gap: 0.5rem;
++   font-weight: 700;
++   margin-bottom: 0.75rem;
++ }
++
++ .ai-session {
++   width: 100%;
++   display: flex;
++   align-items: center;
++   gap: 0.5rem;
++   padding: 0.625rem;
++   color: inherit;
++   background: rgba(255, 255, 255, 0.04);
++   border: 1px solid rgba(255, 255, 255, 0.08);
++   border-radius: 0.375rem;
++   text-align: left;
++ }
++
++ .ai-session.active {
++   border-color: rgba(88, 166, 255, 0.7);
++ }
++
++ .ai-session__dot,
++ .ai-inspector__live,
++ .ai-event__pulse {
++   width: 0.5rem;
++   height: 0.5rem;
++   border-radius: 50%;
++   background: #2ea043;
++   display: inline-block;
++   flex: 0 0 auto;
++ }
++
++ .ai-console {
++   display: grid;
++   grid-template-rows: auto minmax(24rem, 1fr) auto;
++ }
++
++ .ai-console__top {
++   display: flex;
++   justify-content: space-between;
++   gap: 1rem;
++   padding: 0.875rem 1rem;
++   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
++ }
++
++ .ai-console__top h1 {
++   margin: 0;
++   font-size: 1rem;
++ }
++
++ .ai-console__top p {
++   margin: 0.25rem 0 0;
++   color: #8b949e;
++ }
++
++ .ai-stream {
++   overflow: auto;
++   padding: 1rem;
++ }
++
++ .ai-empty {
++   min-height: 18rem;
++   display: flex;
++   align-items: center;
++   justify-content: center;
++   gap: 0.5rem;
++   color: #8b949e;
++ }
++
++ .ai-event {
++   display: grid;
++   grid-template-columns: 1rem minmax(0, 1fr);
++   gap: 0.75rem;
++   margin-bottom: 0.875rem;
++ }
++
++ .ai-event__rail {
++   display: flex;
++   justify-content: center;
++   padding-top: 0.5rem;
++ }
++
++ .ai-event__body {
++   padding: 0.75rem;
++   background: #0f1218;
++   border: 1px solid rgba(255, 255, 255, 0.08);
++   border-radius: 0.5rem;
++ }
++
++ .ai-event__head {
++   display: flex;
++   align-items: center;
++   gap: 0.5rem;
++   font-weight: 700;
++ }
++
++ .ai-event__head small {
++   margin-left: auto;
++   color: #8b949e;
++ }
++
++ .ai-event__body p {
++   margin: 0.5rem 0 0;
++   color: #c9d1d9;
++ }
++
++ .ai-event__payload {
++   margin: 0.625rem 0 0;
++   padding: 0.625rem;
++   overflow: auto;
++   color: #c9d1d9;
++   background: #090b10;
++   border-radius: 0.375rem;
++   font-size: 0.75rem;
++   line-height: 1.45;
++ }
++
++ .ai-event__actions {
++   display: flex;
++   gap: 0.5rem;
++   margin-top: 0.625rem;
++ }
++
++ .tone-waiting .ai-event__body {
++   border-color: rgba(210, 153, 34, 0.75);
++ }
++
++ .tone-danger .ai-event__body {
++   border-color: rgba(248, 81, 73, 0.75);
++ }
++
++ .tone-success .ai-event__body {
++   border-color: rgba(46, 160, 67, 0.75);
++ }
++
++ .ai-composer {
++   display: grid;
++   grid-template-columns: minmax(0, 1fr) 2.75rem;
++   gap: 0.625rem;
++   padding: 0.875rem 1rem;
++   border-top: 1px solid rgba(255, 255, 255, 0.08);
++ }
++
++ .ai-composer__input {
++   border-radius: 0.5rem;
++ }
++
++ .ai-composer__send {
++   height: 100%;
++   border-radius: 0.5rem;
++ }
++
++ .ai-inspector {
++   display: flex;
++   flex-direction: column;
++   gap: 0.75rem;
++ }
++
++ .ai-inspector__status,
++ .ai-inspector__metric {
++   display: flex;
++   align-items: center;
++   justify-content: space-between;
++   gap: 0.75rem;
++   padding: 0.625rem;
++   background: rgba(255, 255, 255, 0.04);
++   border-radius: 0.375rem;
++ }
++
++ .streamPulse {
++   animation: ai-pulse 1.2s ease-in-out infinite;
++ }
++
++ @keyframes ai-pulse {
++   0% {
++     box-shadow: 0 0 0 0 rgba(88, 166, 255, 0.55);
++   }
++   100% {
++     box-shadow: 0 0 0 0.625rem rgba(88, 166, 255, 0);
++   }
++ }
++
++ @media (max-width: 70rem) {
++   .ai-shell {
++     grid-template-columns: 1fr;
++   }
++ }
++ </style>
++
+ ❯ src/views/aiAssistant/aiAssistantShell.test.ts:35:23
+     33|       'ai-assistant-inspector-timeline',
+     34|     ]) {
+     35|       expect(content).toContain(`data-testid="${testId}"`)
+       |                       ^
+     36|     }
+     37|     expect(content).toContain('buildAiAssistantTimeline')
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯

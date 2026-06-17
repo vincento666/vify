@@ -50,6 +50,17 @@ def get_ai_assistant_session(
     return success(_session_payload(session))
 
 
+@router.get("/sessions/{session_id}/runs")
+def list_session_runs(
+    session_id: int,
+    service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
+) -> dict[str, Any]:
+    if service.get_session(session_id) is None:
+        raise HTTPException(status_code=404, detail="AI Assistant session not found")
+    runs = [_run_payload(row) for row in service.list_session_runs(session_id)]
+    return success({"list": runs, "total": len(runs)})
+
+
 @router.post("/sessions/{session_id}/messages")
 def send_message(
     session_id: int,
@@ -81,6 +92,17 @@ def get_run(
     if run is None:
         raise HTTPException(status_code=404, detail="AI Assistant run not found")
     return success(_run_payload(run))
+
+
+@router.get("/runs/{run_id}/inspector")
+def get_run_inspector(
+    run_id: int,
+    service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
+) -> dict[str, Any]:
+    inspector = service.get_run_inspector(run_id)
+    if inspector is None:
+        raise HTTPException(status_code=404, detail="AI Assistant run not found")
+    return success(inspector)
 
 
 @router.get("/runs/{run_id}/events")

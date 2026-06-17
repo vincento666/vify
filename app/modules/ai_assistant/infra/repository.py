@@ -132,6 +132,17 @@ class AiAssistantRepository:
         ).mappings().one_or_none()
         return dict(row) if row else None
 
+    def list_session_runs(self, session_id: int) -> list[dict[str, Any]]:
+        rows = self._session.execute(
+            sa.select(self._run_table)
+            .where(
+                self._run_table.c.session_id == session_id,
+                self._run_table.c.deleted.is_(False),
+            )
+            .order_by(self._run_table.c.id.desc())
+        ).mappings().all()
+        return [dict(row) for row in rows]
+
     def complete_run(self, run_id: int, response_payload: dict[str, Any], status: str = "COMPLETED") -> dict[str, Any]:
         now = datetime.now()
         self._session.execute(
@@ -293,6 +304,17 @@ class AiAssistantRepository:
             sa.select(self._approval_table)
             .where(
                 self._approval_table.c.status == "PENDING",
+                self._approval_table.c.deleted.is_(False),
+            )
+            .order_by(self._approval_table.c.id.asc())
+        ).mappings().all()
+        return [dict(row) for row in rows]
+
+    def list_run_approvals(self, run_id: int) -> list[dict[str, Any]]:
+        rows = self._session.execute(
+            sa.select(self._approval_table)
+            .where(
+                self._approval_table.c.run_id == run_id,
                 self._approval_table.c.deleted.is_(False),
             )
             .order_by(self._approval_table.c.id.asc())

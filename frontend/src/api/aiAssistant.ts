@@ -36,6 +36,16 @@ export interface AiAssistantEvent {
   createdAt: string
 }
 
+export interface AiAssistantRun {
+  id: number
+  sessionId: number
+  status: string
+  input: Record<string, unknown>
+  result: Record<string, unknown>
+  startedAt?: string | null
+  completedAt?: string | null
+}
+
 export interface AiAssistantTurnResult {
   runId: number
   sessionId: number
@@ -94,6 +104,42 @@ export interface AiAssistantToolManifest {
   policyRef: string
 }
 
+export interface AiAssistantInspectorTask {
+  id: string
+  runId: number
+  title: string
+  status: string
+  phase: string
+  currentTool?: string | null
+  updatedAt?: string | null
+}
+
+export interface AiAssistantInspectorEvent {
+  id: number
+  sequence: number
+  type: string
+  status: string
+  level: string
+  title: string
+  summary: string
+  createdAt: string
+}
+
+export interface AiAssistantRunInspector {
+  run: AiAssistantRun
+  activeTasks: AiAssistantInspectorTask[]
+  toolCalls: AiAssistantToolCall[]
+  approvalQueue: AiAssistantApproval[]
+  recentErrors: AiAssistantInspectorEvent[]
+  eventTimeline: AiAssistantInspectorEvent[]
+  usage: {
+    inputTokens: number
+    outputTokens: number
+    totalTokens: number
+    elapsedMs: number
+  }
+}
+
 export function createAiAssistantSession(payload: { title?: string; context?: Record<string, unknown> } = {}) {
   return post<AiAssistantSession>('/v1/ai-assistant/sessions', payload)
 }
@@ -108,6 +154,14 @@ export function sendAiAssistantMessage(sessionId: number, payload: SendAiAssista
 
 export function listAiAssistantRunEvents(runId: number) {
   return get<AiAssistantRunEventList>(`/v1/ai-assistant/runs/${runId}/events`)
+}
+
+export function listAiAssistantSessionRuns(sessionId: number) {
+  return get<AiAssistantListResult<AiAssistantRun>>(`/v1/ai-assistant/sessions/${sessionId}/runs`)
+}
+
+export function getAiAssistantRunInspector(runId: number) {
+  return get<AiAssistantRunInspector>(`/v1/ai-assistant/runs/${runId}/inspector`)
 }
 
 export function listAiAssistantApprovals() {

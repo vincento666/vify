@@ -287,11 +287,31 @@ class AiAssistantHarnessService:
     def get_run(self, run_id: int) -> dict[str, Any] | None:
         return self._repository.get_run(run_id)
 
+    def list_session_runs(self, session_id: int) -> list[dict[str, Any]]:
+        return self._repository.list_session_runs(session_id)
+
     def list_run_events(self, run_id: int) -> list[dict[str, Any]]:
         return self._repository.list_run_events(run_id)
 
     def list_run_tool_calls(self, run_id: int) -> list[dict[str, Any]]:
         return self._repository.list_run_tool_calls(run_id)
+
+    def get_run_inspector(self, run_id: int) -> dict[str, Any] | None:
+        run = self._repository.get_run(run_id)
+        if run is None:
+            return None
+        events = self._repository.list_run_events(run_id)
+        approvals = self._repository.list_run_approvals(run_id)
+        tool_calls = self._repository.list_run_tool_calls(run_id)
+        return {
+            "run": _run_payload(run),
+            "activeTasks": [_task_payload(run, events, approvals)],
+            "toolCalls": [_tool_call_payload(row) for row in tool_calls],
+            "approvalQueue": [_approval_payload(row) for row in approvals],
+            "recentErrors": [_event_timeline_payload(row) for row in _recent_error_events(events)],
+            "eventTimeline": [_event_timeline_payload(row) for row in events],
+            "usage": _usage_payload(run),
+        }
 
     def list_tool_manifests(self) -> list[dict[str, Any]]:
         return [_manifest_payload(manifest) for manifest in self._tools.list_manifests()]
@@ -366,4 +386,79 @@ def _approval_payload(approval: dict[str, Any]) -> dict[str, Any]:
         "status": approval["status"],
         "decidedBy": approval.get("decided_by"),
         "decisionReason": approval.get("decision_reason") or "",
+    }
+
+
+def _run_payload(run: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": run["id"],
+        "sessionId": run["session_id"],
+        "status": run["status"],
+        "input": run.get("input_payload") or {},
+        "result": run.get("response_payload") or {},
+        "startedAt": run["started_at"].isoformat() if run.get("started_at") else None,
+        "completedAt": run["completed_at"].isoformat() if run.get("completed_at") else None,
+    }
+
+
+def _task_payload(
+    run: dict[str, Any],
+    events: list[dict[str, Any]],
+    approvals: list[dict[str, Any]],
+) -> dict[str, Any]:
+    last_event = events[-1] if events else None
+    pending_approval = next((approval for approval in approvals if approval["status"] == "PENDING"), None)
+    message = str((run.get("input_payload") or {}).get("message") or "Assistant run")
+    title = message if len(message) <= 80 else f"{message[:77]}..."
+    phase = "waiting_approval" if pending_approval else str((last_event or {}).get("type") or "created")
+    return {
+        "id": f"run-{run['id']}",
+        "runId": run["id"],
+        "title": title,
+        "status": run["status"],
+        "phase": phase,
+        "currentTool": pending_approval["tool_name"] if pending_approval else None,
+        "updatedAt": (
+            run["completed_at"].isoformat()
+            if run.get("completed_at")
+            else run["updated_at"].isoformat()
+            if run.get("updated_at")
+            else None
+        ),
+    }
+
+
+def _event_timeline_payload(event: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": event["id"],
+        "sequence": event["sequence"],
+        "type": event["type"],
+        "status": event["status"],
+        "level": event["level"],
+        "title": event["visible_title"],
+        "summary": event["visible_summary"],
+        "createdAt": event["created_at"].isoformat(),
+    }
+
+
+def _recent_error_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    error_types = {"model.call_failed", "tool.call_failed", "approval.denied", "sandbox.denied", "run.failed"}
+    return [
+        event
+        for event in events
+        if event["type"] in error_types or event["level"] == "error" or event["status"] in {"DENIED", "FAILED"}
+    ][-5:]
+
+
+def _usage_payload(run: dict[str, Any]) -> dict[str, Any]:
+    started_at = run.get("started_at")
+    ended_at = run.get("completed_at") or run.get("updated_at")
+    elapsed_ms = 0
+    if started_at is not None and ended_at is not None:
+        elapsed_ms = max(0, int((ended_at - started_at).total_seconds() * 1000))
+    return {
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "totalTokens": 0,
+        "elapsedMs": elapsed_ms,
     }

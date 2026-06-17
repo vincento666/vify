@@ -1,0 +1,111 @@
+> vitest run
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ ✓ src/views/evaluation/evaluationTabs.test.ts (2 tests) 5ms
+ ✓ src/utils/uiScale.test.ts (4 tests) 15ms
+ ✓ src/views/evaluation/evalSetViewModel.test.ts (4 tests) 14ms
+ ✓ src/router/agent-workbench-routes.test.ts (1 test) 574ms
+   ✓ agent workbench routes > exposes create and edit workbench routes while keeping the legacy list route  570ms
+ ✓ src/router/evaluation-routes.test.ts (2 tests) 631ms
+   ✓ evaluation route > exposes the Evaluation workbench route  615ms
+ ✓ src/router/workflow-routes.test.ts (2 tests) 479ms
+   ✓ workflow module routes > exposes workflow and chatflow sibling entries for the module tab shell  463ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts (22 tests) 149ms
+ ✓ src/router/customer-assistant-routes.test.ts (2 tests) 337ms
+   ✓ customer assistant route and navigation contract > registers the customer assistant route with module metadata  319ms
+ ✓ src/router/unified-routing-chat-lab-routes.test.ts (1 test) 2713ms
+   ✓ unified routing chat lab route > exposes a top-level composer menu entry and dedicated route  2659ms
+ ✓ src/router/ai-assistant-routes.test.ts (1 test) 244ms
+ ✓ src/views/workflow/nodeConfig.test.ts (21 tests) 153ms
+ ✓ src/views/evaluation/compareViewModel.test.ts (2 tests) 69ms
+ ✓ src/views/evaluation/evaluatorViewModel.test.ts (1 test) 5ms
+ ✓ src/api/workflow.test.ts (3 tests) 45ms
+ ✓ src/views/evaluation/runReportViewModel.test.ts (2 tests) 8ms
+ ✓ src/api/workflowRuntimeV2.test.ts (2 tests) 360ms
+ ✓ src/views/evaluation/experimentRunViewModel.test.ts (3 tests) 6ms
+ ✓ src/views/customerAssistant/customerAssistantEventStream.test.ts (2 tests) 150ms
+ ✓ src/views/evaluation/csvToolsViewModel.test.ts (1 test) 3ms
+ ✓ src/views/agent/agentPreviewDebug.test.ts (2 tests) 77ms
+ ✓ src/views/workflow/workflowCanvasRemGovernance.test.ts (3 tests) 207ms
+ ✓ src/views/workflow/workflowRunDebug.test.ts (7 tests) 22ms
+ ✓ src/api/customerAssistant.test.ts (17 tests) 250ms
+ ✓ src/views/workflow/flowGraph.test.ts (18 tests) 38ms
+ ✓ src/views/customerAssistant/customerAssistantFixtures.test.ts (2 tests) 5ms
+ ✓ src/views/customerAssistant/customerAssistantRuntime.test.ts (15 tests) 519ms
+   ✓ customer assistant runtime integration > creates a session before the first turn and refreshes task/event ledgers after the turn  348ms
+ ✓ src/views/managementRemGovernance.test.ts (1 test) 20ms
+ ✓ src/views/customerAssistant/customerAssistantPanel.test.ts (25 tests) 15ms
+ ✓ src/api/runtimeLab.test.ts (6 tests) 612ms
+   ✓ runtime-lab frontend API client > uses the runtime-lab session and message endpoints  524ms
+ ✓ src/views/workflow/chatflowTrialRun.test.ts (4 tests) 48ms
+ ✓ src/views/workflow/workflowCanvasResponsiveProgressiveCollapse.test.ts (5 tests) 324ms
+ ✓ src/views/workflow/chatflowDebugTimeline.test.ts (4 tests) 14ms
+ ✓ src/api/provider.test.ts (1 test) 398ms
+   ✓ provider frontend API client > tests one configured model through the provider model probe endpoint  354ms
+ ✓ src/views/workflow/observeDashboard.test.ts (2 tests) 12ms
+ ✓ src/remScaleClosure.test.ts (1 test) 263ms
+ ✓ src/views/workflow/variableCatalog.test.ts (11 tests) 348ms
+ ✓ src/utils/feedbackAntMigration.test.ts (3 tests) 16ms
+ ✓ src/api/aiAssistant.test.ts (1 test) 105ms
+ ✓ src/views/workflow/composerSurfaceState.test.ts (4 tests) 8ms
+ ✓ src/views/agent/agentWorkbench.test.ts (11 tests) 370ms
+ ✓ src/views/evaluation/evaluatorVersionSelection.test.ts (2 tests) 6ms
+ ✓ src/views/evaluation/experimentStepperViewModel.test.ts (3 tests) 303ms
+ ✓ src/host/request.test.ts (2 tests) 21ms
+ ✓ src/views/knowledge/documentListRemGovernance.test.ts (3 tests) 117ms
+ ✓ src/views/workflow/canvasControls.test.ts (5 tests) 20ms
+ ✓ src/views/provider/providerListAntMigration.test.ts (1 test) 124ms
+ ✓ src/views/customerAssistant/customerAssistantInteractions.test.ts (6 tests) 95ms
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts (5 tests) 153ms
+ ✓ src/views/workflow/nodeTestFixtures.test.ts (9 tests) 282ms
+ ✓ src/views/workflow/workflowCanvasResponsiveLayout.test.ts (2 tests) 414ms
+ ✓ src/views/chat/unifiedRoutingChatLab.test.ts (13 tests) 53ms
+ ✓ src/views/workflow/runPathEdges.test.ts (4 tests) 169ms
+ ✓ src/views/workflow/chatflowVariables.test.ts (3 tests) 26ms
+ ✓ src/views/knowledge/knowledgeAntMigration.test.ts (1 test) 5ms
+ ✓ src/router/runDebugDeepLinks.test.ts (3 tests) 155ms
+ ✓ src/api/hostFetchIntegration.test.ts (3 tests) 308ms
+ ✓ src/views/chat/runtimeLabAntMigration.test.ts (1 test) 8ms
+ ✓ src/views/workflow/inlineVariableText.test.ts (5 tests) 11ms
+ ✓ src/views/workflow/workflowPublish.test.ts (4 tests) 25ms
+ ✓ src/views/evaluation/evaluationWorkbenchActions.test.ts (6 tests) 22ms
+ ✓ src/views/customerAssistant/customerAssistantStoryLinks.test.ts (4 tests) 213ms
+ ✓ src/appNavigation.test.ts (2 tests) 15ms
+ ✓ src/views/workflow/nodePalette.test.ts (3 tests) 290ms
+ ✓ src/views/workflow/chatflowRunProfile.test.ts (2 tests) 34ms
+ ✓ src/views/agent/agentWorkbenchAntMigration.test.ts (1 test) 307ms
+ ✓ src/app/antDesignDocs.test.ts (2 tests) 323ms
+ ✓ src/views/evaluation/relatedExperimentsViewModel.test.ts (2 tests) 6ms
+ ✓ src/views/workflow/runtimeV2Debug.test.ts (4 tests) 18ms
+ ✓ src/views/evaluation/llmEvaluatorWorkbench.test.ts (2 tests) 171ms
+ ✓ src/views/mcp/mcpAntMigration.test.ts (1 test) 22ms
+ ✓ src/views/workflow/chatflowPublish.test.ts (4 tests) 15ms
+ ✓ src/views/aiAssistant/aiAssistantTimeline.test.ts (1 test) 6ms
+ ✓ src/views/agent/agentListAntMigration.test.ts (1 test) 5ms
+ ✓ src/utils/remGovernance.test.ts (2 tests) 29ms
+ ✓ src/views/agentChatRemGovernance.test.ts (1 test) 8ms
+ ✓ src/views/agent/agentListRemGovernance.test.ts (1 test) 4ms
+ ✓ src/views/knowledge/knowledgeListRemGovernance.test.ts (2 tests) 5ms
+ ✓ src/views/workflow/llmModelOptions.test.ts (3 tests) 390ms
+   ✓ workflow llm model options > keeps only qwen deepseek and mimo family models and deduplicates by model id  357ms
+ ✓ src/views/aiAssistant/aiAssistantShell.test.ts (1 test) 6ms
+ ✓ src/app/ant-design.test.ts (2 tests) 43ms
+ ✓ src/views/workflow/observeRedirect.test.ts (3 tests) 5ms
+ ✓ src/views/workflow/apiResourceAntMigration.test.ts (1 test) 9ms
+ ✓ src/views/workflow/resourceRegistry.test.ts (1 test) 9ms
+ ✓ src/views/evaluation/evaluationAntMigration.test.ts (1 test) 26ms
+ ✓ src/views/workflow/workflowValidation.test.ts (4 tests) 12ms
+ ✓ src/components/base/hifyTableSizing.test.ts (2 tests) 7ms
+ ✓ src/views/workflow/chatflowRunDebug.test.ts (3 tests) 141ms
+ ✓ src/views/provider/providerRemGovernance.test.ts (1 test) 8ms
+ ✓ src/views/workflow/workflowListAntMigration.test.ts (1 test) 7ms
+ ✓ src/app/legacyElementPlusIsolation.test.ts (3 tests) 7ms
+ ✓ src/views/chat/chatViewAntMigration.test.ts (1 test) 6ms
+ ✓ src/views/agent/agentList.test.ts (2 tests) 43ms
+ ✓ src/views/workflow/floatingPanelGeometry.test.ts (1 test) 6ms
+ ✓ src/components/base/hifyFormDialogAntMigration.test.ts (1 test) 5ms
+ ✓ src/utils/request.test.ts (3 tests) 11ms
+ Test Files  95 passed (95)
+      Tests  371 passed (371)
+   Start at  00:08:04
+   Duration  50.88s (transform 6.46s, setup 0ms, collect 83.64s, tests 14.16s, environment 30.50s, prepare 100.30s)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m

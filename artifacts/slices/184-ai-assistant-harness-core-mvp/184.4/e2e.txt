@@ -1,0 +1,1 @@
+PASS ai assistant shell e2e

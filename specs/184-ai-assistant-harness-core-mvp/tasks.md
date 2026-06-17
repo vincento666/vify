@@ -62,19 +62,19 @@
 
 ## 184.4 Phase 3 Conversation List And Right Inspector
 
-- [ ] RED: frontend tests fail for session list, active run inspector,
+- [x] RED: frontend tests fail for session list, active run inspector,
       approval queue, right-panel tool calls, recent errors, and refresh
       behavior.
-- [ ] Add left conversation/session list.
-- [ ] Add create/select conversation workflow.
-- [ ] Add right run/task inspector.
-- [ ] Show active run status, tasks, tool calls, approvals, recent errors,
+- [x] Add left conversation/session list.
+- [x] Add create/select conversation workflow.
+- [x] Add right run/task inspector.
+- [x] Show active run status, tasks, tool calls, approvals, recent errors,
       elapsed time, token placeholders, and event timeline.
-- [ ] Add approve/deny controls from the UI.
-- [ ] Add or update inspector API contract test.
-- [ ] Run frontend unit tests and `remScaleClosure`.
-- [ ] Run product-shell E2E and browser UAT with screenshots.
-- [ ] Save evidence under
+- [x] Add approve/deny controls from the UI.
+- [x] Add or update inspector API contract test.
+- [x] Run frontend unit tests and `remScaleClosure`.
+- [x] Run product-shell E2E and browser UAT with screenshots.
+- [x] Save evidence under
       `artifacts/slices/184-ai-assistant-harness-core-mvp/184.4/`.
 
 ## 184.5 Final Aggregate Acceptance

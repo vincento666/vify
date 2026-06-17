@@ -23,13 +23,17 @@ describe('ai assistant frontend API client', () => {
       .mockResolvedValueOnce({ list: [{ type: 'run.started' }], total: 1 })
       .mockResolvedValueOnce({ list: [{ id: 7, status: 'PENDING' }], total: 1 })
       .mockResolvedValueOnce({ list: [{ name: 'echo_context' }], total: 1 })
+      .mockResolvedValueOnce({ list: [{ id: 20, status: 'COMPLETED' }], total: 1 })
+      .mockResolvedValueOnce({ run: { id: 20 }, activeTasks: [], toolCalls: [], approvalQueue: [] })
 
     const {
       approveAiAssistantApproval,
       createAiAssistantSession,
       denyAiAssistantApproval,
+      getAiAssistantRunInspector,
       listAiAssistantApprovals,
       listAiAssistantRunEvents,
+      listAiAssistantSessionRuns,
       listAiAssistantTools,
       sendAiAssistantMessage,
     } = await import('./aiAssistant')
@@ -46,6 +50,8 @@ describe('ai assistant frontend API client', () => {
     await approveAiAssistantApproval(7, { actorId: 'operator-ui' })
     await denyAiAssistantApproval(8, { actorId: 'operator-ui', reason: 'No' })
     await listAiAssistantTools()
+    await listAiAssistantSessionRuns(10)
+    await getAiAssistantRunInspector(20)
 
     expect(requestMocks.post).toHaveBeenNthCalledWith(1, '/v1/ai-assistant/sessions', { title: 'Kernel' })
     expect(requestMocks.post).toHaveBeenNthCalledWith(2, '/v1/ai-assistant/sessions/10/messages', {
@@ -64,5 +70,7 @@ describe('ai assistant frontend API client', () => {
       reason: 'No',
     })
     expect(requestMocks.get).toHaveBeenNthCalledWith(3, '/v1/ai-assistant/tools')
+    expect(requestMocks.get).toHaveBeenNthCalledWith(4, '/v1/ai-assistant/sessions/10/runs')
+    expect(requestMocks.get).toHaveBeenNthCalledWith(5, '/v1/ai-assistant/runs/20/inspector')
   })
 })
