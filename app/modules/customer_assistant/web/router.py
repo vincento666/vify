@@ -563,6 +563,15 @@ def execute_action(
     return success(service.execute_action(action_id))
 
 
+@router.post("/proposed-actions/{action_id}/deliver")
+def deliver_action(
+    action_id: int,
+    _access: RequestContext = Depends(require_customer_assistant_operate),
+    service: CustomerAssistantService = Depends(get_customer_assistant_service),
+) -> dict[str, Any]:
+    return success(service.deliver_action(action_id))
+
+
 async def _iter_customer_assistant_sse(
     service: CustomerAssistantService,
     *,

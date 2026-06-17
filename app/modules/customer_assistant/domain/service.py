@@ -17,6 +17,7 @@ from app.modules.customer_assistant.harness_adapter import (
 from app.modules.customer_assistant.domain.action_executor import MockActionExecutorRegistry
 from app.modules.customer_assistant.domain.actor import DEFAULT_CUSTOMER_ASSISTANT_ACTOR, CustomerAssistantActor
 from app.modules.customer_assistant.domain.controller import DeterministicTaskRecognitionController
+from app.modules.customer_assistant.domain.draft_delivery import MockDraftDeliveryOutbox
 from app.modules.customer_assistant.domain.ledger import CustomerAssistantLedger, _task_item
 from app.modules.customer_assistant.domain.llm_primary import (
     CustomerAssistantLlmRuntimeMode,
@@ -85,6 +86,7 @@ class CustomerAssistantService:
         llm_primary_client: CustomerAssistantShadowClient | None = None,
         two_stage_runtime: TwoStageFinalizer | None = None,
         action_executor_registry: MockActionExecutorRegistry | None = None,
+        draft_delivery_outbox: MockDraftDeliveryOutbox | None = None,
         async_worker_runtime: CustomerAssistantWorkerRuntime | None = None,
         worker_profiles: CustomerAssistantWorkerProfileCatalog | None = None,
         request_context: RequestContext | None = None,
@@ -116,6 +118,7 @@ class CustomerAssistantService:
         self._llm_primary_client = llm_primary_client
         self._two_stage_runtime = two_stage_runtime or CustomerAssistantTwoStageRuntime()
         self._action_executor_registry = action_executor_registry or MockActionExecutorRegistry()
+        self._draft_delivery_outbox = draft_delivery_outbox or MockDraftDeliveryOutbox()
         self._async_worker_runtime = async_worker_runtime
         self._knowledge_facade = knowledge_facade
 
@@ -1125,6 +1128,67 @@ class CustomerAssistantService:
         )
         return _format_action(updated)
 
+    def deliver_action(self, action_id: int) -> dict[str, Any]:
+        action = self._repository.get_proposed_action(action_id)
+        if action is None:
+            raise BizError(ErrorCode.NOT_FOUND, "Proposed action not found")
+        self._ensure_session(int(action["session_id"]))
+        if action["status"] != "CONFIRMED":
+            raise BizError(ErrorCode.BAD_REQUEST, "Only confirmed draft actions can be delivered")
+        if str(action["action_type"]) != "send_customer_message":
+            raise BizError(ErrorCode.BAD_REQUEST, "Only customer reply draft actions can be delivered")
+        delivering = self._repository.transition_proposed_action_status(
+            action_id,
+            expected_status="CONFIRMED",
+            next_status="DELIVERING",
+        )
+        if delivering is None:
+            raise BizError(ErrorCode.BAD_REQUEST, "Only confirmed draft actions can be delivered")
+        session_id = int(delivering["session_id"])
+        run_id = int(delivering["run_id"])
+        task_id = delivering.get("task_id")
+        start_payload = {
+            "actionId": action_id,
+            "actionType": delivering["action_type"],
+            "status": "DELIVERING",
+            "adapterRef": self._draft_delivery_outbox.adapter_ref,
+        }
+        self._repository.append_event(
+            session_id,
+            "draft_delivery_started",
+            start_payload,
+            run_id=run_id,
+            task_id=task_id,
+            source="draft_delivery_outbox",
+            actor="operator",
+        )
+        delivery = self._draft_delivery_outbox.deliver(dict(delivering.get("payload") or {}))
+        result_payload = sanitize_value(
+            {
+                "delivery": delivery.delivery,
+                "error": delivery.error,
+            }
+        )
+        final_status = "SENT" if delivery.status == "SENT" else "FAILED"
+        updated = self._repository.update_proposed_action_status(action_id, final_status, result=result_payload)
+        event_type = "draft_delivery_sent" if final_status == "SENT" else "draft_delivery_failed"
+        self._repository.append_event(
+            int(updated["session_id"]),
+            event_type,
+            {
+                "actionId": action_id,
+                "actionType": updated["action_type"],
+                "status": final_status,
+                "delivery": result_payload["delivery"],
+                "error": result_payload["error"],
+            },
+            run_id=int(updated["run_id"]),
+            task_id=updated.get("task_id"),
+            source="draft_delivery_outbox",
+            actor="operator",
+        )
+        return _format_action(updated)
+
     def _act(
         self,
         session_id: int,
@@ -2127,6 +2191,9 @@ _OPERATOR_AUDIT_EVENT_TITLES = {
     "proposed_action_executing": "拟议动作执行中",
     "proposed_action_executed": "拟议动作已执行",
     "proposed_action_failed": "拟议动作执行失败",
+    "draft_delivery_started": "草稿发送中",
+    "draft_delivery_sent": "草稿已发送",
+    "draft_delivery_failed": "草稿发送失败",
     "task_started": "任务已启动",
     "worker_started": "Worker 已启动",
     "worker_proposed_action": "Worker 产生拟议动作",
@@ -2145,6 +2212,9 @@ _OPERATOR_AUDIT_STATUS_BY_EVENT = {
     "proposed_action_executing": "EXECUTING",
     "proposed_action_executed": "EXECUTED",
     "proposed_action_failed": "FAILED",
+    "draft_delivery_started": "DELIVERING",
+    "draft_delivery_sent": "SENT",
+    "draft_delivery_failed": "FAILED",
     "task_started": "RUNNING",
     "worker_started": "RUNNING",
     "worker_proposed_action": "PENDING_CONFIRMATION",
@@ -2204,6 +2274,10 @@ def _operator_audit_summary(event_type: str, row: dict[str, Any], payload: dict[
         task_command = payload.get("taskCommand") if isinstance(payload.get("taskCommand"), dict) else {}
         action_type = payload.get("actionType") or task_command.get("type") or "action"
         return sanitize_text(f"{action_type} {payload.get('status') or _OPERATOR_AUDIT_STATUS_BY_EVENT[event_type]}")
+    if event_type.startswith("draft_delivery"):
+        delivery = payload.get("delivery") if isinstance(payload.get("delivery"), dict) else {}
+        channel = delivery.get("channel") or payload.get("channel") or "mock_channel"
+        return sanitize_text(f"{channel} {payload.get('status') or _OPERATOR_AUDIT_STATUS_BY_EVENT[event_type]}")
     if event_type in {"task_started", "task_completed", "task_failed"}:
         return sanitize_text(
             f"{payload.get('taskKey') or row.get('task_id') or 'task'} {_OPERATOR_AUDIT_STATUS_BY_EVENT[event_type]}"
