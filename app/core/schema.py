@@ -29,6 +29,7 @@ def register_baseline_tables() -> None:
         register_api_resource_tables(metadata)
         _register_runtime_policy_tables(metadata)
         _register_customer_assistant_tables(metadata)
+        _register_ai_assistant_tables(metadata)
         return
 
     sa.Table(
@@ -275,6 +276,7 @@ def register_baseline_tables() -> None:
     register_evaluation_tables(metadata)
     _register_runtime_policy_tables(metadata)
     _register_customer_assistant_tables(metadata)
+    _register_ai_assistant_tables(metadata)
 
 
 def ensure_pgvector_extension(bind: Engine | Connection) -> None:
@@ -308,6 +310,12 @@ def _register_customer_assistant_tables(metadata: sa.MetaData) -> None:
     from app.modules.customer_assistant.infra.schema import register_customer_assistant_tables
 
     register_customer_assistant_tables(metadata)
+
+
+def _register_ai_assistant_tables(metadata: sa.MetaData) -> None:
+    from app.modules.ai_assistant.infra.schema import register_ai_assistant_tables
+
+    register_ai_assistant_tables(metadata)
 
 
 def register_chatflow_state_tables(metadata: sa.MetaData) -> None:
