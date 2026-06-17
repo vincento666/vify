@@ -33,6 +33,7 @@ from app.modules.workflow.domain.channel import (
 )
 from app.modules.workflow.domain.engine import ApiToolExecutor, WorkflowExecutionEngine, WorkflowExecutionError
 from app.modules.workflow.domain.engine import AgentInvocationResult
+from app.modules.workflow.domain.engine import WorkflowLlmCompleter
 from app.modules.workflow.infra.channel_repository import ChatflowChannelRepository
 from app.modules.workflow.infra.chatflow_state_repository import ChatflowStateRepository
 from app.modules.workflow.infra.publish_repository import WorkflowPublishRepository
@@ -830,6 +831,17 @@ class WorkflowService:
             parser=self._parser,
             llm_client_factory=self._llm_client_factory,
         )
+
+    def runtime_v2_llm_completer(self, workflow_id: int) -> WorkflowLlmCompleter | None:
+        try:
+            return self._llm_completer(workflow_id)
+        except BizError as exc:
+            if exc.message in {
+                "Workflow LLM agent is not configured",
+                "Workflow LLM agent must use a real provider",
+            }:
+                return None
+            raise
 
     def _preferred_live_llm_agent(self) -> dict[str, Any] | None:
         if self._agent_repository is None:

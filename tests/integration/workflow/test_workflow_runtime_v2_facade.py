@@ -1,6 +1,7 @@
 import time
 import unittest
 from datetime import datetime
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -63,16 +64,17 @@ class WorkflowRuntimeV2FacadeTest(unittest.TestCase):
         self.assertTrue(any(event["type"] == "workflow_node_completed" for event in debug["events"]))
 
     def test_workflow_v2_executes_llm_node_with_runtime_events(self) -> None:
-        with TestClient(app) as client:
-            workflow = _create_workflow(client, message="unsupported", node_type="LLM")
-            client.post(f"/api/v1/workflows/{workflow['id']}/publish")
-            started = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs-v2",
-                json={"input": {"sys.query": "hello runtime v2 llm"}},
-            ).json()["data"]
-            terminal = _wait_for_result(client, started["resultRef"])
-            events = client.get(started["eventsRef"]).json()["data"]["list"]
-            nodes = client.get(started["nodesRef"]).json()["data"]["list"]
+        with patch("app.modules.agent.infra.repository.AgentRepository.find_default_live_llm_agent", return_value=None):
+            with TestClient(app) as client:
+                workflow = _create_workflow(client, message="unsupported", node_type="LLM")
+                client.post(f"/api/v1/workflows/{workflow['id']}/publish")
+                started = client.post(
+                    f"/api/v1/workflows/{workflow['id']}/runs-v2",
+                    json={"input": {"sys.query": "hello runtime v2 llm"}},
+                ).json()["data"]
+                terminal = _wait_for_result(client, started["resultRef"])
+                events = client.get(started["eventsRef"]).json()["data"]["list"]
+                nodes = client.get(started["nodesRef"]).json()["data"]["list"]
 
         self.assertEqual(terminal["status"], "SUCCEEDED")
         self.assertEqual(terminal["output"], {"final": "LLM mock: unsupported"})

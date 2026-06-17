@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
@@ -54,6 +55,7 @@ _SUPPORTED_CORE_NODE_TYPES = {
 }
 _RUNTIME_V2_CANCELLABLE_STATUSES = {"RUNNING", "INTERRUPTED"}
 _RUNTIME_V2_TERMINAL_STATUSES = {"SUCCEEDED", "FAILED", "CANCELLED"}
+RuntimeV2LlmCompleterResolver = Callable[[int], WorkflowLlmCompleter | None]
 
 
 class RuntimeV2RefBuilder:
@@ -146,6 +148,7 @@ class ChatflowRuntimeV2Service:
         publish_repository: WorkflowPublishRepository | None = None,
         knowledge_facade: KnowledgeFacade | None = None,
         llm_completer: WorkflowLlmCompleter | None = None,
+        llm_completer_resolver: RuntimeV2LlmCompleterResolver | None = None,
     ) -> None:
         self._repository = repository
         self._state_repository = state_repository
@@ -156,6 +159,8 @@ class ChatflowRuntimeV2Service:
         self._publish_repository = publish_repository
         self._knowledge_facade = knowledge_facade
         self._llm_completer = llm_completer
+        self._llm_completer_resolver = llm_completer_resolver
+        self._llm_completer_cache: dict[int, WorkflowLlmCompleter | None] = {}
 
     def start_run(
         self,
@@ -587,7 +592,7 @@ class ChatflowRuntimeV2Service:
             elif node_type == "INFORMATION_COLLECTION":
                 output = InformationCollectionNodeExecutor().execute(node, context)
             elif node_type == "LLM":
-                output = LlmNodeExecutor(self._llm_completer, self._knowledge_facade).execute(node, context)
+                output = LlmNodeExecutor(self._llm_completer_for(chatflow_id), self._knowledge_facade).execute(node, context)
             elif node_type == "KNOWLEDGE":
                 if self._knowledge_facade is None:
                     raise ValueError("Runtime v2 KNOWLEDGE node requires KnowledgeFacade")
@@ -938,6 +943,15 @@ class ChatflowRuntimeV2Service:
             raise BizError(ErrorCode.NOT_FOUND, "Runtime v2 run not found")
         return run
 
+    def _llm_completer_for(self, chatflow_id: int) -> WorkflowLlmCompleter | None:
+        if self._llm_completer is not None:
+            return self._llm_completer
+        if self._llm_completer_resolver is None:
+            return None
+        if chatflow_id not in self._llm_completer_cache:
+            self._llm_completer_cache[chatflow_id] = self._llm_completer_resolver(chatflow_id)
+        return self._llm_completer_cache[chatflow_id]
+
     def _run_has_status(self, run_id: int, status: str) -> bool:
         run = self._run_or_404(run_id)
         return str(run["status"]).upper() == status.upper()
@@ -999,6 +1013,7 @@ class WorkflowRuntimeV2Service(ChatflowRuntimeV2Service):
         completion_delay_seconds: float = 0.45,
         knowledge_facade: KnowledgeFacade | None = None,
         llm_completer: WorkflowLlmCompleter | None = None,
+        llm_completer_resolver: RuntimeV2LlmCompleterResolver | None = None,
     ) -> None:
         super().__init__(
             repository,
@@ -1010,6 +1025,7 @@ class WorkflowRuntimeV2Service(ChatflowRuntimeV2Service):
             publish_repository=publish_repository,
             knowledge_facade=knowledge_facade,
             llm_completer=llm_completer,
+            llm_completer_resolver=llm_completer_resolver,
         )
 
 

@@ -88,6 +88,24 @@ def get_chatflow_service(
     )
 
 
+def _runtime_v2_llm_service(
+    session: Session,
+    *,
+    flow_type: str,
+    request_context: RequestContext | None = None,
+    preferred_llm_agent_name: str | None = None,
+) -> WorkflowService:
+    return WorkflowService(
+        WorkflowRepository(session),
+        flow_type=flow_type,
+        agent_repository=AgentRepository(session),
+        model_facade=ProviderModelFacade(session),
+        knowledge_facade=KnowledgeFacade(session),
+        request_context=request_context,
+        preferred_llm_agent_name=preferred_llm_agent_name,
+    )
+
+
 def get_resource_registry(session: Session = Depends(get_session)) -> WorkflowResourceRegistry:
     return WorkflowResourceRegistry(
         mcp_repository=McpServerRepository(session),
@@ -101,21 +119,31 @@ def get_observe_service(session: Session = Depends(get_session)) -> ObserveServi
     return ObserveService(session)
 
 
-def get_chatflow_runtime_v2_service(session: Session = Depends(get_session)) -> ChatflowRuntimeV2Service:
+def get_chatflow_runtime_v2_service(
+    session: Session = Depends(get_session),
+    request_context: RequestContext = Depends(get_request_context),
+) -> ChatflowRuntimeV2Service:
+    llm_service = _runtime_v2_llm_service(session, flow_type="CHATFLOW", request_context=request_context)
     return ChatflowRuntimeV2Service(
         WorkflowRepository(session),
         ChatflowStateRepository(session),
         publish_repository=WorkflowPublishRepository(session),
         knowledge_facade=KnowledgeFacade(session),
+        llm_completer_resolver=llm_service.runtime_v2_llm_completer,
     )
 
 
-def get_workflow_runtime_v2_service(session: Session = Depends(get_session)) -> WorkflowRuntimeV2Service:
+def get_workflow_runtime_v2_service(
+    session: Session = Depends(get_session),
+    request_context: RequestContext = Depends(get_request_context),
+) -> WorkflowRuntimeV2Service:
+    llm_service = _runtime_v2_llm_service(session, flow_type="WORKFLOW", request_context=request_context)
     return WorkflowRuntimeV2Service(
         WorkflowRepository(session),
         ChatflowStateRepository(session),
         WorkflowPublishRepository(session),
         knowledge_facade=KnowledgeFacade(session),
+        llm_completer_resolver=llm_service.runtime_v2_llm_completer,
     )
 
 
@@ -536,18 +564,22 @@ def _start_runtime_v2_completion_thread(session: Session, run_id: int, *, owner_
     def complete() -> None:
         with factory() as background_session:
             if owner_type.upper() == "WORKFLOW":
+                llm_service = _runtime_v2_llm_service(background_session, flow_type="WORKFLOW")
                 WorkflowRuntimeV2Service(
                     WorkflowRepository(background_session),
                     ChatflowStateRepository(background_session),
                     WorkflowPublishRepository(background_session),
                     knowledge_facade=KnowledgeFacade(background_session),
+                    llm_completer_resolver=llm_service.runtime_v2_llm_completer,
                 ).complete_run(run_id)
             else:
+                llm_service = _runtime_v2_llm_service(background_session, flow_type="CHATFLOW")
                 ChatflowRuntimeV2Service(
                     WorkflowRepository(background_session),
                     ChatflowStateRepository(background_session),
                     publish_repository=WorkflowPublishRepository(background_session),
                     knowledge_facade=KnowledgeFacade(background_session),
+                    llm_completer_resolver=llm_service.runtime_v2_llm_completer,
                 ).complete_run(run_id)
 
     threading.Thread(target=complete, daemon=True).start()
