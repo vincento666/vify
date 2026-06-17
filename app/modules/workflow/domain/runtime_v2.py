@@ -21,6 +21,9 @@ from app.modules.workflow.domain.engine import (
     VariableAggregationNodeExecutor,
     VariableAssignNodeExecutor,
     WorkflowInterrupt,
+    _mapped_arguments,
+    _mapped_output,
+    _target_workflow_id,
 )
 from app.modules.workflow.infra.chatflow_state_repository import ChatflowStateRepository
 from app.modules.workflow.infra.publish_repository import WorkflowPublishRepository
@@ -42,6 +45,8 @@ _SUPPORTED_CORE_NODE_TYPES = {
     "INTENT_RECOGNITION",
     "INFORMATION_COLLECTION",
     "KNOWLEDGE",
+    "EXECUTE_WORKFLOW",
+    "TRANSFER_TO_HUMAN",
     "END",
 }
 _RUNTIME_V2_CANCELLABLE_STATUSES = {"RUNNING", "INTERRUPTED"}
@@ -580,6 +585,10 @@ class ChatflowRuntimeV2Service:
                 if self._knowledge_facade is None:
                     raise ValueError("Runtime v2 KNOWLEDGE node requires KnowledgeFacade")
                 output = KnowledgeNodeExecutor(self._knowledge_facade).execute(node, context)
+            elif node_type == "EXECUTE_WORKFLOW":
+                output = self._execute_workflow_output(run_id, node, context)
+            elif node_type == "TRANSFER_TO_HUMAN":
+                output = self._transfer_to_human_output(chatflow_id, run_id, session_id, node, context, input_data)
             elif node_type == "END":
                 output = EndNodeExecutor().execute(node, context)
             else:
@@ -700,6 +709,157 @@ class ChatflowRuntimeV2Service:
         raise _RuntimeV2Interrupt(
             node_key=node_key,
             output={"interrupt": interrupt_payload},
+            variable_scopes=context.scopes_snapshot(),
+        )
+
+    def _execute_workflow_output(
+        self,
+        run_id: int,
+        node: dict[str, Any],
+        context: ExecutionContext,
+    ) -> dict[str, Any]:
+        config = dict(node.get("config") or {})
+        target_workflow_id = _target_workflow_id(config)
+        if target_workflow_id is None:
+            raise ValueError("EXECUTE_WORKFLOW requires targetWorkflowId")
+        mapped_input = _mapped_arguments(config, context)
+        raw_mock_output = (
+            config.get("mockOutput")
+            if "mockOutput" in config
+            else config.get("mock_output", config.get("mockResult", config.get("mock_result", {})))
+        )
+        mock_output = _render_runtime_templates(raw_mock_output, context)
+        if not isinstance(mock_output, dict):
+            mock_output = {"result": mock_output}
+        if not mock_output:
+            mock_output = {
+                "result": f"runtime-v2 mock workflow {target_workflow_id}",
+                "targetWorkflowId": target_workflow_id,
+            }
+        mapped_output = _mapped_output(config, mock_output)
+        output = dict(mapped_output)
+        output.update(
+            {
+                "nestedRunId": 0,
+                "status": "SUCCEEDED",
+                "latencyMs": 0,
+                "mappedInputSummary": dict(mapped_input),
+                "mappedOutputSummary": dict(mapped_output),
+                "targetWorkflowId": target_workflow_id,
+                "mocked": True,
+                "mockRunId": f"runtime-v2-mock-{run_id}-{node['node_key']}",
+                "error": "",
+            }
+        )
+        return output
+
+    def _transfer_to_human_output(
+        self,
+        chatflow_id: int,
+        run_id: int,
+        session_id: str,
+        node: dict[str, Any],
+        context: ExecutionContext,
+        input_data: dict[str, Any],
+    ) -> dict[str, Any]:
+        if self._flow_type != "CHATFLOW":
+            raise ValueError("TRANSFER_TO_HUMAN is Chatflow-only")
+        node_key = str(node["node_key"])
+        config = dict(node.get("config") or {})
+        resume_data = dict(dict(input_data.get("resume") or {}).get(node_key) or {})
+        queue = str(config.get("queue") or config.get("team") or "general")
+        reason = str(config.get("reason") or config.get("category") or "user_request")
+        priority = str(config.get("priority") or "normal")
+        if resume_data:
+            output = {
+                "handoff_id": resume_data.get("handoff_id") or resume_data.get("handoffId") or "",
+                "handoff_status": resume_data.get("handoff_status") or resume_data.get("status") or "resolved",
+                "queue": resume_data.get("queue") or queue,
+                "reason": resume_data.get("reason") or reason,
+                "priority": resume_data.get("priority") or priority,
+                "answer": resume_data.get("answer") or resume_data.get("message") or "",
+                "resumed": True,
+                "mocked": True,
+            }
+            for key, value in resume_data.items():
+                output.setdefault(str(key), value)
+            return output
+
+        message = context.render(str(config.get("message") or "已为你转接人工客服，请稍候。"))
+        handoff_id = f"runtime-v2-handoff-{run_id}-{node_key}"
+        interrupt_payload = {
+            "type": "TRANSFER_TO_HUMAN",
+            "nodeKey": node_key,
+            "handoffId": handoff_id,
+            "queue": queue,
+            "status": "waiting",
+            "message": message,
+            "reason": reason,
+            "priority": priority,
+            "mocked": True,
+        }
+        checkpoint = self._state_repository.create_checkpoint(
+            session_id=session_id,
+            chatflow_id=chatflow_id,
+            run_id=run_id,
+            pending_node_key=node_key,
+            execution_context={"input": input_data},
+            node_outputs=context.outputs_snapshot(),
+            variable_scopes=context.scopes_snapshot(),
+            resume_schema=interrupt_payload,
+        )
+        checkpoint_id = int(checkpoint["id"])
+        waiting_event = self._append_event(
+            session_id=session_id,
+            chatflow_id=chatflow_id,
+            run_id=run_id,
+            event_type="workflow_node_waiting",
+            node_key=node_key,
+            payload=interrupt_payload,
+            checkpoint_id=checkpoint_id,
+        )
+        self._append_event(
+            session_id=session_id,
+            chatflow_id=chatflow_id,
+            run_id=run_id,
+            event_type="handoff_requested",
+            node_key=node_key,
+            payload={
+                "nodeType": "TRANSFER_TO_HUMAN",
+                "handoffId": handoff_id,
+                "queue": queue,
+                "priority": priority,
+                "reason": reason,
+                "status": "waiting",
+                "message": message,
+                "mocked": True,
+            },
+            checkpoint_id=checkpoint_id,
+        )
+        self._state_repository.link_checkpoint_event(checkpoint_id, int(waiting_event["id"]))
+        raise _RuntimeV2Interrupt(
+            node_key=node_key,
+            output={
+                "handoff_id": handoff_id,
+                "handoff_status": "waiting",
+                "queue": queue,
+                "assignee": "",
+                "reason": reason,
+                "priority": priority,
+                "events": [
+                    {"type": "message_done", "nodeKey": node_key, "content": message},
+                    {
+                        "type": "handoff_requested",
+                        "nodeKey": node_key,
+                        "handoffId": handoff_id,
+                        "queue": queue,
+                        "priority": priority,
+                        "reason": reason,
+                    },
+                ],
+                "interrupt": interrupt_payload,
+                "mocked": True,
+            },
             variable_scopes=context.scopes_snapshot(),
         )
 
@@ -1060,7 +1220,18 @@ def _runtime_event_node_state(event_type: str, payload: dict[str, Any]) -> str:
         "workflow_node_failed": "FAILED",
         "workflow_node_waiting": "WAITING",
         "workflow_node_skipped": "SKIPPED",
+        "handoff_requested": "WAITING",
     }.get(event_type, "")
+
+
+def _render_runtime_templates(value: Any, context: ExecutionContext) -> Any:
+    if isinstance(value, dict):
+        return {str(key): _render_runtime_templates(item, context) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_render_runtime_templates(item, context) for item in value]
+    if isinstance(value, str):
+        return context.render(value)
+    return value
 
 
 def _positive_int(value: Any) -> int | None:

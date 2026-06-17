@@ -1,0 +1,92 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/vincento/work/develop/hify
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 3 items
+
+tests/integration/workflow/test_runtime_v2_safe_node_coverage_pack2.py F [ 33%]
+FF                                                                       [100%]
+
+=================================== FAILURES ===================================
+_ RuntimeV2SafeNodeCoveragePack2Test.test_execute_workflow_node_emits_mock_child_run_evidence _
+
+self = <tests.integration.workflow.test_runtime_v2_safe_node_coverage_pack2.RuntimeV2SafeNodeCoveragePack2Test testMethod=test_execute_workflow_node_emits_mock_child_run_evidence>
+
+    def test_execute_workflow_node_emits_mock_child_run_evidence(self) -> None:
+        with TestClient(app) as client:
+            chatflow = _create_execute_workflow_chatflow(client)
+            started_response = client.post(
+                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                json={"input": {"ticket": "A-122", "sys.query": "please route ticket"}},
+            )
+>           self.assertEqual(started_response.status_code, 200, started_response.text)
+E           AssertionError: 400 != 200 : {"code":400,"message":"Unsupported runtime v2 graph: {'supported': False, 'fallbackScope': 'whole_graph', 'unsupportedNodes': [{'nodeKey': 'execute_workflow_1', 'nodeType': 'EXECUTE_WORKFLOW'}], 'unsupportedPatterns': [], 'supportedNodeTypes': ['CONDITION', 'END', 'HUMAN_INPUT', 'INFORMATION_COLLECTION', 'INTENT_RECOGNITION', 'JSON_PARSE', 'KNOWLEDGE', 'MESSAGE', 'QUESTION', 'START', 'TEXT_PROCESS', 'VARIABLE_AGGREGATION', 'VARIABLE_ASSIGN']}","data":null}
+
+tests/integration/workflow/test_runtime_v2_safe_node_coverage_pack2.py:19: AssertionError
+_ RuntimeV2SafeNodeCoveragePack2Test.test_runtime_v2_compatibility_allows_pack2_nodes_without_opening_unknown_nodes _
+
+self = <tests.integration.workflow.test_runtime_v2_safe_node_coverage_pack2.RuntimeV2SafeNodeCoveragePack2Test testMethod=test_runtime_v2_compatibility_allows_pack2_nodes_without_opening_unknown_nodes>
+
+    def test_runtime_v2_compatibility_allows_pack2_nodes_without_opening_unknown_nodes(self) -> None:
+        supported = RuntimeV2CompatibilityChecker.check(
+            [
+                {"nodeKey": "start", "type": "START", "config": {}},
+                {"nodeKey": "exec_1", "type": "EXECUTE_WORKFLOW", "config": {}},
+                {"nodeKey": "handoff_1", "type": "TRANSFER_TO_HUMAN", "config": {}},
+                {"nodeKey": "end", "type": "END", "config": {}},
+            ],
+            [
+                {"sourceNodeKey": "start", "targetNodeKey": "exec_1"},
+                {"sourceNodeKey": "exec_1", "targetNodeKey": "handoff_1"},
+                {"sourceNodeKey": "handoff_1", "targetNodeKey": "end"},
+            ],
+        )
+        rejected = RuntimeV2CompatibilityChecker.check(
+            [
+                {"nodeKey": "start", "type": "START", "config": {}},
+                {"nodeKey": "llm_1", "type": "LLM", "config": {}},
+            ],
+            [{"sourceNodeKey": "start", "targetNodeKey": "llm_1"}],
+        )
+    
+>       self.assertTrue(supported["supported"], supported)
+E       AssertionError: False is not true : {'supported': False, 'fallbackScope': 'whole_graph', 'unsupportedNodes': [{'nodeKey': 'exec_1', 'nodeType': 'EXECUTE_WORKFLOW'}, {'nodeKey': 'handoff_1', 'nodeType': 'TRANSFER_TO_HUMAN'}], 'unsupportedPatterns': [], 'supportedNodeTypes': ['CONDITION', 'END', 'HUMAN_INPUT', 'INFORMATION_COLLECTION', 'INTENT_RECOGNITION', 'JSON_PARSE', 'KNOWLEDGE', 'MESSAGE', 'QUESTION', 'START', 'TEXT_PROCESS', 'VARIABLE_AGGREGATION', 'VARIABLE_ASSIGN']}
+
+tests/integration/workflow/test_runtime_v2_safe_node_coverage_pack2.py:130: AssertionError
+_ RuntimeV2SafeNodeCoveragePack2Test.test_transfer_to_human_waits_resumes_and_cancels_with_checkpoint_evidence _
+
+self = <tests.integration.workflow.test_runtime_v2_safe_node_coverage_pack2.RuntimeV2SafeNodeCoveragePack2Test testMethod=test_transfer_to_human_waits_resumes_and_cancels_with_checkpoint_evidence>
+
+    def test_transfer_to_human_waits_resumes_and_cancels_with_checkpoint_evidence(self) -> None:
+        stamp = time.time_ns()
+        with TestClient(app) as client:
+            chatflow = _create_transfer_to_human_chatflow(client, stamp)
+            resume_started = client.post(
+                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                json={
+                    "input": {
+                        "sys.query": "我要人工",
+                        "sys.conversation_id": f"handoff-resume-{stamp}",
+                        "sys.user_id": "user-122",
+                        "sys.channel": "web",
+                    }
+                },
+            ).json()["data"]
+>           interrupted = _wait_for_result(client, resume_started["resultRef"], "INTERRUPTED")
+                                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           TypeError: 'NoneType' object is not subscriptable
+
+tests/integration/workflow/test_runtime_v2_safe_node_coverage_pack2.py:57: TypeError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/vincento/work/develop/hify/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/integration/workflow/test_runtime_v2_safe_node_coverage_pack2.py::RuntimeV2SafeNodeCoveragePack2Test::test_execute_workflow_node_emits_mock_child_run_evidence
+FAILED tests/integration/workflow/test_runtime_v2_safe_node_coverage_pack2.py::RuntimeV2SafeNodeCoveragePack2Test::test_runtime_v2_compatibility_allows_pack2_nodes_without_opening_unknown_nodes
+FAILED tests/integration/workflow/test_runtime_v2_safe_node_coverage_pack2.py::RuntimeV2SafeNodeCoveragePack2Test::test_transfer_to_human_waits_resumes_and_cancels_with_checkpoint_evidence
+========================= 3 failed, 1 warning in 0.97s =========================
