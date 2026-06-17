@@ -116,9 +116,121 @@ class CustomerAssistantProposedActionOperatorAttributionTest(unittest.TestCase):
         self.assertTrue(all(row["actor"] == "operator" for row in audit_rows))
         self.assertTrue(all(row["source"] == "operator_advisory" for row in audit_rows))
 
+    def test_host_actor_is_recorded_for_confirm_reject_and_execute_audit(self) -> None:
+        headers = _host_headers("agent-007")
+
+        with TestClient(app) as client:
+            assistant_session = client.post(
+                "/api/v1/customer-assistant/sessions",
+                json={"context": {"customer": {"name": "Host Actor Test"}}},
+                headers=headers,
+            )
+            self.assertEqual(assistant_session.status_code, 200, assistant_session.text)
+            session_id = int(assistant_session.json()["data"]["id"])
+            execute_action_id, reject_action_id = self._create_actions(session_id)
+
+            confirmed = client.post(
+                f"/api/v1/customer-assistant/proposed-actions/{execute_action_id}/confirm",
+                headers=headers,
+            )
+            executed = client.post(
+                f"/api/v1/customer-assistant/proposed-actions/{execute_action_id}/execute",
+                headers=headers,
+            )
+            rejected = client.post(
+                f"/api/v1/customer-assistant/proposed-actions/{reject_action_id}/reject",
+                headers=headers,
+            )
+            events = client.get(f"/api/v1/customer-assistant/sessions/{session_id}/events", headers=headers)
+            audit = client.get(
+                f"/api/v1/customer-assistant/sessions/{session_id}/operator-audit",
+                headers=headers,
+            )
+
+        self.assertEqual(confirmed.status_code, 200, confirmed.text)
+        self.assertEqual(executed.status_code, 200, executed.text)
+        self.assertEqual(rejected.status_code, 200, rejected.text)
+
+        event_rows = [
+            event
+            for event in events.json()["data"]["list"]
+            if event["type"]
+            in {
+                "proposed_action_confirmed",
+                "proposed_action_rejected",
+                "proposed_action_executing",
+                "proposed_action_executed",
+            }
+        ]
+        self.assertTrue(event_rows)
+        self.assertTrue(all(event["actor"] == "agent-007" for event in event_rows))
+
+        audit_rows = [
+            row
+            for row in audit.json()["data"]["list"]
+            if row["eventType"]
+            in {
+                "proposed_action_confirmed",
+                "proposed_action_rejected",
+                "proposed_action_executing",
+                "proposed_action_executed",
+            }
+        ]
+        self.assertTrue(audit_rows)
+        self.assertTrue(all(row["actor"] == "agent-007" for row in audit_rows))
+
+    def _create_actions(self, session_id: int) -> tuple[int, int]:
+        with self._factory() as session:
+            repository = CustomerAssistantRepository(session)
+            run, _ = repository.create_run(
+                session_id,
+                "host-actor-attribution",
+                "host-actor-attribution-hash",
+                {"message": "confirm and execute with host actor"},
+            )
+            task = repository.upsert_task(
+                session_id,
+                "refund_ticket:TK-155",
+                "REFUND",
+                "TK-155",
+                "chatflow_sop",
+                "refund_ticket",
+                status="WAITING",
+            )
+            execute_action = repository.upsert_proposed_action(
+                session_id,
+                int(run["id"]),
+                int(task["id"]),
+                "host-actor-attribution:execute",
+                "submit_refund",
+                "提交退票申请",
+                {"orderNo": "TK-155"},
+            )
+            reject_action = repository.upsert_proposed_action(
+                session_id,
+                int(run["id"]),
+                int(task["id"]),
+                "host-actor-attribution:reject",
+                "submit_refund",
+                "拒绝退票申请",
+                {"orderNo": "TK-156"},
+            )
+        return int(execute_action["id"]), int(reject_action["id"])
+
     def _session_override(self) -> Generator[Session]:
         with self._factory() as session:
             yield session
+
+
+def _host_headers(actor_id: str) -> dict[str, str]:
+    return {
+        "X-Hify-Actor-Id": actor_id,
+        "X-Hify-Actor-Name": f"Agent {actor_id}",
+        "X-Hify-Tenant-Id": "tenant-action-audit",
+        "X-Hify-Org-Id": "tenant-action-audit",
+        "X-Hify-Source": "embedded-demo-shell",
+        "X-Hify-Permissions": "customer_assistant:read,customer_assistant:operate",
+    }
 
 
 if __name__ == "__main__":

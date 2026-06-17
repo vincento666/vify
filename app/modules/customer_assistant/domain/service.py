@@ -1027,6 +1027,7 @@ class CustomerAssistantService:
             raise BizError(ErrorCode.BAD_REQUEST, "Only pending proposed actions can be confirmed")
         if action["action_type"] == "PROPOSED_TASK_COMMAND":
             return self._confirm_proposed_task_command(action, note=note)
+        actor = _operator_actor(self._request_context)
         decision = _operator_decision_payload(note=note)
         updated = self._repository.transition_proposed_action_status(
             action_id,
@@ -1046,7 +1047,7 @@ class CustomerAssistantService:
             run_id=int(updated["run_id"]),
             task_id=updated.get("task_id"),
             source="operator_advisory",
-            actor="operator",
+            actor=actor,
         )
         return _format_action(updated)
 
@@ -1055,6 +1056,7 @@ class CustomerAssistantService:
         command = _task_command_from_proposed_payload(dict(payload.get("taskCommand") or {}))
         session_id = int(action["session_id"])
         run_id = int(action["run_id"])
+        actor = _operator_actor(self._request_context)
         decision = _operator_decision_payload(note=note)
         claimed = self._repository.transition_proposed_action_status(
             int(action["id"]),
@@ -1068,7 +1070,7 @@ class CustomerAssistantService:
             run_id,
             str(payload.get("message") or ""),
             [command],
-            actor="operator",
+            actor=actor,
         )
         worker_results: list[WorkerResult] = []
         updated_tasks: tuple[TaskItem, ...] = ()
@@ -1078,7 +1080,7 @@ class CustomerAssistantService:
                 run_id,
                 str(payload.get("message") or payload.get("reason") or command.reason or ""),
                 mutation.ready_tasks,
-                actor="operator",
+                actor=actor,
             )
         result_payload: dict[str, Any] = {
             "applied": True,
@@ -1111,7 +1113,7 @@ class CustomerAssistantService:
             },
             run_id=run_id,
             source="operator_advisory",
-            actor="operator",
+            actor=actor,
         )
         self._repository.append_event(
             session_id,
@@ -1124,7 +1126,7 @@ class CustomerAssistantService:
             run_id=run_id,
             task_id=updated.get("task_id"),
             source="operator_advisory",
-            actor="operator",
+            actor=actor,
         )
         return _format_action(updated)
 
@@ -1135,6 +1137,7 @@ class CustomerAssistantService:
         self._ensure_session(int(action["session_id"]))
         if action["status"] != "PENDING":
             raise BizError(ErrorCode.BAD_REQUEST, "Only pending proposed actions can be rejected")
+        actor = _operator_actor(self._request_context)
         decision = _operator_decision_payload(reason=reason)
         updated = self._repository.transition_proposed_action_status(
             action_id,
@@ -1154,7 +1157,7 @@ class CustomerAssistantService:
             run_id=int(updated["run_id"]),
             task_id=updated.get("task_id"),
             source="operator_advisory",
-            actor="operator",
+            actor=actor,
         )
         return _format_action(updated)
 
@@ -1165,6 +1168,7 @@ class CustomerAssistantService:
         self._ensure_session(int(action["session_id"]))
         if action["status"] != "CONFIRMED":
             raise BizError(ErrorCode.BAD_REQUEST, "Only confirmed proposed actions can be executed")
+        actor = _operator_actor(self._request_context)
         executing = self._repository.transition_proposed_action_status(
             action_id,
             expected_status="CONFIRMED",
@@ -1179,7 +1183,7 @@ class CustomerAssistantService:
             run_id=int(executing["run_id"]),
             task_id=executing.get("task_id"),
             source="operator_advisory",
-            actor="operator",
+            actor=actor,
         )
         result = self._action_executor_registry.execute(
             str(executing["action_type"]),
@@ -1204,7 +1208,7 @@ class CustomerAssistantService:
             run_id=int(updated["run_id"]),
             task_id=updated.get("task_id"),
             source="operator_advisory",
-            actor="operator",
+            actor=actor,
         )
         return _format_action(updated)
 
@@ -1217,6 +1221,7 @@ class CustomerAssistantService:
             raise BizError(ErrorCode.BAD_REQUEST, "Only confirmed draft actions can be delivered")
         if str(action["action_type"]) != "send_customer_message":
             raise BizError(ErrorCode.BAD_REQUEST, "Only customer reply draft actions can be delivered")
+        actor = _operator_actor(self._request_context)
         delivering = self._repository.transition_proposed_action_status(
             action_id,
             expected_status="CONFIRMED",
@@ -1240,7 +1245,7 @@ class CustomerAssistantService:
             run_id=run_id,
             task_id=task_id,
             source="draft_delivery_outbox",
-            actor="operator",
+            actor=actor,
         )
         delivery = self._draft_delivery_outbox.deliver(dict(delivering.get("payload") or {}))
         result_payload = sanitize_value(
@@ -1265,7 +1270,7 @@ class CustomerAssistantService:
             run_id=int(updated["run_id"]),
             task_id=updated.get("task_id"),
             source="draft_delivery_outbox",
-            actor="operator",
+            actor=actor,
         )
         return _format_action(updated)
 
@@ -2142,6 +2147,12 @@ def _should_record_host_context(request_context: RequestContext) -> bool:
             request_context.locale != "zh-CN",
         )
     )
+
+
+def _operator_actor(request_context: RequestContext | None) -> str:
+    if request_context is None or _is_local_request_context(request_context):
+        return "operator"
+    return str(request_context.actor_id or "operator").strip() or "operator"
 
 
 def _is_local_request_context(request_context: RequestContext) -> bool:
