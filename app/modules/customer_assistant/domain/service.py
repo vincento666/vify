@@ -655,7 +655,9 @@ class CustomerAssistantService:
             actor=actor,
         )
         created_actions = self._create_operator_proposed_task_commands(session_id, run_id, message, actor)
-        action_rows = [_format_action(row) for row in self._repository.list_proposed_actions(session_id)]
+        action_rows = _sort_formatted_actions(
+            [_format_action(row) for row in self._repository.list_proposed_actions(session_id)]
+        )
         recommendation = _operator_advisory_recommendation(message, context_pack, created_actions)
         self._repository.append_event(
             session_id,
@@ -777,7 +779,9 @@ class CustomerAssistantService:
         session_row = self._repository.get_session(session_id)
         session_context = dict((session_row or {}).get("context_json") or {})
         task_summaries = [_format_task(row) for row in self._repository.list_tasks(session_id)]
-        action_rows = [_format_action(row) for row in self._repository.list_proposed_actions(session_id)]
+        action_rows = _sort_formatted_actions(
+            [_format_action(row) for row in self._repository.list_proposed_actions(session_id)]
+        )
         event_rows = self._repository.list_events(session_id)
         context_summary = _operator_knowledge_qa_context_summary(
             session_id,
@@ -851,7 +855,8 @@ class CustomerAssistantService:
     def list_proposed_actions(self, session_id: int) -> dict[str, Any]:
         self._ensure_session(session_id)
         rows = self._repository.list_proposed_actions(session_id)
-        return {"list": [_format_action(row) for row in rows], "total": len(rows)}
+        actions = _sort_formatted_actions([_format_action(row) for row in rows])
+        return {"list": actions, "total": len(actions)}
 
     def get_session_metrics(self, session_id: int) -> dict[str, Any]:
         self._ensure_session(session_id)
@@ -1346,7 +1351,7 @@ class CustomerAssistantService:
         task_rows = self._repository.list_tasks(session_id)
         action_rows = self._repository.list_proposed_actions(session_id)
         task_summaries = [_format_task(row) for row in task_rows]
-        proposed_actions = [_format_action(row) for row in action_rows]
+        proposed_actions = _sort_formatted_actions([_format_action(row) for row in action_rows])
         recommendation_started_at = datetime.now()
         self._repository.append_event(
             session_id,
@@ -1388,7 +1393,7 @@ class CustomerAssistantService:
         )
         self._ensure_reply_draft_delivery_action(session_id, run_id, actor, result)
         action_rows = self._repository.list_proposed_actions(session_id)
-        proposed_actions = [_format_action(row) for row in action_rows]
+        proposed_actions = _sort_formatted_actions([_format_action(row) for row in action_rows])
         result = replace(result, proposed_actions=proposed_actions)
         recommendation_completed_at = datetime.now()
         recommendation_timing = {
@@ -2516,6 +2521,22 @@ def _format_action(row: dict[str, Any]) -> dict[str, Any]:
         "status": row["status"],
         "result": sanitize_value(row.get("result_json") or {}),
     }
+
+
+def _sort_formatted_actions(actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(actions, key=_formatted_action_sort_key)
+
+
+def _formatted_action_sort_key(action: dict[str, Any]) -> tuple[int, int, int]:
+    action_type = str(action.get("actionType") or "")
+    if action_type == "PROPOSED_TASK_COMMAND":
+        priority = 0
+    elif action_type == "send_customer_message":
+        priority = 2
+    else:
+        priority = 1
+    task_priority = 0 if action.get("taskId") is not None else 1
+    return (priority, task_priority, int(action.get("id") or 0))
 
 
 def _turn_result_payload(result: AssistantTurnResult, *, replayed: bool) -> dict[str, Any]:
