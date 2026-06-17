@@ -279,7 +279,7 @@ def seed_one_click_mvp_demo(
     write_mvp_demo_env(env_path, result, report_path=report_path)
     report = verify_mvp_demo_topology(session, env_text=env_path.read_text(encoding="utf-8"))
     if report_path is not None:
-        _write_one_click_report(report_path, result, report, env_path=env_path)
+        _write_one_click_report(report_path, result, report, env_path=env_path, session=session)
     return OneClickMvpDemoSeedResult(
         seed=result,
         report=report,
@@ -379,6 +379,7 @@ def _write_one_click_report(
     verification: dict[str, Any],
     *,
     env_path: Path,
+    session: Session,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     manifest = {
@@ -394,9 +395,39 @@ def _write_one_click_report(
             "customerSessionIds": list(result.customer_session_ids),
             "storyIds": list(result.story_ids),
         },
+        "persistence": _one_click_persistence_fingerprint(session, result, verification),
         "verification": verification,
     }
     path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _one_click_persistence_fingerprint(
+    session: Session,
+    result: MvpDemoSeedResult,
+    verification: Mapping[str, Any],
+) -> dict[str, Any]:
+    bind = session.get_bind()
+    dialect = getattr(getattr(bind, "dialect", None), "name", "unknown")
+    url = getattr(bind, "url", None) or getattr(getattr(bind, "engine", None), "url", None)
+    drivername = getattr(url, "drivername", "") or ""
+    database_url_kind = drivername.split("+", 1)[0] if drivername else dialect
+    story_reports = verification.get("stories") if isinstance(verification, Mapping) else None
+    stories = story_reports if isinstance(story_reports, Mapping) else {}
+    return {
+        "dialect": str(dialect),
+        "databaseUrlKind": str(database_url_kind),
+        "mysql8LiveRoundTrip": str(dialect).lower() == "mysql",
+        "topologyCounts": {
+            "storyCount": len(result.story_ids),
+            "chatflowBindingCount": len(result.chatflow_bindings),
+            "knowledgeBaseCount": len(result.knowledge_base_ids),
+            "customerSessionCount": len(result.customer_session_ids),
+            "providerModelCount": min(len(result.provider_ids or []), len(result.model_config_ids or [])),
+            "taskCount": sum(int(story.get("taskCount", 0)) for story in stories.values()),
+            "eventCount": sum(int(story.get("eventCount", 0)) for story in stories.values()),
+            "pendingActionCount": sum(int(story.get("pendingActionCount", 0)) for story in stories.values()),
+        },
+    }
 
 
 def _ensure_seed_tables(session: Session) -> None:
