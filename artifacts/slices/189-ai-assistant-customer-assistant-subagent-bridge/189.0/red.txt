@@ -1,0 +1,13 @@
+# 189.0 RED Evidence
+
+This is a documentation-only sign-off slice. No implementation RED test is
+required for 189.0.
+
+Behavior-level RED for the backend bridge tracer was captured in:
+
+```text
+artifacts/slices/189-ai-assistant-customer-assistant-subagent-bridge/189.1/red.txt
+```
+
+That 189.1 RED shows `customer_assistant_subagent_bridge` missing from the AI
+Assistant tool registry before implementation.

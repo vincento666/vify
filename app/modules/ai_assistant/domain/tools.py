@@ -4,6 +4,14 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, Callable
 
+from app.modules.customer_assistant.harness_adapter import (
+    event_stream_ref,
+    reserved_worker_async_refs,
+    result_ref,
+    sub_agent_run_public_id,
+    unsupported_cancellation,
+)
+
 
 class RiskLevel(StrEnum):
     READ = "READ"
@@ -100,11 +108,42 @@ class ToolRegistry:
             write_resources=["external:shell"],
             policy_ref="ai_assistant_shell_blocked",
         )
+        customer_bridge_manifest = ToolManifest(
+            name="customer_assistant_subagent_bridge",
+            description="Read customer-assistant sub-agent run references for AI Assistant inspection.",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "sessionId": {"type": "integer"},
+                    "runId": {"type": "integer"},
+                    "message": {"type": "string"},
+                },
+                "required": ["sessionId", "runId"],
+            },
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "agentType": {"type": "string"},
+                    "subAgentRunId": {"type": "string"},
+                    "eventStreamRef": {"type": "string"},
+                    "resultRef": {"type": "string"},
+                    "workerAsyncRefs": {"type": "object"},
+                    "cancellation": {"type": "object"},
+                },
+                "required": ["agentType", "subAgentRunId", "eventStreamRef", "resultRef"],
+            },
+            timeout_ms=1000,
+            risk_level=RiskLevel.READ,
+            read_resources=["customer_assistant:session:{sessionId}", "customer_assistant:run:{runId}"],
+            write_resources=[],
+            policy_ref="ai_assistant_customer_assistant_bridge_read_only",
+        )
         return cls(
             {
                 "echo_context": (echo_manifest, _echo_context),
                 "update_customer_profile": (business_write_manifest, _blocked_write),
                 "run_shell": (shell_manifest, _blocked_write),
+                "customer_assistant_subagent_bridge": (customer_bridge_manifest, _customer_assistant_bridge),
             }
         )
 
@@ -137,3 +176,23 @@ def _echo_context(payload: dict[str, Any]) -> ToolResult:
 
 def _blocked_write(_payload: dict[str, Any]) -> ToolResult:
     return ToolResult(status="BLOCKED", output={"status": "BLOCKED"})
+
+
+def _customer_assistant_bridge(payload: dict[str, Any]) -> ToolResult:
+    session_id = int(payload.get("sessionId") or 0)
+    run_id = int(payload.get("runId") or 0)
+    return ToolResult(
+        status="COMPLETED",
+        output={
+            "agentType": "customer_assistant",
+            "status": "linked",
+            "sessionId": session_id,
+            "runId": run_id,
+            "subAgentRunId": sub_agent_run_public_id(run_id),
+            "eventStreamRef": event_stream_ref(session_id),
+            "resultRef": result_ref(run_id),
+            "workerAsyncRefs": reserved_worker_async_refs(run_id=run_id, session_id=session_id),
+            "cancellation": unsupported_cancellation(),
+            "message": str(payload.get("message") or ""),
+        },
+    )

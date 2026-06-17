@@ -1,0 +1,10 @@
+189.0 docs sign-off created for AI Assistant Phase 6.
+
+Scope:
+- backend-only read-only bridge tracer;
+- no customer-assistant runtime edits;
+- no frontend visual work;
+- no live LLM gates by default;
+- future OpenRouter probes must use environment variables only;
+- MySQL8-only persistence boundary retained.
+
