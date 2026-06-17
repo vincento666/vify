@@ -1189,11 +1189,14 @@ class CustomerAssistantService:
             str(executing["action_type"]),
             dict(executing.get("payload") or {}),
         )
+        previous_result = dict(executing.get("result_json") or action.get("result_json") or {})
         result_payload = {
             "executorRef": result.executor_ref,
             "audit": result.audit_payload,
             "error": result.error,
         }
+        if isinstance(previous_result.get("decision"), dict):
+            result_payload["decision"] = dict(previous_result["decision"])
         final_status = "EXECUTED" if result.status == "EXECUTED" else "FAILED"
         updated = self._repository.update_proposed_action_status(action_id, final_status, result=result_payload)
         self._repository.append_event(

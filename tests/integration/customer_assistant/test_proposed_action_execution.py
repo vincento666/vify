@@ -13,6 +13,65 @@ from app.modules.customer_assistant.infra.schema import customer_assistant_table
 
 
 class CustomerAssistantProposedActionExecutionTest(unittest.TestCase):
+    def test_execute_preserves_confirm_decision_and_reject_still_blocks_execution(self) -> None:
+        with _session() as session:
+            repository = CustomerAssistantRepository(session)
+            assistant_session = repository.create_session(context={"customerId": "C-302"})
+            run, _ = repository.create_run(
+                int(assistant_session["id"]),
+                idempotency_key="execute-decision-1",
+                request_hash="execute-decision-hash",
+                input_payload={"message": "确认后执行退票"},
+            )
+            confirm_action = repository.upsert_proposed_action(
+                session_id=int(assistant_session["id"]),
+                run_id=int(run["id"]),
+                task_id=None,
+                action_key="execute-decision:submit_refund:TK-302",
+                action_type="submit_refund",
+                title="提交退票申请",
+                payload={"orderNo": "TK-302"},
+            )
+            reject_action = repository.upsert_proposed_action(
+                session_id=int(assistant_session["id"]),
+                run_id=int(run["id"]),
+                task_id=None,
+                action_key="execute-decision:submit_refund:TK-303",
+                action_type="submit_refund",
+                title="拒绝退票申请",
+                payload={"orderNo": "TK-303"},
+            )
+            service = CustomerAssistantService(repository)
+
+            confirmed = service.confirm_action(
+                int(confirm_action["id"]),
+                note="confirmed by phone 13800138000 for order TK-302 token=confirm-secret",
+            )
+            expected_decision = confirmed["result"]["decision"]
+            executed = service.execute_action(int(confirm_action["id"]))
+            rejected = service.reject_action(int(reject_action["id"]), reason="operator rejected")
+            with self.assertRaises(BizError) as error:
+                service.execute_action(int(reject_action["id"]))
+            events = repository.list_events(int(assistant_session["id"]))
+
+        self.assertEqual(executed["status"], "EXECUTED")
+        self.assertEqual(executed["result"]["decision"], expected_decision)
+        self.assertEqual(executed["result"]["executorRef"], "refund_submit_mock")
+        self.assertEqual(executed["result"]["audit"]["semanticCode"], "REFUND_SUBMITTED_MOCK")
+        self.assertIsNone(executed["result"]["error"])
+        self.assertNotIn("13800138000", str(executed))
+        self.assertNotIn("TK-302", executed["result"]["decision"]["note"])
+        self.assertNotIn("confirm-secret", str(executed))
+        self.assertEqual(rejected["status"], "REJECTED")
+        self.assertIn("Only confirmed proposed actions can be executed", str(error.exception))
+        reject_execution_events = [
+            event
+            for event in events
+            if (event.get("payload") or {}).get("actionId") == int(reject_action["id"])
+            and event["type"] in {"proposed_action_executing", "proposed_action_executed"}
+        ]
+        self.assertEqual(reject_execution_events, [])
+
     def test_unsupported_action_execution_persists_failed_audit_evidence(self) -> None:
         with _session() as session:
             repository = CustomerAssistantRepository(session)
