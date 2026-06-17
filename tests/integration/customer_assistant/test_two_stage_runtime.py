@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,6 +14,7 @@ from app.modules.customer_assistant.domain.llm_primary import (
 from app.modules.customer_assistant.domain.models import TaskItem, TaskStatus, WorkerResult
 from app.modules.customer_assistant.domain.scheduler import LocalWorkerScheduler
 from app.modules.customer_assistant.domain.service import CustomerAssistantService
+from app.modules.customer_assistant.domain.worker_profiles import CustomerAssistantWorkerProfileCatalog
 from app.modules.customer_assistant.infra.repository import CustomerAssistantRepository
 from app.modules.customer_assistant.infra.schema import (
     customer_assistant_tables,
@@ -30,6 +32,7 @@ class CustomerAssistantTwoStageRuntimeTest(unittest.TestCase):
                 llm_runtime_settings=CustomerAssistantLlmRuntimeSettings(
                     mode=CustomerAssistantLlmRuntimeMode.TWO_STAGE_SHADOW
                 ),
+                worker_profiles=_legacy_stub_baggage_profiles(),
             )
             assistant_session = service.create_session()
 
@@ -50,6 +53,7 @@ class CustomerAssistantTwoStageRuntimeTest(unittest.TestCase):
                 llm_runtime_settings=CustomerAssistantLlmRuntimeSettings(
                     mode=CustomerAssistantLlmRuntimeMode.TWO_STAGE_PRIMARY_WITH_FALLBACK
                 ),
+                worker_profiles=_legacy_stub_baggage_profiles(),
             )
             assistant_session = service.create_session()
 
@@ -67,6 +71,7 @@ class CustomerAssistantTwoStageRuntimeTest(unittest.TestCase):
                 llm_runtime_settings=CustomerAssistantLlmRuntimeSettings(
                     mode=CustomerAssistantLlmRuntimeMode.TWO_STAGE_PRIMARY_WITH_FALLBACK
                 ),
+                worker_profiles=_legacy_stub_baggage_profiles(),
             )
             assistant_session = service.create_session()
 
@@ -121,6 +126,7 @@ class CustomerAssistantTwoStageRuntimeTest(unittest.TestCase):
                     mode=CustomerAssistantLlmRuntimeMode.TWO_STAGE_PRIMARY_WITH_FALLBACK
                 ),
                 two_stage_runtime=_FaultyTwoStageRuntime(),
+                worker_profiles=_legacy_stub_baggage_profiles(),
             )
             assistant_session = service.create_session()
 
@@ -140,6 +146,7 @@ class CustomerAssistantTwoStageRuntimeTest(unittest.TestCase):
                     mode=CustomerAssistantLlmRuntimeMode.TWO_STAGE_PRIMARY_WITH_FALLBACK
                 ),
                 two_stage_runtime=_DivergentTwoStageRuntime(),
+                worker_profiles=_legacy_stub_baggage_profiles(),
             )
             assistant_session = service.create_session()
 
@@ -196,6 +203,27 @@ class _DivergentTwoStageRuntime:
             "customerReplyDraft": "请放心，行李额度我已经为您确认好了。",
             "warnings": [],
         }
+
+
+def _legacy_stub_baggage_profiles() -> CustomerAssistantWorkerProfileCatalog:
+    return CustomerAssistantWorkerProfileCatalog.from_json(
+        json.dumps(
+            {
+                "profiles": [
+                    {
+                        "profileId": "legacy_baggage_stub",
+                        "taskKey": "baggage_qa",
+                        "taskType": "QA",
+                        "workerType": "stub_qa",
+                        "workerRef": "baggage_allowance",
+                        "modelPolicyRef": "legacy_stub_qa_model",
+                        "promptRef": "baggage_allowance_prompt",
+                        "riskPolicyRef": "read_only",
+                    }
+                ]
+            }
+        )
+    )
 
 
 def _session() -> Session:

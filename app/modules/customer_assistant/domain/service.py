@@ -1386,6 +1386,10 @@ class CustomerAssistantService:
             result,
             observation,
         )
+        self._ensure_reply_draft_delivery_action(session_id, run_id, actor, result)
+        action_rows = self._repository.list_proposed_actions(session_id)
+        proposed_actions = [_format_action(row) for row in action_rows]
+        result = replace(result, proposed_actions=proposed_actions)
         recommendation_completed_at = datetime.now()
         recommendation_timing = {
             "taskCount": len(task_summaries),
@@ -1423,6 +1427,49 @@ class CustomerAssistantService:
             actor=actor,
         )
         return replace(result, events=[_format_event(row) for row in self._repository.list_events(session_id)])
+
+    def _ensure_reply_draft_delivery_action(
+        self,
+        session_id: int,
+        run_id: int,
+        actor: str,
+        result: AssistantTurnResult,
+    ) -> None:
+        if not _is_task_backed_reply_draft(result.customer_reply_draft, result.task_summaries):
+            return
+        draft = str(result.customer_reply_draft or "").strip()
+        if not _is_deliverable_reply_draft(draft, result.warnings):
+            return
+        action_key = f"reply-draft:{run_id}:send_customer_message"
+        if any(str(action.get("action_key") or "") == action_key for action in self._repository.list_proposed_actions(session_id)):
+            return
+        session_row = self._repository.get_session(session_id)
+        context = dict((session_row or {}).get("context_json") or {})
+        payload = _reply_draft_delivery_payload(session_id, run_id, actor, draft, context)
+        row = self._repository.upsert_proposed_action(
+            session_id=session_id,
+            run_id=run_id,
+            task_id=None,
+            action_key=action_key,
+            action_type="send_customer_message",
+            title="发送客户回复草稿",
+            payload=payload,
+        )
+        self._repository.append_event(
+            session_id,
+            "reply_draft_proposed",
+            {
+                "actionId": int(row["id"]),
+                "actionType": row["action_type"],
+                "status": row["status"],
+                "channel": payload["channel"],
+                "conversationId": payload["conversationId"],
+                "draftLength": len(draft),
+            },
+            run_id=run_id,
+            source="customer_assistant_recommendation",
+            actor=actor,
+        )
 
     def _consume_completed_async_worker_results(self, session_id: int, actor: str) -> int:
         consumed = 0
@@ -1948,6 +1995,53 @@ def _session_context_with_host_context(
     return session_context
 
 
+def _is_deliverable_reply_draft(draft: str, warnings: list[str]) -> bool:
+    if not draft:
+        return False
+    if draft == "暂无可发送给客户的草稿。":
+        return False
+    return not any("required worker evidence is pending" in str(warning) for warning in warnings)
+
+
+def _is_task_backed_reply_draft(customer_reply_draft: str, task_summaries: list[dict[str, Any]]) -> bool:
+    draft = str(customer_reply_draft or "").strip()
+    if not draft:
+        return False
+    for task in task_summaries:
+        last_result = task.get("lastResult") if isinstance(task.get("lastResult"), dict) else {}
+        task_draft = str(last_result.get("customerReplyDraft") or "").strip()
+        if task_draft and (draft == task_draft or task_draft in draft):
+            return True
+    return False
+
+
+def _reply_draft_delivery_payload(
+    session_id: int,
+    run_id: int,
+    actor: str,
+    draft: str,
+    context: dict[str, Any],
+) -> dict[str, Any]:
+    customer = context.get("customer") if isinstance(context.get("customer"), dict) else {}
+    payload = {
+        "channel": str(context.get("channel") or context.get("sourceChannel") or "mock_web"),
+        "conversationId": str(
+            context.get("conversationId")
+            or context.get("conversation_id")
+            or f"customer-assistant-session-{session_id}"
+        ),
+        "recipient": dict(customer),
+        "draft": draft,
+        "metadata": {
+            "source": "customer_assistant_recommendation",
+            "sessionId": session_id,
+            "runId": run_id,
+            "actor": actor,
+        },
+    }
+    return sanitize_value(payload)
+
+
 def customer_assistant_worker_profile_scope(request_context: RequestContext | None) -> tuple[str, str]:
     if request_context is None or _is_local_request_context(request_context):
         return "local", "local"
@@ -2194,6 +2288,7 @@ _OPERATOR_AUDIT_EVENT_TITLES = {
     "draft_delivery_started": "草稿发送中",
     "draft_delivery_sent": "草稿已发送",
     "draft_delivery_failed": "草稿发送失败",
+    "reply_draft_proposed": "客户回复草稿待确认",
     "task_started": "任务已启动",
     "worker_started": "Worker 已启动",
     "worker_proposed_action": "Worker 产生拟议动作",
@@ -2215,6 +2310,7 @@ _OPERATOR_AUDIT_STATUS_BY_EVENT = {
     "draft_delivery_started": "DELIVERING",
     "draft_delivery_sent": "SENT",
     "draft_delivery_failed": "FAILED",
+    "reply_draft_proposed": "PENDING",
     "task_started": "RUNNING",
     "worker_started": "RUNNING",
     "worker_proposed_action": "PENDING_CONFIRMATION",
@@ -2278,6 +2374,9 @@ def _operator_audit_summary(event_type: str, row: dict[str, Any], payload: dict[
         delivery = payload.get("delivery") if isinstance(payload.get("delivery"), dict) else {}
         channel = delivery.get("channel") or payload.get("channel") or "mock_channel"
         return sanitize_text(f"{channel} {payload.get('status') or _OPERATOR_AUDIT_STATUS_BY_EVENT[event_type]}")
+    if event_type == "reply_draft_proposed":
+        channel = payload.get("channel") or "mock_channel"
+        return sanitize_text(f"{channel} {_OPERATOR_AUDIT_STATUS_BY_EVENT[event_type]}")
     if event_type in {"task_started", "task_completed", "task_failed"}:
         return sanitize_text(
             f"{payload.get('taskKey') or row.get('task_id') or 'task'} {_OPERATOR_AUDIT_STATUS_BY_EVENT[event_type]}"

@@ -559,6 +559,80 @@ class CustomerAssistantApiContractTest(unittest.TestCase):
         self.assertIn("worker_run_queued", [row["type"] for row in event_rows])
         self.assertIn("worker_run_completed", [row["type"] for row in event_rows])
 
+    def test_customer_reply_draft_becomes_confirmable_delivery_action(self) -> None:
+        with TestClient(app) as client:
+            created = client.post(
+                "/api/v1/customer-assistant/sessions",
+                json={
+                    "context": {
+                        "channel": "mock_web",
+                        "conversationId": "conversation-MU5137-8899",
+                        "customer": {"phone": "13800138000"},
+                        "apiToken": "raw-api-token",
+                    }
+                },
+            )
+            session_id = created.json()["data"]["id"]
+            turn = client.post(
+                f"/api/v1/customer-assistant/sessions/{session_id}/turns",
+                json={"message": "行李额度是多少 token=secret-token", "idempotencyKey": "reply-draft-action"},
+            )
+            replay = client.post(
+                f"/api/v1/customer-assistant/sessions/{session_id}/turns",
+                json={"message": "行李额度是多少 token=secret-token", "idempotencyKey": "reply-draft-action"},
+            )
+            listed_actions = client.get(f"/api/v1/customer-assistant/sessions/{session_id}/proposed-actions")
+
+            delivery_actions = [
+                action for action in turn.json()["data"]["proposedActions"] if action["actionType"] == "send_customer_message"
+            ]
+            action_id = delivery_actions[0]["id"] if delivery_actions else 0
+            confirmed = client.post(f"/api/v1/customer-assistant/proposed-actions/{action_id}/confirm")
+            delivered = client.post(f"/api/v1/customer-assistant/proposed-actions/{action_id}/deliver")
+            events = client.get(f"/api/v1/customer-assistant/sessions/{session_id}/events")
+            audit = client.get(f"/api/v1/customer-assistant/sessions/{session_id}/operator-audit")
+
+        self.assertEqual(turn.status_code, 200, turn.text)
+        self.assertEqual(replay.status_code, 200, replay.text)
+        self.assertTrue(replay.json()["data"]["replayed"])
+        self.assertEqual(len(delivery_actions), 1)
+        delivery_action = delivery_actions[0]
+        self.assertEqual(delivery_action["status"], "PENDING")
+        self.assertEqual(delivery_action["title"], "发送客户回复草稿")
+        self.assertEqual(delivery_action["payload"]["channel"], "mock_web")
+        self.assertEqual(delivery_action["payload"]["conversationId"], "conversation-[REDACTED]")
+        self.assertIn("手提行李", delivery_action["payload"]["draft"])
+        self.assertEqual(listed_actions.status_code, 200, listed_actions.text)
+        listed_delivery_actions = [
+            action
+            for action in listed_actions.json()["data"]["list"]
+            if action["actionType"] == "send_customer_message"
+        ]
+        self.assertEqual([action["id"] for action in listed_delivery_actions], [action_id])
+        self.assertEqual(confirmed.status_code, 200, confirmed.text)
+        self.assertEqual(confirmed.json()["data"]["status"], "CONFIRMED")
+        self.assertEqual(delivered.status_code, 200, delivered.text)
+        self.assertEqual(delivered.json()["data"]["status"], "SENT")
+        event_types = [event["type"] for event in events.json()["data"]["list"]]
+        self.assertIn("reply_draft_proposed", event_types)
+        self.assertIn("draft_delivery_sent", event_types)
+        audit_types = [item["eventType"] for item in audit.json()["data"]["list"]]
+        self.assertIn("reply_draft_proposed", audit_types)
+        self.assertIn("draft_delivery_sent", audit_types)
+        serialized = json.dumps(
+            {
+                "turn": turn.json()["data"],
+                "listedActions": listed_actions.json()["data"],
+                "events": events.json()["data"],
+                "audit": audit.json()["data"],
+            },
+            ensure_ascii=False,
+        )
+        self.assertNotIn("13800138000", serialized)
+        self.assertNotIn("MU5137-8899", serialized)
+        self.assertNotIn("secret-token", serialized)
+        self.assertNotIn("raw-api-token", serialized)
+
     def test_worker_cancel_records_unsupported_event_without_rewriting_completed_result(self) -> None:
         with TestClient(app) as client:
             session_id = client.post("/api/v1/customer-assistant/sessions", json={}).json()["data"]["id"]

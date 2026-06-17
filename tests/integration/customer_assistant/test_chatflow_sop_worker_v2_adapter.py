@@ -1,3 +1,4 @@
+import json
 import time
 import unittest
 from collections.abc import Iterator
@@ -10,6 +11,7 @@ from app.core.database import get_session
 from app.main import app
 from app.modules.customer_assistant.domain.scheduler import LocalWorkerScheduler
 from app.modules.customer_assistant.domain.service import CustomerAssistantService
+from app.modules.customer_assistant.domain.worker_profiles import CustomerAssistantWorkerProfileCatalog
 from app.modules.customer_assistant.domain.worker_runtime import CustomerAssistantWorkerRuntime
 from app.modules.customer_assistant.domain.models import TaskItem, TaskStatus
 from app.modules.customer_assistant.domain.workers import ChatflowSopWorker
@@ -145,6 +147,7 @@ class ChatflowSopWorkerV2AdapterTest(unittest.TestCase):
                         wait_deadline_seconds=2,
                         task_timeout_seconds=5,
                     ),
+                    worker_profiles=_legacy_stub_baggage_profiles(),
                 )
                 assistant_session = service.create_session()
 
@@ -174,6 +177,27 @@ class ChatflowSopWorkerV2AdapterTest(unittest.TestCase):
         self.assertGreater(refs["runtimeRunId"], 0)
         self.assertGreater(refs["sourceEventId"], 0)
         self.assertGreater(refs["sourceSequence"], 0)
+
+
+def _legacy_stub_baggage_profiles() -> CustomerAssistantWorkerProfileCatalog:
+    return CustomerAssistantWorkerProfileCatalog.from_json(
+        json.dumps(
+            {
+                "profiles": [
+                    {
+                        "profileId": "legacy_baggage_stub",
+                        "taskKey": "baggage_qa",
+                        "taskType": "QA",
+                        "workerType": "stub_qa",
+                        "workerRef": "baggage_allowance",
+                        "modelPolicyRef": "legacy_stub_qa_model",
+                        "promptRef": "baggage_allowance_prompt",
+                        "riskPolicyRef": "read_only",
+                    }
+                ]
+            }
+        )
+    )
 
 
 def _adapter(session: Session, bindings: dict[str, int]) -> ChatflowSopRuntimeAdapter:
