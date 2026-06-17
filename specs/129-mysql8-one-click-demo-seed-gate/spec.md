@@ -17,8 +17,8 @@ by preserving an opt-in MySQL8 seed command gate.
 - The one-click seed JSON report includes a non-secret `persistence` section
   with database dialect, sanitized URL kind, MySQL live round-trip flag, and
   topology counts.
-- Local deterministic SQLite seed tests prove the report shape without needing
-  Docker or real credentials.
+- Local deterministic tests prove the report shape without needing live provider
+  credentials, while product demo seed gates use MySQL8 only.
 - An opt-in MySQL8 test runs the real one-click seed command when
   `HIFY_MYSQL8_TEST_DATABASE_URL` is available and records the same topology
   counts with `dialect=mysql`.

@@ -66,6 +66,52 @@ class Mysql8DatabaseBoundaryTest(unittest.TestCase):
                 self.assertNotIn("sqlite://", content)
                 self.assertIn("mysql+pymysql://", content)
 
+    def test_product_demo_uat_artifacts_do_not_retain_sqlite_evidence(self) -> None:
+        artifact_root = PROJECT_ROOT / "artifacts/slices/115-mvp-demo-story-browser-uat/115.1"
+        if not artifact_root.exists():
+            self.skipTest("115 browser UAT artifact directory is not present in this checkout")
+
+        text_suffixes = {".env", ".json", ".md", ".txt"}
+        forbidden_markers = ("sqlite://", "SQLite", "sqlite", "hify-uat.db")
+        offenders: list[str] = []
+        for path in artifact_root.rglob("*"):
+            if not path.is_file():
+                continue
+            relative_path = str(path.relative_to(PROJECT_ROOT))
+            if path.suffix in {".db", ".sqlite", ".sqlite3"}:
+                offenders.append(relative_path)
+                continue
+            if path.suffix not in text_suffixes and path.name != ".env.demo":
+                continue
+            content = path.read_text(encoding="utf-8")
+            if any(marker in content for marker in forbidden_markers):
+                offenders.append(relative_path)
+
+        self.assertEqual([], offenders)
+
+    def test_product_live_and_demo_specs_do_not_prescribe_sqlite_runtime(self) -> None:
+        checked_paths = [
+            PROJECT_ROOT / "specs/129-mysql8-one-click-demo-seed-gate/spec.md",
+            PROJECT_ROOT / "specs/135-openrouter-deepseek-v4-flash-live-gate/plan.md",
+            PROJECT_ROOT / "specs/136-runtime-v2-openrouter-live-acceptance/spec.md",
+        ]
+        forbidden_markers = (
+            "disposable SQLite",
+            "SQLite database",
+            "SQLite seed",
+            "SQLite seed tests",
+            "sqlite://",
+            "hify.db",
+        )
+
+        offenders: list[str] = []
+        for path in checked_paths:
+            content = path.read_text(encoding="utf-8")
+            if any(marker in content for marker in forbidden_markers):
+                offenders.append(str(path.relative_to(PROJECT_ROOT)))
+
+        self.assertEqual([], offenders)
+
     def test_application_code_and_scripts_do_not_create_sqlite_database_urls(self) -> None:
         checked_roots = [PROJECT_ROOT / "app", PROJECT_ROOT / "scripts"]
 

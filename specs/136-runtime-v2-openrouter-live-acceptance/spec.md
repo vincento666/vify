@@ -17,7 +17,8 @@ Add an opt-in live acceptance gate proving Workflow runtime v2 can execute a rea
 ## Non-Goals
 
 - Do not change runtime v2 production implementation.
-- Do not persist provider credentials in repo files or default local `hify.db`.
+- Do not persist provider credentials in repo files or default local database
+  files.
 - Do not add frontend behavior.
 
 ## Acceptance
@@ -25,5 +26,6 @@ Add an opt-in live acceptance gate proving Workflow runtime v2 can execute a rea
 - RED evidence records the missing runtime v2 live acceptance test.
 - Default run skips safely without live opt-in.
 - Ruff passes for the new acceptance test.
-- Live OpenRouter DeepSeek V4 Flash runtime v2 gate passes with a disposable SQLite database.
+- Live OpenRouter DeepSeek V4 Flash runtime v2 gate passes with a disposable
+  MySQL8 database.
 - Secret scan finds no real provider key in tracked files, specs, or artifacts.

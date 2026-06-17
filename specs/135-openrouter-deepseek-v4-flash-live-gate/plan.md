@@ -10,7 +10,7 @@
    - make ReAct tool prompts explicit tool-call requests
 4. Run local unit and local compatible provider acceptance.
 5. Run live OpenRouter DeepSeek V4 Flash acceptance gates with secrets supplied only through process env/stdin.
-6. Use disposable SQLite databases for live gates that seed provider rows.
+6. Use disposable MySQL8 databases for live gates that seed provider rows.
 7. Scan for accidental secret persistence.
 8. Commit the slice.
 
