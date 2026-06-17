@@ -1,0 +1,21 @@
+# 187.0 RED Evidence
+
+This is a documentation-only sign-off slice. No implementation RED test was
+created or run because the user explicitly limited this turn to documentation
+and evidence planning.
+
+Required implementation RED evidence is planned for 187.1:
+
+- scheduler unit RED for read-only parallel batches;
+- scheduler unit RED for write serialization over overlapping resource keys;
+- scheduler unit RED for unresolved resource templates using conservative
+  serialization;
+- MySQL8 integration RED for persisted scheduler/resource-lock metadata;
+- contract/E2E RED for scheduler metadata in visible API/event payloads.
+
+Expected evidence path:
+
+```text
+artifacts/slices/187-ai-assistant-tool-scheduler-rwmutex/187.1/red.txt
+```
+

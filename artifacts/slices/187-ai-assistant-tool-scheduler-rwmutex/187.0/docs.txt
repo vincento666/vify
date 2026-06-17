@@ -1,0 +1,59 @@
+# 187.0 Documentation Sign-Off Evidence
+
+## Scope
+
+Documentation-only planning for
+`specs/187-ai-assistant-tool-scheduler-rwmutex`.
+
+Allowed paths touched:
+
+- `specs/187-ai-assistant-tool-scheduler-rwmutex/spec.md`
+- `specs/187-ai-assistant-tool-scheduler-rwmutex/plan.md`
+- `specs/187-ai-assistant-tool-scheduler-rwmutex/tasks.md`
+- `artifacts/slices/187-ai-assistant-tool-scheduler-rwmutex/187.0/docs.txt`
+- `artifacts/slices/187-ai-assistant-tool-scheduler-rwmutex/187.0/red.txt`
+
+## Context Inspected
+
+- `specs/184-ai-assistant-harness-core-mvp/spec.md`
+- `specs/184-ai-assistant-harness-core-mvp/plan.md`
+- `specs/184-ai-assistant-harness-core-mvp/tasks.md`
+- `artifacts/slices/184-ai-assistant-harness-core-mvp/184.5/summary.md`
+- `specs/185-mysql8-runtime-unit-harness-hardening/spec.md`
+- `app/modules/ai_assistant/domain/tools.py`
+- `app/modules/ai_assistant/domain/harness.py`
+- `app/modules/ai_assistant/infra/schema.py`
+- `app/modules/ai_assistant/infra/repository.py`
+- `tests/unit/ai_assistant/test_tool_registry.py`
+
+## Findings
+
+- Spec 184 deferred scheduler/RWMutex to a future Phase 4 spec and explicitly
+  called scheduler-level read/write serialization a residual risk.
+- Spec id 185 is already committed as
+  `185-mysql8-runtime-unit-harness-hardening`.
+- No `186-*` spec directory was present in this checkout during inspection, but
+  184 reserved 186 semantically for prompt/skills/memory/compaction.
+- Current AI Assistant manifests already expose `read_resources` and
+  `write_resources`.
+- Current tool-call persistence does not yet expose scheduler batch/RWMutex
+  metadata.
+- Existing worktree had unrelated modified backend files before this docs
+  slice; they were not edited.
+
+## Validation
+
+- `rtk rg -n "[[:blank:]]$" specs/187-ai-assistant-tool-scheduler-rwmutex artifacts/slices/187-ai-assistant-tool-scheduler-rwmutex/187.0`
+  returned no matches.
+- `rtk rg -n "MySQL8|OpenRouter|185|186|frontend|remScaleClosure|RWMutex|read-only|write serialization" specs/187-ai-assistant-tool-scheduler-rwmutex`
+  confirmed the required boundary terms are present in the new docs.
+- `rtk git status --short -- specs/187-ai-assistant-tool-scheduler-rwmutex`
+  shows the new spec directory as untracked.
+- `rtk git status --ignored --short -- artifacts/slices/187-ai-assistant-tool-scheduler-rwmutex`
+  shows the artifact tree is ignored by normal git status.
+- Existing ignored `187.1` artifact files were observed under the same artifact
+  tree and were left untouched.
+- A final full worktree status also showed AI Assistant scheduler-related
+  code/test changes outside the allowed documentation paths. They were treated
+  as concurrent or pre-existing work and were not edited or validated by this
+  documentation-only slice.

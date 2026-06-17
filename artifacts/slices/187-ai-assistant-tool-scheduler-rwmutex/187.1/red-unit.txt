@@ -1,0 +1,24 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+__ AiAssistantToolSchedulerTest.test_read_only_tools_share_one_parallel_batch __
+
+self = <tests.unit.ai_assistant.test_tool_scheduler.AiAssistantToolSchedulerTest testMethod=test_read_only_tools_share_one_parallel_batch>
+
+    def test_read_only_tools_share_one_parallel_batch(self) -> None:
+>       from app.modules.ai_assistant.domain.scheduler import ScheduledToolInvocation, ToolScheduler
+E       ModuleNotFoundError: No module named 'app.modules.ai_assistant.domain.scheduler'
+
+tests/unit/ai_assistant/test_tool_scheduler.py:6: ModuleNotFoundError
+_ AiAssistantToolSchedulerTest.test_write_tools_are_serialized_by_resource_key _
+
+self = <tests.unit.ai_assistant.test_tool_scheduler.AiAssistantToolSchedulerTest testMethod=test_write_tools_are_serialized_by_resource_key>
+
+    def test_write_tools_are_serialized_by_resource_key(self) -> None:
+>       from app.modules.ai_assistant.domain.scheduler import ScheduledToolInvocation, ToolScheduler
+E       ModuleNotFoundError: No module named 'app.modules.ai_assistant.domain.scheduler'
+
+tests/unit/ai_assistant/test_tool_scheduler.py:26: ModuleNotFoundError
+=========================== short test summary info ============================
+FAILED tests/unit/ai_assistant/test_tool_scheduler.py::AiAssistantToolSchedulerTest::test_read_only_tools_share_one_parallel_batch
+FAILED tests/unit/ai_assistant/test_tool_scheduler.py::AiAssistantToolSchedulerTest::test_write_tools_are_serialized_by_resource_key
+2 failed in 0.02s

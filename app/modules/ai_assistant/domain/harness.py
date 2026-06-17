@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from hashlib import sha256
 import json
@@ -9,6 +10,7 @@ from typing import Any
 from app.modules.ai_assistant.domain.permissions import ApprovalMode, ApprovalPolicy, PermissionDecision
 from app.modules.ai_assistant.domain.prompt import PromptAssembler
 from app.modules.ai_assistant.domain.sandbox import SandboxPolicy, SandboxVerdict
+from app.modules.ai_assistant.domain.scheduler import ScheduledToolInvocation, ToolScheduler
 from app.modules.ai_assistant.domain.tools import ToolRegistry
 from app.modules.ai_assistant.infra.repository import AiAssistantRepository, IdempotencyConflict
 
@@ -54,14 +56,17 @@ class AiAssistantHarnessService:
         approval_mode: str = ApprovalMode.SMART_APPROVAL.value,
         tool_name: str = "echo_context",
         tool_input: dict[str, Any] | None = None,
+        tool_calls: list[dict[str, Any]] | None = None,
     ) -> HarnessTurnResult:
         payload = tool_input or {"message": message}
+        scheduled_tool_calls = _scheduled_tool_calls(tool_calls)
         request_hash = _request_hash(
             {
                 "message": message,
                 "approvalMode": approval_mode,
                 "toolName": tool_name,
                 "toolInput": payload,
+                "toolCalls": scheduled_tool_calls,
             }
         )
         try:
@@ -122,9 +127,22 @@ class AiAssistantHarnessService:
             session_id=session_id,
             event_type="model.call_completed",
             visible_title="Model decision",
-            visible_summary="The deterministic MVP planner selected echo_context.",
-            payload={"toolName": "echo_context"},
+            visible_summary="The deterministic MVP planner selected scheduled tools."
+            if scheduled_tool_calls
+            else "The deterministic MVP planner selected echo_context.",
+            payload={"toolNames": [call["toolName"] for call in scheduled_tool_calls]}
+            if scheduled_tool_calls
+            else {"toolName": "echo_context"},
         )
+        if scheduled_tool_calls:
+            return self._run_scheduled_tool_calls(
+                session_id=session_id,
+                run_id=run_id,
+                run=run,
+                message=message,
+                approval_mode=approval_mode,
+                tool_calls=scheduled_tool_calls,
+            )
         manifest = self._tools.get_manifest(tool_name)
         sandbox_decision = self._sandbox_policy.evaluate(tool_name, payload)
         if sandbox_decision.verdict == SandboxVerdict.DENY:
@@ -284,6 +302,343 @@ class AiAssistantHarnessService:
             tool_calls=[_tool_call_payload(tool_call)],
         )
 
+    def _run_scheduled_tool_calls(
+        self,
+        *,
+        session_id: int,
+        run_id: int,
+        run: dict[str, Any],
+        message: str,
+        approval_mode: str,
+        tool_calls: list[dict[str, Any]],
+    ) -> HarnessTurnResult:
+        invocations = [
+            ScheduledToolInvocation(str(call["toolName"]), dict(call.get("toolInput") or {}))
+            for call in tool_calls
+        ]
+        plan = ToolScheduler(self._tools).plan(invocations, context={"session_id": session_id})
+        recorded_tool_calls: list[dict[str, Any]] = []
+        for batch in plan.batches:
+            self._repository.append_event(
+                run_id=run_id,
+                session_id=session_id,
+                event_type="scheduler.batch_started",
+                visible_title="Tool batch started",
+                visible_summary=f"{batch.execution_mode} batch {batch.batch_id} started.",
+                payload={
+                    "batchId": batch.batch_id,
+                    "executionMode": batch.execution_mode,
+                    "toolNames": [item.tool_name for item in batch.items],
+                    "readResources": batch.read_resources,
+                    "writeResources": batch.write_resources,
+                    "lockMode": batch.lock_mode,
+                    "resourceLockReason": batch.resource_lock_reason,
+                    "parallelEligible": batch.parallel_eligible,
+                },
+            )
+            if batch.execution_mode == "READ_PARALLEL" and len(batch.items) > 1:
+                recorded_tool_calls.extend(
+                    self._run_read_parallel_batch(
+                        session_id=session_id,
+                        run_id=run_id,
+                        message=message,
+                        batch=batch,
+                    )
+                )
+            else:
+                for index, item in enumerate(batch.items):
+                    result = self._run_scheduled_tool_call(
+                        session_id=session_id,
+                        run_id=run_id,
+                        message=message,
+                        approval_mode=approval_mode,
+                        tool_name=item.tool_name,
+                        payload=item.tool_input,
+                        scheduler_metadata=batch.item_metadata[index],
+                    )
+                    if isinstance(result, HarnessTurnResult):
+                        return result
+                    recorded_tool_calls.append(result)
+            self._repository.append_event(
+                run_id=run_id,
+                session_id=session_id,
+                event_type="scheduler.batch_completed",
+                visible_title="Tool batch completed",
+                visible_summary=f"{batch.execution_mode} batch {batch.batch_id} completed.",
+                payload={
+                    "batchId": batch.batch_id,
+                    "executionMode": batch.execution_mode,
+                    "toolCallCount": len(batch.items),
+                    "lockMode": batch.lock_mode,
+                },
+            )
+        final_answer = "Scheduled tool results: " + "; ".join(
+            str(call.get("output", {}).get("echo") or call.get("status") or "") for call in recorded_tool_calls
+        )
+        self._repository.append_message(session_id, "assistant", final_answer, run_id=run_id)
+        response_payload = {
+            "finalAnswer": final_answer,
+            "toolCalls": recorded_tool_calls,
+            "approvalRequired": False,
+            "sandboxDenied": False,
+            "schedule": {
+                "batches": [
+                    {
+                        "batchId": batch.batch_id,
+                        "executionMode": batch.execution_mode,
+                        "toolNames": [item.tool_name for item in batch.items],
+                        "readResources": batch.read_resources,
+                        "writeResources": batch.write_resources,
+                        "lockMode": batch.lock_mode,
+                        "resourceLockReason": batch.resource_lock_reason,
+                        "parallelEligible": batch.parallel_eligible,
+                    }
+                    for batch in plan.batches
+                ]
+            },
+        }
+        completed = self._repository.complete_run(run_id, response_payload)
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="run.completed",
+            visible_title="Run completed",
+            visible_summary="The assistant run completed.",
+            payload={"finalAnswer": final_answer},
+        )
+        return HarnessTurnResult(
+            run=completed,
+            replayed=False,
+            final_answer=final_answer,
+            tool_calls=recorded_tool_calls,
+        )
+
+    def _run_read_parallel_batch(
+        self,
+        *,
+        session_id: int,
+        run_id: int,
+        message: str,
+        batch: Any,
+    ) -> list[dict[str, Any]]:
+        for index, item in enumerate(batch.items):
+            self._repository.append_event(
+                run_id=run_id,
+                session_id=session_id,
+                event_type="tool.call_started",
+                visible_title="Tool started",
+                visible_summary=f"{item.tool_name} started.",
+                payload={
+                    "toolName": item.tool_name,
+                    "input": item.tool_input,
+                    "scheduler": batch.item_metadata[index],
+                },
+                correlation_ids={"scheduler": batch.item_metadata[index]},
+            )
+        with ThreadPoolExecutor(max_workers=max(1, len(batch.items))) as executor:
+            futures = [
+                executor.submit(
+                    self._dispatch_tool,
+                    session_id=session_id,
+                    message=message,
+                    tool_name=item.tool_name,
+                    payload=item.tool_input,
+                )
+                for item in batch.items
+            ]
+            dispatch_results = [future.result() for future in futures]
+
+        recorded: list[dict[str, Any]] = []
+        for index, (item, dispatch_result) in enumerate(zip(batch.items, dispatch_results, strict=True)):
+            scheduler_metadata = batch.item_metadata[index]
+            tool_result = dispatch_result["tool_result"]
+            self._repository.append_event(
+                run_id=run_id,
+                session_id=session_id,
+                event_type="tool.call_output",
+                visible_title="Tool output",
+                visible_summary=str(tool_result.output.get("echo") or ""),
+                payload={"toolName": item.tool_name, "output": tool_result.output, "scheduler": scheduler_metadata},
+                correlation_ids={"scheduler": scheduler_metadata},
+            )
+            tool_call = self._repository.record_tool_call(
+                run_id=run_id,
+                session_id=session_id,
+                tool_name=item.tool_name,
+                input_payload={**item.tool_input, "_scheduler": scheduler_metadata},
+                output_payload=tool_result.output,
+                status=tool_result.status,
+                duration_ms=int(dispatch_result["duration_ms"]),
+            )
+            self._repository.append_event(
+                run_id=run_id,
+                session_id=session_id,
+                event_type="tool.call_completed",
+                visible_title="Tool completed",
+                visible_summary=f"{item.tool_name} completed.",
+                payload={"toolName": item.tool_name, "status": tool_result.status, "scheduler": scheduler_metadata},
+                tool_call_id=int(tool_call["id"]),
+                correlation_ids={"scheduler": scheduler_metadata},
+            )
+            recorded.append(_tool_call_payload(tool_call))
+        return recorded
+
+    def _run_scheduled_tool_call(
+        self,
+        *,
+        session_id: int,
+        run_id: int,
+        message: str,
+        approval_mode: str,
+        tool_name: str,
+        payload: dict[str, Any],
+        scheduler_metadata: dict[str, Any],
+    ) -> dict[str, Any] | HarnessTurnResult:
+        manifest = self._tools.get_manifest(tool_name)
+        sandbox_decision = self._sandbox_policy.evaluate(tool_name, payload)
+        if sandbox_decision.verdict == SandboxVerdict.DENY:
+            self._repository.append_event(
+                run_id=run_id,
+                session_id=session_id,
+                event_type="sandbox.denied",
+                visible_title="Sandbox denied",
+                visible_summary=sandbox_decision.reason,
+                payload=sandbox_decision.evidence,
+                status="DENIED",
+            )
+            response_payload = {
+                "finalAnswer": "Sandbox denied the requested tool.",
+                "toolCalls": [],
+                "approvalRequired": False,
+                "sandboxDenied": True,
+            }
+            denied = self._repository.complete_run(run_id, response_payload, status="DENIED")
+            return HarnessTurnResult(
+                run=denied,
+                replayed=False,
+                final_answer=str(response_payload["finalAnswer"]),
+                tool_calls=[],
+                sandbox_denied=True,
+            )
+        permission = self._approval_policy.decide(
+            approval_mode=ApprovalMode(approval_mode),
+            risk_level=manifest.risk_level,
+        )
+        if permission == PermissionDecision.REQUIRE_APPROVAL:
+            approval = self._repository.create_approval(
+                run_id=run_id,
+                session_id=session_id,
+                tool_name=tool_name,
+                risk_level=manifest.risk_level.value,
+                input_payload=payload,
+            )
+            self._repository.append_event(
+                run_id=run_id,
+                session_id=session_id,
+                event_type="approval.required",
+                visible_title="Approval required",
+                visible_summary=f"{tool_name} requires approval.",
+                payload={"approvalId": approval["id"], "toolName": tool_name, "riskLevel": manifest.risk_level.value},
+                status="WAITING",
+            )
+            if manifest.risk_level.value == "BUSINESS_WRITE":
+                proposed_action = self._repository.create_proposed_action(
+                    run_id=run_id,
+                    session_id=session_id,
+                    approval_id=int(approval["id"]),
+                    action_type=tool_name,
+                    title=f"Proposed action: {tool_name}",
+                    payload=payload,
+                )
+                self._repository.append_event(
+                    run_id=run_id,
+                    session_id=session_id,
+                    event_type="proposed_action.created",
+                    visible_title="Proposed action created",
+                    visible_summary=f"{tool_name} was converted to a proposed action.",
+                    payload={"proposedActionId": proposed_action["id"], "approvalId": approval["id"]},
+                )
+            response_payload = {
+                "finalAnswer": "Approval is required before this action can continue.",
+                "toolCalls": [],
+                "approvalRequired": True,
+                "approvalId": approval["id"],
+                "sandboxDenied": False,
+            }
+            waiting = self._repository.complete_run(run_id, response_payload, status="WAITING_APPROVAL")
+            return HarnessTurnResult(
+                run=waiting,
+                replayed=False,
+                final_answer=str(response_payload["finalAnswer"]),
+                tool_calls=[],
+                approval_required=True,
+                approval_id=int(approval["id"]),
+            )
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="tool.call_started",
+            visible_title="Tool started",
+            visible_summary=f"{tool_name} started.",
+            payload={"toolName": tool_name, "input": payload, "scheduler": scheduler_metadata},
+            correlation_ids={"scheduler": scheduler_metadata},
+        )
+        dispatch_result = self._dispatch_tool(
+            session_id=session_id,
+            message=message,
+            tool_name=tool_name,
+            payload=payload,
+        )
+        tool_result = dispatch_result["tool_result"]
+        duration_ms = int(dispatch_result["duration_ms"])
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="tool.call_output",
+            visible_title="Tool output",
+            visible_summary=str(tool_result.output.get("echo") or ""),
+            payload={"toolName": tool_name, "output": tool_result.output, "scheduler": scheduler_metadata},
+            correlation_ids={"scheduler": scheduler_metadata},
+        )
+        tool_call = self._repository.record_tool_call(
+            run_id=run_id,
+            session_id=session_id,
+            tool_name=tool_name,
+            input_payload={**payload, "_scheduler": scheduler_metadata},
+            output_payload=tool_result.output,
+            status=tool_result.status,
+            duration_ms=duration_ms,
+        )
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="tool.call_completed",
+            visible_title="Tool completed",
+            visible_summary=f"{tool_name} completed.",
+            payload={"toolName": tool_name, "status": tool_result.status, "scheduler": scheduler_metadata},
+            tool_call_id=int(tool_call["id"]),
+            correlation_ids={"scheduler": scheduler_metadata},
+        )
+        return _tool_call_payload(tool_call)
+
+    def _dispatch_tool(
+        self,
+        *,
+        session_id: int,
+        message: str,
+        tool_name: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        started = perf_counter()
+        dispatch_payload = payload | {"message": str(payload.get("message") or message)}
+        if tool_name == "echo_context":
+            dispatch_payload = dispatch_payload | {"context": {"sessionId": session_id}}
+        tool_result = self._tools.dispatch(tool_name, dispatch_payload)
+        return {
+            "tool_result": tool_result,
+            "duration_ms": max(0, int((perf_counter() - started) * 1000)),
+        }
+
     def get_run(self, run_id: int) -> dict[str, Any] | None:
         return self._repository.get_run(run_id)
 
@@ -350,14 +705,32 @@ def _request_hash(payload: Any) -> str:
     return sha256(encoded.encode("utf-8")).hexdigest()
 
 
+def _scheduled_tool_calls(tool_calls: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    canonical: list[dict[str, Any]] = []
+    for call in tool_calls or []:
+        tool_name = str(call.get("toolName") or call.get("tool_name") or "")
+        if not tool_name:
+            continue
+        canonical.append(
+            {
+                "toolName": tool_name,
+                "toolInput": dict(call.get("toolInput") or call.get("tool_input") or {}),
+            }
+        )
+    return canonical
+
+
 def _tool_call_payload(tool_call: dict[str, Any]) -> dict[str, Any]:
+    input_payload = tool_call.get("input_payload") or {}
+    scheduler = dict(input_payload.get("_scheduler") or {})
     return {
         "id": tool_call["id"],
         "toolName": tool_call["tool_name"],
-        "input": tool_call.get("input_payload") or {},
+        "input": {key: value for key, value in input_payload.items() if key != "_scheduler"},
         "output": tool_call.get("output_payload") or {},
         "status": tool_call["status"],
         "durationMs": tool_call["duration_ms"],
+        "scheduler": scheduler,
     }
 
 

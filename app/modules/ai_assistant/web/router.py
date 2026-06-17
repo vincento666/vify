@@ -77,6 +77,10 @@ def send_message(
             approval_mode=request.approval_mode,
             tool_name=request.tool_name,
             tool_input=dict(request.tool_input),
+            tool_calls=[
+                {"toolName": call.tool_name, "toolInput": dict(call.tool_input)}
+                for call in request.tool_calls
+            ],
         )
     except IdempotencyConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
