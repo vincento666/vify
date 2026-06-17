@@ -20,47 +20,51 @@ EXPECTED_STORIES = {
 
 class MvpDemoBootstrapContractTest(unittest.TestCase):
     def test_seed_command_runs_verification_and_writes_secret_free_env(self) -> None:
+        previous_url = os.environ.get("HIFY_DATABASE_URL")
         with tempfile.TemporaryDirectory() as tmp:
-            db_path = Path(tmp) / "mvp-demo.db"
-            env_path = Path(tmp) / ".env.demo"
-            env_path.write_text("OPENROUTER_API_KEY=sk-should-not-survive\nEXISTING=value\n", encoding="utf-8")
-            env = {
-                **os.environ,
-                "PYTHONPATH": str(PROJECT_ROOT),
-                "HIFY_DATABASE_URL": f"sqlite:///{db_path}",
-                "HIFY_MVP_DEMO_ENV_PATH": str(env_path),
-            }
+            try:
+                db_path = Path(tmp) / "mvp-demo.db"
+                env_path = Path(tmp) / ".env.demo"
+                env_path.write_text("OPENROUTER_API_KEY=sk-should-not-survive\nEXISTING=value\n", encoding="utf-8")
+                env = {
+                    **os.environ,
+                    "PYTHONPATH": str(PROJECT_ROOT),
+                    "HIFY_DATABASE_URL": f"sqlite:///{db_path}",
+                    "HIFY_MVP_DEMO_ENV_PATH": str(env_path),
+                }
 
-            completed = subprocess.run(
-                [sys.executable, "scripts/seed_mvp_demo.py"],
-                cwd=PROJECT_ROOT,
-                env=env,
-                check=False,
-                text=True,
-                capture_output=True,
-            )
+                completed = subprocess.run(
+                    [sys.executable, "scripts/seed_mvp_demo.py"],
+                    cwd=PROJECT_ROOT,
+                    env=env,
+                    check=False,
+                    text=True,
+                    capture_output=True,
+                )
 
-            self.assertEqual(completed.returncode, 0, completed.stderr)
-            self.assertIn("Verification: passed", completed.stdout)
-            self.assertIn("Story coverage: 3/3", completed.stdout)
-            self.assertNotIn("sk-", completed.stdout)
-            env_text = env_path.read_text(encoding="utf-8")
-            self.assertIn("EXISTING=value", env_text)
-            self.assertNotIn("OPENROUTER_API_KEY", env_text)
-            self.assertNotIn("sk-", env_text)
-            self.assertIn("HIFY_MVP_DEMO_HOST_CONTEXT_JSON=", env_text)
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                self.assertIn("Verification: passed", completed.stdout)
+                self.assertIn("Story coverage: 3/3", completed.stdout)
+                self.assertNotIn("sk-", completed.stdout)
+                env_text = env_path.read_text(encoding="utf-8")
+                self.assertIn("EXISTING=value", env_text)
+                self.assertNotIn("OPENROUTER_API_KEY", env_text)
+                self.assertNotIn("sk-", env_text)
+                self.assertIn("HIFY_MVP_DEMO_HOST_CONTEXT_JSON=", env_text)
 
-            _reset_database_url(env["HIFY_DATABASE_URL"])
-            with get_session_factory()() as session:
-                report = verify_mvp_demo_topology(session, env_text=env_text)
-            self.assertTrue(report["ok"], report)
-            self.assertEqual(set(report["storyIds"]), EXPECTED_STORIES)
-            self.assertEqual(report["storyCoverage"]["covered"], 3)
-            self.assertGreaterEqual(report["chatflowBindings"]["count"], 15)
-            self.assertGreaterEqual(report["knowledge"]["faqCount"], 3)
-            self.assertTrue(report["security"]["secretFreeEnv"])
-            self.assertEqual(report["hostContext"]["tenantId"], MVP_DEMO_HOST_CONTEXT["tenantId"])
-            self.assertTrue(report["hostContext"]["envConfigured"])
+                _reset_database_url(env["HIFY_DATABASE_URL"])
+                with get_session_factory()() as session:
+                    report = verify_mvp_demo_topology(session, env_text=env_text)
+                self.assertTrue(report["ok"], report)
+                self.assertEqual(set(report["storyIds"]), EXPECTED_STORIES)
+                self.assertEqual(report["storyCoverage"]["covered"], 3)
+                self.assertGreaterEqual(report["chatflowBindings"]["count"], 15)
+                self.assertGreaterEqual(report["knowledge"]["faqCount"], 3)
+                self.assertTrue(report["security"]["secretFreeEnv"])
+                self.assertEqual(report["hostContext"]["tenantId"], MVP_DEMO_HOST_CONTEXT["tenantId"])
+                self.assertTrue(report["hostContext"]["envConfigured"])
+            finally:
+                _restore_database_url(previous_url)
 
     def test_reusable_verifier_reports_story_task_action_and_knowledge_contract(self) -> None:
         with _temp_database():
@@ -90,11 +94,7 @@ class _temp_database:
         _reset_database_url(f"sqlite:///{Path(self._tmp.name) / 'seed.db'}")
 
     def __exit__(self, *_exc: object) -> None:
-        if self._previous_url is None:
-            os.environ.pop("HIFY_DATABASE_URL", None)
-        else:
-            os.environ["HIFY_DATABASE_URL"] = self._previous_url
-        get_settings.cache_clear()
+        _restore_database_url(self._previous_url)
         self._tmp.cleanup()
 
 
@@ -102,3 +102,11 @@ def _reset_database_url(url: str) -> None:
     os.environ["HIFY_DATABASE_URL"] = url
     get_settings.cache_clear()
     initialise_database()
+
+
+def _restore_database_url(previous_url: str | None) -> None:
+    if previous_url is None:
+        os.environ.pop("HIFY_DATABASE_URL", None)
+    else:
+        os.environ["HIFY_DATABASE_URL"] = previous_url
+    get_settings.cache_clear()
