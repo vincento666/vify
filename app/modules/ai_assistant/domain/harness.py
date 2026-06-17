@@ -7,6 +7,7 @@ import json
 from time import perf_counter
 from typing import Any
 
+from app.modules.ai_assistant.domain.observability import build_observability_snapshot
 from app.modules.ai_assistant.domain.permissions import ApprovalMode, ApprovalPolicy, PermissionDecision
 from app.modules.ai_assistant.domain.prompt import PromptAssembler
 from app.modules.ai_assistant.domain.sandbox import SandboxPolicy, SandboxVerdict
@@ -658,6 +659,12 @@ class AiAssistantHarnessService:
         events = self._repository.list_run_events(run_id)
         approvals = self._repository.list_run_approvals(run_id)
         tool_calls = self._repository.list_run_tool_calls(run_id)
+        observability = build_observability_snapshot(
+            run=run,
+            events=events,
+            tool_calls=tool_calls,
+            approvals=approvals,
+        )
         return {
             "run": _run_payload(run),
             "activeTasks": [_task_payload(run, events, approvals)],
@@ -665,7 +672,8 @@ class AiAssistantHarnessService:
             "approvalQueue": [_approval_payload(row) for row in approvals],
             "recentErrors": [_event_timeline_payload(row) for row in _recent_error_events(events)],
             "eventTimeline": [_event_timeline_payload(row) for row in events],
-            "usage": _usage_payload(run),
+            "usage": observability["usage"],
+            "observability": observability,
         }
 
     def list_tool_manifests(self) -> list[dict[str, Any]]:

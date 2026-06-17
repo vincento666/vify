@@ -1,0 +1,9 @@
+190.0 docs sign-off created for AI Assistant Phase 7.
+
+Scope:
+- backend-only observability/benchmark tracer;
+- no frontend visual work;
+- no live LLM gates by default;
+- future OpenRouter probes must use environment variables only;
+- MySQL8-only persistence boundary retained.
+
