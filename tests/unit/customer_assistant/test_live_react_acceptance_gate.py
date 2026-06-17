@@ -7,6 +7,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 
+MYSQL8_DATABASE_URL = "mysql+pymysql://hify:hify@127.0.0.1:3306/hify?charset=utf8mb4"
+
+
 class CustomerAssistantLiveReactAcceptanceGateTest(unittest.TestCase):
     def test_default_ci_path_skips_and_writes_redacted_artifact(self) -> None:
         module = _load_gate_module(self)
@@ -96,7 +99,11 @@ class CustomerAssistantLiveReactAcceptanceGateTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             result = module.run_customer_assistant_live_react_acceptance(
-                env={module.LIVE_GATE_FLAG: "1", "OPENROUTER_API_KEY": "unit-api-key"},
+                env={
+                    module.LIVE_GATE_FLAG: "1",
+                    "OPENROUTER_API_KEY": "unit-api-key",
+                    "HIFY_DATABASE_URL": MYSQL8_DATABASE_URL,
+                },
                 output_dir=Path(tmp),
                 live_runner=fake_runner,
             )
@@ -162,7 +169,11 @@ class CustomerAssistantLiveReactAcceptanceGateTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             result = module.run_customer_assistant_live_react_acceptance(
-                env={module.LIVE_GATE_FLAG: "1", "OPENROUTER_API_KEY": "unit-api-key"},
+                env={
+                    module.LIVE_GATE_FLAG: "1",
+                    "OPENROUTER_API_KEY": "unit-api-key",
+                    "HIFY_DATABASE_URL": MYSQL8_DATABASE_URL,
+                },
                 output_dir=Path(tmp),
                 live_runner=fake_runner,
             )
@@ -223,7 +234,11 @@ class CustomerAssistantLiveReactAcceptanceGateTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             result = module.run_customer_assistant_live_react_acceptance(
-                env={module.LIVE_GATE_FLAG: "1", "OPENROUTER_API_KEY": "unit-api-key"},
+                env={
+                    module.LIVE_GATE_FLAG: "1",
+                    "OPENROUTER_API_KEY": "unit-api-key",
+                    "HIFY_DATABASE_URL": MYSQL8_DATABASE_URL,
+                },
                 output_dir=Path(tmp),
                 live_runner=fake_runner,
             )

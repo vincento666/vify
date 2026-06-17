@@ -1,30 +1,21 @@
-import tempfile
 import unittest
 from collections.abc import Generator
-from pathlib import Path
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.core.database import Base, get_session
+from app.core.database import get_session
 from app.main import app
+from tests.support.mysql import mysql8_unittest_database
 from tests.contract.test_runtime_policy_profile_api import _profile_payload
 
 
 class RuntimePolicyRuntimeApiContractTest(unittest.TestCase):
     def setUp(self) -> None:
-        self._tmp_dir = tempfile.TemporaryDirectory()
-        db_path = Path(self._tmp_dir.name) / "runtime_policy_runtime.db"
-        self._engine = create_engine(f"sqlite:///{db_path}", future=True)
-        Base.metadata.create_all(bind=self._engine)
-        self._factory = sessionmaker(
-            bind=self._engine,
-            autoflush=False,
-            autocommit=False,
-            expire_on_commit=False,
-        )
+        self._database = mysql8_unittest_database(self, "runtime_policy_runtime")
+        self._engine = self._database.engine
+        self._factory = self._database.session_factory
         app.dependency_overrides[get_session] = self._session_override
         app.dependency_overrides[get_settings] = lambda: Settings(_env_file=None)
 

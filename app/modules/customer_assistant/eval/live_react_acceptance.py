@@ -5,7 +5,6 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 import json
 import os
-import tempfile
 from pathlib import Path
 from typing import Any, Literal, cast
 from urllib.parse import urlparse
@@ -14,6 +13,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.database import Base
+from app.core.database_url_policy import assert_mysql8_connection, assert_mysql8_database_url
 from app.modules.chat.domain.llm_request import (
     ChatRequestMessage,
     OpenAIChatRequestBuilder,
@@ -71,6 +71,7 @@ class LiveReactAcceptanceConfig:
     base_url: str
     api_key: str
     model_pool: tuple[str, ...]
+    database_url: str = ""
     output_dir: Path = DEFAULT_OUTPUT_DIR
 
 
@@ -131,6 +132,7 @@ def load_live_react_acceptance_config(
         base_url=base_url,
         api_key=api_key,
         model_pool=model_pool,
+        database_url=str(values.get("HIFY_DATABASE_URL") or "").strip(),
         output_dir=output_dir or DEFAULT_OUTPUT_DIR,
     )
 
@@ -159,6 +161,21 @@ def run_customer_assistant_live_react_acceptance(
                 f"or resolvable {LIVE_MODEL_CONFIG_ID}."
             ),
         )
+        artifact = config.output_dir / f"{LIVE_GATE_NAME}.md"
+        _write_artifact(artifact, config, result)
+        return replace(result, evidence_path=str(artifact))
+    if not config.database_url:
+        result = LiveAcceptanceResult(
+            status="failed",
+            reason="Missing HIFY_DATABASE_URL. Live acceptance must run against a disposable MySQL8 database.",
+        )
+        artifact = config.output_dir / f"{LIVE_GATE_NAME}.md"
+        _write_artifact(artifact, config, result)
+        return replace(result, evidence_path=str(artifact))
+    try:
+        assert_mysql8_database_url(config.database_url)
+    except ValueError as exc:
+        result = LiveAcceptanceResult(status="failed", reason=str(exc))
         artifact = config.output_dir / f"{LIVE_GATE_NAME}.md"
         _write_artifact(artifact, config, result)
         return replace(result, evidence_path=str(artifact))
@@ -204,7 +221,7 @@ class CustomerAssistantLiveReactAcceptanceRunner:
     def _task_recognition_accuracy(self, config: LiveReactAcceptanceConfig) -> LiveCategoryResult:
         client = _LivePrimaryClient(config)
         try:
-            with _customer_assistant_session("task-recognition") as session:
+            with _customer_assistant_session(config.database_url) as session:
                 service = CustomerAssistantService(
                     CustomerAssistantRepository(session),
                     llm_runtime_settings=CustomerAssistantLlmRuntimeSettings(
@@ -246,7 +263,7 @@ class CustomerAssistantLiveReactAcceptanceRunner:
     def _two_stage_recommendation_quality(self, config: LiveReactAcceptanceConfig) -> LiveCategoryResult:
         finalizer = _LiveTwoStageFinalizer(config)
         try:
-            with _customer_assistant_session("two-stage") as session:
+            with _customer_assistant_session(config.database_url) as session:
                 service = CustomerAssistantService(
                     CustomerAssistantRepository(session),
                     llm_runtime_settings=CustomerAssistantLlmRuntimeSettings(
@@ -292,7 +309,7 @@ class CustomerAssistantLiveReactAcceptanceRunner:
         write_model = _LiveReactToolModel(config, tool_name="submit_refund", risk="write")
         write_tool_calls = 0
         try:
-            with _customer_assistant_session("react-read") as session:
+            with _customer_assistant_session(config.database_url) as session:
                 service = CustomerAssistantService(
                     CustomerAssistantRepository(session),
                     core=cast(Any, _ReactTaskCore(message_business_key="TK-100")),
@@ -321,7 +338,7 @@ class CustomerAssistantLiveReactAcceptanceRunner:
                 write_tool_calls += 1
                 return {"orderNo": args.get("orderNo"), "submitted": True}
 
-            with _customer_assistant_session("react-write") as session:
+            with _customer_assistant_session(config.database_url) as session:
                 service = CustomerAssistantService(
                     CustomerAssistantRepository(session),
                     core=cast(Any, _ReactTaskCore(message_business_key="TK-100")),
@@ -382,7 +399,7 @@ class CustomerAssistantLiveReactAcceptanceRunner:
                 write_tool_calls += 1
                 return {"orderNo": args.get("orderNo"), "submitted": True}
 
-            with _customer_assistant_session("proposed-action-safety") as session:
+            with _customer_assistant_session(config.database_url) as session:
                 repository = CustomerAssistantRepository(session)
                 service = CustomerAssistantService(
                     repository,
@@ -744,10 +761,10 @@ class _ReactTaskCore:
 
 
 @contextmanager
-def _customer_assistant_session(name: str) -> Iterator[Session]:
-    tmp_dir = tempfile.TemporaryDirectory()
-    db_path = Path(tmp_dir.name) / f"{name}.db"
-    engine = create_engine(f"sqlite:///{db_path}", future=True)
+def _customer_assistant_session(database_url: str) -> Iterator[Session]:
+    assert_mysql8_database_url(database_url)
+    engine = create_engine(database_url, future=True)
+    assert_mysql8_connection(engine)
     register_customer_assistant_tables()
     Base.metadata.create_all(bind=engine, tables=customer_assistant_tables())
     factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
@@ -757,7 +774,6 @@ def _customer_assistant_session(name: str) -> Iterator[Session]:
     finally:
         session.close()
         engine.dispose()
-        tmp_dir.cleanup()
 
 
 def _model_pool_from_env(value: str) -> tuple[str, ...]:
@@ -780,8 +796,10 @@ def _provider_config_from_env(env: dict[str, str] | os._Environ[str]) -> dict[st
     database_url = str(env.get("HIFY_DATABASE_URL") or "").strip()
     if not database_url:
         return None
+    assert_mysql8_database_url(database_url)
     try:
         engine = create_engine(database_url, future=True)
+        assert_mysql8_connection(engine)
         factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
         with factory() as session:
             row = ProviderRepository(session).get_enabled_model_config(model_config_id)

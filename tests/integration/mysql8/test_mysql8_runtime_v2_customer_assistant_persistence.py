@@ -14,6 +14,7 @@ from app.core.database import Base, _ensure_compatible_schema
 from app.core.schema import register_baseline_tables
 from app.modules.customer_assistant.infra.schema import register_customer_assistant_tables
 from app.modules.runtime_lab.infra.schema import register_runtime_lab_tables
+from tests.support.mysql import Mysql8TestDatabase
 
 
 MYSQL8_TEST_DATABASE_URL = os.getenv("HIFY_MYSQL8_TEST_DATABASE_URL")
@@ -71,17 +72,12 @@ class Mysql8RuntimeV2DemoPersistenceContractTest(unittest.TestCase):
                 self.assertIn(compiled_column_types[table_name][column_name], {"BOOL", "BOOLEAN"})
 
     def test_demo_anchor_profile_and_text_payloads_round_trip_locally(self) -> None:
-        register_baseline_tables()
-        register_runtime_lab_tables()
-        register_customer_assistant_tables()
-        engine = sa.create_engine("sqlite:///:memory:", future=True)
         now = datetime.now(UTC).replace(tzinfo=None)
 
-        try:
-            Base.metadata.create_all(
-                bind=engine,
-                tables=_tables(_TABLE_NAMES),
-            )
+        with Mysql8TestDatabase("mysql8_runtime_v2_demo_anchor") as database:
+            database.create_all(tables=_tables(_TABLE_NAMES), register=_register_mvp_surface_tables)
+            engine = database.engine
+            self.assertIsNotNone(engine)
             with engine.begin() as connection:
                 workflow_id = _insert(
                     connection,
@@ -497,8 +493,6 @@ class Mysql8RuntimeV2DemoPersistenceContractTest(unittest.TestCase):
                         "routeDecision"
                     ]["action"],
                 )
-        finally:
-            engine.dispose()
 
 
 @unittest.skipUnless(MYSQL8_TEST_DATABASE_URL, "set HIFY_MYSQL8_TEST_DATABASE_URL for MySQL8 integration")
@@ -1080,6 +1074,12 @@ _MYSQL8_BOOLEAN_COLUMNS = {
 
 def _tables(names: list[str]) -> list[sa.Table]:
     return [Base.metadata.tables[name] for name in names]
+
+
+def _register_mvp_surface_tables() -> None:
+    register_baseline_tables()
+    register_runtime_lab_tables()
+    register_customer_assistant_tables()
 
 
 def _insert(connection: Connection, table_name: str, **values: Any) -> int:

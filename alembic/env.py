@@ -10,6 +10,7 @@ from sqlalchemy import engine_from_config, pool
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.core.database import Base
+from app.core.database_url_policy import assert_mysql8_connection, assert_mysql8_database_url
 from app.core.schema import register_baseline_tables
 
 config = context.config
@@ -18,11 +19,9 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 configured_database_url = config.get_main_option("sqlalchemy.url")
-if (
-    (database_url := os.getenv("HIFY_DATABASE_URL"))
-    and configured_database_url in {None, "", "sqlite:///./hify.db"}
-):
+if database_url := os.getenv("HIFY_DATABASE_URL"):
     config.set_main_option("sqlalchemy.url", database_url)
+assert_mysql8_database_url(config.get_main_option("sqlalchemy.url"))
 
 register_baseline_tables()
 target_metadata = Base.metadata
@@ -70,6 +69,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        assert_mysql8_connection(connection)
         _ensure_mysql_version_table(connection)
         context.configure(connection=connection, target_metadata=target_metadata)
 

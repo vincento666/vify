@@ -1,12 +1,11 @@
+from contextlib import contextmanager
 import json
-import tempfile
 import unittest
-from pathlib import Path
+from collections.abc import Iterator
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
-from app.core.database import Base
+from tests.support.mysql import mysql8_session
 from app.modules.customer_assistant.domain.llm_primary import (
     CustomerAssistantLlmRuntimeMode,
     CustomerAssistantLlmRuntimeSettings,
@@ -136,16 +135,10 @@ class _FakePrimaryClient:
         )
 
 
-def _session() -> Session:
-    tmp_dir = tempfile.TemporaryDirectory()
-    db_path = Path(tmp_dir.name) / "customer_assistant_llm_primary.db"
-    engine = create_engine(f"sqlite:///{db_path}", future=True)
-    register_customer_assistant_tables()
-    Base.metadata.create_all(bind=engine, tables=customer_assistant_tables())
-    factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
-    session = factory()
-    session.info["_tmp_dir"] = tmp_dir
-    return session
+@contextmanager
+def _session() -> Iterator[Session]:
+    with mysql8_session("customer_assistant_llm_primary", tables=customer_assistant_tables(), register=register_customer_assistant_tables) as session:
+        yield session
 
 
 if __name__ == "__main__":

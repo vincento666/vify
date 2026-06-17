@@ -64,9 +64,10 @@ Evidence lives under
 
 ## Result
 
-The 115.1 browser UAT passed against a fresh SQLite database seeded by the
-one-click demo command and served by `scripts/dev.sh`. The UAT verified all
-three seeded story ids, direct deeplink selection, story switching, visible
-conversation/task/action panels, worker profile configuration, operator
-knowledge Q&A, eval/observability task evidence, and one confirmed task-control
-path.
+The original 115.1 browser UAT verified all three seeded story ids, direct
+deeplink selection, story switching, visible conversation/task/action panels,
+worker profile configuration, operator knowledge Q&A, eval/observability task
+evidence, and one confirmed task-control path.
+
+Slice 138 supersedes the persistence requirement: current productized MVP demo
+evidence must run the same seed and browser UAT path against MySQL8.

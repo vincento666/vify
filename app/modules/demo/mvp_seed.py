@@ -12,8 +12,9 @@ import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from app.core.database import Base
+from app.core.database_url_policy import assert_mysql8_connection
 from app.core.db_write import insert_and_get_id
-from app.core.schema import register_baseline_tables
+from app.core.schema import register_baseline_tables, tables_for_bind
 from app.modules.customer_assistant.domain.worker_profiles import default_customer_assistant_worker_profiles_json
 from app.modules.customer_assistant.infra.repository import CustomerAssistantRepository
 from app.modules.customer_assistant.infra.schema import register_customer_assistant_tables
@@ -210,6 +211,7 @@ FAQ_ENTRIES = (
 
 
 def seed_mvp_demo(session: Session) -> MvpDemoSeedResult:
+    assert_mysql8_connection(session.get_bind())
     _ensure_seed_tables(session)
     provider_id, model_config_id = _seed_demo_provider_model(session)
     chatflow_bindings = seed_runtime_lab_airline_chatflows(session)
@@ -291,6 +293,7 @@ def seed_one_click_mvp_demo(
 
 def verify_mvp_demo_topology(session: Session, *, env_text: str | None = None) -> dict[str, Any]:
     _ensure_seed_tables(session)
+    persistence_report = _mysql8_persistence_report(session)
     story_rows = _demo_story_sessions(session)
     story_report = {
         story_id: _verify_story(session, int(row["id"]), dict(row.get("context_json") or {}))
@@ -351,6 +354,12 @@ def verify_mvp_demo_topology(session: Session, *, env_text: str | None = None) -
             provider_model_report,
         ),
         _check(
+            "mysql8_persistence",
+            persistence_report["mysql8LiveRoundTrip"],
+            "Demo seed and verification ran against MySQL8.",
+            persistence_report,
+        ),
+        _check(
             "runtime_v2_llm_readiness",
             runtime_v2_llm_readiness["workflowRunsV2ProviderBinding"]
             and runtime_v2_llm_readiness["chatflowRunsV2ProviderBinding"]
@@ -380,6 +389,7 @@ def verify_mvp_demo_topology(session: Session, *, env_text: str | None = None) -
         "chatflowBindings": chatflow_report,
         "knowledge": knowledge_report,
         "providerModel": provider_model_report,
+        "persistence": persistence_report,
         "runtimeV2LlmReadiness": runtime_v2_llm_readiness,
         "hostContext": host_context_report,
         "security": security_report,
@@ -448,6 +458,22 @@ def _one_click_persistence_fingerprint(
     }
 
 
+def _mysql8_persistence_report(session: Session) -> dict[str, Any]:
+    bind = session.get_bind()
+    try:
+        assert_mysql8_connection(bind)
+        return {
+            "dialect": str(getattr(getattr(bind, "dialect", None), "name", "unknown")),
+            "mysql8LiveRoundTrip": True,
+        }
+    except ValueError as exc:
+        return {
+            "dialect": str(getattr(getattr(bind, "dialect", None), "name", "unknown")),
+            "mysql8LiveRoundTrip": False,
+            "reason": str(exc),
+        }
+
+
 def _runtime_v2_llm_readiness(
     provider_model_report: Mapping[str, Any],
     *,
@@ -483,7 +509,7 @@ def _ensure_seed_tables(session: Session) -> None:
     register_customer_assistant_tables()
     bind = session.get_bind()
     if bind is not None:
-        Base.metadata.create_all(bind=bind)
+        Base.metadata.create_all(bind=bind, tables=tables_for_bind(bind))
 
 
 def _seed_demo_provider_model(session: Session) -> tuple[int, int]:
@@ -822,7 +848,7 @@ def _seed_customer_story(
         _append_seed_event_once(
             repository,
             session_id,
-            f"mvp_demo_task_seeded:{story.story_id}:{task.task_key}",
+            "mvp_demo_task_seeded",
             {
                 "demoSeed": "073",
                 "storyId": story.story_id,
@@ -914,7 +940,7 @@ def _append_seed_event_once(
     task_id: int,
 ) -> None:
     existing = repository.list_events(session_id)
-    if any(event["type"] == event_type for event in existing):
+    if any(event["type"] == event_type and _seed_event_payload_matches(event, payload) for event in existing):
         return
     repository.append_event(
         session_id,
@@ -927,6 +953,13 @@ def _append_seed_event_once(
         actor="system",
         span_id=f"mvp-demo:{session_id}:{task_id}",
     )
+
+
+def _seed_event_payload_matches(event: Mapping[str, Any], payload: Mapping[str, Any]) -> bool:
+    event_payload = event.get("payload")
+    if not isinstance(event_payload, Mapping):
+        return False
+    return all(event_payload.get(key) == payload.get(key) for key in ("demoSeed", "storyId", "taskKey"))
 
 
 def _stable_hash(payload: Mapping[str, Any]) -> str:

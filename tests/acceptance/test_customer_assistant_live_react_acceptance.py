@@ -6,14 +6,10 @@ import json
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-import tempfile
 from threading import Thread
 from typing import Any
 import unittest
 from unittest.mock import patch
-
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base
 from app.core.schema import register_baseline_tables
@@ -21,6 +17,7 @@ from app.modules.customer_assistant.eval.live_react_acceptance import (
     LIVE_GATE_NAME,
     run_customer_assistant_live_react_acceptance,
 )
+from tests.support.mysql import Mysql8TestDatabase, mysql8_database_url
 
 
 ARTIFACT_DIR = Path("artifacts/slices/072-customer-assistant-live-react-acceptance/live")
@@ -44,15 +41,17 @@ EXPECTED_CATEGORIES = {
 class CustomerAssistantLiveReactAcceptanceTest(unittest.TestCase):
     def test_gate_runs_against_local_openai_compatible_provider(self) -> None:
         with _local_openai_compatible_server() as server:
-            with self.subTest("full local compatible provider gate"):
-                result = run_customer_assistant_live_react_acceptance(
-                    env={
-                        "HIFY_RUN_CUSTOMER_ASSISTANT_LIVE_REACT_ACCEPTANCE": "1",
-                        "HIFY_CUSTOMER_ASSISTANT_LIVE_API_KEY": LOCAL_COMPATIBLE_API_KEY,
-                        "HIFY_CUSTOMER_ASSISTANT_LIVE_BASE_URL": server.base_url,
-                    },
-                    output_dir=LOCAL_COMPATIBLE_ARTIFACT_DIR,
-                )
+            with mysql8_database_url("live_react_local_provider") as database_url:
+                with self.subTest("full local compatible provider gate"):
+                    result = run_customer_assistant_live_react_acceptance(
+                        env={
+                            "HIFY_RUN_CUSTOMER_ASSISTANT_LIVE_REACT_ACCEPTANCE": "1",
+                            "HIFY_CUSTOMER_ASSISTANT_LIVE_API_KEY": LOCAL_COMPATIBLE_API_KEY,
+                            "HIFY_CUSTOMER_ASSISTANT_LIVE_BASE_URL": server.base_url,
+                            "HIFY_DATABASE_URL": database_url,
+                        },
+                        output_dir=LOCAL_COMPATIBLE_ARTIFACT_DIR,
+                    )
 
             artifact = Path(result.evidence_path or "")
             content = artifact.read_text(encoding="utf-8")
@@ -219,57 +218,50 @@ def _provider_model_config_db(
     api_key: str,
     provider_type: str = "OPENAI_COMPATIBLE",
 ):
-    tmp_dir = tempfile.TemporaryDirectory()
-    engine = create_engine(f"sqlite:///{Path(tmp_dir.name) / 'provider-config.db'}", future=True)
-    register_baseline_tables()
-    Base.metadata.create_all(
-        bind=engine,
-        tables=[
-            Base.metadata.tables["provider"],
-            Base.metadata.tables["model_config"],
-            Base.metadata.tables["provider_health"],
-        ],
-    )
-    factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
-    session = factory()
-    now = datetime.now()
-    try:
-        provider = session.execute(
-            Base.metadata.tables["provider"].insert().values(
-                name="Local Provider Config",
-                type=provider_type,
-                base_url=base_url,
-                auth_config={"api_key": api_key},
-                description="provider config bridge test",
-                enabled=True,
-                deleted=False,
-                created_at=now,
-                updated_at=now,
-            )
+    with Mysql8TestDatabase("live_react_provider_config") as database:
+        register_baseline_tables()
+        database.create_all(
+            tables=[
+                Base.metadata.tables["provider"],
+                Base.metadata.tables["model_config"],
+                Base.metadata.tables["provider_health"],
+            ]
         )
-        provider_id = int(provider.inserted_primary_key[0])
-        model_config = session.execute(
-            Base.metadata.tables["model_config"].insert().values(
-                provider_id=provider_id,
-                name="Provider Config Model",
-                model_id="local/provider-config-model",
-                context_size=4096,
-                extra_params={},
-                enabled=True,
-                deleted=False,
-                created_at=now,
-                updated_at=now,
+        now = datetime.now()
+        with database.session() as session:
+            provider = session.execute(
+                Base.metadata.tables["provider"].insert().values(
+                    name="Local Provider Config",
+                    type=provider_type,
+                    base_url=base_url,
+                    auth_config={"api_key": api_key},
+                    description="provider config bridge test",
+                    enabled=True,
+                    deleted=False,
+                    created_at=now,
+                    updated_at=now,
+                )
             )
-        )
-        session.commit()
+            provider_id = int(provider.inserted_primary_key[0])
+            model_config = session.execute(
+                Base.metadata.tables["model_config"].insert().values(
+                    provider_id=provider_id,
+                    name="Provider Config Model",
+                    model_id="local/provider-config-model",
+                    context_size=4096,
+                    extra_params={},
+                    enabled=True,
+                    deleted=False,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+            session.commit()
+            model_config_id = int(model_config.inserted_primary_key[0])
         yield _ProviderModelConfig(
-            database_url=str(engine.url),
-            model_config_id=int(model_config.inserted_primary_key[0]),
+            database_url=database.database_url,
+            model_config_id=model_config_id,
         )
-    finally:
-        session.close()
-        engine.dispose()
-        tmp_dir.cleanup()
 
 
 def _provider_config_failure(*, provider_type: str, base_url: str) -> _ProviderConfigFailure:

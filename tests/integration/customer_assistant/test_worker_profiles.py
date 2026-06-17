@@ -1,16 +1,14 @@
 import json
-import tempfile
 import unittest
 from collections.abc import Generator
-from pathlib import Path
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.core.database import Base, get_session
+from app.core.database import get_session
 from app.main import app
+from tests.support.mysql import mysql8_unittest_database
 
 
 def _host_headers(tenant_id: str, org_id: str | None = None) -> dict[str, str]:
@@ -27,11 +25,9 @@ def _host_headers(tenant_id: str, org_id: str | None = None) -> dict[str, str]:
 
 class CustomerAssistantWorkerProfileApiTest(unittest.TestCase):
     def setUp(self) -> None:
-        self._tmp_dir = tempfile.TemporaryDirectory()
-        db_path = Path(self._tmp_dir.name) / "customer_assistant_worker_profiles.db"
-        self._engine = create_engine(f"sqlite:///{db_path}", future=True)
-        Base.metadata.create_all(bind=self._engine)
-        self._factory = sessionmaker(bind=self._engine, autoflush=False, autocommit=False, expire_on_commit=False)
+        self._database = mysql8_unittest_database(self, "customer_assistant_worker_profiles")
+        self._engine = self._database.engine
+        self._factory = self._database.session_factory
         app.dependency_overrides[get_session] = self._session_override
         app.dependency_overrides[get_settings] = lambda: Settings(
             runtime_lab_sop_chatflow_ids=None,

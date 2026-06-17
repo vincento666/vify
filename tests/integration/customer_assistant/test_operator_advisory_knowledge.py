@@ -1,14 +1,17 @@
-import tempfile
 import unittest
-from pathlib import Path
+from collections.abc import Iterator
+from contextlib import contextmanager
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
-from app.core.database import Base
 from app.modules.customer_assistant.domain.service import CustomerAssistantService
 from app.modules.customer_assistant.infra.repository import CustomerAssistantRepository
+from app.modules.customer_assistant.infra.schema import (
+    customer_assistant_tables,
+    register_customer_assistant_tables,
+)
 from app.modules.demo.mvp_seed import seed_mvp_demo
+from tests.support.mysql import mysql8_session
 
 
 class CustomerAssistantOperatorAdvisoryKnowledgeTest(unittest.TestCase):
@@ -37,12 +40,11 @@ class CustomerAssistantOperatorAdvisoryKnowledgeTest(unittest.TestCase):
         self.assertGreaterEqual(packed["payload"]["evidenceCount"], 1)
 
 
-def _seeded_session() -> Session:
-    tmp_dir = tempfile.TemporaryDirectory()
-    db_path = Path(tmp_dir.name) / "customer_assistant_operator_advisory_knowledge.db"
-    engine = create_engine(f"sqlite:///{db_path}", future=True)
-    Base.metadata.create_all(bind=engine)
-    factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
-    session = factory()
-    session.info["_tmp_dir"] = tmp_dir
-    return session
+@contextmanager
+def _seeded_session() -> Iterator[Session]:
+    with mysql8_session(
+        "customer_assistant_operator_advisory_knowledge",
+        tables=customer_assistant_tables(),
+        register=register_customer_assistant_tables,
+    ) as session:
+        yield session

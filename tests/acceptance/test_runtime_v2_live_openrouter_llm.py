@@ -10,6 +10,7 @@ from typing import Any
 from fastapi.testclient import TestClient
 
 from app.core.database import Base, get_session_factory, initialise_database
+from app.core.database_url_policy import assert_mysql8_database_url
 from app.core.db_write import insert_and_get_id
 from app.core.schema import register_baseline_tables
 from app.main import app
@@ -32,8 +33,9 @@ class RuntimeV2LiveOpenRouterLlmAcceptanceTest(unittest.TestCase):
         self.base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/")
         self.model = os.getenv("OPENROUTER_MODEL", DEFAULT_MODEL)
         self.database_url = os.getenv("HIFY_DATABASE_URL", "")
-        if not self.database_url or self.database_url == "sqlite:///./hify.db":
-            self.skipTest("Set HIFY_DATABASE_URL to a disposable database before running this live gate.")
+        if not self.database_url:
+            self.skipTest("Set HIFY_DATABASE_URL to a disposable MySQL8 database before running this live gate.")
+        assert_mysql8_database_url(self.database_url)
         initialise_database()
         register_baseline_tables()
 

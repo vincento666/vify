@@ -479,9 +479,11 @@ class CustomerAssistantService:
         }
 
     def get_worker_run(self, worker_run_id: str) -> dict[str, Any]:
+        self._repository.refresh_external_writes()
         return _format_worker_run(self._get_worker_run_row(worker_run_id))
 
     def get_worker_result(self, worker_run_id: str) -> dict[str, Any]:
+        self._repository.refresh_external_writes()
         row = self._get_worker_run_row(worker_run_id)
         return {
             **_format_worker_run(row),
@@ -490,11 +492,13 @@ class CustomerAssistantService:
         }
 
     def list_worker_events(self, worker_run_id: str) -> dict[str, Any]:
+        self._repository.refresh_external_writes()
         row = self._get_worker_run_row(worker_run_id)
         events = [_format_worker_event(event) for event in self._repository.list_worker_events(int(row["id"]))]
         return {"list": events, "total": len(events)}
 
     def list_worker_events_after(self, worker_run_id: str, after_sequence: int) -> list[dict[str, Any]]:
+        self._repository.refresh_external_writes()
         row = self._get_worker_run_row(worker_run_id)
         return [
             _format_worker_event(event)
@@ -981,6 +985,7 @@ class CustomerAssistantService:
 
     def list_events_after(self, session_id: int, after_sequence: int) -> list[dict[str, Any]]:
         self._ensure_session(session_id)
+        self._repository.refresh_external_writes()
         rows = self._repository.list_events_after(session_id, after_sequence)
         return [_format_event(row) for row in rows]
 
@@ -989,6 +994,7 @@ class CustomerAssistantService:
 
     def refresh_worker_results(self, session_id: int) -> dict[str, Any]:
         self._ensure_session(session_id)
+        self._repository.refresh_external_writes()
         consumed = self._consume_completed_async_worker_results(session_id, actor="system")
         rows = self._repository.list_tasks(session_id)
         return {

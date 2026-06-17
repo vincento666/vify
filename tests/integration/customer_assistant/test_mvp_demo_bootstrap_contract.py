@@ -5,9 +5,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app.core.config import get_settings
-from app.core.database import get_session_factory, initialise_database
+from app.core.database import get_session_factory
 from app.modules.demo.mvp_seed import MVP_DEMO_HOST_CONTEXT, seed_mvp_demo, verify_mvp_demo_topology
+from tests.support.mysql import configured_mysql8_database_url, mysql8_app_database, mysql8_database_url
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -20,16 +20,14 @@ EXPECTED_STORIES = {
 
 class MvpDemoBootstrapContractTest(unittest.TestCase):
     def test_seed_command_runs_verification_and_writes_secret_free_env(self) -> None:
-        previous_url = os.environ.get("HIFY_DATABASE_URL")
-        with tempfile.TemporaryDirectory() as tmp:
-            try:
-                db_path = Path(tmp) / "mvp-demo.db"
+        with mysql8_database_url("mvp_demo_bootstrap_script") as database_url:
+            with tempfile.TemporaryDirectory() as tmp:
                 env_path = Path(tmp) / ".env.demo"
                 env_path.write_text("OPENROUTER_API_KEY=sk-should-not-survive\nEXISTING=value\n", encoding="utf-8")
                 env = {
                     **os.environ,
                     "PYTHONPATH": str(PROJECT_ROOT),
-                    "HIFY_DATABASE_URL": f"sqlite:///{db_path}",
+                    "HIFY_DATABASE_URL": database_url,
                     "HIFY_MVP_DEMO_ENV_PATH": str(env_path),
                 }
 
@@ -52,9 +50,9 @@ class MvpDemoBootstrapContractTest(unittest.TestCase):
                 self.assertNotIn("sk-", env_text)
                 self.assertIn("HIFY_MVP_DEMO_HOST_CONTEXT_JSON=", env_text)
 
-                _reset_database_url(env["HIFY_DATABASE_URL"])
-                with get_session_factory()() as session:
-                    report = verify_mvp_demo_topology(session, env_text=env_text)
+                with configured_mysql8_database_url(database_url):
+                    with get_session_factory()() as session:
+                        report = verify_mvp_demo_topology(session, env_text=env_text)
                 self.assertTrue(report["ok"], report)
                 self.assertEqual(set(report["storyIds"]), EXPECTED_STORIES)
                 self.assertEqual(report["storyCoverage"]["covered"], 3)
@@ -63,8 +61,6 @@ class MvpDemoBootstrapContractTest(unittest.TestCase):
                 self.assertTrue(report["security"]["secretFreeEnv"])
                 self.assertEqual(report["hostContext"]["tenantId"], MVP_DEMO_HOST_CONTEXT["tenantId"])
                 self.assertTrue(report["hostContext"]["envConfigured"])
-            finally:
-                _restore_database_url(previous_url)
 
     def test_reusable_verifier_reports_story_task_action_and_knowledge_contract(self) -> None:
         with _temp_database():
@@ -89,24 +85,8 @@ class MvpDemoBootstrapContractTest(unittest.TestCase):
 
 class _temp_database:
     def __enter__(self) -> None:
-        self._tmp = tempfile.TemporaryDirectory()
-        self._previous_url = os.environ.get("HIFY_DATABASE_URL")
-        _reset_database_url(f"sqlite:///{Path(self._tmp.name) / 'seed.db'}")
+        self._database = mysql8_app_database("mvp_demo_bootstrap")
+        self._database.__enter__()
 
     def __exit__(self, *_exc: object) -> None:
-        _restore_database_url(self._previous_url)
-        self._tmp.cleanup()
-
-
-def _reset_database_url(url: str) -> None:
-    os.environ["HIFY_DATABASE_URL"] = url
-    get_settings.cache_clear()
-    initialise_database()
-
-
-def _restore_database_url(previous_url: str | None) -> None:
-    if previous_url is None:
-        os.environ.pop("HIFY_DATABASE_URL", None)
-    else:
-        os.environ["HIFY_DATABASE_URL"] = previous_url
-    get_settings.cache_clear()
+        self._database.__exit__(*_exc)

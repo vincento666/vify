@@ -29,6 +29,8 @@ class PolicyGate:
         candidates: Sequence[RouteCandidate],
         active_task: Mapping[str, Any] | None,
         suspended_count: int,
+        *,
+        allow_strong_sop_start: bool = False,
     ) -> RouteDecision | None:
         if not candidates:
             return None
@@ -36,6 +38,20 @@ class PolicyGate:
         top = ordered[0]
         if _candidate_type(top) == CandidateType.HANDOFF_TO_HUMAN and top.score >= self._strong_accept_threshold:
             return _handoff_decision(top, "Explicit handoff candidate accepted before classifier")
+        if (
+            allow_strong_sop_start
+            and active_task is None
+            and _candidate_type(top) == CandidateType.SOP_INTENT
+            and top.score >= self._strong_accept_threshold
+            and not top.requires_classifier
+            and not _has_conflicting_candidate(top, ordered)
+        ):
+            return RouteDecision(
+                action="START_SOP",
+                target_sop_id=top.target_id,
+                matched_keyword=_matched_term(top),
+                reason=f"Strong explicit SOP candidate accepted before classifier: {top.candidate_id}",
+            )
         return None
 
     def classifier_decision(
@@ -190,6 +206,18 @@ def _active_collection_candidate(candidates: Sequence[RouteCandidate]) -> RouteC
             if "collection_detail" in candidate.matched_terms:
                 return candidate
     return None
+
+
+def _has_conflicting_candidate(
+    top: RouteCandidate,
+    ordered: Sequence[RouteCandidate],
+) -> bool:
+    for candidate in ordered[1:]:
+        if _candidate_type(candidate) != CandidateType.SOP_INTENT:
+            return True
+        if candidate.target_id != top.target_id and candidate.score >= 0.75:
+            return True
+    return False
 
 
 def _candidate_type(candidate: RouteCandidate) -> CandidateType:

@@ -1,14 +1,13 @@
+from contextlib import contextmanager
 import json
 import unittest
-import tempfile
+from collections.abc import Iterator
 import threading
 import time
-from pathlib import Path
 
-from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.core.database import Base
+from tests.support.mysql import mysql8_session
 from app.modules.customer_assistant.domain.ledger import CustomerAssistantLedger
 from app.modules.customer_assistant.domain.models import TaskItem, TaskStatus, WorkerResult
 from app.modules.customer_assistant.domain.scheduler import LocalWorkerScheduler
@@ -150,11 +149,12 @@ class CustomerAssistantWorkersTest(unittest.TestCase):
 
             result = service.handle_turn(int(assistant_session["id"]), "行李额度是多少", "timeout-1")
             refs = result["taskSummaries"][0]["workerAsyncRefs"]
-            worker_run = service.get_worker_run(refs["workerRunId"])
+            worker_run = _wait_for_worker_run_status(service, refs["workerRunId"], {"TIMED_OUT"})
+            refreshed = service.refresh_worker_results(int(assistant_session["id"]))
             worker_events = service.list_worker_events(refs["workerRunId"])["list"]
 
             self.assertEqual(worker_run["status"], "TIMED_OUT")
-            self.assertEqual(result["taskSummaries"][0]["status"], "FAILED")
+            self.assertEqual(refreshed["tasks"][0]["status"], "FAILED")
             event_types = [event["type"] for event in worker_events]
             self.assertIn("worker_timeout_started", event_types)
             self.assertIn("worker_timed_out", event_types)
@@ -180,17 +180,21 @@ class CustomerAssistantWorkersTest(unittest.TestCase):
             result = service.handle_turn(int(assistant_session["id"]), "我要退票", "timeout-chatflow-1")
             summary = result["taskSummaries"][0]
             refs = summary["workerAsyncRefs"]
+            _wait_for_worker_run_status(service, refs["workerRunId"], {"TIMED_OUT"})
+            refreshed = service.refresh_worker_results(int(assistant_session["id"]))
+            failed_task = refreshed["tasks"][0]
             worker_events = service.list_worker_events(refs["workerRunId"])["list"]
 
-            self.assertEqual(summary["status"], "FAILED")
-            self.assertEqual(summary["lastResult"]["evidence"]["chatflowCancellation"]["supported"], False)
+            self.assertIn(summary["status"], {"RUNNING", "FAILED"})
+            self.assertEqual(failed_task["status"], "FAILED")
+            self.assertEqual(failed_task["lastResult"]["evidence"]["chatflowCancellation"]["supported"], False)
             event_types = [event["type"] for event in worker_events]
             self.assertIn("chatflow_v2_cancel_unsupported", event_types)
 
     def test_async_worker_returns_pending_then_refresh_consumes_completed_result(self) -> None:
         with _session() as session:
             factory = sessionmaker(bind=session.get_bind(), autoflush=False, autocommit=False, expire_on_commit=False)
-            workers = {"stub_qa": _SlowWorker(sleep_seconds=0.12)}
+            workers = {"stub_qa": _SlowWorker(sleep_seconds=1.0)}
             service = CustomerAssistantService(
                 CustomerAssistantRepository(session),
                 scheduler=LocalWorkerScheduler(workers),
@@ -198,7 +202,7 @@ class CustomerAssistantWorkersTest(unittest.TestCase):
                     workers=workers,
                     session_factory=factory,
                     wait_deadline_seconds=0.01,
-                    task_timeout_seconds=1.0,
+                    task_timeout_seconds=3.0,
                 ),
                 worker_profiles=_legacy_stub_baggage_profiles(),
             )
@@ -210,10 +214,10 @@ class CustomerAssistantWorkersTest(unittest.TestCase):
             refs = result["taskSummaries"][0]["workerAsyncRefs"]
             worker_run = service.get_worker_run(refs["workerRunId"])
 
-            time.sleep(0.18)
+            time.sleep(1.1)
             refreshed = service.refresh_worker_results(int(assistant_session["id"]))
 
-            self.assertLess(elapsed, 0.08)
+            self.assertLess(elapsed, 0.9)
             self.assertEqual(result["taskSummaries"][0]["status"], "RUNNING")
             self.assertEqual(worker_run["status"], "RUNNING")
             self.assertIn("required worker evidence is pending", " ".join(result["warnings"]))
@@ -354,16 +358,27 @@ def _legacy_stub_baggage_profiles() -> CustomerAssistantWorkerProfileCatalog:
     )
 
 
-def _session() -> Session:
-    tmp_dir = tempfile.TemporaryDirectory()
-    db_path = Path(tmp_dir.name) / "customer_assistant_workers.db"
-    engine = create_engine(f"sqlite:///{db_path}", future=True)
-    register_customer_assistant_tables()
-    Base.metadata.create_all(bind=engine, tables=customer_assistant_tables())
-    factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
-    session = factory()
-    session.info["_tmp_dir"] = tmp_dir
-    return session
+def _wait_for_worker_run_status(
+    service: CustomerAssistantService,
+    worker_run_id: str,
+    expected_statuses: set[str],
+    *,
+    timeout_seconds: float = 2.0,
+) -> dict[str, object]:
+    deadline = time.monotonic() + timeout_seconds
+    last: dict[str, object] | None = None
+    while time.monotonic() < deadline:
+        last = service.get_worker_run(worker_run_id)
+        if str(last["status"]) in expected_statuses:
+            return last
+        time.sleep(0.02)
+    raise AssertionError(f"worker run {worker_run_id} did not reach {expected_statuses}; last={last}")
+
+
+@contextmanager
+def _session() -> Iterator[Session]:
+    with mysql8_session("customer_assistant_workers", tables=customer_assistant_tables(), register=register_customer_assistant_tables) as session:
+        yield session
 
 
 class _SlowWorker:

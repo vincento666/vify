@@ -7,6 +7,7 @@ from sqlalchemy.engine.reflection import Inspector
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.core.config import get_settings
+from app.core.database_url_policy import assert_mysql8_connection, assert_mysql8_database_url
 
 
 NAMING_CONVENTION = {
@@ -23,7 +24,10 @@ class Base(DeclarativeBase):
 
 
 def make_engine(database_url: str, echo: bool = False) -> Engine:
-    return create_engine(database_url, echo=echo, future=True)
+    assert_mysql8_database_url(database_url)
+    engine = create_engine(database_url, echo=echo, future=True)
+    assert_mysql8_connection(engine)
+    return engine
 
 
 def make_session_factory(engine: Engine) -> sessionmaker[Session]:

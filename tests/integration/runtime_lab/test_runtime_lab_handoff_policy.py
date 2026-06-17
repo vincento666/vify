@@ -1,11 +1,10 @@
-import tempfile
+from contextlib import contextmanager
 import unittest
-from pathlib import Path
+from collections.abc import Iterator
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
-from app.core.database import Base
+from tests.support.mysql import mysql8_session
 from app.modules.runtime_lab.domain.service import RuntimeLabService
 from app.modules.runtime_lab.infra.repository import RuntimeLabRepository
 from app.modules.runtime_lab.infra.schema import register_runtime_lab_tables
@@ -79,23 +78,10 @@ class RuntimeLabHandoffPolicyTest(unittest.TestCase):
             self.assertEqual(ticket_payload["transcript_snapshot"][-1]["content"], "我要人工客服")
 
 
-def _session() -> Session:
-    tmp_dir = tempfile.TemporaryDirectory()
-    db_path = Path(tmp_dir.name) / "runtime_lab_handoff_policy.db"
-    engine = create_engine(f"sqlite:///{db_path}", future=True)
-    register_runtime_lab_tables()
-    tables = [
-        Base.metadata.tables["runtime_lab_session"],
-        Base.metadata.tables["runtime_lab_task"],
-        Base.metadata.tables["runtime_lab_checkpoint"],
-        Base.metadata.tables["runtime_lab_event"],
-        Base.metadata.tables["runtime_lab_command"],
-    ]
-    Base.metadata.create_all(bind=engine, tables=tables)
-    factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
-    session = factory()
-    session.info["_tmp_dir"] = tmp_dir
-    return session
+@contextmanager
+def _session() -> Iterator[Session]:
+    with mysql8_session("runtime_lab_handoff_policy", register=register_runtime_lab_tables) as session:
+        yield session
 
 
 class _RecordingHandoffService:

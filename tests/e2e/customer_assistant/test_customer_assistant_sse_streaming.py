@@ -1,20 +1,18 @@
 import json
 import queue
-import tempfile
 import threading
 import time
 import unittest
 from collections.abc import Generator
-from pathlib import Path
 
 from fastapi import Depends
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.core.database import Base, get_session
+from app.core.database import get_session
 from app.main import app
+from tests.support.mysql import mysql8_unittest_database
 from app.modules.customer_assistant.domain.models import TaskItem, TaskStatus, WorkerResult
 from app.modules.customer_assistant.domain.scheduler import LocalWorkerScheduler
 from app.modules.customer_assistant.domain.service import CustomerAssistantService
@@ -28,16 +26,9 @@ from app.modules.customer_assistant.web.router import get_customer_assistant_ser
 
 class CustomerAssistantSseStreamingE2eTest(unittest.TestCase):
     def setUp(self) -> None:
-        self._tmp_dir = tempfile.TemporaryDirectory()
-        db_path = Path(self._tmp_dir.name) / "customer_assistant_sse.db"
-        self._engine = create_engine(
-            f"sqlite:///{db_path}",
-            future=True,
-            connect_args={"check_same_thread": False},
-        )
-        register_customer_assistant_tables()
-        Base.metadata.create_all(bind=self._engine, tables=customer_assistant_tables())
-        self._factory = sessionmaker(bind=self._engine, autoflush=False, autocommit=False, expire_on_commit=False)
+        self._database = mysql8_unittest_database(self, "customer_assistant_sse", tables=customer_assistant_tables(), register=register_customer_assistant_tables)
+        self._engine = self._database.engine
+        self._factory = self._database.session_factory
         self._worker = _BlockingWorker()
         app.dependency_overrides[get_session] = self._session_override
         app.dependency_overrides[get_settings] = lambda: Settings(runtime_lab_sop_chatflow_ids=None)

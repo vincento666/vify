@@ -1,15 +1,13 @@
-import tempfile
 import unittest
 from collections.abc import Generator
-from pathlib import Path
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.core.database import Base, get_session
+from app.core.database import get_session
 from app.main import app
+from tests.support.mysql import mysql8_unittest_database
 from app.modules.customer_assistant.infra.schema import (
     customer_assistant_tables,
     register_customer_assistant_tables,
@@ -18,12 +16,9 @@ from app.modules.customer_assistant.infra.schema import (
 
 class CustomerAssistantRuntimeE2ETest(unittest.TestCase):
     def setUp(self) -> None:
-        self._tmp_dir = tempfile.TemporaryDirectory()
-        db_path = Path(self._tmp_dir.name) / "customer_assistant_runtime_e2e.db"
-        self._engine = create_engine(f"sqlite:///{db_path}", future=True)
-        register_customer_assistant_tables()
-        Base.metadata.create_all(bind=self._engine, tables=customer_assistant_tables())
-        self._factory = sessionmaker(bind=self._engine, autoflush=False, autocommit=False, expire_on_commit=False)
+        self._database = mysql8_unittest_database(self, "customer_assistant_runtime_e2e", tables=customer_assistant_tables(), register=register_customer_assistant_tables)
+        self._engine = self._database.engine
+        self._factory = self._database.session_factory
         app.dependency_overrides[get_session] = self._session_override
         app.dependency_overrides[get_settings] = lambda: Settings(runtime_lab_sop_chatflow_ids=None)
 

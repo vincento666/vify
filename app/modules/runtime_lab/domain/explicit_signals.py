@@ -201,6 +201,13 @@ def _is_embedded_business_negation(text: str) -> bool:
 def _looks_like_airport_facility_question(text: str) -> bool:
     facility_terms = ("机场", "候机楼", "柜台", "停车", "酒店", "打印店", "寄存", "WiFi", "wifi", "大巴", "贵宾楼")
     question_terms = ("吗", "么", "怎么", "哪里", "几点", "收费", "旁边", "附近", "有没有")
+    transaction_terms = (
+        "机票", "航班", "航班状态", "航班动态", "起飞时间", "到达时间", "登机口", "延误",
+        "改签", "改时间", "改日期", "退票", "票款", "出票", "订票", "买票",
+        "行李额", "托运", "超重", "登机牌", "选座", "发票",
+    )
+    if any(term in text for term in transaction_terms):
+        return False
     return any(term in text for term in facility_terms) and any(term in text for term in question_terms)
 
 

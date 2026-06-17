@@ -307,6 +307,9 @@ class RuntimeLabRepository:
             return
         Base.metadata.create_all(bind=bind, tables=runtime_lab_tables())
         self._ensure_checkpoint_scoped_variables_column()
+        if self._session.in_transaction():
+            self._session.commit()
+        self._session.expire_all()
 
     def _ensure_checkpoint_scoped_variables_column(self) -> None:
         bind = self._session.get_bind()

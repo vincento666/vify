@@ -1,12 +1,11 @@
-import tempfile
+from contextlib import contextmanager
 import unittest
-from pathlib import Path
+from collections.abc import Iterator
 from unittest.mock import patch
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
-from app.core.database import Base
+from tests.support.mysql import mysql8_session
 from app.modules.customer_assistant.infra.repository import CustomerAssistantRepository
 from app.modules.customer_assistant.infra.schema import (
     customer_assistant_tables,
@@ -160,13 +159,7 @@ class CustomerAssistantRepositoryTest(unittest.TestCase):
         self.assertEqual(current["status"], "CONFIRMED")
 
 
-def _session() -> Session:
-    tmp_dir = tempfile.TemporaryDirectory()
-    db_path = Path(tmp_dir.name) / "customer_assistant.db"
-    engine = create_engine(f"sqlite:///{db_path}", future=True)
-    register_customer_assistant_tables()
-    Base.metadata.create_all(bind=engine, tables=customer_assistant_tables())
-    factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
-    session = factory()
-    session.info["_tmp_dir"] = tmp_dir
-    return session
+@contextmanager
+def _session() -> Iterator[Session]:
+    with mysql8_session("customer_assistant", tables=customer_assistant_tables(), register=register_customer_assistant_tables) as session:
+        yield session

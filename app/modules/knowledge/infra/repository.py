@@ -222,7 +222,7 @@ class KnowledgeBaseRepository:
         if len(chunks) != len(embeddings):
             raise ValueError("chunks and embeddings length mismatch")
         if not self._uses_relational_vector_tables():
-            return [{"chunk_id": chunk.id, "embedding_model": model_name} for chunk in chunks]
+            return []
         chunk_ids = [chunk.id for chunk in chunks]
         if not chunk_ids:
             return []
@@ -286,7 +286,7 @@ class KnowledgeBaseRepository:
         if len(faqs) != len(embeddings):
             raise ValueError("faqs and embeddings length mismatch")
         if not self._uses_relational_vector_tables():
-            return [{"faq_id": int(faq["id"]), "embedding_model": model_name} for faq in faqs]
+            return []
         faq_ids = [int(faq["id"]) for faq in faqs]
         if not faq_ids:
             return []

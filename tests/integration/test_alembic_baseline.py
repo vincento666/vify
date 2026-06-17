@@ -1,10 +1,9 @@
-import tempfile
 import unittest
-from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, inspect
+from tests.support.mysql import configured_mysql8_database_url, mysql8_database_url
 
 
 EXPECTED_TABLES = {
@@ -28,19 +27,21 @@ EXPECTED_TABLES = {
 
 class AlembicBaselineTest(unittest.TestCase):
     def test_upgrade_head_creates_baseline_schema(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            db_path = Path(tmp_dir) / "hify.db"
-            database_url = f"sqlite:///{db_path}"
+        with mysql8_database_url("alembic_baseline") as database_url:
             config = Config("alembic.ini")
             config.set_main_option("script_location", "alembic")
             config.set_main_option("sqlalchemy.url", database_url)
 
-            command.upgrade(config, "head")
+            with configured_mysql8_database_url(database_url):
+                command.upgrade(config, "head")
 
             engine = create_engine(database_url)
-            inspector = inspect(engine)
-            table_names = set(inspector.get_table_names())
-            agent_columns = {column["name"] for column in inspector.get_columns("agent")}
+            try:
+                inspector = inspect(engine)
+                table_names = set(inspector.get_table_names())
+                agent_columns = {column["name"] for column in inspector.get_columns("agent")}
+            finally:
+                engine.dispose()
 
             self.assertTrue(EXPECTED_TABLES.issubset(table_names))
             self.assertIn("knowledge_base_id", agent_columns)

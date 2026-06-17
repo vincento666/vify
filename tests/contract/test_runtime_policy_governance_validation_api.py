@@ -1,34 +1,25 @@
-import tempfile
 import unittest
 from collections.abc import Generator
 from copy import deepcopy
 from datetime import datetime
-from pathlib import Path
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.core.database import Base, get_session
+from app.core.db_write import insert_and_get_id
 from app.main import app
+from tests.support.mysql import mysql8_unittest_database
 from app.modules.runtime_policy.infra.schema import register_runtime_policy_tables
 from tests.contract.test_runtime_policy_profile_api import _profile_payload
 
 
 class RuntimePolicyGovernanceValidationApiContractTest(unittest.TestCase):
     def setUp(self) -> None:
-        self._tmp_dir = tempfile.TemporaryDirectory()
-        db_path = Path(self._tmp_dir.name) / "runtime_policy_governance.db"
-        self._engine = create_engine(f"sqlite:///{db_path}", future=True)
-        register_runtime_policy_tables()
-        Base.metadata.create_all(bind=self._engine)
-        self._factory = sessionmaker(
-            bind=self._engine,
-            autoflush=False,
-            autocommit=False,
-            expire_on_commit=False,
-        )
+        self._database = mysql8_unittest_database(self, "runtime_policy_governance", register=register_runtime_policy_tables)
+        self._engine = self._database.engine
+        self._factory = self._database.session_factory
         app.dependency_overrides[get_session] = self._session_override
         app.dependency_overrides[get_settings] = lambda: Settings(_env_file=None)
 
@@ -97,29 +88,28 @@ class RuntimePolicyGovernanceValidationApiContractTest(unittest.TestCase):
         table = Base.metadata.tables["runtime_policy_profile"]
         now = datetime.now()
         with self._factory() as session:
-            result = session.execute(
-                table.insert()
-                .values(
-                    name=payload["name"],
-                    description=payload["description"],
-                    status=payload["status"],
-                    version=1,
-                    mode=payload["mode"],
-                    bindings=payload["bindings"],
-                    thresholds=payload["thresholds"],
-                    classifier=payload["classifier"],
-                    faq=payload["faq"],
-                    rag=payload["rag"],
-                    fallback_agent=payload["fallbackAgent"],
-                    handoff=payload["handoff"],
-                    audit=payload["audit"],
-                    deleted=False,
-                    created_at=now,
-                    updated_at=now,
-                )
-                .returning(table.c.id)
+            profile_id = insert_and_get_id(
+                session,
+                table,
+                {
+                    "name": payload["name"],
+                    "description": payload["description"],
+                    "status": payload["status"],
+                    "version": 1,
+                    "mode": payload["mode"],
+                    "bindings": payload["bindings"],
+                    "thresholds": payload["thresholds"],
+                    "classifier": payload["classifier"],
+                    "faq": payload["faq"],
+                    "rag": payload["rag"],
+                    "fallback_agent": payload["fallbackAgent"],
+                    "handoff": payload["handoff"],
+                    "audit": payload["audit"],
+                    "deleted": False,
+                    "created_at": now,
+                    "updated_at": now,
+                },
             )
-            profile_id = int(result.scalar_one())
             session.commit()
             return profile_id
 

@@ -191,7 +191,7 @@ Demo rollback:
 ```text
 unset MySQL HIFY_DATABASE_URL
 unset HIFY_VECTOR_STORE=weaviate
-return to sqlite:///./hify.db
+return to the default MySQL8 profile
 ```
 
 Implementation must keep rollback simple by isolating dialect logic in helpers

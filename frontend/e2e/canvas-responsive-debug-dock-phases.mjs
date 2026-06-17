@@ -1,8 +1,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { chromium } from 'playwright'
+import { resolveFrontendServer } from './support/dev-server.mjs'
 
-const baseUrl = process.env.HIFY_E2E_BASE_URL || process.env.HIFY_FRONTEND_URL || 'http://127.0.0.1:5173'
 const screenshotDir = process.env.HIFY_E2E_SCREENSHOT_DIR || ''
 const measurementsPath = process.env.HIFY_E2E_MEASUREMENTS || ''
 
@@ -30,7 +30,7 @@ function visibleWidth(rect, viewportWidth) {
 
 async function openCanvasSurfaces(page, path) {
   await page.setViewportSize({ width: 1536, height: 900 })
-  await page.goto(`${baseUrl}${path}`, { waitUntil: 'networkidle' })
+  await page.goto(`${server.baseUrl}${path}`, { waitUntil: 'networkidle' })
   await page.locator('.vue-flow__node[data-id="end"]').click()
   await page.getByTestId('node-config-panel').waitFor({ state: 'visible', timeout: 10000 })
   await page.locator('.canvas-actions').getByRole('button', { name: '调试详情', exact: true }).click()
@@ -67,6 +67,7 @@ async function measure(page) {
   })
 }
 
+const server = await resolveFrontendServer()
 const browser = await chromium.launch()
 const allMeasurements = []
 
@@ -128,6 +129,7 @@ try {
   }
 } finally {
   await browser.close()
+  await server.close()
 }
 
 if (measurementsPath) {
@@ -135,5 +137,5 @@ if (measurementsPath) {
   writeFileSync(measurementsPath, `${JSON.stringify(allMeasurements, null, 2)}\n`)
 }
 
-console.log(JSON.stringify({ baseUrl, measurements: allMeasurements }, null, 2))
+console.log(JSON.stringify({ baseUrl: server.baseUrl, measurements: allMeasurements }, null, 2))
 console.log('PASS canvas responsive debug dock phases e2e')

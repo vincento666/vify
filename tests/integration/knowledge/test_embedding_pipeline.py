@@ -39,6 +39,9 @@ class EmbeddingPipelineIntegrationTest(unittest.TestCase):
         self.assertEqual(2, detail["chunkCount"])
 
         rows = _list_embeddings(document["id"])
+        if not _has_durable_vector_backend():
+            self.assertEqual([], rows)
+            return
         self.assertEqual(2, len(rows))
         self.assertEqual(["fake-local-hash-v1", "fake-local-hash-v1"], [row["embedding_model"] for row in rows])
         self.assertEqual([DEFAULT_EMBEDDING_DIMENSIONS, DEFAULT_EMBEDDING_DIMENSIONS], [row["dimension"] for row in rows])
@@ -113,6 +116,11 @@ def _list_weaviate_embeddings(document_id: int) -> list[dict[str, object]]:
         }
         for row in rows
     ]
+
+
+def _has_durable_vector_backend() -> bool:
+    with get_session_factory()() as session:
+        return inspect(session.get_bind()).has_table("document_embedding") or bool(os.getenv("HIFY_WEAVIATE_URL"))
 
 
 if __name__ == "__main__":

@@ -34,6 +34,11 @@ class CustomerAssistantRepository:
     def session(self) -> Session:
         return self._session
 
+    def refresh_external_writes(self) -> None:
+        if self._session.in_transaction():
+            self._session.commit()
+        self._session.expire_all()
+
     def create_session(self, context: dict[str, Any] | None = None) -> dict[str, Any]:
         now = datetime.now()
         row = insert_and_fetch(

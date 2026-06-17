@@ -33,9 +33,9 @@ FastAPI backend
 Current DB behavior:
 
 ```text
-Default DB URL: sqlite:///./hify.db
-Alembic default URL: sqlite:///./hify.db
-Primary local test DB: SQLite
+Default DB URL: MySQL8
+Alembic default URL: MySQL8
+Primary local test DB: MySQL8
 Vector-capable relational path: PostgreSQL + pgvector
 MySQL dependency: PyMySQL already present
 Full MySQL8 compatibility: not implemented

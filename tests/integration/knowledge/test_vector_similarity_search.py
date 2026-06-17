@@ -1,4 +1,5 @@
 from datetime import datetime
+import os
 import time
 import unittest
 
@@ -21,6 +22,8 @@ class VectorSimilaritySearchTest(unittest.TestCase):
 
         with get_session_factory()() as session:
             repository = KnowledgeBaseRepository(session)
+            if not _has_vector_backend(repository):
+                self.skipTest("requires relational vector tables or HIFY_WEAVIATE_URL")
             service = KnowledgeBaseService(repository)
             document = service.upload_document(kb_id, "vectors.txt", content)
             service.process_document(document["id"], content)
@@ -53,6 +56,8 @@ class VectorSimilaritySearchTest(unittest.TestCase):
 
         with get_session_factory()() as session:
             repository = KnowledgeBaseRepository(session)
+            if not _has_vector_backend(repository):
+                self.skipTest("requires relational vector tables or HIFY_WEAVIATE_URL")
             service = KnowledgeBaseService(repository)
             document = service.upload_document(kb_id, "faq.txt", content)
             service.process_document(document["id"], content)
@@ -79,6 +84,8 @@ class VectorSimilaritySearchTest(unittest.TestCase):
 
         with get_session_factory()() as session:
             repository = KnowledgeBaseRepository(session)
+            if not _has_vector_backend(repository):
+                self.skipTest("requires relational vector tables or HIFY_WEAVIATE_URL")
             service = KnowledgeBaseService(repository)
             document = service.upload_document(kb_id, "low-confidence-faq.txt", content)
             service.process_document(document["id"], content)
@@ -164,6 +171,10 @@ def _search_similar_chunks(
 
 def _has_relational_vector_table(repository: KnowledgeBaseRepository) -> bool:
     return inspect(repository._session.get_bind()).has_table("document_embedding")  # noqa: SLF001
+
+
+def _has_vector_backend(repository: KnowledgeBaseRepository) -> bool:
+    return _has_relational_vector_table(repository) or bool(os.getenv("HIFY_WEAVIATE_URL"))
 
 
 if __name__ == "__main__":

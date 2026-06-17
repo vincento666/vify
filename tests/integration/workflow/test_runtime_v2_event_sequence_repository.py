@@ -1,12 +1,11 @@
-import tempfile
+from contextlib import contextmanager
 import unittest
-from pathlib import Path
+from collections.abc import Iterator
 from unittest.mock import patch
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
-from app.core.database import Base
+from tests.support.mysql import mysql8_session
 from app.core.schema import register_baseline_tables
 from app.modules.workflow.infra.chatflow_state_repository import ChatflowStateRepository
 
@@ -37,16 +36,10 @@ class RuntimeV2EventSequenceRepositoryTest(unittest.TestCase):
             self.assertEqual([event["sequence"] for event in repository.list_events(10, 20)], [1, 2])
 
 
-def _session() -> Session:
-    tmp_dir = tempfile.TemporaryDirectory()
-    db_path = Path(tmp_dir.name) / "runtime_v2_events.db"
-    engine = create_engine(f"sqlite:///{db_path}", future=True)
-    register_baseline_tables()
-    Base.metadata.create_all(bind=engine)
-    factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
-    session = factory()
-    session.info["_tmp_dir"] = tmp_dir
-    return session
+@contextmanager
+def _session() -> Iterator[Session]:
+    with mysql8_session("runtime_v2_events", register=register_baseline_tables) as session:
+        yield session
 
 
 if __name__ == "__main__":

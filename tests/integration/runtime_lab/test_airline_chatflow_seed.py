@@ -1,12 +1,10 @@
-import os
 import tempfile
 import unittest
 from pathlib import Path
 
 import sqlalchemy as sa
 
-from app.core.config import get_settings
-from app.core.database import Base, get_session_factory, initialise_database
+from app.core.database import Base, get_session_factory
 from app.modules.runtime_lab.infra.airline_chatflow_seed import (
     AIRLINE_CHATFLOW_SOP_IDS,
     seed_runtime_lab_airline_chatflows,
@@ -14,6 +12,7 @@ from app.modules.runtime_lab.infra.airline_chatflow_seed import (
     write_runtime_lab_env,
 )
 from app.modules.workflow.infra.repository import WorkflowRepository
+from tests.support.mysql import mysql8_app_database
 
 
 class RuntimeLabAirlineChatflowSeedTest(unittest.TestCase):
@@ -87,16 +86,8 @@ class RuntimeLabAirlineChatflowSeedTest(unittest.TestCase):
 
 class _temp_database:
     def __enter__(self) -> None:
-        self._tmp = tempfile.TemporaryDirectory()
-        self._previous_url = os.environ.get("HIFY_DATABASE_URL")
-        os.environ["HIFY_DATABASE_URL"] = f"sqlite:///{Path(self._tmp.name) / 'seed.db'}"
-        get_settings.cache_clear()
-        initialise_database()
+        self._database = mysql8_app_database("airline_chatflow_seed")
+        self._database.__enter__()
 
     def __exit__(self, *_exc: object) -> None:
-        if self._previous_url is None:
-            os.environ.pop("HIFY_DATABASE_URL", None)
-        else:
-            os.environ["HIFY_DATABASE_URL"] = self._previous_url
-        get_settings.cache_clear()
-        self._tmp.cleanup()
+        self._database.__exit__(*_exc)

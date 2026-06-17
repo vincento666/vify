@@ -86,7 +86,9 @@ def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeL
     rag_answer_gate = _runtime_lab_rag_answer_gate(settings, session, policy_snapshot)
     fallback_agent = build_fallback_agent_from_snapshot(policy_snapshot, session=session)
     agent_output_policy = build_agent_output_policy_from_snapshot(policy_snapshot)
-    policy_thresholds = dict(policy_snapshot.get("thresholds") or {})
+    policy_thresholds = (
+        dict(policy_snapshot.get("thresholds") or {}) if effective_policy.get("source") == "profile" else {}
+    )
     if not bindings:
         return RuntimeLabService(
             RuntimeLabRepository(session),

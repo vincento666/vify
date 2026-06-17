@@ -1,12 +1,15 @@
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.core.database_url_policy import DEFAULT_MYSQL8_DATABASE_URL, assert_mysql8_database_url
 
 
 class Settings(BaseSettings):
     app_name: str = "Hify"
     api_prefix: str = "/api/v1"
-    database_url: str = "sqlite:///./hify.db"
+    database_url: str = DEFAULT_MYSQL8_DATABASE_URL
     redis_url: str | None = None
     log_level: str = "INFO"
     persistence_mode: str = "local"
@@ -31,6 +34,11 @@ class Settings(BaseSettings):
     customer_assistant_worker_profiles_json: str | None = None
 
     model_config = SettingsConfigDict(env_prefix="HIFY_", env_file=".env", extra="ignore")
+
+    @model_validator(mode="after")
+    def validate_database_url(self) -> "Settings":
+        assert_mysql8_database_url(self.database_url)
+        return self
 
 
 @lru_cache
