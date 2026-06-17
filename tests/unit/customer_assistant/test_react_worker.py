@@ -131,6 +131,28 @@ class CustomerAssistantReactWorkerTest(unittest.TestCase):
         self.assertEqual(result.proposed_actions[0]["sideEffect"], "proposed-write")
         self.assertTrue(result.proposed_actions[0]["idempotencyKey"].startswith("react:refund_status:"))
 
+    def test_tool_policy_ref_can_require_manual_confirmation_for_read_tool(self) -> None:
+        executed = False
+
+        def lookup_order(_args):
+            nonlocal executed
+            executed = True
+            return {"status": "refundable"}
+
+        worker = RestrictedReactWorker(
+            config=_config(tool_policy_ref="manual_confirm_lookup_tools"),
+            model=FakeReactWorkerModel([ReactModelAction.request_tool("lookup_order", {"orderNo": "TK-100"})]),
+            tools={"lookup_order": lookup_order},
+        )
+
+        result = worker.run(_task(), "查订单")
+
+        event_types = [event["type"] for event in result.events]
+        self.assertEqual(result.status, TaskStatus.WAITING)
+        self.assertFalse(executed)
+        self.assertEqual(result.proposed_actions[0]["actionType"], "lookup_order")
+        self.assertNotIn("react_tool_call_completed", event_types)
+
     def test_max_iterations_and_timeout_are_enforced(self) -> None:
         looping = RestrictedReactWorker(
             config=_config(max_iterations=1),
@@ -151,6 +173,7 @@ def _config(
     allowed_tools: tuple[str, ...] = ("lookup_order",),
     max_iterations: int = 3,
     timeout_ms: int = 1000,
+    tool_policy_ref: str = "customer_assistant_react_default",
 ) -> ReactWorkerConfig:
     return ReactWorkerConfig(
         worker_ref="refund_status_react",
@@ -158,6 +181,7 @@ def _config(
         allowed_tools=allowed_tools,
         max_iterations=max_iterations,
         timeout_ms=timeout_ms,
+        tool_policy_ref=tool_policy_ref,
     )
 
 

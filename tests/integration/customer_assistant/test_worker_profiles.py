@@ -332,6 +332,50 @@ class CustomerAssistantWorkerProfileApiTest(unittest.TestCase):
         self.assertEqual(config_refs["riskPolicyRef"], "manual_confirm_high_risk")
         self.assertEqual(config_refs["outputSchemaRef"], "refund_react_result_v2")
 
+    def test_react_worker_tool_policy_ref_can_require_manual_confirmation(self) -> None:
+        payload = {
+            "taskKey": "refund_ticket",
+            "taskType": "REFUND",
+            "workerType": "react_worker",
+            "workerRef": "configured_refund_react",
+            "modelPolicyRef": "demo-react-model",
+            "promptRef": "demo-react-prompt",
+            "toolRefs": ["lookup_order"],
+            "toolPolicyRef": "manual_confirm_lookup_tools",
+            "riskPolicyRef": "manual_confirm_high_risk",
+            "outputSchemaRef": "refund_react_result_v2",
+            "enabled": True,
+        }
+
+        with TestClient(app) as client:
+            patched = client.patch(
+                "/api/v1/customer-assistant/worker-profiles/configured_refund_stub",
+                json=payload,
+            )
+            self.assertEqual(patched.status_code, 200, patched.text)
+
+            created = client.post("/api/v1/customer-assistant/sessions", json={"context": {}})
+            session_id = int(created.json()["data"]["id"])
+            turn = client.post(
+                f"/api/v1/customer-assistant/sessions/{session_id}/turns",
+                json={"message": "我要退票", "idempotencyKey": "react-profile-manual-confirm-tool"},
+            )
+            self.assertEqual(turn.status_code, 200, turn.text)
+            turn_data = turn.json()["data"]
+            task = client.get(f"/api/v1/customer-assistant/sessions/{session_id}/tasks").json()["data"]["list"][0]
+            events = client.get(f"/api/v1/customer-assistant/sessions/{session_id}/events").json()["data"]["list"]
+
+        completed_tool_calls = [
+            event
+            for event in events
+            if event["type"] == "react_tool_call_completed" and event["payload"].get("tool") == "lookup_order"
+        ]
+        self.assertEqual(task["workerType"], "react_worker")
+        self.assertEqual(task["status"], "WAITING")
+        self.assertEqual(turn_data["proposedActions"][0]["actionType"], "lookup_order")
+        self.assertEqual(task["lastResult"]["evidence"]["workerConfigRefs"]["toolPolicyRef"], "manual_confirm_lookup_tools")
+        self.assertEqual(completed_tool_calls, [])
+
     def _session_override(self) -> Generator[Session]:
         with self._factory() as session:
             yield session

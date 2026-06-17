@@ -6,7 +6,7 @@ from time import monotonic
 from typing import Any, Callable, Literal, Protocol
 
 from app.modules.customer_assistant.domain.models import TaskItem, TaskStatus, WorkerResult
-from app.modules.customer_assistant.domain.tool_policy import ReactToolPolicy
+from app.modules.customer_assistant.domain.tool_policy import ReactToolPolicy, react_tool_policy_for_ref
 from app.modules.customer_assistant.domain.worker_registry import ReactWorkerConfig
 
 ReactTool = Callable[[dict[str, Any]], dict[str, Any]]
@@ -110,7 +110,10 @@ class RestrictedReactWorker:
         self._config = config
         self._model = model
         self._tools = dict(tools)
-        self._policy = policy or ReactToolPolicy(allowed_tools=config.allowed_tools)
+        self._policy = policy or react_tool_policy_for_ref(
+            policy_ref=config.tool_policy_ref,
+            allowed_tools=config.allowed_tools,
+        )
 
     def run(self, task: TaskItem, message: str) -> WorkerResult:
         started = monotonic()
@@ -164,6 +167,29 @@ class RestrictedReactWorker:
             if not self._policy.is_allowed(call.name):
                 events.append(_event("react_tool_call_failed", {"tool": call.name, "reason": "not_allowed"}))
                 return self._failed(task, events, "TOOL_NOT_ALLOWED", f"Tool not allowed: {call.name}")
+            if self._policy.requires_manual_confirmation(call.name):
+                action_payload = _proposed_action(task, call, side_effect="manual-confirm-tool")
+                events.append(
+                    _event(
+                        "react_worker_completed",
+                        {"proposedAction": action_payload["actionKey"], "toolPolicyRef": self._config.tool_policy_ref},
+                    )
+                )
+                return WorkerResult(
+                    task_id=int(task.id or 0),
+                    worker_type=task.worker_type,
+                    status=TaskStatus.WAITING,
+                    operator_recommendation=f"Tool requires manual confirmation: {call.name}",
+                    customer_reply_draft="该动作需要人工确认后才能继续。",
+                    proposed_actions=[action_payload],
+                    evidence={
+                        "workerRef": self._config.worker_ref,
+                        "iterations": iteration,
+                        "workerConfigRefs": worker_config_refs,
+                        "sideEffect": "manual-confirm-tool",
+                    },
+                    events=events,
+                )
             if call.risk == "write" or self._policy.is_high_risk(call.name):
                 action_payload = _proposed_action(task, call)
                 events.append(_event("react_worker_completed", {"proposedAction": action_payload["actionKey"]}))
@@ -284,14 +310,14 @@ def _worker_config_refs(config: ReactWorkerConfig) -> dict[str, Any]:
     }
 
 
-def _proposed_action(task: TaskItem, call: ReactToolCall) -> dict[str, Any]:
+def _proposed_action(task: TaskItem, call: ReactToolCall, *, side_effect: str = "proposed-write") -> dict[str, Any]:
     business_key = str(call.arguments.get("orderNo") or call.arguments.get("order_no") or task.business_key)
     return {
         "actionKey": f"{task.task_key}:{call.name}:{business_key}",
         "actionType": call.name,
         "title": f"Approve {call.name}",
         "payload": _redact_payload(dict(call.arguments)),
-        "sideEffect": "proposed-write",
+        "sideEffect": side_effect,
         "idempotencyKey": _react_idempotency_key(task, call, business_key),
     }
 
