@@ -30,19 +30,19 @@
 
 ## 184.2 Phase 1 Sandbox And Approval Boundary
 
-- [x] RED: permission/sandbox/approval tests fail for read-only allow,
+- [ ] RED: permission/sandbox/approval tests fail for read-only allow,
       high-risk approval-required, denied no-execute, approved audit, and
       sandbox-denied behavior.
-- [x] Implement risk classifier and approval modes.
-- [x] Implement Sandbox Policy.
-- [x] Implement Permission Middleware.
-- [x] Persist approval records and proposed actions.
-- [x] Add approve/deny API endpoints.
-- [x] Emit `approval.required`, `approval.granted`, `approval.denied`,
+- [ ] Implement risk classifier and approval modes.
+- [ ] Implement Sandbox Policy.
+- [ ] Implement Permission Middleware.
+- [ ] Persist approval records and proposed actions.
+- [ ] Add approve/deny API endpoints.
+- [ ] Emit `approval.required`, `approval.granted`, `approval.denied`,
       `sandbox.denied`, and `proposed_action.created` events.
-- [x] Prove high-risk business mutations become proposed actions unless
+- [ ] Prove high-risk business mutations become proposed actions unless
       explicitly pre-approved.
-- [x] Save RED/unit/integration/contract/E2E evidence under
+- [ ] Save RED/unit/integration/contract/E2E evidence under
       `artifacts/slices/184-ai-assistant-harness-core-mvp/184.2/`.
 
 ## 184.3 Phase 2 Conversation Execution Echo

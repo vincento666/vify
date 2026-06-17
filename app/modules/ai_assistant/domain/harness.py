@@ -2,13 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from hashlib import sha256
-import json
 from time import perf_counter
 from typing import Any
 
-from app.modules.ai_assistant.domain.permissions import ApprovalMode, ApprovalPolicy, PermissionDecision
 from app.modules.ai_assistant.domain.prompt import PromptAssembler
-from app.modules.ai_assistant.domain.sandbox import SandboxPolicy, SandboxVerdict
 from app.modules.ai_assistant.domain.tools import ToolRegistry
 from app.modules.ai_assistant.infra.repository import AiAssistantRepository, IdempotencyConflict
 
@@ -19,9 +16,6 @@ class HarnessTurnResult:
     replayed: bool
     final_answer: str
     tool_calls: list[dict[str, Any]]
-    approval_required: bool = False
-    approval_id: int | None = None
-    sandbox_denied: bool = False
 
 
 class AiAssistantHarnessService:
@@ -29,13 +23,9 @@ class AiAssistantHarnessService:
         self,
         repository: AiAssistantRepository,
         tool_registry: ToolRegistry | None = None,
-        approval_policy: ApprovalPolicy | None = None,
-        sandbox_policy: SandboxPolicy | None = None,
     ) -> None:
         self._repository = repository
         self._tools = tool_registry or ToolRegistry.with_builtin_tools()
-        self._approval_policy = approval_policy or ApprovalPolicy(environment="test")
-        self._sandbox_policy = sandbox_policy or SandboxPolicy()
 
     def create_session(self, title: str = "", context: dict[str, Any] | None = None) -> dict[str, Any]:
         return self._repository.create_session(title=title, context=context)
@@ -51,19 +41,8 @@ class AiAssistantHarnessService:
         session_id: int,
         message: str,
         idempotency_key: str | None = None,
-        approval_mode: str = ApprovalMode.SMART_APPROVAL.value,
-        tool_name: str = "echo_context",
-        tool_input: dict[str, Any] | None = None,
     ) -> HarnessTurnResult:
-        payload = tool_input or {"message": message}
-        request_hash = _request_hash(
-            {
-                "message": message,
-                "approvalMode": approval_mode,
-                "toolName": tool_name,
-                "toolInput": payload,
-            }
-        )
+        request_hash = _request_hash(message)
         try:
             run, replayed = self._repository.create_or_replay_run(
                 session_id=session_id,
@@ -80,9 +59,6 @@ class AiAssistantHarnessService:
                 replayed=True,
                 final_answer=str(response.get("finalAnswer") or ""),
                 tool_calls=list(response.get("toolCalls") or []),
-                approval_required=bool(response.get("approvalRequired") or False),
-                approval_id=response.get("approvalId"),
-                sandbox_denied=bool(response.get("sandboxDenied") or False),
             )
 
         run_id = int(run["id"])
@@ -125,114 +101,16 @@ class AiAssistantHarnessService:
             visible_summary="The deterministic MVP planner selected echo_context.",
             payload={"toolName": "echo_context"},
         )
-        manifest = self._tools.get_manifest(tool_name)
-        sandbox_decision = self._sandbox_policy.evaluate(tool_name, payload)
-        if sandbox_decision.verdict == SandboxVerdict.DENY:
-            self._repository.append_event(
-                run_id=run_id,
-                session_id=session_id,
-                event_type="sandbox.denied",
-                visible_title="Sandbox denied",
-                visible_summary=sandbox_decision.reason,
-                payload=sandbox_decision.evidence,
-                status="DENIED",
-            )
-            response_payload = {
-                "finalAnswer": "Sandbox denied the requested tool.",
-                "toolCalls": [],
-                "approvalRequired": False,
-                "sandboxDenied": True,
-            }
-            denied = self._repository.complete_run(run_id, response_payload, status="DENIED")
-            return HarnessTurnResult(
-                run=denied,
-                replayed=False,
-                final_answer=str(response_payload["finalAnswer"]),
-                tool_calls=[],
-                sandbox_denied=True,
-            )
-
-        permission = self._approval_policy.decide(
-            approval_mode=ApprovalMode(approval_mode),
-            risk_level=manifest.risk_level,
-        )
-        if permission == PermissionDecision.DENY:
-            response_payload = {
-                "finalAnswer": "Approval policy denied the requested tool.",
-                "toolCalls": [],
-                "approvalRequired": False,
-                "sandboxDenied": False,
-            }
-            denied = self._repository.complete_run(run_id, response_payload, status="DENIED")
-            return HarnessTurnResult(
-                run=denied,
-                replayed=False,
-                final_answer=str(response_payload["finalAnswer"]),
-                tool_calls=[],
-            )
-        if permission == PermissionDecision.REQUIRE_APPROVAL:
-            approval = self._repository.create_approval(
-                run_id=run_id,
-                session_id=session_id,
-                tool_name=tool_name,
-                risk_level=manifest.risk_level.value,
-                input_payload=payload,
-            )
-            self._repository.append_event(
-                run_id=run_id,
-                session_id=session_id,
-                event_type="approval.required",
-                visible_title="Approval required",
-                visible_summary=f"{tool_name} requires approval.",
-                payload={"approvalId": approval["id"], "toolName": tool_name, "riskLevel": manifest.risk_level.value},
-                status="WAITING",
-            )
-            if manifest.risk_level.value == "BUSINESS_WRITE":
-                proposed_action = self._repository.create_proposed_action(
-                    run_id=run_id,
-                    session_id=session_id,
-                    approval_id=int(approval["id"]),
-                    action_type=tool_name,
-                    title=f"Proposed action: {tool_name}",
-                    payload=payload,
-                )
-                self._repository.append_event(
-                    run_id=run_id,
-                    session_id=session_id,
-                    event_type="proposed_action.created",
-                    visible_title="Proposed action created",
-                    visible_summary=f"{tool_name} was converted to a proposed action.",
-                    payload={"proposedActionId": proposed_action["id"], "approvalId": approval["id"]},
-                )
-            response_payload = {
-                "finalAnswer": "Approval is required before this action can continue.",
-                "toolCalls": [],
-                "approvalRequired": True,
-                "approvalId": approval["id"],
-                "sandboxDenied": False,
-            }
-            waiting = self._repository.complete_run(run_id, response_payload, status="WAITING_APPROVAL")
-            return HarnessTurnResult(
-                run=waiting,
-                replayed=False,
-                final_answer=str(response_payload["finalAnswer"]),
-                tool_calls=[],
-                approval_required=True,
-                approval_id=int(approval["id"]),
-            )
         self._repository.append_event(
             run_id=run_id,
             session_id=session_id,
             event_type="tool.call_started",
             visible_title="Tool started",
-            visible_summary=f"{tool_name} started.",
-            payload={"toolName": tool_name, "input": payload},
+            visible_summary="echo_context started.",
+            payload={"toolName": "echo_context", "input": {"message": message}},
         )
         started = perf_counter()
-        dispatch_payload = payload | {"message": str(payload.get("message") or message)}
-        if tool_name == "echo_context":
-            dispatch_payload = dispatch_payload | {"context": {"sessionId": session_id}}
-        tool_result = self._tools.dispatch(tool_name, dispatch_payload)
+        tool_result = self._tools.dispatch("echo_context", {"message": message, "context": {"sessionId": session_id}})
         duration_ms = max(0, int((perf_counter() - started) * 1000))
         self._repository.append_event(
             run_id=run_id,
@@ -240,13 +118,13 @@ class AiAssistantHarnessService:
             event_type="tool.call_output",
             visible_title="Tool output",
             visible_summary=str(tool_result.output.get("echo") or ""),
-            payload={"toolName": tool_name, "output": tool_result.output},
+            payload={"toolName": "echo_context", "output": tool_result.output},
         )
         tool_call = self._repository.record_tool_call(
             run_id=run_id,
             session_id=session_id,
-            tool_name=tool_name,
-            input_payload=payload,
+            tool_name="echo_context",
+            input_payload={"message": message},
             output_payload=tool_result.output,
             status=tool_result.status,
             duration_ms=duration_ms,
@@ -256,17 +134,15 @@ class AiAssistantHarnessService:
             session_id=session_id,
             event_type="tool.call_completed",
             visible_title="Tool completed",
-            visible_summary=f"{tool_name} completed.",
-            payload={"toolName": tool_name, "status": tool_result.status},
+            visible_summary="echo_context completed.",
+            payload={"toolName": "echo_context", "status": tool_result.status},
             tool_call_id=int(tool_call["id"]),
         )
-        final_answer = f"Echo result: {tool_result.output.get('echo', '')}"
+        final_answer = f"Echo result: {tool_result.output['echo']}"
         self._repository.append_message(session_id, "assistant", final_answer, run_id=run_id)
         response_payload = {
             "finalAnswer": final_answer,
             "toolCalls": [_tool_call_payload(tool_call)],
-            "approvalRequired": False,
-            "sandboxDenied": False,
         }
         completed = self._repository.complete_run(run_id, response_payload)
         self._repository.append_event(
@@ -296,38 +172,9 @@ class AiAssistantHarnessService:
     def list_tool_manifests(self) -> list[dict[str, Any]]:
         return [_manifest_payload(manifest) for manifest in self._tools.list_manifests()]
 
-    def list_pending_approvals(self) -> list[dict[str, Any]]:
-        return [_approval_payload(row) for row in self._repository.list_pending_approvals()]
 
-    def approve(self, approval_id: int, actor_id: str) -> dict[str, Any]:
-        approval = self._repository.decide_approval(approval_id, "APPROVED", actor_id)
-        self._repository.append_event(
-            run_id=int(approval["run_id"]),
-            session_id=int(approval["session_id"]),
-            event_type="approval.granted",
-            visible_title="Approval granted",
-            visible_summary=f"{actor_id} approved {approval['tool_name']}.",
-            payload={"approvalId": approval_id, "actorId": actor_id},
-        )
-        return _approval_payload(approval)
-
-    def deny(self, approval_id: int, actor_id: str, reason: str = "") -> dict[str, Any]:
-        approval = self._repository.decide_approval(approval_id, "DENIED", actor_id, reason)
-        self._repository.append_event(
-            run_id=int(approval["run_id"]),
-            session_id=int(approval["session_id"]),
-            event_type="approval.denied",
-            visible_title="Approval denied",
-            visible_summary=f"{actor_id} denied {approval['tool_name']}.",
-            payload={"approvalId": approval_id, "actorId": actor_id, "reason": reason},
-            status="DENIED",
-        )
-        return _approval_payload(approval)
-
-
-def _request_hash(payload: Any) -> str:
-    encoded = json.dumps(payload, sort_keys=True, ensure_ascii=True)
-    return sha256(encoded.encode("utf-8")).hexdigest()
+def _request_hash(message: str) -> str:
+    return sha256(message.encode("utf-8")).hexdigest()
 
 
 def _tool_call_payload(tool_call: dict[str, Any]) -> dict[str, Any]:
@@ -352,18 +199,4 @@ def _manifest_payload(manifest: Any) -> dict[str, Any]:
         "readResources": manifest.read_resources,
         "writeResources": manifest.write_resources,
         "policyRef": manifest.policy_ref,
-    }
-
-
-def _approval_payload(approval: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "id": approval["id"],
-        "sessionId": approval["session_id"],
-        "runId": approval["run_id"],
-        "toolName": approval["tool_name"],
-        "riskLevel": approval["risk_level"],
-        "input": approval.get("input_payload") or {},
-        "status": approval["status"],
-        "decidedBy": approval.get("decided_by"),
-        "decisionReason": approval.get("decision_reason") or "",
     }

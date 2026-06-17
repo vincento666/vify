@@ -9,11 +9,7 @@ from app.core.database import get_session
 from app.core.responses import success
 from app.modules.ai_assistant.domain.harness import AiAssistantHarnessService
 from app.modules.ai_assistant.infra.repository import AiAssistantRepository, IdempotencyConflict
-from app.modules.ai_assistant.web.schemas import (
-    ApprovalDecisionRequest,
-    CreateAiAssistantSessionRequest,
-    SendAiAssistantMessageRequest,
-)
+from app.modules.ai_assistant.web.schemas import CreateAiAssistantSessionRequest, SendAiAssistantMessageRequest
 
 
 router = APIRouter(prefix="/api/v1/ai-assistant", tags=["ai-assistant"])
@@ -59,14 +55,7 @@ def send_message(
     if service.get_session(session_id) is None:
         raise HTTPException(status_code=404, detail="AI Assistant session not found")
     try:
-        result = service.run_message(
-            session_id,
-            request.message,
-            request.idempotency_key,
-            approval_mode=request.approval_mode,
-            tool_name=request.tool_name,
-            tool_input=dict(request.tool_input),
-        )
+        result = service.run_message(session_id, request.message, request.idempotency_key)
     except IdempotencyConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return success(_turn_payload(result))
@@ -118,30 +107,6 @@ def list_tools(service: AiAssistantHarnessService = Depends(get_ai_assistant_ser
     return success({"list": tools, "total": len(tools)})
 
 
-@router.get("/approvals")
-def list_approvals(service: AiAssistantHarnessService = Depends(get_ai_assistant_service)) -> dict[str, Any]:
-    approvals = service.list_pending_approvals()
-    return success({"list": approvals, "total": len(approvals)})
-
-
-@router.post("/approvals/{approval_id}/approve")
-def approve(
-    approval_id: int,
-    request: ApprovalDecisionRequest,
-    service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
-) -> dict[str, Any]:
-    return success(service.approve(approval_id, request.actor_id))
-
-
-@router.post("/approvals/{approval_id}/deny")
-def deny(
-    approval_id: int,
-    request: ApprovalDecisionRequest,
-    service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
-) -> dict[str, Any]:
-    return success(service.deny(approval_id, request.actor_id, request.reason))
-
-
 def _session_payload(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": row["id"],
@@ -161,9 +126,6 @@ def _turn_payload(result: Any) -> dict[str, Any]:
         "replayed": result.replayed,
         "finalAnswer": result.final_answer,
         "toolCalls": result.tool_calls,
-        "approvalRequired": result.approval_required,
-        "approvalId": result.approval_id,
-        "sandboxDenied": result.sandbox_denied,
     }
 
 

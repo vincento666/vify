@@ -41,7 +41,7 @@ class ToolRegistry:
 
     @classmethod
     def with_builtin_tools(cls) -> ToolRegistry:
-        echo_manifest = ToolManifest(
+        manifest = ToolManifest(
             name="echo_context",
             description="Echo the current user message and safe context for harness verification.",
             input_schema={
@@ -66,47 +66,7 @@ class ToolRegistry:
             write_resources=[],
             policy_ref="ai_assistant_read_only",
         )
-        business_write_manifest = ToolManifest(
-            name="update_customer_profile",
-            description="Request a high-risk customer profile mutation as a proposed action.",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "customerId": {"type": "string"},
-                    "field": {"type": "string"},
-                    "value": {"type": "string"},
-                },
-                "required": ["customerId"],
-            },
-            output_schema={"type": "object", "properties": {"status": {"type": "string"}}},
-            timeout_ms=1000,
-            risk_level=RiskLevel.BUSINESS_WRITE,
-            read_resources=[],
-            write_resources=["customer:{customerId}"],
-            policy_ref="ai_assistant_business_write_requires_approval",
-        )
-        shell_manifest = ToolManifest(
-            name="run_shell",
-            description="Shell-like execution placeholder blocked by sandbox policy.",
-            input_schema={
-                "type": "object",
-                "properties": {"command": {"type": "string"}},
-                "required": ["command"],
-            },
-            output_schema={"type": "object"},
-            timeout_ms=1000,
-            risk_level=RiskLevel.EXTERNAL_SIDE_EFFECT,
-            read_resources=[],
-            write_resources=["external:shell"],
-            policy_ref="ai_assistant_shell_blocked",
-        )
-        return cls(
-            {
-                "echo_context": (echo_manifest, _echo_context),
-                "update_customer_profile": (business_write_manifest, _blocked_write),
-                "run_shell": (shell_manifest, _blocked_write),
-            }
-        )
+        return cls({"echo_context": (manifest, _echo_context)})
 
     def get_manifest(self, name: str) -> ToolManifest:
         try:
@@ -133,7 +93,3 @@ def _echo_context(payload: dict[str, Any]) -> ToolResult:
             "context": dict(payload.get("context") or {}),
         },
     )
-
-
-def _blocked_write(_payload: dict[str, Any]) -> ToolResult:
-    return ToolResult(status="BLOCKED", output={"status": "BLOCKED"})

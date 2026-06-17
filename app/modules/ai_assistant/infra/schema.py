@@ -100,44 +100,6 @@ def register_ai_assistant_tables(metadata: sa.MetaData | None = None) -> None:
             sa.Index("idx_ai_assistant_tool_call_session", "session_id"),
         )
 
-    if "ai_assistant_approval" not in target.tables:
-        sa.Table(
-            "ai_assistant_approval",
-            target,
-            id_column(),
-            sa.Column("session_id", BIGINT, nullable=False),
-            sa.Column("run_id", BIGINT, nullable=False),
-            sa.Column("tool_name", sa.String(120), nullable=False),
-            sa.Column("risk_level", sa.String(40), nullable=False),
-            sa.Column("input_payload", sa.JSON(), nullable=True),
-            sa.Column("status", sa.String(30), nullable=False, server_default="PENDING"),
-            sa.Column("decided_by", sa.String(120), nullable=True),
-            sa.Column("decision_reason", sa.String(500), nullable=True),
-            sa.Column("decided_at", sa.DateTime(), nullable=True),
-            deleted_column(),
-            *timestamps(),
-            sa.Index("idx_ai_assistant_approval_status", "status"),
-            sa.Index("idx_ai_assistant_approval_run", "run_id"),
-        )
-
-    if "ai_assistant_proposed_action" not in target.tables:
-        sa.Table(
-            "ai_assistant_proposed_action",
-            target,
-            id_column(),
-            sa.Column("session_id", BIGINT, nullable=False),
-            sa.Column("run_id", BIGINT, nullable=False),
-            sa.Column("approval_id", BIGINT, nullable=True),
-            sa.Column("action_type", sa.String(120), nullable=False),
-            sa.Column("title", sa.String(200), nullable=False, server_default=""),
-            sa.Column("payload", sa.JSON(), nullable=True),
-            sa.Column("status", sa.String(30), nullable=False, server_default="PENDING"),
-            deleted_column(),
-            *timestamps(),
-            sa.Index("idx_ai_assistant_proposed_action_run", "run_id"),
-            sa.Index("idx_ai_assistant_proposed_action_status", "status"),
-        )
-
 
 def ai_assistant_tables() -> list[sa.Table]:
     register_ai_assistant_tables()
@@ -147,7 +109,5 @@ def ai_assistant_tables() -> list[sa.Table]:
         "ai_assistant_message",
         "ai_assistant_event",
         "ai_assistant_tool_call",
-        "ai_assistant_approval",
-        "ai_assistant_proposed_action",
     ]
     return [Base.metadata.tables[name] for name in names]
