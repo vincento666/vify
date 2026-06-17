@@ -31,6 +31,65 @@
       description="当前回复来自相同 idempotencyKey 的历史结果。"
     />
 
+    <section class="session-inbox-dashboard" data-testid="operator-session-inbox-dashboard" aria-label="多客户会话">
+      <div class="session-inbox-heading">
+        <span class="panel-heading-title">
+          <DashboardOutlined />
+          多客户会话
+        </span>
+        <div class="heading-meta">
+          <a-tag v-if="demoStoriesLoading" color="processing">加载中</a-tag>
+          <a-tag v-else color="blue">{{ sessionInboxRows.length }} 会话</a-tag>
+          <a-tag v-if="demoStoryError" color="warning">{{ demoStoryError }}</a-tag>
+        </div>
+      </div>
+      <div class="session-inbox-summary" aria-label="会话队列状态">
+        <div class="metric-tile processing">
+          <span>活跃会话</span>
+          <strong>{{ sessionInboxSummary.active }}</strong>
+        </div>
+        <div class="metric-tile warning">
+          <span>待确认</span>
+          <strong>{{ sessionInboxSummary.pending }}</strong>
+        </div>
+        <div class="metric-tile error">
+          <span>阻塞等待</span>
+          <strong>{{ sessionInboxSummary.blocked }}</strong>
+        </div>
+        <div class="metric-tile success">
+          <span>完成归档</span>
+          <strong>{{ sessionInboxSummary.completed }}</strong>
+        </div>
+      </div>
+      <div class="session-inbox-list">
+        <button
+          v-for="row in sessionInboxRows"
+          :key="row.storyId"
+          type="button"
+          class="session-inbox-row"
+          :class="[row.statusKind, { selected: row.storyId === selectedDemoStoryId }]"
+          data-testid="operator-session-inbox-row"
+          @click="openSessionInboxRow(row)"
+        >
+          <span class="session-inbox-main">
+            <strong>{{ row.customerName }}</strong>
+            <span>{{ row.storyTitle }}</span>
+          </span>
+          <span class="session-inbox-meta">
+            <a-tag>{{ `Session #${row.sessionId}` }}</a-tag>
+            <a-tag :color="sessionInboxStatusColor(row.statusKind)">{{ row.statusLabel }}</a-tag>
+            <span>{{ row.taskCount }} 任务</span>
+            <span>{{ row.pendingActionCount }} 待确认</span>
+            <span>{{ row.lastActivityLabel }}</span>
+          </span>
+          <small>{{ row.statusDetail }}</small>
+        </button>
+        <div v-if="sessionInboxRows.length === 0" class="empty-state">
+          {{ demoStoriesLoading ? '正在加载多客户会话' : '暂无会话，请先执行 demo seed' }}
+        </div>
+      </div>
+    </section>
+
     <section class="demo-story-strip" data-testid="customer-assistant-demo-stories" aria-label="演示故事线">
       <div class="demo-story-heading">
         <span class="panel-heading-title">
@@ -1022,6 +1081,7 @@ import {
 
 import {
   askCustomerAssistantRuntimeOperatorKnowledgeQuestion,
+  buildCustomerAssistantSessionInboxRows,
   confirmCustomerAssistantRuntimeAction,
   createCustomerAssistantRuntimeState,
   executeCustomerAssistantRuntimeAction,
@@ -1032,6 +1092,8 @@ import {
   sendCustomerAssistantRuntimeTurn,
   spawnCustomerAssistantRuntimeSubAgent,
   updateCustomerAssistantRuntimeAction,
+  type CustomerAssistantSessionInboxRow,
+  type CustomerAssistantSessionInboxStatusKind,
 } from './customerAssistantRuntime'
 import {
   buildCustomerAssistantStoryQuery,
@@ -1106,6 +1168,23 @@ const operatorKnowledgeQa = computed(() =>
 const selectedDemoStory = computed(() =>
   demoStories.value.find((story) => story.storyId === selectedDemoStoryId.value) ?? null,
 )
+const sessionInboxRows = computed(() =>
+  buildCustomerAssistantSessionInboxRows(demoStories.value, demoStoryMetrics.value),
+)
+const sessionInboxSummary = computed(() =>
+  sessionInboxRows.value.reduce(
+    (summary, row) => ({
+      ...summary,
+      [row.statusKind]: summary[row.statusKind] + 1,
+    }),
+    {
+      active: 0,
+      pending: 0,
+      blocked: 0,
+      completed: 0,
+    } as Record<CustomerAssistantSessionInboxStatusKind, number>,
+  ),
+)
 const sessionLabel = computed(() =>
   workspace.value.sessionId === null ? '尚未创建会话' : `Session #${workspace.value.sessionId}`,
 )
@@ -1165,6 +1244,16 @@ function statusColor(tone: CustomerAssistantTaskRow['statusTone']) {
     warning: 'warning',
   }
   return colors[tone]
+}
+
+function sessionInboxStatusColor(statusKind: CustomerAssistantSessionInboxStatusKind) {
+  const colors: Record<CustomerAssistantSessionInboxStatusKind, string> = {
+    active: 'processing',
+    pending: 'warning',
+    blocked: 'error',
+    completed: 'success',
+  }
+  return colors[statusKind]
 }
 
 function compactPayload(payload: Record<string, unknown>) {
@@ -1386,6 +1475,10 @@ async function loadDemoStory(storyId: string) {
   } finally {
     demoStoryLoadingId.value = null
   }
+}
+
+async function openSessionInboxRow(row: CustomerAssistantSessionInboxRow) {
+  await loadDemoStory(row.storyId)
 }
 
 function syncSelectedDemoStoryRoute(storyId: string) {
@@ -1621,6 +1714,115 @@ async function executeAction(actionId: number) {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.5rem;
+}
+
+.session-inbox-dashboard {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.875rem;
+  border: 0.0625rem solid #d8eadf;
+  border-radius: 0.5rem;
+  background: #fbfefc;
+}
+
+.session-inbox-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.session-inbox-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  gap: 0.5rem;
+}
+
+.session-inbox-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.session-inbox-row {
+  display: grid;
+  grid-template-columns: minmax(10rem, 1.2fr) minmax(18rem, 2fr);
+  gap: 0.35rem 0.75rem;
+  align-items: center;
+  width: 100%;
+  padding: 0.7rem;
+  border: 0.0625rem solid #e1e7f0;
+  border-radius: 0.5rem;
+  background: #ffffff;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.session-inbox-row:hover,
+.session-inbox-row:focus-visible {
+  border-color: #7aa7d9;
+  outline: none;
+}
+
+.session-inbox-row.selected {
+  border-color: #2456a7;
+  background: #f5f9ff;
+}
+
+.session-inbox-row.blocked {
+  border-left: 0.25rem solid #d92d20;
+}
+
+.session-inbox-row.pending {
+  border-left: 0.25rem solid #d18a00;
+}
+
+.session-inbox-row.completed {
+  border-left: 0.25rem solid #16945b;
+}
+
+.session-inbox-row.active {
+  border-left: 0.25rem solid #2456a7;
+}
+
+.session-inbox-main {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.session-inbox-main strong {
+  color: #1d2535;
+  font-size: 0.9375rem;
+  line-height: 1.35;
+}
+
+.session-inbox-main span,
+.session-inbox-row small {
+  overflow-wrap: anywhere;
+}
+
+.session-inbox-main span {
+  color: #5c667a;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.session-inbox-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  color: #4d5b70;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.session-inbox-row small {
+  grid-column: 1 / -1;
+  color: #667085;
+  font-size: 0.75rem;
+  line-height: 1.4;
 }
 
 .demo-story-strip {
@@ -2292,7 +2494,8 @@ async function executeAction(actionId: number) {
 
 @media (max-width: 58rem) {
   .workspace-header,
-  .lane-composer {
+  .lane-composer,
+  .session-inbox-row {
     grid-template-columns: 1fr;
   }
 

@@ -1,0 +1,70 @@
+> vitest run src/views/customerAssistant/customerAssistantRuntime.test.ts src/views/customerAssistant/customerAssistantPanel.test.ts
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ ❯ src/views/customerAssistant/customerAssistantPanel.test.ts (22 tests | 1 failed) 7ms
+   ✓ CustomerAssistantPanel UI contract > renders the required operator workspace regions 1ms
+   ✓ CustomerAssistantPanel UI contract > keeps internal task controls out of the customer lane 0ms
+   ✓ CustomerAssistantPanel UI contract > uses Ant Design Vue primitives and avoids Element Plus and card nesting 0ms
+   ✓ CustomerAssistantPanel UI contract > does not seed the production panel with mock runtime data 0ms
+   ✓ CustomerAssistantPanel UI contract > renders progress checklist and keeps timeline collapsed by default 0ms
+   ✓ CustomerAssistantPanel UI contract > renders observability metrics in the operator panel without raw payload details 0ms
+   ✓ CustomerAssistantPanel UI contract > renders aggregate seeded demo metrics above the story picker 0ms
+   × CustomerAssistantPanel UI contract > renders the seeded session inbox as an operator dashboard outside the customer lane 3ms
+     → expected '' to contain 'sessionInboxRows'
+   ✓ CustomerAssistantPanel UI contract > distinguishes proposed task commands from executable actions 0ms
+   ✓ CustomerAssistantPanel UI contract > renders action execution receipts in the operator proposed-action panel 0ms
+   ✓ CustomerAssistantPanel UI contract > renders retry cancel and resume task controls in the operator ledger 0ms
+   ✓ CustomerAssistantPanel UI contract > renders pending worker refs and manual refresh controls in the operator ledger 0ms
+   ✓ CustomerAssistantPanel UI contract > renders pending proposed action edit controls in the operator panel 0ms
+   ✓ CustomerAssistantPanel UI contract > renders configured worker profile metadata in task rows 0ms
+   ✓ CustomerAssistantPanel UI contract > renders the configured worker profile catalog as a dedicated operator panel 0ms
+   ✓ CustomerAssistantPanel UI contract > renders worker profile edit controls in the operator task ledger 0ms
+   ✓ CustomerAssistantPanel UI contract > renders the eval observability surface as a dedicated read-only panel 0ms
+   ✓ CustomerAssistantPanel UI contract > renders task recognition evidence as a dedicated operator panel 0ms
+   ✓ CustomerAssistantPanel UI contract > renders operator knowledge Q&A as a dedicated compact panel 0ms
+   ✓ CustomerAssistantPanel UI contract > renders operator advisory knowledge evidence as a dedicated panel 0ms
+   ✓ CustomerAssistantPanel UI contract > renders operator audit rows as a compact read-only panel 0ms
+   ✓ CustomerAssistantPanel UI contract > deep-links and auto-opens seeded demo stories through the route query 0ms
+ ❯ src/views/customerAssistant/customerAssistantRuntime.test.ts (13 tests | 1 failed) 28ms
+   ✓ customer assistant runtime integration > creates a session before the first turn and refreshes task/event ledgers after the turn 21ms
+   × customer assistant runtime integration > builds operator session inbox rows from seeded stories and metrics 3ms
+     → buildCustomerAssistantSessionInboxRows is not a function
+   ✓ customer assistant runtime integration > reuses an existing session for later turns 1ms
+   ✓ customer assistant runtime integration > opens SSE before a turn and publishes live state while the turn request is pending 1ms
+   ✓ customer assistant runtime integration > refreshes ledgers after confirming and rejecting proposed actions 1ms
+   ✓ customer assistant runtime integration > refreshes ledgers after editing a pending proposed action 0ms
+   ✓ customer assistant runtime integration > refreshes ledgers after executing a confirmed proposed action 0ms
+   ✓ customer assistant runtime integration > refreshes ledgers after confirming a proposed task command 0ms
+   ✓ customer assistant runtime integration > refreshes pending worker results and reloads runtime ledgers 0ms
+   ✓ customer assistant runtime integration > loads a seeded demo story into the workbench state 0ms
+   ✓ customer assistant runtime integration > proposes a task control and refreshes ledgers 0ms
+   ✓ customer assistant runtime integration > asks operator knowledge Q&A without refreshing or mutating ledgers 0ms
+   ✓ customer assistant runtime integration > spawns a sub-agent for the current session and refreshes workbench ledgers 0ms
+ Test Files  2 failed (2)
+      Tests  2 failed | 33 passed (35)
+   Start at  09:09:10
+   Duration  300ms (transform 113ms, setup 0ms, collect 109ms, tests 35ms, environment 0ms, prepare 124ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/views/customerAssistant/customerAssistantPanel.test.ts > CustomerAssistantPanel UI contract > renders the seeded session inbox as an operator dashboard outside the customer lane
+AssertionError: expected '' to contain 'sessionInboxRows'
+- Expected
++ Received
+- sessionInboxRows
+ ❯ src/views/customerAssistant/customerAssistantPanel.test.ts:115:24
+    113|     const inboxPanel = section(content, 'operator-session-inbox-dashbo…
+    114|
+    115|     expect(inboxPanel).toContain('sessionInboxRows')
+       |                        ^
+    116|     expect(inboxPanel).toContain('openSessionInboxRow')
+    117|     expect(inboxPanel).toContain('data-testid="operator-session-inbox-…
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+ FAIL  src/views/customerAssistant/customerAssistantRuntime.test.ts > customer assistant runtime integration > builds operator session inbox rows from seeded stories and metrics
+TypeError: buildCustomerAssistantSessionInboxRows is not a function
+ ❯ src/views/customerAssistant/customerAssistantRuntime.test.ts:88:18
+     86|     const { buildCustomerAssistantSessionInboxRows } = await import('.…
+     87|
+     88|     const rows = buildCustomerAssistantSessionInboxRows(
+       |                  ^
+     89|       [
+     90|         {
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯

@@ -1,0 +1,8 @@
+Seeded Hify MVP demo topology:
+- Chatflow SOP bindings: 15
+- Customer assistant sessions: 76,77,78
+- Knowledge bases: 1372
+- Demo stories: refund_baggage_parallel,invoice_interrupt_flight_status,chatflow_block_resume_recommendation
+- Verification: passed
+- Story coverage: 3/3
+No API keys were written; keep live provider credentials in shell env or provider config.

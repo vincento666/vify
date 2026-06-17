@@ -82,6 +82,96 @@ describe('customer assistant runtime integration', () => {
     expect(state.eventTimeline[0].title).toBe('run_started')
   })
 
+  it('builds operator session inbox rows from seeded stories and metrics', async () => {
+    const { buildCustomerAssistantSessionInboxRows } = await import('./customerAssistantRuntime')
+
+    const rows = buildCustomerAssistantSessionInboxRows(
+      [
+        {
+          storyId: 'refund_baggage_parallel',
+          title: '退票 + 行李额并行',
+          sessionId: 12,
+          sessionStatus: 'ACTIVE',
+          customerName: '赵女士',
+          maskedPhone: '138****0000',
+          taskCount: 2,
+          pendingActionCount: 1,
+          knowledgeBaseIds: [201],
+        },
+        {
+          storyId: 'completed_archive',
+          title: '已完成归档',
+          sessionId: 13,
+          sessionStatus: 'COMPLETED',
+          customerName: '李先生',
+          taskCount: 1,
+          pendingActionCount: 0,
+          knowledgeBaseIds: [201],
+        },
+      ],
+      {
+        storyCount: 2,
+        sessionCount: 2,
+        taskStatusCounts: { WAITING: 1, COMPLETED: 1 },
+        proposedActionStatusCounts: { PENDING: 1 },
+        humanConfirmation: { pending: 1, adopted: 0, terminal: 0, adoptionRate: 0 },
+        eventCounts: { total: 9, byType: {}, bySource: {} },
+        workerEventCounts: { total: 4, byType: {} },
+        recentFailureReasons: [],
+        stories: [
+          {
+            storyId: 'refund_baggage_parallel',
+            title: '退票 + 行李额并行',
+            sessionId: 12,
+            sessionStatus: 'ACTIVE',
+            taskCount: 2,
+            pendingActionCount: 1,
+            taskStatusCounts: { WAITING: 1, RUNNING: 1 },
+            proposedActionStatusCounts: { PENDING: 1 },
+            humanConfirmation: { pending: 1, adopted: 0, terminal: 0, adoptionRate: 0 },
+            eventCount: 7,
+            workerEventCount: 3,
+            recentFailureReasons: [],
+          },
+          {
+            storyId: 'completed_archive',
+            title: '已完成归档',
+            sessionId: 13,
+            sessionStatus: 'COMPLETED',
+            taskCount: 1,
+            pendingActionCount: 0,
+            taskStatusCounts: { COMPLETED: 1 },
+            proposedActionStatusCounts: { CONFIRMED: 1 },
+            humanConfirmation: { pending: 0, adopted: 1, terminal: 1, adoptionRate: 1 },
+            eventCount: 2,
+            workerEventCount: 1,
+            recentFailureReasons: [],
+          },
+        ],
+      },
+    )
+
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toMatchObject({
+      storyId: 'refund_baggage_parallel',
+      sessionId: 12,
+      customerName: '赵女士',
+      statusKind: 'blocked',
+      statusLabel: '阻塞等待',
+      taskCount: 2,
+      pendingActionCount: 1,
+      lastActivityLabel: '7 事件 · 3 Worker',
+    })
+    expect(rows[1]).toMatchObject({
+      storyId: 'completed_archive',
+      sessionId: 13,
+      statusKind: 'completed',
+      statusLabel: '完成归档',
+      pendingActionCount: 0,
+      lastActivityLabel: '2 事件 · 1 Worker',
+    })
+  })
+
   it('reuses an existing session for later turns', async () => {
     apiMocks.sendCustomerAssistantTurn.mockResolvedValue(mockCustomerAssistantTurnResult)
     apiMocks.listCustomerAssistantTasks.mockResolvedValue(mockCustomerAssistantTasks)

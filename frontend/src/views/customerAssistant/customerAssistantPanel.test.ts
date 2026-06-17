@@ -109,6 +109,21 @@ describe('CustomerAssistantPanel UI contract', () => {
     expect(content).toContain('loadDemoStoryMetrics')
   })
 
+  it('renders the seeded session inbox as an operator dashboard outside the customer lane', () => {
+    const inboxPanel = section(content, 'operator-session-inbox-dashboard')
+
+    expect(inboxPanel).toContain('sessionInboxRows')
+    expect(inboxPanel).toContain('openSessionInboxRow')
+    expect(inboxPanel).toContain('data-testid="operator-session-inbox-row"')
+    expect(inboxPanel).toContain('row.customerName')
+    expect(inboxPanel).toContain('row.storyTitle')
+    expect(inboxPanel).toContain('row.statusLabel')
+    expect(inboxPanel).toContain('row.lastActivityLabel')
+    expect(inboxPanel).toContain('多客户会话')
+    expect(section(content, 'customer-conversation-lane')).not.toContain('operator-session-inbox-dashboard')
+    expect(section(content, 'customer-conversation-lane')).not.toContain('openSessionInboxRow')
+  })
+
   it('distinguishes proposed task commands from executable actions', () => {
     expect(content).toContain('isProposedTaskCommand')
     expect(content).toContain('确认任务变更')

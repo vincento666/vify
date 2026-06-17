@@ -1,0 +1,21 @@
+{
+  "baseUrl": "http://127.0.0.1:5121",
+  "visibleSessions": 3,
+  "switches": [
+    {
+      "storyId": "refund_baggage_parallel",
+      "sessionId": 76
+    },
+    {
+      "storyId": "invoice_interrupt_flight_status",
+      "sessionId": 77
+    }
+  ],
+  "screenshots": [
+    "artifacts/slices/121-customer-assistant-session-inbox-dashboard/121.1/screenshots/session-inbox-dashboard.png"
+  ],
+  "pageMetrics": {
+    "overflowX": 0,
+    "bodyLength": 2486
+  }
+}

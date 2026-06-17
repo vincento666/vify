@@ -18,6 +18,8 @@ import {
   updateCustomerAssistantAction,
   type CustomerAssistantActionUpdatePayload,
   type CustomerAssistantDemoStory,
+  type CustomerAssistantDemoStoryMetrics,
+  type CustomerAssistantDemoStoryMetricsStory,
   type CustomerAssistantEvent,
   type CustomerAssistantListResult,
   type CustomerAssistantOperatorAudit,
@@ -68,6 +70,26 @@ export interface SendCustomerAssistantRuntimeTurnOptions {
   onLiveState?: (state: CustomerAssistantRuntimeState) => void
 }
 
+export type CustomerAssistantSessionInboxStatusKind = 'active' | 'pending' | 'blocked' | 'completed'
+
+export interface CustomerAssistantSessionInboxRow {
+  storyId: string
+  storyTitle: string
+  sessionId: number
+  sessionStatus: string
+  customerName: string
+  maskedPhone?: string
+  statusKind: CustomerAssistantSessionInboxStatusKind
+  statusLabel: string
+  statusDetail: string
+  taskCount: number
+  activeTaskCount: number
+  blockedTaskCount: number
+  completedTaskCount: number
+  pendingActionCount: number
+  lastActivityLabel: string
+}
+
 export function createCustomerAssistantRuntimeState(
   input: CreateCustomerAssistantRuntimeStateInput = {},
 ): CustomerAssistantRuntimeState {
@@ -92,6 +114,50 @@ export function createCustomerAssistantRuntimeState(
     loading: false,
     error: null,
   }
+}
+
+export function buildCustomerAssistantSessionInboxRows(
+  stories: CustomerAssistantDemoStory[],
+  metrics: CustomerAssistantDemoStoryMetrics | null = null,
+): CustomerAssistantSessionInboxRow[] {
+  const metricByStoryId = new Map((metrics?.stories ?? []).map((story) => [story.storyId, story]))
+  return stories.map((story) => {
+    const storyMetrics = metricByStoryId.get(story.storyId)
+    const taskStatusCounts = storyMetrics?.taskStatusCounts ?? {}
+    const activeTaskCount = sumStatusCounts(taskStatusCounts, ['PENDING', 'RUNNING', 'ACTIVE'])
+    const blockedTaskCount = sumStatusCounts(taskStatusCounts, ['WAITING', 'BLOCKED', 'FAILED'])
+    const completedTaskCount = sumStatusCounts(taskStatusCounts, ['COMPLETED', 'CANCELLED'])
+    const taskCount = storyMetrics?.taskCount ?? story.taskCount
+    const pendingActionCount = storyMetrics?.pendingActionCount ?? story.pendingActionCount
+    const statusKind = sessionInboxStatusKind(story, storyMetrics, {
+      blockedTaskCount,
+      completedTaskCount,
+      pendingActionCount,
+      taskCount,
+    })
+    return {
+      storyId: story.storyId,
+      storyTitle: story.title,
+      sessionId: story.sessionId,
+      sessionStatus: storyMetrics?.sessionStatus ?? story.sessionStatus ?? 'UNKNOWN',
+      customerName: story.customerName,
+      maskedPhone: story.maskedPhone,
+      statusKind,
+      statusLabel: sessionInboxStatusLabel(statusKind),
+      statusDetail: sessionInboxStatusDetail(statusKind, {
+        activeTaskCount,
+        blockedTaskCount,
+        completedTaskCount,
+        pendingActionCount,
+      }),
+      taskCount,
+      activeTaskCount,
+      blockedTaskCount,
+      completedTaskCount,
+      pendingActionCount,
+      lastActivityLabel: sessionInboxLastActivityLabel(storyMetrics),
+    }
+  })
 }
 
 export async function sendCustomerAssistantRuntimeTurn(
@@ -498,6 +564,57 @@ function liveTaskStatus(eventType: string): string | null {
 
 function lastEventSequence(events: CustomerAssistantEvent[]): number {
   return events.reduce((max, event) => Math.max(max, event.sequence), 0)
+}
+
+function sumStatusCounts(counts: Record<string, number>, statuses: string[]): number {
+  return statuses.reduce((total, status) => total + Number(counts[status] ?? 0), 0)
+}
+
+function sessionInboxStatusKind(
+  story: CustomerAssistantDemoStory,
+  storyMetrics: CustomerAssistantDemoStoryMetricsStory | undefined,
+  counts: {
+    blockedTaskCount: number
+    completedTaskCount: number
+    pendingActionCount: number
+    taskCount: number
+  },
+): CustomerAssistantSessionInboxStatusKind {
+  if (counts.blockedTaskCount > 0 || (storyMetrics?.recentFailureReasons.length ?? 0) > 0) return 'blocked'
+  if (counts.pendingActionCount > 0) return 'pending'
+  if (counts.taskCount > 0 && counts.completedTaskCount >= counts.taskCount) return 'completed'
+  if ((storyMetrics?.sessionStatus ?? story.sessionStatus) === 'COMPLETED') return 'completed'
+  return 'active'
+}
+
+function sessionInboxStatusLabel(statusKind: CustomerAssistantSessionInboxStatusKind): string {
+  const labels: Record<CustomerAssistantSessionInboxStatusKind, string> = {
+    active: '活跃处理',
+    pending: '待确认动作',
+    blocked: '阻塞等待',
+    completed: '完成归档',
+  }
+  return labels[statusKind]
+}
+
+function sessionInboxStatusDetail(
+  statusKind: CustomerAssistantSessionInboxStatusKind,
+  counts: {
+    activeTaskCount: number
+    blockedTaskCount: number
+    completedTaskCount: number
+    pendingActionCount: number
+  },
+): string {
+  if (statusKind === 'blocked') return `${counts.blockedTaskCount} 个任务等待坐席或补充信息`
+  if (statusKind === 'pending') return `${counts.pendingActionCount} 个动作待人工确认`
+  if (statusKind === 'completed') return `${counts.completedTaskCount} 个任务已归档`
+  return `${counts.activeTaskCount} 个任务进行中`
+}
+
+function sessionInboxLastActivityLabel(storyMetrics: CustomerAssistantDemoStoryMetricsStory | undefined): string {
+  if (!storyMetrics) return '等待指标'
+  return `${storyMetrics.eventCount} 事件 · ${storyMetrics.workerEventCount} Worker`
 }
 
 async function applyRuntimeActionResult(
