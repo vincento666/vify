@@ -12,20 +12,20 @@
 
 ## 184.1 Phase 0 Minimal Harness Kernel
 
-- [x] RED: repository/domain/API tests fail for session, run, message, event,
+- [ ] RED: repository/domain/API tests fail for session, run, message, event,
       tool-call persistence, read-only Tool Registry, and event replay.
-- [x] Implement `app/modules/ai_assistant` domain models for session, run,
+- [ ] Implement `app/modules/ai_assistant` domain models for session, run,
       message, event, tool call, tool manifest, and harness result.
-- [x] Implement persistence repository and SQLAlchemy schema.
-- [x] Implement monotonically increasing event sequence per run.
-- [x] Implement minimal Prompt Assembler.
-- [x] Implement read-only Tool Registry with deterministic `echo_context`.
-- [x] Implement one-turn harness loop:
+- [ ] Implement persistence repository and SQLAlchemy schema.
+- [ ] Implement monotonically increasing event sequence per run.
+- [ ] Implement minimal Prompt Assembler.
+- [ ] Implement read-only Tool Registry with deterministic `echo_context`.
+- [ ] Implement one-turn harness loop:
       `reason -> validate -> act -> observe -> final`.
-- [x] Add `/api/v1/ai-assistant/...` Phase 0 endpoints.
-- [x] Preserve `{code, message, data}` response envelope.
-- [x] Prove one message can produce a final answer and replayed event history.
-- [x] Save RED/unit/integration/contract/E2E evidence under
+- [ ] Add `/api/v1/ai-assistant/...` Phase 0 endpoints.
+- [ ] Preserve `{code, message, data}` response envelope.
+- [ ] Prove one message can produce a final answer and replayed event history.
+- [ ] Save RED/unit/integration/contract/E2E evidence under
       `artifacts/slices/184-ai-assistant-harness-core-mvp/184.1/`.
 
 ## 184.2 Phase 1 Sandbox And Approval Boundary

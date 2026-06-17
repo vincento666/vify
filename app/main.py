@@ -10,7 +10,6 @@ from app.core.database import check_database_schema, initialise_database
 from app.core.exception_handlers import register_exception_handlers
 from app.core.logging import configure_logging
 from app.modules.agent.web.router import router as agent_router
-from app.modules.ai_assistant.web.router import router as ai_assistant_router
 from app.modules.audit.web.router import router as audit_router
 from app.modules.chat.web.router import router as chat_router
 from app.modules.customer_assistant.web.router import router as customer_assistant_router
@@ -65,7 +64,6 @@ app.include_router(health_router)
 app.include_router(runtime_router)
 app.include_router(provider_router)
 app.include_router(agent_router)
-app.include_router(ai_assistant_router)
 app.include_router(mcp_router)
 app.include_router(knowledge_router)
 app.include_router(document_router)

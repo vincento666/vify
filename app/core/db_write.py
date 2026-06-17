@@ -91,4 +91,4 @@ def _conditions(
 ) -> list[ColumnElement[bool]]:
     if isinstance(where, Sequence) and not isinstance(where, ColumnElement):
         return list(where)
-    return [where]
+    return [where]  # type: ignore[list-item]
