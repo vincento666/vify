@@ -271,6 +271,23 @@ describe('customer assistant view model', () => {
     })
   })
 
+  it('redacts sensitive values in runtime event timeline payload previews', () => {
+    const rows = formatCustomerAssistantEvents([
+      {
+        id: 509,
+        sessionId: 12,
+        sequence: 9,
+        type: 'llm_primary_fallback',
+        visibility: 'operator',
+        source: 'llm_primary',
+        payload: { reason: 'schema_failure phone 13800138000' },
+      },
+    ])
+
+    expect(rows[0].payloadPreview).toContain('[REDACTED]')
+    expect(rows[0].payloadPreview).not.toContain('13800138000')
+  })
+
   it('formats operator audit rows without raw payload details', () => {
     const rows = formatCustomerAssistantOperatorAudit({
       sessionId: 12,
@@ -521,7 +538,7 @@ describe('customer assistant view model', () => {
       eventCounts: { total: 8, byType: { task_failed: 1 }, bySource: { chatflow_sop: 3 } },
       workerEventCounts: { total: 4, byType: { worker_started: 2 } },
       recentFailureReasons: [
-        { taskId: 3, taskType: 'REFUND', source: 'chatflow_sop', reason: '工具失败 [REDACTED] api_key=***' },
+        { taskId: 3, taskType: 'REFUND', source: 'chatflow_sop', reason: '工具失败 phone 13800138000' },
       ],
     })
 
@@ -534,8 +551,9 @@ describe('customer assistant view model', () => {
     expect(metrics.failures[0]).toMatchObject({
       taskType: 'REFUND',
       source: 'chatflow_sop',
-      reason: '工具失败 [REDACTED] api_key=***',
+      reason: '工具失败 phone [REDACTED]',
     })
+    expect(JSON.stringify(metrics.failures)).not.toContain('13800138000')
   })
 
   it('formats empty metrics safely before a session exists', () => {
@@ -622,11 +640,13 @@ describe('customer assistant view model', () => {
         payload: {
           phase: 'task_recognition',
           reason: 'low_confidence',
-          error: 'api_key=sk-live-secret customer 13800138000',
+          error: 'provider_error customer 13800138000',
         },
       },
     ]
-    const taskSummary = summarizeCustomerAssistantTasks(mockCustomerAssistantTasks.list)
+    const taskSummary = summarizeCustomerAssistantTasks([
+      { ...mockCustomerAssistantTasks.list[0], status: 'FAILED' },
+    ])
     const recognitionEvidence = formatTaskRecognitionEvidence(recognitionEvents)
 
     const surface = formatCustomerAssistantEvalSurface({
@@ -643,7 +663,7 @@ describe('customer assistant view model', () => {
             taskId: 101,
             taskType: 'REFUND',
             source: 'chatflow_sop',
-            reason: '工具失败 api_key=sk-live-secret phone 13800138000',
+            reason: '工具失败 phone 13800138000',
           },
         ],
       },
@@ -664,8 +684,8 @@ describe('customer assistant view model', () => {
     expect(surface.workerExecution[0]).toMatchObject({
       title: '退票处理',
       detail: 'refund_ticket · chatflow_sop · flight_refund',
-      meta: ['WAITING', '缺失 订单号'],
-      tone: 'warning',
+      meta: ['FAILED', '缺失 订单号'],
+      tone: 'error',
     })
     expect(surface.modelEvidence).toEqual([
       {
@@ -683,13 +703,22 @@ describe('customer assistant view model', () => {
         tone: 'warning',
       },
     ])
+    expect(surface.recoveryHints).toEqual([
+      {
+        key: 'recovery-model-506',
+        title: '模型异常恢复',
+        detail: 'task_recognition · low_confidence',
+        action: '检查模型策略、提示词和输出 Schema；若关联任务失败，可在任务台账点击重试。',
+        tone: 'warning',
+      },
+    ])
     expect(surface.failures[0]).toMatchObject({
       taskType: 'REFUND',
       source: 'chatflow_sop',
-      reason: '工具失败 api_key=[REDACTED] phone [REDACTED]',
+      reason: '工具失败 phone [REDACTED]',
     })
     expect(JSON.stringify(surface)).not.toContain('13800138000')
-    expect(JSON.stringify(surface)).not.toContain('sk-live-secret')
+    expect(JSON.stringify(surface)).not.toContain('provider_error customer 13800138000')
   })
 
   it('derives live progress stages from L1 events', () => {

@@ -180,6 +180,14 @@ export interface CustomerAssistantModelEvidenceRow {
   tone: 'default' | 'success' | 'warning' | 'error'
 }
 
+export interface CustomerAssistantRecoveryHintRow {
+  key: string
+  title: string
+  detail: string
+  action: string
+  tone: 'warning' | 'error'
+}
+
 export interface CustomerAssistantEvalSurfaceInput {
   taskSummary: CustomerAssistantTaskSummaryModel
   recognitionEvidence: CustomerAssistantRecognitionEvidenceRow[]
@@ -193,6 +201,7 @@ export interface CustomerAssistantEvalSurface {
   taskRecognition: CustomerAssistantEvalEvidenceRow[]
   workerExecution: CustomerAssistantEvalEvidenceRow[]
   modelEvidence: CustomerAssistantModelEvidenceRow[]
+  recoveryHints: CustomerAssistantRecoveryHintRow[]
   failures: CustomerAssistantFailureRow[]
 }
 
@@ -462,7 +471,7 @@ export function formatCustomerAssistantEvents(events: CustomerAssistantEvent[]):
     title: event.type,
     visibilityLabel: event.visibility ?? 'normal',
     sourceLabel: event.source ?? 'system',
-    payloadPreview: JSON.stringify(event.payload ?? {}),
+    payloadPreview: redactEvalText(JSON.stringify(event.payload ?? {})),
     debug: event.visibility === 'debug',
     defaultCollapsed: event.visibility === 'debug',
   }))
@@ -619,7 +628,10 @@ export function formatCustomerAssistantMetrics(
         tone: 'default',
       },
     ],
-    failures: [...(metrics?.recentFailureReasons ?? [])],
+    failures: (metrics?.recentFailureReasons ?? []).map((failure) => ({
+      ...failure,
+      reason: redactEvalText(failure.reason),
+    })),
   }
 }
 
@@ -639,6 +651,7 @@ export function formatCustomerAssistantEvalSurface(
     numberMetric(workerCounts, 'task_failed')
   const workerTotal = input.metrics?.workerEventCounts.total ?? workerStarted + workerResult + workerFailed
   const modelEvidence = formatModelEvidence(input.events)
+  const recoveryHints = formatModelRecoveryHints(modelEvidence, input.taskSummary.items)
   const diffCount = modelEvidence.filter((row) => row.reason === 'diff mismatch' || row.reason === 'baseline match').length
   const fallbackCount = modelEvidence.filter((row) => row.title === '模型回退').length
   const adoption = input.metrics?.humanConfirmation ?? { pending: 0, adopted: 0, terminal: 0, adoptionRate: 0 }
@@ -701,6 +714,7 @@ export function formatCustomerAssistantEvalSurface(
       tone: task.statusTone,
     })),
     modelEvidence,
+    recoveryHints,
     failures: (input.metrics?.recentFailureReasons ?? []).map((failure) => ({
       ...failure,
       reason: redactEvalText(failure.reason),
@@ -953,6 +967,24 @@ function formatModelEvidence(events: CustomerAssistantEvent[]): CustomerAssistan
     }
     return []
   })
+}
+
+function formatModelRecoveryHints(
+  modelEvidence: CustomerAssistantModelEvidenceRow[],
+  tasks: CustomerAssistantTaskRow[],
+): CustomerAssistantRecoveryHintRow[] {
+  const hasFailedTask = tasks.some((task) => task.status === 'FAILED')
+  return modelEvidence
+    .filter((row) => row.title === '模型回退' || row.title === '影子评估失败')
+    .map((row) => ({
+      key: `recovery-${row.key}`,
+      title: row.title === '影子评估失败' ? '影子评估恢复' : '模型异常恢复',
+      detail: row.detail,
+      action: hasFailedTask
+        ? '检查模型策略、提示词和输出 Schema；若关联任务失败，可在任务台账点击重试。'
+        : '检查模型策略、提示词和输出 Schema；继续使用当前确定性回退结果并观察下一轮输出。',
+      tone: row.tone === 'error' ? 'error' : 'warning',
+    }))
 }
 
 function redactEvalText(value: string): string {

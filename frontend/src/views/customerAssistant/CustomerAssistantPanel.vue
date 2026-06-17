@@ -354,6 +354,20 @@
               <small>{{ row.reason }}</small>
             </div>
           </div>
+          <div class="eval-evidence-block">
+            <strong>恢复建议</strong>
+            <div v-if="evalSurface.recoveryHints.length === 0" class="empty-compact">暂无模型恢复建议</div>
+            <div
+              v-for="hint in evalSurface.recoveryHints"
+              :key="hint.key"
+              class="eval-evidence-row"
+              :class="hint.tone"
+            >
+              <span>{{ hint.title }}</span>
+              <p>{{ hint.detail }}</p>
+              <small>{{ hint.action }}</small>
+            </div>
+          </div>
           <div v-if="evalSurface.failures.length" class="failure-list">
             <div v-for="failure in evalSurface.failures" :key="`eval-${failure.taskId}:${failure.reason}`">
               <a-tag color="error">{{ failure.taskType }}</a-tag>
