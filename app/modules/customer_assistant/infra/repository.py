@@ -752,6 +752,39 @@ class CustomerAssistantRepository:
         ).mappings().one()
         return dict(row)
 
+    def update_pending_proposed_action(
+        self,
+        action_id: int,
+        *,
+        title: str | None = None,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        now = datetime.now()
+        values: dict[str, Any] = {"updated_at": now}
+        if title is not None:
+            values["title"] = title
+        if payload is not None:
+            values["payload"] = _redact_payload(payload)
+        update_result = self._session.execute(
+            self._action_table.update()
+            .where(
+                self._action_table.c.id == action_id,
+                self._action_table.c.status == "PENDING",
+                self._action_table.c.deleted.is_(False),
+            )
+            .values(**values)
+        )
+        self._session.commit()
+        if update_result.rowcount == 0:
+            return None
+        row = self._session.execute(
+            sa.select(self._action_table).where(
+                self._action_table.c.id == action_id,
+                self._action_table.c.deleted.is_(False),
+            )
+        ).mappings().one()
+        return dict(row)
+
     def get_proposed_action(self, action_id: int) -> dict[str, Any] | None:
         row = self._session.execute(
             sa.select(self._action_table).where(

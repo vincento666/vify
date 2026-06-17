@@ -896,7 +896,9 @@ class CustomerAssistantService:
             changed_fields.append("title")
         if payload is not None and payload != (action.get("payload") or {}):
             changed_fields.append("payload")
-        updated = self._repository.update_proposed_action(action_id, title=title, payload=payload)
+        updated = self._repository.update_pending_proposed_action(action_id, title=title, payload=payload)
+        if updated is None:
+            raise BizError(ErrorCode.BAD_REQUEST, "Only pending proposed actions can be modified")
         self._repository.append_event(
             int(updated["session_id"]),
             "proposed_action_modified",
@@ -1012,7 +1014,13 @@ class CustomerAssistantService:
             raise BizError(ErrorCode.BAD_REQUEST, "Only pending proposed actions can be confirmed")
         if action["action_type"] == "PROPOSED_TASK_COMMAND":
             return self._confirm_proposed_task_command(action)
-        updated = self._repository.update_proposed_action_status(action_id, "CONFIRMED")
+        updated = self._repository.transition_proposed_action_status(
+            action_id,
+            expected_status="PENDING",
+            next_status="CONFIRMED",
+        )
+        if updated is None:
+            raise BizError(ErrorCode.BAD_REQUEST, "Only pending proposed actions can be confirmed")
         self._repository.append_event(
             int(updated["session_id"]),
             "proposed_action_confirmed",
@@ -1029,6 +1037,13 @@ class CustomerAssistantService:
         command = _task_command_from_proposed_payload(dict(payload.get("taskCommand") or {}))
         session_id = int(action["session_id"])
         run_id = int(action["run_id"])
+        claimed = self._repository.transition_proposed_action_status(
+            int(action["id"]),
+            expected_status="PENDING",
+            next_status="CONFIRMED",
+        )
+        if claimed is None:
+            raise BizError(ErrorCode.BAD_REQUEST, "Only pending proposed actions can be confirmed")
         mutation = self._ledger.apply_commands(
             session_id,
             run_id,
@@ -1056,11 +1071,14 @@ class CustomerAssistantService:
             worker_run_ids = [result.worker_run_id for result in worker_results if result.worker_run_id]
             if worker_run_ids:
                 result_payload["workerRunIds"] = worker_run_ids
-        updated = self._repository.update_proposed_action_status(
+        updated = self._repository.transition_proposed_action_status(
             int(action["id"]),
-            "CONFIRMED",
+            expected_status="CONFIRMED",
+            next_status="CONFIRMED",
             result=result_payload,
         )
+        if updated is None:
+            raise BizError(ErrorCode.BAD_REQUEST, "Only pending proposed actions can be confirmed")
         self._repository.append_event(
             session_id,
             "proposed_task_command_confirmed",
@@ -1091,7 +1109,13 @@ class CustomerAssistantService:
         self._ensure_session(int(action["session_id"]))
         if action["status"] != "PENDING":
             raise BizError(ErrorCode.BAD_REQUEST, "Only pending proposed actions can be rejected")
-        updated = self._repository.update_proposed_action_status(action_id, "REJECTED")
+        updated = self._repository.transition_proposed_action_status(
+            action_id,
+            expected_status="PENDING",
+            next_status="REJECTED",
+        )
+        if updated is None:
+            raise BizError(ErrorCode.BAD_REQUEST, "Only pending proposed actions can be rejected")
         self._repository.append_event(
             int(updated["session_id"]),
             "proposed_action_rejected",
