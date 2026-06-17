@@ -26,6 +26,7 @@ from app.modules.customer_assistant.domain.llm_primary import (
 from app.modules.customer_assistant.domain.models import AssistantTurnResult, TaskCommand, TaskCommandType, TaskItem, TaskLedger, TaskStatus, WorkerResult
 from app.modules.customer_assistant.domain.policy import CustomerAssistantActionPolicy, UnsupportedTaskCommand
 from app.modules.customer_assistant.domain.react_core import AssistantTurnContext, ControlledReActCore, CoreObservation
+from app.modules.customer_assistant.domain.risk_policy import is_supported_risk_policy_ref, supported_risk_policy_refs
 from app.modules.customer_assistant.domain.scheduler import LocalWorkerScheduler
 from app.modules.customer_assistant.domain.shadow import (
     CustomerAssistantShadowClient,
@@ -2379,6 +2380,12 @@ def _validate_worker_profile(profile: CustomerAssistantWorkerProfile) -> None:
         raise BizError(
             ErrorCode.BAD_REQUEST,
             f"Unsupported toolPolicyRef: {profile.tool_policy_ref}. Supported tool policies: {supported}",
+        )
+    if not is_supported_risk_policy_ref(profile.risk_policy_ref):
+        supported = ", ".join(supported_risk_policy_refs())
+        raise BizError(
+            ErrorCode.BAD_REQUEST,
+            f"Unsupported riskPolicyRef: {profile.risk_policy_ref}. Supported risk policies: {supported}",
         )
     normalized_tool_refs = [str(tool_ref or "").strip() for tool_ref in profile.tool_refs]
     if any(not tool_ref for tool_ref in normalized_tool_refs):

@@ -181,6 +181,7 @@ class CustomerAssistantWorkerProfileApiTest(unittest.TestCase):
             ({"toolPolicyRef": ""}, "toolPolicyRef"),
             ({"toolPolicyRef": "unknown-tool-policy"}, "Unsupported toolPolicyRef"),
             ({"riskPolicyRef": ""}, "riskPolicyRef"),
+            ({"riskPolicyRef": "unknown-risk-policy"}, "Unsupported riskPolicyRef"),
             ({"outputSchemaRef": ""}, "outputSchemaRef"),
             ({"toolRefs": ["lookup_order", "", "lookup_order"]}, "toolRefs"),
         ]
