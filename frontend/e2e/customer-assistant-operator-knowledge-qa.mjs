@@ -57,6 +57,25 @@ const operatorAudit = {
   list: [],
   total: 0,
 }
+const operatorKnowledgeAudit = {
+  sessionId: 51,
+  list: [
+    {
+      id: 720,
+      sequence: 8,
+      eventType: 'operator_knowledge_qa_answered',
+      title: '知识追问已回答',
+      actor: 'operator',
+      source: 'operator_advisory',
+      status: 'ANSWERED',
+      targetType: 'session',
+      targetId: 51,
+      summary: '1 source(s), 1 evidence, warnings=1',
+      createdAt: '2026-06-17T06:00:00',
+    },
+  ],
+  total: 1,
+}
 
 const qaResult = {
   sessionId: 51,
@@ -97,6 +116,8 @@ const qaResult = {
   warnings: ['No seeded FAQ or knowledge source matched the operator question.'],
 }
 
+let operatorKnowledgeAsked = false
+
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1366, height: 900 } })
 
@@ -123,7 +144,30 @@ try {
       return
     }
     if (method === 'GET' && url.endsWith('/sessions/51/events')) {
-      await route.fulfill({ json: envelope({ list: [], total: 0 }) })
+      await route.fulfill({
+        json: envelope({
+          list: operatorKnowledgeAsked
+            ? [
+                {
+                  id: 720,
+                  sessionId: 51,
+                  runId: null,
+                  sequence: 8,
+                  type: 'operator_knowledge_qa_answered',
+                  visibility: 'normal',
+                  source: 'operator_advisory',
+                  actor: 'operator',
+                  taskId: null,
+                  parentSpanId: null,
+                  spanId: null,
+                  payload: { sourceCount: 1, evidenceCount: 1, warningCount: 1 },
+                  createdAt: '2026-06-17T06:00:00',
+                },
+              ]
+            : [],
+          total: operatorKnowledgeAsked ? 1 : 0,
+        }),
+      })
       return
     }
     if (method === 'GET' && url.endsWith('/sessions/51/proposed-actions')) {
@@ -135,12 +179,13 @@ try {
       return
     }
     if (method === 'GET' && url.endsWith('/sessions/51/operator-audit')) {
-      await route.fulfill({ json: envelope(operatorAudit) })
+      await route.fulfill({ json: envelope(operatorKnowledgeAsked ? operatorKnowledgeAudit : operatorAudit) })
       return
     }
     if (method === 'POST' && url.endsWith('/sessions/51/operator-knowledge-qa')) {
       const body = request.postDataJSON()
       assert(body.question === qaResult.question, `Expected Q&A question, got ${JSON.stringify(body)}`)
+      operatorKnowledgeAsked = true
       await route.fulfill({ json: envelope(qaResult) })
       return
     }
@@ -173,6 +218,14 @@ try {
   assert(!qaText.includes('MU5137-8899'), 'Q&A panel leaked order-like task key')
   assert(!qaText.includes('secret-token'), 'Q&A panel leaked host context token')
   assert(!qaText.includes('hostContext'), 'Q&A panel leaked raw context field')
+
+  const auditPanel = page.getByTestId('operator-audit-panel')
+  await auditPanel.getByText('知识追问已回答').waitFor({ state: 'visible', timeout: 10000 })
+  await auditPanel.getByText('ANSWERED').waitFor({ state: 'visible', timeout: 10000 })
+  const auditText = await auditPanel.innerText()
+  assert(auditText.includes('1 source'), `Expected Q&A audit source count, got ${auditText}`)
+  assert(!auditText.includes('MU5137-8899'), 'Audit panel leaked order-like task key')
+  assert(!auditText.includes('secret-token'), 'Audit panel leaked host context token')
 
   if (screenshotPath) {
     mkdirSync(dirname(screenshotPath), { recursive: true })

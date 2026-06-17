@@ -809,6 +809,19 @@ class CustomerAssistantService:
             evidence,
             warnings,
         )
+        self._repository.append_event(
+            session_id,
+            "operator_knowledge_qa_answered",
+            _operator_knowledge_qa_event_payload(
+                normalized_question,
+                sources,
+                context_summary,
+                evidence,
+                warnings,
+            ),
+            source="operator_advisory",
+            actor="operator",
+        )
         return {
             "sessionId": session_id,
             "question": sanitize_text(normalized_question),
@@ -2365,6 +2378,7 @@ _OPERATOR_AUDIT_EVENT_TITLES = {
     "task_failed": "任务失败",
     "worker_failed": "Worker 失败",
     "operator_advisory_context_packed": "坐席追问上下文已打包",
+    "operator_knowledge_qa_answered": "知识追问已回答",
 }
 
 _OPERATOR_AUDIT_STATUS_BY_EVENT = {
@@ -2387,6 +2401,7 @@ _OPERATOR_AUDIT_STATUS_BY_EVENT = {
     "task_failed": "FAILED",
     "worker_failed": "FAILED",
     "operator_advisory_context_packed": "PACKED",
+    "operator_knowledge_qa_answered": "ANSWERED",
 }
 
 
@@ -2464,6 +2479,12 @@ def _operator_audit_summary(event_type: str, row: dict[str, Any], payload: dict[
     if event_type == "operator_advisory_context_packed":
         return sanitize_text(
             f"{payload.get('taskCount') or 0} tasks, {payload.get('knowledgeSnippetCount') or 0} knowledge snippets"
+        )
+    if event_type == "operator_knowledge_qa_answered":
+        return sanitize_text(
+            f"{payload.get('sourceCount') or 0} source(s), "
+            f"{payload.get('evidenceCount') or 0} evidence, "
+            f"warnings={payload.get('warningCount') or 0}"
         )
     return sanitize_text(event_type)
 
@@ -3066,6 +3087,26 @@ def _operator_knowledge_qa_answer(
     if warnings:
         lines.append(f"Warnings: {'; '.join(warnings)}")
     return sanitize_text("\n".join(line for line in lines if line))
+
+
+def _operator_knowledge_qa_event_payload(
+    question: str,
+    sources: list[dict[str, Any]],
+    context_summary: dict[str, Any],
+    evidence: list[dict[str, Any]],
+    warnings: list[str],
+) -> dict[str, Any]:
+    primary_source = sources[0] if sources else {}
+    return {
+        "questionExcerpt": sanitize_text(question)[:240],
+        "sourceCount": len(sources),
+        "primarySourceTitle": sanitize_text(str(primary_source.get("title") or ""))[:160],
+        "primarySourceType": sanitize_text(str(primary_source.get("sourceType") or ""))[:80],
+        "evidenceCount": len(evidence),
+        "warningCount": len(warnings),
+        "taskCount": int(context_summary.get("taskCount") or 0),
+        "pendingActionCount": int(context_summary.get("pendingActionCount") or 0),
+    }
 
 
 def _count_formatted_values(rows: list[dict[str, Any]], key: str) -> dict[str, int]:

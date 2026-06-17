@@ -373,11 +373,31 @@ export async function askCustomerAssistantRuntimeOperatorKnowledgeQuestion(
     const operatorKnowledgeQa = await askCustomerAssistantOperatorKnowledgeQuestion(current.session.id, {
       question: normalizedQuestion,
     })
+    const { tasks, events, proposedActions, metrics, operatorAudit } = await refreshCustomerAssistantRuntimeLedgers(
+      current.session.id,
+    )
+    const rebuilt = buildCustomerAssistantState({
+      sessionId: current.session.id,
+      tasks: tasks.list,
+      events: events.list,
+      proposedActions: proposedActions.list,
+      operatorAudit,
+    })
     return {
-      ...current,
+      ...rebuilt,
+      session: current.session,
+      tasks: tasks.list,
+      events: events.list,
+      metrics,
+      operatorAudit,
       operatorKnowledgeQa,
       operatorKnowledgeQaLoading: false,
       operatorKnowledgeQaError: null,
+      subAgentRun: current.subAgentRun,
+      subAgentLoading: false,
+      subAgentError: null,
+      loading: false,
+      error: null,
     }
   } catch (error) {
     return {

@@ -37,6 +37,8 @@ class CustomerAssistantOperatorKnowledgeQaApiTest(unittest.TestCase):
                 json={"question": "退票和行李额可以并行处理吗？"},
             )
             after_tasks = client.get(f"/api/v1/customer-assistant/sessions/{session_id}/tasks").json()["data"]["list"]
+            events = client.get(f"/api/v1/customer-assistant/sessions/{session_id}/events").json()["data"]["list"]
+            audit = client.get(f"/api/v1/customer-assistant/sessions/{session_id}/operator-audit").json()["data"]
 
         self.assertEqual(response.status_code, 200, response.text)
         data = response.json()["data"]
@@ -51,10 +53,31 @@ class CustomerAssistantOperatorKnowledgeQaApiTest(unittest.TestCase):
         self.assertEqual(data["contextSummary"]["customer"]["name"], "赵女士")
         self.assertEqual(data["contextSummary"]["proposedActionCount"], 1)
         self.assertEqual(after_tasks, before_tasks)
+        qa_events = [event for event in events if event["type"] == "operator_knowledge_qa_answered"]
+        self.assertEqual(len(qa_events), 1)
+        self.assertEqual(qa_events[0]["source"], "operator_advisory")
+        self.assertEqual(qa_events[0]["actor"], "operator")
+        self.assertEqual(qa_events[0]["payload"]["sourceCount"], len(data["sources"]))
+        self.assertEqual(qa_events[0]["payload"]["evidenceCount"], len(data["evidence"]))
+        self.assertEqual(qa_events[0]["payload"]["warningCount"], len(data["warnings"]))
+        self.assertEqual(qa_events[0]["payload"]["taskCount"], 2)
+        self.assertEqual(qa_events[0]["payload"]["pendingActionCount"], 1)
+        self.assertEqual(qa_events[0]["payload"]["primarySourceTitle"], data["sources"][0]["title"])
+        qa_audit_rows = [row for row in audit["list"] if row["eventType"] == "operator_knowledge_qa_answered"]
+        self.assertEqual(len(qa_audit_rows), 1)
+        self.assertEqual(qa_audit_rows[0]["title"], "知识追问已回答")
+        self.assertEqual(qa_audit_rows[0]["status"], "ANSWERED")
+        self.assertEqual(qa_audit_rows[0]["targetType"], "session")
+        self.assertIn("1 source", qa_audit_rows[0]["summary"])
+        self.assertIn(f"{len(data['evidence'])} evidence", qa_audit_rows[0]["summary"])
         serialized = json.dumps(data, ensure_ascii=False)
         self.assertNotIn("MU5137-8899", serialized)
         self.assertNotIn("13800000000", serialized)
         self.assertNotIn("hostContext", serialized)
+        serialized_events = json.dumps({"events": qa_events, "audit": qa_audit_rows}, ensure_ascii=False)
+        self.assertNotIn("MU5137-8899", serialized_events)
+        self.assertNotIn("13800000000", serialized_events)
+        self.assertNotIn("hostContext", serialized_events)
 
     def _session_override(self) -> Generator[Session]:
         with self._factory() as session:

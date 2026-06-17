@@ -699,7 +699,7 @@ describe('customer assistant runtime integration', () => {
     expect(state.eventTimeline.some((event) => event.title === 'task_control_proposed')).toBe(true)
   })
 
-  it('asks operator knowledge Q&A without refreshing or mutating ledgers', async () => {
+  it('asks operator knowledge Q&A and refreshes audit ledgers without mutating the answer', async () => {
     apiMocks.askCustomerAssistantOperatorKnowledgeQuestion.mockResolvedValue({
       sessionId: 12,
       question: '退票和行李额可以并行处理吗？',
@@ -708,6 +708,60 @@ describe('customer assistant runtime integration', () => {
       evidence: [{ type: 'TASK_LEDGER', taskKey: 'refund_ticket', taskType: 'REFUND', status: 'WAITING' }],
       contextSummary: { sessionId: 12, taskCount: 1, pendingActionCount: 1, knowledgeBaseIds: [201] },
       warnings: [],
+    })
+    apiMocks.listCustomerAssistantTasks.mockResolvedValue(mockCustomerAssistantTasks)
+    apiMocks.listCustomerAssistantEvents.mockResolvedValue({
+      list: [
+        ...mockCustomerAssistantEvents.list,
+        {
+          id: 720,
+          sessionId: 12,
+          runId: null,
+          sequence: 8,
+          type: 'operator_knowledge_qa_answered',
+          visibility: 'normal',
+          source: 'operator_advisory',
+          actor: 'operator',
+          taskId: null,
+          parentSpanId: null,
+          spanId: null,
+          payload: { sourceCount: 1, evidenceCount: 1, warningCount: 0 },
+          createdAt: '2026-06-17T06:00:00',
+        },
+      ],
+      total: mockCustomerAssistantEvents.total + 1,
+    })
+    apiMocks.listCustomerAssistantProposedActions.mockResolvedValue({
+      list: mockCustomerAssistantTurnResult.proposedActions,
+      total: 1,
+    })
+    apiMocks.getCustomerAssistantSessionMetrics.mockResolvedValue({
+      ...mockCustomerAssistantMetrics,
+      eventCounts: {
+        total: 2,
+        byType: { run_started: 1, operator_knowledge_qa_answered: 1 },
+        bySource: { customer_assistant: 1, operator_advisory: 1 },
+      },
+    })
+    apiMocks.listCustomerAssistantOperatorAudit.mockResolvedValue({
+      sessionId: 12,
+      list: [
+        ...mockCustomerAssistantOperatorAudit.list,
+        {
+          id: 720,
+          sequence: 8,
+          eventType: 'operator_knowledge_qa_answered',
+          title: '知识追问已回答',
+          actor: 'operator',
+          source: 'operator_advisory',
+          status: 'ANSWERED',
+          targetType: 'session',
+          targetId: 12,
+          summary: '1 source, 1 evidence, warnings=0',
+          createdAt: '2026-06-17T06:00:00',
+        },
+      ],
+      total: mockCustomerAssistantOperatorAudit.total + 1,
     })
 
     const { askCustomerAssistantRuntimeOperatorKnowledgeQuestion, createCustomerAssistantRuntimeState } = await import(
@@ -729,11 +783,15 @@ describe('customer assistant runtime integration', () => {
     expect(apiMocks.askCustomerAssistantOperatorKnowledgeQuestion).toHaveBeenCalledWith(12, {
       question: '退票和行李额可以并行处理吗？',
     })
-    expect(apiMocks.listCustomerAssistantTasks).not.toHaveBeenCalled()
-    expect(apiMocks.listCustomerAssistantEvents).not.toHaveBeenCalled()
-    expect(apiMocks.listCustomerAssistantProposedActions).not.toHaveBeenCalled()
-    expect(answered.tasks).toBe(initial.tasks)
-    expect(answered.events).toBe(initial.events)
+    expect(apiMocks.listCustomerAssistantTasks).toHaveBeenCalledWith(12)
+    expect(apiMocks.listCustomerAssistantEvents).toHaveBeenCalledWith(12)
+    expect(apiMocks.listCustomerAssistantProposedActions).toHaveBeenCalledWith(12)
+    expect(apiMocks.getCustomerAssistantSessionMetrics).toHaveBeenCalledWith(12)
+    expect(apiMocks.listCustomerAssistantOperatorAudit).toHaveBeenCalledWith(12)
+    expect(answered.tasks).toEqual(mockCustomerAssistantTasks.list)
+    expect(answered.events.some((event) => event.type === 'operator_knowledge_qa_answered')).toBe(true)
+    expect(answered.operatorAudit.list.some((row) => row.eventType === 'operator_knowledge_qa_answered')).toBe(true)
+    expect(answered.metrics?.eventCounts.byType.operator_knowledge_qa_answered).toBe(1)
     expect(answered.operatorKnowledgeQa).not.toBeNull()
     expect(answered.operatorKnowledgeQa!.answer).toContain('可以并行处理')
   })

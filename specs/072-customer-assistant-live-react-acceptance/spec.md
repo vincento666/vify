@@ -39,3 +39,16 @@ pool:
   `artifacts/slices/072-customer-assistant-live-react-acceptance/acceptance-skip.txt`
 - Live artifact:
   `artifacts/slices/072-customer-assistant-live-react-acceptance/live/customer-assistant-live-react-acceptance.md`
+- OpenRouter DeepSeek verification:
+  `artifacts/slices/072-customer-assistant-live-react-acceptance/live/openrouter-deepseek-v4-flash-run.txt`
+
+## Latest Live Verification
+
+- Date: 2026-06-17
+- Provider: OpenRouter OpenAI-compatible API
+- Model pool override: `deepseek/deepseek-v4-flash`
+- Database: disposable MySQL8 database
+- Result: acceptance passed, 1 test passed, 6 live model calls, all required
+  categories completed.
+- Redaction: live artifact records provider/model/category evidence and does
+  not record API keys.
