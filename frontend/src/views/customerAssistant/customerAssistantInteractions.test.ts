@@ -80,9 +80,21 @@ describe('customer assistant interaction polish', () => {
     expect(content).toContain('aria-label="本地应用客户回复草稿"')
     expect(content).toContain('aria-label="确认拟议动作"')
     expect(content).toContain('aria-label="拒绝拟议动作"')
+    expect(content).toContain('aria-label="确认备注"')
+    expect(content).toContain('aria-label="拒绝原因"')
     expect(content).toContain('data-testid="customer-assistant-empty-state"')
     expect(content).toContain('data-testid="customer-assistant-failed-state"')
     expect(content).toContain('data-testid="customer-assistant-replayed-state"')
+  })
+
+  it('passes decision note payloads through confirm and reject actions', () => {
+    const content = readProjectFile('src/views/customerAssistant/CustomerAssistantPanel.vue')
+
+    expect(content).toContain('confirmCustomerAssistantRuntimeAction(runtimeState.value, actionId, payload)')
+    expect(content).toContain('rejectCustomerAssistantRuntimeAction(runtimeState.value, actionId, payload)')
+    expect(content).toContain('actionConfirmDecisionPayload(actionId)')
+    expect(content).toContain('actionRejectDecisionPayload(actionId)')
+    expect(content).toContain('clearActionDecisionDraft(actionId)')
   })
 
   it('persists action and task-control failures in the workbench failed-state alert', () => {

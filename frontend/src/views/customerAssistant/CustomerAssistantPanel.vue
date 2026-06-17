@@ -957,6 +957,24 @@
                   </a-button>
                 </div>
               </div>
+              <div
+                v-if="action.status === 'PENDING'"
+                class="action-decision-form"
+                data-testid="operator-action-decision-form"
+              >
+                <a-textarea
+                  v-model:value="actionDecisionDraft(action.id).confirmNote"
+                  aria-label="确认备注"
+                  :auto-size="{ minRows: 2, maxRows: 4 }"
+                  placeholder="确认备注，将写入审计"
+                />
+                <a-textarea
+                  v-model:value="actionDecisionDraft(action.id).rejectReason"
+                  aria-label="拒绝原因"
+                  :auto-size="{ minRows: 2, maxRows: 4 }"
+                  placeholder="拒绝原因，将写入审计"
+                />
+              </div>
               <div class="panel-actions">
                 <a-tooltip title="修改拟议动作">
                   <a-button
@@ -1084,6 +1102,7 @@ import {
   listCustomerAssistantDemoStories,
   listCustomerAssistantWorkerProfiles,
   updateCustomerAssistantWorkerProfile,
+  type CustomerAssistantActionDecisionPayload,
   type CustomerAssistantDemoStory,
   type CustomerAssistantDemoStoryMetrics,
   type CustomerAssistantProposedAction,
@@ -1176,8 +1195,14 @@ const editingActionId = ref<number | null>(null)
 const editingActionTitle = ref('')
 const editingActionPayload = ref('')
 const editingActionError = ref<string | null>(null)
+const actionDecisionDrafts = ref<Record<number, ActionDecisionDraft>>({})
 const route = useRoute()
 const router = useRouter()
+
+interface ActionDecisionDraft {
+  confirmNote: string
+  rejectReason: string
+}
 
 const workspace = computed(() => ({
   ...runtimeState.value,
@@ -1337,6 +1362,27 @@ function cancelEditAction() {
   editingActionTitle.value = ''
   editingActionPayload.value = ''
   editingActionError.value = null
+}
+
+function actionDecisionDraft(actionId: number): ActionDecisionDraft {
+  const existing = actionDecisionDrafts.value[actionId]
+  if (existing) return existing
+  actionDecisionDrafts.value[actionId] = { confirmNote: '', rejectReason: '' }
+  return actionDecisionDrafts.value[actionId]
+}
+
+function actionConfirmDecisionPayload(actionId: number): CustomerAssistantActionDecisionPayload | undefined {
+  const note = actionDecisionDraft(actionId).confirmNote.trim()
+  return note ? { note } : undefined
+}
+
+function actionRejectDecisionPayload(actionId: number): CustomerAssistantActionDecisionPayload | undefined {
+  const reason = actionDecisionDraft(actionId).rejectReason.trim()
+  return reason ? { reason } : undefined
+}
+
+function clearActionDecisionDraft(actionId: number) {
+  delete actionDecisionDrafts.value[actionId]
 }
 
 async function saveEditedAction(actionId: number) {
@@ -1701,7 +1747,9 @@ function catchCustomerAssistantError(error: unknown, fallbackMessage: string) {
 async function confirmAction(actionId: number) {
   actionLoadingId.value = actionId
   try {
-    runtimeState.value = await confirmCustomerAssistantRuntimeAction(runtimeState.value, actionId)
+    const payload = actionConfirmDecisionPayload(actionId)
+    runtimeState.value = await confirmCustomerAssistantRuntimeAction(runtimeState.value, actionId, payload)
+    clearActionDecisionDraft(actionId)
     void loadDemoStoryMetrics()
   } catch (error) {
     catchCustomerAssistantError(error, '确认动作失败')
@@ -1713,7 +1761,9 @@ async function confirmAction(actionId: number) {
 async function rejectAction(actionId: number) {
   actionLoadingId.value = actionId
   try {
-    runtimeState.value = await rejectCustomerAssistantRuntimeAction(runtimeState.value, actionId)
+    const payload = actionRejectDecisionPayload(actionId)
+    runtimeState.value = await rejectCustomerAssistantRuntimeAction(runtimeState.value, actionId, payload)
+    clearActionDecisionDraft(actionId)
     void loadDemoStoryMetrics()
   } catch (error) {
     catchCustomerAssistantError(error, '拒绝动作失败')
@@ -2499,6 +2549,16 @@ function stringValue(value: unknown, fallback: string) {
   background: #f7fbff;
 }
 
+.action-decision-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  padding: 0.6rem;
+  border: 0.0625rem dashed #f0c36d;
+  border-radius: 0.45rem;
+  background: #fffaf0;
+}
+
 .action-edit-actions {
   margin-top: 0;
 }
@@ -2575,7 +2635,8 @@ function stringValue(value: unknown, fallback: string) {
   }
 
   .workspace-grid,
-  .operator-panels {
+  .operator-panels,
+  .action-decision-form {
     display: flex;
     flex-direction: column;
   }

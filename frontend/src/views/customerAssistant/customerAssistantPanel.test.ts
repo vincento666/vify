@@ -183,6 +183,17 @@ describe('CustomerAssistantPanel UI contract', () => {
     expect(section(content, 'customer-conversation-lane')).not.toContain('operator-action-edit-form')
   })
 
+  it('renders decision note controls in pending operator proposed-action rows', () => {
+    const actionPanel = section(content, 'operator-proposed-actions-panel')
+
+    expect(actionPanel).toContain('data-testid="operator-action-decision-form"')
+    expect(actionPanel).toContain('aria-label="确认备注"')
+    expect(actionPanel).toContain('aria-label="拒绝原因"')
+    expect(actionPanel).toContain('actionDecisionDraft(action.id).confirmNote')
+    expect(actionPanel).toContain('actionDecisionDraft(action.id).rejectReason')
+    expect(section(content, 'customer-conversation-lane')).not.toContain('operator-action-decision-form')
+  })
+
   it('renders configured worker profile metadata in task rows', () => {
     const taskLedger = section(content, 'operator-task-ledger')
 
