@@ -49,12 +49,6 @@ const router = createRouter({
       component: () => import('@/views/customerAssistant/CustomerAssistantPanel.vue'),
     },
     {
-      path: '/ai-assistant',
-      name: 'HifyAiAssistant',
-      meta: { aiAssistant: true },
-      component: () => import('@/views/aiAssistant/AiAssistantShell.vue'),
-    },
-    {
       path: '/knowledge',
       name: 'HifyKnowledge',
       component: () => import('@/views/knowledge/KnowledgeList.vue'),

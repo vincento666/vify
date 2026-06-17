@@ -47,17 +47,17 @@
 
 ## 184.3 Phase 2 Conversation Execution Echo
 
-- [x] RED: frontend tests fail for event-card rendering and refresh recovery.
-- [x] Add frontend AI Assistant API client.
-- [x] Add center conversation timeline.
-- [x] Render orchestration phase, model-call summary, tool-call, approval,
+- [ ] RED: frontend tests fail for event-card rendering and refresh recovery.
+- [ ] Add frontend AI Assistant API client.
+- [ ] Add center conversation timeline.
+- [ ] Render orchestration phase, model-call summary, tool-call, approval,
       sandbox, proposed-action, error, and run result cards.
-- [x] Reload persisted events after refresh.
-- [x] Keep hidden reasoning out of the UI.
-- [x] Run backend event-envelope contract regression.
-- [x] Run frontend unit tests and `remScaleClosure`.
-- [x] Run browser UAT and save screenshot/notes.
-- [x] Save evidence under
+- [ ] Reload persisted events after refresh.
+- [ ] Keep hidden reasoning out of the UI.
+- [ ] Run backend event-envelope contract regression.
+- [ ] Run frontend unit tests and `remScaleClosure`.
+- [ ] Run browser UAT and save screenshot/notes.
+- [ ] Save evidence under
       `artifacts/slices/184-ai-assistant-harness-core-mvp/184.3/`.
 
 ## 184.4 Phase 3 Conversation List And Right Inspector
