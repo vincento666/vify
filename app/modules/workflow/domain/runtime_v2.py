@@ -152,6 +152,7 @@ class ChatflowRuntimeV2Service:
         chatflow_id: int,
         input_data: dict[str, Any],
         idempotency_key: str | None = None,
+        version_id: int | None = None,
     ) -> dict[str, Any]:
         self._ensure_owner(chatflow_id)
         if idempotency_key:
@@ -177,7 +178,7 @@ class ChatflowRuntimeV2Service:
                 )
                 replay_payload["idempotentReplay"] = True
                 return replay_payload
-        definition = self._definition_for_start(chatflow_id)
+        definition = self._definition_for_start(chatflow_id, version_id)
         compatibility = RuntimeV2CompatibilityChecker.check(definition["nodes"], definition["edges"])
         if not compatibility["supported"]:
             raise BizError(ErrorCode.BAD_REQUEST, f"Unsupported runtime v2 graph: {compatibility}")
@@ -779,28 +780,31 @@ class ChatflowRuntimeV2Service:
             label = "Workflow" if self._flow_type == "WORKFLOW" else "Chatflow"
             raise BizError(ErrorCode.NOT_FOUND, f"{label} not found")
 
-    def _definition_for_start(self, chatflow_id: int) -> dict[str, Any]:
+    def _definition_for_start(self, chatflow_id: int, version_id: int | None = None) -> dict[str, Any]:
+        published = self._published_version_for_start(chatflow_id, version_id)
+        if published is not None:
+            return _definition_from_published_version(published)
         if self._owner_type == "WORKFLOW":
             if self._publish_repository is None:
                 raise BizError(ErrorCode.BAD_REQUEST, "Workflow v2 requires publish repository")
-            active = self._publish_repository.active_version(chatflow_id, "WORKFLOW")
-            if active is None:
-                raise BizError(ErrorCode.BAD_REQUEST, "Workflow v2 requires an active published version")
-            snapshot = active.get("snapshot") if isinstance(active.get("snapshot"), dict) else {}
-            nodes = snapshot.get("nodes") if isinstance(snapshot.get("nodes"), list) else []
-            edges = snapshot.get("edges") if isinstance(snapshot.get("edges"), list) else []
-            return {
-                "nodes": [dict(node) for node in nodes if isinstance(node, dict)],
-                "edges": [dict(edge) for edge in edges if isinstance(edge, dict)],
-                "versionId": int(active["id"]),
-                "version": int(active["version"]),
-                "definitionSource": "published",
-            }
+            raise BizError(ErrorCode.BAD_REQUEST, "Workflow v2 requires an active published version")
+        if version_id is not None:
+            raise BizError(ErrorCode.NOT_FOUND, "Published version not found")
         return {
             "nodes": self._repository.list_nodes(chatflow_id),
             "edges": self._repository.list_edges(chatflow_id),
             "definitionSource": "draft",
         }
+
+    def _published_version_for_start(self, chatflow_id: int, version_id: int | None) -> dict[str, Any] | None:
+        if self._publish_repository is None:
+            return None
+        if version_id is None:
+            return self._publish_repository.active_version(chatflow_id, self._flow_type)
+        row = self._publish_repository.get_version(chatflow_id, self._flow_type, version_id)
+        if row is None:
+            raise BizError(ErrorCode.NOT_FOUND, "Published version not found")
+        return row
 
     def _owner_type_for_run(self, run: dict[str, Any]) -> str:
         metadata = _runtime_metadata(dict(run.get("input") or {}))
@@ -887,6 +891,19 @@ def _context_from_input(input_data: dict[str, Any]) -> ExecutionContext:
         except ValueError:
             continue
     return context
+
+
+def _definition_from_published_version(published: dict[str, Any]) -> dict[str, Any]:
+    snapshot = published.get("snapshot") if isinstance(published.get("snapshot"), dict) else {}
+    nodes = snapshot.get("nodes") if isinstance(snapshot.get("nodes"), list) else []
+    edges = snapshot.get("edges") if isinstance(snapshot.get("edges"), list) else []
+    return {
+        "nodes": [dict(node) for node in nodes if isinstance(node, dict)],
+        "edges": [dict(edge) for edge in edges if isinstance(edge, dict)],
+        "versionId": int(published["id"]),
+        "version": int(published["version"]),
+        "definitionSource": "published",
+    }
 
 
 def _with_runtime_metadata(

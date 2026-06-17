@@ -105,6 +105,7 @@ def get_chatflow_runtime_v2_service(session: Session = Depends(get_session)) -> 
     return ChatflowRuntimeV2Service(
         WorkflowRepository(session),
         ChatflowStateRepository(session),
+        publish_repository=WorkflowPublishRepository(session),
         knowledge_facade=KnowledgeFacade(session),
     )
 
@@ -178,7 +179,7 @@ def run_workflow_v2(
     session: Session = Depends(get_session),
     service: WorkflowRuntimeV2Service = Depends(get_workflow_runtime_v2_service),
 ) -> dict[str, Any]:
-    data = service.start_run(workflow_id, dict(request.input), request.idempotency_key)
+    data = service.start_run(workflow_id, dict(request.input), request.idempotency_key, request.version_id)
     if not data.get("idempotentReplay"):
         _start_runtime_v2_completion_thread(session, int(data["runId"]), owner_type="WORKFLOW")
     return success(data)
@@ -196,7 +197,9 @@ def get_workflow_run_debug(
         raise BizError(ErrorCode.NOT_FOUND, "Workflow run not found") from exc
     if int(detail.get("workflowId") or 0) != workflow_id or detail.get("flowType") != "WORKFLOW":
         raise BizError(ErrorCode.NOT_FOUND, "Workflow run not found")
-    return success(build_composer_run_debug(detail, owner_type="WORKFLOW", owner_id=workflow_id))
+    debug = build_composer_run_debug(detail, owner_type="WORKFLOW", owner_id=workflow_id)
+    _attach_runtime_v2_debug_version(debug)
+    return success(debug)
 
 
 @router.post("/{workflow_id}/published-runs")
@@ -307,7 +310,7 @@ def run_chatflow_v2(
     session: Session = Depends(get_session),
     service: ChatflowRuntimeV2Service = Depends(get_chatflow_runtime_v2_service),
 ) -> dict[str, Any]:
-    data = service.start_run(chatflow_id, dict(request.input), request.idempotency_key)
+    data = service.start_run(chatflow_id, dict(request.input), request.idempotency_key, request.version_id)
     if not data.get("idempotentReplay"):
         _start_runtime_v2_completion_thread(session, int(data["runId"]), owner_type="CHATFLOW")
     return success(data)
@@ -328,6 +331,7 @@ def get_chatflow_run_debug(
         raise BizError(ErrorCode.NOT_FOUND, "Chatflow run not found")
 
     debug = build_composer_run_debug(detail, owner_type="CHATFLOW", owner_id=chatflow_id)
+    _attach_runtime_v2_debug_version(debug)
     session_id = str(detail.get("sessionId") or "")
     session_state = chatflow_service.get_session_state(chatflow_id, session_id) if session_id else {}
     events = chatflow_service.list_run_events(chatflow_id, run_id)["list"]
@@ -542,6 +546,7 @@ def _start_runtime_v2_completion_thread(session: Session, run_id: int, *, owner_
                 ChatflowRuntimeV2Service(
                     WorkflowRepository(background_session),
                     ChatflowStateRepository(background_session),
+                    publish_repository=WorkflowPublishRepository(background_session),
                     knowledge_facade=KnowledgeFacade(background_session),
                 ).complete_run(run_id)
 
@@ -595,6 +600,14 @@ def _iter_chatflow_run_sse(data: dict[str, Any]) -> Iterable[str]:
 
 def _sse_data(payload: dict[str, Any]) -> str:
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def _attach_runtime_v2_debug_version(debug: dict[str, Any]) -> None:
+    input_data = debug.get("input") if isinstance(debug.get("input"), dict) else {}
+    metadata = input_data.get("_runtimeV2") if isinstance(input_data.get("_runtimeV2"), dict) else {}
+    if metadata.get("versionId") is not None:
+        debug["versionId"] = metadata.get("versionId")
+        debug["version"] = metadata.get("version")
 
 
 @chatflow_router.delete("/{chatflow_id}")
