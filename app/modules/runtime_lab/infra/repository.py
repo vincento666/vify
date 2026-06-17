@@ -123,6 +123,22 @@ class RuntimeLabRepository:
         ).mappings().one_or_none()
         return dict(row) if row else None
 
+    def delete_task(self, task_id: int) -> None:
+        task = self.get_task(task_id)
+        if task is None:
+            return
+        session_id = int(task["session_id"])
+        now = datetime.now()
+        self._session.execute(
+            self._task_table.update()
+            .where(self._task_table.c.id == task_id, self._task_table.c.deleted.is_(False))
+            .values(deleted=True, updated_at=now)
+        )
+        session_row = self.get_session(session_id)
+        if session_row is not None and int(session_row.get("active_task_id") or 0) == task_id:
+            self._set_active_task(session_id, None, now)
+        self._session.commit()
+
     def get_active_task(self, session_id: int) -> dict[str, Any] | None:
         row = self._session.execute(
             sa.select(self._task_table).where(

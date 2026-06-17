@@ -116,17 +116,20 @@ class RuntimeLabService:
             return self._agent_fallback_turn(session_id, message, active_task, suspended_tasks, decision)
 
         if decision.action == "START_SOP" and decision.target_sop_id is not None:
+            task = self._create_pending_task(session_id, decision.target_sop_id)
             result = self._adapter.start_sop(
                 self._adapter_request(
                     session_id,
                     decision.target_sop_id,
                     message=message,
+                    task=task,
                     collected=self._session_business_context(session_id),
                 )
             )
             if result.status == SopExecutionStatus.FAILED:
+                self._repository.delete_task(int(task["id"]))
                 return self._adapter_failure_turn(session_id, result, decision)
-            task = self._start_task(session_id, decision.target_sop_id, result)
+            task = self._start_task(session_id, decision.target_sop_id, result, task=task)
             self._repository.append_event(
                 session_id,
                 "TASK_STARTED",
@@ -141,17 +144,20 @@ class RuntimeLabService:
                 "TASK_SUSPENDED",
                 {"taskId": suspended["id"], "sopId": suspended["sop_id"]},
             )
+            task = self._create_pending_task(session_id, decision.target_sop_id)
             result = self._adapter.start_sop(
                 self._adapter_request(
                     session_id,
                     decision.target_sop_id,
                     message=message,
+                    task=task,
                     collected=self._session_business_context(session_id),
                 )
             )
             if result.status == SopExecutionStatus.FAILED:
+                self._repository.delete_task(int(task["id"]))
                 return self._adapter_failure_turn(session_id, result, decision)
-            task = self._start_task(session_id, decision.target_sop_id, result)
+            task = self._start_task(session_id, decision.target_sop_id, result, task=task)
             self._repository.append_event(
                 session_id,
                 "TASK_STARTED",
@@ -870,8 +876,24 @@ class RuntimeLabService:
             return None
         return frozenset(sop_id for sop_id in enabled_sop_ids if sop_id in self._manifests)
 
-    def _start_task(self, session_id: int, sop_id: str, result: SopExecutionResult) -> dict[str, Any]:
-        task = self._repository.create_task(
+    def _create_pending_task(self, session_id: int, sop_id: str) -> dict[str, Any]:
+        return self._repository.create_task(
+            session_id,
+            sop_id=sop_id,
+            status="PENDING",
+            current_step="pending",
+            business_refs={},
+        )
+
+    def _start_task(
+        self,
+        session_id: int,
+        sop_id: str,
+        result: SopExecutionResult,
+        *,
+        task: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        task = task or self._repository.create_task(
             session_id,
             sop_id=sop_id,
             current_step=result.current_step,

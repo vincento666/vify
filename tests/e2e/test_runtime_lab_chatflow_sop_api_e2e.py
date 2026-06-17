@@ -103,10 +103,36 @@ class RuntimeLabChatflowSopApiE2ETest(unittest.TestCase):
         self.assertEqual([task["status"] for task in tasks], ["COMPLETED", "COMPLETED"])
 
         refund_trace = next(task for task in trace["tasks"] if task["sopId"] == "refund_ticket")
+        refund_run_id = refund_trace["chatflow"]["runId"]
+        self.assertEqual(refund_trace["chatflow"]["statusRef"], f"/api/v1/runtime-runs/{refund_run_id}")
+        self.assertEqual(refund_trace["chatflow"]["eventsRef"], f"/api/v1/runtime-runs/{refund_run_id}/events")
+        self.assertEqual(
+            refund_trace["chatflow"]["eventStreamRef"],
+            f"/api/v1/runtime-runs/{refund_run_id}/events/stream?afterSequence=0",
+        )
+        self.assertEqual(refund_trace["chatflow"]["nodesRef"], f"/api/v1/runtime-runs/{refund_run_id}/nodes")
+        self.assertEqual(refund_trace["chatflow"]["resultRef"], f"/api/v1/runtime-runs/{refund_run_id}/result")
         event_types = [event["type"] for event in refund_trace["events"]]
         self.assertIn("workflow_run_started", event_types)
         self.assertIn("workflow_run_resumed", event_types)
         self.assertIn("workflow_node_waiting", event_types)
+
+        with TestClient(app) as client:
+            raw_events_response = client.get(refund_trace["chatflow"]["eventsRef"])
+        self.assertEqual(raw_events_response.status_code, 200, raw_events_response.text)
+        raw_events = raw_events_response.json()["data"]["list"]
+        contextual_events = [
+            event
+            for event in raw_events
+            if event["type"] in {"workflow_run_started", "workflow_run_resumed", "workflow_node_waiting"}
+        ]
+        self.assertTrue(contextual_events)
+        for event in contextual_events:
+            context = event["payload"]["callerContext"]
+            self.assertEqual(context["source"], "runtime-lab")
+            self.assertEqual(context["sop_key"], "refund_ticket")
+            self.assertEqual(context["session_id"], str(session_id))
+            self.assertEqual(context["task_id"], str(refund_trace["taskId"]))
 
 
 def _runtime_service_override(chatflow_id: int, *, runtime_v2: bool = False) -> Callable[[Session], RuntimeLabService]:

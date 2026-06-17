@@ -887,6 +887,7 @@ def _runtime_task_chatflow_trace(
     current_step = str(task.get("current_step") or checkpoint.get("current_step") or "")
     events = _chatflow_events(state_repository, chatflow_id, run_id)
     session_variables = _chatflow_session_variables(state_repository, chatflow_id, chatflow_session_id)
+    runtime_refs = _chatflow_runtime_refs(meta, run_id)
 
     return {
         "taskId": int(task["id"]),
@@ -901,6 +902,7 @@ def _runtime_task_chatflow_trace(
             "eventId": _optional_int_value(meta.get("eventId")),
             "checkpointId": _optional_int_value(meta.get("checkpointId")),
             "sessionId": chatflow_session_id,
+            **runtime_refs,
             "canvasPath": f"/chatflows/{chatflow_id}/canvas" if chatflow_id > 0 else "",
             "debugPath": f"/chatflows/{chatflow_id}/canvas?runId={run_id}&debug=1"
             if chatflow_id > 0 and run_id > 0
@@ -934,6 +936,22 @@ def _chatflow_meta_from_checkpoint(checkpoint: Mapping[str, Any]) -> Mapping[str
         return {}
     meta = scoped.get("__chatflow")
     return meta if isinstance(meta, Mapping) else {}
+
+
+def _chatflow_runtime_refs(meta: Mapping[str, Any], run_id: int) -> dict[str, str]:
+    if _int_value(meta.get("runtimeVersion")) != 2 or run_id <= 0:
+        return {}
+    raw_refs = meta.get("runtimeRefs")
+    refs = dict(raw_refs) if isinstance(raw_refs, Mapping) else {}
+    return {
+        "statusRef": str(refs.get("statusRef") or f"/api/v1/runtime-runs/{run_id}"),
+        "eventsRef": str(refs.get("eventsRef") or f"/api/v1/runtime-runs/{run_id}/events"),
+        "eventStreamRef": str(
+            refs.get("eventStreamRef") or f"/api/v1/runtime-runs/{run_id}/events/stream?afterSequence=0"
+        ),
+        "nodesRef": str(refs.get("nodesRef") or f"/api/v1/runtime-runs/{run_id}/nodes"),
+        "resultRef": str(refs.get("resultRef") or f"/api/v1/runtime-runs/{run_id}/result"),
+    }
 
 
 def _latest_node_runs_by_key(node_runs: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
