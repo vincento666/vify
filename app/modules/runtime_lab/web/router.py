@@ -109,6 +109,14 @@ def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeL
         chatflow_state_repository=chatflow_state_repository,
         preferred_llm_agent_name=RUNTIME_LAB_AIRLINE_LLM_AGENT_NAME,
     )
+    runtime_v2_llm_service = WorkflowService(
+        workflow_repository,
+        flow_type="CHATFLOW",
+        agent_repository=AgentRepository(session),
+        model_facade=ProviderModelFacade(session),
+        knowledge_facade=KnowledgeFacade(session),
+        preferred_llm_agent_name=RUNTIME_LAB_AIRLINE_LLM_AGENT_NAME,
+    )
     adapter = ChatflowSopRuntimeAdapter(
         workflow_service,
         sop_chatflow_ids=bindings,
@@ -117,6 +125,7 @@ def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeL
             workflow_repository,
             chatflow_state_repository,
             knowledge_facade=KnowledgeFacade(session),
+            llm_completer_resolver=runtime_v2_llm_service.runtime_v2_llm_completer,
         ),
     )
     return RuntimeLabService(

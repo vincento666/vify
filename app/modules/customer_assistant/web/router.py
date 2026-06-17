@@ -228,6 +228,7 @@ def _customer_assistant_sop_adapter(session: Session, bindings: dict[str, int]):
             WorkflowRepository(session),
             ChatflowStateRepository(session),
             knowledge_facade=KnowledgeFacade(session),
+            llm_completer_resolver=workflow_service.runtime_v2_llm_completer,
         ),
     )
 
