@@ -40,9 +40,10 @@ configure_logging(settings.log_level)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    if should_initialise_database_on_startup(settings):
+    current_settings = get_settings()
+    if should_initialise_database_on_startup(current_settings):
         initialise_database()
-    elif should_check_database_schema_on_startup(settings):
+    elif should_check_database_schema_on_startup(current_settings):
         check_database_schema()
     yield
 

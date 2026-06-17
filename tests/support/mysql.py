@@ -104,11 +104,19 @@ def mysql8_unittest_database(
 ) -> Mysql8TestDatabase:
     database = Mysql8TestDatabase(prefix)
     database.__enter__()
-    database.create_all(tables=tables, register=register)
+    database_url_override = _DatabaseUrlOverride(database.database_url)
+    database_url_override.__enter__()
+    try:
+        database.create_all(tables=tables, register=register)
+    except Exception:
+        database_url_override.__exit__(None, None, None)
+        database.__exit__(None, None, None)
+        raise
     if not hasattr(testcase, "_tmp_dir"):
         setattr(testcase, "_tmp_dir", _NoopCleanup())
 
     def cleanup() -> None:
+        database_url_override.__exit__(None, None, None)
         database.__exit__(None, None, None)
 
     testcase.addCleanup(cleanup)
@@ -118,6 +126,24 @@ def mysql8_unittest_database(
 class _NoopCleanup:
     def cleanup(self) -> None:
         return
+
+
+class _DatabaseUrlOverride:
+    def __init__(self, database_url: str) -> None:
+        self._database_url = database_url
+        self._previous_url: str | None = None
+
+    def __enter__(self) -> None:
+        self._previous_url = os.environ.get("HIFY_DATABASE_URL")
+        os.environ["HIFY_DATABASE_URL"] = self._database_url
+        get_settings.cache_clear()
+
+    def __exit__(self, *_exc: object) -> None:
+        if self._previous_url is None:
+            os.environ.pop("HIFY_DATABASE_URL", None)
+        else:
+            os.environ["HIFY_DATABASE_URL"] = self._previous_url
+        get_settings.cache_clear()
 
 
 @contextmanager
