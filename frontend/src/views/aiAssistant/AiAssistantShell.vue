@@ -1,36 +1,47 @@
 <template>
   <section class="ai-shell" data-testid="ai-assistant-shell">
-    <aside class="ai-shell__side">
+    <aside class="ai-shell__side" data-testid="ai-assistant-left-column-scroll">
       <div class="ai-shell__brand">
         <ThunderboltOutlined />
-        <span>AI Assistant</span>
+        <span>Hify AI 助手</span>
       </div>
 
       <button class="ai-new-session" type="button" @click="createConversation">
         <PlusOutlined />
-        <span>New Run</span>
+        <span>新建会话</span>
       </button>
 
       <section class="ai-session-list" data-testid="ai-assistant-session-list">
-        <button
+        <article
           v-for="session in sessions"
           :key="session.id"
           class="ai-session"
           :class="{ active: session.id === sessionId }"
-          type="button"
           data-testid="ai-assistant-session-row"
-          @click="selectSession(session.id)"
         >
-          <span class="ai-session__dot" :class="{ statusPulse: session.id === sessionId && sending }" />
-          <span class="ai-session__content">
-            <strong>{{ session.title || 'AI Assistant' }}</strong>
-            <small>{{ session.status }}</small>
-          </span>
-        </button>
+          <button class="ai-session__select" type="button" @click="selectSession(session.id)">
+            <span class="ai-session__dot" :class="{ statusPulse: session.id === sessionId && sending }" />
+            <span class="ai-session__content">
+              <strong>{{ sessionDisplayTitle(session.title) }}</strong>
+              <small>{{ statusLabel(session.status) }}</small>
+            </span>
+          </button>
+          <a-button
+            class="ai-session__delete"
+            data-testid="ai-assistant-delete-session"
+            size="small"
+            type="text"
+            danger
+            aria-label="删除会话"
+            @click.stop="deleteConversation(session.id)"
+          >
+            <template #icon><DeleteOutlined /></template>
+          </a-button>
+        </article>
       </section>
 
       <section class="ai-run-list">
-        <header>Runs</header>
+        <header>运行记录</header>
         <button
           v-for="run in runs"
           :key="run.id"
@@ -41,7 +52,7 @@
         >
           <span class="ai-run__status" :class="statusClass(run.status)" />
           <span class="ai-run__content">
-            <strong>#{{ run.id }} {{ run.status }}</strong>
+            <strong>#{{ run.id }} {{ statusLabel(run.status) }}</strong>
             <small>{{ runTitle(run) }}</small>
           </span>
         </button>
@@ -52,15 +63,52 @@
       <header class="ai-console__top">
         <div>
           <h1>{{ sessionTitle }}</h1>
-          <p>{{ runStatusLabel }}</p>
+          <p>{{ runStatusLabel }} / Qwen3.5-27B</p>
         </div>
-        <a-tag :color="statusTagColor">{{ runStatusLabel }}</a-tag>
+        <div class="ai-console__actions">
+          <a-button
+            data-testid="ai-assistant-clear-history"
+            size="small"
+            type="text"
+            :disabled="!sessionId"
+            @click="clearCurrentHistory"
+          >
+            <template #icon><ClearOutlined /></template>
+            清空历史上下文
+          </a-button>
+          <a-button
+            data-testid="ai-assistant-stream-toggle"
+            size="small"
+            type="text"
+            @click="eventStreamCollapsed = !eventStreamCollapsed"
+          >
+            <template #icon>
+              <DownOutlined v-if="eventStreamCollapsed" />
+              <UpOutlined v-else />
+            </template>
+            {{ eventStreamCollapsed ? '展开回显' : '收起回显' }}
+          </a-button>
+          <a-tag :color="statusTagColor">{{ runStatusLabel }}</a-tag>
+        </div>
       </header>
 
-      <section class="ai-stream" data-testid="ai-assistant-event-stream">
+      <section
+        v-if="eventStreamCollapsed"
+        class="ai-stream ai-stream--collapsed"
+        data-testid="ai-assistant-event-stream"
+        data-testid-secondary="ai-assistant-center-column-scroll"
+      >
+        <button class="ai-stream__restore" type="button" @click="eventStreamCollapsed = false">展开回显</button>
+      </section>
+      <section
+        v-else
+        class="ai-stream"
+        data-testid="ai-assistant-event-stream"
+        data-testid-secondary="ai-assistant-center-column-scroll"
+      >
         <div v-if="timeline.length === 0" class="ai-empty">
           <ClockCircleOutlined />
-          <span>Ready</span>
+          <span>空闲</span>
         </div>
         <article
           v-for="item in timeline"
@@ -73,16 +121,26 @@
             <span class="ai-event__pulse" :class="{ streamPulse: item.tone === 'running' || item.tone === 'waiting' }" />
           </div>
           <div class="ai-event__body">
-            <div class="ai-event__head">
+            <button
+              class="ai-event__head"
+              type="button"
+              data-testid="ai-assistant-event-card-header"
+              :aria-expanded="isEventExpanded(item.id)"
+              @click="toggleEventCard(item.id)"
+            >
               <component :is="eventIcon(item.kind, item.tone)" />
               <span>{{ item.title }}</span>
               <small>#{{ item.sequence }}</small>
-            </div>
-            <p>{{ item.summary }}</p>
-            <pre v-if="item.payloadPreview !== '{}'" class="ai-event__payload">{{ item.payloadPreview }}</pre>
-            <div v-if="item.kind === 'approval' && item.approvalId" class="ai-event__actions">
-              <a-button size="small" type="primary" @click="approve(item.approvalId)">Approve</a-button>
-              <a-button size="small" danger @click="deny(item.approvalId)">Deny</a-button>
+              <DownOutlined v-if="!isEventExpanded(item.id)" />
+              <UpOutlined v-else />
+            </button>
+            <div v-if="isEventExpanded(item.id)" class="ai-event__details">
+              <p>{{ item.summary }}</p>
+              <pre v-if="item.payloadPreview !== '{}'" class="ai-event__payload">{{ item.payloadPreview }}</pre>
+              <div v-if="item.kind === 'approval' && item.approvalId" class="ai-event__actions">
+                <a-button size="small" type="primary" @click="approve(item.approvalId)">批准</a-button>
+                <a-button size="small" danger @click="deny(item.approvalId)">拒绝</a-button>
+              </div>
             </div>
           </div>
         </article>
@@ -93,7 +151,7 @@
           v-model:value="draft"
           class="ai-composer__input"
           :auto-size="{ minRows: 2, maxRows: 5 }"
-          placeholder="Message AI Assistant"
+          placeholder="输入给 AI 助手的消息"
         />
         <a-button
           class="ai-composer__send"
@@ -107,7 +165,11 @@
       </form>
     </main>
 
-    <aside class="ai-inspector" data-testid="ai-assistant-run-inspector">
+    <aside
+      class="ai-inspector"
+      data-testid="ai-assistant-run-inspector"
+      data-testid-secondary="ai-assistant-right-column-scroll"
+    >
       <header class="ai-inspector__header">
         <span class="ai-inspector__live" :class="{ statusPulse: sending || runStatus === 'WAITING_APPROVAL' }" />
         <div>
@@ -117,7 +179,7 @@
       </header>
 
       <section class="ai-inspector__section">
-        <header>Tasks</header>
+        <header>任务</header>
         <article
           v-for="task in inspector?.activeTasks || []"
           :key="task.id"
@@ -133,7 +195,7 @@
       </section>
 
       <section class="ai-inspector__section">
-        <header>Tool Calls</header>
+        <header>工具调用</header>
         <article
           v-for="toolCall in inspector?.toolCalls || []"
           :key="toolCall.id"
@@ -142,14 +204,14 @@
         >
           <ToolOutlined />
           <div>
-            <strong>{{ toolCall.toolName }}</strong>
-            <small>{{ toolCall.status }} / {{ toolCall.durationMs }}ms</small>
+            <strong>{{ toolLabel(toolCall.toolName) }}</strong>
+            <small>{{ statusLabel(toolCall.status) }} / {{ toolCall.durationMs }}ms</small>
           </div>
         </article>
       </section>
 
       <section class="ai-inspector__section">
-        <header>Approvals</header>
+        <header>审批</header>
         <article
           v-for="approval in inspector?.approvalQueue || []"
           :key="approval.id"
@@ -157,18 +219,18 @@
           data-testid="ai-assistant-approval-row"
         >
           <div>
-            <strong>{{ approval.toolName }}</strong>
-            <small>{{ approval.riskLevel }} / {{ approval.status }}</small>
+            <strong>{{ toolLabel(approval.toolName) }}</strong>
+            <small>{{ riskLabel(approval.riskLevel) }} / {{ statusLabel(approval.status) }}</small>
           </div>
           <div v-if="approval.status === 'PENDING'" class="ai-approval__actions">
-            <a-button size="small" type="primary" @click="approve(approval.id)">Approve</a-button>
-            <a-button size="small" danger @click="deny(approval.id)">Deny</a-button>
+            <a-button size="small" type="primary" @click="approve(approval.id)">批准</a-button>
+            <a-button size="small" danger @click="deny(approval.id)">拒绝</a-button>
           </div>
         </article>
       </section>
 
       <section class="ai-inspector__section">
-        <header>Recent Errors</header>
+        <header>最近错误</header>
         <article
           v-for="error in inspector?.recentErrors || []"
           :key="error.id"
@@ -184,21 +246,21 @@
       </section>
 
       <section class="ai-inspector__section">
-        <header>Usage</header>
+        <header>用量</header>
         <div class="ai-usage-grid">
-          <span>Input</span>
+          <span>输入</span>
           <strong>{{ inspector?.usage.inputTokens ?? 0 }}</strong>
-          <span>Output</span>
+          <span>输出</span>
           <strong>{{ inspector?.usage.outputTokens ?? 0 }}</strong>
         </div>
       </section>
 
       <section class="ai-inspector__section" data-testid="ai-assistant-inspector-timeline">
-        <header>Timeline</header>
+        <header>时间线</header>
         <ol class="ai-mini-timeline">
           <li v-for="event in inspector?.eventTimeline || []" :key="event.id">
             <span>{{ event.sequence }}</span>
-            <strong>{{ event.type }}</strong>
+            <strong>{{ event.title || event.type }}</strong>
           </li>
         </ol>
       </section>
@@ -209,19 +271,25 @@
 <script setup lang="ts">
 import {
   CheckCircleOutlined,
+  ClearOutlined,
   ClockCircleOutlined,
   CodeOutlined,
+  DeleteOutlined,
+  DownOutlined,
   ExclamationCircleOutlined,
   PlusOutlined,
   SendOutlined,
   ThunderboltOutlined,
   ToolOutlined,
+  UpOutlined,
 } from '@ant-design/icons-vue'
 import { computed, onMounted, ref } from 'vue'
 
 import {
   approveAiAssistantApproval,
+  clearAiAssistantSessionHistory,
   createAiAssistantSession,
+  deleteAiAssistantSession,
   denyAiAssistantApproval,
   getAiAssistantRunInspector,
   listAiAssistantRunEvents,
@@ -238,16 +306,18 @@ import { buildAiAssistantTimeline, type AiAssistantTimelineKind } from './aiAssi
 const sessions = ref<AiAssistantSession[]>([])
 const runs = ref<AiAssistantRun[]>([])
 const sessionId = ref<number | null>(null)
-const sessionTitle = ref('AI Assistant')
+const sessionTitle = ref('Hify AI 助手')
 const runId = ref<number | null>(null)
 const runStatus = ref('IDLE')
 const draft = ref('')
 const sending = ref(false)
 const events = ref<AiAssistantEvent[]>([])
 const inspector = ref<AiAssistantRunInspector | null>(null)
+const eventStreamCollapsed = ref(false)
+const expandedEventIds = ref<Set<string>>(new Set())
 
 const timeline = computed(() => buildAiAssistantTimeline(events.value))
-const runStatusLabel = computed(() => (sending.value ? 'Running' : runStatus.value))
+const runStatusLabel = computed(() => (sending.value ? '执行中' : statusLabel(runStatus.value)))
 const elapsedLabel = computed(() => `${Math.max(0, Math.round((inspector.value?.usage.elapsedMs ?? 0) / 100) / 10)}s`)
 const statusTagColor = computed(() => {
   if (runStatus.value === 'WAITING_APPROVAL') return 'gold'
@@ -270,7 +340,7 @@ async function loadSessions() {
 }
 
 async function createConversation() {
-  const session = await createAiAssistantSession({ title: 'AI Assistant' })
+  const session = await createAiAssistantSession({ title: 'Hify AI 助手' })
   await loadSessions()
   await selectSession(session.id)
 }
@@ -278,12 +348,13 @@ async function createConversation() {
 async function selectSession(nextSessionId: number) {
   const selected = sessions.value.find((session) => session.id === nextSessionId)
   sessionId.value = nextSessionId
-  sessionTitle.value = selected?.title || 'AI Assistant'
+  sessionTitle.value = sessionDisplayTitle(selected?.title)
   await loadSessionRuns(nextSessionId)
 }
 
 async function loadSessionRuns(nextSessionId: number, preferredRunId?: number) {
   runs.value = (await listAiAssistantSessionRuns(nextSessionId)).list
+  expandedEventIds.value = new Set()
   const nextRunId = preferredRunId ?? runs.value[0]?.id
   if (!nextRunId) {
     runId.value = null
@@ -306,6 +377,39 @@ async function loadRunInspector(nextRunId: number) {
   runStatus.value = runInspector.run.status
 }
 
+async function clearCurrentHistory() {
+  if (!sessionId.value) return
+  await clearAiAssistantSessionHistory(sessionId.value)
+  runs.value = []
+  events.value = []
+  inspector.value = null
+  runId.value = null
+  runStatus.value = 'IDLE'
+  expandedEventIds.value = new Set()
+  await loadSessions()
+}
+
+async function deleteConversation(targetSessionId: number) {
+  const activeSessionId = sessionId.value
+  await deleteAiAssistantSession(targetSessionId)
+  await loadSessions()
+  if (sessions.value.length === 0) return resetConversationAfterDelete()
+  if (activeSessionId === targetSessionId || !sessions.value.some((session) => session.id === activeSessionId)) {
+    await selectSession(sessions.value[0].id)
+  }
+}
+
+async function resetConversationAfterDelete() {
+  sessionId.value = null
+  sessionTitle.value = 'Hify AI 助手'
+  runs.value = []
+  events.value = []
+  inspector.value = null
+  runId.value = null
+  runStatus.value = 'IDLE'
+  await createConversation()
+}
+
 async function submit() {
   const message = draft.value.trim()
   if (!message) return
@@ -315,11 +419,13 @@ async function submit() {
   if (!sessionId.value) return
   sending.value = true
   try {
-    const asksForUpdate = message.toLowerCase().includes('update')
+    const normalized = message.toLowerCase()
+    const asksForUpdate = normalized.includes('update') || /更新|修改|写入|变更/.test(message)
     const result = await sendAiAssistantMessage(sessionId.value, {
       message,
       idempotencyKey: `ui-${Date.now()}`,
       approvalMode: 'smart_approval',
+      modelMode: 'live',
       toolName: asksForUpdate ? 'update_customer_profile' : 'echo_context',
       toolInput: asksForUpdate ? { customerId: 'ui-customer', request: message } : undefined,
     })
@@ -337,13 +443,62 @@ async function approve(approvalId: number) {
 }
 
 async function deny(approvalId: number) {
-  await denyAiAssistantApproval(approvalId, { actorId: 'operator-ui', reason: 'Denied from UI' })
+  await denyAiAssistantApproval(approvalId, { actorId: 'operator-ui', reason: '界面拒绝' })
   if (runId.value) await loadRunInspector(runId.value)
 }
 
 function runTitle(run: AiAssistantRun) {
-  const message = typeof run.input?.message === 'string' ? run.input.message : 'Assistant run'
+  const message = typeof run.input?.message === 'string' ? run.input.message : '助手运行'
   return message.length > 42 ? `${message.slice(0, 39)}...` : message
+}
+
+function sessionDisplayTitle(title?: string) {
+  if (!title || title === 'AI Assistant') return 'Hify AI 助手'
+  return title
+}
+
+function statusLabel(status: string) {
+  return (
+    {
+      IDLE: '空闲',
+      ACTIVE: '活跃',
+      RUNNING: '执行中',
+      COMPLETED: '已完成',
+      WAITING_APPROVAL: '等待审批',
+      PENDING: '待处理',
+      APPROVED: '已批准',
+      DENIED: '已拒绝',
+      FAILED: '失败',
+      BLOCKED: '已阻断',
+      NOT_FOUND: '未找到',
+    }[status] ?? status
+  )
+}
+
+function toolLabel(toolName: string) {
+  return (
+    {
+      echo_context: '上下文回显',
+      update_customer_profile: '客户资料变更',
+      run_shell: 'Shell 执行',
+      customer_assistant_subagent_bridge: '客服助手子任务桥接',
+      read_workspace_file: '读取工作区文件',
+      write_workspace_file: '写入工作区文件',
+      invoke_skill: '调用技能',
+    }[toolName] ?? toolName
+  )
+}
+
+function riskLabel(riskLevel: string) {
+  return (
+    {
+      READ: '只读',
+      LOW_WRITE: '低风险写入',
+      BUSINESS_WRITE: '业务写入',
+      DESTRUCTIVE: '破坏性操作',
+      EXTERNAL_SIDE_EFFECT: '外部副作用',
+    }[riskLevel] ?? riskLevel
+  )
 }
 
 function statusClass(status: string) {
@@ -361,24 +516,41 @@ function eventIcon(kind: AiAssistantTimelineKind, tone: string) {
   if (kind === 'tool' || kind === 'tool-output') return ToolOutlined
   return CodeOutlined
 }
+
+function toggleEventCard(itemId: string) {
+  const next = new Set(expandedEventIds.value)
+  if (next.has(itemId)) next.delete(itemId)
+  else next.add(itemId)
+  expandedEventIds.value = next
+}
+
+function isEventExpanded(itemId: string) {
+  return expandedEventIds.value.has(itemId)
+}
 </script>
 
 <style scoped>
 .ai-shell {
-  min-height: 42rem;
+  height: calc(100vh - var(--header-height, 3.5rem) - 3rem);
+  max-height: calc(100vh - var(--header-height, 3.5rem) - 3rem);
+  box-sizing: border-box;
+  min-height: 0;
   display: grid;
   grid-template-columns: 15rem minmax(0, 1fr) 18rem;
+  grid-template-rows: minmax(0, 1fr);
   gap: 1rem;
   padding: 1rem;
   background: var(--color-bg-page, #f8f9fc);
   color: var(--color-text-primary, #0f1117);
   border-radius: var(--radius-lg, 0.5rem);
+  overflow: hidden;
 }
 
 .ai-shell__side,
 .ai-inspector,
 .ai-console {
   min-width: 0;
+  min-height: 0;
   border: 0.0625rem solid var(--color-border-default, #e3e6ef);
   background: var(--color-bg-surface, #ffffff);
   box-shadow: var(--shadow-xs, 0 0.0625rem 0.125rem rgba(15, 15, 30, 0.06));
@@ -387,13 +559,16 @@ function eventIcon(kind: AiAssistantTimelineKind, tone: string) {
 .ai-shell__side,
 .ai-inspector {
   padding: 0.75rem;
+  overflow: auto;
 }
 
 .ai-shell__brand,
 .ai-new-session,
 .ai-session,
+.ai-session__select,
 .ai-run,
 .ai-console__top,
+.ai-console__actions,
 .ai-event__head,
 .ai-inspector__header,
 .ai-inspector-row,
@@ -410,7 +585,7 @@ function eventIcon(kind: AiAssistantTimelineKind, tone: string) {
 }
 
 .ai-new-session,
-.ai-session,
+.ai-session__select,
 .ai-run {
   width: 100%;
   gap: 0.5rem;
@@ -432,8 +607,13 @@ function eventIcon(kind: AiAssistantTimelineKind, tone: string) {
 .ai-run-list,
 .ai-inspector__section {
   display: flex;
-  flex-direction: column;
   gap: 0.5rem;
+}
+
+.ai-session-list,
+.ai-run-list,
+.ai-inspector__section {
+  flex-direction: column;
 }
 
 .ai-run-list {
@@ -448,15 +628,40 @@ function eventIcon(kind: AiAssistantTimelineKind, tone: string) {
   text-transform: uppercase;
 }
 
-.ai-session,
+.ai-session__select,
 .ai-run {
   padding: 0.625rem;
   background: var(--color-bg-surface, #ffffff);
 }
 
+.ai-session {
+  min-width: 0;
+  gap: 0.25rem;
+  border: 0.0625rem solid var(--color-border-default, #e3e6ef);
+  border-radius: var(--radius-md, 0.375rem);
+  background: var(--color-bg-surface, #ffffff);
+}
+
+.ai-session__select {
+  min-width: 0;
+  flex: 1;
+  padding-right: 0.25rem;
+  border: 0;
+  border-radius: calc(var(--radius-md, 0.375rem) - 0.0625rem);
+}
+
+.ai-session__delete {
+  flex: 0 0 auto;
+  margin-right: 0.25rem;
+}
+
 .ai-session.active,
 .ai-run.active {
   border-color: var(--color-primary-300, #a5b4fc);
+  background: var(--color-bg-selected, #eef2ff);
+}
+
+.ai-session.active .ai-session__select {
   background: var(--color-bg-selected, #eef2ff);
 }
 
@@ -518,7 +723,8 @@ function eventIcon(kind: AiAssistantTimelineKind, tone: string) {
 
 .ai-console {
   display: grid;
-  grid-template-rows: auto minmax(24rem, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
 }
 
 .ai-console__top {
@@ -526,6 +732,10 @@ function eventIcon(kind: AiAssistantTimelineKind, tone: string) {
   gap: 1rem;
   padding: 0.875rem 1rem;
   border-bottom: 0.0625rem solid var(--color-border-default, #e3e6ef);
+}
+
+.ai-console__actions {
+  flex: 0 0 auto;
 }
 
 .ai-console__top h1 {
@@ -539,8 +749,28 @@ function eventIcon(kind: AiAssistantTimelineKind, tone: string) {
 }
 
 .ai-stream {
+  min-height: 0;
   overflow: auto;
   padding: 1rem;
+}
+
+.ai-stream--collapsed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ai-stream__restore {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  padding: 0 0.875rem;
+  color: var(--color-primary-600, #4f46e5);
+  background: var(--color-bg-selected, #eef2ff);
+  border: 0.0625rem solid var(--color-primary-300, #a5b4fc);
+  border-radius: var(--radius-md, 0.375rem);
+  cursor: pointer;
 }
 
 .ai-empty {
@@ -573,8 +803,14 @@ function eventIcon(kind: AiAssistantTimelineKind, tone: string) {
 }
 
 .ai-event__head {
+  width: 100%;
   gap: 0.5rem;
   font-weight: 700;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
 }
 
 .ai-event__head small {
@@ -582,7 +818,7 @@ function eventIcon(kind: AiAssistantTimelineKind, tone: string) {
   color: var(--color-text-tertiary, #8b92a8);
 }
 
-.ai-event__body p {
+.ai-event__details p {
   margin: 0.5rem 0 0;
   color: var(--color-text-secondary, #4b5268);
 }
@@ -734,7 +970,10 @@ function eventIcon(kind: AiAssistantTimelineKind, tone: string) {
 
 @media (max-width: 70rem) {
   .ai-shell {
-    grid-template-columns: 1fr;
+    grid-template-columns: 12rem minmax(22rem, 1fr) 16rem;
+    gap: 0.75rem;
+    overflow-x: auto;
+    overflow-y: hidden;
   }
 }
 </style>

@@ -1,0 +1,43 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ AiAssistantSessionLifecycleApiContractTest.test_clear_history_and_delete_session_are_soft_deleted_from_public_contracts _
+
+self = <tests.contract.test_ai_assistant_session_lifecycle_api.AiAssistantSessionLifecycleApiContractTest testMethod=test_clear_history_and_delete_session_are_soft_deleted_from_public_contracts>
+
+    def test_clear_history_and_delete_session_are_soft_deleted_from_public_contracts(self) -> None:
+        with TestClient(app) as client:
+            created = client.post("/api/v1/ai-assistant/sessions", json={"title": "生命周期"})
+            session_id = created.json()["data"]["id"]
+            first = client.post(
+                f"/api/v1/ai-assistant/sessions/{session_id}/messages",
+                json={"message": "第一条消息", "idempotencyKey": "lifecycle-1"},
+            )
+            first_run_id = first.json()["data"]["runId"]
+    
+            cleared = client.delete(f"/api/v1/ai-assistant/sessions/{session_id}/history")
+            runs_after_clear = client.get(f"/api/v1/ai-assistant/sessions/{session_id}/runs")
+            first_run_after_clear = client.get(f"/api/v1/ai-assistant/runs/{first_run_id}")
+    
+            second = client.post(
+                f"/api/v1/ai-assistant/sessions/{session_id}/messages",
+                json={"message": "第二条消息", "idempotencyKey": "lifecycle-2"},
+            )
+            second_run_id = second.json()["data"]["runId"]
+            deleted = client.delete(f"/api/v1/ai-assistant/sessions/{session_id}")
+            listed = client.get("/api/v1/ai-assistant/sessions")
+            deleted_session = client.get(f"/api/v1/ai-assistant/sessions/{session_id}")
+            second_run_after_delete = client.get(f"/api/v1/ai-assistant/runs/{second_run_id}")
+    
+>       self.assertEqual(cleared.status_code, 200, cleared.text)
+E       AssertionError: 404 != 200 : {"code":404,"message":"Not Found","data":null}
+
+tests/contract/test_ai_assistant_session_lifecycle_api.py:58: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/vincento/work/develop/hify/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/contract/test_ai_assistant_session_lifecycle_api.py::AiAssistantSessionLifecycleApiContractTest::test_clear_history_and_delete_session_are_soft_deleted_from_public_contracts
+1 failed, 1 warning in 3.08s

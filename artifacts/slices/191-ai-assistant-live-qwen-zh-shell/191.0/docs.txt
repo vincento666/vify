@@ -1,0 +1,10 @@
+Created spec, plan, and tasks for 191-ai-assistant-live-qwen-zh-shell.
+
+OpenRouter model id verified from OpenRouter model page/search result:
+qwen/qwen3.5-27b.
+
+Credentials policy:
+- no provider key is committed;
+- live tests must read credentials from environment only;
+- standard gates stay deterministic unless explicitly opted into live mode.
+

@@ -1,0 +1,6 @@
+Command:
+rtk uv run ruff check app/modules/ai_assistant app/core/config.py tests/unit/ai_assistant/test_qwen_live_planner.py tests/contract/test_ai_assistant_live_qwen_api.py
+
+Result:
+All checks passed!
+

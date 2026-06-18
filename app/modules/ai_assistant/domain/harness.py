@@ -7,6 +7,7 @@ import json
 from time import perf_counter
 from typing import Any
 
+from app.modules.ai_assistant.domain.live_model import LivePlannerDecision, QwenLivePlanner
 from app.modules.ai_assistant.domain.observability import build_observability_snapshot
 from app.modules.ai_assistant.domain.permissions import ApprovalMode, ApprovalPolicy, PermissionDecision
 from app.modules.ai_assistant.domain.prompt import PromptAssembler
@@ -34,11 +35,13 @@ class AiAssistantHarnessService:
         tool_registry: ToolRegistry | None = None,
         approval_policy: ApprovalPolicy | None = None,
         sandbox_policy: SandboxPolicy | None = None,
+        live_planner: QwenLivePlanner | None = None,
     ) -> None:
         self._repository = repository
         self._tools = tool_registry or ToolRegistry.with_builtin_tools()
         self._approval_policy = approval_policy or ApprovalPolicy(environment="test")
         self._sandbox_policy = sandbox_policy or SandboxPolicy()
+        self._live_planner = live_planner
 
     def create_session(self, title: str = "", context: dict[str, Any] | None = None) -> dict[str, Any]:
         return self._repository.create_session(title=title, context=context)
@@ -49,6 +52,12 @@ class AiAssistantHarnessService:
     def get_session(self, session_id: int) -> dict[str, Any] | None:
         return self._repository.get_session(session_id)
 
+    def clear_session_history(self, session_id: int) -> bool:
+        return self._repository.clear_session_history(session_id)
+
+    def delete_session(self, session_id: int) -> bool:
+        return self._repository.delete_session(session_id)
+
     def run_message(
         self,
         session_id: int,
@@ -58,6 +67,7 @@ class AiAssistantHarnessService:
         tool_name: str = "echo_context",
         tool_input: dict[str, Any] | None = None,
         tool_calls: list[dict[str, Any]] | None = None,
+        model_mode: str = "deterministic",
     ) -> HarnessTurnResult:
         payload = tool_input or {"message": message}
         scheduled_tool_calls = _scheduled_tool_calls(tool_calls)
@@ -68,6 +78,7 @@ class AiAssistantHarnessService:
                 "toolName": tool_name,
                 "toolInput": payload,
                 "toolCalls": scheduled_tool_calls,
+                "modelMode": model_mode,
             }
         )
         try:
@@ -97,16 +108,16 @@ class AiAssistantHarnessService:
             run_id=run_id,
             session_id=session_id,
             event_type="run.started",
-            visible_title="Run started",
-            visible_summary="The assistant run started.",
+            visible_title="运行开始",
+            visible_summary="AI 助手运行已开始。",
             payload={"phase": "reason"},
         )
         self._repository.append_event(
             run_id=run_id,
             session_id=session_id,
             event_type="orchestration.phase_started",
-            visible_title="Reason",
-            visible_summary="The harness selected a read-only tool path.",
+            visible_title="推理规划",
+            visible_summary="正在选择模型与工具编排路径。",
             payload={
                 "phase": "reason",
                 "promptLayers": [
@@ -123,14 +134,50 @@ class AiAssistantHarnessService:
                 ],
             },
         )
+        if _live_requested(model_mode) and self._live_planner is not None:
+            decision = self._plan_with_live_model(run_id=run_id, session_id=session_id, message=message)
+            if decision.tool_calls:
+                return self._run_scheduled_tool_calls(
+                    session_id=session_id,
+                    run_id=run_id,
+                    run=run,
+                    message=message,
+                    approval_mode=approval_mode,
+                    tool_calls=decision.tool_calls,
+                    model_decision=decision,
+                )
+            final_answer = decision.final_answer or "模型未选择工具，已完成回复。"
+            self._repository.append_message(session_id, "assistant", final_answer, run_id=run_id)
+            response_payload = {
+                "finalAnswer": final_answer,
+                "toolCalls": [],
+                "approvalRequired": False,
+                "sandboxDenied": False,
+                "model": {"provider": decision.provider, "model": decision.model, "usage": decision.usage},
+            }
+            completed = self._repository.complete_run(run_id, response_payload)
+            self._repository.append_event(
+                run_id=run_id,
+                session_id=session_id,
+                event_type="run.completed",
+                visible_title="运行完成",
+                visible_summary="AI 助手运行已完成。",
+                payload={"finalAnswer": final_answer},
+            )
+            return HarnessTurnResult(
+                run=completed,
+                replayed=False,
+                final_answer=final_answer,
+                tool_calls=[],
+            )
         self._repository.append_event(
             run_id=run_id,
             session_id=session_id,
             event_type="model.call_completed",
-            visible_title="Model decision",
-            visible_summary="The deterministic MVP planner selected scheduled tools."
+            visible_title="模型决策",
+            visible_summary="本地确定性规划器已选择计划工具。"
             if scheduled_tool_calls
-            else "The deterministic MVP planner selected echo_context.",
+            else "本地确定性规划器已选择上下文回显工具。",
             payload={"toolNames": [call["toolName"] for call in scheduled_tool_calls]}
             if scheduled_tool_calls
             else {"toolName": "echo_context"},
@@ -151,13 +198,13 @@ class AiAssistantHarnessService:
                 run_id=run_id,
                 session_id=session_id,
                 event_type="sandbox.denied",
-                visible_title="Sandbox denied",
+                visible_title="沙箱拒绝",
                 visible_summary=sandbox_decision.reason,
                 payload=sandbox_decision.evidence,
                 status="DENIED",
             )
             response_payload = {
-                "finalAnswer": "Sandbox denied the requested tool.",
+                "finalAnswer": "沙箱已拒绝该工具请求。",
                 "toolCalls": [],
                 "approvalRequired": False,
                 "sandboxDenied": True,
@@ -177,7 +224,7 @@ class AiAssistantHarnessService:
         )
         if permission == PermissionDecision.DENY:
             response_payload = {
-                "finalAnswer": "Approval policy denied the requested tool.",
+                "finalAnswer": "审批策略已拒绝该工具请求。",
                 "toolCalls": [],
                 "approvalRequired": False,
                 "sandboxDenied": False,
@@ -201,8 +248,8 @@ class AiAssistantHarnessService:
                 run_id=run_id,
                 session_id=session_id,
                 event_type="approval.required",
-                visible_title="Approval required",
-                visible_summary=f"{tool_name} requires approval.",
+                visible_title="需要审批",
+                visible_summary=f"{_tool_label(tool_name)} 需要审批后才能执行。",
                 payload={"approvalId": approval["id"], "toolName": tool_name, "riskLevel": manifest.risk_level.value},
                 status="WAITING",
             )
@@ -212,19 +259,19 @@ class AiAssistantHarnessService:
                     session_id=session_id,
                     approval_id=int(approval["id"]),
                     action_type=tool_name,
-                    title=f"Proposed action: {tool_name}",
+                    title=f"拟执行动作：{_tool_label(tool_name)}",
                     payload=payload,
                 )
                 self._repository.append_event(
                     run_id=run_id,
                     session_id=session_id,
                     event_type="proposed_action.created",
-                    visible_title="Proposed action created",
-                    visible_summary=f"{tool_name} was converted to a proposed action.",
+                    visible_title="已创建拟执行动作",
+                    visible_summary=f"{_tool_label(tool_name)} 已转换为需要审批的拟执行动作。",
                     payload={"proposedActionId": proposed_action["id"], "approvalId": approval["id"]},
                 )
             response_payload = {
-                "finalAnswer": "Approval is required before this action can continue.",
+                "finalAnswer": "该动作需要审批后才能继续。",
                 "toolCalls": [],
                 "approvalRequired": True,
                 "approvalId": approval["id"],
@@ -243,8 +290,8 @@ class AiAssistantHarnessService:
             run_id=run_id,
             session_id=session_id,
             event_type="tool.call_started",
-            visible_title="Tool started",
-            visible_summary=f"{tool_name} started.",
+            visible_title="工具开始",
+            visible_summary=f"{_tool_label(tool_name)} 已开始执行。",
             payload={"toolName": tool_name, "input": payload},
         )
         started = perf_counter()
@@ -257,7 +304,7 @@ class AiAssistantHarnessService:
             run_id=run_id,
             session_id=session_id,
             event_type="tool.call_output",
-            visible_title="Tool output",
+            visible_title="工具输出",
             visible_summary=str(tool_result.output.get("echo") or ""),
             payload={"toolName": tool_name, "output": tool_result.output},
         )
@@ -274,12 +321,12 @@ class AiAssistantHarnessService:
             run_id=run_id,
             session_id=session_id,
             event_type="tool.call_completed",
-            visible_title="Tool completed",
-            visible_summary=f"{tool_name} completed.",
+            visible_title="工具完成",
+            visible_summary=f"{_tool_label(tool_name)} 已完成。",
             payload={"toolName": tool_name, "status": tool_result.status},
             tool_call_id=int(tool_call["id"]),
         )
-        final_answer = f"Echo result: {tool_result.output.get('echo', '')}"
+        final_answer = f"回显结果：{tool_result.output.get('echo', '')}"
         self._repository.append_message(session_id, "assistant", final_answer, run_id=run_id)
         response_payload = {
             "finalAnswer": final_answer,
@@ -292,8 +339,8 @@ class AiAssistantHarnessService:
             run_id=run_id,
             session_id=session_id,
             event_type="run.completed",
-            visible_title="Run completed",
-            visible_summary="The assistant run completed.",
+            visible_title="运行完成",
+            visible_summary="AI 助手运行已完成。",
             payload={"finalAnswer": final_answer},
         )
         return HarnessTurnResult(
@@ -302,6 +349,82 @@ class AiAssistantHarnessService:
             final_answer=final_answer,
             tool_calls=[_tool_call_payload(tool_call)],
         )
+
+    def _plan_with_live_model(self, *, run_id: int, session_id: int, message: str) -> LivePlannerDecision:
+        if self._live_planner is None:
+            raise RuntimeError("AI Assistant live planner is not configured")
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="model.call_started",
+            visible_title="模型调用开始",
+            visible_summary=f"正在调用 OpenRouter {self._live_planner.model}。",
+            payload={"provider": "openrouter", "model": self._live_planner.model},
+        )
+        decision = self._live_planner.plan(message, self._tools)
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="model.thought_summary",
+            visible_title="思考摘要",
+            visible_summary=decision.thought_summary,
+            payload={"model": decision.model, "summary": decision.thought_summary},
+        )
+        for index, chunk in enumerate(decision.stream_chunks, start=1):
+            self._repository.append_event(
+                run_id=run_id,
+                session_id=session_id,
+                event_type="model.stream_chunk",
+                visible_title="流式输出",
+                visible_summary=chunk,
+                payload={"index": index, "chunk": chunk, "model": decision.model},
+            )
+        tool_names = [call["toolName"] for call in decision.tool_calls]
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="model.tool_call_decision",
+            visible_title="工具调用决策",
+            visible_summary="模型已选择工具调用。" if tool_names else "模型未选择工具调用。",
+            payload={"toolNames": tool_names, "model": decision.model, "usage": decision.usage},
+        )
+        file_tools = [name for name in tool_names if name in {"read_workspace_file", "write_workspace_file"}]
+        if file_tools:
+            self._repository.append_event(
+                run_id=run_id,
+                session_id=session_id,
+                event_type="model.file_intent",
+                visible_title="文件操作意图",
+                visible_summary="模型规划了文件读取或写入动作。",
+                payload={"toolNames": file_tools},
+            )
+        skill_tools = [name for name in tool_names if name == "invoke_skill"]
+        if skill_tools:
+            self._repository.append_event(
+                run_id=run_id,
+                session_id=session_id,
+                event_type="model.skill_intent",
+                visible_title="技能调用意图",
+                visible_summary="模型规划了技能调用动作。",
+                payload={"toolNames": skill_tools},
+            )
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="task.updated",
+            visible_title="任务编排",
+            visible_summary="任务面板已记录模型规划、工具调用和审批状态。",
+            payload={"phase": "live_model_planning", "toolNames": tool_names},
+        )
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="model.call_completed",
+            visible_title="模型调用完成",
+            visible_summary=f"OpenRouter {decision.model} 已返回规划结果。",
+            payload={"provider": decision.provider, "model": decision.model, "usage": decision.usage},
+        )
+        return decision
 
     def _run_scheduled_tool_calls(
         self,
@@ -312,6 +435,7 @@ class AiAssistantHarnessService:
         message: str,
         approval_mode: str,
         tool_calls: list[dict[str, Any]],
+        model_decision: LivePlannerDecision | None = None,
     ) -> HarnessTurnResult:
         invocations = [
             ScheduledToolInvocation(str(call["toolName"]), dict(call.get("toolInput") or {}))
@@ -324,8 +448,8 @@ class AiAssistantHarnessService:
                 run_id=run_id,
                 session_id=session_id,
                 event_type="scheduler.batch_started",
-                visible_title="Tool batch started",
-                visible_summary=f"{batch.execution_mode} batch {batch.batch_id} started.",
+                visible_title="工具批次开始",
+                visible_summary=f"{batch.execution_mode} 批次 {batch.batch_id} 已开始。",
                 payload={
                     "batchId": batch.batch_id,
                     "executionMode": batch.execution_mode,
@@ -364,8 +488,8 @@ class AiAssistantHarnessService:
                 run_id=run_id,
                 session_id=session_id,
                 event_type="scheduler.batch_completed",
-                visible_title="Tool batch completed",
-                visible_summary=f"{batch.execution_mode} batch {batch.batch_id} completed.",
+                visible_title="工具批次完成",
+                visible_summary=f"{batch.execution_mode} 批次 {batch.batch_id} 已完成。",
                 payload={
                     "batchId": batch.batch_id,
                     "executionMode": batch.execution_mode,
@@ -373,7 +497,7 @@ class AiAssistantHarnessService:
                     "lockMode": batch.lock_mode,
                 },
             )
-        final_answer = "Scheduled tool results: " + "; ".join(
+        final_answer = "计划工具结果：" + "; ".join(
             str(call.get("output", {}).get("echo") or call.get("status") or "") for call in recorded_tool_calls
         )
         self._repository.append_message(session_id, "assistant", final_answer, run_id=run_id)
@@ -382,6 +506,11 @@ class AiAssistantHarnessService:
             "toolCalls": recorded_tool_calls,
             "approvalRequired": False,
             "sandboxDenied": False,
+            "model": (
+                {"provider": model_decision.provider, "model": model_decision.model, "usage": model_decision.usage}
+                if model_decision
+                else None
+            ),
             "schedule": {
                 "batches": [
                     {
@@ -403,8 +532,8 @@ class AiAssistantHarnessService:
             run_id=run_id,
             session_id=session_id,
             event_type="run.completed",
-            visible_title="Run completed",
-            visible_summary="The assistant run completed.",
+            visible_title="运行完成",
+            visible_summary="AI 助手运行已完成。",
             payload={"finalAnswer": final_answer},
         )
         return HarnessTurnResult(
@@ -427,8 +556,8 @@ class AiAssistantHarnessService:
                 run_id=run_id,
                 session_id=session_id,
                 event_type="tool.call_started",
-                visible_title="Tool started",
-                visible_summary=f"{item.tool_name} started.",
+                visible_title="工具开始",
+                visible_summary=f"{_tool_label(item.tool_name)} 已开始执行。",
                 payload={
                     "toolName": item.tool_name,
                     "input": item.tool_input,
@@ -457,7 +586,7 @@ class AiAssistantHarnessService:
                 run_id=run_id,
                 session_id=session_id,
                 event_type="tool.call_output",
-                visible_title="Tool output",
+                visible_title="工具输出",
                 visible_summary=str(tool_result.output.get("echo") or ""),
                 payload={"toolName": item.tool_name, "output": tool_result.output, "scheduler": scheduler_metadata},
                 correlation_ids={"scheduler": scheduler_metadata},
@@ -475,8 +604,8 @@ class AiAssistantHarnessService:
                 run_id=run_id,
                 session_id=session_id,
                 event_type="tool.call_completed",
-                visible_title="Tool completed",
-                visible_summary=f"{item.tool_name} completed.",
+                visible_title="工具完成",
+                visible_summary=f"{_tool_label(item.tool_name)} 已完成。",
                 payload={"toolName": item.tool_name, "status": tool_result.status, "scheduler": scheduler_metadata},
                 tool_call_id=int(tool_call["id"]),
                 correlation_ids={"scheduler": scheduler_metadata},
@@ -502,13 +631,13 @@ class AiAssistantHarnessService:
                 run_id=run_id,
                 session_id=session_id,
                 event_type="sandbox.denied",
-                visible_title="Sandbox denied",
+                visible_title="沙箱拒绝",
                 visible_summary=sandbox_decision.reason,
                 payload=sandbox_decision.evidence,
                 status="DENIED",
             )
             response_payload = {
-                "finalAnswer": "Sandbox denied the requested tool.",
+                "finalAnswer": "沙箱已拒绝该工具请求。",
                 "toolCalls": [],
                 "approvalRequired": False,
                 "sandboxDenied": True,
@@ -537,8 +666,8 @@ class AiAssistantHarnessService:
                 run_id=run_id,
                 session_id=session_id,
                 event_type="approval.required",
-                visible_title="Approval required",
-                visible_summary=f"{tool_name} requires approval.",
+                visible_title="需要审批",
+                visible_summary=f"{_tool_label(tool_name)} 需要审批后才能执行。",
                 payload={"approvalId": approval["id"], "toolName": tool_name, "riskLevel": manifest.risk_level.value},
                 status="WAITING",
             )
@@ -548,19 +677,19 @@ class AiAssistantHarnessService:
                     session_id=session_id,
                     approval_id=int(approval["id"]),
                     action_type=tool_name,
-                    title=f"Proposed action: {tool_name}",
+                    title=f"拟执行动作：{_tool_label(tool_name)}",
                     payload=payload,
                 )
                 self._repository.append_event(
                     run_id=run_id,
                     session_id=session_id,
                     event_type="proposed_action.created",
-                    visible_title="Proposed action created",
-                    visible_summary=f"{tool_name} was converted to a proposed action.",
+                    visible_title="已创建拟执行动作",
+                    visible_summary=f"{_tool_label(tool_name)} 已转换为需要审批的拟执行动作。",
                     payload={"proposedActionId": proposed_action["id"], "approvalId": approval["id"]},
                 )
             response_payload = {
-                "finalAnswer": "Approval is required before this action can continue.",
+                "finalAnswer": "该动作需要审批后才能继续。",
                 "toolCalls": [],
                 "approvalRequired": True,
                 "approvalId": approval["id"],
@@ -579,8 +708,8 @@ class AiAssistantHarnessService:
             run_id=run_id,
             session_id=session_id,
             event_type="tool.call_started",
-            visible_title="Tool started",
-            visible_summary=f"{tool_name} started.",
+            visible_title="工具开始",
+            visible_summary=f"{_tool_label(tool_name)} 已开始执行。",
             payload={"toolName": tool_name, "input": payload, "scheduler": scheduler_metadata},
             correlation_ids={"scheduler": scheduler_metadata},
         )
@@ -596,7 +725,7 @@ class AiAssistantHarnessService:
             run_id=run_id,
             session_id=session_id,
             event_type="tool.call_output",
-            visible_title="Tool output",
+            visible_title="工具输出",
             visible_summary=str(tool_result.output.get("echo") or ""),
             payload={"toolName": tool_name, "output": tool_result.output, "scheduler": scheduler_metadata},
             correlation_ids={"scheduler": scheduler_metadata},
@@ -614,8 +743,8 @@ class AiAssistantHarnessService:
             run_id=run_id,
             session_id=session_id,
             event_type="tool.call_completed",
-            visible_title="Tool completed",
-            visible_summary=f"{tool_name} completed.",
+            visible_title="工具完成",
+            visible_summary=f"{_tool_label(tool_name)} 已完成。",
             payload={"toolName": tool_name, "status": tool_result.status, "scheduler": scheduler_metadata},
             tool_call_id=int(tool_call["id"]),
             correlation_ids={"scheduler": scheduler_metadata},
@@ -688,8 +817,8 @@ class AiAssistantHarnessService:
             run_id=int(approval["run_id"]),
             session_id=int(approval["session_id"]),
             event_type="approval.granted",
-            visible_title="Approval granted",
-            visible_summary=f"{actor_id} approved {approval['tool_name']}.",
+            visible_title="审批通过",
+            visible_summary=f"{actor_id} 已批准 {_tool_label(str(approval['tool_name']))}。",
             payload={"approvalId": approval_id, "actorId": actor_id},
         )
         return _approval_payload(approval)
@@ -700,8 +829,8 @@ class AiAssistantHarnessService:
             run_id=int(approval["run_id"]),
             session_id=int(approval["session_id"]),
             event_type="approval.denied",
-            visible_title="Approval denied",
-            visible_summary=f"{actor_id} denied {approval['tool_name']}.",
+            visible_title="审批拒绝",
+            visible_summary=f"{actor_id} 已拒绝 {_tool_label(str(approval['tool_name']))}。",
             payload={"approvalId": approval_id, "actorId": actor_id, "reason": reason},
             status="DENIED",
         )
@@ -711,6 +840,10 @@ class AiAssistantHarnessService:
 def _request_hash(payload: Any) -> str:
     encoded = json.dumps(payload, sort_keys=True, ensure_ascii=True)
     return sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _live_requested(model_mode: str) -> bool:
+    return model_mode.strip().lower() in {"live", "qwen", "openrouter"}
 
 
 def _scheduled_tool_calls(tool_calls: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
@@ -789,9 +922,9 @@ def _task_payload(
 ) -> dict[str, Any]:
     last_event = events[-1] if events else None
     pending_approval = next((approval for approval in approvals if approval["status"] == "PENDING"), None)
-    message = str((run.get("input_payload") or {}).get("message") or "Assistant run")
+    message = str((run.get("input_payload") or {}).get("message") or "助手运行")
     title = message if len(message) <= 80 else f"{message[:77]}..."
-    phase = "waiting_approval" if pending_approval else str((last_event or {}).get("type") or "created")
+    phase = "等待审批" if pending_approval else _phase_label(str((last_event or {}).get("type") or "created"))
     return {
         "id": f"run-{run['id']}",
         "runId": run["id"],
@@ -829,6 +962,43 @@ def _recent_error_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
         for event in events
         if event["type"] in error_types or event["level"] == "error" or event["status"] in {"DENIED", "FAILED"}
     ][-5:]
+
+
+def _phase_label(event_type: str) -> str:
+    labels = {
+        "created": "已创建",
+        "run.started": "运行开始",
+        "orchestration.phase_started": "推理规划",
+        "model.call_started": "模型调用",
+        "model.thought_summary": "思考摘要",
+        "model.stream_chunk": "流式输出",
+        "model.tool_call_decision": "工具决策",
+        "model.file_intent": "文件意图",
+        "model.skill_intent": "技能意图",
+        "task.updated": "任务编排",
+        "scheduler.batch_started": "工具批次",
+        "tool.call_started": "工具执行",
+        "tool.call_output": "工具输出",
+        "tool.call_completed": "工具完成",
+        "approval.required": "等待审批",
+        "proposed_action.created": "拟执行动作",
+        "run.completed": "运行完成",
+        "sandbox.denied": "沙箱拒绝",
+    }
+    return labels.get(event_type, event_type)
+
+
+def _tool_label(tool_name: str) -> str:
+    labels = {
+        "echo_context": "上下文回显",
+        "update_customer_profile": "客户资料变更",
+        "run_shell": "Shell 执行",
+        "customer_assistant_subagent_bridge": "客服助手子任务桥接",
+        "read_workspace_file": "读取工作区文件",
+        "write_workspace_file": "写入工作区文件",
+        "invoke_skill": "调用技能",
+    }
+    return labels.get(tool_name, tool_name)
 
 
 def _usage_payload(run: dict[str, Any]) -> dict[str, Any]:

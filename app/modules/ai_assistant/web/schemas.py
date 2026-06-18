@@ -20,6 +20,7 @@ class SendAiAssistantMessageRequest(BaseModel):
     tool_name: str = Field(default="echo_context", alias="toolName")
     tool_input: dict[str, object] = Field(default_factory=dict, alias="toolInput")
     tool_calls: list[AiAssistantToolCallRequest] = Field(default_factory=list, alias="toolCalls")
+    model_mode: str = Field(default="deterministic", alias="modelMode")
 
     model_config = {"populate_by_name": True}
 

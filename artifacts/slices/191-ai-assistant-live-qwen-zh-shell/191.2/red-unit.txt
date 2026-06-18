@@ -1,0 +1,12 @@
+Command:
+rtk uv run pytest tests/unit/ai_assistant/test_qwen_live_planner.py -q
+
+Expected RED:
+- Settings does not yet expose AI Assistant OpenRouter/Qwen fields;
+- live Qwen planner module does not exist yet.
+
+Key failure:
+2 failed
+AttributeError: 'Settings' object has no attribute 'ai_assistant_openrouter_base_url'
+ModuleNotFoundError: No module named 'app.modules.ai_assistant.domain.live_model'
+

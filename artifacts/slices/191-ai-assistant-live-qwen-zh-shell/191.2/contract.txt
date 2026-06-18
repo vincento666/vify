@@ -1,0 +1,10 @@
+Command:
+rtk env HIFY_MYSQL8_TEST_DATABASE_URL='mysql+pymysql://hify:hify@127.0.0.1:3316/hify?charset=utf8mb4' HIFY_MYSQL8_TEST_ADMIN_DATABASE_URL='mysql+pymysql://root:root@127.0.0.1:3316/mysql?charset=utf8mb4' uv run pytest tests/contract/test_ai_assistant_live_qwen_api.py tests/contract/test_ai_assistant_kernel_api.py -q
+
+Result:
+2 passed, 1 warning in 5.77s
+
+Aggregate AI Assistant contract run:
+rtk env HIFY_MYSQL8_TEST_DATABASE_URL='mysql+pymysql://hify:hify@127.0.0.1:3316/hify?charset=utf8mb4' HIFY_MYSQL8_TEST_ADMIN_DATABASE_URL='mysql+pymysql://root:root@127.0.0.1:3316/mysql?charset=utf8mb4' uv run pytest tests/contract/test_ai_assistant*.py -q
+11 passed, 1 warning in 30.36s
+

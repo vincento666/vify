@@ -61,6 +61,44 @@ class AiAssistantRepository:
         ).mappings().one_or_none()
         return dict(row) if row else None
 
+    def clear_session_history(self, session_id: int) -> bool:
+        if self.get_session(session_id) is None:
+            return False
+        now = datetime.now()
+        for table in [
+            self._run_table,
+            self._message_table,
+            self._event_table,
+            self._tool_call_table,
+            self._approval_table,
+            self._proposed_action_table,
+        ]:
+            self._session.execute(
+                table.update()
+                .where(table.c.session_id == session_id, table.c.deleted.is_(False))
+                .values(deleted=True, updated_at=now)
+            )
+        self._session.execute(
+            self._session_table.update()
+            .where(self._session_table.c.id == session_id, self._session_table.c.deleted.is_(False))
+            .values(status="ACTIVE", context_json={}, updated_at=now)
+        )
+        self._session.commit()
+        return True
+
+    def delete_session(self, session_id: int) -> bool:
+        if self.get_session(session_id) is None:
+            return False
+        self.clear_session_history(session_id)
+        now = datetime.now()
+        self._session.execute(
+            self._session_table.update()
+            .where(self._session_table.c.id == session_id, self._session_table.c.deleted.is_(False))
+            .values(deleted=True, updated_at=now)
+        )
+        self._session.commit()
+        return True
+
     def create_run(
         self,
         *,

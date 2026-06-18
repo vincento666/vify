@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+import os
+from pathlib import Path
 from typing import Any, Callable
 
 from app.modules.customer_assistant.harness_adapter import (
@@ -51,7 +53,7 @@ class ToolRegistry:
     def with_builtin_tools(cls) -> ToolRegistry:
         echo_manifest = ToolManifest(
             name="echo_context",
-            description="Echo the current user message and safe context for harness verification.",
+            description="回显当前用户消息和安全上下文，用于助手运行验证。",
             input_schema={
                 "type": "object",
                 "properties": {
@@ -76,7 +78,7 @@ class ToolRegistry:
         )
         business_write_manifest = ToolManifest(
             name="update_customer_profile",
-            description="Request a high-risk customer profile mutation as a proposed action.",
+            description="把客户资料修改请求转换为需要审批的高风险拟执行动作。",
             input_schema={
                 "type": "object",
                 "properties": {
@@ -95,7 +97,7 @@ class ToolRegistry:
         )
         shell_manifest = ToolManifest(
             name="run_shell",
-            description="Shell-like execution placeholder blocked by sandbox policy.",
+            description="类 Shell 执行占位工具，默认被沙箱策略阻断。",
             input_schema={
                 "type": "object",
                 "properties": {"command": {"type": "string"}},
@@ -110,7 +112,7 @@ class ToolRegistry:
         )
         customer_bridge_manifest = ToolManifest(
             name="customer_assistant_subagent_bridge",
-            description="Read customer-assistant sub-agent run references for AI Assistant inspection.",
+            description="读取客服助手子任务引用，供 AI 助手检查任务状态。",
             input_schema={
                 "type": "object",
                 "properties": {
@@ -144,6 +146,9 @@ class ToolRegistry:
                 "update_customer_profile": (business_write_manifest, _blocked_write),
                 "run_shell": (shell_manifest, _blocked_write),
                 "customer_assistant_subagent_bridge": (customer_bridge_manifest, _customer_assistant_bridge),
+                "read_workspace_file": (_read_file_manifest(), _read_workspace_file),
+                "write_workspace_file": (_write_file_manifest(), _write_workspace_file),
+                "invoke_skill": (_skill_manifest(), _invoke_skill),
             }
         )
 
@@ -196,3 +201,126 @@ def _customer_assistant_bridge(payload: dict[str, Any]) -> ToolResult:
             "message": str(payload.get("message") or ""),
         },
     )
+
+
+def _read_file_manifest() -> ToolManifest:
+    return ToolManifest(
+        name="read_workspace_file",
+        description="读取工作区内的文本文件，并返回截断预览。",
+        input_schema={
+            "type": "object",
+            "properties": {"path": {"type": "string"}},
+            "required": ["path"],
+        },
+        output_schema={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "content": {"type": "string"},
+                "truncated": {"type": "boolean"},
+            },
+        },
+        timeout_ms=2000,
+        risk_level=RiskLevel.READ,
+        read_resources=["file:{path}"],
+        write_resources=[],
+        policy_ref="ai_assistant_workspace_file_read",
+    )
+
+
+def _write_file_manifest() -> ToolManifest:
+    return ToolManifest(
+        name="write_workspace_file",
+        description="写入工作区文本文件；该工具必须经过审批才能执行。",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "content": {"type": "string"},
+            },
+            "required": ["path", "content"],
+        },
+        output_schema={"type": "object", "properties": {"path": {"type": "string"}, "bytes": {"type": "integer"}}},
+        timeout_ms=2000,
+        risk_level=RiskLevel.BUSINESS_WRITE,
+        read_resources=[],
+        write_resources=["file:{path}"],
+        policy_ref="ai_assistant_workspace_file_write_requires_approval",
+    )
+
+
+def _skill_manifest() -> ToolManifest:
+    return ToolManifest(
+        name="invoke_skill",
+        description="记录一次技能调用意图，并返回技能名与调用说明。",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "skillName": {"type": "string"},
+                "instruction": {"type": "string"},
+            },
+            "required": ["skillName"],
+        },
+        output_schema={
+            "type": "object",
+            "properties": {
+                "skillName": {"type": "string"},
+                "instruction": {"type": "string"},
+                "status": {"type": "string"},
+            },
+        },
+        timeout_ms=1000,
+        risk_level=RiskLevel.READ,
+        read_resources=["skill:{skillName}"],
+        write_resources=[],
+        policy_ref="ai_assistant_skill_invocation_read_only",
+    )
+
+
+def _read_workspace_file(payload: dict[str, Any]) -> ToolResult:
+    path = _safe_workspace_path(payload)
+    if not path.exists() or not path.is_file():
+        return ToolResult(
+            status="NOT_FOUND",
+            output={"path": str(path.relative_to(_workspace_root())), "content": "", "truncated": False},
+        )
+    content = path.read_text(encoding="utf-8")
+    truncated = len(content) > 12000
+    return ToolResult(
+        status="COMPLETED",
+        output={"path": str(path.relative_to(_workspace_root())), "content": content[:12000], "truncated": truncated},
+    )
+
+
+def _write_workspace_file(payload: dict[str, Any]) -> ToolResult:
+    path = _safe_workspace_path(payload)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    content = str(payload.get("content") or "")
+    path.write_text(content, encoding="utf-8")
+    return ToolResult(status="COMPLETED", output={"path": str(path.relative_to(_workspace_root())), "bytes": len(content)})
+
+
+def _invoke_skill(payload: dict[str, Any]) -> ToolResult:
+    return ToolResult(
+        status="COMPLETED",
+        output={
+            "skillName": str(payload.get("skillName") or ""),
+            "instruction": str(payload.get("instruction") or ""),
+            "status": "RECORDED",
+        },
+    )
+
+
+def _safe_workspace_path(payload: dict[str, Any]) -> Path:
+    raw = str(payload.get("path") or "").strip()
+    if not raw:
+        raise ValueError("path is required")
+    root = _workspace_root()
+    candidate = (root / raw).resolve()
+    if candidate != root and root not in candidate.parents:
+        raise ValueError("path must stay inside workspace")
+    return candidate
+
+
+def _workspace_root() -> Path:
+    return Path(os.getenv("HIFY_WORKSPACE_ROOT") or Path.cwd()).resolve()

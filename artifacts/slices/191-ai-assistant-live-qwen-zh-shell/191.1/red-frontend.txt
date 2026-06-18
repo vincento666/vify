@@ -1,0 +1,13 @@
+Command:
+rtk npm --prefix frontend run test:unit -- src/views/aiAssistant/aiAssistantShell.test.ts
+
+Expected RED:
+- shell did not constrain itself to one viewport height;
+- three columns did not expose explicit internal scroll containers;
+- visible AI Assistant shell copy was still English.
+
+Key failure:
+2 failed | 1 passed
+expected AiAssistantShell.vue to contain 'height: calc(100vh - 2rem)'
+expected AiAssistantShell.vue to contain 'Hify AI 助手'
+

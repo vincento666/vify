@@ -26,7 +26,7 @@ export const composerNavItems: ComposerNavItem[] = [
   { path: '/workflows', name: 'HifyWorkflows', label: '工作流', icon: ShareAltOutlined, matches: ['/workflows', '/chatflows'] },
   { path: '/evaluation', name: 'HifyEvaluation', label: '评测', icon: BarChartOutlined },
   { path: '/customer-assistant', name: 'HifyCustomerAssistant', label: '客服助手', icon: CustomerServiceOutlined },
-  { path: '/ai-assistant', name: 'HifyAiAssistant', label: 'AI Assistant', icon: ThunderboltOutlined },
+  { path: '/ai-assistant', name: 'HifyAiAssistant', label: 'AI 助手', icon: ThunderboltOutlined },
   { path: '/mcp', name: 'HifyMcp', label: 'MCP 工具', icon: ApiOutlined },
   { path: '/runtime-lab/chat', name: 'HifyRuntimeLabChat', label: '路由对话', icon: CommentOutlined },
   { path: '/chat', name: 'HifyChat', label: '对话', icon: MessageOutlined },

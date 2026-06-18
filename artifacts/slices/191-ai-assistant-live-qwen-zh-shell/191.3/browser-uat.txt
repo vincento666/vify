@@ -1,0 +1,20 @@
+Command:
+rtk env HIFY_E2E_BASE_URL=http://127.0.0.1:5173 HIFY_E2E_SCREENSHOT=artifacts/slices/191-ai-assistant-live-qwen-zh-shell/191.3/ai-assistant-zh-uat.png node frontend/e2e/ai-assistant-shell.mjs
+
+Result:
+PASS ai assistant shell e2e
+
+Verified:
+- light system color style remains;
+- `/ai-assistant` uses Chinese primary UI labels;
+- the page has no horizontal overflow;
+- the page has no page-level vertical overflow beyond tolerance;
+- conversation, event stream, task rows, tool calls, approval queue, and right
+  inspector render;
+- screenshot saved as ai-assistant-zh-uat.png.
+
+In-app browser note:
+The Browser plugin rejected automation of the current localhost tab because of
+its URL policy. No workaround was attempted. Playwright UAT above is the
+repeatable browser evidence for this slice.
+

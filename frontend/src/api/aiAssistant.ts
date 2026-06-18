@@ -1,4 +1,4 @@
-import { get, post } from '@/utils/request'
+import { del, get, post } from '@/utils/request'
 
 export interface AiAssistantSession {
   id: number
@@ -73,6 +73,7 @@ export interface SendAiAssistantMessagePayload {
   approvalMode?: string
   toolName?: string
   toolInput?: Record<string, unknown>
+  modelMode?: string
 }
 
 export interface AiAssistantApproval {
@@ -146,6 +147,14 @@ export function createAiAssistantSession(payload: { title?: string; context?: Re
 
 export function listAiAssistantSessions() {
   return get<AiAssistantListResult<AiAssistantSession>>('/v1/ai-assistant/sessions')
+}
+
+export function clearAiAssistantSessionHistory(sessionId: number) {
+  return del<{ sessionId: number; cleared: boolean }>(`/v1/ai-assistant/sessions/${sessionId}/history`)
+}
+
+export function deleteAiAssistantSession(sessionId: number) {
+  return del<{ sessionId: number; deleted: boolean }>(`/v1/ai-assistant/sessions/${sessionId}`)
 }
 
 export function sendAiAssistantMessage(sessionId: number, payload: SendAiAssistantMessagePayload) {

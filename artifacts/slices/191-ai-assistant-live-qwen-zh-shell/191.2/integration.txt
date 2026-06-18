@@ -1,0 +1,6 @@
+Command:
+rtk env HIFY_MYSQL8_TEST_DATABASE_URL='mysql+pymysql://hify:hify@127.0.0.1:3316/hify?charset=utf8mb4' HIFY_MYSQL8_TEST_ADMIN_DATABASE_URL='mysql+pymysql://root:root@127.0.0.1:3316/mysql?charset=utf8mb4' uv run pytest tests/integration/ai_assistant -q
+
+Result:
+3 passed in 2.27s
+

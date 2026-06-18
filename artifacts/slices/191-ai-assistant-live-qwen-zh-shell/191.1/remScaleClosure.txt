@@ -1,0 +1,10 @@
+Command:
+rtk npm --prefix frontend run test:unit -- src/remScaleClosure.test.ts
+
+Result:
+1 passed file, 1 passed test.
+
+Unit scan note:
+The only new viewport unit is `100vh`, intentionally used to satisfy the
+one-screen AI Assistant shell requirement. remScaleClosure passed.
+

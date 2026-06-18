@@ -1,0 +1,6 @@
+Command:
+rtk uv run mypy app/modules/ai_assistant app/core/config.py
+
+Result:
+Success: no issues found in 18 source files
+

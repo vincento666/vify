@@ -5,9 +5,11 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.config import Settings, get_settings
 from app.core.database import get_session
 from app.core.responses import success
 from app.modules.ai_assistant.domain.harness import AiAssistantHarnessService
+from app.modules.ai_assistant.domain.live_model import create_qwen_live_planner
 from app.modules.ai_assistant.infra.repository import AiAssistantRepository, IdempotencyConflict
 from app.modules.ai_assistant.web.schemas import (
     ApprovalDecisionRequest,
@@ -19,8 +21,14 @@ from app.modules.ai_assistant.web.schemas import (
 router = APIRouter(prefix="/api/v1/ai-assistant", tags=["ai-assistant"])
 
 
-def get_ai_assistant_service(session: Session = Depends(get_session)) -> AiAssistantHarnessService:
-    return AiAssistantHarnessService(AiAssistantRepository(session))
+def get_ai_assistant_service(
+    session: Session = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> AiAssistantHarnessService:
+    return AiAssistantHarnessService(
+        AiAssistantRepository(session),
+        live_planner=create_qwen_live_planner(settings),
+    )
 
 
 @router.post("/sessions")
@@ -46,8 +54,28 @@ def get_ai_assistant_session(
 ) -> dict[str, Any]:
     session = service.get_session(session_id)
     if session is None:
-        raise HTTPException(status_code=404, detail="AI Assistant session not found")
+        raise HTTPException(status_code=404, detail="AI 助手会话不存在")
     return success(_session_payload(session))
+
+
+@router.delete("/sessions/{session_id}/history")
+def clear_session_history(
+    session_id: int,
+    service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
+) -> dict[str, Any]:
+    if not service.clear_session_history(session_id):
+        raise HTTPException(status_code=404, detail="AI 助手会话不存在")
+    return success({"sessionId": session_id, "cleared": True})
+
+
+@router.delete("/sessions/{session_id}")
+def delete_session(
+    session_id: int,
+    service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
+) -> dict[str, Any]:
+    if not service.delete_session(session_id):
+        raise HTTPException(status_code=404, detail="AI 助手会话不存在")
+    return success({"sessionId": session_id, "deleted": True})
 
 
 @router.get("/sessions/{session_id}/runs")
@@ -56,7 +84,7 @@ def list_session_runs(
     service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
 ) -> dict[str, Any]:
     if service.get_session(session_id) is None:
-        raise HTTPException(status_code=404, detail="AI Assistant session not found")
+        raise HTTPException(status_code=404, detail="AI 助手会话不存在")
     runs = [_run_payload(row) for row in service.list_session_runs(session_id)]
     return success({"list": runs, "total": len(runs)})
 
@@ -68,7 +96,7 @@ def send_message(
     service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
 ) -> dict[str, Any]:
     if service.get_session(session_id) is None:
-        raise HTTPException(status_code=404, detail="AI Assistant session not found")
+        raise HTTPException(status_code=404, detail="AI 助手会话不存在")
     try:
         result = service.run_message(
             session_id,
@@ -81,6 +109,7 @@ def send_message(
                 {"toolName": call.tool_name, "toolInput": dict(call.tool_input)}
                 for call in request.tool_calls
             ],
+            model_mode=request.model_mode,
         )
     except IdempotencyConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

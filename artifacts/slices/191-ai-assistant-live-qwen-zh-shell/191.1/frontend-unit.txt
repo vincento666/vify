@@ -1,0 +1,10 @@
+Command:
+rtk npm --prefix frontend run test:unit -- src/views/aiAssistant/aiAssistantShell.test.ts
+
+Result:
+1 passed file, 3 passed tests.
+
+Full frontend unit:
+rtk npm --prefix frontend run test:unit
+95 passed files, 373 passed tests, duration 5.14s.
+

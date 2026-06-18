@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     customer_assistant_worker_timeout_seconds: float = 5.0
     customer_assistant_stub_qa_delay_seconds: float = 0.0
     customer_assistant_worker_profiles_json: str | None = None
+    ai_assistant_llm_mode: str = "deterministic"
+    ai_assistant_openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    ai_assistant_openrouter_model: str = "qwen/qwen3.5-27b"
+    ai_assistant_openrouter_api_key: str = ""
+    ai_assistant_openrouter_api_key_env: str = "OPENROUTER_API_KEY"
 
     model_config = SettingsConfigDict(env_prefix="HIFY_", env_file=".env", extra="ignore")
 

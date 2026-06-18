@@ -8,8 +8,8 @@ describe('AI Assistant route', () => {
     const { default: router } = await import('./index')
 
     expect(router.getRoutes().some((route) => route.name === 'HifyAiAssistant')).toBe(true)
-    expect(composerNavItems.some((item) => item.name === 'HifyAiAssistant' && item.path === '/ai-assistant')).toBe(
-      true,
-    )
+    expect(
+      composerNavItems.some((item) => item.name === 'HifyAiAssistant' && item.path === '/ai-assistant' && item.label === 'AI 助手'),
+    ).toBe(true)
   })
 })
