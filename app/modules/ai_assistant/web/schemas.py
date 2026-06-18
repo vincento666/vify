@@ -13,6 +13,18 @@ class AiAssistantToolCallRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class AiAssistantModelConfigRequest(BaseModel):
+    provider: str = "openrouter"
+    base_url: str = Field(default="https://openrouter.ai/api/v1", alias="baseUrl")
+    model: str = "qwen/qwen3.5-27b"
+    api_key: str = Field(default="", alias="apiKey")
+    api_key_ref: str = Field(default="env:OPENROUTER_API_KEY", alias="apiKeyRef")
+    temperature: float = 0
+    max_tokens: int = Field(default=1024, alias="maxTokens")
+
+    model_config = {"populate_by_name": True}
+
+
 class SendAiAssistantMessageRequest(BaseModel):
     message: str
     idempotency_key: str | None = Field(default=None, alias="idempotencyKey")
@@ -21,6 +33,7 @@ class SendAiAssistantMessageRequest(BaseModel):
     tool_input: dict[str, object] = Field(default_factory=dict, alias="toolInput")
     tool_calls: list[AiAssistantToolCallRequest] = Field(default_factory=list, alias="toolCalls")
     model_mode: str = Field(default="deterministic", alias="modelMode")
+    model_config_request: AiAssistantModelConfigRequest | None = Field(default=None, alias="modelConfig")
 
     model_config = {"populate_by_name": True}
 

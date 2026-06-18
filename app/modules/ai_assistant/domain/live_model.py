@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 import os
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 from app.core.config import Settings
 from app.modules.ai_assistant.domain.tools import ToolRegistry
@@ -22,6 +22,9 @@ class LivePlannerConfig:
     model: str
     api_key_ref: str = "env:OPENROUTER_API_KEY"
     api_key: str = ""
+    provider: str = "openrouter"
+    temperature: float = 0
+    max_tokens: int = 1024
 
 
 @dataclass(frozen=True)
@@ -33,10 +36,21 @@ class LivePlannerDecision:
     usage: dict[str, int]
     model: str
     provider: str = "openrouter"
+    streaming: bool = False
+    stream_source: str = "post_completion_split"
 
 
 class ChatCompletionClient(Protocol):
     def complete(self, payload: dict[str, Any]) -> dict[str, Any]:
+        ...
+
+
+class StreamingChatCompletionClient(ChatCompletionClient, Protocol):
+    def stream_complete(
+        self,
+        payload: dict[str, Any],
+        on_delta: Callable[[str], None] | None = None,
+    ) -> dict[str, Any]:
         ...
 
 
@@ -52,7 +66,7 @@ class QwenLivePlanner:
         self._builder = builder or OpenAIChatRequestBuilder()
         self._client = client or ProviderBackedOpenAIChatClient(
             ProviderChatConfig(
-                provider_type="openrouter",
+                provider_type=config.provider,
                 base_url=config.base_url,
                 auth_config=_auth_config(config),
             )
@@ -62,21 +76,46 @@ class QwenLivePlanner:
     def model(self) -> str:
         return self._config.model
 
-    def plan(self, user_message: str, tool_registry: ToolRegistry) -> LivePlannerDecision:
+    def with_config(self, config: LivePlannerConfig) -> QwenLivePlanner:
+        reusable_client = None if isinstance(self._client, ProviderBackedOpenAIChatClient) else self._client
+        return QwenLivePlanner(config, client=reusable_client, builder=self._builder)
+
+    def plan(
+        self,
+        user_message: str,
+        tool_registry: ToolRegistry,
+        on_stream_chunk: Callable[[str, int], None] | None = None,
+    ) -> LivePlannerDecision:
+        return self.plan_messages(
+            self.initial_messages(user_message),
+            tool_registry,
+            on_stream_chunk=on_stream_chunk,
+        )
+
+    def initial_messages(self, user_message: str) -> list[ChatRequestMessage]:
+        return [
+            ChatRequestMessage(
+                role="system",
+                content=(
+                    "你是 Hify AI 助手。请用中文给出简短思考摘要，"
+                    "不要输出隐藏推理。用户要求工具调用、文件读写、"
+                    "skill 调用或执行回显时，必须使用提供的 function tools，"
+                    "不要只用文字描述计划。工具执行后会收到 tool 结果，"
+                    "如果原任务仍需要后续工具，请继续返回 function tool_calls。"
+                ),
+            ),
+            ChatRequestMessage(role="user", content=user_message),
+        ]
+
+    def plan_messages(
+        self,
+        messages: list[ChatRequestMessage],
+        tool_registry: ToolRegistry,
+        on_stream_chunk: Callable[[str, int], None] | None = None,
+    ) -> LivePlannerDecision:
         payload = self._builder.build(
             model=self._config.model,
-            messages=[
-                ChatRequestMessage(
-                    role="system",
-                    content=(
-                        "你是 Hify AI 助手。请用中文给出简短思考摘要，"
-                        "不要输出隐藏推理。用户要求工具调用、文件读写、"
-                        "skill 调用或执行回显时，必须使用提供的 function tools，"
-                        "不要只用文字描述计划。"
-                    ),
-                ),
-                ChatRequestMessage(role="user", content=user_message),
-            ],
+            messages=messages,
             tools=[
                 ToolDefinition(
                     name=manifest.name,
@@ -85,10 +124,18 @@ class QwenLivePlanner:
                 )
                 for manifest in tool_registry.list_manifests()
             ],
-            temperature=0,
-            max_tokens=1024,
+            temperature=self._config.temperature,
+            max_tokens=self._config.max_tokens,
         )
-        response = self._client.complete(payload)
+        streamed_chunks: list[str] = []
+        if hasattr(self._client, "stream_complete"):
+            response = self._stream_complete(payload, streamed_chunks, on_stream_chunk)
+            streaming = bool(streamed_chunks)
+            stream_source = "openrouter_delta" if streaming else "post_completion_split"
+        else:
+            response = self._client.complete(payload)
+            streaming = False
+            stream_source = "post_completion_split"
         message = _first_message(response)
         content = str(message.get("content") or "").strip()
         tool_calls = _tool_calls(message)
@@ -96,11 +143,33 @@ class QwenLivePlanner:
         return LivePlannerDecision(
             final_answer=content or "已完成模型规划。",
             thought_summary=summary,
-            stream_chunks=_stream_chunks(content or summary),
+            stream_chunks=streamed_chunks if streamed_chunks else _stream_chunks(content or summary),
             tool_calls=tool_calls,
             usage=_usage(response),
             model=self._config.model,
+            provider=self._config.provider,
+            streaming=streaming,
+            stream_source=stream_source,
         )
+
+    def _stream_complete(
+        self,
+        payload: dict[str, Any],
+        streamed_chunks: list[str],
+        on_stream_chunk: Callable[[str, int], None] | None,
+    ) -> dict[str, Any]:
+        client = self._client
+        if not hasattr(client, "stream_complete"):
+            raise RuntimeError("stream_complete is unavailable")
+
+        def forward(chunk: str) -> None:
+            if not chunk:
+                return
+            streamed_chunks.append(chunk)
+            if on_stream_chunk:
+                on_stream_chunk(chunk, len(streamed_chunks))
+
+        return client.stream_complete(payload, on_delta=forward)  # type: ignore[attr-defined]
 
 
 def create_qwen_live_planner(settings: Settings) -> QwenLivePlanner | None:
@@ -115,6 +184,7 @@ def create_qwen_live_planner(settings: Settings) -> QwenLivePlanner | None:
             model=settings.ai_assistant_openrouter_model,
             api_key=api_key,
             api_key_ref=key_ref,
+            provider="openrouter",
         )
     )
 
@@ -150,7 +220,13 @@ def _tool_calls(message: dict[str, Any]) -> list[dict[str, Any]]:
         name = str(function.get("name") or "")
         if not name:
             continue
-        planned.append({"toolName": name, "toolInput": _arguments(function.get("arguments"))})
+        planned.append(
+            {
+                "toolName": name,
+                "toolInput": _arguments(function.get("arguments")),
+                "toolCallId": str(call.get("id") or f"call_{name}"),
+            }
+        )
     return planned
 
 

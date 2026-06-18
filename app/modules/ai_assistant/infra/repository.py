@@ -257,10 +257,18 @@ class AiAssistantRepository:
         self._session.commit()
         return row
 
-    def list_run_events(self, run_id: int) -> list[dict[str, Any]]:
+    def list_run_events(self, run_id: int, after_sequence: int = 0) -> list[dict[str, Any]]:
+        if after_sequence:
+            self._session.rollback()
+        where = [
+            self._event_table.c.run_id == run_id,
+            self._event_table.c.deleted.is_(False),
+        ]
+        if after_sequence > 0:
+            where.append(self._event_table.c.sequence > after_sequence)
         rows = self._session.execute(
             sa.select(self._event_table)
-            .where(self._event_table.c.run_id == run_id, self._event_table.c.deleted.is_(False))
+            .where(*where)
             .order_by(self._event_table.c.sequence.asc())
         ).mappings().all()
         return [dict(row) for row in rows]

@@ -1,0 +1,29 @@
+Slice: 193.3 ReAct stream assembly and collapsible run timeline
+Date: 2026-06-18
+
+Backend RED
+
+Command:
+rtk uv run python -m unittest tests.contract.test_ai_assistant_live_qwen_api.AiAssistantLiveQwenApiContractTest.test_live_qwen_react_loop_feeds_tool_result_back_to_model_for_next_tool_decision
+
+Expected failure before implementation:
+AssertionError: False is not true
+
+Reason:
+The harness executed the first model-planned tool call and completed/paused the
+run without appending an assistant tool_calls message plus tool result message
+back into the next Qwen planning round.
+
+Frontend RED
+
+Command:
+rtk npm --prefix frontend run test:unit -- src/views/aiAssistant/aiAssistantShell.test.ts
+
+Expected failure before implementation:
+AI Assistant shell UI contract > groups live execution echoes into a
+collapsible run task with a milestone line and nested details
+
+Reason:
+The shell rendered individual event cards directly and did not expose
+ai-assistant-run-event-group, ai-assistant-run-event-line, milestone markers, or
+nested formatted detail rows.

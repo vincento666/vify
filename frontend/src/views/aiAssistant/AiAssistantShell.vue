@@ -71,7 +71,7 @@
       <header class="ai-console__top">
         <div>
           <h1>{{ sessionTitle }}</h1>
-          <p>{{ runStatusLabel }} / Qwen3.5-27B</p>
+          <p>{{ runStatusLabel }} / {{ selectedModelLabel }}</p>
         </div>
         <div class="ai-console__actions">
           <a-button
@@ -100,6 +100,76 @@
         </div>
       </header>
 
+      <section class="ai-runtime" data-testid="ai-assistant-runtime-config">
+        <div class="ai-runtime__summary">
+          <label class="ai-runtime__field">
+            <span>模型</span>
+            <a-select
+              v-model:value="runtimeConfig.modelName"
+              class="ai-runtime__select"
+              :options="modelOptions"
+              data-testid="ai-assistant-model-select"
+            />
+          </label>
+          <div class="ai-runtime__meta">
+            <span>{{ runtimeConfig.baseUrl }}</span>
+            <span>实时事件流：已启用</span>
+          </div>
+          <a-button
+            class="ai-runtime__toggle"
+            type="text"
+            data-testid="ai-assistant-model-config-toggle"
+            @click="runtimeConfigExpanded = !runtimeConfigExpanded"
+          >
+            {{ runtimeConfigExpanded ? '收起模型配置' : '模型配置' }}
+          </a-button>
+        </div>
+        <div v-if="runtimeConfigExpanded" class="ai-runtime__panel">
+          <label class="ai-runtime__field">
+            <span>接口地址</span>
+            <a-input
+              v-model:value="runtimeConfig.baseUrl"
+              class="ai-runtime__input"
+              placeholder="https://openrouter.ai/api/v1"
+              data-testid="ai-assistant-model-base-url"
+            />
+          </label>
+          <label class="ai-runtime__field">
+            <span>临时密钥</span>
+            <a-input-password
+              v-model:value="runtimeConfig.apiKey"
+              class="ai-runtime__input"
+              placeholder="sk-..."
+              data-testid="ai-assistant-model-api-key"
+            />
+          </label>
+          <label class="ai-runtime__field">
+            <span>温度</span>
+            <a-input-number
+              v-model:value="runtimeConfig.temperature"
+              class="ai-runtime__input"
+              :min="0"
+              :max="2"
+              :step="0.05"
+              :precision="2"
+              data-testid="ai-assistant-model-temperature"
+            />
+          </label>
+          <label class="ai-runtime__field">
+            <span>输出上限</span>
+            <a-input-number
+              v-model:value="runtimeConfig.maxTokens"
+              class="ai-runtime__input"
+              :min="1"
+              :max="32768"
+              :step="128"
+              :precision="0"
+              data-testid="ai-assistant-model-max-tokens"
+            />
+          </label>
+        </div>
+      </section>
+
       <section
         v-if="eventStreamCollapsed"
         class="ai-stream ai-stream--collapsed"
@@ -119,39 +189,133 @@
           <span>空闲</span>
         </div>
         <article
-          v-for="item in timeline"
-          :key="item.id"
-          class="ai-event"
-          :class="[`tone-${item.tone}`, `kind-${item.kind}`]"
-          data-testid="ai-assistant-event-card"
+          v-else-if="activeRunEventGroup"
+          class="ai-run-event-group"
+          data-testid="ai-assistant-run-event-group"
         >
-          <div class="ai-event__rail">
-            <span class="ai-event__pulse" :class="{ streamPulse: item.tone === 'running' || item.tone === 'waiting' }" />
-          </div>
-          <div class="ai-event__body">
-            <button
-              class="ai-event__head"
-              type="button"
-              data-testid="ai-assistant-event-card-header"
-              :aria-expanded="isEventExpanded(item.id)"
-              @click="toggleEventCard(item.id)"
+          <button
+            class="ai-run-event-group__header"
+            type="button"
+            data-testid="ai-assistant-run-event-group-header"
+            :aria-expanded="isRunEventGroupExpanded(activeRunEventGroup.id)"
+            @click="toggleRunEventGroup(activeRunEventGroup.id)"
+          >
+            <span class="ai-run-event-group__status" :class="statusClass(activeRunEventGroup.status)" />
+            <span class="ai-run-event-group__title">
+              <small>任务执行</small>
+              <strong>{{ activeRunEventGroup.title }}</strong>
+            </span>
+            <span class="ai-run-event-group__meta">
+              动态事件 {{ activeRunEventGroup.eventCount }} 条 / 执行线 / {{ activeRunEventGroup.phase }}
+            </span>
+            <DownOutlined v-if="!isRunEventGroupExpanded(activeRunEventGroup.id)" />
+            <UpOutlined v-else />
+          </button>
+
+          <section
+            v-if="isRunEventGroupExpanded(activeRunEventGroup.id)"
+            class="ai-run-event-line"
+            data-testid="ai-assistant-run-event-line"
+          >
+            <article
+              v-for="item in timeline"
+              :key="item.id"
+              class="ai-event"
+              :class="[`tone-${item.tone}`, `kind-${item.kind}`]"
+              data-testid="ai-assistant-event-card"
             >
-              <component :is="eventIcon(item.kind, item.tone)" />
-              <span>{{ item.title }}</span>
-              <small>#{{ item.sequence }}</small>
-              <DownOutlined v-if="!isEventExpanded(item.id)" />
-              <UpOutlined v-else />
-            </button>
-            <div v-if="isEventExpanded(item.id)" class="ai-event__details">
-              <p>{{ item.summary }}</p>
-              <pre v-if="item.payloadPreview !== '{}'" class="ai-event__payload">{{ item.payloadPreview }}</pre>
-              <div v-if="item.kind === 'approval' && item.approvalId" class="ai-event__actions">
-                <a-button size="small" type="primary" @click="approve(item.approvalId)">批准</a-button>
-                <a-button size="small" danger @click="deny(item.approvalId)">拒绝</a-button>
+              <div class="ai-event__rail">
+                <span
+                  class="ai-event__pulse"
+                  data-testid="ai-assistant-event-milestone"
+                  :class="{ streamPulse: item.tone === 'running' || item.tone === 'waiting' }"
+                />
               </div>
-            </div>
+              <div
+                class="ai-event__body"
+                :class="{ 'ai-event__body--model-output': item.kind === 'model-output' }"
+                :data-testid="item.kind === 'model-thought' ? 'ai-assistant-thought-summary' : undefined"
+              >
+                <button
+                  class="ai-event__head"
+                  type="button"
+                  data-testid="ai-assistant-event-card-header"
+                  :aria-expanded="isEventExpanded(item.id)"
+                  @click="toggleEventCard(item.id)"
+                >
+                  <component :is="eventIcon(item.kind, item.tone)" />
+                  <span>{{ item.title }}</span>
+                  <small>#{{ item.sequence }}</small>
+                  <DownOutlined v-if="!isEventExpanded(item.id)" />
+                  <UpOutlined v-else />
+                </button>
+                <div v-if="item.kind === 'model-output'" class="ai-model-output" data-testid="ai-assistant-model-output">
+                  <p>{{ item.summary }}</p>
+                </div>
+                <p v-else class="ai-event__summary">{{ compactSummary(item.summary) }}</p>
+                <div
+                  v-if="isEventExpanded(item.id)"
+                  class="ai-event__details"
+                  data-testid="ai-assistant-event-detail-panel"
+                >
+                  <dl class="ai-event__detail-grid">
+                    <div
+                      v-for="row in formatEventDetailRows(item)"
+                      :key="row.label"
+                      class="ai-event__detail-row"
+                      data-testid="ai-assistant-event-detail-row"
+                    >
+                      <dt>{{ row.label }}</dt>
+                      <dd>
+                        <pre v-if="row.monospace">{{ row.value }}</pre>
+                        <span v-else>{{ row.value }}</span>
+                      </dd>
+                    </div>
+                  </dl>
+                  <div v-if="item.kind === 'approval' && item.approvalId" class="ai-event__actions">
+                    <a-button size="small" type="primary" @click="approve(item.approvalId)">批准</a-button>
+                    <a-button size="small" danger @click="deny(item.approvalId)">拒绝</a-button>
+                  </div>
+                </div>
+              </div>
+            </article>
+          </section>
+          <div v-else class="ai-run-event-group__collapsed">
+            已收纳 {{ activeRunEventGroup.eventCount }} 条动态事件，展开可查看执行线。
           </div>
         </article>
+        <template v-else>
+          <article
+            v-for="item in timeline"
+            :key="item.id"
+            class="ai-event"
+            :class="[`tone-${item.tone}`, `kind-${item.kind}`]"
+            data-testid="ai-assistant-event-card"
+          >
+            <div class="ai-event__rail">
+              <span class="ai-event__pulse" :class="{ streamPulse: item.tone === 'running' || item.tone === 'waiting' }" />
+            </div>
+            <div class="ai-event__body" :data-testid="item.kind === 'model-thought' ? 'ai-assistant-thought-summary' : undefined">
+              <button
+                class="ai-event__head"
+                type="button"
+                data-testid="ai-assistant-event-card-header"
+                :aria-expanded="isEventExpanded(item.id)"
+                @click="toggleEventCard(item.id)"
+              >
+                <component :is="eventIcon(item.kind, item.tone)" />
+                <span>{{ item.title }}</span>
+                <small>#{{ item.sequence }}</small>
+                <DownOutlined v-if="!isEventExpanded(item.id)" />
+                <UpOutlined v-else />
+              </button>
+              <div v-if="item.kind === 'model-output'" class="ai-model-output" data-testid="ai-assistant-model-output">
+                <p>{{ item.summary }}</p>
+              </div>
+              <p v-else class="ai-event__summary">{{ compactSummary(item.summary) }}</p>
+            </div>
+          </article>
+        </template>
       </section>
 
       <form class="ai-composer" data-testid="ai-assistant-composer" @submit.prevent="submit">
@@ -302,7 +466,7 @@ import {
   ToolOutlined,
   UpOutlined,
 } from '@ant-design/icons-vue'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import {
   approveAiAssistantApproval,
@@ -314,13 +478,16 @@ import {
   listAiAssistantRunEvents,
   listAiAssistantSessionRuns,
   listAiAssistantSessions,
-  sendAiAssistantMessage,
+  buildAiAssistantMessagePayload,
+  startAiAssistantMessage,
   type AiAssistantEvent,
   type AiAssistantRun,
   type AiAssistantRunInspector,
   type AiAssistantSession,
+  type AiAssistantRuntimeConfig,
 } from '@/api/aiAssistant'
-import { buildAiAssistantTimeline, type AiAssistantTimelineKind } from './aiAssistantTimeline'
+import { openAiAssistantEventStream, type AiAssistantEventStream } from './aiAssistantEventStream'
+import { buildAiAssistantTimeline, type AiAssistantTimelineItem, type AiAssistantTimelineKind } from './aiAssistantTimeline'
 
 const sessions = ref<AiAssistantSession[]>([])
 const runs = ref<AiAssistantRun[]>([])
@@ -328,14 +495,45 @@ const sessionId = ref<number | null>(null)
 const sessionTitle = ref('Hify AI 助手')
 const runId = ref<number | null>(null)
 const runStatus = ref('IDLE')
+const runtimeConfigExpanded = ref(false)
+const runtimeConfig = ref<AiAssistantRuntimeConfig>({
+  modelName: 'qwen/qwen3.5-27b',
+  baseUrl: 'https://openrouter.ai/api/v1',
+  apiKey: '',
+  temperature: 0.2,
+  maxTokens: 4096,
+  streamEnabled: true,
+})
+const modelOptions = [
+  { label: 'Qwen / qwen3.5-27B', value: 'qwen/qwen3.5-27b' },
+  { label: 'Qwen / qwen3.5-14B', value: 'qwen/qwen3.5-14b' },
+  { label: 'Qwen / qwen2.5-72B-Instruct', value: 'qwen/qwen2.5-72b-instruct' },
+]
 const draft = ref('')
 const sending = ref(false)
 const events = ref<AiAssistantEvent[]>([])
 const inspector = ref<AiAssistantRunInspector | null>(null)
 const eventStreamCollapsed = ref(false)
 const expandedEventIds = ref<Set<string>>(new Set())
+const runEventGroupExpanded = ref<Record<number, boolean>>({})
+let activeEventStream: AiAssistantEventStream | null = null
+let inspectorRefreshTimer: number | null = null
 
 const timeline = computed(() => buildAiAssistantTimeline(events.value))
+const runEventGroupDefaultExpanded = computed(() => runStatus.value === 'RUNNING' || runStatus.value === 'WAITING_APPROVAL')
+const activeRunEventGroup = computed(() => {
+  if (!runId.value || timeline.value.length === 0) return null
+  const task = inspector.value?.activeTasks?.[0]
+  const run = runs.value.find((item) => item.id === runId.value)
+  return {
+    id: runId.value,
+    title: task?.title || (run ? runTitle(run) : '任务执行'),
+    status: task?.status || runStatus.value,
+    phase: task?.phase || statusLabel(runStatus.value),
+    eventCount: timeline.value.length,
+  }
+})
+const selectedModelLabel = computed(() => modelOptions.find((option) => option.value === runtimeConfig.value.modelName)?.label ?? runtimeConfig.value.modelName)
 const pendingApprovals = computed(() => inspector.value?.approvalQueue ?? [])
 const approvalRecords = computed(() => inspector.value?.approvalHistory ?? [])
 const decidedApprovalRecords = computed(() => approvalRecords.value.filter((approval) => approval.status !== 'PENDING'))
@@ -357,6 +555,11 @@ onMounted(async () => {
   await selectSession(sessions.value[0].id)
 })
 
+onBeforeUnmount(() => {
+  closeActiveEventStream()
+  if (inspectorRefreshTimer !== null) window.clearTimeout(inspectorRefreshTimer)
+})
+
 async function loadSessions() {
   sessions.value = (await listAiAssistantSessions()).list
 }
@@ -368,6 +571,7 @@ async function createConversation() {
 }
 
 async function selectSession(nextSessionId: number) {
+  closeActiveEventStream()
   const selected = sessions.value.find((session) => session.id === nextSessionId)
   sessionId.value = nextSessionId
   sessionTitle.value = selected ? sessionDisplayTitle(selected) : 'Hify AI 助手'
@@ -377,8 +581,10 @@ async function selectSession(nextSessionId: number) {
 async function loadSessionRuns(nextSessionId: number, preferredRunId?: number) {
   runs.value = (await listAiAssistantSessionRuns(nextSessionId)).list
   expandedEventIds.value = new Set()
+  runEventGroupExpanded.value = {}
   const nextRunId = preferredRunId ?? runs.value[0]?.id
   if (!nextRunId) {
+    closeActiveEventStream()
     runId.value = null
     runStatus.value = 'IDLE'
     events.value = []
@@ -389,6 +595,7 @@ async function loadSessionRuns(nextSessionId: number, preferredRunId?: number) {
 }
 
 async function loadRunInspector(nextRunId: number) {
+  closeActiveEventStream()
   runId.value = nextRunId
   const [eventList, runInspector] = await Promise.all([
     listAiAssistantRunEvents(nextRunId),
@@ -401,6 +608,7 @@ async function loadRunInspector(nextRunId: number) {
 
 async function clearCurrentHistory() {
   if (!sessionId.value) return
+  closeActiveEventStream()
   await clearAiAssistantSessionHistory(sessionId.value)
   runs.value = []
   events.value = []
@@ -408,10 +616,12 @@ async function clearCurrentHistory() {
   runId.value = null
   runStatus.value = 'IDLE'
   expandedEventIds.value = new Set()
+  runEventGroupExpanded.value = {}
   await loadSessions()
 }
 
 async function deleteConversation(targetSessionId: number) {
+  closeActiveEventStream()
   const activeSessionId = sessionId.value
   await deleteAiAssistantSession(targetSessionId)
   await loadSessions()
@@ -422,6 +632,7 @@ async function deleteConversation(targetSessionId: number) {
 }
 
 async function resetConversationAfterDelete() {
+  closeActiveEventStream()
   sessionId.value = null
   sessionTitle.value = 'Hify AI 助手'
   runs.value = []
@@ -441,22 +652,75 @@ async function submit() {
   if (!sessionId.value) return
   sending.value = true
   try {
-    const normalized = message.toLowerCase()
-    const asksForUpdate = normalized.includes('update') || /更新|修改|写入|变更/.test(message)
-    const result = await sendAiAssistantMessage(sessionId.value, {
-      message,
-      idempotencyKey: `ui-${Date.now()}`,
-      approvalMode: 'smart_approval',
-      modelMode: 'live',
-      toolName: asksForUpdate ? 'update_customer_profile' : 'echo_context',
-      toolInput: asksForUpdate ? { customerId: 'ui-customer', request: message } : undefined,
-    })
+    const result = await startAiAssistantMessage(
+      sessionId.value,
+      buildAiAssistantMessagePayload(message, runtimeConfig.value, `ui-${Date.now()}`),
+    )
     draft.value = ''
+    events.value = []
+    inspector.value = null
+    runId.value = result.runId
+    runEventGroupExpanded.value = { ...runEventGroupExpanded.value, [result.runId]: true }
     runStatus.value = result.status
-    await loadSessionRuns(result.sessionId, result.runId)
+    await loadSessions()
+    await refreshRuns(result.sessionId, result.runId)
+    openRunEventStream(result.runId)
   } finally {
-    sending.value = false
+    if (!runId.value || runStatus.value !== 'RUNNING') sending.value = false
   }
+}
+
+async function refreshRuns(nextSessionId: number, preferredRunId: number) {
+  runs.value = (await listAiAssistantSessionRuns(nextSessionId)).list
+  const runInspector = await getAiAssistantRunInspector(preferredRunId)
+  inspector.value = runInspector
+  runStatus.value = runInspector.run.status
+  sending.value = runInspector.run.status === 'RUNNING'
+}
+
+function openRunEventStream(nextRunId: number) {
+  closeActiveEventStream()
+  activeEventStream = openAiAssistantEventStream(nextRunId, {
+    onEvent: (event) => {
+      mergeEvent(event)
+      runStatus.value = event.status === 'FAILED' ? 'FAILED' : runStatus.value
+      scheduleInspectorRefresh(nextRunId)
+      if (isTerminalEvent(event)) {
+        sending.value = false
+        if (event.type !== 'approval.required') collapseRunEventGroup(event.runId)
+        closeActiveEventStream()
+      }
+    },
+  })
+}
+
+function mergeEvent(event: AiAssistantEvent) {
+  const index = events.value.findIndex((item) => item.id === event.id)
+  if (index >= 0) {
+    events.value = events.value.map((item) => (item.id === event.id ? event : item))
+    return
+  }
+  events.value = [...events.value, event].sort((left, right) => left.sequence - right.sequence)
+}
+
+function scheduleInspectorRefresh(nextRunId: number) {
+  if (inspectorRefreshTimer !== null) return
+  inspectorRefreshTimer = window.setTimeout(async () => {
+    inspectorRefreshTimer = null
+    const runInspector = await getAiAssistantRunInspector(nextRunId)
+    inspector.value = runInspector
+    runStatus.value = runInspector.run.status
+    sending.value = runInspector.run.status === 'RUNNING'
+  }, 350)
+}
+
+function closeActiveEventStream() {
+  activeEventStream?.close()
+  activeEventStream = null
+}
+
+function isTerminalEvent(event: AiAssistantEvent) {
+  return ['run.completed', 'run.failed', 'approval.required', 'sandbox.denied'].includes(event.type)
 }
 
 async function approve(approvalId: number) {
@@ -550,6 +814,65 @@ function toggleEventCard(itemId: string) {
 function isEventExpanded(itemId: string) {
   return expandedEventIds.value.has(itemId)
 }
+
+function toggleRunEventGroup(targetRunId: number) {
+  const current = isRunEventGroupExpanded(targetRunId)
+  runEventGroupExpanded.value = { ...runEventGroupExpanded.value, [targetRunId]: !current }
+}
+
+function collapseRunEventGroup(targetRunId: number) {
+  runEventGroupExpanded.value = { ...runEventGroupExpanded.value, [targetRunId]: false }
+}
+
+function isRunEventGroupExpanded(targetRunId: number) {
+  const explicit = runEventGroupExpanded.value[targetRunId]
+  return typeof explicit === 'boolean' ? explicit : runEventGroupDefaultExpanded.value
+}
+
+function compactSummary(summary: string) {
+  if (summary.length <= 96) return summary
+  return `${summary.slice(0, 93)}...`
+}
+
+function formatEventDetailRows(item: AiAssistantTimelineItem) {
+  const rows: Array<{ label: string; value: string; monospace?: boolean }> = [
+    { label: '里程碑', value: `#${item.sequence} ${item.title}` },
+    { label: '状态', value: `${toneLabel(item.tone)} / ${kindLabel(item.kind)}` },
+  ]
+  if (item.summary) rows.push({ label: '内容', value: item.summary, monospace: item.kind === 'model-output' })
+  if (item.payloadPreview !== '{}') rows.push({ label: '动态事件', value: item.payloadPreview, monospace: true })
+  return rows
+}
+
+function toneLabel(tone: string) {
+  return (
+    {
+      running: '执行中',
+      success: '已完成',
+      waiting: '等待中',
+      danger: '异常',
+      neutral: '已记录',
+    }[tone] ?? tone
+  )
+}
+
+function kindLabel(kind: AiAssistantTimelineKind) {
+  return (
+    {
+      phase: '阶段',
+      model: '模型事件',
+      'model-output': '模型输出',
+      'model-thought': '思考摘要',
+      tool: '工具事件',
+      'tool-output': '工具输出',
+      approval: '审批',
+      sandbox: '沙箱',
+      'proposed-action': '拟执行动作',
+      result: '运行结果',
+      error: '错误',
+    }[kind] ?? kind
+  )
+}
 </script>
 
 <style scoped>
@@ -561,8 +884,8 @@ function isEventExpanded(itemId: string) {
   display: grid;
   grid-template-columns: 15rem minmax(0, 1fr) 18rem;
   grid-template-rows: minmax(0, 1fr);
-  gap: 1rem;
-  padding: 1rem;
+  gap: 0;
+  padding: 0;
   background: var(--color-bg-page, #f8f9fc);
   color: var(--color-text-primary, #0f1117);
   border: 0.0625rem solid var(--color-border-default, #e3e6ef);
@@ -609,7 +932,24 @@ function isEventExpanded(itemId: string) {
 
 .ai-shell :deep(.ant-btn),
 .ai-shell :deep(.ant-input),
+.ai-shell :deep(.ant-input-number),
+.ai-shell :deep(.ant-select),
+.ai-shell :deep(.ant-select-selector),
 .ai-shell :deep(.ant-tag) {
+  border: 0;
+  box-shadow: none;
+}
+
+.ai-shell :deep(.ant-select-selector),
+.ai-shell :deep(.ant-input),
+.ai-shell :deep(.ant-input-number) {
+  background: var(--color-bg-page, #f8f9fc);
+  border-radius: var(--radius-md, 0.375rem);
+}
+
+.ai-shell :deep(.ant-input-number-input-wrap),
+.ai-shell :deep(.ant-select-selection-item),
+.ai-shell :deep(.ant-select-selection-placeholder) {
   border: 0;
   box-shadow: none;
 }
@@ -756,14 +1096,14 @@ function isEventExpanded(itemId: string) {
 
 .ai-console {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   overflow: hidden;
 }
 
 .ai-console__top {
   justify-content: space-between;
-  gap: 1rem;
-  padding: 0.875rem 1rem;
+  gap: 0.625rem;
+  padding: 0.625rem;
 }
 
 .ai-console__actions {
@@ -780,10 +1120,66 @@ function isEventExpanded(itemId: string) {
   color: var(--color-text-secondary, #4b5268);
 }
 
+.ai-runtime {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0 0.625rem 0.375rem;
+}
+
+.ai-runtime__summary,
+.ai-runtime__panel {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.ai-runtime__summary {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+.ai-runtime__panel {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.ai-runtime__field {
+  min-width: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.ai-runtime__field span {
+  color: var(--color-text-tertiary, #8b92a8);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.ai-runtime__select,
+.ai-runtime__input {
+  width: 100%;
+}
+
+.ai-runtime__meta {
+  min-width: 0;
+  display: grid;
+  gap: 0.25rem;
+  color: var(--color-text-secondary, #4b5268);
+  font-size: 0.75rem;
+}
+
+.ai-runtime__meta span:last-child {
+  color: var(--color-text-tertiary, #8b92a8);
+}
+
+.ai-runtime__toggle {
+  justify-self: end;
+  padding-inline: 0;
+  color: var(--color-primary-600, #4f46e5);
+}
+
 .ai-stream {
   min-height: 0;
   overflow: auto;
-  padding: 1rem;
+  padding: 0.625rem;
 }
 
 .ai-stream--collapsed {
@@ -814,23 +1210,128 @@ function isEventExpanded(itemId: string) {
   color: var(--color-text-tertiary, #8b92a8);
 }
 
+.ai-run-event-group {
+  display: grid;
+  gap: 0.625rem;
+}
+
+.ai-run-event-group__header {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 0.625rem;
+  align-items: center;
+  padding: 0.75rem;
+  color: inherit;
+  text-align: left;
+  background: var(--color-bg-page, #f8f9fc);
+  border: 0;
+  border-radius: var(--radius-lg, 0.5rem);
+  cursor: pointer;
+}
+
+.ai-run-event-group__status {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  background: var(--color-info-500, #3b82f6);
+}
+
+.ai-run-event-group__title {
+  min-width: 0;
+  display: grid;
+  gap: 0.125rem;
+}
+
+.ai-run-event-group__title small,
+.ai-run-event-group__meta {
+  color: var(--color-text-tertiary, #8b92a8);
+  font-size: 0.75rem;
+}
+
+.ai-run-event-group__title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-run-event-group__meta {
+  white-space: nowrap;
+}
+
+.ai-run-event-group__collapsed {
+  padding: 0.75rem 0.875rem;
+  color: var(--color-text-secondary, #4b5268);
+  background: var(--color-bg-page, #f8f9fc);
+  border-radius: var(--radius-md, 0.375rem);
+}
+
+.ai-run-event-line {
+  display: grid;
+  gap: 0;
+  padding: 0.25rem 0 0.125rem;
+}
+
 .ai-event {
   display: grid;
-  grid-template-columns: 1rem minmax(0, 1fr);
+  grid-template-columns: 1.25rem minmax(0, 1fr);
   gap: 0.75rem;
-  margin-bottom: 0.875rem;
+  margin: 0;
+}
+
+.ai-event:not(:last-child) {
+  padding-bottom: 0.875rem;
 }
 
 .ai-event__rail {
+  position: relative;
   display: flex;
   justify-content: center;
   padding-top: 0.5rem;
 }
 
+.ai-event:not(:last-child) .ai-event__rail::after {
+  content: '';
+  position: absolute;
+  top: 1.375rem;
+  bottom: -0.875rem;
+  width: 0.0625rem;
+  background: var(--color-border-default, #e3e6ef);
+}
+
+.ai-event__pulse {
+  position: relative;
+  z-index: 1;
+}
+
 .ai-event__body {
+  display: grid;
+  gap: 0.5rem;
   padding: 0.75rem;
   background: var(--color-bg-surface, #ffffff);
   border-radius: var(--radius-lg, 0.5rem);
+}
+
+.ai-event__body--model-output {
+  background: var(--color-bg-selected, #eef2ff);
+}
+
+.ai-model-output {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.ai-model-output p {
+  margin: 0;
+  color: var(--color-text-primary, #0f1117);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.ai-event__summary {
+  margin: 0;
+  color: var(--color-text-secondary, #4b5268);
+  line-height: 1.55;
 }
 
 .ai-event__head {
@@ -849,19 +1350,42 @@ function isEventExpanded(itemId: string) {
   color: var(--color-text-tertiary, #8b92a8);
 }
 
-.ai-event__details p {
-  margin: 0.5rem 0 0;
+.ai-event__details {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.ai-event__detail-grid {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.ai-event__detail-row {
+  display: grid;
+  grid-template-columns: 5rem minmax(0, 1fr);
+  gap: 0.625rem;
+  padding: 0.625rem;
+  background: var(--color-bg-page, #f8f9fc);
+  border-radius: var(--radius-md, 0.375rem);
+}
+
+.ai-event__detail-row dt {
+  color: var(--color-text-tertiary, #8b92a8);
+  font-weight: 700;
+}
+
+.ai-event__detail-row dd {
+  min-width: 0;
+  margin: 0;
   color: var(--color-text-secondary, #4b5268);
 }
 
-.ai-event__payload {
-  margin: 0.625rem 0 0;
-  padding: 0.625rem;
+.ai-event__detail-row pre {
+  max-height: 14rem;
+  margin: 0;
   overflow: auto;
-  color: var(--color-text-secondary, #4b5268);
-  background: var(--color-bg-page, #f8f9fc);
-  border: 0;
-  border-radius: var(--radius-md, 0.375rem);
+  white-space: pre-wrap;
   font-size: 0.75rem;
   line-height: 1.45;
 }
@@ -890,7 +1414,7 @@ function isEventExpanded(itemId: string) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 2.75rem;
   gap: 0.625rem;
-  padding: 0.875rem 1rem;
+  padding: 0.625rem 0.625rem;
   background: var(--color-bg-surface, #ffffff);
 }
 
@@ -998,9 +1522,17 @@ function isEventExpanded(itemId: string) {
 @media (max-width: 70rem) {
   .ai-shell {
     grid-template-columns: 12rem minmax(22rem, 1fr) 16rem;
-    gap: 0.75rem;
+    gap: 0;
     overflow-x: auto;
     overflow-y: hidden;
+  }
+
+  .ai-runtime__summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ai-runtime__panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>

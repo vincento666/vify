@@ -7,7 +7,7 @@ import json
 from time import perf_counter
 from typing import Any
 
-from app.modules.ai_assistant.domain.live_model import LivePlannerDecision, QwenLivePlanner
+from app.modules.ai_assistant.domain.live_model import LivePlannerConfig, LivePlannerDecision, QwenLivePlanner
 from app.modules.ai_assistant.domain.observability import build_observability_snapshot
 from app.modules.ai_assistant.domain.permissions import ApprovalMode, ApprovalPolicy, PermissionDecision
 from app.modules.ai_assistant.domain.prompt import PromptAssembler
@@ -15,6 +15,7 @@ from app.modules.ai_assistant.domain.sandbox import SandboxPolicy, SandboxVerdic
 from app.modules.ai_assistant.domain.scheduler import ScheduledToolInvocation, ToolScheduler
 from app.modules.ai_assistant.domain.tools import ToolRegistry
 from app.modules.ai_assistant.infra.repository import AiAssistantRepository, IdempotencyConflict
+from app.modules.chat.domain.llm_request import ChatRequestMessage
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,13 @@ class HarnessTurnResult:
     approval_required: bool = False
     approval_id: int | None = None
     sandbox_denied: bool = False
+
+
+@dataclass(frozen=True)
+class ScheduledToolExecutionResult:
+    recorded_tool_calls: list[dict[str, Any]]
+    schedule: dict[str, Any]
+    terminal_result: HarnessTurnResult | None = None
 
 
 class AiAssistantHarnessService:
@@ -68,6 +76,46 @@ class AiAssistantHarnessService:
         tool_input: dict[str, Any] | None = None,
         tool_calls: list[dict[str, Any]] | None = None,
         model_mode: str = "deterministic",
+        model_config: LivePlannerConfig | None = None,
+    ) -> HarnessTurnResult:
+        started = self.start_message(
+            session_id=session_id,
+            message=message,
+            idempotency_key=idempotency_key,
+            approval_mode=approval_mode,
+            tool_name=tool_name,
+            tool_input=tool_input,
+            tool_calls=tool_calls,
+            model_mode=model_mode,
+            model_config=model_config,
+        )
+        if started.replayed or started.run["status"] != "RUNNING":
+            return started
+        return self.complete_started_message(
+            session_id=session_id,
+            run_id=int(started.run["id"]),
+            run=started.run,
+            message=message,
+            approval_mode=approval_mode,
+            tool_name=tool_name,
+            tool_input=tool_input,
+            tool_calls=tool_calls,
+            model_mode=model_mode,
+            model_config=model_config,
+        )
+
+    def start_message(
+        self,
+        *,
+        session_id: int,
+        message: str,
+        idempotency_key: str | None = None,
+        approval_mode: str = ApprovalMode.SMART_APPROVAL.value,
+        tool_name: str = "echo_context",
+        tool_input: dict[str, Any] | None = None,
+        tool_calls: list[dict[str, Any]] | None = None,
+        model_mode: str = "deterministic",
+        model_config: LivePlannerConfig | None = None,
     ) -> HarnessTurnResult:
         payload = tool_input or {"message": message}
         scheduled_tool_calls = _scheduled_tool_calls(tool_calls)
@@ -79,6 +127,7 @@ class AiAssistantHarnessService:
                 "toolInput": payload,
                 "toolCalls": scheduled_tool_calls,
                 "modelMode": model_mode,
+                "modelConfig": _safe_model_config_payload(model_config),
             }
         )
         try:
@@ -132,43 +181,55 @@ class AiAssistantHarnessService:
                     )
                     .layers
                 ],
+                "modelConfig": _safe_model_config_payload(model_config),
             },
         )
-        if _live_requested(model_mode) and self._live_planner is not None:
-            decision = self._plan_with_live_model(run_id=run_id, session_id=session_id, message=message)
-            if decision.tool_calls:
-                return self._run_scheduled_tool_calls(
-                    session_id=session_id,
+        return HarnessTurnResult(run=run, replayed=False, final_answer="", tool_calls=[])
+
+    def complete_started_message(
+        self,
+        *,
+        session_id: int,
+        run_id: int,
+        run: dict[str, Any] | None = None,
+        message: str,
+        approval_mode: str = ApprovalMode.SMART_APPROVAL.value,
+        tool_name: str = "echo_context",
+        tool_input: dict[str, Any] | None = None,
+        tool_calls: list[dict[str, Any]] | None = None,
+        model_mode: str = "deterministic",
+        model_config: LivePlannerConfig | None = None,
+    ) -> HarnessTurnResult:
+        current_run = run or self._repository.get_run(run_id)
+        if current_run is None:
+            raise KeyError(f"AI Assistant run not found: {run_id}")
+        payload = tool_input or {"message": message}
+        scheduled_tool_calls = _scheduled_tool_calls(tool_calls)
+        if _live_requested(model_mode) and self._planner_for(model_config) is not None:
+            try:
+                return self._run_live_react_loop(
                     run_id=run_id,
-                    run=run,
+                    session_id=session_id,
+                    run=current_run,
                     message=message,
                     approval_mode=approval_mode,
-                    tool_calls=decision.tool_calls,
-                    model_decision=decision,
+                    model_config=model_config,
                 )
-            final_answer = decision.final_answer or "模型未选择工具，已完成回复。"
-            self._repository.append_message(session_id, "assistant", final_answer, run_id=run_id)
-            response_payload = {
-                "finalAnswer": final_answer,
-                "toolCalls": [],
-                "approvalRequired": False,
-                "sandboxDenied": False,
-                "model": {"provider": decision.provider, "model": decision.model, "usage": decision.usage},
-            }
-            completed = self._repository.complete_run(run_id, response_payload)
-            self._repository.append_event(
+            except Exception as exc:  # pragma: no cover - exercised through API contracts
+                return self._fail_run(
+                    run_id=run_id,
+                    session_id=session_id,
+                    run=current_run,
+                    reason=f"模型调用失败：{exc}",
+                    payload={"provider": "openrouter", "model": (model_config.model if model_config else None)},
+                )
+        if _live_requested(model_mode):
+            return self._fail_run(
                 run_id=run_id,
                 session_id=session_id,
-                event_type="run.completed",
-                visible_title="运行完成",
-                visible_summary="AI 助手运行已完成。",
-                payload={"finalAnswer": final_answer},
-            )
-            return HarnessTurnResult(
-                run=completed,
-                replayed=False,
-                final_answer=final_answer,
-                tool_calls=[],
+                run=current_run,
+                reason="live 模式未配置 OpenRouter Qwen 模型凭据。",
+                payload={"modelMode": model_mode},
             )
         self._repository.append_event(
             run_id=run_id,
@@ -186,7 +247,7 @@ class AiAssistantHarnessService:
             return self._run_scheduled_tool_calls(
                 session_id=session_id,
                 run_id=run_id,
-                run=run,
+                run=current_run,
                 message=message,
                 approval_mode=approval_mode,
                 tool_calls=scheduled_tool_calls,
@@ -350,27 +411,41 @@ class AiAssistantHarnessService:
             tool_calls=[_tool_call_payload(tool_call)],
         )
 
-    def _plan_with_live_model(self, *, run_id: int, session_id: int, message: str) -> LivePlannerDecision:
-        if self._live_planner is None:
+    def _planner_for(self, model_config: LivePlannerConfig | None) -> QwenLivePlanner | None:
+        if model_config is None:
+            return self._live_planner
+        if self._live_planner is not None:
+            return self._live_planner.with_config(model_config)
+        if not model_config.api_key and not model_config.api_key_ref:
+            return None
+        return QwenLivePlanner(model_config)
+
+    def _plan_with_live_model(
+        self,
+        *,
+        run_id: int,
+        session_id: int,
+        message: str,
+        model_config: LivePlannerConfig | None = None,
+        messages: list[ChatRequestMessage] | None = None,
+        round_index: int = 1,
+    ) -> LivePlannerDecision:
+        planner = self._planner_for(model_config)
+        if planner is None:
             raise RuntimeError("AI Assistant live planner is not configured")
         self._repository.append_event(
             run_id=run_id,
             session_id=session_id,
             event_type="model.call_started",
             visible_title="模型调用开始",
-            visible_summary=f"正在调用 OpenRouter {self._live_planner.model}。",
-            payload={"provider": "openrouter", "model": self._live_planner.model},
+            visible_summary=f"正在调用 OpenRouter {planner.model}。",
+            payload={"provider": "openrouter", "model": planner.model, "roundIndex": round_index},
         )
-        decision = self._live_planner.plan(message, self._tools)
-        self._repository.append_event(
-            run_id=run_id,
-            session_id=session_id,
-            event_type="model.thought_summary",
-            visible_title="思考摘要",
-            visible_summary=decision.thought_summary,
-            payload={"model": decision.model, "summary": decision.thought_summary},
-        )
-        for index, chunk in enumerate(decision.stream_chunks, start=1):
+        streamed_count = 0
+
+        def append_stream_chunk(chunk: str, index: int) -> None:
+            nonlocal streamed_count
+            streamed_count = max(streamed_count, index)
             self._repository.append_event(
                 run_id=run_id,
                 session_id=session_id,
@@ -380,11 +455,43 @@ class AiAssistantHarnessService:
                 payload={
                     "index": index,
                     "chunk": chunk,
-                    "model": decision.model,
-                    "streaming": False,
-                    "source": "post_completion_split",
+                    "model": planner.model,
+                    "roundIndex": round_index,
+                    "streaming": True,
+                    "source": "openrouter_delta",
                 },
             )
+
+        decision = (
+            planner.plan_messages(messages, self._tools, on_stream_chunk=append_stream_chunk)
+            if messages is not None
+            else planner.plan(message, self._tools, on_stream_chunk=append_stream_chunk)
+        )
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="model.thought_summary",
+            visible_title="思考摘要",
+            visible_summary=decision.thought_summary,
+            payload={"model": decision.model, "summary": decision.thought_summary, "roundIndex": round_index},
+        )
+        if streamed_count == 0:
+            for index, chunk in enumerate(decision.stream_chunks, start=1):
+                self._repository.append_event(
+                    run_id=run_id,
+                    session_id=session_id,
+                    event_type="model.stream_chunk",
+                    visible_title="流式输出",
+                    visible_summary=chunk,
+                    payload={
+                        "index": index,
+                        "chunk": chunk,
+                        "model": decision.model,
+                        "roundIndex": round_index,
+                        "streaming": decision.streaming,
+                        "source": decision.stream_source,
+                    },
+                )
         tool_names = [call["toolName"] for call in decision.tool_calls]
         self._repository.append_event(
             run_id=run_id,
@@ -392,7 +499,7 @@ class AiAssistantHarnessService:
             event_type="model.tool_call_decision",
             visible_title="工具调用决策",
             visible_summary="模型已选择工具调用。" if tool_names else "模型未选择工具调用。",
-            payload={"toolNames": tool_names, "model": decision.model, "usage": decision.usage},
+            payload={"toolNames": tool_names, "model": decision.model, "usage": decision.usage, "roundIndex": round_index},
         )
         file_tools = [name for name in tool_names if name in {"read_workspace_file", "write_workspace_file"}]
         if file_tools:
@@ -420,7 +527,7 @@ class AiAssistantHarnessService:
             event_type="task.updated",
             visible_title="任务编排",
             visible_summary="任务面板已记录模型规划、工具调用和审批状态。",
-            payload={"phase": "live_model_planning", "toolNames": tool_names},
+            payload={"phase": "live_model_planning", "toolNames": tool_names, "roundIndex": round_index},
         )
         self._repository.append_event(
             run_id=run_id,
@@ -428,9 +535,224 @@ class AiAssistantHarnessService:
             event_type="model.call_completed",
             visible_title="模型调用完成",
             visible_summary=f"OpenRouter {decision.model} 已返回规划结果。",
-            payload={"provider": decision.provider, "model": decision.model, "usage": decision.usage},
+            payload={"provider": decision.provider, "model": decision.model, "usage": decision.usage, "roundIndex": round_index},
         )
         return decision
+
+    def _run_live_react_loop(
+        self,
+        *,
+        run_id: int,
+        session_id: int,
+        run: dict[str, Any],
+        message: str,
+        approval_mode: str,
+        model_config: LivePlannerConfig | None,
+    ) -> HarnessTurnResult:
+        planner = self._planner_for(model_config)
+        if planner is None:
+            raise RuntimeError("AI Assistant live planner is not configured")
+        messages = planner.initial_messages(message)
+        decisions: list[LivePlannerDecision] = []
+        recorded_tool_calls: list[dict[str, Any]] = []
+        seen_tool_keys: set[str] = set()
+
+        for round_index in range(1, 5):
+            decision = self._plan_with_live_model(
+                run_id=run_id,
+                session_id=session_id,
+                message=message,
+                model_config=model_config,
+                messages=messages,
+                round_index=round_index,
+            )
+            decisions.append(decision)
+            if not decision.tool_calls:
+                return self._complete_live_run(
+                    run_id=run_id,
+                    session_id=session_id,
+                    run=run,
+                    final_answer=decision.final_answer or "模型未选择工具，已完成回复。",
+                    recorded_tool_calls=recorded_tool_calls,
+                    decision=decision,
+                    decisions=decisions,
+                    append_final_stream=False,
+                )
+
+            new_tool_calls = [call for call in decision.tool_calls if _tool_call_key(call) not in seen_tool_keys]
+            if not new_tool_calls:
+                final_answer = decision.final_answer or _tool_execution_answer(recorded_tool_calls)
+                return self._complete_live_run(
+                    run_id=run_id,
+                    session_id=session_id,
+                    run=run,
+                    final_answer=final_answer,
+                    recorded_tool_calls=recorded_tool_calls,
+                    decision=decision,
+                    decisions=decisions,
+                    append_final_stream=True,
+                )
+
+            seen_tool_keys.update(_tool_call_key(call) for call in new_tool_calls)
+            execution = self._execute_scheduled_tool_calls(
+                session_id=session_id,
+                run_id=run_id,
+                message=message,
+                approval_mode=approval_mode,
+                tool_calls=new_tool_calls,
+            )
+            recorded_tool_calls.extend(execution.recorded_tool_calls)
+            if execution.terminal_result is not None:
+                return self._with_accumulated_tool_calls(execution.terminal_result, recorded_tool_calls)
+            messages = _react_messages_after_tools(messages, decision, new_tool_calls, execution.recorded_tool_calls)
+
+        last_decision = decisions[-1]
+        final_answer = last_decision.final_answer or _tool_execution_answer(recorded_tool_calls)
+        return self._complete_live_run(
+            run_id=run_id,
+            session_id=session_id,
+            run=run,
+            final_answer=final_answer,
+            recorded_tool_calls=recorded_tool_calls,
+            decision=last_decision,
+            decisions=decisions,
+            append_final_stream=True,
+        )
+
+    def _complete_live_run(
+        self,
+        *,
+        run_id: int,
+        session_id: int,
+        run: dict[str, Any],
+        final_answer: str,
+        recorded_tool_calls: list[dict[str, Any]],
+        decision: LivePlannerDecision,
+        decisions: list[LivePlannerDecision],
+        append_final_stream: bool,
+    ) -> HarnessTurnResult:
+        if append_final_stream:
+            self._append_model_output_stream(
+                run_id=run_id,
+                session_id=session_id,
+                model=decision.model,
+                text=final_answer,
+                phase="final_answer",
+                source="harness_final_answer",
+            )
+        self._repository.append_message(session_id, "assistant", final_answer, run_id=run_id)
+        response_payload = {
+            "finalAnswer": final_answer,
+            "toolCalls": recorded_tool_calls,
+            "approvalRequired": False,
+            "sandboxDenied": False,
+            "model": {"provider": decision.provider, "model": decision.model, "usage": _merged_usage(decisions)},
+        }
+        completed = self._repository.complete_run(run_id, response_payload)
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="run.completed",
+            visible_title="运行完成",
+            visible_summary="AI 助手运行已完成。",
+            payload={"finalAnswer": final_answer},
+        )
+        return HarnessTurnResult(
+            run=completed or run,
+            replayed=False,
+            final_answer=final_answer,
+            tool_calls=recorded_tool_calls,
+        )
+
+    def _with_accumulated_tool_calls(
+        self,
+        result: HarnessTurnResult,
+        recorded_tool_calls: list[dict[str, Any]],
+    ) -> HarnessTurnResult:
+        response_payload = dict(result.run.get("response_payload") or {})
+        response_payload["toolCalls"] = recorded_tool_calls
+        updated = self._repository.complete_run(
+            int(result.run["id"]),
+            response_payload,
+            status=str(result.run["status"]),
+        )
+        return HarnessTurnResult(
+            run=updated or result.run,
+            replayed=result.replayed,
+            final_answer=result.final_answer,
+            tool_calls=recorded_tool_calls,
+            approval_required=result.approval_required,
+            approval_id=result.approval_id,
+            sandbox_denied=result.sandbox_denied,
+        )
+
+    def _fail_run(
+        self,
+        *,
+        run_id: int,
+        session_id: int,
+        run: dict[str, Any],
+        reason: str,
+        payload: dict[str, Any] | None = None,
+    ) -> HarnessTurnResult:
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="model.call_failed",
+            visible_title="模型调用失败",
+            visible_summary=reason,
+            payload=payload or {},
+            status="FAILED",
+            level="error",
+        )
+        failed = self._repository.complete_run(
+            run_id,
+            {
+                "finalAnswer": reason,
+                "toolCalls": [],
+                "approvalRequired": False,
+                "sandboxDenied": False,
+            },
+            status="FAILED",
+        )
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="run.failed",
+            visible_title="运行失败",
+            visible_summary=reason,
+            payload={"finalAnswer": reason},
+            status="FAILED",
+            level="error",
+        )
+        return HarnessTurnResult(run=failed or run, replayed=False, final_answer=reason, tool_calls=[])
+
+    def _append_model_output_stream(
+        self,
+        *,
+        run_id: int,
+        session_id: int,
+        model: str,
+        text: str,
+        phase: str,
+        source: str,
+    ) -> None:
+        for index, chunk in enumerate(_text_chunks(text), start=1):
+            self._repository.append_event(
+                run_id=run_id,
+                session_id=session_id,
+                event_type="model.stream_chunk",
+                visible_title="模型输出",
+                visible_summary=chunk,
+                payload={
+                    "index": index,
+                    "chunk": chunk,
+                    "model": model,
+                    "phase": phase,
+                    "streaming": True,
+                    "source": source,
+                },
+            )
 
     def _run_scheduled_tool_calls(
         self,
@@ -443,6 +765,33 @@ class AiAssistantHarnessService:
         tool_calls: list[dict[str, Any]],
         model_decision: LivePlannerDecision | None = None,
     ) -> HarnessTurnResult:
+        execution = self._execute_scheduled_tool_calls(
+            session_id=session_id,
+            run_id=run_id,
+            message=message,
+            approval_mode=approval_mode,
+            tool_calls=tool_calls,
+        )
+        if execution.terminal_result is not None:
+            return execution.terminal_result
+        return self._complete_tool_run(
+            session_id=session_id,
+            run_id=run_id,
+            run=run,
+            recorded_tool_calls=execution.recorded_tool_calls,
+            schedule=execution.schedule,
+            model_decision=model_decision,
+        )
+
+    def _execute_scheduled_tool_calls(
+        self,
+        *,
+        session_id: int,
+        run_id: int,
+        message: str,
+        approval_mode: str,
+        tool_calls: list[dict[str, Any]],
+    ) -> ScheduledToolExecutionResult:
         invocations = [
             ScheduledToolInvocation(str(call["toolName"]), dict(call.get("toolInput") or {}))
             for call in tool_calls
@@ -488,7 +837,11 @@ class AiAssistantHarnessService:
                         scheduler_metadata=batch.item_metadata[index],
                     )
                     if isinstance(result, HarnessTurnResult):
-                        return result
+                        return ScheduledToolExecutionResult(
+                            recorded_tool_calls=recorded_tool_calls,
+                            schedule=_schedule_payload(plan),
+                            terminal_result=result,
+                        )
                     recorded_tool_calls.append(result)
             self._repository.append_event(
                 run_id=run_id,
@@ -503,8 +856,31 @@ class AiAssistantHarnessService:
                     "lockMode": batch.lock_mode,
                 },
             )
-        final_answer = "计划工具结果：" + "; ".join(
-            str(call.get("output", {}).get("echo") or call.get("status") or "") for call in recorded_tool_calls
+        return ScheduledToolExecutionResult(
+            recorded_tool_calls=recorded_tool_calls,
+            schedule=_schedule_payload(plan),
+        )
+
+    def _complete_tool_run(
+        self,
+        *,
+        session_id: int,
+        run_id: int,
+        run: dict[str, Any],
+        recorded_tool_calls: list[dict[str, Any]],
+        schedule: dict[str, Any],
+        model_decision: LivePlannerDecision | None = None,
+    ) -> HarnessTurnResult:
+        final_answer = _tool_execution_answer(recorded_tool_calls)
+        if model_decision and model_decision.final_answer:
+            final_answer = f"{model_decision.final_answer}\n\n{final_answer}"
+        self._append_model_output_stream(
+            run_id=run_id,
+            session_id=session_id,
+            model=model_decision.model if model_decision else "deterministic",
+            text=final_answer,
+            phase="final_answer",
+            source="harness_final_answer",
         )
         self._repository.append_message(session_id, "assistant", final_answer, run_id=run_id)
         response_payload = {
@@ -517,21 +893,7 @@ class AiAssistantHarnessService:
                 if model_decision
                 else None
             ),
-            "schedule": {
-                "batches": [
-                    {
-                        "batchId": batch.batch_id,
-                        "executionMode": batch.execution_mode,
-                        "toolNames": [item.tool_name for item in batch.items],
-                        "readResources": batch.read_resources,
-                        "writeResources": batch.write_resources,
-                        "lockMode": batch.lock_mode,
-                        "resourceLockReason": batch.resource_lock_reason,
-                        "parallelEligible": batch.parallel_eligible,
-                    }
-                    for batch in plan.batches
-                ]
-            },
+            "schedule": schedule,
         }
         completed = self._repository.complete_run(run_id, response_payload)
         self._repository.append_event(
@@ -543,7 +905,7 @@ class AiAssistantHarnessService:
             payload={"finalAnswer": final_answer},
         )
         return HarnessTurnResult(
-            run=completed,
+            run=completed or run,
             replayed=False,
             final_answer=final_answer,
             tool_calls=recorded_tool_calls,
@@ -781,8 +1143,8 @@ class AiAssistantHarnessService:
     def list_session_runs(self, session_id: int) -> list[dict[str, Any]]:
         return self._repository.list_session_runs(session_id)
 
-    def list_run_events(self, run_id: int) -> list[dict[str, Any]]:
-        return self._repository.list_run_events(run_id)
+    def list_run_events(self, run_id: int, after_sequence: int = 0) -> list[dict[str, Any]]:
+        return self._repository.list_run_events(run_id, after_sequence=after_sequence)
 
     def list_run_tool_calls(self, run_id: int) -> list[dict[str, Any]]:
         return self._repository.list_run_tool_calls(run_id)
@@ -965,6 +1327,135 @@ def _request_hash(payload: Any) -> str:
     return sha256(encoded.encode("utf-8")).hexdigest()
 
 
+def _text_chunks(text: str) -> list[str]:
+    stripped = text.strip()
+    if not stripped:
+        return ["工具执行已完成。"]
+    if len(stripped) <= 80:
+        return [stripped]
+    return [stripped[index : index + 80] for index in range(0, len(stripped), 80)]
+
+
+def _tool_output_summary(tool_call: dict[str, Any]) -> str:
+    output = dict(tool_call.get("output") or {})
+    for key in ("echo", "path", "skillName", "status"):
+        value = output.get(key)
+        if value:
+            return str(value)
+    status = str(tool_call.get("status") or "")
+    return status
+
+
+def _tool_execution_answer(recorded_tool_calls: list[dict[str, Any]]) -> str:
+    tool_summary = "; ".join(
+        _tool_output_summary(call) for call in recorded_tool_calls if _tool_output_summary(call)
+    )
+    return f"工具结果：{tool_summary}" if tool_summary else "工具执行已完成。"
+
+
+def _tool_call_key(tool_call: dict[str, Any]) -> str:
+    return json.dumps(
+        {
+            "toolName": tool_call.get("toolName"),
+            "toolInput": tool_call.get("toolInput") or {},
+        },
+        sort_keys=True,
+        ensure_ascii=True,
+    )
+
+
+def _react_messages_after_tools(
+    messages: list[ChatRequestMessage],
+    decision: LivePlannerDecision,
+    requested_tool_calls: list[dict[str, Any]],
+    recorded_tool_calls: list[dict[str, Any]],
+) -> list[ChatRequestMessage]:
+    return [
+        *messages,
+        ChatRequestMessage(
+            role="assistant",
+            content=decision.final_answer or None,
+            tool_calls=[_assistant_tool_call_payload(call) for call in requested_tool_calls],
+        ),
+        *[
+            _tool_result_message(requested_call, recorded_call)
+            for requested_call, recorded_call in zip(requested_tool_calls, recorded_tool_calls, strict=False)
+        ],
+    ]
+
+
+def _assistant_tool_call_payload(tool_call: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": str(tool_call.get("toolCallId") or f"call_{tool_call.get('toolName') or 'tool'}"),
+        "type": "function",
+        "function": {
+            "name": str(tool_call.get("toolName") or ""),
+            "arguments": json.dumps(tool_call.get("toolInput") or {}, ensure_ascii=False),
+        },
+    }
+
+
+def _tool_result_message(requested_call: dict[str, Any], recorded_call: dict[str, Any]) -> ChatRequestMessage:
+    content = {
+        "toolName": recorded_call.get("toolName") or requested_call.get("toolName"),
+        "status": recorded_call.get("status"),
+        "input": recorded_call.get("input") or requested_call.get("toolInput") or {},
+        "output": recorded_call.get("output") or {},
+    }
+    return ChatRequestMessage(
+        role="tool",
+        content=json.dumps(content, ensure_ascii=False),
+        tool_call_id=str(requested_call.get("toolCallId") or f"call_{requested_call.get('toolName') or 'tool'}"),
+        name=str(requested_call.get("toolName") or ""),
+    )
+
+
+def _merged_usage(decisions: list[LivePlannerDecision]) -> dict[str, int]:
+    totals = {"inputTokens": 0, "outputTokens": 0, "totalTokens": 0}
+    for decision in decisions:
+        usage = decision.usage
+        totals["inputTokens"] += int(usage.get("inputTokens") or usage.get("prompt_tokens") or 0)
+        totals["outputTokens"] += int(usage.get("outputTokens") or usage.get("completion_tokens") or 0)
+        total = int(usage.get("totalTokens") or usage.get("total_tokens") or 0)
+        totals["totalTokens"] += total or (
+            int(usage.get("inputTokens") or usage.get("prompt_tokens") or 0)
+            + int(usage.get("outputTokens") or usage.get("completion_tokens") or 0)
+        )
+    return totals
+
+
+def _schedule_payload(plan: Any) -> dict[str, Any]:
+    return {
+        "batches": [
+            {
+                "batchId": batch.batch_id,
+                "executionMode": batch.execution_mode,
+                "toolNames": [item.tool_name for item in batch.items],
+                "readResources": batch.read_resources,
+                "writeResources": batch.write_resources,
+                "lockMode": batch.lock_mode,
+                "resourceLockReason": batch.resource_lock_reason,
+                "parallelEligible": batch.parallel_eligible,
+            }
+            for batch in plan.batches
+        ]
+    }
+
+
+def _safe_model_config_payload(model_config: LivePlannerConfig | None) -> dict[str, Any] | None:
+    if model_config is None:
+        return None
+    return {
+        "provider": model_config.provider,
+        "baseUrl": model_config.base_url,
+        "model": model_config.model,
+        "apiKeyRef": model_config.api_key_ref,
+        "hasApiKey": bool(model_config.api_key),
+        "temperature": model_config.temperature,
+        "maxTokens": model_config.max_tokens,
+    }
+
+
 def _live_requested(model_mode: str) -> bool:
     return model_mode.strip().lower() in {"live", "qwen", "openrouter"}
 
@@ -1094,7 +1585,7 @@ def _phase_label(event_type: str) -> str:
         "orchestration.phase_started": "推理规划",
         "model.call_started": "模型调用",
         "model.thought_summary": "思考摘要",
-        "model.stream_chunk": "流式输出",
+        "model.stream_chunk": "模型输出",
         "model.tool_call_decision": "工具决策",
         "model.file_intent": "文件意图",
         "model.skill_intent": "技能意图",

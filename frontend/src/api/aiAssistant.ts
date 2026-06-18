@@ -56,6 +56,7 @@ export interface AiAssistantTurnResult {
   approvalRequired?: boolean
   approvalId?: number | null
   sandboxDenied?: boolean
+  eventStreamRef?: string
 }
 
 export interface AiAssistantToolCall {
@@ -71,9 +72,51 @@ export interface SendAiAssistantMessagePayload {
   message: string
   idempotencyKey?: string
   approvalMode?: string
+  modelMode?: string
   toolName?: string
   toolInput?: Record<string, unknown>
-  modelMode?: string
+  toolCalls?: Array<{ toolName: string; toolInput?: Record<string, unknown> }>
+  modelConfig?: AiAssistantModelConfigPayload
+}
+
+export interface AiAssistantModelConfigPayload {
+  provider?: string
+  baseUrl?: string
+  model?: string
+  apiKey?: string
+  apiKeyRef?: string
+  temperature?: number
+  maxTokens?: number
+}
+
+export interface AiAssistantRuntimeConfig {
+  modelName: string
+  baseUrl: string
+  apiKey: string
+  temperature: number
+  maxTokens: number
+  streamEnabled: boolean
+}
+
+export function buildAiAssistantMessagePayload(
+  message: string,
+  runtimeConfig: AiAssistantRuntimeConfig,
+  idempotencyKey: string,
+): SendAiAssistantMessagePayload {
+  return {
+    message,
+    idempotencyKey,
+    approvalMode: 'smart_approval',
+    modelMode: 'live',
+    modelConfig: {
+      provider: 'openrouter',
+      baseUrl: runtimeConfig.baseUrl,
+      model: runtimeConfig.modelName,
+      apiKey: runtimeConfig.apiKey,
+      temperature: runtimeConfig.temperature,
+      maxTokens: runtimeConfig.maxTokens,
+    },
+  }
 }
 
 export interface AiAssistantApproval {
@@ -163,8 +206,15 @@ export function sendAiAssistantMessage(sessionId: number, payload: SendAiAssista
   return post<AiAssistantTurnResult>(`/v1/ai-assistant/sessions/${sessionId}/messages`, payload)
 }
 
-export function listAiAssistantRunEvents(runId: number) {
-  return get<AiAssistantRunEventList>(`/v1/ai-assistant/runs/${runId}/events`)
+export function startAiAssistantMessage(sessionId: number, payload: SendAiAssistantMessagePayload) {
+  return post<AiAssistantTurnResult>(`/v1/ai-assistant/sessions/${sessionId}/messages/async`, payload)
+}
+
+export function listAiAssistantRunEvents(runId: number, afterSequence?: number) {
+  return get<AiAssistantRunEventList>(
+    `/v1/ai-assistant/runs/${runId}/events`,
+    afterSequence ? { afterSequence } : undefined,
+  )
 }
 
 export function listAiAssistantSessionRuns(sessionId: number) {

@@ -1,15 +1,18 @@
 from __future__ import annotations
 
+import json
+from time import sleep
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.core.database import get_session
 from app.core.responses import success
 from app.modules.ai_assistant.domain.harness import AiAssistantHarnessService
-from app.modules.ai_assistant.domain.live_model import create_qwen_live_planner
+from app.modules.ai_assistant.domain.live_model import LivePlannerConfig, create_qwen_live_planner
 from app.modules.ai_assistant.infra.repository import AiAssistantRepository, IdempotencyConflict
 from app.modules.ai_assistant.web.schemas import (
     ApprovalDecisionRequest,
@@ -94,6 +97,7 @@ def send_message(
     session_id: int,
     request: SendAiAssistantMessageRequest,
     service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
+    settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     if service.get_session(session_id) is None:
         raise HTTPException(status_code=404, detail="AI 助手会话不存在")
@@ -110,10 +114,61 @@ def send_message(
                 for call in request.tool_calls
             ],
             model_mode=request.model_mode,
+            model_config=_request_model_config(request, settings),
         )
     except IdempotencyConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return success(_turn_payload(result))
+
+
+@router.post("/sessions/{session_id}/messages/async")
+def start_message(
+    session_id: int,
+    request: SendAiAssistantMessageRequest,
+    background_tasks: BackgroundTasks,
+    service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
+    settings: Settings = Depends(get_settings),
+) -> dict[str, Any]:
+    if service.get_session(session_id) is None:
+        raise HTTPException(status_code=404, detail="AI 助手会话不存在")
+    model_config = _request_model_config(request, settings)
+    try:
+        result = service.start_message(
+            session_id=session_id,
+            message=request.message,
+            idempotency_key=request.idempotency_key,
+            approval_mode=request.approval_mode,
+            tool_name=request.tool_name,
+            tool_input=dict(request.tool_input),
+            tool_calls=[
+                {"toolName": call.tool_name, "toolInput": dict(call.tool_input)}
+                for call in request.tool_calls
+            ],
+            model_mode=request.model_mode,
+            model_config=model_config,
+        )
+    except IdempotencyConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if not result.replayed and result.run["status"] == "RUNNING":
+        background_tasks.add_task(
+            service.complete_started_message,
+            session_id=session_id,
+            run_id=int(result.run["id"]),
+            run=result.run,
+            message=request.message,
+            approval_mode=request.approval_mode,
+            tool_name=request.tool_name,
+            tool_input=dict(request.tool_input),
+            tool_calls=[
+                {"toolName": call.tool_name, "toolInput": dict(call.tool_input)}
+                for call in request.tool_calls
+            ],
+            model_mode=request.model_mode,
+            model_config=model_config,
+        )
+    payload = _turn_payload(result)
+    payload["eventStreamRef"] = f"/api/v1/ai-assistant/runs/{result.run['id']}/events/stream?afterSequence=0"
+    return success(payload)
 
 
 @router.get("/runs/{run_id}")
@@ -141,10 +196,41 @@ def get_run_inspector(
 @router.get("/runs/{run_id}/events")
 def list_run_events(
     run_id: int,
+    after_sequence: int = Query(default=0, alias="afterSequence"),
     service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
 ) -> dict[str, Any]:
-    events = [_event_payload(row) for row in service.list_run_events(run_id)]
+    events = [_event_payload(row) for row in service.list_run_events(run_id, after_sequence=after_sequence)]
     return success({"list": events, "total": len(events)})
+
+
+@router.get("/runs/{run_id}/events/stream")
+def stream_run_events(
+    run_id: int,
+    after_sequence: int = Query(default=0, alias="afterSequence"),
+    test_limit: int | None = Query(default=None, alias="_testLimit"),
+    service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
+) -> StreamingResponse:
+    if service.get_run(run_id) is None:
+        raise HTTPException(status_code=404, detail="AI Assistant run not found")
+
+    def iter_events() -> Any:
+        last_sequence = after_sequence
+        emitted = 0
+        while True:
+            rows = service.list_run_events(run_id, after_sequence=last_sequence)
+            for row in rows:
+                last_sequence = max(last_sequence, int(row["sequence"]))
+                emitted += 1
+                yield _sse_frame("ai_assistant_event", _event_payload(row))
+                if test_limit is not None and emitted >= test_limit:
+                    return
+            run = service.get_run(run_id)
+            if run is None or run["status"] in {"COMPLETED", "FAILED", "DENIED", "WAITING_APPROVAL"}:
+                if not rows:
+                    return
+            sleep(0.2)
+
+    return StreamingResponse(iter_events(), media_type="text/event-stream")
 
 
 @router.get("/runs/{run_id}/result")
@@ -251,3 +337,26 @@ def _event_payload(row: dict[str, Any]) -> dict[str, Any]:
         "correlationIds": row.get("correlation_ids") or {},
         "createdAt": row["created_at"].isoformat(),
     }
+
+
+def _request_model_config(
+    request: SendAiAssistantMessageRequest,
+    settings: Settings,
+) -> LivePlannerConfig | None:
+    if request.model_config_request is None:
+        return None
+    model_config = request.model_config_request
+    return LivePlannerConfig(
+        provider=model_config.provider or "openrouter",
+        base_url=model_config.base_url or settings.ai_assistant_openrouter_base_url,
+        model=model_config.model or settings.ai_assistant_openrouter_model,
+        api_key=model_config.api_key,
+        api_key_ref=model_config.api_key_ref or f"env:{settings.ai_assistant_openrouter_api_key_env}",
+        temperature=model_config.temperature,
+        max_tokens=model_config.max_tokens,
+    )
+
+
+def _sse_frame(event_name: str, payload: dict[str, Any]) -> str:
+    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    return f"event: {event_name}\ndata: {encoded}\n\n"
