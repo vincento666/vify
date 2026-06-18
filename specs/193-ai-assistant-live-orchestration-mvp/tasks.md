@@ -63,3 +63,16 @@
       keeping the implementation on MySQL8.
 - [x] Commit only AI Assistant/spec/artifact changes, excluding unrelated
       dirty customer-assistant/workflow files.
+
+## 193.5 Final Browser UAT And Completion Audit
+
+- [x] Run a real browser UAT journey against `/ai-assistant` with OpenRouter
+      `qwen/qwen3.5-27b`, temporary model config, model stream, read tool,
+      skill intent, write approval, and write completion.
+- [x] Verify the ReAct event order over time instead of a fixed mock list:
+      running spinner before model output, model output before tool rows,
+      tool rows before approval, and completed run after approval.
+- [x] Verify one-screen layout, no old echo copy, usage units, task panel real
+      content, and expanded tool details with `调用详情` / `输入` / `输出`.
+- [x] Save browser UAT screenshots and JSON evidence under
+      `artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.5/`.

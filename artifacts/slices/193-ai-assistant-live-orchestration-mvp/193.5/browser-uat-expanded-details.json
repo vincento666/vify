@@ -1,0 +1,14 @@
+{
+  "runGroups": 1,
+  "expandedGroups": 1,
+  "detailPanels": 14,
+  "detailRows": 32,
+  "toolInputs": 4,
+  "toolOutputs": 4,
+  "hasCallDetail": true,
+  "hasInput": true,
+  "hasOutput": true,
+  "hasTerminalLikePayload": true,
+  "oldCopy": false,
+  "excerpt": "调用详情正在调用 OpenRouter qwen/qwen3.5-27b。输入{\n  \"model\": \"qwen/qwen3.5-27b\",\n  \"provider\": \"openrouter\",\n  \"roundIndex\": 1\n}\n---\n调用详情模型已选择工具调用。输入{\n  \"model\": \"qwen/qwen3.5-27b\",\n  \"usage\": {\n    \"inputTokens\": 897,\n    \"totalTokens\": 1182,\n    \"outputTokens\": 285,\n    \"total_tokens\": 1182,\n    \"prompt_tokens\": 897,\n    \"completion_tokens\": 285\n  },\n  \"toolNames\": [\n    \"read_workspace_file\",\n    \"invoke_skill\"\n  ],\n  \"roundIndex\": 1\n}\n---\n调用详情模型记录了技能调用意图；当前 harness 不执行本机 Codex skill。输入{\n  \"execution\": \"intent_recorded\",\n  \"toolNames\": [\n    \"invoke_skill\"\n  ]\n}\n---\n调用详情OpenRouter qwen/qwen3.5-27b 已返回规划结果。输入{\n  \"model\": \"qwen/qwen3.5-27b\",\n  \"usage\": {\n    \"inputTokens\": 897,\n    \"totalTokens\": 1182,\n    \"outputTokens\": 285,\n    \"total_tokens\": 1182,\n    \"prompt_tokens\": 897,\n    \"completion_tokens\": 285\n  },\n  \"provider\": \"openrouter\",\n  \"roundIndex\": 1\n}\n---\n调用详情READ_PARALLEL 批次 1 已开始。输入{\n  \"batchId\": 1,\n  \"lockMode\": \"READ\",\n  \"toolNames\": [\n    \"read_workspace_file\",\n    \"invoke_skill\"\n  ],\n  \"executionMode\": \"READ_PARALLEL\",\n  \"readResources\": [\n    \"file:README.md\",\n    \"skill:tdd\"\n  ],\n  \"writeResources\": [],\n  \"parallelEligible\": true,\n  \"resourceLockReason\": \"compatible_read_onl"
+}
