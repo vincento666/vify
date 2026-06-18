@@ -227,7 +227,7 @@ def _message_reasoning(message: dict[str, Any]) -> str:
 
 def _message_text(raw: Any) -> str:
     if isinstance(raw, str):
-        return raw.strip()
+        return _normalize_repeated_text(raw)
     if isinstance(raw, list):
         parts: list[str] = []
         for item in raw:
@@ -237,7 +237,7 @@ def _message_text(raw: Any) -> str:
                     parts.append(text)
             elif isinstance(item, str):
                 parts.append(item)
-        return "".join(parts).strip()
+        return _normalize_repeated_text("".join(parts))
     return ""
 
 
@@ -252,7 +252,7 @@ def _append_unique_text(parts: list[str], text: str) -> None:
 
 def _thought_summary(*, content: str, reasoning: str, has_tool_calls: bool) -> str:
     if reasoning:
-        return reasoning
+        return _normalize_repeated_text(reasoning)
     if content:
         return "模型已返回可展示输出。"
     if has_tool_calls:
@@ -303,6 +303,42 @@ def _stream_chunks(content: str) -> list[str]:
     if len(text) <= 48:
         return [text]
     return [text[index : index + 48] for index in range(0, len(text), 48)]
+
+
+def _normalize_repeated_text(value: str) -> str:
+    text = value.strip()
+    for _ in range(4):
+        collapsed = _collapse_adjacent_repeated_units(text)
+        if collapsed == text:
+            break
+        text = collapsed
+    return text
+
+
+def _collapse_adjacent_repeated_units(text: str) -> str:
+    output: list[str] = []
+    index = 0
+    while index < len(text):
+        max_unit_length = min(32, (len(text) - index) // 2)
+        matched = False
+        for unit_length in range(max_unit_length, 1, -1):
+            unit = text[index : index + unit_length]
+            if not _has_text_signal(unit):
+                continue
+            next_unit = text[index + unit_length : index + unit_length * 2]
+            if unit == next_unit:
+                output.append(unit)
+                index += unit_length * 2
+                matched = True
+                break
+        if not matched:
+            output.append(text[index])
+            index += 1
+    return "".join(output)
+
+
+def _has_text_signal(value: str) -> bool:
+    return bool(any(char.isalnum() or char == "_" or "\u4e00" <= char <= "\u9fff" for char in value))
 
 
 def _usage(response: dict[str, Any]) -> dict[str, int]:

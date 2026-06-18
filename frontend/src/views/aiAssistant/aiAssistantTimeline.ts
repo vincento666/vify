@@ -88,7 +88,7 @@ export function buildAiAssistantTimeline(events: AiAssistantEvent[]): AiAssistan
 
 function eventToTimelineItem(event: AiAssistantEvent): AiAssistantTimelineItem {
   const kind = eventKind(event.type)
-  const summary = event.visibleSummary || ''
+  const summary = normalizeRepeatedText(event.visibleSummary || '')
   return {
     id: `${event.runId}-${event.sequence}-${event.type}`,
     eventId: event.id,
@@ -111,7 +111,7 @@ function flushModelStreamGroup(
   if (events.length === 0) return previousModelOutput
   const first = events[0]
   const last = events[events.length - 1]
-  const summary = events.map(modelStreamChunkText).join('')
+  const summary = normalizeRepeatedText(events.map(modelStreamChunkText).join(''))
   timeline.push({
     id: `${first.runId}-${first.sequence}-${last.sequence}-model.stream_chunk`,
     eventId: last.id,
@@ -315,6 +315,45 @@ function nextModelStreamSummary(events: AiAssistantEvent[], currentIndex: number
 
 function normalizeText(value: string) {
   return value.replace(/\s+/g, '').trim()
+}
+
+function normalizeRepeatedText(value: string) {
+  let text = value.trim()
+  for (let index = 0; index < 4; index += 1) {
+    const collapsed = collapseAdjacentRepeatedUnits(text)
+    if (collapsed === text) break
+    text = collapsed
+  }
+  return text
+}
+
+function collapseAdjacentRepeatedUnits(text: string) {
+  let output = ''
+  let index = 0
+  while (index < text.length) {
+    const maxUnitLength = Math.min(32, Math.floor((text.length - index) / 2))
+    let matched = false
+    for (let unitLength = maxUnitLength; unitLength > 1; unitLength -= 1) {
+      const unit = text.slice(index, index + unitLength)
+      if (!hasTextSignal(unit)) continue
+      const nextUnit = text.slice(index + unitLength, index + unitLength * 2)
+      if (unit === nextUnit) {
+        output += unit
+        index += unitLength * 2
+        matched = true
+        break
+      }
+    }
+    if (!matched) {
+      output += text[index]
+      index += 1
+    }
+  }
+  return output
+}
+
+function hasTextSignal(value: string) {
+  return /[\p{L}\p{N}_]/u.test(value)
 }
 
 function compactPayload(payload: Record<string, unknown>) {

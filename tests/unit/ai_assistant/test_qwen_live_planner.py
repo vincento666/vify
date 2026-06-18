@@ -122,6 +122,41 @@ class AiAssistantQwenLivePlannerTest(unittest.TestCase):
         self.assertEqual(decision.final_answer, "")
         self.assertEqual(decision.stream_chunks, [])
 
+    def test_repeated_openrouter_reasoning_fragments_are_normalized_before_display(self) -> None:
+        from app.modules.ai_assistant.domain.live_model import LivePlannerConfig, QwenLivePlanner
+        from app.modules.ai_assistant.domain.tools import ToolRegistry
+
+        fake_client = FakeOpenAIChatClient(
+            response_payload={
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": None,
+                            "reasoning": (
+                                "用户用户要求我要求我执行一个复杂执行一个复杂验收任务验收任务，"
+                                "需要按顺序需要按顺序调用多个工具：调用多个工具："
+                            ),
+                        },
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {"prompt_tokens": 12, "completion_tokens": 8, "total_tokens": 20},
+            }
+        )
+        planner = QwenLivePlanner(
+            LivePlannerConfig(
+                base_url="https://openrouter.ai/api/v1",
+                model="qwen/qwen3.5-27b",
+                api_key_ref="env:OPENROUTER_API_KEY",
+            ),
+            client=fake_client,
+        )
+
+        decision = planner.plan("请执行复杂任务", ToolRegistry.with_builtin_tools())
+
+        self.assertEqual(decision.thought_summary, "用户要求我执行一个复杂验收任务，需要按顺序调用多个工具：")
+
 
 if __name__ == "__main__":
     unittest.main()

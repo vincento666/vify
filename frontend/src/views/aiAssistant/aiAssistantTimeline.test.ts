@@ -169,6 +169,24 @@ describe('ai assistant execution timeline', () => {
     expect(timeline[0].summary).toBe('已根据请求规划工具调用。')
   })
 
+  it('normalizes duplicated model stream fragments before rendering model text', () => {
+    const events: AiAssistantEvent[] = [
+      event(1, 'model.stream_chunk', '模型输出', '用户用户要求我要求我', {
+        chunk: '用户用户要求我要求我',
+      }),
+      event(2, 'model.stream_chunk', '模型输出', '执行一个复杂执行一个复杂验收任务验收任务。', {
+        chunk: '执行一个复杂执行一个复杂验收任务验收任务。',
+      }),
+    ]
+
+    const timeline = buildAiAssistantTimeline(events)
+
+    expect(timeline).toHaveLength(1)
+    expect(timeline[0].kind).toBe('model-output')
+    expect(timeline[0].summary).toBe('用户要求我执行一个复杂验收任务。')
+    expect(timeline[0].details[1].value).toBe('用户要求我执行一个复杂验收任务。')
+  })
+
   it('keeps a tool invocation as one foldable call with input output and execution detail', () => {
     const events: AiAssistantEvent[] = [
       event(1, 'tool.call_started', '工具开始', '读取工作区文件 已开始执行。', {

@@ -1,0 +1,19 @@
+Slice 193.14 RED Evidence
+
+Scope:
+- Execution-step and tool-call duration truthfulness.
+
+Command:
+rtk uv run pytest tests/unit/ai_assistant/test_tool_duration.py -q
+
+Expected failure before implementation:
+
+```
+AssertionError: 0 != 1
+```
+
+Reason:
+- The backend measured duration with `perf_counter`, but converted elapsed
+  milliseconds using `int(...)`.
+- Real sub-millisecond tool executions therefore displayed as `0 ms`, which made
+  visible execution-step durations look fake.

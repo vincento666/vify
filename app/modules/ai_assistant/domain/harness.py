@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from hashlib import sha256
 import json
+from math import ceil
 from time import perf_counter
 from typing import Any
 
@@ -360,7 +361,7 @@ class AiAssistantHarnessService:
         if tool_name == "echo_context":
             dispatch_payload = dispatch_payload | {"context": {"sessionId": session_id}}
         tool_result = self._tools.dispatch(tool_name, dispatch_payload)
-        duration_ms = max(0, int((perf_counter() - started) * 1000))
+        duration_ms = _elapsed_duration_ms(started)
         self._repository.append_event(
             run_id=run_id,
             session_id=session_id,
@@ -1134,7 +1135,7 @@ class AiAssistantHarnessService:
         tool_result = self._tools.dispatch(tool_name, dispatch_payload)
         return {
             "tool_result": tool_result,
-            "duration_ms": max(0, int((perf_counter() - started) * 1000)),
+            "duration_ms": _elapsed_duration_ms(started),
         }
 
     def get_run(self, run_id: int) -> dict[str, Any] | None:
@@ -1325,6 +1326,11 @@ class AiAssistantHarnessService:
 def _request_hash(payload: Any) -> str:
     encoded = json.dumps(payload, sort_keys=True, ensure_ascii=True)
     return sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _elapsed_duration_ms(started: float) -> int:
+    elapsed_ms = max(0.0, (perf_counter() - started) * 1000)
+    return int(ceil(elapsed_ms)) if elapsed_ms > 0 else 0
 
 
 def _text_chunks(text: str) -> list[str]:

@@ -27,7 +27,7 @@ describe('AI Assistant shell UI contract', () => {
       'ai-assistant-event-stream',
       'ai-assistant-event-card',
       'ai-assistant-event-card-header',
-      'ai-assistant-model-output',
+      'ai-assistant-assistant-message',
       'ai-assistant-composer',
       'ai-assistant-composer-body',
       'ai-assistant-composer-actions',
@@ -52,6 +52,11 @@ describe('AI Assistant shell UI contract', () => {
       'ai-assistant-event-completed-icon',
       'ai-assistant-node-spinner',
       'ai-assistant-run-final-answer',
+      'ai-assistant-task-status-icon',
+      'ai-assistant-task-spinner',
+      'ai-assistant-task-completed-icon',
+      'ai-assistant-execution-step-spinner',
+      'ai-assistant-execution-step-done',
     ]) {
       expect(content).toContain(`data-testid="${testId}"`)
     }
@@ -138,14 +143,13 @@ describe('AI Assistant shell UI contract', () => {
     expect(content).toContain('expandedEventIds')
     expect(content).toContain('toggleEventCard')
     expect(content).toContain('isEventExpanded')
-    expect(content).toContain(':aria-expanded="isEventExpanded(item.id)"')
-    expect(content).toContain('v-if="isEventExpanded(item.id)"')
-    expect(content).toContain("item.kind === 'model-output'")
-    expect(content).toContain('data-testid="ai-assistant-model-output"')
-    expect(content).toContain("item.kind === 'model-thought'")
+    expect(content).toContain(':aria-expanded="isEventExpanded(eventItem.id)"')
+    expect(content).toContain('v-if="isEventExpanded(eventItem.id)"')
+    expect(content).toContain("eventItem.kind === 'model-thought'")
     expect(content).toContain('ai-assistant-thought-summary')
     expect(content).toContain('isEventRunning')
     expect(content).toContain('LoadingOutlined')
+    expect(content).toContain('data-testid="ai-assistant-assistant-message"')
     expect(content).not.toContain('eventStreamCollapsed')
     expect(content).not.toContain('收起回显')
     expect(content).not.toContain('展开回显')
@@ -166,14 +170,13 @@ describe('AI Assistant shell UI contract', () => {
     ]) {
       expect(content).toContain(`data-testid="${testId}"`)
     }
-    expect(content).toContain('runEventGroupExpanded')
-    expect(content).toContain('toggleRunEventGroup')
-    expect(content).toContain('runThreadDefaultExpanded')
+    expect(content).toContain('processedGroupExpanded')
+    expect(content).toContain('toggleProcessedGroup')
+    expect(content).toContain('isProcessedGroupExpanded')
     expect(content).toContain('formatEventDetailRows')
     expect(content).toContain('eventStatusIcon')
     expect(content).toContain('事件')
-    expect(content).toContain('.ai-task__dot.status-running')
-    expect(content).toContain('animation: ai-pulse')
+    expect(content).toContain('animation: ai-spin')
     expect(content).not.toContain('ai-event__pulse')
     expect(content).not.toContain('已收纳')
     expect(content).not.toContain('任务记录 #')
@@ -185,24 +188,45 @@ describe('AI Assistant shell UI contract', () => {
   it('keeps run card headers compact and renders final answers outside folded echo cards', () => {
     expect(content).toContain('runThreadUserMessage(thread)')
     expect(content).toContain('data-testid="ai-assistant-user-message"')
-    expect(content).toContain('runThreadHeaderTitle(thread)')
-    expect(content).toContain('timelineForThreadEcho(thread)')
+    expect(content).toContain('runThreadPresentationItems(thread)')
     expect(content).toContain('runThreadFinalAnswer(thread)')
     expect(content).toContain('data-testid="ai-assistant-run-final-answer"')
+    expect(content).toContain('data-testid="ai-assistant-completion-copy"')
+    expect(content).toContain('data-testid="ai-assistant-completion-like"')
+    expect(content).toContain('data-testid="ai-assistant-completion-dislike"')
     expect(content).toContain('已处理')
+    expect(content).not.toContain('runThreadHeaderTitle(thread)')
+    expect(content).not.toContain('function runThreadHeaderTitle')
     expect(content).not.toContain('<small>任务记录 #{{ thread.run.id }}</small>')
     expect(content).not.toContain('runTitle(thread.run)')
     expect(content).not.toContain('function runTitle')
     expect(content).not.toContain('statusLabel(thread.inspector?.run.status ?? thread.run.status)} / ${timeline.length} 条事件')
   })
 
-  it('renders user and final assistant message bubbles without card chrome', () => {
+  it('renders processed groups and model text as peer-level Codex-like timeline items', () => {
+    expect(content).toContain('data-testid="ai-assistant-processed-group"')
+    expect(content).toContain('data-testid="ai-assistant-assistant-message"')
+    expect(content).toContain('processedGroupMeta(item.items)')
+    expect(content).toContain('presentationItemKey(item)')
+    expect(content).toContain('buildRunThreadPresentationItems')
+    expect(content).toContain("item.kind === 'processed'")
+    expect(content).toContain("item.kind === 'assistant-output'")
+    expect(content).toContain('思考')
+    expect(content).toContain('工具调用')
+  })
+
+  it('renders user bubbles with subtle fill and completion summary cards with actions', () => {
     expect(content).toContain('class="ai-message ai-message--user"')
     expect(content).toContain('class="ai-message ai-message--assistant"')
+    expect(content).toContain('class="ai-completion-card"')
     expect(content).toContain('.ai-message {')
-    expect(content).toContain('background: transparent;')
+    expect(content).toContain('.ai-message--user p {')
+    expect(content).toContain('background: var(--color-bg-selected, #eef2ff);')
     expect(content).toContain('border: 0;')
-    expect(content).not.toContain('.ai-final-answer {')
+    expect(content).toContain('.ai-completion-card__actions')
+    expect(content).toContain('复制')
+    expect(content).toContain('点赞')
+    expect(content).toContain('点踩')
   })
 
   it('groups inspector stream chunks and hides stale approval actions', () => {
@@ -218,11 +242,19 @@ describe('AI Assistant shell UI contract', () => {
     expect(content).toContain('isCurrentInspectorStep(step)')
     expect(content).toContain("inspector.value?.run.status === 'RUNNING'")
     expect(content).toContain('taskMetaLabel(task)')
-    expect(content).toContain('shouldShowApprovalActions(item, thread)')
+    expect(content).toContain('shouldShowApprovalActions(eventItem, thread)')
     expect(content).toContain('approvalStatusForTimelineItem')
     expect(content).toContain('isPendingApprovalStatus(approval.status)')
+    expect(content).toContain('isDoneInspectorStepStatus(step.status)')
+    expect(content).toContain('ai-execution-step__pending')
     expect(content).toContain('data-testid="ai-assistant-approval-approve"')
     expect(content).toContain('data-testid="ai-assistant-approval-deny"')
+    expect(content).toContain('data-testid="ai-assistant-task-status-icon"')
+    expect(content).toContain('data-testid="ai-assistant-task-spinner"')
+    expect(content).toContain('data-testid="ai-assistant-task-completed-icon"')
+    expect(content).not.toContain('class="ai-task__dot"')
+    expect(content).not.toContain('.ai-task__dot.status-running')
+    expect(content).not.toContain("return !isInspectorEventRunning(step) && step.status !== 'FAILED' && step.status !== 'DENIED'")
     expect(content).not.toContain('<header>时间线</header>')
     expect(content).not.toContain('v-for="event in inspector?.eventTimeline || []"')
     expect(content).not.toContain('v-for="event in inspectorPlanningStepsForView"')

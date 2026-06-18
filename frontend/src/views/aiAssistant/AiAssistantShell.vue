@@ -84,136 +84,183 @@
         >
           <p>{{ runThreadUserMessage(thread) }}</p>
         </div>
-        <article class="ai-run-event-group" data-testid="ai-assistant-run-task-card">
-          <span class="ai-event__detail-anchor" data-testid="ai-assistant-run-event-group" />
-          <button
-            class="ai-run-event-group__header"
-            type="button"
-            data-testid="ai-assistant-run-event-group-header"
-            :aria-expanded="isRunEventGroupExpanded(thread.run.id, thread)"
-            @click="toggleRunEventGroup(thread.run.id, thread)"
+        <template v-for="item in runThreadPresentationItems(thread)" :key="presentationItemKey(item)">
+          <article
+            v-if="item.kind === 'processed'"
+            class="ai-run-event-group"
+            data-testid="ai-assistant-run-task-card"
           >
-            <span class="ai-run-event-group__status-icon" data-testid="ai-assistant-run-status-icon">
-              <LoadingOutlined v-if="isRunThreadRunning(thread)" class="ai-run-event-group__spinner" />
-              <CheckCircleOutlined v-else-if="isRunThreadDone(thread)" />
-              <ClockCircleOutlined v-else />
-            </span>
-            <span class="ai-run-event-group__title">
-              <strong>{{ runThreadHeaderTitle(thread) }}</strong>
-            </span>
-            <span class="ai-run-event-group__meta">{{ runThreadMeta(thread) }}</span>
-            <DownOutlined v-if="!isRunEventGroupExpanded(thread.run.id, thread)" />
-            <UpOutlined v-else />
-          </button>
-
-          <section
-            v-if="isRunEventGroupExpanded(thread.run.id, thread)"
-            class="ai-run-event-line"
-            data-testid="ai-assistant-run-event-line"
-          >
-            <article
-              v-for="item in timelineForThreadEcho(thread)"
-              :key="item.id"
-              class="ai-event"
-              :class="[`tone-${eventToneClass(item, thread)}`, `kind-${item.kind}`]"
-              data-testid="ai-assistant-event-card"
+            <span class="ai-event__detail-anchor" data-testid="ai-assistant-run-event-group" />
+            <span class="ai-event__detail-anchor" data-testid="ai-assistant-processed-group" />
+            <button
+              class="ai-run-event-group__header"
+              type="button"
+              data-testid="ai-assistant-run-event-group-header"
+              :aria-expanded="isProcessedGroupExpanded(item, thread)"
+              @click="toggleProcessedGroup(item, thread)"
             >
-              <div class="ai-event__rail">
-                <span
-                  class="ai-event__status-icon"
-                  data-testid="ai-assistant-event-status-icon"
-                  :class="`tone-${eventToneClass(item, thread)}`"
-                >
-                  <LoadingOutlined
-                    v-if="isEventRunning(item, thread)"
-                    class="ai-event__spinner"
-                    data-testid="ai-assistant-node-spinner"
-                  />
-                  <CheckCircleOutlined
-                    v-else-if="isEventDone(item, thread)"
-                    data-testid="ai-assistant-event-completed-icon"
-                  />
-                  <component :is="eventStatusIcon(item, thread)" v-else />
-                </span>
-              </div>
-              <div
-                class="ai-event__body"
-                :data-testid="item.kind === 'model-thought' ? 'ai-assistant-thought-summary' : undefined"
+              <span class="ai-run-event-group__status-icon" data-testid="ai-assistant-run-status-icon">
+                <LoadingOutlined v-if="isProcessedGroupRunning(item, thread)" class="ai-run-event-group__spinner" />
+                <CheckCircleOutlined v-else-if="isRunThreadDone(thread)" />
+                <ClockCircleOutlined v-else />
+              </span>
+              <span class="ai-run-event-group__title">
+                <strong>已处理</strong>
+              </span>
+              <span class="ai-run-event-group__meta">{{ processedGroupMeta(item.items) }}</span>
+              <DownOutlined v-if="!isProcessedGroupExpanded(item, thread)" />
+              <UpOutlined v-else />
+            </button>
+
+            <section
+              v-if="isProcessedGroupExpanded(item, thread)"
+              class="ai-run-event-line"
+              data-testid="ai-assistant-run-event-line"
+            >
+              <article
+                v-for="eventItem in item.items"
+                :key="eventItem.id"
+                class="ai-event"
+                :class="[`tone-${eventToneClass(eventItem, thread)}`, `kind-${eventItem.kind}`]"
+                data-testid="ai-assistant-event-card"
               >
-                <button
-                  class="ai-event__head"
-                  type="button"
-                  data-testid="ai-assistant-event-card-header"
-                  :aria-expanded="isEventExpanded(item.id)"
-                  @click="toggleEventCard(item.id)"
-                >
-                  <span>{{ item.title }}</span>
-                  <small>#{{ item.sequence }}</small>
-                  <DownOutlined v-if="!isEventExpanded(item.id)" />
-                  <UpOutlined v-else />
-                </button>
-                <div v-if="item.kind === 'model-output'" class="ai-model-output" data-testid="ai-assistant-model-output">
-                  <p>{{ item.summary }}</p>
+                <div class="ai-event__rail">
+                  <span
+                    class="ai-event__status-icon"
+                    data-testid="ai-assistant-event-status-icon"
+                    :class="`tone-${eventToneClass(eventItem, thread)}`"
+                  >
+                    <LoadingOutlined
+                      v-if="isEventRunning(eventItem, thread)"
+                      class="ai-event__spinner"
+                      data-testid="ai-assistant-node-spinner"
+                    />
+                    <CheckCircleOutlined
+                      v-else-if="isEventDone(eventItem, thread)"
+                      data-testid="ai-assistant-event-completed-icon"
+                    />
+                    <component :is="eventStatusIcon(eventItem, thread)" v-else />
+                  </span>
                 </div>
                 <div
-                  v-if="isEventExpanded(item.id)"
-                  class="ai-event__details"
-                  data-testid="ai-assistant-event-detail-panel"
+                  class="ai-event__body"
+                  :data-testid="eventItem.kind === 'model-thought' ? 'ai-assistant-thought-summary' : undefined"
                 >
-                  <dl class="ai-event__detail-grid">
-                    <div
-                      v-for="row in formatEventDetailRows(item)"
-                      :key="row.label"
-                      class="ai-event__detail-row"
-                      data-testid="ai-assistant-event-detail-row"
-                    >
-                      <dt>{{ row.label }}</dt>
-                      <dd>
-                        <pre v-if="row.monospace">{{ row.value }}</pre>
-                        <span v-else>{{ row.value }}</span>
-                        <span
-                          v-if="row.testId === 'ai-assistant-tool-detail-input'"
-                          class="ai-event__detail-anchor"
-                          data-testid="ai-assistant-tool-detail-input"
-                        />
-                        <span
-                          v-if="row.testId === 'ai-assistant-tool-detail-output'"
-                          class="ai-event__detail-anchor"
-                          data-testid="ai-assistant-tool-detail-output"
-                        />
-                      </dd>
+                  <button
+                    class="ai-event__head"
+                    type="button"
+                    data-testid="ai-assistant-event-card-header"
+                    :aria-expanded="isEventExpanded(eventItem.id)"
+                    @click="toggleEventCard(eventItem.id)"
+                  >
+                    <span>{{ eventItem.title }}</span>
+                    <small>#{{ eventItem.sequence }}</small>
+                    <DownOutlined v-if="!isEventExpanded(eventItem.id)" />
+                    <UpOutlined v-else />
+                  </button>
+                  <div
+                    v-if="isEventExpanded(eventItem.id)"
+                    class="ai-event__details"
+                    data-testid="ai-assistant-event-detail-panel"
+                  >
+                    <dl class="ai-event__detail-grid">
+                      <div
+                        v-for="row in formatEventDetailRows(eventItem)"
+                        :key="row.label"
+                        class="ai-event__detail-row"
+                        data-testid="ai-assistant-event-detail-row"
+                      >
+                        <dt>{{ row.label }}</dt>
+                        <dd>
+                          <pre v-if="row.monospace">{{ row.value }}</pre>
+                          <span v-else>{{ row.value }}</span>
+                          <span
+                            v-if="row.testId === 'ai-assistant-tool-detail-input'"
+                            class="ai-event__detail-anchor"
+                            data-testid="ai-assistant-tool-detail-input"
+                          />
+                          <span
+                            v-if="row.testId === 'ai-assistant-tool-detail-output'"
+                            class="ai-event__detail-anchor"
+                            data-testid="ai-assistant-tool-detail-output"
+                          />
+                        </dd>
+                      </div>
+                    </dl>
+                    <div v-if="shouldShowApprovalActions(eventItem, thread)" class="ai-event__actions">
+                      <a-button
+                        size="small"
+                        type="primary"
+                        data-testid="ai-assistant-approval-approve"
+                        @click="approveTimelineItem(eventItem)"
+                      >
+                        批准
+                      </a-button>
+                      <a-button
+                        size="small"
+                        danger
+                        data-testid="ai-assistant-approval-deny"
+                        @click="denyTimelineItem(eventItem)"
+                      >
+                        拒绝
+                      </a-button>
                     </div>
-                  </dl>
-                  <div v-if="shouldShowApprovalActions(item, thread)" class="ai-event__actions">
-                    <a-button
-                      size="small"
-                      type="primary"
-                      data-testid="ai-assistant-approval-approve"
-                      @click="approveTimelineItem(item)"
-                    >
-                      批准
-                    </a-button>
-                    <a-button
-                      size="small"
-                      danger
-                      data-testid="ai-assistant-approval-deny"
-                      @click="denyTimelineItem(item)"
-                    >
-                      拒绝
-                    </a-button>
                   </div>
                 </div>
-              </div>
-            </article>
-          </section>
-        </article>
-        <div
+              </article>
+            </section>
+          </article>
+          <div
+            v-else-if="item.kind === 'assistant-output'"
+            class="ai-message ai-message--assistant"
+            data-testid="ai-assistant-assistant-message"
+          >
+            <p>{{ item.item.summary }}</p>
+          </div>
+        </template>
+        <article
           v-if="runThreadFinalAnswer(thread)"
-          class="ai-message ai-message--assistant"
+          class="ai-completion-card"
           data-testid="ai-assistant-run-final-answer"
         >
+          <header>
+            <CheckCircleOutlined />
+            <strong>任务完成</strong>
+          </header>
           <p>{{ runThreadFinalAnswer(thread) }}</p>
-        </div>
+          <footer class="ai-completion-card__actions">
+            <a-button
+              size="small"
+              type="text"
+              data-testid="ai-assistant-completion-copy"
+              aria-label="复制"
+              @click="copyFinalAnswer(thread)"
+            >
+              <template #icon><CopyOutlined /></template>
+              复制
+            </a-button>
+            <a-button
+              size="small"
+              type="text"
+              data-testid="ai-assistant-completion-like"
+              aria-label="点赞"
+              @click="markFinalAnswerFeedback(thread.run.id, 'like')"
+            >
+              <template #icon><LikeOutlined /></template>
+              点赞
+            </a-button>
+            <a-button
+              size="small"
+              type="text"
+              data-testid="ai-assistant-completion-dislike"
+              aria-label="点踩"
+              @click="markFinalAnswerFeedback(thread.run.id, 'dislike')"
+            >
+              <template #icon><DislikeOutlined /></template>
+              点踩
+            </a-button>
+          </footer>
+        </article>
           </template>
         </template>
       </section>
@@ -361,7 +408,24 @@
           class="ai-task"
           data-testid="ai-assistant-task-row"
         >
-          <span class="ai-task__dot" :class="statusClass(task.status)" />
+          <span
+            class="ai-task__status"
+            :class="statusClass(task.status)"
+            data-testid="ai-assistant-task-status-icon"
+          >
+            <LoadingOutlined
+              v-if="isRunningStatus(task.status)"
+              class="ai-task__spinner"
+              data-testid="ai-assistant-task-spinner"
+            />
+            <CheckCircleOutlined
+              v-else-if="isDoneStatus(task.status)"
+              class="ai-task__done"
+              data-testid="ai-assistant-task-completed-icon"
+            />
+            <ExclamationCircleOutlined v-else-if="isDangerStatus(task.status)" />
+            <ClockCircleOutlined v-else />
+          </span>
           <div>
             <strong>{{ task.title }}</strong>
             <small>{{ taskMetaLabel(task) }}</small>
@@ -492,10 +556,13 @@
 import {
   CheckCircleOutlined,
   ClearOutlined,
+  CopyOutlined,
   ClockCircleOutlined,
   DeleteOutlined,
+  DislikeOutlined,
   DownOutlined,
   ExclamationCircleOutlined,
+  LikeOutlined,
   LoadingOutlined,
   PlusOutlined,
   SafetyCertificateOutlined,
@@ -545,6 +612,20 @@ interface AiAssistantInspectorExecutionStep {
   summary?: string
 }
 
+type AiAssistantRunPresentationItem =
+  | {
+      kind: 'processed'
+      id: string
+      runId: number
+      items: AiAssistantTimelineItem[]
+    }
+  | {
+      kind: 'assistant-output'
+      id: string
+      runId: number
+      item: AiAssistantTimelineItem
+    }
+
 const AI_ASSISTANT_RUNTIME_CONFIG_STORAGE_KEY = 'hify.ai-assistant.runtime-config'
 const DEFAULT_RUNTIME_CONFIG: AiAssistantRuntimeConfig = {
   modelName: 'qwen/qwen3.5-27b',
@@ -575,7 +656,8 @@ const sending = ref(false)
 const events = ref<AiAssistantEvent[]>([])
 const inspector = ref<AiAssistantRunInspector | null>(null)
 const expandedEventIds = ref<Set<string>>(new Set())
-const runEventGroupExpanded = ref<Record<number, boolean>>({})
+const processedGroupExpanded = ref<Record<string, boolean>>({})
+const completionFeedback = ref<Record<number, 'like' | 'dislike'>>({})
 let activeEventStream: AiAssistantEventStream | null = null
 let inspectorRefreshTimer: number | null = null
 
@@ -638,7 +720,7 @@ async function loadSessionRuns(nextSessionId: number, preferredRunId?: number) {
   const sessionRuns = (await listAiAssistantSessionRuns(nextSessionId)).list
   runs.value = sessionRuns
   expandedEventIds.value = new Set()
-  runEventGroupExpanded.value = {}
+  processedGroupExpanded.value = {}
   runThreads.value = await loadRunThreadRecords(sessionRuns)
   const orderedThreads = runThreadsForView.value
   const nextRunId = preferredRunId ?? orderedThreads[orderedThreads.length - 1]?.run.id
@@ -709,7 +791,7 @@ async function clearCurrentHistory() {
   runId.value = null
   runStatus.value = 'IDLE'
   expandedEventIds.value = new Set()
-  runEventGroupExpanded.value = {}
+  processedGroupExpanded.value = {}
   await loadSessions()
 }
 
@@ -734,6 +816,8 @@ async function resetConversationAfterDelete() {
   inspector.value = null
   runId.value = null
   runStatus.value = 'IDLE'
+  expandedEventIds.value = new Set()
+  processedGroupExpanded.value = {}
   await createConversation()
 }
 
@@ -755,7 +839,8 @@ async function submit() {
     events.value = []
     inspector.value = null
     runId.value = result.runId
-    runEventGroupExpanded.value = { ...runEventGroupExpanded.value, [result.runId]: true }
+    expandedEventIds.value = new Set()
+    processedGroupExpanded.value = {}
     runStatus.value = result.status
     await loadSessions()
     await refreshRuns(result.sessionId, result.runId)
@@ -789,7 +874,6 @@ function openRunEventStream(nextRunId: number) {
       scheduleInspectorRefresh(nextRunId)
       if (isTerminalEvent(event)) {
         sending.value = false
-        if (event.type !== 'approval.required') collapseRunEventGroup(event.runId)
         closeActiveEventStream()
       }
     },
@@ -916,6 +1000,49 @@ function timelineForThreadEcho(thread: AiAssistantRunThread) {
   return timelineForThread(thread).filter((item) => !isFinalAnswerItem(item))
 }
 
+function runThreadPresentationItems(thread: AiAssistantRunThread) {
+  return buildRunThreadPresentationItems(thread.run.id, timelineForThreadEcho(thread))
+}
+
+function buildRunThreadPresentationItems(runIdValue: number, timeline: AiAssistantTimelineItem[]): AiAssistantRunPresentationItem[] {
+  const items: AiAssistantRunPresentationItem[] = []
+  let processedItems: AiAssistantTimelineItem[] = []
+
+  const flushProcessedItems = () => {
+    if (processedItems.length === 0) return
+    const first = processedItems[0]
+    const last = processedItems[processedItems.length - 1]
+    items.push({
+      kind: 'processed',
+      id: `processed-${runIdValue}-${first.sequence}-${last.sequence}`,
+      runId: runIdValue,
+      items: processedItems,
+    })
+    processedItems = []
+  }
+
+  for (const item of timeline) {
+    if (item.kind === 'model-output') {
+      flushProcessedItems()
+      items.push({
+        kind: 'assistant-output',
+        id: `assistant-output-${item.id}`,
+        runId: runIdValue,
+        item,
+      })
+      continue
+    }
+    processedItems.push(item)
+  }
+
+  flushProcessedItems()
+  return items
+}
+
+function presentationItemKey(item: AiAssistantRunPresentationItem) {
+  return item.id
+}
+
 function isFinalAnswerItem(item: AiAssistantTimelineItem) {
   return item.kind === 'model-output' && (item.phase === 'final_answer' || item.source === 'harness_final_answer')
 }
@@ -937,20 +1064,42 @@ function finalAnswerFromRun(run: AiAssistantRun) {
   return typeof answer === 'string' ? answer.trim() : ''
 }
 
-function runThreadHeaderTitle(thread: AiAssistantRunThread) {
-  const status = thread.inspector?.run.status ?? thread.run.status
-  if (status === 'RUNNING') return '执行中'
-  if (status === 'WAITING_APPROVAL' || status === 'PENDING') return '等待审批'
-  if (status === 'FAILED') return '处理失败'
-  if (status === 'DENIED') return '已拒绝'
-  if (status === 'COMPLETED' || status === 'APPROVED') return '已处理'
-  return statusLabel(status)
+function processedGroupMeta(items: AiAssistantTimelineItem[]) {
+  const thoughtCount = items.filter((item) => item.kind === 'model-thought').length
+  const toolCount = items.filter((item) => item.kind === 'tool' || item.kind === 'tool-output').length
+  return `思考 ${thoughtCount} 次 / 工具调用 ${toolCount} 次`
 }
 
-function runThreadMeta(thread: AiAssistantRunThread) {
-  const timeline = timelineForThreadEcho(thread)
-  const toolCount = thread.inspector?.toolCalls.length ?? 0
-  return `${timeline.length} 条事件 / ${toolCount} 次工具`
+function isProcessedGroupRunning(item: AiAssistantRunPresentationItem, thread: AiAssistantRunThread) {
+  if (item.kind !== 'processed') return false
+  if (!isRunThreadRunning(thread)) return false
+  const presentationItems = runThreadPresentationItems(thread)
+  return item.id === presentationItems[presentationItems.length - 1]?.id
+}
+
+function isProcessedGroupExpanded(item: AiAssistantRunPresentationItem, thread: AiAssistantRunThread) {
+  if (item.kind !== 'processed') return false
+  const explicit = processedGroupExpanded.value[item.id]
+  if (typeof explicit === 'boolean') return explicit
+  return isProcessedGroupRunning(item, thread)
+}
+
+function toggleProcessedGroup(item: AiAssistantRunPresentationItem, thread: AiAssistantRunThread) {
+  if (item.kind !== 'processed') return
+  processedGroupExpanded.value = {
+    ...processedGroupExpanded.value,
+    [item.id]: !isProcessedGroupExpanded(item, thread),
+  }
+}
+
+function copyFinalAnswer(thread: AiAssistantRunThread) {
+  const answer = runThreadFinalAnswer(thread)
+  if (!answer || typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return
+  void navigator.clipboard.writeText(answer)
+}
+
+function markFinalAnswerFeedback(targetRunId: number, value: 'like' | 'dislike') {
+  completionFeedback.value = { ...completionFeedback.value, [targetRunId]: value }
 }
 
 function taskMetaLabel(task: { phase: string; currentTool?: string | null }) {
@@ -972,11 +1121,15 @@ function isInspectorEventRunning(step: AiAssistantInspectorExecutionStep) {
 }
 
 function isInspectorEventDone(step: AiAssistantInspectorExecutionStep) {
-  return !isInspectorEventRunning(step) && step.status !== 'FAILED' && step.status !== 'DENIED'
+  return !isInspectorEventRunning(step) && isDoneInspectorStepStatus(step.status)
 }
 
 function isTerminalInspectorStepStatus(status: string) {
-  return ['COMPLETED', 'APPROVED', 'OK', 'DENIED', 'FAILED'].includes(status)
+  return isDoneInspectorStepStatus(status) || isDangerStatus(status)
+}
+
+function isDoneInspectorStepStatus(status: string) {
+  return isDoneStatus(status)
 }
 
 function buildInspectorExecutionSteps(
@@ -1162,11 +1315,23 @@ function riskLabel(riskLevel: string) {
 
 function statusClass(status: string) {
   return {
-    'status-done': status === 'COMPLETED' || status === 'APPROVED' || status === 'OK',
+    'status-done': isDoneStatus(status),
     'status-waiting': status === 'WAITING_APPROVAL' || status === 'PENDING',
-    'status-danger': status === 'DENIED' || status === 'FAILED',
-    'status-running': status === 'RUNNING',
+    'status-danger': isDangerStatus(status),
+    'status-running': isRunningStatus(status),
   }
+}
+
+function isRunningStatus(status: string) {
+  return status === 'RUNNING' || status === 'STREAMING'
+}
+
+function isDoneStatus(status: string) {
+  return status === 'COMPLETED' || status === 'APPROVED' || status === 'OK'
+}
+
+function isDangerStatus(status: string) {
+  return status === 'DENIED' || status === 'FAILED'
 }
 
 function eventStatusIcon(item: AiAssistantTimelineItem, _thread: AiAssistantRunThread) {
@@ -1185,24 +1350,6 @@ function toggleEventCard(itemId: string) {
 
 function isEventExpanded(itemId: string) {
   return expandedEventIds.value.has(itemId)
-}
-
-function toggleRunEventGroup(targetRunId: number, thread?: AiAssistantRunThread) {
-  const current = isRunEventGroupExpanded(targetRunId, thread)
-  runEventGroupExpanded.value = { ...runEventGroupExpanded.value, [targetRunId]: !current }
-}
-
-function collapseRunEventGroup(targetRunId: number) {
-  runEventGroupExpanded.value = { ...runEventGroupExpanded.value, [targetRunId]: false }
-}
-
-function isRunEventGroupExpanded(targetRunId: number, thread?: AiAssistantRunThread) {
-  const explicit = runEventGroupExpanded.value[targetRunId]
-  return typeof explicit === 'boolean' ? explicit : runThreadDefaultExpanded(thread)
-}
-
-function runThreadDefaultExpanded(thread?: AiAssistantRunThread) {
-  return thread ? isRunThreadRunning(thread) : runStatus.value === 'RUNNING'
 }
 
 function formatEventDetailRows(item: AiAssistantTimelineItem) {
@@ -1427,9 +1574,7 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
   color: var(--color-text-tertiary, #8b92a8);
 }
 
-.ai-session__dot,
-.ai-inspector__live,
-.ai-task__dot {
+.ai-session__dot {
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 50%;
@@ -1438,25 +1583,8 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
   flex: 0 0 auto;
 }
 
-.status-done,
 .ai-session__dot {
   background: var(--color-success-500, #10b981);
-}
-
-.status-waiting {
-  background: var(--color-warning-500, #f59e0b);
-}
-
-.status-danger {
-  background: var(--color-danger-500, #ef4444);
-}
-
-.status-running {
-  background: var(--color-info-500, #3b82f6);
-}
-
-.ai-task__dot.status-running {
-  animation: ai-pulse 1.2s ease-in-out infinite;
 }
 
 .ai-console {
@@ -1559,6 +1687,13 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
   color: var(--color-text-primary, #0f1117);
 }
 
+.ai-message--user p {
+  padding: 0.625rem 0.75rem;
+  background: var(--color-bg-selected, #eef2ff);
+  border: 0;
+  border-radius: var(--radius-lg, 0.5rem);
+}
+
 .ai-message--assistant {
   color: var(--color-text-primary, #0f1117);
 }
@@ -1566,6 +1701,39 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
 .ai-message--user p,
 .ai-message--assistant p {
   max-width: min(42rem, 100%);
+}
+
+.ai-completion-card {
+  display: grid;
+  gap: 0.625rem;
+  margin: 0.5rem 0.75rem;
+  padding: 0.75rem;
+  background: var(--color-bg-page, #f8f9fc);
+  border: 0;
+  border-radius: var(--radius-lg, 0.5rem);
+}
+
+.ai-completion-card header,
+.ai-completion-card__actions {
+  display: flex;
+  align-items: center;
+}
+
+.ai-completion-card header {
+  gap: 0.5rem;
+  color: var(--color-success-500, #10b981);
+}
+
+.ai-completion-card p {
+  margin: 0;
+  color: var(--color-text-primary, #0f1117);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.ai-completion-card__actions {
+  gap: 0.375rem;
+  justify-content: flex-end;
 }
 
 .ai-run-event-group__header {
@@ -1871,6 +2039,40 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
   min-width: 0;
   display: grid;
   gap: 0.125rem;
+}
+
+.ai-task__status {
+  width: 1rem;
+  height: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-tertiary, #8b92a8);
+  flex: 0 0 auto;
+}
+
+.ai-task__status.status-running {
+  color: var(--color-primary-600, #4f46e5);
+}
+
+.ai-task__status.status-done {
+  color: var(--color-success-500, #10b981);
+}
+
+.ai-task__status.status-danger {
+  color: var(--color-danger-500, #ef4444);
+}
+
+.ai-task__status.status-waiting {
+  color: var(--color-text-tertiary, #8b92a8);
+}
+
+.ai-task__spinner {
+  animation: ai-spin 0.9s linear infinite;
+}
+
+.ai-task__done {
+  color: var(--color-success-500, #10b981);
 }
 
 .ai-approval {

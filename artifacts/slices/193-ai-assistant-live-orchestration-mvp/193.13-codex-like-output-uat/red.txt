@@ -1,0 +1,34 @@
+Slice 193.13 RED Evidence
+
+Scope:
+- Codex-like live output grouping.
+- User message bubble visibility.
+- Completion summary card actions.
+- Real status icons for current task and execution rows.
+
+Expected red failures before implementation:
+
+1. Backend duplicate text normalization
+   Command:
+   rtk uv run pytest tests/unit/ai_assistant/test_qwen_live_planner.py -q
+
+   Failure:
+   Repeated OpenRouter reasoning/content fragments were preserved verbatim, so
+   duplicated text could surface in thought summaries or visible assistant text.
+
+2. Frontend timeline duplicate stream assembly
+   Command:
+   rtk npm --prefix frontend run test:unit -- src/views/aiAssistant/aiAssistantTimeline.test.ts
+
+   Failure:
+   Adjacent duplicate model stream fragments were assembled into repeated visible
+   assistant output.
+
+3. Shell presentation contract
+   Command:
+   rtk npm --prefix frontend run test:unit -- src/views/aiAssistant/aiAssistantShell.test.ts
+
+   Failure:
+   The shell did not expose peer-level user/assistant message bubbles, did not
+   collapse processed thought/tool groups around model text, and did not expose
+   dedicated status icon test ids for task/execution rows.

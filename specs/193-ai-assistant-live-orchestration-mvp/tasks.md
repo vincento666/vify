@@ -141,3 +141,37 @@
 - [x] Revalidate with focused frontend unit, remScaleClosure, full frontend unit,
       frontend build, AI Assistant backend unit/contract with MySQL8 admin DSN,
       scripted real qwen e2e, and in-app browser UAT evidence.
+
+## 193.13 Codex-Like Output Grouping And Status Icons
+
+- [x] RED: backend planner contract fails until repeated OpenRouter
+      reasoning/content fragments are normalized before thought/model display.
+- [x] RED: frontend timeline contract fails until duplicate adjacent model stream
+      chunks are assembled into one clean assistant output segment.
+- [x] RED: shell contract fails until user messages, peer-level assistant text,
+      processed thought/tool groups, completion card actions, and dedicated
+      task/execution status icons are exposed.
+- [x] Fold processed thought/tool groups when model text appears, while keeping
+      the visible assistant output at the same timeline level.
+- [x] Render user message bubbles with subtle fill and no border; render pure
+      assistant text without card background or border.
+- [x] Add completion summary card controls for copy, like, and dislike.
+- [x] Revalidate with backend planner unit, focused frontend unit, full frontend
+      unit, remScaleClosure, frontend build, real qwen smoke, backend AI
+      Assistant gate, and browser UAT.
+- [x] Save evidence under
+      `artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.13-codex-like-output-uat/`.
+
+## 193.14 Duration MS Truthfulness
+
+- [x] RED: duration unit contract fails because a real sub-millisecond tool
+      execution is displayed as `0 ms`.
+- [x] Preserve real backend `perf_counter` duration measurement while rounding
+      nonzero elapsed milliseconds up to at least `1 ms`.
+- [x] Apply the same duration helper to direct tool intent and dispatched tool
+      execution paths.
+- [x] Revalidate with duration unit, full AI Assistant unit, AI Assistant
+      unit/integration/contract/e2e backend gate against MySQL8, and real
+      in-app browser UAT.
+- [x] Save evidence under
+      `artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.14-duration-ms-truthfulness/`.

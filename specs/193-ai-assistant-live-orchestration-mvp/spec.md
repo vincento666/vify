@@ -68,6 +68,9 @@ Out of scope:
   detail, input, and output sections.
 - Completed event nodes do not animate; only the currently running node shows a
   spinner, and completed headers use a unified green check indicator.
+- Tool and execution-step durations are measured from real backend execution
+  time. Nonzero sub-millisecond executions render as at least `1 ms` rather than
+  a misleading `0 ms`.
 - Historical runs remain as folded task records in the same conversation
   timeline; the left column does not switch between run windows.
 - Inspector usage labels include explicit `tokens` and `ms` units and avoid
