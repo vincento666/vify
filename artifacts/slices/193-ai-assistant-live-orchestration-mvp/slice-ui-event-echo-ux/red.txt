@@ -1,0 +1,15 @@
+AI Assistant event echo UX RED evidence
+
+Command:
+rtk npm --prefix frontend run test:unit -- src/views/aiAssistant/aiAssistantTimeline.test.ts src/views/aiAssistant/aiAssistantShell.test.ts
+
+Expected failing tests before implementation:
+- aiAssistantTimeline.test.ts: tool events were still rendered as standalone `tool-output` cards instead of one tool invocation with 调用详情/输入/输出.
+- aiAssistantTimeline.test.ts: duplicate thought summaries were rendered when the same text was also visible as model output.
+- aiAssistantTimeline.test.ts: thought summaries that arrived immediately before the same stream output were not deduplicated.
+- aiAssistantShell.test.ts: left run rows and the global stream toggle were still present; run history was not rendered as same-conversation task records.
+- aiAssistantShell.test.ts: usage labels lacked concrete units.
+
+Representative failure:
+expected ['model-output', 'model'] but received ['model-thought', 'model-output', 'model'].
+

@@ -31,33 +31,37 @@ describe('AI Assistant shell UI contract', () => {
       'ai-assistant-send',
       'ai-assistant-session-list',
       'ai-assistant-session-row',
-      'ai-assistant-run-row',
       'ai-assistant-clear-history',
       'ai-assistant-delete-session',
-      'ai-assistant-stream-toggle',
       'ai-assistant-run-inspector',
       'ai-assistant-task-row',
       'ai-assistant-tool-call-row',
       'ai-assistant-approval-row',
       'ai-assistant-recent-error-row',
       'ai-assistant-inspector-timeline',
+      'ai-assistant-run-task-card',
+      'ai-assistant-tool-detail-input',
+      'ai-assistant-tool-detail-output',
+      'ai-assistant-run-status-icon',
+      'ai-assistant-node-spinner',
     ]) {
       expect(content).toContain(`data-testid="${testId}"`)
     }
     expect(content).toContain('buildAiAssistantTimeline')
-    expect(content).toContain('loadRunInspector')
-    expect(content).toContain('statusPulse')
-    expect(content).toContain('streamPulse')
+    expect(content).toContain('loadRunThreadRecords')
+    expect(content).toContain('runThreads')
+    expect(content).toContain('isEventRunning')
     expect(content).toContain('实时事件流')
     expect(content).toContain('qwen/qwen3.5-27b')
     expect(content).toContain('https://openrouter.ai/api/v1')
     expect(content).toContain('临时密钥')
     expect(content).not.toContain('chain-of-thought')
+    expect(content).not.toContain('data-testid="ai-assistant-run-row"')
+    expect(content).not.toContain('data-testid="ai-assistant-stream-toggle"')
   })
 
   it('exposes stable controls for browser UAT and avoids mock-looking session titles', () => {
     expect(content).toContain('aria-label="新建 AI 助手会话"')
-    expect(content).toContain(':aria-pressed="run.id === runId"')
     expect(content).toContain('createAiAssistantSession()')
     expect(content).toContain('会话 #')
     expect(content).toContain('sessionDisplayTitle(session)')
@@ -133,28 +137,36 @@ describe('AI Assistant shell UI contract', () => {
     expect(content).toContain('data-testid="ai-assistant-model-output"')
     expect(content).toContain("item.kind === 'model-thought'")
     expect(content).toContain('ai-assistant-thought-summary')
-    expect(content).toContain('eventStreamCollapsed')
-    expect(content).toContain('回显')
+    expect(content).toContain('isEventRunning')
+    expect(content).toContain('LoadingOutlined')
+    expect(content).not.toContain('eventStreamCollapsed')
+    expect(content).not.toContain('收起回显')
+    expect(content).not.toContain('展开回显')
   })
 
   it('groups live execution echoes into a collapsible run task with a milestone line and nested details', () => {
     for (const testId of [
       'ai-assistant-run-event-group',
       'ai-assistant-run-event-group-header',
+      'ai-assistant-run-task-card',
       'ai-assistant-run-event-line',
       'ai-assistant-event-milestone',
       'ai-assistant-event-detail-panel',
       'ai-assistant-event-detail-row',
+      'ai-assistant-tool-detail-input',
+      'ai-assistant-tool-detail-output',
     ]) {
       expect(content).toContain(`data-testid="${testId}"`)
     }
     expect(content).toContain('runEventGroupExpanded')
     expect(content).toContain('toggleRunEventGroup')
-    expect(content).toContain('runEventGroupDefaultExpanded')
+    expect(content).toContain('runThreadDefaultExpanded')
     expect(content).toContain('formatEventDetailRows')
-    expect(content).toContain('任务执行')
-    expect(content).toContain('执行线')
-    expect(content).toContain('动态事件')
+    expect(content).toContain('任务记录')
+    expect(content).toContain('事件')
+    expect(content).not.toContain('里程碑')
+    expect(content).not.toContain('动态事件')
+    expect(content).not.toContain('运行记录')
   })
 
   it('places clear context in the conversation header and delete on each session row', () => {
@@ -171,7 +183,6 @@ describe('AI Assistant shell UI contract', () => {
     for (const label of [
       'Hify AI 助手',
       '新建会话',
-      '运行记录',
       '执行中',
       '空闲',
       '输入给 AI 助手的消息',
@@ -186,18 +197,21 @@ describe('AI Assistant shell UI contract', () => {
       '审批',
       '最近错误',
       '用量',
+      '输入 tokens',
+      '输出 tokens',
+      '总计 tokens',
+      '耗时 ms',
       '时间线',
       '批准',
       '拒绝',
       '清空历史上下文',
       '删除会话',
-      '展开',
-      '收起',
       'Qwen / qwen3.5-27B',
       '临时密钥',
       '读取工作区文件',
       '写入工作区文件',
       '技能意图',
+      '可观测性',
     ]) {
       expect(content).toContain(label)
     }

@@ -25,6 +25,11 @@ In scope:
   milestone line and nested event detail panels;
 - assemble consecutive `model.stream_chunk` events into a single visible model
   output segment, splitting only when tool/task/approval events interleave;
+- keep historical runs as folded task records in the same conversation window
+  instead of a separate run-record navigation pane;
+- render product-level event echoes as model text segments or tool/approval
+  cards with header plus `调用详情`/`输入`/`输出`, deduplicating thought summaries
+  that repeat visible model output;
 - keep AI Assistant visual framing to the outer shell border only.
 
 Out of scope:
@@ -56,6 +61,17 @@ Out of scope:
   execution line, and each milestone can expand into formatted detail rows.
 - Model output renders as growing stream segments, not one UI card per token or
   delta chunk.
+- Thought summaries are shown only when distinct from the visible model output,
+  including cases where the thought event arrives immediately before the same
+  stream output.
+- Tool call events are aggregated into one foldable invocation with execution
+  detail, input, and output sections.
+- Completed event nodes do not animate; only the currently running node shows a
+  spinner, and completed headers use a unified green check indicator.
+- Historical runs remain as folded task records in the same conversation
+  timeline; the left column does not switch between run windows.
+- Inspector usage labels include explicit `tokens` and `ms` units and avoid
+  duplicating the run completion status already shown on the task record.
 - The shell uses Chinese visible copy and only the outer `.ai-shell` solid
   border; the three columns and internal cards remain visually framed by
   spacing/background, not nested borders.

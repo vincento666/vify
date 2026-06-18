@@ -1,0 +1,21 @@
+AI Assistant event echo UX integration/e2e evidence
+
+Commands:
+- rtk uv run pytest tests/integration/ai_assistant
+  Result: blocked, 3 failures before test bodies complete.
+- rtk uv run pytest tests/e2e/test_ai_assistant_kernel_e2e.py tests/e2e/test_ai_assistant_security_e2e.py
+  Result: blocked, 2 failures before test bodies complete.
+- rtk uv run pytest tests/contract/test_ai_assistant_*
+  Result: 5 passed, 11 blocked/failing before test bodies complete.
+
+Blocking error:
+MySQL8 rejects index creation for the configured `hify` user:
+
+`INDEX command denied to user 'hify'@'192.168.97.1' for table 'ai_assistant_session'`
+
+Failing SQL:
+`CREATE INDEX idx_ai_assistant_session_status ON ai_assistant_session (status)`
+
+Decision:
+Do not switch to sqlite or PostgreSQL. The remaining gate needs MySQL8 user privilege correction, then rerun the blocked integration/contract/e2e commands.
+

@@ -45,33 +45,12 @@
           </a-button>
         </article>
       </section>
-
-      <section class="ai-run-list">
-        <header>运行记录</header>
-        <button
-          v-for="run in runs"
-          :key="run.id"
-          class="ai-run"
-          :class="{ active: run.id === runId }"
-          type="button"
-          data-testid="ai-assistant-run-row"
-          :aria-pressed="run.id === runId"
-          @click="loadRunInspector(run.id)"
-        >
-          <span class="ai-run__status" :class="statusClass(run.status)" />
-          <span class="ai-run__content">
-            <strong>#{{ run.id }} {{ statusLabel(run.status) }}</strong>
-            <small>{{ runTitle(run) }}</small>
-          </span>
-        </button>
-      </section>
     </aside>
 
     <main class="ai-console" data-testid="ai-assistant-conversation-window">
       <header class="ai-console__top">
         <div>
           <h1>{{ sessionTitle }}</h1>
-          <p>{{ runStatusLabel }} / {{ selectedModelLabel }}</p>
         </div>
         <div class="ai-console__actions">
           <a-button
@@ -84,19 +63,6 @@
             <template #icon><ClearOutlined /></template>
             清空历史上下文
           </a-button>
-          <a-button
-            data-testid="ai-assistant-stream-toggle"
-            size="small"
-            type="text"
-            @click="eventStreamCollapsed = !eventStreamCollapsed"
-          >
-            <template #icon>
-              <DownOutlined v-if="eventStreamCollapsed" />
-              <UpOutlined v-else />
-            </template>
-            {{ eventStreamCollapsed ? '展开回显' : '收起回显' }}
-          </a-button>
-          <a-tag :color="statusTagColor">{{ runStatusLabel }}</a-tag>
         </div>
       </header>
 
@@ -171,69 +137,70 @@
       </section>
 
       <section
-        v-if="eventStreamCollapsed"
-        class="ai-stream ai-stream--collapsed"
-        data-testid="ai-assistant-event-stream"
-        data-testid-secondary="ai-assistant-center-column-scroll"
-      >
-        <button class="ai-stream__restore" type="button" @click="eventStreamCollapsed = false">展开回显</button>
-      </section>
-      <section
-        v-else
         class="ai-stream"
         data-testid="ai-assistant-event-stream"
         data-testid-secondary="ai-assistant-center-column-scroll"
       >
-        <div v-if="timeline.length === 0" class="ai-empty">
+        <div v-if="runThreads.length === 0" class="ai-empty">
           <ClockCircleOutlined />
           <span>空闲</span>
         </div>
+        <template v-else>
         <article
-          v-else-if="activeRunEventGroup"
+          v-for="thread in runThreadsForView"
+          :key="thread.run.id"
           class="ai-run-event-group"
-          data-testid="ai-assistant-run-event-group"
+          data-testid="ai-assistant-run-task-card"
         >
+          <span class="ai-event__detail-anchor" data-testid="ai-assistant-run-event-group" />
           <button
             class="ai-run-event-group__header"
             type="button"
             data-testid="ai-assistant-run-event-group-header"
-            :aria-expanded="isRunEventGroupExpanded(activeRunEventGroup.id)"
-            @click="toggleRunEventGroup(activeRunEventGroup.id)"
+            :aria-expanded="isRunEventGroupExpanded(thread.run.id, thread)"
+            @click="toggleRunEventGroup(thread.run.id, thread)"
           >
-            <span class="ai-run-event-group__status" :class="statusClass(activeRunEventGroup.status)" />
+            <span class="ai-run-event-group__status-icon" data-testid="ai-assistant-run-status-icon">
+              <LoadingOutlined v-if="isRunThreadRunning(thread)" class="ai-run-event-group__spinner" />
+              <CheckCircleOutlined v-else-if="isRunThreadDone(thread)" />
+              <ClockCircleOutlined v-else />
+            </span>
             <span class="ai-run-event-group__title">
-              <small>任务执行</small>
-              <strong>{{ activeRunEventGroup.title }}</strong>
+              <small>任务记录 #{{ thread.run.id }}</small>
+              <strong>{{ runTitle(thread.run) }}</strong>
             </span>
-            <span class="ai-run-event-group__meta">
-              动态事件 {{ activeRunEventGroup.eventCount }} 条 / 执行线 / {{ activeRunEventGroup.phase }}
-            </span>
-            <DownOutlined v-if="!isRunEventGroupExpanded(activeRunEventGroup.id)" />
+            <span class="ai-run-event-group__meta">{{ runThreadMeta(thread) }}</span>
+            <DownOutlined v-if="!isRunEventGroupExpanded(thread.run.id, thread)" />
             <UpOutlined v-else />
           </button>
 
           <section
-            v-if="isRunEventGroupExpanded(activeRunEventGroup.id)"
+            v-if="isRunEventGroupExpanded(thread.run.id, thread)"
             class="ai-run-event-line"
             data-testid="ai-assistant-run-event-line"
           >
             <article
-              v-for="item in timeline"
+              v-for="item in timelineForThread(thread)"
               :key="item.id"
               class="ai-event"
-              :class="[`tone-${item.tone}`, `kind-${item.kind}`]"
+              :class="[`tone-${eventToneClass(item, thread)}`, `kind-${item.kind}`]"
               data-testid="ai-assistant-event-card"
             >
               <div class="ai-event__rail">
+                <LoadingOutlined
+                  v-if="isEventRunning(item, thread)"
+                  class="ai-event__spinner"
+                  data-testid="ai-assistant-node-spinner"
+                />
                 <span
+                  v-else
                   class="ai-event__pulse"
                   data-testid="ai-assistant-event-milestone"
-                  :class="{ streamPulse: item.tone === 'running' || item.tone === 'waiting' }"
+                  :class="{ 'ai-event__pulse--done': isEventDone(item, thread) }"
                 />
               </div>
               <div
                 class="ai-event__body"
-                :class="{ 'ai-event__body--model-output': item.kind === 'model-output' }"
                 :data-testid="item.kind === 'model-thought' ? 'ai-assistant-thought-summary' : undefined"
               >
                 <button
@@ -246,13 +213,20 @@
                   <component :is="eventIcon(item.kind, item.tone)" />
                   <span>{{ item.title }}</span>
                   <small>#{{ item.sequence }}</small>
+                  <CheckCircleOutlined
+                    v-if="isEventDone(item, thread)"
+                    class="ai-event__done-icon"
+                    data-testid="ai-assistant-run-status-icon"
+                  />
                   <DownOutlined v-if="!isEventExpanded(item.id)" />
                   <UpOutlined v-else />
                 </button>
                 <div v-if="item.kind === 'model-output'" class="ai-model-output" data-testid="ai-assistant-model-output">
                   <p>{{ item.summary }}</p>
                 </div>
-                <p v-else class="ai-event__summary">{{ compactSummary(item.summary) }}</p>
+                <div v-else-if="item.kind === 'model-thought'" class="ai-model-output" data-testid="ai-assistant-thought-summary">
+                  <p>{{ item.summary }}</p>
+                </div>
                 <div
                   v-if="isEventExpanded(item.id)"
                   class="ai-event__details"
@@ -269,6 +243,16 @@
                       <dd>
                         <pre v-if="row.monospace">{{ row.value }}</pre>
                         <span v-else>{{ row.value }}</span>
+                        <span
+                          v-if="row.testId === 'ai-assistant-tool-detail-input'"
+                          class="ai-event__detail-anchor"
+                          data-testid="ai-assistant-tool-detail-input"
+                        />
+                        <span
+                          v-if="row.testId === 'ai-assistant-tool-detail-output'"
+                          class="ai-event__detail-anchor"
+                          data-testid="ai-assistant-tool-detail-output"
+                        />
                       </dd>
                     </div>
                   </dl>
@@ -281,40 +265,9 @@
             </article>
           </section>
           <div v-else class="ai-run-event-group__collapsed">
-            已收纳 {{ activeRunEventGroup.eventCount }} 条动态事件，展开可查看执行线。
+            已收纳 {{ timelineForThread(thread).length }} 条事件。
           </div>
         </article>
-        <template v-else>
-          <article
-            v-for="item in timeline"
-            :key="item.id"
-            class="ai-event"
-            :class="[`tone-${item.tone}`, `kind-${item.kind}`]"
-            data-testid="ai-assistant-event-card"
-          >
-            <div class="ai-event__rail">
-              <span class="ai-event__pulse" :class="{ streamPulse: item.tone === 'running' || item.tone === 'waiting' }" />
-            </div>
-            <div class="ai-event__body" :data-testid="item.kind === 'model-thought' ? 'ai-assistant-thought-summary' : undefined">
-              <button
-                class="ai-event__head"
-                type="button"
-                data-testid="ai-assistant-event-card-header"
-                :aria-expanded="isEventExpanded(item.id)"
-                @click="toggleEventCard(item.id)"
-              >
-                <component :is="eventIcon(item.kind, item.tone)" />
-                <span>{{ item.title }}</span>
-                <small>#{{ item.sequence }}</small>
-                <DownOutlined v-if="!isEventExpanded(item.id)" />
-                <UpOutlined v-else />
-              </button>
-              <div v-if="item.kind === 'model-output'" class="ai-model-output" data-testid="ai-assistant-model-output">
-                <p>{{ item.summary }}</p>
-              </div>
-              <p v-else class="ai-event__summary">{{ compactSummary(item.summary) }}</p>
-            </div>
-          </article>
         </template>
       </section>
 
@@ -343,9 +296,9 @@
       data-testid-secondary="ai-assistant-right-column-scroll"
     >
       <header class="ai-inspector__header">
-        <span class="ai-inspector__live" :class="{ statusPulse: sending || runStatus === 'WAITING_APPROVAL' }" />
+        <ClockCircleOutlined />
         <div>
-          <strong>{{ runStatusLabel }}</strong>
+          <strong>可观测性</strong>
           <small>{{ elapsedLabel }}</small>
         </div>
       </header>
@@ -361,7 +314,7 @@
           <span class="ai-task__dot" :class="statusClass(task.status)" />
           <div>
             <strong>{{ task.title }}</strong>
-            <small>{{ task.phase }}</small>
+            <small>{{ taskMetaLabel(task) }}</small>
           </div>
         </article>
       </section>
@@ -377,7 +330,7 @@
           <ToolOutlined />
           <div>
             <strong>{{ toolLabel(toolCall.toolName) }}</strong>
-            <small>{{ statusLabel(toolCall.status) }} / {{ toolCall.durationMs }}ms</small>
+            <small>{{ statusLabel(toolCall.status) }} / {{ toolCall.durationMs }} ms</small>
           </div>
         </article>
       </section>
@@ -431,10 +384,14 @@
       <section class="ai-inspector__section">
         <header>用量</header>
         <div class="ai-usage-grid">
-          <span>输入</span>
+          <span>输入 tokens</span>
           <strong>{{ inspector?.usage.inputTokens ?? 0 }}</strong>
-          <span>输出</span>
+          <span>输出 tokens</span>
           <strong>{{ inspector?.usage.outputTokens ?? 0 }}</strong>
+          <span>总计 tokens</span>
+          <strong>{{ inspector?.usage.totalTokens ?? 0 }}</strong>
+          <span>耗时 ms</span>
+          <strong>{{ inspector?.usage.elapsedMs ?? 0 }}</strong>
         </div>
       </section>
 
@@ -460,6 +417,7 @@ import {
   DeleteOutlined,
   DownOutlined,
   ExclamationCircleOutlined,
+  LoadingOutlined,
   PlusOutlined,
   SendOutlined,
   ThunderboltOutlined,
@@ -489,8 +447,15 @@ import {
 import { openAiAssistantEventStream, type AiAssistantEventStream } from './aiAssistantEventStream'
 import { buildAiAssistantTimeline, type AiAssistantTimelineItem, type AiAssistantTimelineKind } from './aiAssistantTimeline'
 
+interface AiAssistantRunThread {
+  run: AiAssistantRun
+  events: AiAssistantEvent[]
+  inspector: AiAssistantRunInspector | null
+}
+
 const sessions = ref<AiAssistantSession[]>([])
 const runs = ref<AiAssistantRun[]>([])
+const runThreads = ref<AiAssistantRunThread[]>([])
 const sessionId = ref<number | null>(null)
 const sessionTitle = ref('Hify AI 助手')
 const runId = ref<number | null>(null)
@@ -513,38 +478,16 @@ const draft = ref('')
 const sending = ref(false)
 const events = ref<AiAssistantEvent[]>([])
 const inspector = ref<AiAssistantRunInspector | null>(null)
-const eventStreamCollapsed = ref(false)
 const expandedEventIds = ref<Set<string>>(new Set())
 const runEventGroupExpanded = ref<Record<number, boolean>>({})
 let activeEventStream: AiAssistantEventStream | null = null
 let inspectorRefreshTimer: number | null = null
 
-const timeline = computed(() => buildAiAssistantTimeline(events.value))
-const runEventGroupDefaultExpanded = computed(() => runStatus.value === 'RUNNING' || runStatus.value === 'WAITING_APPROVAL')
-const activeRunEventGroup = computed(() => {
-  if (!runId.value || timeline.value.length === 0) return null
-  const task = inspector.value?.activeTasks?.[0]
-  const run = runs.value.find((item) => item.id === runId.value)
-  return {
-    id: runId.value,
-    title: task?.title || (run ? runTitle(run) : '任务执行'),
-    status: task?.status || runStatus.value,
-    phase: task?.phase || statusLabel(runStatus.value),
-    eventCount: timeline.value.length,
-  }
-})
-const selectedModelLabel = computed(() => modelOptions.find((option) => option.value === runtimeConfig.value.modelName)?.label ?? runtimeConfig.value.modelName)
 const pendingApprovals = computed(() => inspector.value?.approvalQueue ?? [])
 const approvalRecords = computed(() => inspector.value?.approvalHistory ?? [])
 const decidedApprovalRecords = computed(() => approvalRecords.value.filter((approval) => approval.status !== 'PENDING'))
-const runStatusLabel = computed(() => (sending.value ? '执行中' : statusLabel(runStatus.value)))
 const elapsedLabel = computed(() => `${Math.max(0, Math.round((inspector.value?.usage.elapsedMs ?? 0) / 100) / 10)}s`)
-const statusTagColor = computed(() => {
-  if (runStatus.value === 'WAITING_APPROVAL') return 'gold'
-  if (runStatus.value === 'DENIED') return 'red'
-  if (runStatus.value === 'COMPLETED') return 'green'
-  return 'blue'
-})
+const runThreadsForView = computed(() => runThreads.value.slice().sort((left, right) => left.run.id - right.run.id))
 
 onMounted(async () => {
   await loadSessions()
@@ -579,10 +522,13 @@ async function selectSession(nextSessionId: number) {
 }
 
 async function loadSessionRuns(nextSessionId: number, preferredRunId?: number) {
-  runs.value = (await listAiAssistantSessionRuns(nextSessionId)).list
+  const sessionRuns = (await listAiAssistantSessionRuns(nextSessionId)).list
+  runs.value = sessionRuns
   expandedEventIds.value = new Set()
   runEventGroupExpanded.value = {}
-  const nextRunId = preferredRunId ?? runs.value[0]?.id
+  runThreads.value = await loadRunThreadRecords(sessionRuns)
+  const orderedThreads = runThreadsForView.value
+  const nextRunId = preferredRunId ?? orderedThreads[orderedThreads.length - 1]?.run.id
   if (!nextRunId) {
     closeActiveEventStream()
     runId.value = null
@@ -591,19 +537,51 @@ async function loadSessionRuns(nextSessionId: number, preferredRunId?: number) {
     inspector.value = null
     return
   }
-  await loadRunInspector(nextRunId)
+  setActiveRunThread(nextRunId)
 }
 
 async function loadRunInspector(nextRunId: number) {
+  await refreshRunThread(nextRunId)
+}
+
+async function loadRunThreadRecords(sessionRuns: AiAssistantRun[]) {
+  const records = await Promise.all(
+    sessionRuns.map(async (run) => {
+      const [eventList, runInspector] = await Promise.all([
+        listAiAssistantRunEvents(run.id),
+        getAiAssistantRunInspector(run.id),
+      ])
+      return {
+        run: runInspector.run,
+        events: eventList.list,
+        inspector: runInspector,
+      }
+    }),
+  )
+  return records
+}
+
+async function refreshRunThread(nextRunId: number) {
   closeActiveEventStream()
-  runId.value = nextRunId
   const [eventList, runInspector] = await Promise.all([
     listAiAssistantRunEvents(nextRunId),
     getAiAssistantRunInspector(nextRunId),
   ])
-  events.value = eventList.list
-  inspector.value = runInspector
-  runStatus.value = runInspector.run.status
+  upsertRunThread({
+    run: runInspector.run,
+    events: eventList.list,
+    inspector: runInspector,
+  })
+  setActiveRunThread(nextRunId)
+}
+
+function setActiveRunThread(nextRunId: number) {
+  const thread = runThreads.value.find((item) => item.run.id === nextRunId)
+  if (!thread) return
+  runId.value = nextRunId
+  events.value = thread.events
+  inspector.value = thread.inspector
+  runStatus.value = thread.inspector?.run.status ?? thread.run.status
 }
 
 async function clearCurrentHistory() {
@@ -611,6 +589,7 @@ async function clearCurrentHistory() {
   closeActiveEventStream()
   await clearAiAssistantSessionHistory(sessionId.value)
   runs.value = []
+  runThreads.value = []
   events.value = []
   inspector.value = null
   runId.value = null
@@ -636,6 +615,7 @@ async function resetConversationAfterDelete() {
   sessionId.value = null
   sessionTitle.value = 'Hify AI 助手'
   runs.value = []
+  runThreads.value = []
   events.value = []
   inspector.value = null
   runId.value = null
@@ -672,9 +652,16 @@ async function submit() {
 
 async function refreshRuns(nextSessionId: number, preferredRunId: number) {
   runs.value = (await listAiAssistantSessionRuns(nextSessionId)).list
-  const runInspector = await getAiAssistantRunInspector(preferredRunId)
-  inspector.value = runInspector
-  runStatus.value = runInspector.run.status
+  const [eventList, runInspector] = await Promise.all([
+    listAiAssistantRunEvents(preferredRunId),
+    getAiAssistantRunInspector(preferredRunId),
+  ])
+  upsertRunThread({
+    run: runInspector.run,
+    events: eventList.list,
+    inspector: runInspector,
+  })
+  setActiveRunThread(preferredRunId)
   sending.value = runInspector.run.status === 'RUNNING'
 }
 
@@ -698,9 +685,10 @@ function mergeEvent(event: AiAssistantEvent) {
   const index = events.value.findIndex((item) => item.id === event.id)
   if (index >= 0) {
     events.value = events.value.map((item) => (item.id === event.id ? event : item))
-    return
+  } else {
+    events.value = [...events.value, event].sort((left, right) => left.sequence - right.sequence)
   }
-  events.value = [...events.value, event].sort((left, right) => left.sequence - right.sequence)
+  mergeEventIntoRunThread(event)
 }
 
 function scheduleInspectorRefresh(nextRunId: number) {
@@ -711,7 +699,49 @@ function scheduleInspectorRefresh(nextRunId: number) {
     inspector.value = runInspector
     runStatus.value = runInspector.run.status
     sending.value = runInspector.run.status === 'RUNNING'
+    upsertRunThread({
+      run: runInspector.run,
+      events: events.value,
+      inspector: runInspector,
+    })
   }, 350)
+}
+
+function upsertRunThread(thread: AiAssistantRunThread) {
+  const index = runThreads.value.findIndex((item) => item.run.id === thread.run.id)
+  if (index >= 0) {
+    runThreads.value = runThreads.value.map((item) => (item.run.id === thread.run.id ? thread : item))
+    return
+  }
+  runThreads.value = [...runThreads.value, thread]
+}
+
+function mergeEventIntoRunThread(event: AiAssistantEvent) {
+  const currentThread = runThreads.value.find((thread) => thread.run.id === event.runId)
+  const nextRun = currentThread?.run ?? {
+    id: event.runId,
+    sessionId: event.sessionId,
+    status: runStatusFromEvent(event, runStatus.value),
+    input: { message: draft.value },
+    result: {},
+  }
+  const nextEvents = [...(currentThread?.events ?? [])]
+  const index = nextEvents.findIndex((item) => item.id === event.id)
+  if (index >= 0) nextEvents[index] = event
+  else nextEvents.push(event)
+  upsertRunThread({
+    run: { ...nextRun, status: runStatusFromEvent(event, nextRun.status) },
+    events: nextEvents.sort((left, right) => left.sequence - right.sequence),
+    inspector: currentThread?.inspector ?? null,
+  })
+}
+
+function runStatusFromEvent(event: AiAssistantEvent, fallback: string) {
+  if (event.type === 'run.completed') return 'COMPLETED'
+  if (event.type === 'run.failed') return 'FAILED'
+  if (event.type === 'approval.required') return 'WAITING_APPROVAL'
+  if (event.type === 'run.started') return 'RUNNING'
+  return fallback
 }
 
 function closeActiveEventStream() {
@@ -736,6 +766,31 @@ async function deny(approvalId: number) {
 function runTitle(run: AiAssistantRun) {
   const message = typeof run.input?.message === 'string' ? run.input.message : '助手运行'
   return message.length > 42 ? `${message.slice(0, 39)}...` : message
+}
+
+function timelineForThread(thread: AiAssistantRunThread) {
+  return buildAiAssistantTimeline(thread.events)
+}
+
+function runThreadMeta(thread: AiAssistantRunThread) {
+  const timeline = timelineForThread(thread)
+  const toolCount = thread.inspector?.toolCalls.length ?? 0
+  return `${statusLabel(thread.inspector?.run.status ?? thread.run.status)} / ${timeline.length} 条事件 / ${toolCount} 次工具`
+}
+
+function taskMetaLabel(task: { phase: string; currentTool?: string | null }) {
+  const currentTool = task.currentTool ? ` / ${toolLabel(task.currentTool)}` : ''
+  const eventCount = inspector.value?.eventTimeline.length ?? 0
+  return `${task.phase}${currentTool} / ${eventCount} 条事件`
+}
+
+function isRunThreadRunning(thread: AiAssistantRunThread) {
+  return (thread.inspector?.run.status ?? thread.run.status) === 'RUNNING'
+}
+
+function isRunThreadDone(thread: AiAssistantRunThread) {
+  const status = thread.inspector?.run.status ?? thread.run.status
+  return status === 'COMPLETED' || status === 'APPROVED'
 }
 
 function sessionDisplayTitle(session: AiAssistantSession) {
@@ -799,7 +854,6 @@ function statusClass(status: string) {
 
 function eventIcon(kind: AiAssistantTimelineKind, tone: string) {
   if (tone === 'danger') return ExclamationCircleOutlined
-  if (tone === 'success') return CheckCircleOutlined
   if (kind === 'tool' || kind === 'tool-output') return ToolOutlined
   return CodeOutlined
 }
@@ -815,8 +869,8 @@ function isEventExpanded(itemId: string) {
   return expandedEventIds.value.has(itemId)
 }
 
-function toggleRunEventGroup(targetRunId: number) {
-  const current = isRunEventGroupExpanded(targetRunId)
+function toggleRunEventGroup(targetRunId: number, thread?: AiAssistantRunThread) {
+  const current = isRunEventGroupExpanded(targetRunId, thread)
   runEventGroupExpanded.value = { ...runEventGroupExpanded.value, [targetRunId]: !current }
 }
 
@@ -824,54 +878,33 @@ function collapseRunEventGroup(targetRunId: number) {
   runEventGroupExpanded.value = { ...runEventGroupExpanded.value, [targetRunId]: false }
 }
 
-function isRunEventGroupExpanded(targetRunId: number) {
+function isRunEventGroupExpanded(targetRunId: number, thread?: AiAssistantRunThread) {
   const explicit = runEventGroupExpanded.value[targetRunId]
-  return typeof explicit === 'boolean' ? explicit : runEventGroupDefaultExpanded.value
+  return typeof explicit === 'boolean' ? explicit : runThreadDefaultExpanded(thread)
 }
 
-function compactSummary(summary: string) {
-  if (summary.length <= 96) return summary
-  return `${summary.slice(0, 93)}...`
+function runThreadDefaultExpanded(thread?: AiAssistantRunThread) {
+  return thread ? isRunThreadRunning(thread) : runStatus.value === 'RUNNING'
 }
 
 function formatEventDetailRows(item: AiAssistantTimelineItem) {
-  const rows: Array<{ label: string; value: string; monospace?: boolean }> = [
-    { label: '里程碑', value: `#${item.sequence} ${item.title}` },
-    { label: '状态', value: `${toneLabel(item.tone)} / ${kindLabel(item.kind)}` },
-  ]
-  if (item.summary) rows.push({ label: '内容', value: item.summary, monospace: item.kind === 'model-output' })
-  if (item.payloadPreview !== '{}') rows.push({ label: '动态事件', value: item.payloadPreview, monospace: true })
-  return rows
+  return item.details
 }
 
-function toneLabel(tone: string) {
-  return (
-    {
-      running: '执行中',
-      success: '已完成',
-      waiting: '等待中',
-      danger: '异常',
-      neutral: '已记录',
-    }[tone] ?? tone
-  )
+function isEventRunning(item: AiAssistantTimelineItem, thread: AiAssistantRunThread) {
+  if (!isRunThreadRunning(thread)) return false
+  const timeline = timelineForThread(thread)
+  return item.id === timeline[timeline.length - 1]?.id && item.tone === 'running'
 }
 
-function kindLabel(kind: AiAssistantTimelineKind) {
-  return (
-    {
-      phase: '阶段',
-      model: '模型事件',
-      'model-output': '模型输出',
-      'model-thought': '思考摘要',
-      tool: '工具事件',
-      'tool-output': '工具输出',
-      approval: '审批',
-      sandbox: '沙箱',
-      'proposed-action': '拟执行动作',
-      result: '运行结果',
-      error: '错误',
-    }[kind] ?? kind
-  )
+function isEventDone(item: AiAssistantTimelineItem, thread: AiAssistantRunThread) {
+  return !isEventRunning(item, thread) && item.tone !== 'waiting' && item.tone !== 'danger'
+}
+
+function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThread) {
+  if (isEventRunning(item, thread)) return 'running'
+  if (isEventDone(item, thread)) return 'success'
+  return item.tone
 }
 </script>
 
@@ -912,7 +945,6 @@ function kindLabel(kind: AiAssistantTimelineKind) {
 .ai-new-session,
 .ai-session,
 .ai-session__select,
-.ai-run,
 .ai-console__top,
 .ai-console__actions,
 .ai-event__head,
@@ -960,8 +992,7 @@ function kindLabel(kind: AiAssistantTimelineKind) {
 }
 
 .ai-new-session,
-.ai-session__select,
-.ai-run {
+.ai-session__select {
   width: 100%;
   gap: 0.5rem;
   color: inherit;
@@ -979,23 +1010,16 @@ function kindLabel(kind: AiAssistantTimelineKind) {
 }
 
 .ai-session-list,
-.ai-run-list,
 .ai-inspector__section {
   display: flex;
   gap: 0.5rem;
 }
 
 .ai-session-list,
-.ai-run-list,
 .ai-inspector__section {
   flex-direction: column;
 }
 
-.ai-run-list {
-  margin-top: 1rem;
-}
-
-.ai-run-list header,
 .ai-inspector__section header {
   color: var(--color-text-tertiary, #8b92a8);
   font-size: 0.75rem;
@@ -1003,8 +1027,7 @@ function kindLabel(kind: AiAssistantTimelineKind) {
   text-transform: uppercase;
 }
 
-.ai-session__select,
-.ai-run {
+.ai-session__select {
   padding: 0.625rem;
   background: var(--color-bg-surface, #ffffff);
 }
@@ -1029,8 +1052,7 @@ function kindLabel(kind: AiAssistantTimelineKind) {
   margin-right: 0.25rem;
 }
 
-.ai-session.active,
-.ai-run.active {
+.ai-session.active {
   background: var(--color-bg-selected, #eef2ff);
 }
 
@@ -1038,15 +1060,13 @@ function kindLabel(kind: AiAssistantTimelineKind) {
   background: var(--color-bg-selected, #eef2ff);
 }
 
-.ai-session__content,
-.ai-run__content {
+.ai-session__content {
   min-width: 0;
   display: grid;
   gap: 0.125rem;
 }
 
 .ai-session__content strong,
-.ai-run__content strong,
 .ai-task strong,
 .ai-inspector-row strong,
 .ai-approval strong {
@@ -1056,7 +1076,6 @@ function kindLabel(kind: AiAssistantTimelineKind) {
 }
 
 .ai-session__content small,
-.ai-run__content small,
 .ai-task small,
 .ai-inspector-row small,
 .ai-approval small,
@@ -1065,7 +1084,6 @@ function kindLabel(kind: AiAssistantTimelineKind) {
 }
 
 .ai-session__dot,
-.ai-run__status,
 .ai-inspector__live,
 .ai-event__pulse,
 .ai-task__dot {
@@ -1182,25 +1200,6 @@ function kindLabel(kind: AiAssistantTimelineKind) {
   padding: 0.625rem;
 }
 
-.ai-stream--collapsed {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.ai-stream__restore {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 2rem;
-  padding: 0 0.875rem;
-  color: var(--color-primary-600, #4f46e5);
-  background: var(--color-bg-selected, #eef2ff);
-  border: 0;
-  border-radius: var(--radius-md, 0.375rem);
-  cursor: pointer;
-}
-
 .ai-empty {
   min-height: 18rem;
   display: flex;
@@ -1224,17 +1223,26 @@ function kindLabel(kind: AiAssistantTimelineKind) {
   padding: 0.75rem;
   color: inherit;
   text-align: left;
-  background: var(--color-bg-page, #f8f9fc);
+  background: transparent;
   border: 0;
   border-radius: var(--radius-lg, 0.5rem);
   cursor: pointer;
 }
 
-.ai-run-event-group__status {
-  width: 0.625rem;
-  height: 0.625rem;
-  border-radius: 50%;
-  background: var(--color-info-500, #3b82f6);
+.ai-run-event-group__status-icon {
+  width: 1rem;
+  height: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-success-500, #10b981);
+  flex: 0 0 auto;
+}
+
+.ai-run-event-group__spinner,
+.ai-event__spinner {
+  color: var(--color-primary-600, #4f46e5);
+  animation: ai-spin 0.9s linear infinite;
 }
 
 .ai-run-event-group__title {
@@ -1260,10 +1268,8 @@ function kindLabel(kind: AiAssistantTimelineKind) {
 }
 
 .ai-run-event-group__collapsed {
-  padding: 0.75rem 0.875rem;
+  padding: 0 0 0.25rem 2rem;
   color: var(--color-text-secondary, #4b5268);
-  background: var(--color-bg-page, #f8f9fc);
-  border-radius: var(--radius-md, 0.375rem);
 }
 
 .ai-run-event-line {
@@ -1287,7 +1293,7 @@ function kindLabel(kind: AiAssistantTimelineKind) {
   position: relative;
   display: flex;
   justify-content: center;
-  padding-top: 0.5rem;
+  padding-top: 0.375rem;
 }
 
 .ai-event:not(:last-child) .ai-event__rail::after {
@@ -1304,16 +1310,22 @@ function kindLabel(kind: AiAssistantTimelineKind) {
   z-index: 1;
 }
 
+.ai-event__pulse--done {
+  background: var(--color-border-strong, #c7ccd8);
+}
+
+.ai-event__spinner {
+  position: relative;
+  z-index: 1;
+  font-size: 0.875rem;
+}
+
 .ai-event__body {
   display: grid;
   gap: 0.5rem;
-  padding: 0.75rem;
-  background: var(--color-bg-surface, #ffffff);
-  border-radius: var(--radius-lg, 0.5rem);
-}
-
-.ai-event__body--model-output {
-  background: var(--color-bg-selected, #eef2ff);
+  padding: 0 0 0.625rem;
+  background: transparent;
+  border-radius: 0;
 }
 
 .ai-model-output {
@@ -1350,6 +1362,11 @@ function kindLabel(kind: AiAssistantTimelineKind) {
   color: var(--color-text-tertiary, #8b92a8);
 }
 
+.ai-event__done-icon {
+  color: var(--color-success-500, #10b981);
+  font-size: 0.875rem;
+}
+
 .ai-event__details {
   display: grid;
   gap: 0.5rem;
@@ -1368,6 +1385,13 @@ function kindLabel(kind: AiAssistantTimelineKind) {
   padding: 0.625rem;
   background: var(--color-bg-page, #f8f9fc);
   border-radius: var(--radius-md, 0.375rem);
+}
+
+.ai-event__detail-anchor {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
 }
 
 .ai-event__detail-row dt {
@@ -1397,17 +1421,9 @@ function kindLabel(kind: AiAssistantTimelineKind) {
   margin-top: 0.625rem;
 }
 
-.tone-waiting .ai-event__body {
-  background: var(--color-warning-50, #fffbeb);
-}
-
-.tone-danger .ai-event__body,
+.tone-danger,
 .ai-inspector-row.danger {
-  background: var(--color-danger-50, #fef2f2);
-}
-
-.tone-success .ai-event__body {
-  background: var(--color-success-50, #ecfdf5);
+  color: var(--color-danger-600, #dc2626);
 }
 
 .ai-composer {
@@ -1437,7 +1453,7 @@ function kindLabel(kind: AiAssistantTimelineKind) {
 .ai-inspector__header {
   gap: 0.75rem;
   padding: 0.625rem;
-  background: var(--color-bg-selected, #eef2ff);
+  background: transparent;
   border-radius: var(--radius-md, 0.375rem);
 }
 
@@ -1505,9 +1521,14 @@ function kindLabel(kind: AiAssistantTimelineKind) {
   white-space: nowrap;
 }
 
-.streamPulse,
 .statusPulse {
   animation: ai-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes ai-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes ai-pulse {

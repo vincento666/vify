@@ -36,5 +36,30 @@
 - [x] Run frontend unit, `remScaleClosure`, and production build.
 - [x] Run browser UAT with real OpenRouter `qwen/qwen3.5-27b`.
 - [x] Record remaining MySQL8 permission risk.
-- [ ] Commit only AI Assistant/spec/artifact changes, excluding unrelated
+- [x] Commit only AI Assistant/spec/artifact changes, excluding unrelated
+      dirty customer-assistant/workflow files.
+
+## 193.4 Product-Grade Event Echo And Same-Conversation Run History
+
+- [x] RED: frontend timeline contract fails until tool start/output/completed
+      events are aggregated into one invocation with `调用详情`/`输入`/`输出`.
+- [x] RED: frontend timeline contract fails until duplicate thought summaries
+      are removed both before and after matching model stream output.
+- [x] RED: frontend shell contract fails until the left run-record navigation
+      and global echo toggle are removed.
+- [x] Render persisted historical runs as folded task records in the same
+      conversation window.
+- [x] Show only running nodes with a spinner; completed nodes use gray dots and
+      completed headers use a green check indicator.
+- [x] Remove generic `里程碑`/`动态事件` detail rows from event cards.
+- [x] Add explicit usage units: `输入 tokens`, `输出 tokens`, `总计 tokens`,
+      `耗时 ms`.
+- [x] Run full frontend unit, `remScaleClosure`, production build, backend AI
+      Assistant unit, and live Qwen/stream contract subset.
+- [x] Run browser UAT with real OpenRouter `qwen/qwen3.5-27b`, including
+      read tools, write approval, write execution, persisted replay, and
+      screenshot evidence.
+- [x] Record remaining MySQL8 permission risk for blocked
+      integration/contract/e2e gates.
+- [x] Commit only AI Assistant/spec/artifact changes, excluding unrelated
       dirty customer-assistant/workflow files.

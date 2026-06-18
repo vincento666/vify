@@ -1,0 +1,17 @@
+AI Assistant event echo UX unit/build evidence
+
+Commands:
+- rtk npm --prefix frontend run test:unit -- src/views/aiAssistant/aiAssistantTimeline.test.ts src/views/aiAssistant/aiAssistantShell.test.ts src/remScaleClosure.test.ts
+  Result: 3 files passed, 17 tests passed.
+- rtk npm --prefix frontend run test:unit
+  Result: 95 files passed, 388 tests passed.
+- rtk npm --prefix frontend run build
+  Result: vue-tsc and Vite production build passed.
+- rtk uv run pytest tests/unit/ai_assistant
+  Result: 16 passed.
+- rtk uv run python -m unittest tests.contract.test_ai_assistant_live_qwen_api tests.contract.test_ai_assistant_live_stream_api
+  Result: 5 tests passed.
+
+Notes:
+- Full AI Assistant MySQL-backed contract/integration/e2e gates remain blocked by MySQL8 INDEX privilege, recorded in integration.txt.
+
