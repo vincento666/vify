@@ -40,6 +40,30 @@ class AiAssistantToolRegistryTest(unittest.TestCase):
         self.assertIn("/api/v1/customer-assistant/runs/34", result.output["resultRef"])
         self.assertFalse(result.output["cancellation"]["supported"])
 
+    def test_system_knowledge_base_search_tool_is_read_only_and_dispatches(self) -> None:
+        from app.modules.ai_assistant.domain.tools import RiskLevel, ToolRegistry
+
+        registry = ToolRegistry.with_builtin_tools()
+        manifest = registry.get_manifest("search_knowledge_base")
+
+        self.assertEqual(manifest.risk_level, RiskLevel.READ)
+        self.assertEqual(manifest.write_resources, [])
+        self.assertIn("query", manifest.input_schema["properties"])
+        self.assertIn("knowledgeBaseId", manifest.input_schema["properties"])
+        self.assertIn("knowledge_base", manifest.read_resources)
+
+        result = registry.dispatch(
+            "search_knowledge_base",
+            {"query": "退票规则", "knowledgeBaseId": 12, "limit": 3},
+        )
+
+        self.assertEqual(result.status, "COMPLETED")
+        self.assertEqual(result.output["query"], "退票规则")
+        self.assertEqual(result.output["knowledgeBaseId"], 12)
+        self.assertEqual(result.output["limit"], 3)
+        self.assertEqual(result.output["source"], "system_knowledge_base")
+        self.assertIn("hits", result.output)
+
 
 if __name__ == "__main__":
     unittest.main()

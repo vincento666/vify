@@ -1611,6 +1611,7 @@ def _tool_label(tool_name: str) -> str:
         "read_workspace_file": "读取工作区文件",
         "write_workspace_file": "写入工作区文件",
         "invoke_skill": "调用技能",
+        "search_knowledge_base": "知识库检索",
     }
     return labels.get(tool_name, tool_name)
 

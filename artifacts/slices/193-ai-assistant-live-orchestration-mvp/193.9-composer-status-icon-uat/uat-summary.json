@@ -1,0 +1,26 @@
+{
+  "timestamp": "2026-06-18T18:45:00+08:00",
+  "url": "http://127.0.0.1:5173/ai-assistant",
+  "checks": {
+    "oldTopRuntimeConfigRemoved": true,
+    "modelConfigPanelAboveComposerButton": true,
+    "oldCollapsedTextRemoved": true,
+    "eventRailDotRemoved": true,
+    "eventStatusIconCountAfterExpand": 5,
+    "eventCompletedIconCountAfterExpand": 4,
+    "oldMilestoneNodeCountAfterExpand": 0,
+    "rightInspectorTitle": "执行步骤",
+    "rightInspectorShowsOnlyModelPlanningSteps": true
+  },
+  "realOpenRouterRun": {
+    "attempted": true,
+    "model": "qwen/qwen3.5-27b",
+    "baseUrl": "https://openrouter.ai/api/v1",
+    "result": "blocked",
+    "blockingError": "HTTP 401 User not found",
+    "notes": "真实 OpenRouter 调用在模型规划前被外部凭据拒绝，因此本次浏览器 UAT 未进入知识库工具调用阶段。UI 失败事件可回溯，事件线状态图标显示正常。"
+  },
+  "screenshots": [
+    "screenshots/uat-status-icons-model-panel.png"
+  ]
+}

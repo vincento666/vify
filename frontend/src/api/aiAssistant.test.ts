@@ -53,7 +53,7 @@ describe('ai assistant frontend API client', () => {
     }
 
     await createAiAssistantSession({ title: 'Kernel' })
-    const payload = buildAiAssistantMessagePayload('Echo', runtimeConfig, 'front-echo')
+    const payload = buildAiAssistantMessagePayload('Echo', runtimeConfig, 'front-echo', 'ask_each_time')
     await sendAiAssistantMessage(10, payload)
     await startAiAssistantMessage(10, buildAiAssistantMessagePayload('Stream Echo', runtimeConfig, 'front-stream'))
     await listAiAssistantRunEvents(20)
@@ -69,7 +69,7 @@ describe('ai assistant frontend API client', () => {
     expect(requestMocks.post).toHaveBeenNthCalledWith(2, '/v1/ai-assistant/sessions/10/messages', {
       message: 'Echo',
       idempotencyKey: 'front-echo',
-      approvalMode: 'smart_approval',
+      approvalMode: 'ask_each_time',
       modelMode: 'live',
       modelConfig: {
         provider: 'openrouter',
@@ -107,5 +107,25 @@ describe('ai assistant frontend API client', () => {
     expect(requestMocks.get).toHaveBeenNthCalledWith(4, '/v1/ai-assistant/runs/20/inspector')
     expect(requestMocks.del).toHaveBeenNthCalledWith(1, '/v1/ai-assistant/sessions/10/history')
     expect(requestMocks.del).toHaveBeenNthCalledWith(2, '/v1/ai-assistant/sessions/10')
+  })
+
+  it('defaults to smart approval but allows the composer to choose a stricter permission mode', async () => {
+    const { buildAiAssistantMessagePayload } = await import('./aiAssistant')
+    const runtimeConfig = {
+      modelName: 'qwen/qwen3.5-27b',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      apiKey: 'sk-temp',
+      temperature: 0.2,
+      maxTokens: 4096,
+      streamEnabled: true,
+    }
+
+    expect(buildAiAssistantMessagePayload('默认', runtimeConfig, 'default').approvalMode).toBe('smart_approval')
+    expect(buildAiAssistantMessagePayload('请求审批', runtimeConfig, 'strict', 'ask_each_time').approvalMode).toBe(
+      'ask_each_time',
+    )
+    expect(buildAiAssistantMessagePayload('完全访问', runtimeConfig, 'full', 'always_approve').approvalMode).toBe(
+      'always_approve',
+    )
   })
 })

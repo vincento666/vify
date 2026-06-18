@@ -100,10 +100,37 @@ describe('ai assistant execution timeline', () => {
       'approval',
     ])
     expect(timeline[1].summary).toBe('我先读取文件。')
+    expect(timeline[1].phase).toBeUndefined()
     expect(timeline[1].payloadPreview).toContain('"chunkCount":3')
     expect(timeline[3].summary).toBe('最终回答。')
     expect(timeline[3].sequence).toBe(6)
+    expect(timeline[3].phase).toBe('final_answer')
     expect(timeline[4].approvalId).toBe(9)
+  })
+
+  it('carries stream phase and source metadata for final answer placement', () => {
+    const events: AiAssistantEvent[] = [
+      event(1, 'model.stream_chunk', '模型输出', '最终', {
+        chunk: '最终',
+        phase: 'final_answer',
+        source: 'harness_final_answer',
+      }),
+      event(2, 'model.stream_chunk', '模型输出', '回答', {
+        chunk: '回答',
+        phase: 'final_answer',
+        source: 'harness_final_answer',
+      }),
+    ]
+
+    const timeline = buildAiAssistantTimeline(events)
+
+    expect(timeline).toHaveLength(1)
+    expect(timeline[0]).toMatchObject({
+      kind: 'model-output',
+      summary: '最终回答',
+      phase: 'final_answer',
+      source: 'harness_final_answer',
+    })
   })
 
   it('deduplicates thought summaries that repeat the visible model output', () => {

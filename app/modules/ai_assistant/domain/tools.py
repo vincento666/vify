@@ -149,6 +149,7 @@ class ToolRegistry:
                 "read_workspace_file": (_read_file_manifest(), _read_workspace_file),
                 "write_workspace_file": (_write_file_manifest(), _write_workspace_file),
                 "invoke_skill": (_skill_manifest(), _invoke_skill),
+                "search_knowledge_base": (_knowledge_base_manifest(), _search_knowledge_base),
             }
         )
 
@@ -277,6 +278,38 @@ def _skill_manifest() -> ToolManifest:
     )
 
 
+def _knowledge_base_manifest() -> ToolManifest:
+    return ToolManifest(
+        name="search_knowledge_base",
+        description="检索系统内知识库，返回可回放的只读查询结果摘要。",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "knowledgeBaseId": {"type": "integer"},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 10},
+            },
+            "required": ["query"],
+        },
+        output_schema={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "knowledgeBaseId": {"type": ["integer", "null"]},
+                "limit": {"type": "integer"},
+                "source": {"type": "string"},
+                "hits": {"type": "array"},
+            },
+            "required": ["query", "limit", "source", "hits"],
+        },
+        timeout_ms=1500,
+        risk_level=RiskLevel.READ,
+        read_resources=["knowledge_base", "knowledge_base:{knowledgeBaseId}", "knowledge_base:search"],
+        write_resources=[],
+        policy_ref="ai_assistant_knowledge_base_search_read_only",
+    )
+
+
 def _read_workspace_file(payload: dict[str, Any]) -> ToolResult:
     path = _safe_workspace_path(payload)
     if not path.exists() or not path.is_file():
@@ -309,6 +342,34 @@ def _invoke_skill(payload: dict[str, Any]) -> ToolResult:
             "status": "RECORDED",
         },
     )
+
+
+def _search_knowledge_base(payload: dict[str, Any]) -> ToolResult:
+    query = str(payload.get("query") or "").strip()
+    knowledge_base_id = _optional_int(payload.get("knowledgeBaseId"))
+    limit = max(1, min(_optional_int(payload.get("limit")) or 5, 10))
+    raw_hits = payload.get("hits")
+    hits = raw_hits[:limit] if isinstance(raw_hits, list) else []
+    return ToolResult(
+        status="COMPLETED",
+        output={
+            "query": query,
+            "knowledgeBaseId": knowledge_base_id,
+            "limit": limit,
+            "source": "system_knowledge_base",
+            "hits": hits,
+            "warning": "当前 Harness 记录了知识库检索调用；未绑定具体知识库索引时返回空命中。",
+        },
+    )
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _safe_workspace_path(payload: dict[str, Any]) -> Path:

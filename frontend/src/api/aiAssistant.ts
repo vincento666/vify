@@ -98,15 +98,18 @@ export interface AiAssistantRuntimeConfig {
   streamEnabled: boolean
 }
 
+export type AiAssistantApprovalMode = 'ask_each_time' | 'smart_approval' | 'always_approve'
+
 export function buildAiAssistantMessagePayload(
   message: string,
   runtimeConfig: AiAssistantRuntimeConfig,
   idempotencyKey: string,
+  approvalMode: AiAssistantApprovalMode = 'smart_approval',
 ): SendAiAssistantMessagePayload {
   return {
     message,
     idempotencyKey,
-    approvalMode: 'smart_approval',
+    approvalMode,
     modelMode: 'live',
     modelConfig: {
       provider: 'openrouter',

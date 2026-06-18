@@ -22,12 +22,17 @@ describe('AI Assistant shell UI contract', () => {
       'ai-assistant-conversation-window',
       'ai-assistant-runtime-config',
       'ai-assistant-model-select',
-      'ai-assistant-model-config-toggle',
+      'ai-assistant-model-config-panel',
+      'ai-assistant-model-config-icon',
       'ai-assistant-event-stream',
       'ai-assistant-event-card',
       'ai-assistant-event-card-header',
       'ai-assistant-model-output',
       'ai-assistant-composer',
+      'ai-assistant-composer-body',
+      'ai-assistant-composer-actions',
+      'ai-assistant-add-context',
+      'ai-assistant-permission-mode',
       'ai-assistant-send',
       'ai-assistant-session-list',
       'ai-assistant-session-row',
@@ -43,7 +48,10 @@ describe('AI Assistant shell UI contract', () => {
       'ai-assistant-tool-detail-input',
       'ai-assistant-tool-detail-output',
       'ai-assistant-run-status-icon',
+      'ai-assistant-event-status-icon',
+      'ai-assistant-event-completed-icon',
       'ai-assistant-node-spinner',
+      'ai-assistant-run-final-answer',
     ]) {
       expect(content).toContain(`data-testid="${testId}"`)
     }
@@ -83,7 +91,7 @@ describe('AI Assistant shell UI contract', () => {
     expect(content).toContain('height: calc(100vh - var(--header-height, 3.5rem) - 3rem)')
     expect(content).toContain('box-sizing: border-box')
     expect(content).toContain('overflow: hidden')
-    expect(content).toContain('grid-template-rows: auto auto minmax(0, 1fr) auto')
+    expect(content).toContain('grid-template-rows: auto minmax(0, 1fr) auto')
     expect(content).toContain('data-testid="ai-assistant-left-column-scroll"')
     expect(content).toContain('ai-assistant-center-column-scroll')
     expect(content).toContain('ai-assistant-right-column-scroll')
@@ -94,7 +102,6 @@ describe('AI Assistant shell UI contract', () => {
     expect(content).toContain('gap: 0;')
     expect(content).toContain('padding: 0;')
     expect(content).toContain('padding: 0.625rem;')
-    expect(content).toContain('padding: 0 0.625rem 0.375rem;')
     expect(content).toContain('padding: 0.625rem 0.625rem;')
     expect(content).toContain('padding: 0.625rem;')
     expect(content).not.toContain('gap: 1rem;')
@@ -150,7 +157,8 @@ describe('AI Assistant shell UI contract', () => {
       'ai-assistant-run-event-group-header',
       'ai-assistant-run-task-card',
       'ai-assistant-run-event-line',
-      'ai-assistant-event-milestone',
+      'ai-assistant-event-status-icon',
+      'ai-assistant-event-completed-icon',
       'ai-assistant-event-detail-panel',
       'ai-assistant-event-detail-row',
       'ai-assistant-tool-detail-input',
@@ -162,11 +170,62 @@ describe('AI Assistant shell UI contract', () => {
     expect(content).toContain('toggleRunEventGroup')
     expect(content).toContain('runThreadDefaultExpanded')
     expect(content).toContain('formatEventDetailRows')
-    expect(content).toContain('任务记录')
+    expect(content).toContain('eventStatusIcon')
     expect(content).toContain('事件')
+    expect(content).not.toContain('ai-event__pulse')
+    expect(content).not.toContain('已收纳')
+    expect(content).not.toContain('任务记录 #')
     expect(content).not.toContain('里程碑')
     expect(content).not.toContain('动态事件')
     expect(content).not.toContain('运行记录')
+  })
+
+  it('keeps run card headers compact and renders final answers outside folded echo cards', () => {
+    expect(content).toContain('runThreadUserMessage(thread)')
+    expect(content).toContain('data-testid="ai-assistant-user-message"')
+    expect(content).toContain('runThreadHeaderTitle(thread)')
+    expect(content).toContain('timelineForThreadEcho(thread)')
+    expect(content).toContain('runThreadFinalAnswer(thread)')
+    expect(content).toContain('data-testid="ai-assistant-run-final-answer"')
+    expect(content).toContain('已处理')
+    expect(content).not.toContain('<small>任务记录 #{{ thread.run.id }}</small>')
+    expect(content).not.toContain('runTitle(thread.run)')
+    expect(content).not.toContain('function runTitle')
+    expect(content).not.toContain('statusLabel(thread.inspector?.run.status ?? thread.run.status)} / ${timeline.length} 条事件')
+  })
+
+  it('renders user and final assistant message bubbles without card chrome', () => {
+    expect(content).toContain('class="ai-message ai-message--user"')
+    expect(content).toContain('class="ai-message ai-message--assistant"')
+    expect(content).toContain('.ai-message {')
+    expect(content).toContain('background: transparent;')
+    expect(content).toContain('border: 0;')
+    expect(content).not.toContain('.ai-final-answer {')
+  })
+
+  it('groups inspector stream chunks and hides stale approval actions', () => {
+    expect(content).toContain('inspectorTimelineForView')
+    expect(content).toContain('inspectorPlanningStepsForView')
+    expect(content).toContain('groupInspectorTimeline')
+    expect(content).toContain('isModelPlanningInspectorEvent')
+    expect(content).toContain('执行步骤')
+    expect(content).toContain('ai-execution-steps')
+    expect(content).toContain('data-testid="ai-assistant-execution-step"')
+    expect(content).toContain('v-for="event in inspectorPlanningStepsForView"')
+    expect(content).toContain('taskMetaLabel(task)')
+    expect(content).toContain('shouldShowApprovalActions(item)')
+    expect(content).toContain('isPendingApprovalStatus(approval.status)')
+    expect(content).not.toContain('<header>时间线</header>')
+    expect(content).not.toContain('v-for="event in inspector?.eventTimeline || []"')
+    expect(content).not.toContain('item.kind === \'approval\' && item.approvalId"')
+    expect(content).not.toContain("approval.status === 'PENDING'")
+  })
+
+  it('keeps temporary model configuration across a browser reload without using long term storage', () => {
+    expect(content).toContain('AI_ASSISTANT_RUNTIME_CONFIG_STORAGE_KEY')
+    expect(content).toContain('sessionStorage')
+    expect(content).toContain('watch(runtimeConfig')
+    expect(content).not.toContain('localStorage')
   })
 
   it('places clear context in the conversation header and delete on each session row', () => {
@@ -177,6 +236,26 @@ describe('AI Assistant shell UI contract', () => {
     expect(content).toContain('@click.stop="deleteConversation(session.id)"')
     expect(content).toContain('class="ai-session__delete"')
     expect(content).not.toContain('class="ai-session-actions"')
+  })
+
+  it('uses a Codex-like composer with permission mode and model settings controls', () => {
+    expect(content).toContain('class="ai-composer__body"')
+    expect(content).toContain('data-testid="ai-assistant-composer-body"')
+    expect(content).toContain('class="ai-composer__actions"')
+    expect(content).toContain('data-testid="ai-assistant-composer-actions"')
+    expect(content).toContain('data-testid="ai-assistant-add-context"')
+    expect(content).toContain('data-testid="ai-assistant-permission-mode"')
+    expect(content).toContain('permissionModeLabel')
+    expect(content).toContain('selectPermissionMode')
+    expect(content).toContain('请求批准')
+    expect(content).toContain('替我审批')
+    expect(content).toContain('完全访问权限')
+    expect(content).toContain('data-testid="ai-assistant-model-config-icon"')
+    expect(content).toContain('data-testid="ai-assistant-model-config-panel"')
+    expect(content).toContain('class="ai-composer__model-panel"')
+    expect(content).not.toContain('class="ai-runtime__toggle"')
+    expect(content).not.toContain('class="ai-runtime__summary"')
+    expect(content).toContain("buildAiAssistantMessagePayload(message, runtimeConfig.value, `ui-${Date.now()}`, permissionMode.value)")
   })
 
   it('uses Chinese visible copy for the whole AI Assistant feature', () => {
@@ -201,7 +280,7 @@ describe('AI Assistant shell UI contract', () => {
       '输出 tokens',
       '总计 tokens',
       '耗时 ms',
-      '时间线',
+      '执行步骤',
       '批准',
       '拒绝',
       '清空历史上下文',
@@ -211,6 +290,7 @@ describe('AI Assistant shell UI contract', () => {
       '读取工作区文件',
       '写入工作区文件',
       '技能意图',
+      '知识库检索',
       '可观测性',
     ]) {
       expect(content).toContain(label)

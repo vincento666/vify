@@ -99,7 +99,7 @@ class QwenLivePlanner:
                 content=(
                     "你是 Hify AI 助手。请用中文给出简短思考摘要，"
                     "不要输出隐藏推理。用户要求工具调用、文件读写、"
-                    "skill 调用或执行回显时，必须使用提供的 function tools，"
+                    "skill 调用、知识库检索或执行回显时，必须使用提供的 function tools，"
                     "不要只用文字描述计划。工具执行后会收到 tool 结果，"
                     "如果原任务仍需要后续工具，请继续返回 function tool_calls。"
                 ),

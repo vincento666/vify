@@ -66,76 +66,6 @@
         </div>
       </header>
 
-      <section class="ai-runtime" data-testid="ai-assistant-runtime-config">
-        <div class="ai-runtime__summary">
-          <label class="ai-runtime__field">
-            <span>模型</span>
-            <a-select
-              v-model:value="runtimeConfig.modelName"
-              class="ai-runtime__select"
-              :options="modelOptions"
-              data-testid="ai-assistant-model-select"
-            />
-          </label>
-          <div class="ai-runtime__meta">
-            <span>{{ runtimeConfig.baseUrl }}</span>
-            <span>实时事件流：已启用</span>
-          </div>
-          <a-button
-            class="ai-runtime__toggle"
-            type="text"
-            data-testid="ai-assistant-model-config-toggle"
-            @click="runtimeConfigExpanded = !runtimeConfigExpanded"
-          >
-            {{ runtimeConfigExpanded ? '收起模型配置' : '模型配置' }}
-          </a-button>
-        </div>
-        <div v-if="runtimeConfigExpanded" class="ai-runtime__panel">
-          <label class="ai-runtime__field">
-            <span>接口地址</span>
-            <a-input
-              v-model:value="runtimeConfig.baseUrl"
-              class="ai-runtime__input"
-              placeholder="https://openrouter.ai/api/v1"
-              data-testid="ai-assistant-model-base-url"
-            />
-          </label>
-          <label class="ai-runtime__field">
-            <span>临时密钥</span>
-            <a-input-password
-              v-model:value="runtimeConfig.apiKey"
-              class="ai-runtime__input"
-              placeholder="sk-..."
-              data-testid="ai-assistant-model-api-key"
-            />
-          </label>
-          <label class="ai-runtime__field">
-            <span>温度</span>
-            <a-input-number
-              v-model:value="runtimeConfig.temperature"
-              class="ai-runtime__input"
-              :min="0"
-              :max="2"
-              :step="0.05"
-              :precision="2"
-              data-testid="ai-assistant-model-temperature"
-            />
-          </label>
-          <label class="ai-runtime__field">
-            <span>输出上限</span>
-            <a-input-number
-              v-model:value="runtimeConfig.maxTokens"
-              class="ai-runtime__input"
-              :min="1"
-              :max="32768"
-              :step="128"
-              :precision="0"
-              data-testid="ai-assistant-model-max-tokens"
-            />
-          </label>
-        </div>
-      </section>
-
       <section
         class="ai-stream"
         data-testid="ai-assistant-event-stream"
@@ -146,12 +76,15 @@
           <span>空闲</span>
         </div>
         <template v-else>
-        <article
-          v-for="thread in runThreadsForView"
-          :key="thread.run.id"
-          class="ai-run-event-group"
-          data-testid="ai-assistant-run-task-card"
+          <template v-for="thread in runThreadsForView" :key="thread.run.id">
+        <div
+          v-if="runThreadUserMessage(thread)"
+          class="ai-message ai-message--user"
+          data-testid="ai-assistant-user-message"
         >
+          <p>{{ runThreadUserMessage(thread) }}</p>
+        </div>
+        <article class="ai-run-event-group" data-testid="ai-assistant-run-task-card">
           <span class="ai-event__detail-anchor" data-testid="ai-assistant-run-event-group" />
           <button
             class="ai-run-event-group__header"
@@ -166,8 +99,7 @@
               <ClockCircleOutlined v-else />
             </span>
             <span class="ai-run-event-group__title">
-              <small>任务记录 #{{ thread.run.id }}</small>
-              <strong>{{ runTitle(thread.run) }}</strong>
+              <strong>{{ runThreadHeaderTitle(thread) }}</strong>
             </span>
             <span class="ai-run-event-group__meta">{{ runThreadMeta(thread) }}</span>
             <DownOutlined v-if="!isRunEventGroupExpanded(thread.run.id, thread)" />
@@ -180,24 +112,29 @@
             data-testid="ai-assistant-run-event-line"
           >
             <article
-              v-for="item in timelineForThread(thread)"
+              v-for="item in timelineForThreadEcho(thread)"
               :key="item.id"
               class="ai-event"
               :class="[`tone-${eventToneClass(item, thread)}`, `kind-${item.kind}`]"
               data-testid="ai-assistant-event-card"
             >
               <div class="ai-event__rail">
-                <LoadingOutlined
-                  v-if="isEventRunning(item, thread)"
-                  class="ai-event__spinner"
-                  data-testid="ai-assistant-node-spinner"
-                />
                 <span
-                  v-else
-                  class="ai-event__pulse"
-                  data-testid="ai-assistant-event-milestone"
-                  :class="{ 'ai-event__pulse--done': isEventDone(item, thread) }"
-                />
+                  class="ai-event__status-icon"
+                  data-testid="ai-assistant-event-status-icon"
+                  :class="`tone-${eventToneClass(item, thread)}`"
+                >
+                  <LoadingOutlined
+                    v-if="isEventRunning(item, thread)"
+                    class="ai-event__spinner"
+                    data-testid="ai-assistant-node-spinner"
+                  />
+                  <CheckCircleOutlined
+                    v-else-if="isEventDone(item, thread)"
+                    data-testid="ai-assistant-event-completed-icon"
+                  />
+                  <component :is="eventStatusIcon(item, thread)" v-else />
+                </span>
               </div>
               <div
                 class="ai-event__body"
@@ -210,21 +147,12 @@
                   :aria-expanded="isEventExpanded(item.id)"
                   @click="toggleEventCard(item.id)"
                 >
-                  <component :is="eventIcon(item.kind, item.tone)" />
                   <span>{{ item.title }}</span>
                   <small>#{{ item.sequence }}</small>
-                  <CheckCircleOutlined
-                    v-if="isEventDone(item, thread)"
-                    class="ai-event__done-icon"
-                    data-testid="ai-assistant-run-status-icon"
-                  />
                   <DownOutlined v-if="!isEventExpanded(item.id)" />
                   <UpOutlined v-else />
                 </button>
                 <div v-if="item.kind === 'model-output'" class="ai-model-output" data-testid="ai-assistant-model-output">
-                  <p>{{ item.summary }}</p>
-                </div>
-                <div v-else-if="item.kind === 'model-thought'" class="ai-model-output" data-testid="ai-assistant-thought-summary">
                   <p>{{ item.summary }}</p>
                 </div>
                 <div
@@ -256,37 +184,145 @@
                       </dd>
                     </div>
                   </dl>
-                  <div v-if="item.kind === 'approval' && item.approvalId" class="ai-event__actions">
-                    <a-button size="small" type="primary" @click="approve(item.approvalId)">批准</a-button>
-                    <a-button size="small" danger @click="deny(item.approvalId)">拒绝</a-button>
+                  <div v-if="shouldShowApprovalActions(item)" class="ai-event__actions">
+                    <a-button size="small" type="primary" @click="approveTimelineItem(item)">批准</a-button>
+                    <a-button size="small" danger @click="denyTimelineItem(item)">拒绝</a-button>
                   </div>
                 </div>
               </div>
             </article>
           </section>
-          <div v-else class="ai-run-event-group__collapsed">
-            已收纳 {{ timelineForThread(thread).length }} 条事件。
-          </div>
         </article>
+        <div
+          v-if="runThreadFinalAnswer(thread)"
+          class="ai-message ai-message--assistant"
+          data-testid="ai-assistant-run-final-answer"
+        >
+          <p>{{ runThreadFinalAnswer(thread) }}</p>
+        </div>
+          </template>
         </template>
       </section>
 
       <form class="ai-composer" data-testid="ai-assistant-composer" @submit.prevent="submit">
-        <a-textarea
-          v-model:value="draft"
-          class="ai-composer__input"
-          :auto-size="{ minRows: 2, maxRows: 5 }"
-          placeholder="输入给 AI 助手的消息"
-        />
-        <a-button
-          class="ai-composer__send"
-          data-testid="ai-assistant-send"
-          type="primary"
-          html-type="submit"
-          :loading="sending"
-        >
-          <template #icon><SendOutlined /></template>
-        </a-button>
+        <div class="ai-composer__body" data-testid="ai-assistant-composer-body">
+          <a-textarea
+            v-model:value="draft"
+            class="ai-composer__input"
+            :auto-size="{ minRows: 2, maxRows: 5 }"
+            placeholder="输入给 AI 助手的消息"
+          />
+        </div>
+        <div class="ai-composer__actions" data-testid="ai-assistant-composer-actions">
+          <div class="ai-composer__left-actions">
+            <a-button
+              class="ai-composer__icon-button"
+              data-testid="ai-assistant-add-context"
+              type="text"
+              aria-label="添加上下文"
+            >
+              <template #icon><PlusOutlined /></template>
+            </a-button>
+            <a-dropdown :trigger="['click']">
+              <a-button class="ai-composer__permission" data-testid="ai-assistant-permission-mode" type="text">
+                <template #icon><SafetyCertificateOutlined /></template>
+                {{ permissionModeLabel }}
+                <DownOutlined />
+              </a-button>
+              <template #overlay>
+                <a-menu @click="selectPermissionMode">
+                  <a-menu-item key="ask_each_time">请求批准</a-menu-item>
+                  <a-menu-item key="smart_approval">替我审批</a-menu-item>
+                  <a-menu-item key="always_approve">完全访问权限</a-menu-item>
+                </a-menu>
+              </template>
+            </a-dropdown>
+            <div class="ai-composer__model-config">
+              <a-button
+                class="ai-composer__icon-button"
+                data-testid="ai-assistant-model-config-icon"
+                type="text"
+                aria-label="模型配置"
+                @click="runtimeConfigExpanded = !runtimeConfigExpanded"
+              >
+                <template #icon><SettingOutlined /></template>
+              </a-button>
+              <section
+                v-if="runtimeConfigExpanded"
+                class="ai-composer__model-panel"
+                data-testid="ai-assistant-model-config-panel"
+              >
+                <div class="ai-runtime" data-testid="ai-assistant-runtime-config">
+                  <label class="ai-runtime__field">
+                    <span>模型</span>
+                    <a-select
+                      v-model:value="runtimeConfig.modelName"
+                      class="ai-runtime__select"
+                      :options="modelOptions"
+                      data-testid="ai-assistant-model-select"
+                    />
+                  </label>
+                  <label class="ai-runtime__field">
+                    <span>接口地址</span>
+                    <a-input
+                      v-model:value="runtimeConfig.baseUrl"
+                      class="ai-runtime__input"
+                      placeholder="https://openrouter.ai/api/v1"
+                      data-testid="ai-assistant-model-base-url"
+                    />
+                  </label>
+                  <label class="ai-runtime__field">
+                    <span>临时密钥</span>
+                    <a-input-password
+                      v-model:value="runtimeConfig.apiKey"
+                      class="ai-runtime__input"
+                      placeholder="sk-..."
+                      data-testid="ai-assistant-model-api-key"
+                    />
+                  </label>
+                  <label class="ai-runtime__field">
+                    <span>温度</span>
+                    <a-input-number
+                      v-model:value="runtimeConfig.temperature"
+                      class="ai-runtime__input"
+                      :min="0"
+                      :max="2"
+                      :step="0.05"
+                      :precision="2"
+                      data-testid="ai-assistant-model-temperature"
+                    />
+                  </label>
+                  <label class="ai-runtime__field">
+                    <span>输出上限</span>
+                    <a-input-number
+                      v-model:value="runtimeConfig.maxTokens"
+                      class="ai-runtime__input"
+                      :min="1"
+                      :max="32768"
+                      :step="128"
+                      :precision="0"
+                      data-testid="ai-assistant-model-max-tokens"
+                    />
+                  </label>
+                  <div class="ai-runtime__meta">
+                    <span>{{ runtimeConfig.baseUrl }}</span>
+                    <span>实时事件流：已启用</span>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+          <a-button
+            class="ai-composer__send"
+            data-testid="ai-assistant-send"
+            type="primary"
+            html-type="submit"
+            :loading="sending"
+            aria-label="发送"
+          >
+            <template #icon><SendOutlined /></template>
+          </a-button>
+        </div>
       </form>
     </main>
 
@@ -347,7 +383,7 @@
             <strong>{{ toolLabel(approval.toolName) }}</strong>
             <small>{{ riskLabel(approval.riskLevel) }} / {{ statusLabel(approval.status) }}</small>
           </div>
-          <div v-if="approval.status === 'PENDING'" class="ai-approval__actions">
+          <div v-if="isPendingApprovalStatus(approval.status)" class="ai-approval__actions">
             <a-button size="small" type="primary" @click="approve(approval.id)">批准</a-button>
             <a-button size="small" danger @click="deny(approval.id)">拒绝</a-button>
           </div>
@@ -396,11 +432,19 @@
       </section>
 
       <section class="ai-inspector__section" data-testid="ai-assistant-inspector-timeline">
-        <header>时间线</header>
-        <ol class="ai-mini-timeline">
-          <li v-for="event in inspector?.eventTimeline || []" :key="event.id">
-            <span>{{ event.sequence }}</span>
-            <strong>{{ event.title || event.type }}</strong>
+        <header>执行步骤</header>
+        <ol class="ai-execution-steps">
+          <li v-for="event in inspectorPlanningStepsForView" :key="event.id" data-testid="ai-assistant-execution-step">
+            <span class="ai-execution-step__status" :class="statusClass(event.status)">
+              <LoadingOutlined v-if="isInspectorEventRunning(event)" class="ai-event__spinner" />
+              <CheckCircleOutlined v-else-if="isInspectorEventDone(event)" />
+              <ExclamationCircleOutlined v-else-if="event.status === 'FAILED'" />
+              <ClockCircleOutlined v-else />
+            </span>
+            <div>
+              <strong>{{ event.title || event.type }}</strong>
+              <small>{{ statusLabel(event.status) }}</small>
+            </div>
           </li>
         </ol>
       </section>
@@ -413,18 +457,19 @@ import {
   CheckCircleOutlined,
   ClearOutlined,
   ClockCircleOutlined,
-  CodeOutlined,
   DeleteOutlined,
   DownOutlined,
   ExclamationCircleOutlined,
   LoadingOutlined,
   PlusOutlined,
+  SafetyCertificateOutlined,
   SendOutlined,
+  SettingOutlined,
   ThunderboltOutlined,
   ToolOutlined,
   UpOutlined,
 } from '@ant-design/icons-vue'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import {
   approveAiAssistantApproval,
@@ -439,18 +484,34 @@ import {
   buildAiAssistantMessagePayload,
   startAiAssistantMessage,
   type AiAssistantEvent,
+  type AiAssistantInspectorEvent,
+  type AiAssistantApprovalMode,
   type AiAssistantRun,
   type AiAssistantRunInspector,
   type AiAssistantSession,
   type AiAssistantRuntimeConfig,
 } from '@/api/aiAssistant'
 import { openAiAssistantEventStream, type AiAssistantEventStream } from './aiAssistantEventStream'
-import { buildAiAssistantTimeline, type AiAssistantTimelineItem, type AiAssistantTimelineKind } from './aiAssistantTimeline'
+import { buildAiAssistantTimeline, type AiAssistantTimelineItem } from './aiAssistantTimeline'
 
 interface AiAssistantRunThread {
   run: AiAssistantRun
   events: AiAssistantEvent[]
   inspector: AiAssistantRunInspector | null
+}
+
+interface AiAssistantInspectorTimelineRow extends AiAssistantInspectorEvent {
+  groupedCount?: number
+}
+
+const AI_ASSISTANT_RUNTIME_CONFIG_STORAGE_KEY = 'hify.ai-assistant.runtime-config'
+const DEFAULT_RUNTIME_CONFIG: AiAssistantRuntimeConfig = {
+  modelName: 'qwen/qwen3.5-27b',
+  baseUrl: 'https://openrouter.ai/api/v1',
+  apiKey: '',
+  temperature: 0.2,
+  maxTokens: 4096,
+  streamEnabled: true,
 }
 
 const sessions = ref<AiAssistantSession[]>([])
@@ -461,14 +522,8 @@ const sessionTitle = ref('Hify AI 助手')
 const runId = ref<number | null>(null)
 const runStatus = ref('IDLE')
 const runtimeConfigExpanded = ref(false)
-const runtimeConfig = ref<AiAssistantRuntimeConfig>({
-  modelName: 'qwen/qwen3.5-27b',
-  baseUrl: 'https://openrouter.ai/api/v1',
-  apiKey: '',
-  temperature: 0.2,
-  maxTokens: 4096,
-  streamEnabled: true,
-})
+const runtimeConfig = ref<AiAssistantRuntimeConfig>(loadRuntimeConfig())
+const permissionMode = ref<AiAssistantApprovalMode>('smart_approval')
 const modelOptions = [
   { label: 'Qwen / qwen3.5-27B', value: 'qwen/qwen3.5-27b' },
   { label: 'Qwen / qwen3.5-14B', value: 'qwen/qwen3.5-14b' },
@@ -488,6 +543,16 @@ const approvalRecords = computed(() => inspector.value?.approvalHistory ?? [])
 const decidedApprovalRecords = computed(() => approvalRecords.value.filter((approval) => approval.status !== 'PENDING'))
 const elapsedLabel = computed(() => `${Math.max(0, Math.round((inspector.value?.usage.elapsedMs ?? 0) / 100) / 10)}s`)
 const runThreadsForView = computed(() => runThreads.value.slice().sort((left, right) => left.run.id - right.run.id))
+const inspectorTimelineForView = computed(() => groupInspectorTimeline(inspector.value?.eventTimeline ?? []))
+const inspectorPlanningStepsForView = computed(() => inspectorTimelineForView.value.filter(isModelPlanningInspectorEvent))
+const permissionModeLabel = computed(() => permissionModeOptions[permissionMode.value])
+const permissionModeOptions: Record<AiAssistantApprovalMode, string> = {
+  ask_each_time: '请求批准',
+  smart_approval: '替我审批',
+  always_approve: '完全访问权限',
+}
+
+watch(runtimeConfig, (value) => persistRuntimeConfig(value), { deep: true })
 
 onMounted(async () => {
   await loadSessions()
@@ -573,6 +638,7 @@ async function refreshRunThread(nextRunId: number) {
     inspector: runInspector,
   })
   setActiveRunThread(nextRunId)
+  sending.value = runInspector.run.status === 'RUNNING'
 }
 
 function setActiveRunThread(nextRunId: number) {
@@ -634,7 +700,7 @@ async function submit() {
   try {
     const result = await startAiAssistantMessage(
       sessionId.value,
-      buildAiAssistantMessagePayload(message, runtimeConfig.value, `ui-${Date.now()}`),
+      buildAiAssistantMessagePayload(message, runtimeConfig.value, `ui-${Date.now()}`, permissionMode.value),
     )
     draft.value = ''
     events.value = []
@@ -763,25 +829,134 @@ async function deny(approvalId: number) {
   if (runId.value) await loadRunInspector(runId.value)
 }
 
-function runTitle(run: AiAssistantRun) {
-  const message = typeof run.input?.message === 'string' ? run.input.message : '助手运行'
-  return message.length > 42 ? `${message.slice(0, 39)}...` : message
+function loadRuntimeConfig(): AiAssistantRuntimeConfig {
+  if (typeof window === 'undefined') return { ...DEFAULT_RUNTIME_CONFIG }
+  try {
+    const stored = window.sessionStorage.getItem(AI_ASSISTANT_RUNTIME_CONFIG_STORAGE_KEY)
+    if (!stored) return { ...DEFAULT_RUNTIME_CONFIG }
+    return { ...DEFAULT_RUNTIME_CONFIG, ...JSON.parse(stored) }
+  } catch {
+    return { ...DEFAULT_RUNTIME_CONFIG }
+  }
+}
+
+function persistRuntimeConfig(value: AiAssistantRuntimeConfig) {
+  if (typeof window === 'undefined') return
+  window.sessionStorage.setItem(AI_ASSISTANT_RUNTIME_CONFIG_STORAGE_KEY, JSON.stringify(value))
+}
+
+function selectPermissionMode(event: { key: string | number }) {
+  const key = String(event.key)
+  if (isApprovalMode(key)) permissionMode.value = key
+}
+
+function isApprovalMode(value: string): value is AiAssistantApprovalMode {
+  return value === 'ask_each_time' || value === 'smart_approval' || value === 'always_approve'
 }
 
 function timelineForThread(thread: AiAssistantRunThread) {
   return buildAiAssistantTimeline(thread.events)
 }
 
+function runThreadUserMessage(thread: AiAssistantRunThread) {
+  const message = thread.run.input?.message
+  return typeof message === 'string' ? message.trim() : ''
+}
+
+function timelineForThreadEcho(thread: AiAssistantRunThread) {
+  return timelineForThread(thread).filter((item) => !isFinalAnswerItem(item))
+}
+
+function isFinalAnswerItem(item: AiAssistantTimelineItem) {
+  return item.kind === 'model-output' && (item.phase === 'final_answer' || item.source === 'harness_final_answer')
+}
+
+function runThreadFinalAnswer(thread: AiAssistantRunThread) {
+  const status = thread.inspector?.run.status ?? thread.run.status
+  if (!['COMPLETED', 'APPROVED'].includes(status)) return ''
+  const resultAnswer = finalAnswerFromRun(thread.inspector?.run ?? thread.run)
+  if (resultAnswer) return resultAnswer
+  return timelineForThread(thread)
+    .filter(isFinalAnswerItem)
+    .map((item) => item.summary.trim())
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+function finalAnswerFromRun(run: AiAssistantRun) {
+  const answer = run.result?.finalAnswer
+  return typeof answer === 'string' ? answer.trim() : ''
+}
+
+function runThreadHeaderTitle(thread: AiAssistantRunThread) {
+  const status = thread.inspector?.run.status ?? thread.run.status
+  if (status === 'RUNNING') return '执行中'
+  if (status === 'WAITING_APPROVAL' || status === 'PENDING') return '等待审批'
+  if (status === 'FAILED') return '处理失败'
+  if (status === 'DENIED') return '已拒绝'
+  if (status === 'COMPLETED' || status === 'APPROVED') return '已处理'
+  return statusLabel(status)
+}
+
 function runThreadMeta(thread: AiAssistantRunThread) {
-  const timeline = timelineForThread(thread)
+  const timeline = timelineForThreadEcho(thread)
   const toolCount = thread.inspector?.toolCalls.length ?? 0
-  return `${statusLabel(thread.inspector?.run.status ?? thread.run.status)} / ${timeline.length} 条事件 / ${toolCount} 次工具`
+  return `${timeline.length} 条事件 / ${toolCount} 次工具`
 }
 
 function taskMetaLabel(task: { phase: string; currentTool?: string | null }) {
   const currentTool = task.currentTool ? ` / ${toolLabel(task.currentTool)}` : ''
-  const eventCount = inspector.value?.eventTimeline.length ?? 0
+  const eventCount = inspectorTimelineForView.value.length
   return `${task.phase}${currentTool} / ${eventCount} 条事件`
+}
+
+function isModelPlanningInspectorEvent(event: AiAssistantInspectorTimelineRow) {
+  return [
+    'model.stream_chunk',
+    'model.thought_summary',
+    'model.tool_call_decision',
+    'model.file_intent',
+    'model.skill_intent',
+  ].includes(event.type)
+}
+
+function isInspectorEventRunning(event: AiAssistantInspectorTimelineRow) {
+  return event.status === 'RUNNING' || event.status === 'PENDING' || event.status === 'STREAMING'
+}
+
+function isInspectorEventDone(event: AiAssistantInspectorTimelineRow) {
+  return !isInspectorEventRunning(event) && event.status !== 'FAILED' && event.status !== 'DENIED'
+}
+
+function groupInspectorTimeline(events: AiAssistantInspectorEvent[]): AiAssistantInspectorTimelineRow[] {
+  const rows: AiAssistantInspectorTimelineRow[] = []
+  let streamGroup: AiAssistantInspectorEvent[] = []
+
+  const flushStreamGroup = () => {
+    if (streamGroup.length === 0) return
+    const first = streamGroup[0]
+    const last = streamGroup[streamGroup.length - 1]
+    rows.push({
+      ...last,
+      id: first.id,
+      sequence: first.sequence,
+      title: '模型输出',
+      summary: `已聚合 ${streamGroup.length} 段流式输出`,
+      groupedCount: streamGroup.length,
+    })
+    streamGroup = []
+  }
+
+  for (const event of events) {
+    if (event.type === 'model.stream_chunk') {
+      streamGroup.push(event)
+      continue
+    }
+    flushStreamGroup()
+    rows.push(event)
+  }
+  flushStreamGroup()
+  return rows
 }
 
 function isRunThreadRunning(thread: AiAssistantRunThread) {
@@ -804,6 +979,7 @@ function statusLabel(status: string) {
     {
       IDLE: '空闲',
       ACTIVE: '活跃',
+      OK: '已完成',
       RUNNING: '执行中',
       COMPLETED: '已完成',
       WAITING_APPROVAL: '等待审批',
@@ -827,6 +1003,7 @@ function toolLabel(toolName: string) {
       read_workspace_file: '读取工作区文件',
       write_workspace_file: '写入工作区文件',
       invoke_skill: '技能意图',
+      search_knowledge_base: '知识库检索',
     }[toolName] ?? toolName
   )
 }
@@ -845,17 +1022,18 @@ function riskLabel(riskLevel: string) {
 
 function statusClass(status: string) {
   return {
-    'status-done': status === 'COMPLETED' || status === 'APPROVED',
+    'status-done': status === 'COMPLETED' || status === 'APPROVED' || status === 'OK',
     'status-waiting': status === 'WAITING_APPROVAL' || status === 'PENDING',
     'status-danger': status === 'DENIED' || status === 'FAILED',
     'status-running': status === 'RUNNING',
   }
 }
 
-function eventIcon(kind: AiAssistantTimelineKind, tone: string) {
+function eventStatusIcon(item: AiAssistantTimelineItem, _thread: AiAssistantRunThread) {
+  const { kind, tone } = item
   if (tone === 'danger') return ExclamationCircleOutlined
   if (kind === 'tool' || kind === 'tool-output') return ToolOutlined
-  return CodeOutlined
+  return ClockCircleOutlined
 }
 
 function toggleEventCard(itemId: string) {
@@ -891,9 +1069,25 @@ function formatEventDetailRows(item: AiAssistantTimelineItem) {
   return item.details
 }
 
+function shouldShowApprovalActions(item: AiAssistantTimelineItem) {
+  return item.kind === 'approval' && item.approvalId && item.tone === 'waiting'
+}
+
+function isPendingApprovalStatus(status: string) {
+  return status === 'PENDING' || status === 'WAITING_APPROVAL'
+}
+
+function approveTimelineItem(item: AiAssistantTimelineItem) {
+  if (item.approvalId) return approve(item.approvalId)
+}
+
+function denyTimelineItem(item: AiAssistantTimelineItem) {
+  if (item.approvalId) return deny(item.approvalId)
+}
+
 function isEventRunning(item: AiAssistantTimelineItem, thread: AiAssistantRunThread) {
   if (!isRunThreadRunning(thread)) return false
-  const timeline = timelineForThread(thread)
+  const timeline = timelineForThreadEcho(thread)
   return item.id === timeline[timeline.length - 1]?.id && item.tone === 'running'
 }
 
@@ -1085,7 +1279,6 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
 
 .ai-session__dot,
 .ai-inspector__live,
-.ai-event__pulse,
 .ai-task__dot {
   width: 0.5rem;
   height: 0.5rem;
@@ -1114,7 +1307,7 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
 
 .ai-console {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   overflow: hidden;
 }
 
@@ -1140,23 +1333,8 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
 
 .ai-runtime {
   display: grid;
-  gap: 0.5rem;
-  padding: 0 0.625rem 0.375rem;
-}
-
-.ai-runtime__summary,
-.ai-runtime__panel {
-  display: grid;
-  gap: 0.75rem;
-}
-
-.ai-runtime__summary {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-  align-items: end;
-}
-
-.ai-runtime__panel {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.625rem;
+  padding: 0.75rem;
 }
 
 .ai-runtime__field {
@@ -1188,12 +1366,6 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
   color: var(--color-text-tertiary, #8b92a8);
 }
 
-.ai-runtime__toggle {
-  justify-self: end;
-  padding-inline: 0;
-  color: var(--color-primary-600, #4f46e5);
-}
-
 .ai-stream {
   min-height: 0;
   overflow: auto;
@@ -1212,6 +1384,34 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
 .ai-run-event-group {
   display: grid;
   gap: 0.625rem;
+}
+
+.ai-message {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.5rem 0.75rem;
+  background: transparent;
+  border: 0;
+}
+
+.ai-message p {
+  margin: 0;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.ai-message--user {
+  justify-items: end;
+  color: var(--color-text-primary, #0f1117);
+}
+
+.ai-message--assistant {
+  color: var(--color-text-primary, #0f1117);
+}
+
+.ai-message--user p,
+.ai-message--assistant p {
+  max-width: min(42rem, 100%);
 }
 
 .ai-run-event-group__header {
@@ -1267,11 +1467,6 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
   white-space: nowrap;
 }
 
-.ai-run-event-group__collapsed {
-  padding: 0 0 0.25rem 2rem;
-  color: var(--color-text-secondary, #4b5268);
-}
-
 .ai-run-event-line {
   display: grid;
   gap: 0;
@@ -1305,19 +1500,21 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
   background: var(--color-border-default, #e3e6ef);
 }
 
-.ai-event__pulse {
-  position: relative;
-  z-index: 1;
-}
-
-.ai-event__pulse--done {
-  background: var(--color-border-strong, #c7ccd8);
-}
-
+.ai-event__status-icon,
 .ai-event__spinner {
   position: relative;
   z-index: 1;
   font-size: 0.875rem;
+}
+
+.ai-event__status-icon {
+  width: 1rem;
+  height: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-surface, #ffffff);
+  color: var(--color-border-strong, #c7ccd8);
 }
 
 .ai-event__body {
@@ -1360,11 +1557,6 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
 .ai-event__head small {
   margin-left: auto;
   color: var(--color-text-tertiary, #8b92a8);
-}
-
-.ai-event__done-icon {
-  color: var(--color-success-500, #10b981);
-  font-size: 0.875rem;
 }
 
 .ai-event__details {
@@ -1428,18 +1620,70 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
 
 .ai-composer {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 2.75rem;
-  gap: 0.625rem;
+  grid-template-rows: auto auto;
+  gap: 0.375rem;
   padding: 0.625rem 0.625rem;
   background: var(--color-bg-surface, #ffffff);
+}
+
+.ai-composer__body {
+  min-width: 0;
 }
 
 .ai-composer__input {
   border-radius: 0.5rem;
 }
 
+.ai-composer__actions,
+.ai-composer__left-actions {
+  display: flex;
+  align-items: center;
+}
+
+.ai-composer__actions {
+  justify-content: space-between;
+  gap: 0.625rem;
+}
+
+.ai-composer__left-actions {
+  min-width: 0;
+  gap: 0.25rem;
+}
+
+.ai-composer__model-config {
+  position: relative;
+  display: inline-flex;
+}
+
+.ai-composer__model-panel {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.5rem);
+  z-index: 20;
+  width: min(26rem, calc(100vw - 3rem));
+  background: var(--color-bg-surface, #ffffff);
+  border-radius: var(--radius-lg, 0.5rem);
+  box-shadow: var(--shadow-lg, 0 1rem 2rem rgba(15, 17, 23, 0.14));
+}
+
+.ai-composer__icon-button,
+.ai-composer__permission {
+  min-width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+}
+
+.ai-composer__permission {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  max-width: 12rem;
+  color: var(--color-text-secondary, #4b5268);
+}
+
 .ai-composer__send {
-  height: 100%;
+  width: 2.25rem;
+  height: 2.25rem;
   border-radius: 0.5rem;
 }
 
@@ -1494,7 +1738,7 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
   color: var(--color-text-tertiary, #8b92a8);
 }
 
-.ai-mini-timeline {
+.ai-execution-steps {
   display: grid;
   gap: 0.375rem;
   margin: 0;
@@ -1502,23 +1746,41 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
   list-style: none;
 }
 
-.ai-mini-timeline li {
+.ai-execution-steps li {
   display: grid;
   grid-template-columns: 1.75rem minmax(0, 1fr);
   gap: 0.5rem;
-  align-items: center;
+  align-items: start;
   font-size: 0.75rem;
   color: var(--color-text-secondary, #4b5268);
 }
 
-.ai-mini-timeline span {
+.ai-execution-step__status {
+  width: 1rem;
+  height: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ai-execution-steps span {
   color: var(--color-text-tertiary, #8b92a8);
 }
 
-.ai-mini-timeline strong {
+.ai-execution-steps div {
+  min-width: 0;
+  display: grid;
+  gap: 0.125rem;
+}
+
+.ai-execution-steps strong {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ai-execution-steps small {
+  color: var(--color-text-tertiary, #8b92a8);
 }
 
 .statusPulse {
@@ -1548,12 +1810,10 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
     overflow-y: hidden;
   }
 
-  .ai-runtime__summary {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .ai-runtime__panel {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .ai-composer__model-panel {
+    right: auto;
+    left: 0;
+    width: min(22rem, calc(100vw - 2rem));
   }
 }
 </style>

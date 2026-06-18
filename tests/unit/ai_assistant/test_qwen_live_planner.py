@@ -80,6 +80,7 @@ class AiAssistantQwenLivePlannerTest(unittest.TestCase):
         self.assertIn("read_workspace_file", tool_names)
         self.assertIn("write_workspace_file", tool_names)
         self.assertIn("invoke_skill", tool_names)
+        self.assertIn("search_knowledge_base", tool_names)
 
 
 if __name__ == "__main__":

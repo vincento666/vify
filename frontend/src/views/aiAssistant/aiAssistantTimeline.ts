@@ -24,6 +24,8 @@ export interface AiAssistantTimelineItem {
   payloadPreview: string
   details: AiAssistantTimelineDetail[]
   approvalId?: number
+  phase?: string
+  source?: string
 }
 
 export interface AiAssistantTimelineDetail {
@@ -133,6 +135,8 @@ function flushModelStreamGroup(
       },
       { label: '内容', value: summary, monospace: true },
     ],
+    phase: typeof first.payload?.phase === 'string' ? first.payload.phase : undefined,
+    source: typeof first.payload?.source === 'string' ? first.payload.source : undefined,
   })
   return summary
 }
@@ -335,6 +339,7 @@ function toolLabel(toolName: string) {
       read_workspace_file: '读取工作区文件',
       write_workspace_file: '写入工作区文件',
       invoke_skill: '技能调用',
+      search_knowledge_base: '知识库检索',
     }[toolName] ?? toolName
   )
 }
