@@ -118,3 +118,26 @@
       browser UAT.
 - [x] Record remaining risk: Codex in-app browser bridge still times out while
       attaching a webview; Playwright Chromium UAT against the same URL is green.
+
+## 193.12 Current-Run Execution Steps And In-App Browser UAT Recovery
+
+- [x] RED: frontend shell contract fails until right-panel execution steps use
+      `inspectorExecutionStepsForView` instead of accumulated low-level model
+      timeline events.
+- [x] Scope execution steps to the currently selected/currently running run so
+      each new user question starts with a clean step list.
+- [x] Build execution steps from current-run model-planned tool names plus real
+      tool call and approval records; hide low-level ReAct event names such as
+      `思考摘要`, `工具调用决策`, `模型输出`, `文件操作意图`, and `技能调用意图`.
+- [x] Fix execution-step state icons: running uses a dedicated spinner, completed
+      uses a transparent green check icon, failed/denied uses the error icon, and
+      waiting remains neutral.
+- [x] Recover the Codex in-app browser bridge, run a real qwen3.5-27b complex
+      journey in the in-app browser, approve the write action, and verify current
+      run steps, icon states, running animation, final answer, and one-screen
+      layout.
+- [x] Extend the complex browser e2e script to assert current-question execution
+      step scope and absence of low-level event labels.
+- [x] Revalidate with focused frontend unit, remScaleClosure, full frontend unit,
+      frontend build, AI Assistant backend unit/contract with MySQL8 admin DSN,
+      scripted real qwen e2e, and in-app browser UAT evidence.

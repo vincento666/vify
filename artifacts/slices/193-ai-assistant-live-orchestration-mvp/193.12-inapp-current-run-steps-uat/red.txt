@@ -1,0 +1,17 @@
+RED evidence for 193.12 current-run execution steps
+
+Command:
+rtk npm --prefix frontend run test:unit -- src/views/aiAssistant/aiAssistantShell.test.ts
+
+Expected failure before implementation:
+AI Assistant shell UI contract > groups inspector stream chunks and hides stale approval actions
+
+Failure excerpt:
+expected '<template>...' to contain 'inspectorExecutionStepsForView'
+
+Why this was red:
+The previous implementation rendered right-panel execution steps from accumulated
+low-level inspector timeline events, so repeated model.thought_summary,
+model.tool_call_decision, model.stream_chunk, model.file_intent, and
+model.skill_intent rows could appear instead of the current user's planned task
+steps.

@@ -462,16 +462,24 @@
       <section class="ai-inspector__section" data-testid="ai-assistant-inspector-timeline">
         <header>执行步骤</header>
         <ol class="ai-execution-steps">
-          <li v-for="event in inspectorPlanningStepsForView" :key="event.id" data-testid="ai-assistant-execution-step">
-            <span class="ai-execution-step__status" :class="statusClass(event.status)">
-              <LoadingOutlined v-if="isInspectorEventRunning(event)" class="ai-event__spinner" />
-              <CheckCircleOutlined v-else-if="isInspectorEventDone(event)" />
-              <ExclamationCircleOutlined v-else-if="event.status === 'FAILED'" />
-              <ClockCircleOutlined v-else />
+          <li v-for="step in inspectorExecutionStepsForView" :key="step.id" data-testid="ai-assistant-execution-step">
+            <span class="ai-execution-step__status" :class="statusClass(step.status)">
+              <LoadingOutlined
+                v-if="isInspectorEventRunning(step)"
+                class="ai-execution-step__spinner"
+                data-testid="ai-assistant-execution-step-spinner"
+              />
+              <CheckCircleOutlined
+                v-else-if="isInspectorEventDone(step)"
+                class="ai-execution-step__done"
+                data-testid="ai-assistant-execution-step-done"
+              />
+              <ExclamationCircleOutlined v-else-if="step.status === 'FAILED' || step.status === 'DENIED'" />
+              <ClockCircleOutlined v-else class="ai-execution-step__pending" />
             </span>
             <div>
-              <strong>{{ event.title || event.type }}</strong>
-              <small>{{ statusLabel(event.status) }}</small>
+              <strong>{{ step.title }}</strong>
+              <small>{{ stepMetaLabel(step) }}</small>
             </div>
           </li>
         </ol>
@@ -512,12 +520,13 @@ import {
   buildAiAssistantMessagePayload,
   startAiAssistantMessage,
   type AiAssistantEvent,
-  type AiAssistantInspectorEvent,
+  type AiAssistantApproval,
   type AiAssistantApprovalMode,
   type AiAssistantRun,
   type AiAssistantRunInspector,
   type AiAssistantSession,
   type AiAssistantRuntimeConfig,
+  type AiAssistantToolCall,
 } from '@/api/aiAssistant'
 import { openAiAssistantEventStream, type AiAssistantEventStream } from './aiAssistantEventStream'
 import { buildAiAssistantTimeline, type AiAssistantTimelineItem } from './aiAssistantTimeline'
@@ -528,8 +537,12 @@ interface AiAssistantRunThread {
   inspector: AiAssistantRunInspector | null
 }
 
-interface AiAssistantInspectorTimelineRow extends AiAssistantInspectorEvent {
-  groupedCount?: number
+interface AiAssistantInspectorExecutionStep {
+  id: string
+  sequence: number
+  title: string
+  status: string
+  summary?: string
 }
 
 const AI_ASSISTANT_RUNTIME_CONFIG_STORAGE_KEY = 'hify.ai-assistant.runtime-config'
@@ -571,8 +584,15 @@ const approvalRecords = computed(() => inspector.value?.approvalHistory ?? [])
 const decidedApprovalRecords = computed(() => approvalRecords.value.filter((approval) => approval.status !== 'PENDING'))
 const elapsedLabel = computed(() => `${Math.max(0, Math.round((inspector.value?.usage.elapsedMs ?? 0) / 100) / 10)}s`)
 const runThreadsForView = computed(() => runThreads.value.slice().sort((left, right) => left.run.id - right.run.id))
-const inspectorTimelineForView = computed(() => groupInspectorTimeline(inspector.value?.eventTimeline ?? []))
-const inspectorPlanningStepsForView = computed(() => inspectorTimelineForView.value.filter(isModelPlanningInspectorEvent))
+const currentRunEventsForView = computed(() => {
+  const currentRunId = inspector.value?.run.id ?? runId.value
+  if (!currentRunId) return []
+  const thread = runThreads.value.find((item) => item.run.id === currentRunId)
+  return (thread?.events ?? events.value).filter((event) => event.runId === currentRunId)
+})
+const inspectorExecutionStepsForView = computed(() =>
+  buildInspectorExecutionSteps(inspector.value, currentRunEventsForView.value),
+)
 const permissionModeLabel = computed(() => permissionModeOptions[permissionMode.value])
 const permissionModeOptions: Record<AiAssistantApprovalMode, string> = {
   ask_each_time: '请求批准',
@@ -935,64 +955,148 @@ function runThreadMeta(thread: AiAssistantRunThread) {
 
 function taskMetaLabel(task: { phase: string; currentTool?: string | null }) {
   const currentTool = task.currentTool ? ` / ${toolLabel(task.currentTool)}` : ''
-  const eventCount = inspectorTimelineForView.value.length
-  return `${task.phase}${currentTool} / ${eventCount} 条事件`
+  const stepCount = inspectorExecutionStepsForView.value.length
+  return `${task.phase}${currentTool} / ${stepCount} 个执行步骤`
 }
 
-function isModelPlanningInspectorEvent(event: AiAssistantInspectorTimelineRow) {
-  return [
-    'model.stream_chunk',
-    'model.thought_summary',
-    'model.tool_call_decision',
-    'model.file_intent',
-    'model.skill_intent',
-  ].includes(event.type)
+function isCurrentInspectorStep(step: AiAssistantInspectorExecutionStep) {
+  const steps = inspectorExecutionStepsForView.value
+  const activeStep = steps.find((item) => !isTerminalInspectorStepStatus(item.status))
+  return step.id === (activeStep?.id ?? steps[steps.length - 1]?.id)
 }
 
-function isCurrentInspectorStep(event: AiAssistantInspectorTimelineRow) {
-  const steps = inspectorPlanningStepsForView.value
-  return event.id === steps[steps.length - 1]?.id
-}
-
-function isInspectorEventRunning(event: AiAssistantInspectorTimelineRow) {
+function isInspectorEventRunning(step: AiAssistantInspectorExecutionStep) {
   const runIsActive = inspector.value?.run.status === 'RUNNING'
   if (!runIsActive) return false
-  return event.status === 'RUNNING' || event.status === 'PENDING' || event.status === 'STREAMING' || isCurrentInspectorStep(event)
+  return step.status === 'RUNNING' || step.status === 'STREAMING' || isCurrentInspectorStep(step)
 }
 
-function isInspectorEventDone(event: AiAssistantInspectorTimelineRow) {
-  return !isInspectorEventRunning(event) && event.status !== 'FAILED' && event.status !== 'DENIED'
+function isInspectorEventDone(step: AiAssistantInspectorExecutionStep) {
+  return !isInspectorEventRunning(step) && step.status !== 'FAILED' && step.status !== 'DENIED'
 }
 
-function groupInspectorTimeline(events: AiAssistantInspectorEvent[]): AiAssistantInspectorTimelineRow[] {
-  const rows: AiAssistantInspectorTimelineRow[] = []
-  let streamGroup: AiAssistantInspectorEvent[] = []
+function isTerminalInspectorStepStatus(status: string) {
+  return ['COMPLETED', 'APPROVED', 'OK', 'DENIED', 'FAILED'].includes(status)
+}
 
-  const flushStreamGroup = () => {
-    if (streamGroup.length === 0) return
-    const first = streamGroup[0]
-    const last = streamGroup[streamGroup.length - 1]
-    rows.push({
-      ...last,
-      id: first.id,
-      sequence: first.sequence,
-      title: '模型输出',
-      summary: `已聚合 ${streamGroup.length} 段流式输出`,
-      groupedCount: streamGroup.length,
-    })
-    streamGroup = []
+function buildInspectorExecutionSteps(
+  runInspector: AiAssistantRunInspector | null,
+  currentRunEvents: AiAssistantEvent[],
+): AiAssistantInspectorExecutionStep[] {
+  if (!runInspector) return []
+  const runScopedEvents = currentRunEvents.filter((event) => event.runId === runInspector.run.id)
+  const plannedToolNames = plannedToolNamesFromCurrentRun(runScopedEvents)
+  const steps: AiAssistantInspectorExecutionStep[] = []
+  const approvals = dedupeApprovals([...(runInspector.approvalHistory ?? []), ...(runInspector.approvalQueue ?? [])])
+  const toolCallsByName = groupToolCallsByName(runInspector.toolCalls ?? [])
+  const plannedNames =
+    plannedToolNames.length > 0 ? plannedToolNames : (runInspector.toolCalls ?? []).map((toolCall) => toolCall.toolName)
+
+  for (const toolName of plannedNames) {
+    const toolCall = toolCallsByName.get(toolName)?.shift()
+    steps.push(toolCall ? toolCallExecutionStep(toolCall, steps.length + 1) : plannedToolExecutionStep(runInspector.run.id, toolName, steps.length + 1))
+    const approval = approvals.find((record) => record.toolName === toolName)
+    if (approval) steps.push(approvalExecutionStep(approval, steps.length + 1))
   }
 
-  for (const event of events) {
-    if (event.type === 'model.stream_chunk') {
-      streamGroup.push(event)
-      continue
+  for (const remainingCalls of toolCallsByName.values()) {
+    for (const toolCall of remainingCalls) {
+      steps.push(toolCallExecutionStep(toolCall, steps.length + 1))
     }
-    flushStreamGroup()
-    rows.push(event)
   }
-  flushStreamGroup()
-  return rows
+
+  for (const approval of approvals) {
+    if (!steps.some((step) => step.id === `approval-${approval.id}`)) {
+      steps.push(approvalExecutionStep(approval, steps.length + 1))
+    }
+  }
+
+  return normalizeCurrentRunExecutionSteps(steps, runInspector.run.status)
+}
+
+function toolCallExecutionStep(toolCall: AiAssistantToolCall, sequence: number): AiAssistantInspectorExecutionStep {
+  return {
+    id: `tool-${toolCall.id}`,
+    sequence,
+    title: toolLabel(toolCall.toolName),
+    status: toolCall.status,
+    summary: `工具调用 / ${toolCall.durationMs} ms`,
+  }
+}
+
+function approvalExecutionStep(approval: AiAssistantApproval, sequence: number): AiAssistantInspectorExecutionStep {
+  return {
+    id: `approval-${approval.id}`,
+    sequence,
+    title: `${toolLabel(approval.toolName)}审批`,
+    status: approval.status,
+    summary: riskLabel(approval.riskLevel),
+  }
+}
+
+function plannedToolExecutionStep(runIdValue: number, toolName: string, sequence: number): AiAssistantInspectorExecutionStep {
+  return {
+    id: `planned-${runIdValue}-${sequence}-${toolName}`,
+    sequence,
+    title: toolLabel(toolName),
+    status: 'PENDING',
+    summary: '模型已编排',
+  }
+}
+
+function plannedToolNamesFromCurrentRun(runScopedEvents: AiAssistantEvent[]) {
+  const plannedNames: string[] = []
+  const taskPlanningEvents = runScopedEvents.filter((event) => event.type === 'task.updated')
+  const fallbackPlanningEvents = runScopedEvents.filter((event) => event.type === 'model.tool_call_decision')
+  const planningEvents = (taskPlanningEvents.length > 0 ? taskPlanningEvents : fallbackPlanningEvents)
+    .sort((left, right) => left.sequence - right.sequence)
+
+  for (const event of planningEvents) {
+    const toolNames = event.payload?.toolNames
+    if (!Array.isArray(toolNames)) continue
+    for (const toolName of toolNames) {
+      if (typeof toolName === 'string' && toolName.trim()) plannedNames.push(toolName)
+    }
+  }
+  return plannedNames
+}
+
+function groupToolCallsByName(toolCalls: AiAssistantToolCall[]) {
+  const grouped = new Map<string, AiAssistantToolCall[]>()
+  for (const toolCall of toolCalls) {
+    const calls = grouped.get(toolCall.toolName) ?? []
+    calls.push(toolCall)
+    grouped.set(toolCall.toolName, calls)
+  }
+  return grouped
+}
+
+function normalizeCurrentRunExecutionSteps(steps: AiAssistantInspectorExecutionStep[], status: string) {
+  if (steps.length === 0) return []
+  if (status === 'COMPLETED' || status === 'APPROVED') {
+    return steps.map((step) => (isTerminalInspectorStepStatus(step.status) ? step : { ...step, status: 'COMPLETED' }))
+  }
+  if (status !== 'RUNNING') return steps
+  let markedRunning = false
+  return steps.map((step) => {
+    if (isTerminalInspectorStepStatus(step.status)) return step
+    if (markedRunning) return step
+    markedRunning = true
+    return { ...step, status: 'RUNNING' }
+  })
+}
+
+function stepMetaLabel(step: AiAssistantInspectorExecutionStep) {
+  return step.summary ? `${statusLabel(step.status)} / ${step.summary}` : statusLabel(step.status)
+}
+
+function dedupeApprovals(approvals: AiAssistantApproval[]) {
+  const seen = new Set<number>()
+  return approvals.filter((approval) => {
+    if (seen.has(approval.id)) return false
+    seen.add(approval.id)
+    return true
+  })
 }
 
 function isRunThreadRunning(thread: AiAssistantRunThread) {
@@ -1811,6 +1915,40 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  background: transparent;
+  color: var(--color-border-strong, #c7ccd8);
+}
+
+.ai-execution-step__status.status-running {
+  background: transparent;
+  color: var(--color-primary-600, #4f46e5);
+}
+
+.ai-execution-step__status.status-done {
+  background: transparent;
+  color: var(--color-success-500, #10b981);
+}
+
+.ai-execution-step__status.status-waiting {
+  background: transparent;
+  color: var(--color-text-tertiary, #8b92a8);
+}
+
+.ai-execution-step__status.status-danger {
+  background: transparent;
+  color: var(--color-danger-500, #ef4444);
+}
+
+.ai-execution-step__spinner {
+  animation: ai-spin 0.9s linear infinite;
+}
+
+.ai-execution-step__done {
+  color: var(--color-success-500, #10b981);
+}
+
+.ai-execution-step__pending {
+  color: var(--color-text-tertiary, #8b92a8);
 }
 
 .ai-execution-steps span {

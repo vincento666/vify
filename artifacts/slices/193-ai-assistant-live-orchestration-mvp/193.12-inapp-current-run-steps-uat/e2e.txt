@@ -1,0 +1,26 @@
+E2E evidence for 193.12 current-run execution steps
+
+Command:
+rtk env HIFY_AI_ASSISTANT_OPENROUTER_API_KEY='<temporary key omitted>' HIFY_E2E_BASE_URL='http://127.0.0.1:5173' HIFY_E2E_ARTIFACT_DIR='artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.12-inapp-current-run-steps-uat' node frontend/e2e/ai-assistant-complex-progress-uat.mjs
+
+Result summary:
+sampleCount: 39
+sawTaskRows: true
+sawRunningTask: true
+sawAnimatedRunningTask: true
+sawStepSpinner: true
+finalHeader: 已处理44 条事件 / 4 次工具
+finalSteps: 5
+finalToolRows: 4
+finalAnswers: 1
+finalStepTexts:
+- 读取工作区文件已完成 / 工具调用 / 1 ms
+- 知识库检索已完成 / 工具调用 / 0 ms
+- 技能意图已完成 / 工具调用 / 0 ms
+- 写入工作区文件已完成 / 工具调用 / 1 ms
+- 写入工作区文件审批已批准 / 业务写入
+pageOverflowY: 0
+
+Assertions added:
+- right-panel execution steps must not expose low-level ReAct loop event names.
+- final step count must stay scoped to the current question's tool plan plus approvals.

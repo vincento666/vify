@@ -1,0 +1,21 @@
+Unit and build gates for 193.12 current-run execution steps
+
+Frontend focused unit:
+rtk npm --prefix frontend run test:unit -- src/views/aiAssistant/aiAssistantShell.test.ts
+Result: 16 passed.
+
+Frontend remScaleClosure:
+rtk npm --prefix frontend run test:unit -- src/remScaleClosure.test.ts
+Result: 1 passed.
+
+Frontend full unit:
+rtk npm --prefix frontend run test:unit
+Result: 96 files passed, 401 tests passed.
+
+Frontend production build:
+rtk npm --prefix frontend run build
+Result: passed.
+
+Backend AI Assistant unit and contract subset:
+rtk env HIFY_MYSQL8_TEST_DATABASE_URL='mysql+pymysql://hify:hify@127.0.0.1:3306/hify?charset=utf8mb4' HIFY_MYSQL8_TEST_ADMIN_DATABASE_URL='mysql+pymysql://root:root@127.0.0.1:3306/mysql?charset=utf8mb4' HIFY_MYSQL8_TEST_GRANT_HOST='%' uv run pytest tests/unit/ai_assistant tests/contract/test_ai_assistant_kernel_api.py tests/contract/test_ai_assistant_inspector_api.py tests/contract/test_ai_assistant_live_qwen_api.py tests/contract/test_ai_assistant_live_stream_api.py tests/contract/test_ai_assistant_scheduler_api.py tests/contract/test_ai_assistant_observability_api.py tests/contract/test_ai_assistant_session_lifecycle_api.py -q
+Result: 28 passed, 1 warning.

@@ -33,7 +33,8 @@ async function collectMetrics(page, label) {
     const steps = all('[data-testid="ai-assistant-execution-step"]').map((row) => ({
       text: row.textContent?.trim() || '',
       statusClass: row.querySelector('.ai-execution-step__status')?.className || '',
-      spinner: Boolean(row.querySelector('.ai-event__spinner')),
+      spinner: Boolean(row.querySelector('[data-testid="ai-assistant-execution-step-spinner"]')),
+      done: Boolean(row.querySelector('[data-testid="ai-assistant-execution-step-done"]')),
     }))
     return {
       label: sampleLabel,
@@ -170,6 +171,7 @@ async function main() {
       finalSteps: final.steps.length,
       finalToolRows: final.toolRows.length,
       finalAnswers: final.finalAnswers.length,
+      finalStepTexts: final.steps.map((step) => step.text),
       pageOverflowY: final.pageOverflowY,
     }
     fs.writeFileSync(`${outDir}/complex-progress-uat.json`, JSON.stringify({ summary, samples }, null, 2))
@@ -178,6 +180,14 @@ async function main() {
     assert(summary.sawRunningTask, 'expected a running task state during execution')
     assert(summary.sawAnimatedRunningTask, 'expected running task state to animate')
     assert(summary.sawStepSpinner, 'expected running execution step spinner')
+    assert(
+      final.steps.every((step) => !/思考摘要|工具调用决策|模型输出|文件操作意图|技能调用意图/.test(step.text)),
+      `expected execution steps to hide low-level react loop events: ${final.steps.map((step) => step.text).join(' | ')}`,
+    )
+    assert(
+      final.steps.length <= final.toolRows.length + 2,
+      `expected current-question execution steps only, got ${final.steps.length} steps for ${final.toolRows.length} tool calls`,
+    )
     assert(summary.finalAnswers > 0, 'expected final assistant answer')
     assert(summary.pageOverflowY <= 2, `expected one-screen shell, got overflow ${summary.pageOverflowY}`)
   } finally {
