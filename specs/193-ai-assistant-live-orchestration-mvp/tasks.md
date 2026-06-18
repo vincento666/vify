@@ -35,7 +35,7 @@
 - [x] Run backend unit/contract gates that do not require privileged MySQL DDL.
 - [x] Run frontend unit, `remScaleClosure`, and production build.
 - [x] Run browser UAT with real OpenRouter `qwen/qwen3.5-27b`.
-- [x] Record remaining MySQL8 permission risk.
+- [x] Close MySQL8 integration/contract/e2e gates with the test admin URL.
 - [x] Commit only AI Assistant/spec/artifact changes, excluding unrelated
       dirty customer-assistant/workflow files.
 
@@ -59,7 +59,7 @@
 - [x] Run browser UAT with real OpenRouter `qwen/qwen3.5-27b`, including
       read tools, write approval, write execution, persisted replay, and
       screenshot evidence.
-- [x] Record remaining MySQL8 permission risk for blocked
-      integration/contract/e2e gates.
+- [x] Close MySQL8 integration/contract/e2e gates with the test admin URL,
+      keeping the implementation on MySQL8.
 - [x] Commit only AI Assistant/spec/artifact changes, excluding unrelated
       dirty customer-assistant/workflow files.
