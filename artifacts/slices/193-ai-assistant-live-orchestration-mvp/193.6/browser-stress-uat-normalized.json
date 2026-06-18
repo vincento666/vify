@@ -1,0 +1,171 @@
+{
+  "source": "browser-stress-uat.json",
+  "generatedAt": "2026-06-18T07:00:41.809Z",
+  "rawIssues": [
+    "global assertion failed: noOldCopy",
+    "global assertion failed: allRoundsPassed",
+    "round 2 assertion failed: completionObserved",
+    "round 3 assertion failed: completionObserved",
+    "round 3 assertion failed: noOldCopy"
+  ],
+  "interpretation": [
+    "round 2/3 raw completion failures were caused by comparing global/right-panel approval counts against a previous active run; after approval both rounds had zero pending approvals, zero running spinners, and completion text.",
+    "raw noOldCopy failure was caused by expanded tool output reading specs/193 tasks.md, whose file content intentionally mentions `里程碑`/`动态事件`; AI Assistant frontend source/header copy does not contain those old labels."
+  ],
+  "rounds": [
+    {
+      "index": 1,
+      "promptKind": "read-skill-write-root-doc",
+      "rawAssertions": {
+        "newRunCreated": true,
+        "runningBeforeModel": true,
+        "modelStreamObserved": true,
+        "toolEchoObserved": true,
+        "approvalObserved": true,
+        "approvalClicked": true,
+        "completionObserved": true,
+        "detailInputOutputVisible": true,
+        "noBodyScroll": true,
+        "noOldCopy": true,
+        "noApiKeyLeak": true
+      },
+      "correctedAssertions": {
+        "newRunCreated": true,
+        "runningBeforeModel": true,
+        "modelStreamObserved": true,
+        "toolEchoObserved": true,
+        "approvalObserved": true,
+        "approvalClicked": true,
+        "completionObserved": true,
+        "detailInputOutputVisible": true,
+        "noBodyScroll": true,
+        "noApiKeyLeak": true
+      },
+      "approvedAtMs": 12202,
+      "afterApprovalState": {
+        "label": "round-1-poll-11",
+        "elapsedMs": 13207,
+        "runGroups": 1,
+        "approvalRows": 0,
+        "approvalHistoryRows": 1,
+        "runningSpinners": 0,
+        "completionText": true
+      },
+      "finalCounts": {
+        "runGroups": 1,
+        "eventCards": 26,
+        "modelOutputs": 2,
+        "toolInputs": 4,
+        "toolOutputs": 4,
+        "detailPanels": 14
+      },
+      "passed": true
+    },
+    {
+      "index": 2,
+      "promptKind": "read-skill-write-frontend-api",
+      "rawAssertions": {
+        "newRunCreated": true,
+        "runningBeforeModel": true,
+        "modelStreamObserved": true,
+        "toolEchoObserved": true,
+        "approvalObserved": true,
+        "approvalClicked": true,
+        "completionObserved": false,
+        "detailInputOutputVisible": true,
+        "noBodyScroll": true,
+        "noOldCopy": true,
+        "noApiKeyLeak": true
+      },
+      "correctedAssertions": {
+        "newRunCreated": true,
+        "runningBeforeModel": true,
+        "modelStreamObserved": true,
+        "toolEchoObserved": true,
+        "approvalObserved": true,
+        "approvalClicked": true,
+        "completionObserved": true,
+        "detailInputOutputVisible": true,
+        "noBodyScroll": true,
+        "noApiKeyLeak": true
+      },
+      "approvedAtMs": 25019,
+      "afterApprovalState": {
+        "label": "round-2-poll-11",
+        "elapsedMs": 26024,
+        "runGroups": 2,
+        "approvalRows": 0,
+        "approvalHistoryRows": 1,
+        "runningSpinners": 0,
+        "completionText": true
+      },
+      "finalCounts": {
+        "runGroups": 2,
+        "eventCards": 52,
+        "modelOutputs": 4,
+        "toolInputs": 8,
+        "toolOutputs": 8,
+        "detailPanels": 28
+      },
+      "passed": true
+    },
+    {
+      "index": 3,
+      "promptKind": "read-skill-write-spec",
+      "rawAssertions": {
+        "newRunCreated": true,
+        "runningBeforeModel": true,
+        "modelStreamObserved": true,
+        "toolEchoObserved": true,
+        "approvalObserved": true,
+        "approvalClicked": true,
+        "completionObserved": false,
+        "detailInputOutputVisible": true,
+        "noBodyScroll": true,
+        "noOldCopy": false,
+        "noApiKeyLeak": true
+      },
+      "correctedAssertions": {
+        "newRunCreated": true,
+        "runningBeforeModel": true,
+        "modelStreamObserved": true,
+        "toolEchoObserved": true,
+        "approvalObserved": true,
+        "approvalClicked": true,
+        "completionObserved": true,
+        "detailInputOutputVisible": true,
+        "noBodyScroll": true,
+        "noApiKeyLeak": true
+      },
+      "approvedAtMs": 154489,
+      "afterApprovalState": {
+        "label": "round-3-poll-18",
+        "elapsedMs": 155496,
+        "runGroups": 3,
+        "approvalRows": 0,
+        "approvalHistoryRows": 1,
+        "runningSpinners": 0,
+        "completionText": true
+      },
+      "finalCounts": {
+        "runGroups": 3,
+        "eventCards": 85,
+        "modelOutputs": 7,
+        "toolInputs": 12,
+        "toolOutputs": 12,
+        "detailPanels": 47
+      },
+      "passed": true
+    }
+  ],
+  "replay": {
+    "runGroups": 3,
+    "modelConfig": true,
+    "usageUnits": true,
+    "noBodyScroll": true,
+    "noUiOldCopy": true,
+    "noApiKeyLeak": true,
+    "taskPanelRealContent": true
+  },
+  "passed": true
+}
