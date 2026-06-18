@@ -377,7 +377,13 @@ class AiAssistantHarnessService:
                 event_type="model.stream_chunk",
                 visible_title="流式输出",
                 visible_summary=chunk,
-                payload={"index": index, "chunk": chunk, "model": decision.model},
+                payload={
+                    "index": index,
+                    "chunk": chunk,
+                    "model": decision.model,
+                    "streaming": False,
+                    "source": "post_completion_split",
+                },
             )
         tool_names = [call["toolName"] for call in decision.tool_calls]
         self._repository.append_event(
@@ -405,8 +411,8 @@ class AiAssistantHarnessService:
                 session_id=session_id,
                 event_type="model.skill_intent",
                 visible_title="技能调用意图",
-                visible_summary="模型规划了技能调用动作。",
-                payload={"toolNames": skill_tools},
+                visible_summary="模型记录了技能调用意图；当前 harness 不执行本机 Codex skill。",
+                payload={"toolNames": skill_tools, "execution": "intent_recorded"},
             )
         self._repository.append_event(
             run_id=run_id,
@@ -787,6 +793,7 @@ class AiAssistantHarnessService:
             return None
         events = self._repository.list_run_events(run_id)
         approvals = self._repository.list_run_approvals(run_id)
+        pending_approvals = [row for row in approvals if row["status"] == "PENDING"]
         tool_calls = self._repository.list_run_tool_calls(run_id)
         observability = build_observability_snapshot(
             run=run,
@@ -798,7 +805,8 @@ class AiAssistantHarnessService:
             "run": _run_payload(run),
             "activeTasks": [_task_payload(run, events, approvals)],
             "toolCalls": [_tool_call_payload(row) for row in tool_calls],
-            "approvalQueue": [_approval_payload(row) for row in approvals],
+            "approvalQueue": [_approval_payload(row) for row in pending_approvals],
+            "approvalHistory": [_approval_payload(row) for row in approvals],
             "recentErrors": [_event_timeline_payload(row) for row in _recent_error_events(events)],
             "eventTimeline": [_event_timeline_payload(row) for row in events],
             "usage": observability["usage"],
@@ -812,29 +820,144 @@ class AiAssistantHarnessService:
         return [_approval_payload(row) for row in self._repository.list_pending_approvals()]
 
     def approve(self, approval_id: int, actor_id: str) -> dict[str, Any]:
+        current = self._repository.get_approval(approval_id)
+        if current is None:
+            raise KeyError(f"AI Assistant approval not found: {approval_id}")
+        if current["status"] != "PENDING":
+            return _approval_payload(current)
         approval = self._repository.decide_approval(approval_id, "APPROVED", actor_id)
+        run_id = int(approval["run_id"])
+        session_id = int(approval["session_id"])
         self._repository.append_event(
-            run_id=int(approval["run_id"]),
-            session_id=int(approval["session_id"]),
+            run_id=run_id,
+            session_id=session_id,
             event_type="approval.granted",
             visible_title="审批通过",
             visible_summary=f"{actor_id} 已批准 {_tool_label(str(approval['tool_name']))}。",
             payload={"approvalId": approval_id, "actorId": actor_id},
         )
+        run = self._repository.get_run(run_id)
+        if run is None:
+            raise KeyError(f"AI Assistant run not found: {run_id}")
+        message = str((run.get("input_payload") or {}).get("message") or "")
+        tool_name = str(approval["tool_name"])
+        tool_call = self._execute_approved_tool(
+            run_id=run_id,
+            session_id=session_id,
+            message=message,
+            tool_name=tool_name,
+            payload=dict(approval.get("input_payload") or {}),
+        )
+        tool_calls = [_tool_call_payload(row) for row in self._repository.list_run_tool_calls(run_id)]
+        final_answer = f"已执行审批通过的工具：{_tool_label(tool_name)}。"
+        output_hint = str(tool_call.get("output", {}).get("echo") or tool_call.get("output", {}).get("path") or "")
+        if output_hint:
+            final_answer = f"{final_answer}结果：{output_hint}"
+        self._repository.append_message(session_id, "assistant", final_answer, run_id=run_id)
+        response_payload = {
+            "finalAnswer": final_answer,
+            "toolCalls": tool_calls,
+            "approvalRequired": False,
+            "approvalId": approval_id,
+            "sandboxDenied": False,
+        }
+        self._repository.complete_run(run_id, response_payload)
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="run.completed",
+            visible_title="运行完成",
+            visible_summary="审批通过的工具已执行，AI 助手运行已完成。",
+            payload={"finalAnswer": final_answer},
+        )
         return _approval_payload(approval)
 
     def deny(self, approval_id: int, actor_id: str, reason: str = "") -> dict[str, Any]:
+        current = self._repository.get_approval(approval_id)
+        if current is None:
+            raise KeyError(f"AI Assistant approval not found: {approval_id}")
+        if current["status"] != "PENDING":
+            return _approval_payload(current)
         approval = self._repository.decide_approval(approval_id, "DENIED", actor_id, reason)
+        run_id = int(approval["run_id"])
+        session_id = int(approval["session_id"])
         self._repository.append_event(
-            run_id=int(approval["run_id"]),
-            session_id=int(approval["session_id"]),
+            run_id=run_id,
+            session_id=session_id,
             event_type="approval.denied",
             visible_title="审批拒绝",
             visible_summary=f"{actor_id} 已拒绝 {_tool_label(str(approval['tool_name']))}。",
             payload={"approvalId": approval_id, "actorId": actor_id, "reason": reason},
             status="DENIED",
         )
+        tool_calls = [_tool_call_payload(row) for row in self._repository.list_run_tool_calls(run_id)]
+        final_answer = "审批已拒绝，相关工具未执行。"
+        self._repository.append_message(session_id, "assistant", final_answer, run_id=run_id)
+        self._repository.complete_run(
+            run_id,
+            {
+                "finalAnswer": final_answer,
+                "toolCalls": tool_calls,
+                "approvalRequired": False,
+                "approvalId": approval_id,
+                "sandboxDenied": False,
+            },
+            status="DENIED",
+        )
         return _approval_payload(approval)
+
+    def _execute_approved_tool(
+        self,
+        *,
+        run_id: int,
+        session_id: int,
+        message: str,
+        tool_name: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="tool.call_started",
+            visible_title="工具开始",
+            visible_summary=f"{_tool_label(tool_name)} 已开始执行。",
+            payload={"toolName": tool_name, "input": payload, "approvalResumed": True},
+        )
+        dispatch_result = self._dispatch_tool(
+            session_id=session_id,
+            message=message,
+            tool_name=tool_name,
+            payload=payload,
+        )
+        tool_result = dispatch_result["tool_result"]
+        duration_ms = int(dispatch_result["duration_ms"])
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="tool.call_output",
+            visible_title="工具输出",
+            visible_summary=str(tool_result.output.get("echo") or tool_result.output.get("path") or ""),
+            payload={"toolName": tool_name, "output": tool_result.output, "approvalResumed": True},
+        )
+        tool_call = self._repository.record_tool_call(
+            run_id=run_id,
+            session_id=session_id,
+            tool_name=tool_name,
+            input_payload=payload,
+            output_payload=tool_result.output,
+            status=tool_result.status,
+            duration_ms=duration_ms,
+        )
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="tool.call_completed",
+            visible_title="工具完成",
+            visible_summary=f"{_tool_label(tool_name)} 已完成。",
+            payload={"toolName": tool_name, "status": tool_result.status, "approvalResumed": True},
+            tool_call_id=int(tool_call["id"]),
+        )
+        return _tool_call_payload(tool_call)
 
 
 def _request_hash(payload: Any) -> str:

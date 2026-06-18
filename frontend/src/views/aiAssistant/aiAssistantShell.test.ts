@@ -18,6 +18,7 @@ describe('AI Assistant shell UI contract', () => {
   it('renders conversation timeline composer and execution echo regions', () => {
     for (const testId of [
       'ai-assistant-shell',
+      'ai-assistant-new-session',
       'ai-assistant-conversation-window',
       'ai-assistant-event-stream',
       'ai-assistant-event-card',
@@ -26,6 +27,7 @@ describe('AI Assistant shell UI contract', () => {
       'ai-assistant-send',
       'ai-assistant-session-list',
       'ai-assistant-session-row',
+      'ai-assistant-run-row',
       'ai-assistant-clear-history',
       'ai-assistant-delete-session',
       'ai-assistant-stream-toggle',
@@ -45,6 +47,25 @@ describe('AI Assistant shell UI contract', () => {
     expect(content).not.toContain('chain-of-thought')
   })
 
+  it('exposes stable controls for browser UAT and avoids mock-looking session titles', () => {
+    expect(content).toContain('aria-label="新建 AI 助手会话"')
+    expect(content).toContain(':aria-pressed="run.id === runId"')
+    expect(content).toContain('createAiAssistantSession()')
+    expect(content).toContain('会话 #')
+    expect(content).toContain('sessionDisplayTitle(session)')
+    expect(content).not.toContain("createAiAssistantSession({ title: 'Hify AI 助手' })")
+    expect(content).not.toContain('sessionDisplayTitle(session.title)')
+  })
+
+  it('separates pending approvals from approval history in the inspector', () => {
+    expect(content).toContain('pendingApprovals')
+    expect(content).toContain('approvalRecords')
+    expect(content).toContain('decidedApprovalRecords')
+    expect(content).toContain('v-for="approval in pendingApprovals"')
+    expect(content).toContain('data-testid="ai-assistant-approval-history-row"')
+    expect(content).not.toContain('v-for="approval in inspector?.approvalQueue || []"')
+  })
+
   it('keeps the assistant workbench one screen tall with internal column scrolling', () => {
     expect(content).toContain('height: calc(100vh - var(--header-height, 3.5rem) - 3rem)')
     expect(content).toContain('box-sizing: border-box')
@@ -54,6 +75,18 @@ describe('AI Assistant shell UI contract', () => {
     expect(content).toContain('ai-assistant-center-column-scroll')
     expect(content).toContain('ai-assistant-right-column-scroll')
     expect(content).not.toContain('height: auto;')
+  })
+
+  it('uses only the outer shell border instead of inline module borders', () => {
+    const solidBorders = content.match(/border: 0\.0625rem solid/g) ?? []
+    expect(content).toContain('.ai-shell {')
+    expect(content).toContain('border: 0.0625rem solid var(--color-border-default, #e3e6ef);')
+    expect(content).toContain('.ai-shell :deep(.ant-btn),')
+    expect(content).toContain('.ai-shell :deep(.ant-input),')
+    expect(content).toContain('.ai-shell :deep(.ant-tag)')
+    expect(solidBorders).toHaveLength(1)
+    expect(content).not.toContain('border-top: 0.0625rem solid')
+    expect(content).not.toContain('border-bottom: 0.0625rem solid')
   })
 
   it('defaults execution echo cards to collapsed details with header toggles', () => {
@@ -99,7 +132,7 @@ describe('AI Assistant shell UI contract', () => {
       'Qwen3.5-27B',
       '读取工作区文件',
       '写入工作区文件',
-      '调用技能',
+      '技能意图',
     ]) {
       expect(content).toContain(label)
     }

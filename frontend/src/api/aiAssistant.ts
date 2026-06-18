@@ -131,6 +131,7 @@ export interface AiAssistantRunInspector {
   activeTasks: AiAssistantInspectorTask[]
   toolCalls: AiAssistantToolCall[]
   approvalQueue: AiAssistantApproval[]
+  approvalHistory: AiAssistantApproval[]
   recentErrors: AiAssistantInspectorEvent[]
   eventTimeline: AiAssistantInspectorEvent[]
   usage: {
@@ -138,6 +139,7 @@ export interface AiAssistantRunInspector {
     outputTokens: number
     totalTokens: number
     elapsedMs: number
+    estimated?: boolean
   }
 }
 

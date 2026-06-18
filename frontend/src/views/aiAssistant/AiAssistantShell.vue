@@ -6,7 +6,13 @@
         <span>Hify AI 助手</span>
       </div>
 
-      <button class="ai-new-session" type="button" @click="createConversation">
+      <button
+        class="ai-new-session"
+        type="button"
+        data-testid="ai-assistant-new-session"
+        aria-label="新建 AI 助手会话"
+        @click="createConversation"
+      >
         <PlusOutlined />
         <span>新建会话</span>
       </button>
@@ -22,7 +28,7 @@
           <button class="ai-session__select" type="button" @click="selectSession(session.id)">
             <span class="ai-session__dot" :class="{ statusPulse: session.id === sessionId && sending }" />
             <span class="ai-session__content">
-              <strong>{{ sessionDisplayTitle(session.title) }}</strong>
+              <strong>{{ sessionDisplayTitle(session) }}</strong>
               <small>{{ statusLabel(session.status) }}</small>
             </span>
           </button>
@@ -48,6 +54,8 @@
           class="ai-run"
           :class="{ active: run.id === runId }"
           type="button"
+          data-testid="ai-assistant-run-row"
+          :aria-pressed="run.id === runId"
           @click="loadRunInspector(run.id)"
         >
           <span class="ai-run__status" :class="statusClass(run.status)" />
@@ -211,9 +219,9 @@
       </section>
 
       <section class="ai-inspector__section">
-        <header>审批</header>
+        <header>待审批</header>
         <article
-          v-for="approval in inspector?.approvalQueue || []"
+          v-for="approval in pendingApprovals"
           :key="approval.id"
           class="ai-approval"
           data-testid="ai-assistant-approval-row"
@@ -225,6 +233,17 @@
           <div v-if="approval.status === 'PENDING'" class="ai-approval__actions">
             <a-button size="small" type="primary" @click="approve(approval.id)">批准</a-button>
             <a-button size="small" danger @click="deny(approval.id)">拒绝</a-button>
+          </div>
+        </article>
+        <article
+          v-for="approval in decidedApprovalRecords"
+          :key="`history-${approval.id}`"
+          class="ai-approval ai-approval--history"
+          data-testid="ai-assistant-approval-history-row"
+        >
+          <div>
+            <strong>{{ toolLabel(approval.toolName) }}</strong>
+            <small>{{ riskLabel(approval.riskLevel) }} / {{ statusLabel(approval.status) }}</small>
           </div>
         </article>
       </section>
@@ -317,6 +336,9 @@ const eventStreamCollapsed = ref(false)
 const expandedEventIds = ref<Set<string>>(new Set())
 
 const timeline = computed(() => buildAiAssistantTimeline(events.value))
+const pendingApprovals = computed(() => inspector.value?.approvalQueue ?? [])
+const approvalRecords = computed(() => inspector.value?.approvalHistory ?? [])
+const decidedApprovalRecords = computed(() => approvalRecords.value.filter((approval) => approval.status !== 'PENDING'))
 const runStatusLabel = computed(() => (sending.value ? '执行中' : statusLabel(runStatus.value)))
 const elapsedLabel = computed(() => `${Math.max(0, Math.round((inspector.value?.usage.elapsedMs ?? 0) / 100) / 10)}s`)
 const statusTagColor = computed(() => {
@@ -340,7 +362,7 @@ async function loadSessions() {
 }
 
 async function createConversation() {
-  const session = await createAiAssistantSession({ title: 'Hify AI 助手' })
+  const session = await createAiAssistantSession()
   await loadSessions()
   await selectSession(session.id)
 }
@@ -348,7 +370,7 @@ async function createConversation() {
 async function selectSession(nextSessionId: number) {
   const selected = sessions.value.find((session) => session.id === nextSessionId)
   sessionId.value = nextSessionId
-  sessionTitle.value = sessionDisplayTitle(selected?.title)
+  sessionTitle.value = selected ? sessionDisplayTitle(selected) : 'Hify AI 助手'
   await loadSessionRuns(nextSessionId)
 }
 
@@ -452,8 +474,9 @@ function runTitle(run: AiAssistantRun) {
   return message.length > 42 ? `${message.slice(0, 39)}...` : message
 }
 
-function sessionDisplayTitle(title?: string) {
-  if (!title || title === 'AI Assistant') return 'Hify AI 助手'
+function sessionDisplayTitle(session: AiAssistantSession) {
+  const title = session.title?.trim()
+  if (!title || title === 'AI Assistant' || title === 'Hify AI 助手') return `会话 #${session.id}`
   return title
 }
 
@@ -484,7 +507,7 @@ function toolLabel(toolName: string) {
       customer_assistant_subagent_bridge: '客服助手子任务桥接',
       read_workspace_file: '读取工作区文件',
       write_workspace_file: '写入工作区文件',
-      invoke_skill: '调用技能',
+      invoke_skill: '技能意图',
     }[toolName] ?? toolName
   )
 }
@@ -542,6 +565,7 @@ function isEventExpanded(itemId: string) {
   padding: 1rem;
   background: var(--color-bg-page, #f8f9fc);
   color: var(--color-text-primary, #0f1117);
+  border: 0.0625rem solid var(--color-border-default, #e3e6ef);
   border-radius: var(--radius-lg, 0.5rem);
   overflow: hidden;
 }
@@ -551,9 +575,8 @@ function isEventExpanded(itemId: string) {
 .ai-console {
   min-width: 0;
   min-height: 0;
-  border: 0.0625rem solid var(--color-border-default, #e3e6ef);
   background: var(--color-bg-surface, #ffffff);
-  box-shadow: var(--shadow-xs, 0 0.0625rem 0.125rem rgba(15, 15, 30, 0.06));
+  box-shadow: none;
 }
 
 .ai-shell__side,
@@ -584,6 +607,18 @@ function isEventExpanded(itemId: string) {
   margin-bottom: 0.75rem;
 }
 
+.ai-shell :deep(.ant-btn),
+.ai-shell :deep(.ant-input),
+.ai-shell :deep(.ant-tag) {
+  border: 0;
+  box-shadow: none;
+}
+
+.ai-shell :deep(.ant-input:focus),
+.ai-shell :deep(.ant-input-focused) {
+  box-shadow: 0 0 0 0.125rem rgba(79, 70, 229, 0.16);
+}
+
 .ai-new-session,
 .ai-session__select,
 .ai-run {
@@ -591,7 +626,7 @@ function isEventExpanded(itemId: string) {
   gap: 0.5rem;
   color: inherit;
   text-align: left;
-  border: 0.0625rem solid var(--color-border-default, #e3e6ef);
+  border: 0;
   border-radius: var(--radius-md, 0.375rem);
 }
 
@@ -637,7 +672,6 @@ function isEventExpanded(itemId: string) {
 .ai-session {
   min-width: 0;
   gap: 0.25rem;
-  border: 0.0625rem solid var(--color-border-default, #e3e6ef);
   border-radius: var(--radius-md, 0.375rem);
   background: var(--color-bg-surface, #ffffff);
 }
@@ -657,7 +691,6 @@ function isEventExpanded(itemId: string) {
 
 .ai-session.active,
 .ai-run.active {
-  border-color: var(--color-primary-300, #a5b4fc);
   background: var(--color-bg-selected, #eef2ff);
 }
 
@@ -731,7 +764,6 @@ function isEventExpanded(itemId: string) {
   justify-content: space-between;
   gap: 1rem;
   padding: 0.875rem 1rem;
-  border-bottom: 0.0625rem solid var(--color-border-default, #e3e6ef);
 }
 
 .ai-console__actions {
@@ -768,7 +800,7 @@ function isEventExpanded(itemId: string) {
   padding: 0 0.875rem;
   color: var(--color-primary-600, #4f46e5);
   background: var(--color-bg-selected, #eef2ff);
-  border: 0.0625rem solid var(--color-primary-300, #a5b4fc);
+  border: 0;
   border-radius: var(--radius-md, 0.375rem);
   cursor: pointer;
 }
@@ -798,7 +830,6 @@ function isEventExpanded(itemId: string) {
 .ai-event__body {
   padding: 0.75rem;
   background: var(--color-bg-surface, #ffffff);
-  border: 0.0625rem solid var(--color-border-default, #e3e6ef);
   border-radius: var(--radius-lg, 0.5rem);
 }
 
@@ -829,7 +860,7 @@ function isEventExpanded(itemId: string) {
   overflow: auto;
   color: var(--color-text-secondary, #4b5268);
   background: var(--color-bg-page, #f8f9fc);
-  border: 0.0625rem solid var(--color-border-default, #e3e6ef);
+  border: 0;
   border-radius: var(--radius-md, 0.375rem);
   font-size: 0.75rem;
   line-height: 1.45;
@@ -843,18 +874,15 @@ function isEventExpanded(itemId: string) {
 }
 
 .tone-waiting .ai-event__body {
-  border-color: var(--color-warning-500, #f59e0b);
   background: var(--color-warning-50, #fffbeb);
 }
 
 .tone-danger .ai-event__body,
 .ai-inspector-row.danger {
-  border-color: var(--color-danger-500, #ef4444);
   background: var(--color-danger-50, #fef2f2);
 }
 
 .tone-success .ai-event__body {
-  border-color: var(--color-success-500, #10b981);
   background: var(--color-success-50, #ecfdf5);
 }
 
@@ -863,7 +891,6 @@ function isEventExpanded(itemId: string) {
   grid-template-columns: minmax(0, 1fr) 2.75rem;
   gap: 0.625rem;
   padding: 0.875rem 1rem;
-  border-top: 0.0625rem solid var(--color-border-default, #e3e6ef);
   background: var(--color-bg-surface, #ffffff);
 }
 
@@ -896,7 +923,7 @@ function isEventExpanded(itemId: string) {
   gap: 0.625rem;
   padding: 0.625rem;
   background: var(--color-bg-surface, #ffffff);
-  border: 0.0625rem solid var(--color-border-default, #e3e6ef);
+  border: 0;
   border-radius: var(--radius-md, 0.375rem);
 }
 
@@ -919,7 +946,7 @@ function isEventExpanded(itemId: string) {
   gap: 0.375rem 0.75rem;
   padding: 0.625rem;
   background: var(--color-bg-page, #f8f9fc);
-  border: 0.0625rem solid var(--color-border-default, #e3e6ef);
+  border: 0;
   border-radius: var(--radius-md, 0.375rem);
 }
 

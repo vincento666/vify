@@ -115,6 +115,7 @@ class AiAssistantLiveQwenApiContractTest(unittest.TestCase):
             )
             run_id = message.json()["data"]["runId"]
             events = client.get(f"/api/v1/ai-assistant/runs/{run_id}/events")
+            inspector = client.get(f"/api/v1/ai-assistant/runs/{run_id}/inspector")
 
         self.assertEqual(message.status_code, 200, message.text)
         self.assertTrue(message.json()["data"]["approvalRequired"])
@@ -126,7 +127,16 @@ class AiAssistantLiveQwenApiContractTest(unittest.TestCase):
             self.assertIn(title, titles)
         model_events = [event for event in event_list if event["type"] == "model.call_started"]
         self.assertEqual(model_events[0]["payload"]["model"], "qwen/qwen3.5-27b")
+        stream_events = [event for event in event_list if event["type"] == "model.stream_chunk"]
+        self.assertEqual(stream_events[0]["payload"]["streaming"], False)
+        self.assertEqual(stream_events[0]["payload"]["source"], "post_completion_split")
+        skill_events = [event for event in event_list if event["type"] == "model.skill_intent"]
+        self.assertEqual(skill_events[0]["payload"]["execution"], "intent_recorded")
         self.assertTrue(any(event["type"] == "approval.required" for event in event_list))
+        self.assertEqual(inspector.json()["data"]["usage"]["inputTokens"], 10)
+        self.assertEqual(inspector.json()["data"]["usage"]["outputTokens"], 5)
+        self.assertEqual(inspector.json()["data"]["usage"]["totalTokens"], 15)
+        self.assertFalse(inspector.json()["data"]["usage"]["estimated"])
 
     def _session_override(self) -> Generator[Session, None, None]:
         with self._factory() as session:

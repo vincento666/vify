@@ -48,7 +48,7 @@ try {
   assert(isLightRgb(shellColors.console), `Expected light console background, got ${shellColors.console}`)
 
   const initialSessionRows = await page.getByTestId('ai-assistant-session-row').count()
-  await page.getByRole('button', { name: /新建会话/ }).click()
+  await page.getByTestId('ai-assistant-new-session').click()
   await page.getByTestId('ai-assistant-session-row').first().waitFor({ state: 'visible', timeout: 10000 })
   const createdSessionRows = await page.getByTestId('ai-assistant-session-row').count()
   assert(createdSessionRows >= initialSessionRows, 'Expected a visible session after creating one')
@@ -59,6 +59,8 @@ try {
     state: 'visible',
     timeout: 10000,
   })
+  const firstRunId = await page.getByTestId('ai-assistant-run-row').first().getAttribute('aria-pressed')
+  assert(firstRunId === 'true', 'Expected the first completed run to be selected')
   await page.getByTestId('ai-assistant-tool-call-row').first().waitFor({ state: 'visible', timeout: 10000 })
   await page.getByTestId('ai-assistant-task-row').first().waitFor({ state: 'visible', timeout: 10000 })
   await page.getByTestId('ai-assistant-inspector-timeline').waitFor({ state: 'visible', timeout: 10000 })
@@ -78,6 +80,19 @@ try {
     timeout: 10000,
   })
   await page.getByTestId('ai-assistant-approval-row').first().waitFor({ state: 'visible', timeout: 10000 })
+  assert((await page.getByTestId('ai-assistant-run-row').count()) >= 2, 'Expected multiple run rows after two prompts')
+  await page.getByTestId('ai-assistant-run-row').nth(1).click()
+  await page.getByTestId('ai-assistant-tool-call-row').first().waitFor({ state: 'visible', timeout: 10000 })
+  await page.getByTestId('ai-assistant-run-row').first().click()
+  await page.getByTestId('ai-assistant-approval-row').first().waitFor({ state: 'visible', timeout: 10000 })
+  await page.getByTestId('ai-assistant-approval-row').first().getByRole('button', { name: '批准' }).click()
+  await page.getByTestId('ai-assistant-event-stream').getByText('运行完成', { exact: true }).first().waitFor({
+    state: 'visible',
+    timeout: 10000,
+  })
+  assert((await page.getByTestId('ai-assistant-approval-row').count()) === 0, 'Expected pending approvals to clear')
+  await page.getByTestId('ai-assistant-approval-history-row').first().waitFor({ state: 'visible', timeout: 10000 })
+  await page.getByTestId('ai-assistant-tool-call-row').first().waitFor({ state: 'visible', timeout: 10000 })
 
   const pageMetrics = await page.evaluate(() => ({
     overflowX: document.documentElement.scrollWidth - window.innerWidth,
