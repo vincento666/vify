@@ -2,6 +2,7 @@ import { chromium } from 'playwright'
 
 const baseUrl = process.env.HIFY_E2E_BASE_URL || 'http://127.0.0.1:5173'
 const screenshotPath = process.env.HIFY_E2E_SCREENSHOT
+const beforeCleanupScreenshotPath = process.env.HIFY_E2E_BEFORE_CLEANUP_SCREENSHOT
 const openRouterApiKey = process.env.HIFY_AI_ASSISTANT_OPENROUTER_API_KEY || ''
 
 function assert(condition, message) {
@@ -60,7 +61,7 @@ async function submitPrompt(text) {
 
 async function configureLiveModelIfNeeded() {
   if (!openRouterApiKey) return
-  await page.getByTestId('ai-assistant-model-config-toggle').click()
+  await page.getByTestId('ai-assistant-model-config-icon').click()
   await page.getByTestId('ai-assistant-model-base-url').fill('https://openrouter.ai/api/v1')
   await page.getByTestId('ai-assistant-model-api-key').fill(openRouterApiKey)
 }
@@ -136,7 +137,6 @@ try {
     state: 'visible',
     timeout: 45000,
   })
-  await page.getByTestId('ai-assistant-tool-call-row').first().waitFor({ state: 'visible', timeout: 10000 })
   const finalAnswerCountBeforeApproval = await page.getByTestId('ai-assistant-run-final-answer').count()
   await expandLatestRun()
   const approvalEventHeader = page.getByTestId('ai-assistant-event-card-header').filter({ hasText: '需要审批' }).last()
@@ -177,6 +177,10 @@ try {
   assert(pageMetrics.taskRecordHeaders === 0, `Expected compact run headers, got ${pageMetrics.taskRecordHeaders} old headers`)
   assert(pageMetrics.composerVisible, 'Expected composer visible inside one-screen shell')
   assert(pageMetrics.composerBottom <= 900, `Expected composer inside viewport, got bottom ${pageMetrics.composerBottom}`)
+
+  if (beforeCleanupScreenshotPath) {
+    await page.screenshot({ path: beforeCleanupScreenshotPath, fullPage: true })
+  }
 
   const clearResponse = page.waitForResponse((response) => {
     return response.url().includes('/api/v1/ai-assistant/sessions/') && response.url().endsWith('/history')

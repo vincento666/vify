@@ -184,7 +184,7 @@
                       </dd>
                     </div>
                   </dl>
-                  <div v-if="shouldShowApprovalActions(item)" class="ai-event__actions">
+                  <div v-if="shouldShowApprovalActions(item, thread)" class="ai-event__actions">
                     <a-button size="small" type="primary" @click="approveTimelineItem(item)">批准</a-button>
                     <a-button size="small" danger @click="denyTimelineItem(item)">拒绝</a-button>
                   </div>
@@ -697,6 +697,7 @@ async function submit() {
   }
   if (!sessionId.value) return
   sending.value = true
+  runtimeConfigExpanded.value = false
   try {
     const result = await startAiAssistantMessage(
       sessionId.value,
@@ -1069,8 +1070,18 @@ function formatEventDetailRows(item: AiAssistantTimelineItem) {
   return item.details
 }
 
-function shouldShowApprovalActions(item: AiAssistantTimelineItem) {
-  return item.kind === 'approval' && item.approvalId && item.tone === 'waiting'
+function shouldShowApprovalActions(item: AiAssistantTimelineItem, thread: AiAssistantRunThread) {
+  if (item.kind !== 'approval' || !item.approvalId || item.tone !== 'waiting') return false
+  const status = approvalStatusForTimelineItem(item, thread)
+  return !status || isPendingApprovalStatus(status)
+}
+
+function approvalStatusForTimelineItem(item: AiAssistantTimelineItem, thread: AiAssistantRunThread) {
+  const records = [
+    ...(thread.inspector?.approvalQueue ?? []),
+    ...(thread.inspector?.approvalHistory ?? []),
+  ]
+  return records.find((approval) => approval.id === item.approvalId)?.status
 }
 
 function isPendingApprovalStatus(status: string) {

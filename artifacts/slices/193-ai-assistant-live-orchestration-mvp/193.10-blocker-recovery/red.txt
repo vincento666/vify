@@ -1,0 +1,17 @@
+RED evidence captured on 2026-06-18:
+
+Command:
+rtk uv run pytest tests/unit/ai_assistant/test_qwen_live_planner.py tests/unit/chat/test_llm_request_client.py
+
+Expected failures before implementation:
+- test_fake_live_planner_maps_qwen_tool_calls_to_harness_plan:
+  thought_summary equaled final_answer, proving visible model output was duplicated
+  into the thought summary.
+- test_openrouter_reasoning_becomes_thought_summary_without_visible_output_duplication:
+  reasoning text was ignored and the planner emitted the fallback
+  "已完成模型规划。".
+- test_stream_preserves_openrouter_reasoning_outside_visible_content:
+  streamed OpenRouter reasoning deltas were absent from the assembled response.
+
+Observed result:
+3 failed, 3 passed.

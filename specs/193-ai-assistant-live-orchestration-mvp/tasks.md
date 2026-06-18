@@ -76,3 +76,26 @@
       content, and expanded tool details with `调用详情` / `输入` / `输出`.
 - [x] Save browser UAT screenshots and JSON evidence under
       `artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.5/`.
+
+## 193.10 Blocker Recovery And Real Qwen Revalidation
+
+- [x] RED: prove OpenRouter reasoning-only responses were being dropped or
+      duplicated into visible model output.
+- [x] RED: prove OpenRouter SSE `delta.reasoning` was not preserved by the
+      OpenAI-compatible stream client.
+- [x] Fix live planner text separation: `reasoning` becomes thought summary,
+      while `content` remains the only visible model output stream.
+- [x] Fix OpenRouter stream assembly to preserve reasoning outside visible
+      `content` deltas.
+- [x] Fix the model-config panel so it closes on send and cannot block approval
+      actions.
+- [x] Hide approval action buttons once the matching approval is no longer
+      pending.
+- [x] Resolve MySQL8 gate blocker by running tests with
+      `HIFY_MYSQL8_TEST_ADMIN_DATABASE_URL` against the local MySQL8 container,
+      without introducing SQLite or PostgreSQL fallback.
+- [x] Revalidate real OpenRouter `qwen/qwen3.5-27b` browser UAT with tool
+      calling, write approval, approval execution, stream output, usage metrics,
+      one-screen layout, and cleanup.
+- [x] Save evidence under
+      `artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.10-blocker-recovery/`.

@@ -137,13 +137,14 @@ class QwenLivePlanner:
             streaming = False
             stream_source = "post_completion_split"
         message = _first_message(response)
-        content = str(message.get("content") or "").strip()
+        content = _message_content(message)
+        reasoning = _message_reasoning(message)
         tool_calls = _tool_calls(message)
-        summary = content or ("已根据请求规划工具调用。" if tool_calls else "已完成模型规划。")
+        summary = _thought_summary(content=content, reasoning=reasoning, has_tool_calls=bool(tool_calls))
         return LivePlannerDecision(
-            final_answer=content or "已完成模型规划。",
+            final_answer=content,
             thought_summary=summary,
-            stream_chunks=streamed_chunks if streamed_chunks else _stream_chunks(content or summary),
+            stream_chunks=streamed_chunks if streamed_chunks else (_stream_chunks(content) if content else []),
             tool_calls=tool_calls,
             usage=_usage(response),
             model=self._config.model,
@@ -204,6 +205,59 @@ def _first_message(response: dict[str, Any]) -> dict[str, Any]:
         return {}
     message = first.get("message")
     return message if isinstance(message, dict) else {}
+
+
+def _message_content(message: dict[str, Any]) -> str:
+    return _message_text(message.get("content"))
+
+
+def _message_reasoning(message: dict[str, Any]) -> str:
+    parts: list[str] = []
+    _append_unique_text(parts, _message_text(message.get("reasoning")))
+    details = message.get("reasoning_details")
+    if isinstance(details, list):
+        for detail in details:
+            if isinstance(detail, dict):
+                _append_unique_text(parts, _message_text(detail.get("text")))
+                _append_unique_text(parts, _message_text(detail.get("content")))
+            else:
+                _append_unique_text(parts, _message_text(detail))
+    return "\n".join(parts).strip()
+
+
+def _message_text(raw: Any) -> str:
+    if isinstance(raw, str):
+        return raw.strip()
+    if isinstance(raw, list):
+        parts: list[str] = []
+        for item in raw:
+            if isinstance(item, dict):
+                text = item.get("text") or item.get("content")
+                if isinstance(text, str):
+                    parts.append(text)
+            elif isinstance(item, str):
+                parts.append(item)
+        return "".join(parts).strip()
+    return ""
+
+
+def _append_unique_text(parts: list[str], text: str) -> None:
+    if not text:
+        return
+    existing = "\n".join(parts)
+    if text in existing:
+        return
+    parts.append(text)
+
+
+def _thought_summary(*, content: str, reasoning: str, has_tool_calls: bool) -> str:
+    if reasoning:
+        return reasoning
+    if content:
+        return "模型已返回可展示输出。"
+    if has_tool_calls:
+        return "已根据请求规划工具调用。"
+    return "模型未返回可展示正文。"
 
 
 def _tool_calls(message: dict[str, Any]) -> list[dict[str, Any]]:

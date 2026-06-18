@@ -163,6 +163,7 @@ class ProviderBackedOpenAIChatClient:
         on_delta: Callable[[str], None] | None,
     ) -> dict[str, Any]:
         content_parts: list[str] = []
+        reasoning_parts: list[str] = []
         tool_calls: dict[int, dict[str, Any]] = {}
         usage: dict[str, Any] = {}
         finish_reason = "stop"
@@ -192,11 +193,18 @@ class ProviderBackedOpenAIChatClient:
                             content_parts.append(content)
                             if on_delta:
                                 on_delta(content)
+                        reasoning = _delta_reasoning_text(delta)
+                        if reasoning:
+                            reasoning_parts.append(reasoning)
                         _accumulate_tool_call_deltas(tool_calls, delta.get("tool_calls"))
         message: dict[str, Any] = {
             "role": "assistant",
             "content": "".join(content_parts) or None,
         }
+        if reasoning_parts:
+            reasoning = "".join(reasoning_parts)
+            message["reasoning"] = reasoning
+            message["reasoning_details"] = [{"type": "reasoning.text", "text": reasoning}]
         if tool_calls:
             message["tool_calls"] = [_complete_tool_call(tool_calls[index]) for index in sorted(tool_calls)]
         return {
@@ -314,6 +322,22 @@ def _stream_json_event(line: str) -> dict[str, Any] | None:
         return None
     parsed = json.loads(data)
     return parsed if isinstance(parsed, dict) else None
+
+
+def _delta_reasoning_text(delta: dict[str, Any]) -> str:
+    parts: list[str] = []
+    reasoning = delta.get("reasoning")
+    if isinstance(reasoning, str):
+        parts.append(reasoning)
+    details = delta.get("reasoning_details")
+    if isinstance(details, list):
+        for detail in details:
+            if not isinstance(detail, dict):
+                continue
+            text = detail.get("text") or detail.get("content")
+            if isinstance(text, str):
+                parts.append(text)
+    return "".join(parts)
 
 
 def _accumulate_tool_call_deltas(tool_calls: dict[int, dict[str, Any]], deltas: Any) -> None:

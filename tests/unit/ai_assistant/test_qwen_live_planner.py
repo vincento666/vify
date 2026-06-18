@@ -73,7 +73,9 @@ class AiAssistantQwenLivePlannerTest(unittest.TestCase):
             "invoke_skill",
             "write_workspace_file",
         ])
-        self.assertIn("我会先读取文件", decision.thought_summary)
+        self.assertEqual(decision.thought_summary, "模型已返回可展示输出。")
+        self.assertIn("我会先读取文件", decision.final_answer)
+        self.assertNotEqual(decision.thought_summary, decision.final_answer)
         self.assertGreaterEqual(len(decision.stream_chunks), 1)
         self.assertEqual(decision.usage["total_tokens"], 20)
         tool_names = [tool["function"]["name"] for tool in fake_client.captured_payload["tools"]]
@@ -81,6 +83,44 @@ class AiAssistantQwenLivePlannerTest(unittest.TestCase):
         self.assertIn("write_workspace_file", tool_names)
         self.assertIn("invoke_skill", tool_names)
         self.assertIn("search_knowledge_base", tool_names)
+
+    def test_openrouter_reasoning_becomes_thought_summary_without_visible_output_duplication(self) -> None:
+        from app.modules.ai_assistant.domain.live_model import LivePlannerConfig, QwenLivePlanner
+        from app.modules.ai_assistant.domain.tools import ToolRegistry
+
+        fake_client = FakeOpenAIChatClient(
+            response_payload={
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": None,
+                            "reasoning": "需要先判断用户是否要求工具调用，再生成计划。",
+                            "reasoning_details": [
+                                {"type": "reasoning.text", "text": "补充思考：不应作为最终回答展示。"}
+                            ],
+                        },
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {"prompt_tokens": 12, "completion_tokens": 8, "total_tokens": 20},
+            }
+        )
+        planner = QwenLivePlanner(
+            LivePlannerConfig(
+                base_url="https://openrouter.ai/api/v1",
+                model="qwen/qwen3.5-27b",
+                api_key_ref="env:OPENROUTER_API_KEY",
+            ),
+            client=fake_client,
+        )
+
+        decision = planner.plan("请先思考再回答", ToolRegistry.with_builtin_tools())
+
+        self.assertIn("需要先判断用户是否要求工具调用", decision.thought_summary)
+        self.assertIn("补充思考", decision.thought_summary)
+        self.assertEqual(decision.final_answer, "")
+        self.assertEqual(decision.stream_chunks, [])
 
 
 if __name__ == "__main__":

@@ -213,12 +213,12 @@ describe('AI Assistant shell UI contract', () => {
     expect(content).toContain('data-testid="ai-assistant-execution-step"')
     expect(content).toContain('v-for="event in inspectorPlanningStepsForView"')
     expect(content).toContain('taskMetaLabel(task)')
-    expect(content).toContain('shouldShowApprovalActions(item)')
+    expect(content).toContain('shouldShowApprovalActions(item, thread)')
+    expect(content).toContain('approvalStatusForTimelineItem')
     expect(content).toContain('isPendingApprovalStatus(approval.status)')
     expect(content).not.toContain('<header>时间线</header>')
     expect(content).not.toContain('v-for="event in inspector?.eventTimeline || []"')
     expect(content).not.toContain('item.kind === \'approval\' && item.approvalId"')
-    expect(content).not.toContain("approval.status === 'PENDING'")
   })
 
   it('keeps temporary model configuration across a browser reload without using long term storage', () => {
@@ -256,6 +256,7 @@ describe('AI Assistant shell UI contract', () => {
     expect(content).not.toContain('class="ai-runtime__toggle"')
     expect(content).not.toContain('class="ai-runtime__summary"')
     expect(content).toContain("buildAiAssistantMessagePayload(message, runtimeConfig.value, `ui-${Date.now()}`, permissionMode.value)")
+    expect(content).toContain('runtimeConfigExpanded.value = false')
   })
 
   it('uses Chinese visible copy for the whole AI Assistant feature', () => {
