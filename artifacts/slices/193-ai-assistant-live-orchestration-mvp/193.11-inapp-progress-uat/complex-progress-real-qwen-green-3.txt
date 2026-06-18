@@ -1,0 +1,22 @@
+{
+  "sampleCount": 74,
+  "sawTaskRows": true,
+  "sawRunningTask": true,
+  "sawAnimatedRunningTask": true,
+  "sawStepSpinner": true,
+  "finalHeader": "等待审批40 条事件 / 3 次工具",
+  "finalSteps": 14,
+  "finalToolRows": 3,
+  "finalAnswers": 0,
+  "pageOverflowY": 0
+}
+file:///Users/vincento/work/develop/hify/frontend/e2e/ai-assistant-complex-progress-uat.mjs:11
+  if (!condition) throw new Error(message)
+                        ^
+
+Error: expected final assistant answer
+    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/ai-assistant-complex-progress-uat.mjs:11:25)
+    at main (file:///Users/vincento/work/develop/hify/frontend/e2e/ai-assistant-complex-progress-uat.mjs:170:5)
+    at async file:///Users/vincento/work/develop/hify/frontend/e2e/ai-assistant-complex-progress-uat.mjs:177:1
+
+Node.js v23.11.0

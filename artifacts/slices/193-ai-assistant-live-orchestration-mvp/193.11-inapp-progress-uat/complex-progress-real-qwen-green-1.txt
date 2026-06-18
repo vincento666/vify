@@ -1,0 +1,22 @@
+{
+  "sampleCount": 32,
+  "sawTaskRows": true,
+  "sawRunningTask": true,
+  "sawAnimatedRunningTask": true,
+  "sawStepSpinner": false,
+  "finalHeader": "已处理44 条事件 / 4 次工具",
+  "finalSteps": 14,
+  "finalToolRows": 4,
+  "finalAnswers": 1,
+  "pageOverflowY": 0
+}
+file:///Users/vincento/work/develop/hify/frontend/e2e/ai-assistant-complex-progress-uat.mjs:11
+  if (!condition) throw new Error(message)
+                        ^
+
+Error: expected running execution step spinner
+    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/ai-assistant-complex-progress-uat.mjs:11:25)
+    at main (file:///Users/vincento/work/develop/hify/frontend/e2e/ai-assistant-complex-progress-uat.mjs:160:5)
+    at async file:///Users/vincento/work/develop/hify/frontend/e2e/ai-assistant-complex-progress-uat.mjs:168:1
+
+Node.js v23.11.0

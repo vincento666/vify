@@ -1,0 +1,12 @@
+{
+  "sampleCount": 36,
+  "sawTaskRows": true,
+  "sawRunningTask": true,
+  "sawAnimatedRunningTask": true,
+  "sawStepSpinner": true,
+  "finalHeader": "已处理44 条事件 / 4 次工具",
+  "finalSteps": 14,
+  "finalToolRows": 4,
+  "finalAnswers": 1,
+  "pageOverflowY": 0
+}

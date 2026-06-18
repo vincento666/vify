@@ -1,0 +1,22 @@
+193.11 RED evidence
+
+1. Focused UI contract red test:
+   Command: rtk npm --prefix frontend run test:unit -- src/views/aiAssistant/aiAssistantShell.test.ts
+   Expected failure: missing isCurrentInspectorStep(event) and running run-state guard for inspector execution steps.
+
+2. Real qwen browser UAT red run:
+   Command: HIFY_AI_ASSISTANT_OPENROUTER_API_KEY=... rtk node frontend/e2e/ai-assistant-complex-progress-uat.mjs
+   Evidence file: complex-progress-real-qwen-green-1.txt
+   Observed summary:
+   - sawTaskRows: true
+   - sawRunningTask: true
+   - sawAnimatedRunningTask: true
+   - sawStepSpinner: false
+   Failure: expected running execution step spinner.
+
+3. Approval wait red run:
+   Evidence files: complex-progress-real-qwen-green-2.txt, complex-progress-real-qwen-green-3.txt
+   Observed summary:
+   - finalHeader: 等待审批
+   - finalAnswers: 0
+   Failure: fixed polling window missed the later qwen approval point, so the UAT script never clicked approve.

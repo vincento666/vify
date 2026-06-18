@@ -99,3 +99,22 @@
       one-screen layout, and cleanup.
 - [x] Save evidence under
       `artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.10-blocker-recovery/`.
+
+## 193.11 Complex Progress UAT And In-App Browser Bridge Check
+
+- [x] RED: prove the right-side task row could enter `RUNNING` without a visible
+      animation during complex live execution.
+- [x] RED: prove the right-side execution-step list could miss a running spinner
+      while qwen live planning was still active.
+- [x] Add a complex browser UAT script covering real qwen3.5-27b streaming,
+      workspace file read, knowledge-base search, skill intent, write approval,
+      approval execution, final answer, and one-screen layout.
+- [x] Fix the task/progress UI so only the active run's current planning step
+      spins; historical completed steps resolve back to done icons.
+- [x] Add stable approval button test ids and wait for the real approve API
+      response in UAT.
+- [x] Revalidate with frontend unit, remScaleClosure, full frontend unit, build,
+      AI Assistant backend unit/contract with MySQL8 admin DSN, and real qwen
+      browser UAT.
+- [x] Record remaining risk: Codex in-app browser bridge still times out while
+      attaching a webview; Playwright Chromium UAT against the same URL is green.

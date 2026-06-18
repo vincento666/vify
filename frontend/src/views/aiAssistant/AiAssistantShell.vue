@@ -185,8 +185,22 @@
                     </div>
                   </dl>
                   <div v-if="shouldShowApprovalActions(item, thread)" class="ai-event__actions">
-                    <a-button size="small" type="primary" @click="approveTimelineItem(item)">批准</a-button>
-                    <a-button size="small" danger @click="denyTimelineItem(item)">拒绝</a-button>
+                    <a-button
+                      size="small"
+                      type="primary"
+                      data-testid="ai-assistant-approval-approve"
+                      @click="approveTimelineItem(item)"
+                    >
+                      批准
+                    </a-button>
+                    <a-button
+                      size="small"
+                      danger
+                      data-testid="ai-assistant-approval-deny"
+                      @click="denyTimelineItem(item)"
+                    >
+                      拒绝
+                    </a-button>
                   </div>
                 </div>
               </div>
@@ -384,8 +398,22 @@
             <small>{{ riskLabel(approval.riskLevel) }} / {{ statusLabel(approval.status) }}</small>
           </div>
           <div v-if="isPendingApprovalStatus(approval.status)" class="ai-approval__actions">
-            <a-button size="small" type="primary" @click="approve(approval.id)">批准</a-button>
-            <a-button size="small" danger @click="deny(approval.id)">拒绝</a-button>
+            <a-button
+              size="small"
+              type="primary"
+              data-testid="ai-assistant-approval-approve"
+              @click="approve(approval.id)"
+            >
+              批准
+            </a-button>
+            <a-button
+              size="small"
+              danger
+              data-testid="ai-assistant-approval-deny"
+              @click="deny(approval.id)"
+            >
+              拒绝
+            </a-button>
           </div>
         </article>
         <article
@@ -921,8 +949,15 @@ function isModelPlanningInspectorEvent(event: AiAssistantInspectorTimelineRow) {
   ].includes(event.type)
 }
 
+function isCurrentInspectorStep(event: AiAssistantInspectorTimelineRow) {
+  const steps = inspectorPlanningStepsForView.value
+  return event.id === steps[steps.length - 1]?.id
+}
+
 function isInspectorEventRunning(event: AiAssistantInspectorTimelineRow) {
-  return event.status === 'RUNNING' || event.status === 'PENDING' || event.status === 'STREAMING'
+  const runIsActive = inspector.value?.run.status === 'RUNNING'
+  if (!runIsActive) return false
+  return event.status === 'RUNNING' || event.status === 'PENDING' || event.status === 'STREAMING' || isCurrentInspectorStep(event)
 }
 
 function isInspectorEventDone(event: AiAssistantInspectorTimelineRow) {
@@ -1314,6 +1349,10 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
 
 .status-running {
   background: var(--color-info-500, #3b82f6);
+}
+
+.ai-task__dot.status-running {
+  animation: ai-pulse 1.2s ease-in-out infinite;
 }
 
 .ai-console {
