@@ -29,7 +29,7 @@ export interface AiAssistantTimelineItem {
 }
 
 export interface AiAssistantTimelineDetail {
-  label: '调用详情' | '输入' | '输出' | '内容'
+  label: '调用详情' | '输入' | '输出' | '内容' | '结果'
   value: string
   monospace?: boolean
   testId?: string
@@ -51,7 +51,11 @@ interface ToolEventGroup {
 export function buildAiAssistantTimeline(events: AiAssistantEvent[]): AiAssistantTimelineItem[] {
   const sortedEvents = events.slice().sort((left, right) => left.sequence - right.sequence)
   const toolGroups = collectToolGroups(sortedEvents)
-  const toolGroupByFirstSequence = new Map(toolGroups.map((group) => [group.firstSequence, group]))
+  const toolGroupByDisplaySequence = new Map(
+    toolGroups
+      .map((group) => [toolGroupDisplaySequence(group), group] as const)
+      .filter((entry): entry is readonly [number, ToolEventGroup] => typeof entry[0] === 'number'),
+  )
   const toolEventSequences = new Set(toolGroups.flatMap((group) => group.events.map((event) => event.sequence)))
   const timeline: AiAssistantTimelineItem[] = []
   let modelStreamGroup: AiAssistantEvent[] = []
@@ -68,7 +72,7 @@ export function buildAiAssistantTimeline(events: AiAssistantEvent[]): AiAssistan
     modelStreamGroup = []
 
     if (toolEventSequences.has(event.sequence)) {
-      const group = toolGroupByFirstSequence.get(event.sequence)
+      const group = toolGroupByDisplaySequence.get(event.sequence)
       if (group) timeline.push(toolGroupToTimelineItem(group))
       continue
     }
@@ -80,7 +84,7 @@ export function buildAiAssistantTimeline(events: AiAssistantEvent[]): AiAssistan
       continue
     }
 
-    timeline.push(eventToTimelineItem(event))
+    if (shouldRenderEvent(event)) timeline.push(eventToTimelineItem(event))
   }
   flushModelStreamGroup(timeline, modelStreamGroup, lastModelOutput)
   return timeline
@@ -177,7 +181,8 @@ function eventTone(event: AiAssistantEvent): AiAssistantTimelineItem['tone'] {
 }
 
 function timelineTitle(event: AiAssistantEvent, kind: AiAssistantTimelineKind) {
-  if (kind === 'model-thought') return '思考'
+  if (kind === 'model-thought') return '思考过程'
+  if (kind === 'approval') return '审批通过'
   return event.visibleTitle || event.type
 }
 
@@ -188,6 +193,9 @@ function eventDetails(
 ): AiAssistantTimelineDetail[] {
   if (kind === 'model-output' || kind === 'model-thought') {
     return summary ? [{ label: '内容', value: summary, monospace: true }] : []
+  }
+  if (kind === 'approval') {
+    return summary ? [{ label: '内容', value: summary }] : []
   }
   const rows: AiAssistantTimelineDetail[] = []
   if (summary) rows.push({ label: '调用详情', value: summary })
@@ -241,15 +249,15 @@ function mergeToolEvent(group: ToolEventGroup, event: AiAssistantEvent) {
 }
 
 function toolGroupToTimelineItem(group: ToolEventGroup): AiAssistantTimelineItem {
-  const first = group.events[0]
-  const last = group.events[group.events.length - 1]
+  const resultEvent = group.events.find((event) => event.type === 'tool.call_output') ?? group.events[group.events.length - 1]
+  const result = summarizeToolOutput(group.toolName, group.output)
   return {
     id: group.id,
-    eventId: last.id,
-    sequence: group.firstSequence,
+    eventId: resultEvent.id,
+    sequence: resultEvent.sequence,
     kind: 'tool',
     tone: toolGroupTone(group),
-    title: toolLabel(group.toolName),
+    title: toolGroupTitle(group.toolName),
     summary: '',
     payloadPreview: compactPayload({
       toolName: group.toolName,
@@ -259,25 +267,22 @@ function toolGroupToTimelineItem(group: ToolEventGroup): AiAssistantTimelineItem
       fromSequence: group.firstSequence,
       toSequence: group.lastSequence,
     }),
-    details: [
-      {
-        label: '调用详情',
-        value: `${toolLabel(group.toolName)}${group.status ? ` / ${statusLabel(group.status)}` : ''}`,
-      },
-      {
-        label: '输入',
-        value: group.input === undefined ? prettyPayload(first.payload) : prettyPayload(group.input),
-        monospace: true,
-        testId: 'ai-assistant-tool-detail-input',
-      },
-      {
-        label: '输出',
-        value: group.output === undefined ? '等待工具输出' : prettyPayload(group.output),
-        monospace: true,
-        testId: 'ai-assistant-tool-detail-output',
-      },
-    ],
+    details: result ? [{ label: '结果', value: result }] : [],
   }
+}
+
+function toolGroupDisplaySequence(group: ToolEventGroup) {
+  return group.events.find((event) => event.type === 'tool.call_output')?.sequence
+}
+
+function toolGroupTitle(toolName: string) {
+  return toolName === 'run_shell' ? '命令执行' : '工具调用'
+}
+
+function shouldRenderEvent(event: AiAssistantEvent) {
+  if (event.type === 'model.thought_summary') return true
+  if (event.type === 'approval.approved') return true
+  return false
 }
 
 function toolGroupTone(group: ToolEventGroup): AiAssistantTimelineItem['tone'] {
@@ -291,6 +296,46 @@ function toolEventKey(event: AiAssistantEvent) {
   if (scheduler) return `${payloadString(event, 'toolName')}:${JSON.stringify(scheduler)}`
   if (event.toolCallId) return `tool-call:${event.toolCallId}`
   return payloadString(event, 'toolName') || `tool-sequence:${event.sequence}`
+}
+
+function summarizeToolOutput(toolName: string, output: unknown) {
+  if (output === undefined || output === null) return ''
+  if (typeof output === 'string') return output
+  if (!isRecord(output)) return String(output)
+  if (toolName === 'read_workspace_file') return stringValue(output.content) || stringValue(output.text) || stringValue(output.echo)
+  if (toolName === 'write_workspace_file') {
+    const path = stringValue(output.path)
+    const bytes = typeof output.bytes === 'number' ? output.bytes : undefined
+    if (path && bytes !== undefined) return `已写入 ${path}（${bytes} bytes）`
+    if (path) return `已写入 ${path}`
+  }
+  if (toolName === 'invoke_skill') {
+    const skillName = stringValue(output.skillName)
+    const instruction = stringValue(output.instruction)
+    return [`已记录技能 ${skillName}`, instruction].filter(Boolean).join('：')
+  }
+  if (toolName === 'search_knowledge_base') {
+    const query = stringValue(output.query)
+    const hits = Array.isArray(output.hits) ? output.hits.length : 0
+    return `知识库检索：${query || '未命名查询'}，命中 ${hits} 条`
+  }
+  return (
+    stringValue(output.content) ||
+    stringValue(output.text) ||
+    stringValue(output.echo) ||
+    stringValue(output.stdout) ||
+    stringValue(output.stderr) ||
+    stringValue(output.message) ||
+    prettyPayload(output)
+  )
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function stringValue(value: unknown) {
+  return typeof value === 'string' ? value.trim() : ''
 }
 
 function payloadString(event: AiAssistantEvent, key: string) {
@@ -366,32 +411,4 @@ function prettyPayload(payload: unknown) {
   if (payload === undefined || payload === null) return ''
   if (typeof payload === 'string') return payload
   return JSON.stringify(payload, null, 2)
-}
-
-function toolLabel(toolName: string) {
-  return (
-    {
-      echo_context: '上下文回显',
-      update_customer_profile: '客户资料变更',
-      run_shell: '终端',
-      customer_assistant_subagent_bridge: '客服助手子任务桥接',
-      read_workspace_file: '读取工作区文件',
-      write_workspace_file: '写入工作区文件',
-      invoke_skill: '技能调用',
-      search_knowledge_base: '知识库检索',
-    }[toolName] ?? toolName
-  )
-}
-
-function statusLabel(status: string) {
-  return (
-    {
-      OK: '已完成',
-      COMPLETED: '已完成',
-      RUNNING: '执行中',
-      FAILED: '失败',
-      PENDING: '待处理',
-      WAITING_APPROVAL: '等待审批',
-    }[status] ?? status
-  )
 }

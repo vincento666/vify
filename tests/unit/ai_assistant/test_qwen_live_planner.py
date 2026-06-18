@@ -84,6 +84,48 @@ class AiAssistantQwenLivePlannerTest(unittest.TestCase):
         self.assertIn("invoke_skill", tool_names)
         self.assertIn("search_knowledge_base", tool_names)
 
+    def test_system_prompt_guides_colloquial_tool_skill_and_file_orchestration(self) -> None:
+        from app.modules.ai_assistant.domain.live_model import LivePlannerConfig, QwenLivePlanner
+        from app.modules.ai_assistant.domain.tools import ToolRegistry
+
+        fake_client = FakeOpenAIChatClient(
+            response_payload={
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": "我会自动编排读写文件、知识库和技能调用。",
+                            "tool_calls": [],
+                        },
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+            }
+        )
+        planner = QwenLivePlanner(
+            LivePlannerConfig(
+                base_url="https://openrouter.ai/api/v1",
+                model="qwen/qwen3.5-27b",
+                api_key_ref="env:OPENROUTER_API_KEY",
+            ),
+            client=fake_client,
+        )
+
+        planner.plan("帮我看看 AGENTS.md，查一下退票规则，按 TDD 整理后创建 tmp/uat.md", ToolRegistry.with_builtin_tools())
+
+        system_message = fake_client.captured_payload["messages"][0]["content"]
+        self.assertIn("口语化", system_message)
+        self.assertIn("自动识别", system_message)
+        self.assertIn("read_workspace_file", system_message)
+        self.assertIn("write_workspace_file", system_message)
+        self.assertIn("search_knowledge_base", system_message)
+        self.assertIn("invoke_skill", system_message)
+        self.assertIn("创建/写入/保存文件", system_message)
+        self.assertIn("查看/读取/打开文件", system_message)
+        self.assertIn("tdd", system_message)
+        self.assertIn("不要要求用户显式写出工具名", system_message)
+
     def test_openrouter_reasoning_becomes_thought_summary_without_visible_output_duplication(self) -> None:
         from app.modules.ai_assistant.domain.live_model import LivePlannerConfig, QwenLivePlanner
         from app.modules.ai_assistant.domain.tools import ToolRegistry

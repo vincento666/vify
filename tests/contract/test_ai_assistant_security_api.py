@@ -154,6 +154,47 @@ class AiAssistantSecurityApiContractTest(unittest.TestCase):
         self.assertIn("tool.call_completed", [event["type"] for event in events])
         self.assertIn("run.completed", [event["type"] for event in events])
 
+    def test_approved_write_continues_pending_readback_tool_call(self) -> None:
+        with TestClient(app) as client:
+            session_id = client.post("/api/v1/ai-assistant/sessions", json={"title": "Security"}).json()["data"]["id"]
+            message = client.post(
+                f"/api/v1/ai-assistant/sessions/{session_id}/messages",
+                json={
+                    "message": "写入后读取确认",
+                    "idempotencyKey": "security-approve-readback",
+                    "approvalMode": "ask_each_time",
+                    "toolCalls": [
+                        {
+                            "toolName": "write_workspace_file",
+                            "toolInput": {"path": "approved-readback.txt", "content": "approved readback content"},
+                        },
+                        {"toolName": "read_workspace_file", "toolInput": {"path": "approved-readback.txt"}},
+                    ],
+                },
+            )
+            approval_id = client.get("/api/v1/ai-assistant/approvals").json()["data"]["list"][0]["id"]
+            approved = client.post(
+                f"/api/v1/ai-assistant/approvals/{approval_id}/approve",
+                json={"actorId": "operator-2"},
+            )
+            run_id = message.json()["data"]["runId"]
+            run = client.get(f"/api/v1/ai-assistant/runs/{run_id}").json()["data"]
+            inspector = client.get(f"/api/v1/ai-assistant/runs/{run_id}/inspector").json()["data"]
+            events = client.get(f"/api/v1/ai-assistant/runs/{run_id}/events").json()["data"]["list"]
+
+        self.assertEqual(approved.json()["data"]["status"], "APPROVED")
+        self.assertEqual(run["status"], "COMPLETED")
+        self.assertEqual(
+            [tool["toolName"] for tool in run["result"]["toolCalls"]],
+            ["write_workspace_file", "read_workspace_file"],
+        )
+        self.assertEqual(
+            [tool["toolName"] for tool in inspector["toolCalls"]],
+            ["write_workspace_file", "read_workspace_file"],
+        )
+        self.assertIn("approved readback content", run["result"]["toolCalls"][1]["output"]["content"])
+        self.assertIn("run.completed", [event["type"] for event in events])
+
     def test_unsafe_shell_command_is_blocked_by_sandbox_policy(self) -> None:
         with TestClient(app) as client:
             session_id = client.post("/api/v1/ai-assistant/sessions", json={"title": "Security"}).json()["data"]["id"]

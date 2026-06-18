@@ -175,3 +175,27 @@
       in-app browser UAT.
 - [x] Save evidence under
       `artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.14-duration-ms-truthfulness/`.
+
+## 193.15 Agent Echo Polish And Orchestration Hardness
+
+- [x] RED: frontend shell contract fails until completion summaries become plain
+      assistant text, user messages show hover copy/time controls, compact
+      chevrons sit after task/event title text, and event `#` sequence markers
+      are removed.
+- [x] RED: frontend timeline contract fails until visible event echo items are
+      limited to `思考过程`, `工具调用`, `命令执行`, and `审批通过`, with tool cards
+      showing result/content instead of raw JSON or start/completed noise.
+- [x] RED: backend hardness tests fail until colloquial qwen plans supplement
+      missed knowledge, skill, write, and readback tool calls while preserving
+      staged read-only ReAct rounds and OpenAI tool-call ids.
+- [x] RED: approval contract fails until approving a scheduled write continues
+      pending readback tool calls before completing the run.
+- [x] Polish the processed-run and nested event headers into one-line Chinese
+      layout: status icon, title, compact meta, weak chevron, no sequence marker.
+- [x] Align parent processed-run status icon and nested event status icons on the
+      same execution rail center line.
+- [x] Revalidate with focused frontend unit, `remScaleClosure`, full frontend
+      unit, frontend build, AI Assistant backend unit/integration/contract/e2e,
+      real OpenRouter qwen3.5-27b smoke, and complex browser UAT.
+- [x] Save evidence under
+      `artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.15-agent-echo-polish-uat/`.

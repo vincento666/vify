@@ -83,6 +83,20 @@
           data-testid="ai-assistant-user-message"
         >
           <p>{{ runThreadUserMessage(thread) }}</p>
+          <div class="ai-message__meta-row ai-message__meta-row--user">
+            <span class="ai-message__actions">
+              <a-button
+                size="small"
+                type="text"
+                data-testid="ai-assistant-message-copy"
+                aria-label="复制用户消息"
+                @click="copyUserMessage(thread)"
+              >
+                <template #icon><CopyOutlined /></template>
+              </a-button>
+            </span>
+            <span data-testid="ai-assistant-user-message-meta">{{ runThreadStartedAt(thread) }}</span>
+          </div>
         </div>
         <template v-for="item in runThreadPresentationItems(thread)" :key="presentationItemKey(item)">
           <article
@@ -104,12 +118,12 @@
                 <CheckCircleOutlined v-else-if="isRunThreadDone(thread)" />
                 <ClockCircleOutlined v-else />
               </span>
-              <span class="ai-run-event-group__title">
-                <strong>已处理</strong>
-              </span>
-              <span class="ai-run-event-group__meta">{{ processedGroupMeta(item.items) }}</span>
-              <DownOutlined v-if="!isProcessedGroupExpanded(item, thread)" />
-              <UpOutlined v-else />
+              <strong class="ai-run-event-group__title-text">已处理</strong>
+              <small class="ai-run-event-group__meta">{{ processedGroupMeta(item.items) }}</small>
+              <ChevronRight
+                class="ai-collapse-chevron"
+                :class="{ expanded: isProcessedGroupExpanded(item, thread) }"
+              />
             </button>
 
             <section
@@ -153,10 +167,11 @@
                     :aria-expanded="isEventExpanded(eventItem.id)"
                     @click="toggleEventCard(eventItem.id)"
                   >
-                    <span>{{ eventItem.title }}</span>
-                    <small>#{{ eventItem.sequence }}</small>
-                    <DownOutlined v-if="!isEventExpanded(eventItem.id)" />
-                    <UpOutlined v-else />
+                    <strong class="ai-event__title-text">{{ eventItem.title }}</strong>
+                    <ChevronRight
+                      class="ai-collapse-chevron"
+                      :class="{ expanded: isEventExpanded(eventItem.id) }"
+                    />
                   </button>
                   <div
                     v-if="isEventExpanded(eventItem.id)"
@@ -218,49 +233,47 @@
             <p>{{ item.item.summary }}</p>
           </div>
         </template>
-        <article
+        <div
           v-if="runThreadFinalAnswer(thread)"
-          class="ai-completion-card"
+          class="ai-message ai-message--assistant ai-message--completion"
           data-testid="ai-assistant-run-final-answer"
         >
-          <header>
-            <CheckCircleOutlined />
-            <strong>任务完成</strong>
-          </header>
           <p>{{ runThreadFinalAnswer(thread) }}</p>
-          <footer class="ai-completion-card__actions">
-            <a-button
-              size="small"
-              type="text"
-              data-testid="ai-assistant-completion-copy"
-              aria-label="复制"
-              @click="copyFinalAnswer(thread)"
-            >
-              <template #icon><CopyOutlined /></template>
-              复制
-            </a-button>
-            <a-button
-              size="small"
-              type="text"
-              data-testid="ai-assistant-completion-like"
-              aria-label="点赞"
-              @click="markFinalAnswerFeedback(thread.run.id, 'like')"
-            >
-              <template #icon><LikeOutlined /></template>
-              点赞
-            </a-button>
-            <a-button
-              size="small"
-              type="text"
-              data-testid="ai-assistant-completion-dislike"
-              aria-label="点踩"
-              @click="markFinalAnswerFeedback(thread.run.id, 'dislike')"
-            >
-              <template #icon><DislikeOutlined /></template>
-              点踩
-            </a-button>
-          </footer>
-        </article>
+          <div class="ai-message__meta-row ai-message__meta-row--completion">
+            <span class="ai-message__actions">
+              <a-button
+                size="small"
+                type="text"
+                data-testid="ai-assistant-completion-copy"
+                aria-label="复制完成总结"
+                @click="copyFinalAnswer(thread)"
+              >
+                <template #icon><CopyOutlined /></template>
+              </a-button>
+              <a-button
+                size="small"
+                type="text"
+                data-testid="ai-assistant-completion-like"
+                aria-label="点赞完成总结"
+                :class="{ active: completionFeedback[thread.run.id] === 'like' }"
+                @click="markFinalAnswerFeedback(thread.run.id, 'like')"
+              >
+                <template #icon><LikeOutlined /></template>
+              </a-button>
+              <a-button
+                size="small"
+                type="text"
+                data-testid="ai-assistant-completion-dislike"
+                aria-label="点踩完成总结"
+                :class="{ active: completionFeedback[thread.run.id] === 'dislike' }"
+                @click="markFinalAnswerFeedback(thread.run.id, 'dislike')"
+              >
+                <template #icon><DislikeOutlined /></template>
+              </a-button>
+            </span>
+            <span data-testid="ai-assistant-completion-meta">已完成 · {{ runThreadCompletedAt(thread) }}</span>
+          </div>
+        </div>
           </template>
         </template>
       </section>
@@ -565,12 +578,12 @@ import {
   LikeOutlined,
   LoadingOutlined,
   PlusOutlined,
+  RightOutlined as ChevronRight,
   SafetyCertificateOutlined,
   SendOutlined,
   SettingOutlined,
   ThunderboltOutlined,
   ToolOutlined,
-  UpOutlined,
 } from '@ant-design/icons-vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
@@ -1098,8 +1111,34 @@ function copyFinalAnswer(thread: AiAssistantRunThread) {
   void navigator.clipboard.writeText(answer)
 }
 
+function copyUserMessage(thread: AiAssistantRunThread) {
+  const message = runThreadUserMessage(thread)
+  if (!message || typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return
+  void navigator.clipboard.writeText(message)
+}
+
 function markFinalAnswerFeedback(targetRunId: number, value: 'like' | 'dislike') {
   completionFeedback.value = { ...completionFeedback.value, [targetRunId]: value }
+}
+
+function runThreadStartedAt(thread: AiAssistantRunThread) {
+  return formatMessageTime(thread.run.startedAt || thread.events[0]?.createdAt || '')
+}
+
+function runThreadCompletedAt(thread: AiAssistantRunThread) {
+  return formatMessageTime(thread.run.completedAt || thread.events[thread.events.length - 1]?.createdAt || '')
+}
+
+function formatMessageTime(value: string | null | undefined) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
 }
 
 function taskMetaLabel(task: { phase: string; currentTool?: string | null }) {
@@ -1703,44 +1742,54 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
   max-width: min(42rem, 100%);
 }
 
-.ai-completion-card {
-  display: grid;
-  gap: 0.625rem;
-  margin: 0.5rem 0.75rem;
-  padding: 0.75rem;
-  background: var(--color-bg-page, #f8f9fc);
-  border: 0;
-  border-radius: var(--radius-lg, 0.5rem);
-}
-
-.ai-completion-card header,
-.ai-completion-card__actions {
+.ai-message__meta-row {
   display: flex;
   align-items: center;
-}
-
-.ai-completion-card header {
-  gap: 0.5rem;
-  color: var(--color-success-500, #10b981);
-}
-
-.ai-completion-card p {
-  margin: 0;
-  color: var(--color-text-primary, #0f1117);
-  line-height: 1.6;
-  white-space: pre-wrap;
-}
-
-.ai-completion-card__actions {
   gap: 0.375rem;
+  max-width: min(42rem, 100%);
+  color: var(--color-text-tertiary, #8b92a8);
+  font-size: 0.75rem;
+}
+
+.ai-message__meta-row--user {
   justify-content: flex-end;
+  opacity: 0;
+  transition: opacity 0.16s ease;
+}
+
+.ai-message__meta-row--completion {
+  justify-content: space-between;
+}
+
+.ai-message__actions {
+  opacity: 0;
+  transition: opacity 0.16s ease;
+  display: flex;
+  gap: 0.375rem;
+  justify-content: flex-start;
+}
+
+.ai-message:hover .ai-message__actions,
+.ai-message:focus-within .ai-message__actions,
+.ai-message--user:hover .ai-message__meta-row--user,
+.ai-message--user:focus-within .ai-message__meta-row--user {
+  opacity: 1;
+}
+
+.ai-message__actions :deep(.ant-btn) {
+  color: var(--color-text-tertiary, #8b92a8);
+}
+
+.ai-message__actions :deep(.ant-btn:hover),
+.ai-message__actions :deep(.ant-btn.active) {
+  color: var(--color-text-secondary, #4b5268);
 }
 
 .ai-run-event-group__header {
   width: 100%;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
-  gap: 0.625rem;
+  grid-template-columns: auto auto auto auto;
+  gap: 0.5rem;
   align-items: center;
   padding: 0.75rem;
   color: inherit;
@@ -1749,6 +1798,19 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
   border: 0;
   border-radius: var(--radius-lg, 0.5rem);
   cursor: pointer;
+}
+
+.ai-collapse-chevron {
+  width: 0.75rem;
+  height: 0.75rem;
+  color: var(--color-text-tertiary, #8b92a8);
+  font-size: 0.625rem;
+  transform: rotate(0deg);
+  transition: transform 0.16s ease;
+}
+
+.ai-collapse-chevron.expanded {
+  transform: rotate(90deg);
 }
 
 .ai-run-event-group__status-icon {
@@ -1767,25 +1829,16 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
   animation: ai-spin 0.9s linear infinite;
 }
 
-.ai-run-event-group__title {
-  min-width: 0;
-  display: grid;
-  gap: 0.125rem;
-}
-
-.ai-run-event-group__title small,
-.ai-run-event-group__meta {
-  color: var(--color-text-tertiary, #8b92a8);
-  font-size: 0.75rem;
-}
-
-.ai-run-event-group__title strong {
+.ai-run-event-group__title-text,
+.ai-event__title-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .ai-run-event-group__meta {
+  color: var(--color-text-tertiary, #8b92a8);
+  font-size: 0.75rem;
   white-space: nowrap;
 }
 
@@ -1793,12 +1846,13 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
   display: grid;
   gap: 0;
   padding: 0.25rem 0 0.125rem;
+  padding-left: 0.75rem;
 }
 
 .ai-event {
   display: grid;
-  grid-template-columns: 1.25rem minmax(0, 1fr);
-  gap: 0.75rem;
+  grid-template-columns: 1rem minmax(0, 1fr);
+  gap: 0.5rem;
   margin: 0;
 }
 
@@ -1810,7 +1864,7 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
   position: relative;
   display: flex;
   justify-content: center;
-  padding-top: 0.375rem;
+  padding-top: 0.25rem;
 }
 
 .ai-event:not(:last-child) .ai-event__rail::after {
@@ -1867,18 +1921,16 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
 
 .ai-event__head {
   width: 100%;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
   gap: 0.5rem;
+  align-items: center;
   font-weight: 700;
   color: inherit;
   background: transparent;
   border: 0;
   cursor: pointer;
   text-align: left;
-}
-
-.ai-event__head small {
-  margin-left: auto;
-  color: var(--color-text-tertiary, #8b92a8);
 }
 
 .ai-event__details {

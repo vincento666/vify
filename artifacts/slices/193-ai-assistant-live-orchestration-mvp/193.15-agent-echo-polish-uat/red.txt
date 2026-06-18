@@ -1,0 +1,33 @@
+193.15 RED evidence
+
+1. Frontend shell contract initially failed for the latest event echo layout:
+   - completion summary was still card-like instead of plain assistant text;
+   - user message meta controls were missing from the message log;
+   - task/event headers still used the older layout contract;
+   - event sequence markers were still part of the visible contract.
+
+2. Frontend timeline contract initially failed for product echo filtering:
+   - low-level model/task/tool start-completed events leaked into the visible
+     timeline;
+   - tool cards still exposed raw JSON/call-detail style rows instead of the
+     user-facing result/content only;
+   - supported visible event categories were not limited to thought/tool/command
+     approval categories.
+
+3. Backend hardness red tests:
+   - `test_completed_tool_duration_uses_one_millisecond_floor_when_clock_resolution_is_zero`
+     failed with `AssertionError: 0 != 1`.
+   - `_supplement_required_tool_calls` was missing, then duplicated `invoke_skill`
+     and produced an untrimmed query `知识库里的退票规则`.
+   - ReAct contract regressed when supplementing future write steps during a
+     staged read-only first round.
+   - Tool-call id preservation failed: second-round tool message used
+     `call_read_workspace_file` instead of the original `call_read_agents`.
+
+4. Browser UAT red evidence with real OpenRouter qwen3.5-27b:
+   - before the fix, complex UAT completed without the required write/readback
+     chain: final tool rows only contained read/search/skill;
+   - after supplementing write, approval exposed the next issue: approving the
+     write completed the run without executing the pending readback;
+   - running backend service needed restart to load the current code; the stale
+     service still rendered 0 ms durations.

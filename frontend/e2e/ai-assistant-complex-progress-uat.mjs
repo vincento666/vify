@@ -21,8 +21,9 @@ async function collectMetrics(page, label) {
       return { top: rect.top, bottom: rect.bottom, height: rect.height }
     }
     const taskRows = all('[data-testid="ai-assistant-task-row"]').map((row) => {
-      const status = row.querySelector('.ai-task__dot')
-      const style = status ? getComputedStyle(status) : null
+      const status = row.querySelector('[data-testid="ai-assistant-task-status-icon"]')
+      const spinner = row.querySelector('[data-testid="ai-assistant-task-spinner"]')
+      const style = spinner ? getComputedStyle(spinner) : null
       return {
         text: row.textContent?.trim() || '',
         statusClass: status?.className || '',
@@ -36,10 +37,24 @@ async function collectMetrics(page, label) {
       spinner: Boolean(row.querySelector('[data-testid="ai-assistant-execution-step-spinner"]')),
       done: Boolean(row.querySelector('[data-testid="ai-assistant-execution-step-done"]')),
     }))
+    const eventHeaders = all('[data-testid="ai-assistant-event-card-header"]').map((node) => node.textContent?.trim() || '')
+    const groupHeaders = all('[data-testid="ai-assistant-run-event-group-header"]')
+    const parentIcon = groupHeaders.at(-1)?.querySelector('[data-testid="ai-assistant-run-status-icon"]')
+    const parentIconRect = parentIcon?.getBoundingClientRect()
+    const childIconRects = all('[data-testid="ai-assistant-event-status-icon"]').map((node) => node.getBoundingClientRect())
+    const parentCenterX = parentIconRect ? parentIconRect.left + parentIconRect.width / 2 : null
+    const childCenterXs = childIconRects.map((rect) => rect.left + rect.width / 2)
+    const iconAlignmentMaxDelta =
+      parentCenterX === null || childCenterXs.length === 0
+        ? null
+        : Math.max(...childCenterXs.map((centerX) => Math.abs(centerX - parentCenterX)))
     return {
       label: sampleLabel,
       at: Date.now(),
       runHeaders: all('[data-testid="ai-assistant-run-event-group-header"]').map((node) => node.textContent?.trim() || ''),
+      eventHeaders,
+      hasHashSequence: eventHeaders.some((text) => /#\d+/.test(text)),
+      iconAlignmentMaxDelta,
       taskRows,
       steps,
       taskRunningCount: taskRows.filter((row) => row.statusClass.includes('status-running')).length,
@@ -70,12 +85,13 @@ async function installDeterministicFallbackIfNeeded(page) {
   await page.route('**/api/v1/ai-assistant/sessions/*/messages/async', async (route) => {
     const request = route.request()
     const payload = JSON.parse(request.postData() || '{}')
-    payload.modelMode = 'deterministic'
-    payload.toolName = 'write_workspace_file'
-    payload.toolInput = {
-      path: 'tmp/ai-assistant-uat-progress.md',
-      content: 'AI 助手复杂任务进度 UAT',
-    }
+      payload.modelMode = 'deterministic'
+    payload.toolCalls = [
+      { toolName: 'write_workspace_file', toolInput: { path: 'tmp/ai-assistant-uat-progress.md', content: 'AI 助手复杂任务进度 UAT' } },
+      { toolName: 'read_workspace_file', toolInput: { path: 'tmp/ai-assistant-uat-progress.md' } },
+    ]
+    delete payload.toolName
+    delete payload.toolInput
     delete payload.modelConfig
     await route.continue({
       headers: { ...request.headers(), 'content-type': 'application/json' },
@@ -102,12 +118,13 @@ async function main() {
       '必须调用 read_workspace_file 读取 specs/README.md；',
       '必须调用 search_knowledge_base 检索“退票规则 和 AI 助手 harness”；',
       '必须调用 invoke_skill 记录 tdd 技能调用意图；',
-      '最后必须调用 write_workspace_file 写入 tmp/ai-assistant-uat-progress.md，内容为中文三段式总结。',
-      '写入前需要审批。请在工具之间输出简短中文进度，并最后给出中文总结。',
+      '必须创建并写入 tmp/ai-assistant-uat-progress.md，内容为中文三段式总结；',
+      '写入审批通过后必须再次调用 read_workspace_file 读取该文件校验内容。',
+      '请不要要求我写工具名，自动识别读文件、知识库、skill、创建文件、写入文件、读取校验这些调用；工具之间输出简短中文进度，并最后给出中文总结。',
     ].join('')
     await page.getByPlaceholder('输入给 AI 助手的消息').fill(prompt)
     await page.getByTestId('ai-assistant-send').click()
-    await page.getByTestId('ai-assistant-run-event-group-header').last().waitFor({ state: 'visible', timeout: 15000 })
+    await page.getByTestId('ai-assistant-run-event-group-header').last().waitFor({ state: 'visible', timeout: 60000 })
 
     for (let index = 0; index < 180; index += 1) {
       const sample = await collectMetrics(page, `running-${index}`)
@@ -171,7 +188,11 @@ async function main() {
       finalSteps: final.steps.length,
       finalToolRows: final.toolRows.length,
       finalAnswers: final.finalAnswers.length,
+      finalEventHeaders: final.eventHeaders,
+      hasHashSequence: final.hasHashSequence,
+      iconAlignmentMaxDelta: final.iconAlignmentMaxDelta,
       finalStepTexts: final.steps.map((step) => step.text),
+      finalToolTexts: final.toolRows,
       pageOverflowY: final.pageOverflowY,
     }
     fs.writeFileSync(`${outDir}/complex-progress-uat.json`, JSON.stringify({ summary, samples }, null, 2))
@@ -181,12 +202,22 @@ async function main() {
     assert(summary.sawAnimatedRunningTask, 'expected running task state to animate')
     assert(summary.sawStepSpinner, 'expected running execution step spinner')
     assert(
+      final.toolRows.some((row) => row.includes('写入工作区文件')) &&
+        final.toolRows.filter((row) => row.includes('读取工作区文件')).length >= 2,
+      `expected create/write/read verification tool calls, got: ${final.toolRows.join(' | ')}`,
+    )
+    assert(
       final.steps.every((step) => !/思考摘要|工具调用决策|模型输出|文件操作意图|技能调用意图/.test(step.text)),
       `expected execution steps to hide low-level react loop events: ${final.steps.map((step) => step.text).join(' | ')}`,
     )
     assert(
       final.steps.length <= final.toolRows.length + 2,
       `expected current-question execution steps only, got ${final.steps.length} steps for ${final.toolRows.length} tool calls`,
+    )
+    assert(!summary.hasHashSequence, `expected event headers without # sequence, got: ${summary.finalEventHeaders.join(' | ')}`)
+    assert(
+      summary.iconAlignmentMaxDelta === null || summary.iconAlignmentMaxDelta <= 1,
+      `expected parent and child event icons to align horizontally, got delta ${summary.iconAlignmentMaxDelta}`,
     )
     assert(summary.finalAnswers > 0, 'expected final assistant answer')
     assert(summary.pageOverflowY <= 2, `expected one-screen shell, got overflow ${summary.pageOverflowY}`)

@@ -45,8 +45,9 @@ describe('AI Assistant shell UI contract', () => {
       'ai-assistant-recent-error-row',
       'ai-assistant-inspector-timeline',
       'ai-assistant-run-task-card',
-      'ai-assistant-tool-detail-input',
-      'ai-assistant-tool-detail-output',
+      'ai-assistant-message-copy',
+      'ai-assistant-user-message-meta',
+      'ai-assistant-completion-meta',
       'ai-assistant-run-status-icon',
       'ai-assistant-event-status-icon',
       'ai-assistant-event-completed-icon',
@@ -165,8 +166,6 @@ describe('AI Assistant shell UI contract', () => {
       'ai-assistant-event-completed-icon',
       'ai-assistant-event-detail-panel',
       'ai-assistant-event-detail-row',
-      'ai-assistant-tool-detail-input',
-      'ai-assistant-tool-detail-output',
     ]) {
       expect(content).toContain(`data-testid="${testId}"`)
     }
@@ -175,7 +174,7 @@ describe('AI Assistant shell UI contract', () => {
     expect(content).toContain('isProcessedGroupExpanded')
     expect(content).toContain('formatEventDetailRows')
     expect(content).toContain('eventStatusIcon')
-    expect(content).toContain('事件')
+    expect(content).toContain('ai-collapse-chevron')
     expect(content).toContain('animation: ai-spin')
     expect(content).not.toContain('ai-event__pulse')
     expect(content).not.toContain('已收纳')
@@ -218,15 +217,44 @@ describe('AI Assistant shell UI contract', () => {
   it('renders user bubbles with subtle fill and completion summary cards with actions', () => {
     expect(content).toContain('class="ai-message ai-message--user"')
     expect(content).toContain('class="ai-message ai-message--assistant"')
-    expect(content).toContain('class="ai-completion-card"')
+    expect(content).toContain('class="ai-message ai-message--assistant ai-message--completion"')
     expect(content).toContain('.ai-message {')
     expect(content).toContain('.ai-message--user p {')
     expect(content).toContain('background: var(--color-bg-selected, #eef2ff);')
     expect(content).toContain('border: 0;')
-    expect(content).toContain('.ai-completion-card__actions')
-    expect(content).toContain('复制')
-    expect(content).toContain('点赞')
-    expect(content).toContain('点踩')
+    expect(content).toContain('data-testid="ai-assistant-message-copy"')
+    expect(content).toContain('data-testid="ai-assistant-user-message-meta"')
+    expect(content).toContain('data-testid="ai-assistant-completion-meta"')
+    expect(content).toContain('.ai-message__actions')
+    expect(content).toContain('.ai-message:hover .ai-message__actions')
+    expect(content).toContain('opacity: 0;')
+    expect(content).not.toContain('class="ai-completion-card"')
+    expect(content).not.toContain('<strong>任务完成</strong>')
+    expect(content).not.toContain('>复制<')
+    expect(content).not.toContain('>点赞<')
+    expect(content).not.toContain('>点踩<')
+  })
+
+  it('uses compact right-side chevrons after title text for task and event folding', () => {
+    expect(content).toContain('ChevronRight')
+    expect(content).toContain('class="ai-collapse-chevron"')
+    expect(content).toContain('class="ai-run-event-group__title-text"')
+    expect(content).toContain('class="ai-run-event-group__meta"')
+    expect(content).toContain('class="ai-event__title-text"')
+    expect(content).toContain(':class="{ expanded: isProcessedGroupExpanded(item, thread) }"')
+    expect(content).toContain(':class="{ expanded: isEventExpanded(eventItem.id) }"')
+    expect(content).toContain('grid-template-columns: auto auto auto auto;')
+    expect(content).toContain('grid-template-columns: auto auto minmax(0, 1fr);')
+    expect(content).toContain('white-space: nowrap;')
+    expect(content).toContain('padding-left: 0.75rem;')
+    expect(content).toContain('color: var(--color-text-tertiary, #8b92a8);')
+    expect(content).not.toContain('<small>{{ processedGroupMeta(item.items) }}</small>')
+    expect(content).not.toContain('class="ai-event__meta"')
+    expect(content).not.toContain('#{{ eventItem.sequence }}')
+    expect(content).not.toContain('<DownOutlined v-if="!isProcessedGroupExpanded(item, thread)" />')
+    expect(content).not.toContain('<UpOutlined v-else />')
+    expect(content).not.toContain('<DownOutlined v-if="!isEventExpanded(eventItem.id)" />')
+    expect(content).not.toContain('<UpOutlined v-else />')
   })
 
   it('groups inspector stream chunks and hides stale approval actions', () => {

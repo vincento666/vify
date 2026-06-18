@@ -62,12 +62,12 @@ describe('ai assistant execution timeline', () => {
 
     const timeline = buildAiAssistantTimeline(events)
 
-    expect(timeline.map((item) => item.kind)).toEqual(['phase', 'model-output', 'tool', 'approval'])
-    expect(timeline[0].tone).toBe('running')
-    expect(timeline[1].summary).toBe('我先读取文件。')
-    expect(timeline[2].details.map((detail) => detail.label)).toEqual(['调用详情', '输入', '输出'])
-    expect(timeline[2].details.find((detail) => detail.label === '输出')?.value).toContain('hello')
-    expect(timeline[3].approvalId).toBe(9)
+    expect(timeline.map((item) => item.kind)).toEqual(['model-output', 'tool'])
+    expect(timeline[0].summary).toBe('我先读取文件。')
+    expect(timeline[1].title).toBe('工具调用')
+    expect(timeline[1].details.map((detail) => detail.label)).toEqual(['结果'])
+    expect(timeline[1].details[0].value).toBe('hello')
+    expect(timeline.some((item) => item.approvalId === 9)).toBe(false)
   })
 
   it('assembles consecutive model stream chunks into one visible model output message', () => {
@@ -93,19 +93,17 @@ describe('ai assistant execution timeline', () => {
     const timeline = buildAiAssistantTimeline(events)
 
     expect(timeline.map((item) => item.kind)).toEqual([
-      'phase',
       'model-output',
       'tool',
       'model-output',
-      'approval',
     ])
-    expect(timeline[1].summary).toBe('我先读取文件。')
-    expect(timeline[1].phase).toBeUndefined()
-    expect(timeline[1].payloadPreview).toContain('"chunkCount":3')
-    expect(timeline[3].summary).toBe('最终回答。')
-    expect(timeline[3].sequence).toBe(6)
-    expect(timeline[3].phase).toBe('final_answer')
-    expect(timeline[4].approvalId).toBe(9)
+    expect(timeline[0].summary).toBe('我先读取文件。')
+    expect(timeline[0].phase).toBeUndefined()
+    expect(timeline[0].payloadPreview).toContain('"chunkCount":3')
+    expect(timeline[2].summary).toBe('最终回答。')
+    expect(timeline[2].sequence).toBe(6)
+    expect(timeline[2].phase).toBe('final_answer')
+    expect(timeline.some((item) => item.approvalId === 9)).toBe(false)
   })
 
   it('carries stream phase and source metadata for final answer placement', () => {
@@ -147,7 +145,7 @@ describe('ai assistant execution timeline', () => {
     const timeline = buildAiAssistantTimeline(events)
 
     expect(timeline.map((item) => item.kind)).toEqual(['model-output', 'model-thought'])
-    expect(timeline[1].title).toBe('思考')
+    expect(timeline[1].title).toBe('思考过程')
     expect(timeline[1].summary).toBe('需要比对配置和测试结果。')
   })
 
@@ -165,7 +163,7 @@ describe('ai assistant execution timeline', () => {
 
     const timeline = buildAiAssistantTimeline(events)
 
-    expect(timeline.map((item) => item.kind)).toEqual(['model-output', 'model'])
+    expect(timeline.map((item) => item.kind)).toEqual(['model-output'])
     expect(timeline[0].summary).toBe('已根据请求规划工具调用。')
   })
 
@@ -187,7 +185,7 @@ describe('ai assistant execution timeline', () => {
     expect(timeline[0].details[1].value).toBe('用户要求我执行一个复杂验收任务。')
   })
 
-  it('keeps a tool invocation as one foldable call with input output and execution detail', () => {
+  it('keeps only the tool result event as one foldable call without JSON input or invocation detail', () => {
     const events: AiAssistantEvent[] = [
       event(1, 'tool.call_started', '工具开始', '读取工作区文件 已开始执行。', {
         toolName: 'read_workspace_file',
@@ -207,11 +205,52 @@ describe('ai assistant execution timeline', () => {
 
     expect(timeline).toHaveLength(1)
     expect(timeline[0].kind).toBe('tool')
-    expect(timeline[0].title).toBe('读取工作区文件')
+    expect(timeline[0].title).toBe('工具调用')
     expect(timeline[0].tone).toBe('success')
-    expect(timeline[0].details.map((detail) => detail.label)).toEqual(['调用详情', '输入', '输出'])
-    expect(timeline[0].details[1].value).toContain('AGENTS.md')
-    expect(timeline[0].details[2].value).toContain('project instructions')
+    expect(timeline[0].details.map((detail) => detail.label)).toEqual(['结果'])
+    expect(timeline[0].details[0].value).toBe('project instructions')
+    expect(timeline[0].details[0].value).not.toContain('{')
+    expect(timeline[0].details[0].value).not.toContain('AGENTS.md')
+  })
+
+  it('renders only supported execution echo event categories in processed groups', () => {
+    const events: AiAssistantEvent[] = [
+      event(1, 'run.started', '运行开始', 'started', {}),
+      event(2, 'task.updated', '任务规划', '低层事件不展示', { toolNames: ['read_workspace_file'] }),
+      event(3, 'model.tool_call_decision', '工具决策', '低层事件不展示', { toolNames: ['read_workspace_file'] }),
+      event(4, 'model.thought_summary', '思考摘要', '先读取再写入。', {}),
+      event(5, 'tool.call_output', '工具输出', 'content', {
+        toolName: 'read_workspace_file',
+        output: { content: '文件正文' },
+      }),
+      event(6, 'approval.approved', '审批', 'operator-ui 已批准 写入工作区文件。', {
+        approvalId: 11,
+        toolName: 'write_workspace_file',
+      }),
+      event(7, 'run.completed', '完成', 'done', {}),
+    ]
+
+    const timeline = buildAiAssistantTimeline(events)
+
+    expect(timeline.map((item) => item.title)).toEqual(['思考过程', '工具调用', '审批通过'])
+    expect(timeline.map((item) => item.kind)).toEqual(['model-thought', 'tool', 'approval'])
+    expect(timeline[1].details).toEqual([{ label: '结果', value: '文件正文' }])
+    expect(timeline[2].details).toEqual([{ label: '内容', value: 'operator-ui 已批准 写入工作区文件。' }])
+  })
+
+  it('labels shell command execution separately while still showing only the command result', () => {
+    const events: AiAssistantEvent[] = [
+      event(1, 'tool.call_output', '工具输出', 'ok', {
+        toolName: 'run_shell',
+        output: { stdout: 'created tmp/demo.txt\nread tmp/demo.txt' },
+      }),
+    ]
+
+    const timeline = buildAiAssistantTimeline(events)
+
+    expect(timeline).toHaveLength(1)
+    expect(timeline[0].title).toBe('命令执行')
+    expect(timeline[0].details).toEqual([{ label: '结果', value: 'created tmp/demo.txt\nread tmp/demo.txt' }])
   })
 })
 

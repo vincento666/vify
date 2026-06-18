@@ -78,3 +78,20 @@ Out of scope:
 - The shell uses Chinese visible copy and only the outer `.ai-shell` solid
   border; the three columns and internal cards remain visually framed by
   spacing/background, not nested borders.
+- Completion summaries render as plain assistant text with hover-only icon
+  actions; user messages render in the conversation log with hover copy/time
+  controls.
+- The processed-run header and nested event headers use one-line Chinese labels:
+  status icon, title, compact meta, and a weak right-chevron; nested event
+  headers do not render `#` sequence numbers.
+- Parent processed-run status icons and nested event status icons share the same
+  execution rail center line; completed nodes use a green check, only running
+  nodes animate.
+- Visible event echo items are limited to `思考过程`, `工具调用`, `命令执行`, and
+  `审批通过`; tool cards show result/content only, not raw JSON or low-level
+  start/completed events.
+- The live harness supplements missed colloquial read/write/readback,
+  knowledge-base, and skill-intent tool calls without rushing a staged
+  read-only first ReAct round.
+- If a scheduled write requires approval, approving it resumes any remaining
+  pending tool calls such as readback verification before completing the run.

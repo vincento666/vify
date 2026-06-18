@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from hashlib import sha256
 import json
 from math import ceil
+import re
 from time import perf_counter
 from typing import Any
 
@@ -493,6 +494,19 @@ class AiAssistantHarnessService:
                         "source": decision.stream_source,
                     },
                 )
+        supplemented_tool_calls = _supplement_required_tool_calls(message, decision.tool_calls)
+        if supplemented_tool_calls != decision.tool_calls:
+            decision = LivePlannerDecision(
+                final_answer=decision.final_answer,
+                thought_summary=decision.thought_summary,
+                stream_chunks=decision.stream_chunks,
+                tool_calls=supplemented_tool_calls,
+                usage=decision.usage,
+                model=decision.model,
+                provider=decision.provider,
+                streaming=decision.streaming,
+                stream_source=decision.stream_source,
+            )
         tool_names = [call["toolName"] for call in decision.tool_calls]
         self._repository.append_event(
             run_id=run_id,
@@ -774,7 +788,7 @@ class AiAssistantHarnessService:
             tool_calls=tool_calls,
         )
         if execution.terminal_result is not None:
-            return execution.terminal_result
+            return self._with_accumulated_tool_calls(execution.terminal_result, execution.recorded_tool_calls)
         return self._complete_tool_run(
             session_id=session_id,
             run_id=run_id,
@@ -799,7 +813,7 @@ class AiAssistantHarnessService:
         ]
         plan = ToolScheduler(self._tools).plan(invocations, context={"session_id": session_id})
         recorded_tool_calls: list[dict[str, Any]] = []
-        for batch in plan.batches:
+        for batch_index, batch in enumerate(plan.batches):
             self._repository.append_event(
                 run_id=run_id,
                 session_id=session_id,
@@ -828,6 +842,7 @@ class AiAssistantHarnessService:
                 )
             else:
                 for index, item in enumerate(batch.items):
+                    pending_tool_calls = _remaining_scheduled_tool_calls(plan.batches, batch_index, index)
                     result = self._run_scheduled_tool_call(
                         session_id=session_id,
                         run_id=run_id,
@@ -836,6 +851,7 @@ class AiAssistantHarnessService:
                         tool_name=item.tool_name,
                         payload=item.tool_input,
                         scheduler_metadata=batch.item_metadata[index],
+                        pending_tool_calls_after_approval=pending_tool_calls,
                     )
                     if isinstance(result, HarnessTurnResult):
                         return ScheduledToolExecutionResult(
@@ -992,6 +1008,7 @@ class AiAssistantHarnessService:
         tool_name: str,
         payload: dict[str, Any],
         scheduler_metadata: dict[str, Any],
+        pending_tool_calls_after_approval: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any] | HarnessTurnResult:
         manifest = self._tools.get_manifest(tool_name)
         sandbox_decision = self._sandbox_policy.evaluate(tool_name, payload)
@@ -1063,6 +1080,7 @@ class AiAssistantHarnessService:
                 "approvalRequired": True,
                 "approvalId": approval["id"],
                 "sandboxDenied": False,
+                "pendingToolCallsAfterApproval": pending_tool_calls_after_approval or [],
             }
             waiting = self._repository.complete_run(run_id, response_payload, status="WAITING_APPROVAL")
             return HarnessTurnResult(
@@ -1204,6 +1222,8 @@ class AiAssistantHarnessService:
             raise KeyError(f"AI Assistant run not found: {run_id}")
         message = str((run.get("input_payload") or {}).get("message") or "")
         tool_name = str(approval["tool_name"])
+        run_response = dict(run.get("response_payload") or {})
+        pending_tool_calls = _pending_tool_calls_after_approval(run_response)
         tool_call = self._execute_approved_tool(
             run_id=run_id,
             session_id=session_id,
@@ -1211,10 +1231,26 @@ class AiAssistantHarnessService:
             tool_name=tool_name,
             payload=dict(approval.get("input_payload") or {}),
         )
+        if pending_tool_calls:
+            execution = self._execute_scheduled_tool_calls(
+                session_id=session_id,
+                run_id=run_id,
+                message=message,
+                approval_mode=str(
+                    (run.get("input_payload") or {}).get("approvalMode") or ApprovalMode.SMART_APPROVAL.value
+                ),
+                tool_calls=pending_tool_calls,
+            )
+            if execution.terminal_result is not None:
+                return _approval_payload(approval)
         tool_calls = [_tool_call_payload(row) for row in self._repository.list_run_tool_calls(run_id)]
-        final_answer = f"已执行审批通过的工具：{_tool_label(tool_name)}。"
+        final_answer = (
+            _tool_execution_answer(tool_calls)
+            if pending_tool_calls
+            else f"已执行审批通过的工具：{_tool_label(tool_name)}。"
+        )
         output_hint = str(tool_call.get("output", {}).get("echo") or tool_call.get("output", {}).get("path") or "")
-        if output_hint:
+        if output_hint and not pending_tool_calls:
             final_answer = f"{final_answer}结果：{output_hint}"
         self._repository.append_message(session_id, "assistant", final_answer, run_id=run_id)
         response_payload = {
@@ -1223,6 +1259,7 @@ class AiAssistantHarnessService:
             "approvalRequired": False,
             "approvalId": approval_id,
             "sandboxDenied": False,
+            "pendingToolCallsAfterApproval": [],
         }
         self._repository.complete_run(run_id, response_payload)
         self._repository.append_event(
@@ -1330,7 +1367,124 @@ def _request_hash(payload: Any) -> str:
 
 def _elapsed_duration_ms(started: float) -> int:
     elapsed_ms = max(0.0, (perf_counter() - started) * 1000)
-    return int(ceil(elapsed_ms)) if elapsed_ms > 0 else 0
+    return max(1, int(ceil(elapsed_ms)))
+
+
+def _supplement_required_tool_calls(message: str, tool_calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    supplemented = [_canonical_tool_call(call) for call in tool_calls]
+    seen = {_tool_call_key(call) for call in supplemented}
+    tool_names = {str(call.get("toolName") or "") for call in supplemented}
+    staged_read_only_round = bool(supplemented) and tool_names <= {"read_workspace_file"}
+
+    def add(tool_name: str, tool_input: dict[str, Any]) -> None:
+        if tool_name in {"search_knowledge_base", "invoke_skill"} and tool_name in tool_names:
+            return
+        call = {"toolName": tool_name, "toolInput": tool_input}
+        key = _tool_call_key(call)
+        if key in seen:
+            return
+        supplemented.append(call)
+        seen.add(key)
+        tool_names.add(tool_name)
+
+    if not staged_read_only_round and _mentions_knowledge_search(message):
+        add("search_knowledge_base", {"query": _knowledge_query(message)})
+    if not staged_read_only_round and _mentions_tdd_or_skill(message):
+        add("invoke_skill", {"skillName": _skill_name(message), "instruction": _skill_instruction(message)})
+
+    file_paths = _mentioned_file_paths(message)
+    write_path = _write_target_path(message, file_paths)
+    for path in _read_target_paths(message, file_paths, write_path):
+        add("read_workspace_file", {"path": path})
+    if write_path and not staged_read_only_round and _mentions_write_intent(message):
+        add("write_workspace_file", {"path": write_path, "content": _write_content(message)})
+    if write_path and not staged_read_only_round and _mentions_readback_after_write(message):
+        add("read_workspace_file", {"path": write_path})
+    return supplemented
+
+
+def _canonical_tool_call(call: dict[str, Any]) -> dict[str, Any]:
+    canonical = {
+        "toolName": str(call.get("toolName") or call.get("tool_name") or ""),
+        "toolInput": dict(call.get("toolInput") or call.get("tool_input") or {}),
+    }
+    tool_call_id = call.get("toolCallId") or call.get("tool_call_id")
+    if tool_call_id:
+        canonical["toolCallId"] = str(tool_call_id)
+    return canonical
+
+
+def _mentioned_file_paths(message: str) -> list[str]:
+    paths = re.findall(r"(?<![\w/.-])(?:[\w.-]+/)*[\w.-]+\.(?:md|txt|json|yaml|yml|py|ts|tsx|vue|js|mjs)", message)
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for path in paths:
+        if path in seen:
+            continue
+        seen.add(path)
+        ordered.append(path)
+    return ordered
+
+
+def _write_target_path(message: str, file_paths: list[str]) -> str:
+    for path in file_paths:
+        index = message.find(path)
+        window = message[max(0, index - 18) : index + len(path) + 18]
+        if _mentions_write_intent(window):
+            return path
+    for path in file_paths:
+        if path.startswith("tmp/"):
+            return path
+    return file_paths[-1] if file_paths and _mentions_write_intent(message) else ""
+
+
+def _read_target_paths(message: str, file_paths: list[str], write_path: str) -> list[str]:
+    if not re.search(r"读|读取|查看|打开|看看", message):
+        return []
+    return [path for path in file_paths if path != write_path]
+
+
+def _mentions_write_intent(message: str) -> bool:
+    return bool(re.search(r"创建|写入|保存|生成文件|落盘", message))
+
+
+def _mentions_readback_after_write(message: str) -> bool:
+    return bool(re.search(r"写.*后.*读|写完.*读|读回|读取该文件|再次.*读取|校验", message))
+
+
+def _mentions_knowledge_search(message: str) -> bool:
+    return bool(re.search(r"知识库|检索|查询|查一下|规则", message))
+
+
+def _mentions_tdd_or_skill(message: str) -> bool:
+    return bool(re.search(r"\btdd\b|TDD|测试驱动|红绿重构|skill|技能", message, flags=re.IGNORECASE))
+
+
+def _skill_name(message: str) -> str:
+    if re.search(r"\btdd\b|TDD|测试驱动|红绿重构", message, flags=re.IGNORECASE):
+        return "tdd"
+    return "general"
+
+
+def _skill_instruction(message: str) -> str:
+    return message[:240]
+
+
+def _knowledge_query(message: str) -> str:
+    quoted = re.findall(r"[“\"]([^”\"]+)[”\"]", message)
+    if quoted:
+        return quoted[0]
+    match = re.search(r"(?:知识库|检索|查询|查一下)(?:里|中的|的)?([^，。；;]+)", message)
+    query = match.group(1).strip() if match else message[:80].strip()
+    query = re.sub(r"^(?:知识库(?:里|里的|中|中的)?|里|里的|中|中的|的)+", "", query).strip()
+    return query or "用户请求"
+
+
+def _write_content(message: str) -> str:
+    match = re.search(r"内容(?:为|是|：|:)([^。；;]+)", message)
+    if match:
+        return match.group(1).strip()
+    return "AI Assistant Harness 写入校验"
 
 
 def _text_chunks(text: str) -> list[str]:
@@ -1446,6 +1600,28 @@ def _schedule_payload(plan: Any) -> dict[str, Any]:
             for batch in plan.batches
         ]
     }
+
+
+def _remaining_scheduled_tool_calls(
+    batches: list[Any],
+    current_batch_index: int,
+    current_item_index: int,
+) -> list[dict[str, Any]]:
+    remaining: list[dict[str, Any]] = []
+    for batch_index, batch in enumerate(batches):
+        start_index = current_item_index + 1 if batch_index == current_batch_index else 0
+        if batch_index < current_batch_index:
+            continue
+        for item in batch.items[start_index:]:
+            remaining.append({"toolName": item.tool_name, "toolInput": dict(item.tool_input or {})})
+    return remaining
+
+
+def _pending_tool_calls_after_approval(response_payload: dict[str, Any]) -> list[dict[str, Any]]:
+    raw_calls = response_payload.get("pendingToolCallsAfterApproval")
+    if not isinstance(raw_calls, list):
+        return []
+    return _scheduled_tool_calls([call for call in raw_calls if isinstance(call, dict)])
 
 
 def _safe_model_config_payload(model_config: LivePlannerConfig | None) -> dict[str, Any] | None:
