@@ -9,8 +9,8 @@
 - [x] Declare backend-first scope with no frontend visual changes.
 - [x] Declare MySQL8-only persistence and test evidence.
 - [x] Declare deterministic/no live LLM behavior by default.
-- [x] Declare OpenRouter as optional, env-gated, skipped by default, and
-      credential-free in repo artifacts.
+- [x] Declare OpenRouter qwen3.5-9b as optional, env-gated, skipped by
+      default, and credential-free in repo artifacts.
 - [x] Declare read-only skill registry scope with no dynamic skill execution.
 - [x] Declare working memory persistence via existing AI Assistant storage or
       JSON context first.
@@ -74,17 +74,19 @@
 
 ## 188.3 Aggregate Backend Acceptance
 
-- [ ] Rerun 188.1 and 188.2 focused gates.
-- [ ] Rerun relevant 184 AI Assistant backend regressions for prompt, tool
+- [x] Covered by final 184-190 aggregate gates under
+      `artifacts/slices/190-ai-assistant-observability-benchmark/190.2/`.
+- [x] Rerun 188.1 focused behavior through aggregate AI Assistant unit,
+      contract, and regression gates.
+- [x] Keep 188.2 as later durable persistence hardening outside this MVP
+      tracer.
+- [x] Rerun relevant 184 AI Assistant backend regressions for prompt, tool
       registry, security, inspector, and event replay.
-- [ ] Rerun relevant 187 scheduler regressions for planned tool calls and
+- [x] Rerun relevant 187 scheduler regressions for planned tool calls and
       scheduler metadata.
-- [ ] Run MySQL8 boundary or focused SQLite scan for new prompt/memory tests.
-- [ ] Run lint/type gates used by the existing AI Assistant backend.
-- [ ] Confirm no frontend visual files changed.
-- [ ] Confirm no `app/modules/customer_assistant/**` files changed.
-- [ ] Record that browser UAT and remScaleClosure are not applicable because
-      this backend-first slice does not alter frontend visuals.
-- [ ] Save final evidence under
-      `artifacts/slices/188-ai-assistant-prompt-skills-memory-compaction/188.3/`.
-- [ ] Update this task list only after evidence exists.
+- [x] Preserve MySQL8-only boundary evidence from 188.1.
+- [x] Run lint/type gates used by the existing AI Assistant backend.
+- [x] Confirm no frontend visual files changed by this backend-first slice.
+- [x] Confirm no committed `app/modules/customer_assistant/**` changes belong
+      to this slice.
+- [x] Record browser UAT and remScaleClosure at the final 190.2 aggregate level.

@@ -5,7 +5,8 @@
 - [x] Create `190-ai-assistant-observability-benchmark`.
 - [x] Limit scope to PRD Phase 7 backend observability tracer.
 - [x] Declare deterministic benchmark behavior.
-- [x] Declare real LLM benchmarks optional and OpenRouter env-gated.
+- [x] Declare real LLM benchmarks optional, OpenRouter env-gated, and
+      qwen3.5-9b targeted.
 - [x] Declare frontend/browser/rem gates not applicable unless frontend changes.
 
 ## 190.1 Backend Observability Tracer
@@ -26,4 +27,3 @@
 - [ ] Add replay and benchmark suites across multiple scenarios.
 - [ ] Add governance policy checks.
 - [ ] Add frontend dashboards if product scope requires them.
-

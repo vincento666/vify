@@ -5,21 +5,14 @@
 Slice `187.0` documentation sign-off is complete. Slice `187.1` backend
 scheduler tracer is complete for deterministic planned tool calls, read-only
 parallel dispatch, write/unresolved resource serialization decisions, MySQL8
-metadata roundtrip, and API/event metadata. Slice `187.2` aggregate acceptance
-remains pending.
+metadata roundtrip, and API/event metadata. Final aggregate acceptance is
+covered by spec `190.2`.
 
 ## Numbering Note
 
-Spec 184 originally deferred PRD Phase 4 as
-`185-ai-assistant-tool-scheduler-rwmutex` and PRD Phase 5 as
-`186-ai-assistant-prompt-skills-memory-compaction`.
-
-The repository now contains `185-mysql8-runtime-unit-harness-hardening`, so the
-AI Assistant scheduler cannot use spec id 185 without colliding with committed
-work. No `186-*` directory exists in this checkout, but 186 already has a
-semantic reservation in the 184 roadmap for prompt, skills, memory, and
-compaction. This spec therefore uses 187 for PRD Phase 4 and records that the
-later 184 placeholders must be renumbered before those later phases start.
+Spec 184 now records PRD Phase 4 through Phase 7 as specs 187 through 190. The
+repository already contains `185-mysql8-runtime-unit-harness-hardening`, so this
+AI Assistant scheduler spec uses 187 as the collision-free Phase 4 id.
 
 ## Goal
 
@@ -166,9 +159,10 @@ Required evidence:
 ## LLM Boundary
 
 Default tests must use deterministic planned tool calls and fake/local handlers.
-Real LLM tests are deferred. Any future optional live LLM probe must be skipped
-unless explicitly enabled by environment variables, and OpenRouter credentials
-must be read only from environment such as `OPENROUTER_API_KEY`.
+Real LLM tests are deferred. Any future optional live LLM probe must target
+OpenRouter qwen3.5-9b, be skipped unless explicitly enabled by environment
+variables, and read credentials only from environment such as
+`OPENROUTER_API_KEY`.
 
 ## Acceptance Criteria
 

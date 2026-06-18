@@ -181,6 +181,7 @@ No live LLM gate is required for 188. Default tests must stay deterministic.
 Optional OpenRouter probe requirements:
 
 - skip unless an explicit env flag such as `AI_ASSISTANT_LIVE_LLM=1` is set;
+- target qwen3.5-9b unless a later spec explicitly changes the model;
 - read credentials only from environment variables;
 - do not write credentials to logs or artifacts;
 - save skipped/live evidence separately from required GREEN gates;

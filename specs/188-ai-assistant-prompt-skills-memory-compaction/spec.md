@@ -10,11 +10,9 @@ later backend slice.
 
 ## Numbering Note
 
-Spec 184 originally deferred PRD Phase 5 as
-`186-ai-assistant-prompt-skills-memory-compaction`. Spec 187 recorded that 186
-had become a semantic reservation rather than an available implementation id.
+Spec 184 now records PRD Phase 4 through Phase 7 as specs 187 through 190.
 After `187-ai-assistant-tool-scheduler-rwmutex` was committed, this Phase 5
-spec uses the next requested collision-free id:
+spec uses the next collision-free id:
 
 ```text
 188-ai-assistant-prompt-skills-memory-compaction
@@ -268,7 +266,8 @@ are true:
 - an explicit opt-in flag such as `AI_ASSISTANT_LIVE_LLM=1` is set;
 - credentials are read only from environment variables such as
   `OPENROUTER_API_KEY`;
-- the model name is read from environment or a safe default;
+- the model name is read from environment or defaults to OpenRouter
+  qwen3.5-9b;
 - tests are skipped by default when the opt-in flag or credentials are absent;
 - skipped/live evidence is saved separately from required GREEN gates.
 

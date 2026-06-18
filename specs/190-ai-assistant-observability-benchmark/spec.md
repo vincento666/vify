@@ -48,5 +48,5 @@ Out of scope:
 - Existing `usage` field remains available for the current frontend.
 - Existing AI Assistant kernel/inspector contracts remain green.
 - Default tests are deterministic and credential-free.
-- Future real LLM benchmarks must be optional and OpenRouter env-gated.
-
+- Future real LLM benchmarks must be optional, OpenRouter env-gated, and
+  targeted at qwen3.5-9b unless a later spec explicitly changes the model.

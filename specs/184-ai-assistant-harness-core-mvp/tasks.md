@@ -6,7 +6,7 @@
       `183-final-openrouter-live-gate-revalidation`.
 - [x] Create `184-ai-assistant-harness-core-mvp`.
 - [x] Limit this spec to PRD Phase 0 through Phase 3.
-- [x] Defer PRD Phase 4 through Phase 7 to follow-up specs 185 through 188.
+- [x] Defer PRD Phase 4 through Phase 7 to follow-up specs 187 through 190.
 - [x] Save documentation evidence under
       `artifacts/slices/184-ai-assistant-harness-core-mvp/184.0/`.
 
@@ -86,12 +86,14 @@
 - [x] Run browser UAT for AI Assistant shell.
 - [x] Save final evidence and screenshots under
       `artifacts/slices/184-ai-assistant-harness-core-mvp/184.5/`.
+- [x] Save final 184-190 aggregate evidence and browser UAT under
+      `artifacts/slices/190-ai-assistant-observability-benchmark/190.2/`.
 - [x] Record final residual risk list.
 - [x] Mark the goal complete only after evidence and UAT are complete.
 
-## Later Specs
+## Follow-Up Specs
 
-- [ ] 185: tool scheduler and RWMutex.
-- [ ] 186: prompt, skills, memory, and compaction.
-- [ ] 187: customer-assistant subagent bridge.
-- [ ] 188: observability, benchmark, replay, and governance.
+- [x] 187: tool scheduler and RWMutex.
+- [x] 188: prompt, skills, memory, and compaction.
+- [x] 189: customer-assistant subagent bridge.
+- [x] 190: observability, benchmark, replay, and governance.

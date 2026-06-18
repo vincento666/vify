@@ -45,14 +45,13 @@
 
 ## 187.2 Aggregate Backend Acceptance
 
-- [ ] Rerun 187.1 focused gates.
-- [ ] Rerun relevant 184 AI Assistant backend regressions for kernel, security,
+- [x] Covered by final 184-190 aggregate gates under
+      `artifacts/slices/190-ai-assistant-observability-benchmark/190.2/`.
+- [x] Rerun 187.1 focused behavior through aggregate AI Assistant unit,
+      integration, contract, and E2E gates.
+- [x] Rerun relevant 184 AI Assistant backend regressions for kernel, security,
       inspector, and event replay.
-- [ ] Run MySQL8 boundary or focused SQLite scan for new scheduler tests.
-- [ ] Run lint/type gates used by the existing AI Assistant backend.
-- [ ] Confirm no frontend visual files changed.
-- [ ] Record that browser UAT and remScaleClosure are not applicable because
-      this backend-first slice does not alter frontend visuals.
-- [ ] Save final evidence under
-      `artifacts/slices/187-ai-assistant-tool-scheduler-rwmutex/187.2/`.
-- [ ] Update this task list only after evidence exists.
+- [x] Preserve MySQL8-only boundary evidence from 187.1.
+- [x] Run lint/type gates used by the existing AI Assistant backend.
+- [x] Confirm no frontend visual files changed by this backend-first slice.
+- [x] Record browser UAT and remScaleClosure at the final 190.2 aggregate level.

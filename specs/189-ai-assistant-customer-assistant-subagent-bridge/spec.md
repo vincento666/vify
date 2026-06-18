@@ -54,5 +54,5 @@ Out of scope:
   `workerAsyncRefs`, and `cancellation`.
 - Existing customer-assistant harness sub-agent contract remains green.
 - No `app/modules/customer_assistant/**` files are modified by this slice.
-- Real LLM probes remain optional and environment-gated through OpenRouter only.
-
+- Real LLM probes remain optional, environment-gated through OpenRouter only,
+  and must target qwen3.5-9b unless a later spec explicitly changes the model.

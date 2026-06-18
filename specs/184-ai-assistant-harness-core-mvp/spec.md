@@ -9,7 +9,7 @@ boundaries, and render the first non-CLI product shell with a left conversation
 list, center execution timeline, and right run/task inspector.
 
 This spec covers only PRD Phase 0 through Phase 3. PRD Phase 4 through Phase 7
-are explicitly deferred to later specs.
+are explicitly split into the follow-up specs recorded below.
 
 ## Why This Spec Exists
 
@@ -58,10 +58,12 @@ In scope:
 
 Out of scope:
 
-- PRD Phase 4 read/write scheduler and RWMutex implementation;
-- PRD Phase 5 AGENTS.md, skills, memory, and compaction implementation;
-- PRD Phase 6 customer-assistant subagent bridge implementation;
-- PRD Phase 7 observability, benchmark, replay, and governance platform;
+- PRD Phase 4 read/write scheduler and RWMutex implementation in spec 187;
+- PRD Phase 5 AGENTS.md, skills, memory, and compaction implementation in
+  spec 188;
+- PRD Phase 6 customer-assistant subagent bridge implementation in spec 189;
+- PRD Phase 7 observability, benchmark, replay, and governance platform in
+  spec 190;
 - automatic business writes;
 - replacing the customer-assistant runtime;
 - generic workflow designer or agent-builder UI;
@@ -120,18 +122,18 @@ Acceptance:
 - pending approvals can be approved or denied from the UI;
 - UI state survives page refresh.
 
-## Deferred Follow-Up Specs
+## Follow-Up Specs
 
-- `185-ai-assistant-tool-scheduler-rwmutex`: PRD Phase 4, read-only parallel
+- `187-ai-assistant-tool-scheduler-rwmutex`: PRD Phase 4, read-only parallel
   batches, write serialization, and later resource-keyed RWMutex.
-- `186-ai-assistant-prompt-skills-memory-compaction`: PRD Phase 5, layered
+- `188-ai-assistant-prompt-skills-memory-compaction`: PRD Phase 5, layered
   prompt assembler, project instructions, skill registry, working memory, and
   compaction.
-- `187-ai-assistant-customer-assistant-subagent-bridge`: PRD Phase 6,
+- `189-ai-assistant-customer-assistant-subagent-bridge`: PRD Phase 6,
   customer-assistant subagent spawn/status/events/result integration.
-- `188-ai-assistant-observability-benchmark-governance`: PRD Phase 7, trace
-  spans, token/cost/latency accounting, benchmark, replay, audit, and
-  governance gates.
+- `190-ai-assistant-observability-benchmark`: PRD Phase 7, trace spans,
+  token/cost/latency accounting, benchmark, replay, audit, and governance
+  gates.
 
 ## Event Contract
 

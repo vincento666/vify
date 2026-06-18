@@ -121,6 +121,6 @@ No live LLM gate is required for 187. Default tests must stay deterministic.
 Any optional future OpenRouter probe must:
 
 - be skipped unless an explicit env flag is present;
+- target qwen3.5-9b unless a later spec explicitly changes the model;
 - read credentials only from environment variables;
 - save skipped/live evidence separately from required GREEN gates.
-

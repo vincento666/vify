@@ -42,7 +42,8 @@
 - Real token/cost accounting is still placeholder-based; real accounting is a
   later hardening task.
 - Real LLM gates remain skipped by default; future live probes must use
-  OpenRouter via environment variables only.
+  OpenRouter qwen3.5-9b via environment variables only, with no credentials
+  committed to the repository.
 - Durable memory persistence and full multi-run compaction replay remain in
   later 188 slices.
 - Customer-assistant dirty runtime files remain outside this goal's committed
