@@ -1,0 +1,9 @@
+> vitest run src/remScaleClosure.test.ts src/views/workflow/workflowCanvasRemGovernance.test.ts
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ ✓ src/views/workflow/workflowCanvasRemGovernance.test.ts (3 tests) 7ms
+ ✓ src/remScaleClosure.test.ts (1 test) 16ms
+ Test Files  2 passed (2)
+      Tests  4 passed (4)
+   Start at  00:05:07
+   Duration  257ms (transform 32ms, setup 0ms, collect 34ms, tests 23ms, environment 0ms, prepare 88ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m

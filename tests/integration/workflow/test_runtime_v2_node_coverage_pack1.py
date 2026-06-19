@@ -222,7 +222,8 @@ def _create_branch_chatflow(client: TestClient) -> dict[str, object]:
             ],
             "edges": [
                 {"sourceNodeKey": "start", "targetNodeKey": "intent_1", "condition": None},
-                {"sourceNodeKey": "intent_1", "targetNodeKey": "condition_1", "condition": None},
+                {"sourceNodeKey": "intent_1", "targetNodeKey": "condition_1", "condition": "pricing"},
+                {"sourceNodeKey": "intent_1", "targetNodeKey": "general_msg", "condition": None},
                 {"sourceNodeKey": "condition_1", "targetNodeKey": "price_msg", "condition": "pricing"},
                 {"sourceNodeKey": "condition_1", "targetNodeKey": "general_msg", "condition": None},
                 {"sourceNodeKey": "price_msg", "targetNodeKey": "end", "condition": None},
