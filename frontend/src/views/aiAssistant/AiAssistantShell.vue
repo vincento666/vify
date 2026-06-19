@@ -667,7 +667,6 @@
 
 <script setup lang="ts">
 import {
-  CaretRightOutlined as CollapseChevron,
   CheckCircleOutlined,
   ClearOutlined,
   CopyOutlined,
@@ -680,6 +679,7 @@ import {
   LikeOutlined,
   LoadingOutlined,
   PlusOutlined,
+  RightOutlined as CollapseChevron,
   SafetyCertificateOutlined,
   SendOutlined,
   SettingOutlined,

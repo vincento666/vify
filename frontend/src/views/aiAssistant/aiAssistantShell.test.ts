@@ -309,13 +309,14 @@ describe('AI Assistant shell UI contract', () => {
   })
 
   it('uses compact unified icon buttons and svg-only collapse arrows', () => {
-    expect(content).toContain('CaretRightOutlined as CollapseChevron')
+    expect(content).toContain('RightOutlined as CollapseChevron')
     expect(content).toContain('<CollapseChevron')
     expect(content).toContain('aria-hidden="true"')
     expect(content).toContain('--ai-icon-button-size: 1.875rem;')
     expect(content).toContain('--ai-icon-glyph-size: 0.875rem;')
     expect(content).toContain('.ai-shell :deep(.ant-btn-icon-only)')
     expect(content).toContain('.ai-shell :deep(.ant-btn .anticon)')
+    expect(content).not.toContain('CaretRightOutlined as CollapseChevron')
     expect(content).not.toContain('RightOutlined as ChevronRight')
     expect(content).not.toContain('<ChevronRight')
     expect(content).not.toContain('>›<')

@@ -353,3 +353,16 @@
       `qwen/qwen3.5-27b`.
 - [x] Save evidence under
       `artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.23-shell-result-alignment/`.
+
+## 193.24 Collapse Chevron Restore
+
+- [x] RED: frontend shell contract fails while echo fold indicators still use
+      the newer filled caret icon instead of the previous line-style chevron.
+- [x] Restore task, event, and nested tool fold indicators to the previous
+      `RightOutlined` line icon while preserving SVG-only arrows and expanded
+      rotation behavior.
+- [x] Revalidate with focused frontend unit, AI Assistant shell/timeline unit,
+      `remScaleClosure`, full frontend unit, frontend build, `git diff --check`,
+      and Codex in-app browser UAT.
+- [x] Save evidence under
+      `artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.24-collapse-chevron-restore/`.
