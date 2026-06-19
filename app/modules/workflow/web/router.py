@@ -37,6 +37,7 @@ from app.modules.workflow.infra.publish_repository import WorkflowPublishReposit
 from app.modules.workflow.infra.realtime.redis_streams import RedisRuntimeEventStreamBus, RuntimeEventStreamBus
 from app.modules.workflow.infra.repository import WorkflowRepository
 from app.modules.workflow.infra.runtime_job_repository import RuntimeJobRepository
+from app.modules.workflow.runtime_job_worker import build_workflow_runtime_job_worker
 from app.modules.workflow.web.schemas import (
     ChatflowChannelTestRequest,
     ChatflowChannelUpdateRequest,
@@ -727,40 +728,24 @@ def _start_runtime_v2_completion_thread(
     def complete() -> None:
         worker_id = f"inline-runtime-v2-{run_id}-{time.time_ns()}"
         with factory() as background_session:
-            job_repository = RuntimeJobRepository(background_session) if job_id is not None else None
-            if job_repository is not None and job_repository.claim(job_id, worker_id=worker_id, lease_seconds=300) is None:
+            if job_id is not None and owner_type.upper() == "WORKFLOW":
+                build_workflow_runtime_job_worker(
+                    background_session,
+                    worker_id=worker_id,
+                    event_stream_bus=event_stream_bus,
+                ).run_once(job_id=job_id)
                 return
-            try:
-                if owner_type.upper() == "WORKFLOW":
-                    llm_service = _runtime_v2_llm_service(background_session, flow_type="WORKFLOW")
-                    WorkflowRuntimeV2Service(
-                        WorkflowRepository(background_session),
-                        ChatflowStateRepository(background_session, event_stream_bus=event_stream_bus),
-                        WorkflowPublishRepository(background_session),
-                        knowledge_facade=KnowledgeFacade(background_session),
-                        llm_completer_resolver=llm_service.runtime_v2_llm_completer,
-                        agent_invoker_resolver=llm_service.runtime_v2_agent_invoker,
-                        mcp_tool_executor=llm_service.runtime_v2_mcp_tool_executor(),
-                        api_tool_executor=llm_service.runtime_v2_api_tool_executor(),
-                    ).complete_run(run_id)
-                else:
-                    llm_service = _runtime_v2_llm_service(background_session, flow_type="CHATFLOW")
-                    ChatflowRuntimeV2Service(
-                        WorkflowRepository(background_session),
-                        ChatflowStateRepository(background_session, event_stream_bus=event_stream_bus),
-                        publish_repository=WorkflowPublishRepository(background_session),
-                        knowledge_facade=KnowledgeFacade(background_session),
-                        llm_completer_resolver=llm_service.runtime_v2_llm_completer,
-                        agent_invoker_resolver=llm_service.runtime_v2_agent_invoker,
-                        mcp_tool_executor=llm_service.runtime_v2_mcp_tool_executor(),
-                        api_tool_executor=llm_service.runtime_v2_api_tool_executor(),
-                    ).complete_run(run_id)
-            except Exception as exc:
-                if job_repository is not None:
-                    job_repository.fail(job_id, worker_id=worker_id, error=str(exc))
-                return
-            if job_repository is not None:
-                job_repository.complete(job_id, worker_id=worker_id)
+            llm_service = _runtime_v2_llm_service(background_session, flow_type="CHATFLOW")
+            ChatflowRuntimeV2Service(
+                WorkflowRepository(background_session),
+                ChatflowStateRepository(background_session, event_stream_bus=event_stream_bus),
+                publish_repository=WorkflowPublishRepository(background_session),
+                knowledge_facade=KnowledgeFacade(background_session),
+                llm_completer_resolver=llm_service.runtime_v2_llm_completer,
+                agent_invoker_resolver=llm_service.runtime_v2_agent_invoker,
+                mcp_tool_executor=llm_service.runtime_v2_mcp_tool_executor(),
+                api_tool_executor=llm_service.runtime_v2_api_tool_executor(),
+            ).complete_run(run_id)
 
     threading.Thread(target=complete, daemon=True).start()
 
