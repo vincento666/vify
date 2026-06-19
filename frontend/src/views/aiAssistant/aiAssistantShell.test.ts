@@ -232,6 +232,21 @@ describe('AI Assistant shell UI contract', () => {
     expect(content).not.toContain('skill=')
   })
 
+  it('renders command invocations as copyable Codex-like shell result blocks', () => {
+    expect(content).toContain("toolInvocation.displayMode === 'shell'")
+    expect(content).toContain("'ai-tool-invocation__header--shell': toolInvocation.displayMode === 'shell'")
+    expect(content).toContain('v-if="toolInvocation.displayMode !== \'shell\'"')
+    expect(content).toContain('v-if="toolInvocation.subtitle"')
+    expect(content).toContain('data-testid="ai-assistant-shell-result"')
+    expect(content).toContain('data-testid="ai-assistant-shell-result-output"')
+    expect(content).toContain('data-testid="ai-assistant-shell-result-copy"')
+    expect(content).toContain('copyToolInvocationResult')
+    expect(content).toContain('toolInvocationShellOutput(toolInvocation)')
+    expect(content).toContain('.ai-shell-result:hover .ai-shell-result__copy')
+    expect(content).toContain('.ai-shell-result:focus-within .ai-shell-result__copy')
+    expect(content).toContain('Shell')
+  })
+
   it('renders user bubbles with subtle fill and completion summary cards with actions', () => {
     expect(content).toContain('class="ai-message ai-message--user"')
     expect(content).toContain('class="ai-message ai-message--assistant"')

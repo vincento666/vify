@@ -1,0 +1,37 @@
+> vitest run src/views/aiAssistant/aiAssistantTimeline.test.ts -t shell commands as command-titled
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ ❯ src/views/aiAssistant/aiAssistantTimeline.test.ts (15 tests | 1 failed | 14 skipped) 5ms
+   ↓ ai assistant execution timeline > maps durable run events into visible Codex-style execution cards
+   ↓ ai assistant execution timeline > assembles consecutive model stream chunks into one visible model output message
+   ↓ ai assistant execution timeline > carries stream phase and source metadata for final answer placement
+   ↓ ai assistant execution timeline > deduplicates thought summaries that repeat the visible model output
+   ↓ ai assistant execution timeline > deduplicates thought summaries that arrive immediately before the same stream output
+   ↓ ai assistant execution timeline > normalizes duplicated model stream fragments before rendering model text
+   ↓ ai assistant execution timeline > keeps only one foldable tool result with readable input and output details
+   ↓ ai assistant execution timeline > summarizes multiple low-level tool calls into one foldable tool echo item
+   ↓ ai assistant execution timeline > builds one product-grade summarized invocation instead of many raw tool blocks
+   ↓ ai assistant execution timeline > keeps a single summarized tool echo item running while outputs are pending
+   ↓ ai assistant execution timeline > merges completed events back into the active tool group when only completion has a tool call id
+   ↓ ai assistant execution timeline > renders completed empty tool outputs from status instead of a pending placeholder
+   ↓ ai assistant execution timeline > deduplicates repeated file detail rows when the same path is read more than once
+   ↓ ai assistant execution timeline > renders only supported execution echo event categories in processed groups
+   × ai assistant execution timeline > renders shell commands as command-titled fold items with a single shell result block 5ms
+     → expected '命令执行' to be '已运行 1 条命令' // Object.is equality
+ Test Files  1 failed (1)
+      Tests  1 failed | 14 skipped (15)
+   Start at  16:42:50
+   Duration  261ms (transform 34ms, setup 0ms, collect 37ms, tests 5ms, environment 0ms, prepare 30ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/views/aiAssistant/aiAssistantTimeline.test.ts > ai assistant execution timeline > renders shell commands as command-titled fold items with a single shell result block
+AssertionError: expected '命令执行' to be '已运行 1 条命令' // Object.is equality
+Expected: "已运行 1 条命令"
+Received: "命令执行"
+ ❯ src/views/aiAssistant/aiAssistantTimeline.test.ts:583:31
+    581| 
+    582|     expect(timeline).toHaveLength(1)
+    583|     expect(timeline[0].title).toBe('已运行 1 条命令')
+       |                               ^
+    584|     const invocation = timeline[0].toolInvocations?.[0]
+    585|     expect(invocation).toMatchObject({
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯

@@ -315,3 +315,26 @@
       in-app browser UAT measurement.
 - [x] Save evidence under
       `artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.21-controlled-shell-approval/`.
+
+## 193.22 Command Echo Shell Result UI
+
+- [x] RED: frontend timeline contract fails while shell tool echoes still
+      render the outer header as generic `命令执行` instead of
+      `已运行 N 条命令`.
+- [x] RED: frontend shell contract fails while command invocations lack a
+      copyable Codex-like `Shell` result block.
+- [x] Refactor `run_shell` timeline invocations into `displayMode: "shell"`
+      with the real command as the fold header, no nested `终端命令` or
+      `调用工具` rows, and Shell copy text assembled from command plus stdout.
+- [x] Render expanded shell invocations as a single terminal-style result
+      block with command, stdout/stderr, completion indicator, and a hover/focus
+      copy button.
+- [x] Keep shell command fold headers free of an inner completed icon and avoid
+      duplicated completion text; the parent event line carries the completion
+      status.
+- [x] Update pressure UAT assertions to verify command headers, Shell result
+      output, absence of old tool detail rows, and copy button presence.
+- [x] Revalidate with focused frontend unit, `remScaleClosure`, full frontend
+      unit, frontend build, deterministic pressure UAT, and in-app browser UAT.
+- [x] Save evidence under
+      `artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.22-command-echo-shell-result-ui/`.

@@ -194,19 +194,24 @@
                       >
                         <button
                           class="ai-tool-invocation__header"
+                          :class="{ 'ai-tool-invocation__header--shell': toolInvocation.displayMode === 'shell' }"
                           type="button"
                           data-testid="ai-assistant-tool-invocation-header"
                           :aria-expanded="isToolInvocationExpanded(eventItem, toolInvocation)"
                           @click="toggleToolInvocation(eventItem, toolInvocation)"
                         >
-                          <span class="ai-tool-invocation__status" :class="`tone-${toolInvocation.tone}`">
+                          <span
+                            v-if="toolInvocation.displayMode !== 'shell'"
+                            class="ai-tool-invocation__status"
+                            :class="`tone-${toolInvocation.tone}`"
+                          >
                             <LoadingOutlined v-if="toolInvocation.tone === 'running'" class="ai-event__spinner" />
                             <CheckCircleOutlined v-else-if="toolInvocation.tone === 'success'" />
                             <ExclamationCircleOutlined v-else-if="toolInvocation.tone === 'danger'" />
                             <ClockCircleOutlined v-else />
                           </span>
                           <strong>{{ toolInvocation.title }}</strong>
-                          <small>{{ toolInvocation.subtitle || toolInvocation.statusText }}</small>
+                          <small v-if="toolInvocation.subtitle">{{ toolInvocation.subtitle }}</small>
                           <span>{{ toolInvocation.statusText }}</span>
                           <CollapseChevron
                             class="ai-collapse-chevron"
@@ -214,8 +219,38 @@
                             :class="{ expanded: isToolInvocationExpanded(eventItem, toolInvocation) }"
                           />
                         </button>
+                        <div
+                          v-if="isToolInvocationExpanded(eventItem, toolInvocation) && toolInvocation.displayMode === 'shell'"
+                          class="ai-shell-result"
+                          data-testid="ai-assistant-shell-result"
+                        >
+                          <header class="ai-shell-result__header">
+                            <span>Shell</span>
+                            <a-button
+                              class="ai-shell-result__copy"
+                              size="small"
+                              type="text"
+                              aria-label="复制命令结果"
+                              data-testid="ai-assistant-shell-result-copy"
+                              @click.stop="copyToolInvocationResult(toolInvocation)"
+                            >
+                              <template #icon><CopyOutlined /></template>
+                            </a-button>
+                          </header>
+                          <pre
+                            class="ai-shell-result__output"
+                            data-testid="ai-assistant-shell-result-output"
+                          >{{ toolInvocationShellOutput(toolInvocation) }}</pre>
+                          <footer class="ai-shell-result__footer" :class="`tone-${toolInvocation.tone}`">
+                            <CheckCircleOutlined v-if="toolInvocation.tone === 'success'" />
+                            <LoadingOutlined v-else-if="toolInvocation.tone === 'running'" class="ai-event__spinner" />
+                            <ExclamationCircleOutlined v-else-if="toolInvocation.tone === 'danger'" />
+                            <ClockCircleOutlined v-else />
+                            <span>{{ toolInvocation.shellResultText || toolInvocation.statusText }}</span>
+                          </footer>
+                        </div>
                         <dl
-                          v-if="isToolInvocationExpanded(eventItem, toolInvocation)"
+                          v-else-if="isToolInvocationExpanded(eventItem, toolInvocation)"
                           class="ai-tool-invocation__details"
                           data-testid="ai-assistant-tool-invocation-details"
                         >
@@ -1189,6 +1224,16 @@ function copyUserMessage(thread: AiAssistantRunThread) {
   void navigator.clipboard.writeText(message)
 }
 
+function copyToolInvocationResult(invocation: AiAssistantToolInvocation) {
+  const text = invocation.shellCopyText || toolInvocationShellOutput(invocation)
+  if (!text || typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return
+  void navigator.clipboard.writeText(text)
+}
+
+function toolInvocationShellOutput(invocation: AiAssistantToolInvocation) {
+  return [`$ ${invocation.shellCommand || invocation.title}`.trim(), invocation.shellOutput].filter(Boolean).join('\n\n')
+}
+
 function markFinalAnswerFeedback(targetRunId: number, value: 'like' | 'dislike') {
   completionFeedback.value = { ...completionFeedback.value, [targetRunId]: value }
 }
@@ -2149,6 +2194,11 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
   text-align: left;
 }
 
+.ai-tool-invocation__header--shell {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding-left: 0;
+}
+
 .ai-tool-invocation__header strong,
 .ai-tool-invocation__header small {
   overflow: hidden;
@@ -2187,6 +2237,68 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
   gap: 0.375rem;
   margin: 0;
   padding: 0 0 0.375rem 1.5rem;
+}
+
+.ai-shell-result {
+  position: relative;
+  display: grid;
+  gap: 0.625rem;
+  margin-left: 1.5rem;
+  padding: 0.75rem;
+  background: var(--color-bg-page, #f8f9fc);
+  border-radius: var(--radius-md, 0.375rem);
+}
+
+.ai-shell-result__header,
+.ai-shell-result__footer {
+  display: flex;
+  align-items: center;
+}
+
+.ai-shell-result__header {
+  justify-content: space-between;
+  min-height: 1.875rem;
+  color: var(--color-text-secondary, #4b5268);
+  font-weight: 600;
+}
+
+.ai-shell-result__copy {
+  opacity: 0;
+  transition: opacity 0.16s ease;
+}
+
+.ai-shell-result:hover .ai-shell-result__copy,
+.ai-shell-result:focus-within .ai-shell-result__copy {
+  opacity: 1;
+}
+
+.ai-shell-result__output {
+  max-height: 16rem;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  color: var(--color-text-primary, #0f1117);
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+
+.ai-shell-result__footer {
+  justify-content: flex-end;
+  gap: 0.375rem;
+  color: var(--color-text-tertiary, #8b92a8);
+  font-size: 0.8125rem;
+}
+
+.ai-shell-result__footer.tone-success {
+  color: var(--color-success-600, #059669);
+}
+
+.ai-shell-result__footer.tone-running {
+  color: var(--color-primary-600, #4f46e5);
+}
+
+.ai-shell-result__footer.tone-danger {
+  color: var(--color-danger-600, #dc2626);
 }
 
 .ai-tool-invocation__row {

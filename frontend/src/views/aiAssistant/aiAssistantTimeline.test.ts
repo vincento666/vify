@@ -560,22 +560,41 @@ describe('ai assistant execution timeline', () => {
     expect(timeline[2].details).toEqual([{ label: '内容', value: 'operator-ui 已批准 写入工作区文件。' }])
   })
 
-  it('labels shell command execution separately while still showing only the command result', () => {
+  it('renders shell commands as command-titled fold items with a single shell result block', () => {
     const events: AiAssistantEvent[] = [
-      event(1, 'tool.call_output', '工具输出', 'ok', {
+      event(1, 'tool.call_started', '工具开始', 'start', {
         toolName: 'run_shell',
+        input: { command: 'node tmp/demo.mjs' },
+      }),
+      event(2, 'tool.call_output', '工具输出', 'ok', {
+        toolName: 'run_shell',
+        input: { command: 'node tmp/demo.mjs' },
         output: { stdout: 'created tmp/demo.txt\nread tmp/demo.txt' },
+      }),
+      event(3, 'tool.call_completed', '工具完成', 'done', {
+        toolName: 'run_shell',
+        status: 'COMPLETED',
       }),
     ]
 
     const timeline = buildAiAssistantTimeline(events)
 
     expect(timeline).toHaveLength(1)
-    expect(timeline[0].title).toBe('命令执行')
-    expect(timeline[0].toolInvocations?.[0].title).toBe('终端命令')
-    expect(timeline[0].toolInvocations?.[0].outputRows).toContainEqual(
-      expect.objectContaining({ label: '终端命令', value: '输出：created tmp/demo.txt\nread tmp/demo.txt' }),
-    )
+    expect(timeline[0].title).toBe('已运行 1 条命令')
+    const invocation = timeline[0].toolInvocations?.[0]
+    expect(invocation).toMatchObject({
+      title: 'node tmp/demo.mjs',
+      subtitle: '',
+      statusText: '已完成',
+      displayMode: 'shell',
+      shellCommand: 'node tmp/demo.mjs',
+      shellOutput: 'created tmp/demo.txt\nread tmp/demo.txt',
+      shellCopyText: '$ node tmp/demo.mjs\n\ncreated tmp/demo.txt\nread tmp/demo.txt',
+    })
+    expect(invocation?.inputRows).toEqual([])
+    expect(invocation?.outputRows).toEqual([])
+    expect(JSON.stringify(timeline)).not.toContain('终端命令')
+    expect(JSON.stringify(timeline)).not.toContain('调用工具')
   })
 })
 

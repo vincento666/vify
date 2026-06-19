@@ -1,0 +1,8 @@
+> vitest run src/views/aiAssistant/aiAssistantShell.test.ts -t command invocations as copyable
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ ✓ src/views/aiAssistant/aiAssistantShell.test.ts (22 tests | 21 skipped) 1ms
+ Test Files  1 passed (1)
+      Tests  1 passed | 21 skipped (22)
+   Start at  17:16:59
+   Duration  386ms (transform 41ms, setup 0ms, collect 42ms, tests 1ms, environment 0ms, prepare 121ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m

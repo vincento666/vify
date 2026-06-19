@@ -1,0 +1,174 @@
+{
+  "mode": "deterministic-tool-stress",
+  "saveRunId": 111,
+  "shellRunId": 112,
+  "shellStatus": "COMPLETED",
+  "savedFile": "tmp/ai-assistant-code-save-test-uat.mjs",
+  "savedBytes": 694,
+  "localTestOutput": "PASS ai-assistant-code-save-test-uat",
+  "saveEventTypes": [
+    "run.started",
+    "orchestration.phase_started",
+    "model.call_completed",
+    "scheduler.batch_started",
+    "tool.call_started",
+    "tool.call_output",
+    "tool.call_completed",
+    "scheduler.batch_completed",
+    "scheduler.batch_started",
+    "tool.call_started",
+    "tool.call_output",
+    "tool.call_completed",
+    "scheduler.batch_completed",
+    "model.stream_chunk",
+    "model.stream_chunk",
+    "run.completed"
+  ],
+  "shellEventTypes": [
+    "run.started",
+    "orchestration.phase_started",
+    "model.call_completed",
+    "tool.call_started",
+    "tool.call_output",
+    "tool.call_completed",
+    "run.completed"
+  ],
+  "ui": {
+    "runHeaders": [
+      "已处理思考 0 次 / 工具调用 0 次",
+      "已处理思考 0 次 / 工具调用 1 次"
+    ],
+    "eventHeaders": [
+      "已编辑 1 个文件",
+      "已读取 1 个文件",
+      "已运行 1 条命令"
+    ],
+    "eventDetails": [
+      "输入路径：tmp/ai-assistant-code-save-test-uat.mjs\n内容预览：export function classifyHarnessEvent(event) {\n  if (!event || typeof event.type !== 'string') return 'unknown';\n  if (event.type === 'sandbox.denied') return 'blocked';\n  if (event.type.startsWith('tool.')) return 'tool';\n  if (event.type.startsWith('approval.')) return 'approval';\n  return 'other';\n}\n\nconst cases = [\n  [{ type: 'tool.call_completed' }, 'tool'],\n  [{ type: 'approval.granted' }, 'approval'],\n  [{ type: 'sandbox.denied' }, 'blocked'],\n];\n\nfor (const [input, expected] of cases) {\n  const actual = classifyHarnessEvent(input);\n  if (actual !== expected) {\n    throw new Error(`ex...结果结果：已写入 tmp/ai-assistant-code-save-test-uat.mjs（694 bytes）",
+      "输入路径：tmp/ai-assistant-code-save-test-uat.mjs结果结果：已读取 tmp/ai-assistant-code-save-test-uat.mjs\n内容预览：export function classifyHarnessEvent(event) {\n  if (!event || typeof event.type !== 'string') return 'unknown';\n  if (event.type === 'sandbox.denied') return 'blocked';\n  if (event.type.startsWith('tool.')) return 'tool';\n  if (event.type.startsWith('approval.')) return 'approval';\n  return 'other';\n}\n\nconst cases = [\n  [{ type: 'tool.call_completed' }, 'tool'],\n  [{ type: 'approval.granted' }, 'approval'],\n  [{ type: 'sandbox.denied' }, 'blocked'],\n];\n\nfor (const [input, expected] of cases) {\n  const actual = classifyHarnessEvent(input);\n  if (actual !== expected) {\n    throw new Error(`ex...",
+      "node tmp/ai-assistant-code-save-test-uat.mjs已完成Shell$ node tmp/ai-assistant-code-save-test-uat.mjs\n\nPASS ai-assistant-code-save-test-uat成功"
+    ],
+    "toolInvocationHeaders": [
+      "node tmp/ai-assistant-code-save-test-uat.mjs已完成"
+    ],
+    "toolInvocationDetails": [],
+    "shellHeaderStatusIcons": 0,
+    "shellResults": [
+      "Shell$ node tmp/ai-assistant-code-save-test-uat.mjs\n\nPASS ai-assistant-code-save-test-uat成功"
+    ],
+    "shellResultOutputs": [
+      "$ node tmp/ai-assistant-code-save-test-uat.mjs\n\nPASS ai-assistant-code-save-test-uat"
+    ],
+    "shellResultCopyButtons": 1,
+    "userMessages": [
+      "请完成一次代码保存验收：编写一份可直接用 node 运行的 JS 测试代码并保存到 tmp/ai-assistant-code-save-test-uat.mjs；代码需要包含一个 classifyHarnessEvent 函数和三个自检 case；保存后请读回这个文件确认内容已经落盘；最后用中文总结保存和读回结果。06/19 17:18",
+      "请运行刚才保存的测试：node tmp/ai-assistant-code-save-test-uat.mjs。请用完全访问权限下的受控命令执行能力运行，并把 stdout 作为可回溯事件显示。06/19 17:18"
+    ],
+    "finalAnswers": [
+      "工具结果：tmp/ai-assistant-code-save-test-uat.mjs; tmp/ai-assistant-code-save-test-uat.mjs已完成 · 06/19 17:18",
+      "工具结果：PASS ai-assistant-code-save-test-uat已完成 · 06/19 17:18"
+    ],
+    "taskRows": [
+      "请运行刚才保存的测试：node tmp/ai-assistant-code-save-test-uat.mjs。请用完全访问权限下的受控命令执行能力运行，...运行完成 / 1 个执行步骤"
+    ],
+    "toolRows": [
+      "Shell 执行已完成 / 27 ms"
+    ],
+    "recentErrors": [],
+    "approvalRows": [],
+    "iconOnlyButtons": [
+      {
+        "testId": "ai-assistant-delete-session",
+        "present": true,
+        "text": "",
+        "svgCount": 1,
+        "size": "27.19x27.19"
+      },
+      {
+        "testId": "ai-assistant-message-copy",
+        "present": true,
+        "text": "",
+        "svgCount": 1,
+        "size": "27.19x27.19"
+      },
+      {
+        "testId": "ai-assistant-completion-copy",
+        "present": true,
+        "text": "",
+        "svgCount": 1,
+        "size": "27.19x27.19"
+      },
+      {
+        "testId": "ai-assistant-completion-like",
+        "present": true,
+        "text": "",
+        "svgCount": 1,
+        "size": "27.19x27.19"
+      },
+      {
+        "testId": "ai-assistant-completion-dislike",
+        "present": true,
+        "text": "",
+        "svgCount": 1,
+        "size": "27.19x27.19"
+      },
+      {
+        "testId": "ai-assistant-add-context",
+        "present": true,
+        "text": "",
+        "svgCount": 1,
+        "size": "27.19x27.19"
+      },
+      {
+        "testId": "ai-assistant-model-config-icon",
+        "present": true,
+        "text": "",
+        "svgCount": 1,
+        "size": "27.19x27.19"
+      },
+      {
+        "testId": "ai-assistant-send",
+        "present": true,
+        "text": "",
+        "svgCount": 1,
+        "size": "27.19x27.19"
+      }
+    ],
+    "iconButtonSizes": [
+      "27.19x27.19"
+    ],
+    "chevrons": [
+      {
+        "text": "",
+        "hasSvg": true,
+        "ariaHidden": "true"
+      },
+      {
+        "text": "",
+        "hasSvg": true,
+        "ariaHidden": "true"
+      },
+      {
+        "text": "",
+        "hasSvg": true,
+        "ariaHidden": "true"
+      },
+      {
+        "text": "",
+        "hasSvg": true,
+        "ariaHidden": "true"
+      },
+      {
+        "text": "",
+        "hasSvg": true,
+        "ariaHidden": "true"
+      },
+      {
+        "text": "",
+        "hasSvg": true,
+        "ariaHidden": "true"
+      }
+    ],
+    "pageOverflowY": 0
+  }
+}

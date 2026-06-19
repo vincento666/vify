@@ -45,6 +45,11 @@ export interface AiAssistantToolInvocation {
   tone: AiAssistantTimelineItem['tone']
   inputRows: AiAssistantToolInvocationRow[]
   outputRows: AiAssistantToolInvocationRow[]
+  displayMode?: 'rows' | 'shell'
+  shellCommand?: string
+  shellOutput?: string
+  shellResultText?: string
+  shellCopyText?: string
 }
 
 export interface AiAssistantToolInvocationRow {
@@ -290,14 +295,15 @@ function toolGroupsToTimelineItem(groups: ToolEventGroup[]): AiAssistantTimeline
   const firstSequence = Math.min(...orderedGroups.map((group) => group.firstSequence))
   const lastSequence = Math.max(...orderedGroups.map((group) => group.lastSequence))
   const allShellCommands = orderedGroups.every((group) => group.toolName === 'run_shell')
+  const title = allShellCommands ? shellGroupsTitle(orderedGroups) : '工具调用'
   return {
     id: `${firstEvent.runId}-${firstSequence}-${lastSequence}-tool-summary`,
     eventId: resultEvent.id,
     sequence: firstSequence,
     kind: 'tool',
     tone: toolGroupsTone(orderedGroups),
-    title: allShellCommands ? '命令执行' : '工具调用',
-    summary: `已汇总 ${orderedGroups.length} 次工具调用`,
+    title,
+    summary: allShellCommands ? title : `已汇总 ${orderedGroups.length} 次工具调用`,
     payloadPreview: compactPayload({
       callCount: orderedGroups.length,
       toolNames: orderedGroups.map((group) => group.toolName),
@@ -306,7 +312,7 @@ function toolGroupsToTimelineItem(groups: ToolEventGroup[]): AiAssistantTimeline
       toSequence: lastSequence,
     }),
     details: [],
-    toolInvocations: [toolGroupsToSummaryInvocation(orderedGroups)],
+    toolInvocations: allShellCommands ? orderedGroups.map(toolGroupToInvocation) : [toolGroupsToSummaryInvocation(orderedGroups)],
   }
 }
 
@@ -380,6 +386,10 @@ function fileGroupsTitle(groups: ToolEventGroup[]) {
   if (groups.every((group) => group.toolName === 'create_workspace_file')) return `已创建 ${count} 个文件`
   if (groups.every((group) => group.toolName === 'write_workspace_file')) return `已编辑 ${count} 个文件`
   return `已处理 ${count} 个文件`
+}
+
+function shellGroupsTitle(groups: ToolEventGroup[]) {
+  return `已运行 ${groups.length} 条命令`
 }
 
 function fileGroupsToDetails(groups: ToolEventGroup[]): AiAssistantTimelineDetail[] {
@@ -547,6 +557,7 @@ function summarizeToolOutput(toolName: string, output: unknown) {
 }
 
 function toolGroupToInvocation(group: ToolEventGroup): AiAssistantToolInvocation {
+  if (group.toolName === 'run_shell') return shellGroupToInvocation(group)
   return {
     id: group.id,
     title: toolDisplayName(group.toolName),
@@ -556,6 +567,54 @@ function toolGroupToInvocation(group: ToolEventGroup): AiAssistantToolInvocation
     inputRows: toolInputRows(group),
     outputRows: toolOutputRows(group),
   }
+}
+
+function shellGroupToInvocation(group: ToolEventGroup): AiAssistantToolInvocation {
+  const command = shellCommandText(group)
+  const output = shellOutputText(group)
+  const resultText = shellResultText(group)
+  return {
+    id: group.id,
+    title: command || '命令',
+    subtitle: '',
+    statusText: toolInvocationStatusText(group),
+    tone: toolGroupTone(group),
+    inputRows: [],
+    outputRows: [],
+    displayMode: 'shell',
+    shellCommand: command,
+    shellOutput: output,
+    shellResultText: resultText,
+    shellCopyText: shellCopyText(command, output),
+  }
+}
+
+function shellCommandText(group: ToolEventGroup) {
+  return (
+    fieldValue(group.input, 'command') ||
+    fieldValue(group.input, 'args') ||
+    fieldValue(group.output, 'command') ||
+    fieldValue(group.output, 'args')
+  )
+}
+
+function shellOutputText(group: ToolEventGroup) {
+  const stdout = fieldValue(group.output, 'stdout')
+  const stderr = fieldValue(group.output, 'stderr')
+  const message = !stdout && !stderr ? summarizeToolOutput(group.toolName, group.output) : ''
+  return [stdout, stderr, message].filter(Boolean).join('\n').trim()
+}
+
+function shellResultText(group: ToolEventGroup) {
+  const tone = toolGroupTone(group)
+  const exitCode = Number(fieldValue(group.output, 'exitCode'))
+  if (tone === 'running') return '运行中'
+  if (tone === 'danger' || (!Number.isNaN(exitCode) && exitCode !== 0)) return '失败'
+  return '成功'
+}
+
+function shellCopyText(command: string, output: string) {
+  return [`$ ${command}`.trim(), output].filter(Boolean).join('\n\n')
 }
 
 function toolInvocationSubtitle(group: ToolEventGroup) {

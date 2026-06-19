@@ -166,7 +166,14 @@ async function collectUiState(page) {
       runHeaders: textList('[data-testid="ai-assistant-run-event-group-header"]'),
       eventHeaders: textList('[data-testid="ai-assistant-event-card-header"]'),
       eventDetails: textList('[data-testid="ai-assistant-event-detail-panel"]'),
+      toolInvocationHeaders: textList('[data-testid="ai-assistant-tool-invocation-header"]'),
       toolInvocationDetails: textList('[data-testid="ai-assistant-tool-invocation-details"]'),
+      shellHeaderStatusIcons: all(
+        '[data-testid="ai-assistant-tool-invocation-header"].ai-tool-invocation__header--shell .ai-tool-invocation__status',
+      ).length,
+      shellResults: textList('[data-testid="ai-assistant-shell-result"]'),
+      shellResultOutputs: textList('[data-testid="ai-assistant-shell-result-output"]'),
+      shellResultCopyButtons: all('[data-testid="ai-assistant-shell-result-copy"]').length,
       userMessages: textList('[data-testid="ai-assistant-user-message"]'),
       finalAnswers: textList('[data-testid="ai-assistant-run-final-answer"]'),
       taskRows: textList('[data-testid="ai-assistant-task-row"]'),
@@ -263,12 +270,36 @@ async function run() {
     assert(state.eventHeaders.some((text) => text.includes('已编辑')), `expected file edit echo, got ${state.eventHeaders.join(' | ')}`)
     assert(state.eventHeaders.some((text) => text.includes('已读取')), `expected file read echo, got ${state.eventHeaders.join(' | ')}`)
     assert(
-      state.eventHeaders.some((text) => text.includes('命令执行')),
+      state.eventHeaders.some((text) => text.includes('已运行 1 条命令')),
       `expected visible command execution echo, got headers=${state.eventHeaders.join(' | ')}`,
     )
     assert(
-      state.toolInvocationDetails.some((text) => text.includes('PASS ai-assistant-code-save-test-uat')),
-      `expected command stdout in tool detail, got details=${state.toolInvocationDetails.join(' | ')}`,
+      state.toolInvocationHeaders.some((text) => text.includes(`node ${targetPath}`)),
+      `expected command as shell fold header, got headers=${state.toolInvocationHeaders.join(' | ')}`,
+    )
+    assert(
+      !state.toolInvocationHeaders.some((text) => text.includes('终端命令')),
+      `expected shell fold header to avoid nested tool labels, got headers=${state.toolInvocationHeaders.join(' | ')}`,
+    )
+    assert(
+      !state.toolInvocationHeaders.some((text) => text.includes('已完成已完成')),
+      `expected shell fold header to show one status only, got headers=${state.toolInvocationHeaders.join(' | ')}`,
+    )
+    assert(
+      state.shellHeaderStatusIcons === 0,
+      `expected shell fold header to omit inner status icons, got ${state.shellHeaderStatusIcons}`,
+    )
+    assert(
+      state.shellResultOutputs.some((text) => text.includes(`$ node ${targetPath}`)),
+      `expected shell result output to show command, got outputs=${state.shellResultOutputs.join(' | ')}`,
+    )
+    assert(
+      state.shellResults.some((text) => text.includes('PASS ai-assistant-code-save-test-uat')),
+      `expected command stdout in shell result block, got results=${state.shellResults.join(' | ')}`,
+    )
+    assert(
+      state.shellResultCopyButtons >= 1,
+      `expected shell result copy button, got ${state.shellResultCopyButtons}`,
     )
     assert(
       state.finalAnswers.some((text) => text.includes('PASS ai-assistant-code-save-test-uat')),
