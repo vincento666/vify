@@ -163,7 +163,7 @@ def _nodes(spec: AirlineSopSeedSpec) -> list[dict[str, Any]]:
                 "inputSource": "{{start.sys.query}}",
                 "outputVariable": "info",
                 "collectionKey": "info",
-                "extractorMode": "llm",
+                "extractorMode": "fake",
                 "includeHistory": True,
                 "followupTemplate": _history_aware_followup(spec.followup),
                 "fields": list(spec.fields),

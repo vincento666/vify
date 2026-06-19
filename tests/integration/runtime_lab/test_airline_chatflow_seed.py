@@ -46,6 +46,7 @@ class RuntimeLabAirlineChatflowSeedTest(unittest.TestCase):
                     self.assertTrue(any(node["type"] == "QUESTION" for node in nodes), sop_id)
                     collect_node = next(node for node in nodes if node["type"] == "INFORMATION_COLLECTION")
                     followup_template = str(collect_node["config"].get("followupTemplate") or "")
+                    self.assertEqual(collect_node["config"].get("extractorMode"), "fake", sop_id)
                     self.assertIs(collect_node["config"].get("includeHistory"), True, sop_id)
                     self.assertIn("{{missing_labels}}", followup_template, sop_id)
                     self.assertIn("{{collected_notice}}", followup_template, sop_id)
