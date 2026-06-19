@@ -1,0 +1,128 @@
+{
+  "chatflowId": 1779,
+  "sessionId": "chatflow-1779-session-1781847460409118000",
+  "first": {
+    "sessionId": "chatflow-1779-session-1781847460409118000",
+    "conversationId": "chatflow-1779-session-1781847460409118000",
+    "runId": 1293,
+    "status": "SUCCEEDED",
+    "answer": "answer: Hello first browser turn",
+    "output": {
+      "answer": "answer: Hello first browser turn"
+    },
+    "requiresInput": false,
+    "checkpoint": null,
+    "statusRef": "/api/v1/runtime-runs/1293",
+    "eventsRef": "/api/v1/runtime-runs/1293/events",
+    "eventStreamRef": "/api/v1/runtime-runs/1293/events/stream?afterSequence=0",
+    "nodesRef": "/api/v1/runtime-runs/1293/nodes",
+    "resultRef": "/api/v1/runtime-runs/1293/result",
+    "idempotentReplay": false,
+    "waitTimedOut": false,
+    "transport": {
+      "decision": "sse",
+      "webSocket": "deferred_until_bidirectional_control",
+      "redisPubsub": "deferred_until_multi_process_fanout",
+      "redisStreams": "not_configured"
+    },
+    "error": ""
+  },
+  "second": {
+    "sessionId": "chatflow-1779-session-1781847460409118000",
+    "conversationId": "chatflow-1779-session-1781847460409118000",
+    "runId": 1294,
+    "status": "SUCCEEDED",
+    "answer": "answer: Hello second browser turn",
+    "output": {
+      "answer": "answer: Hello second browser turn"
+    },
+    "requiresInput": false,
+    "checkpoint": null,
+    "statusRef": "/api/v1/runtime-runs/1294",
+    "eventsRef": "/api/v1/runtime-runs/1294/events",
+    "eventStreamRef": "/api/v1/runtime-runs/1294/events/stream?afterSequence=0",
+    "nodesRef": "/api/v1/runtime-runs/1294/nodes",
+    "resultRef": "/api/v1/runtime-runs/1294/result",
+    "idempotentReplay": false,
+    "waitTimedOut": false,
+    "transport": {
+      "decision": "sse",
+      "webSocket": "deferred_until_bidirectional_control",
+      "redisPubsub": "deferred_until_multi_process_fanout",
+      "redisStreams": "not_configured"
+    },
+    "error": ""
+  },
+  "replay": {
+    "sessionId": "chatflow-1779-session-1781847460409118000",
+    "conversationId": "chatflow-1779-session-1781847460409118000",
+    "runId": 1294,
+    "status": "SUCCEEDED",
+    "answer": "answer: Hello second browser turn",
+    "output": {
+      "answer": "answer: Hello second browser turn"
+    },
+    "requiresInput": false,
+    "checkpoint": null,
+    "statusRef": "/api/v1/runtime-runs/1294",
+    "eventsRef": "/api/v1/runtime-runs/1294/events",
+    "eventStreamRef": "/api/v1/runtime-runs/1294/events/stream?afterSequence=0",
+    "nodesRef": "/api/v1/runtime-runs/1294/nodes",
+    "resultRef": "/api/v1/runtime-runs/1294/result",
+    "idempotentReplay": true,
+    "waitTimedOut": false,
+    "transport": {
+      "decision": "sse",
+      "webSocket": "deferred_until_bidirectional_control",
+      "redisPubsub": "deferred_until_multi_process_fanout",
+      "redisStreams": "not_configured"
+    },
+    "error": ""
+  },
+  "session": {
+    "sessionId": "chatflow-1779-session-1781847460409118000",
+    "chatflowId": 1779,
+    "conversationId": "chatflow-1779-session-1781847460409118000",
+    "userId": "browser-uat-user",
+    "channel": "browser-uat",
+    "channelId": "browser-uat",
+    "status": "completed",
+    "currentRunId": 1294,
+    "variables": {
+      "sys": {
+        "files": [],
+        "query": "second browser turn",
+        "channel": "browser-uat",
+        "user_id": "browser-uat-user",
+        "channel_id": "browser-uat",
+        "session_id": "chatflow-1779-session-1781847460409118000",
+        "conversation_id": "chatflow-1779-session-1781847460409118000"
+      },
+      "flow": {},
+      "user": {},
+      "input": {},
+      "global": {},
+      "channel": {},
+      "external": {},
+      "conversation": {}
+    },
+    "expiresAt": "2026-06-20T13:37:41",
+    "waitingEvent": null,
+    "checkpoint": null
+  },
+  "sessionEventsTotal": 24,
+  "secondRunEventTypes": [
+    "workflow_run_started",
+    "user_message",
+    "workflow_node_started",
+    "node_status_changed",
+    "workflow_node_completed",
+    "node_status_changed",
+    "workflow_node_started",
+    "node_status_changed",
+    "workflow_node_completed",
+    "node_status_changed",
+    "workflow_run_completed",
+    "assistant_message"
+  ]
+}

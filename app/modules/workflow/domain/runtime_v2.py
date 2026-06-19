@@ -282,6 +282,20 @@ class ChatflowRuntimeV2Service:
                 **_definition_payload(definition),
             },
         )
+        if self._use_chatflow_session and self._owner_type == "CHATFLOW":
+            user_message = _chatflow_user_message_from_input(input_data)
+            if user_message:
+                self._append_event(
+                    session_id=session_id,
+                    chatflow_id=chatflow_id,
+                    run_id=run_id,
+                    event_type="user_message",
+                    payload={
+                        "role": "user",
+                        "content": user_message,
+                        "metadata": input_data.get("metadata") if isinstance(input_data.get("metadata"), dict) else {},
+                    },
+                )
         payload = _start_payload(
             RuntimeV2Start(
                 run_id=run_id,
@@ -377,6 +391,20 @@ class ChatflowRuntimeV2Service:
             event_type="workflow_run_completed",
             payload={"output": output},
         )
+        if self._use_chatflow_session and self._owner_type == "CHATFLOW":
+            assistant_message = _chatflow_answer_from_output(output)
+            if assistant_message:
+                self._append_event(
+                    session_id=session_id,
+                    chatflow_id=chatflow_id,
+                    run_id=run_id,
+                    event_type="assistant_message",
+                    payload={
+                        "role": "assistant",
+                        "content": assistant_message,
+                        "output": output,
+                    },
+                )
 
     def resume_run(
         self,
@@ -1360,6 +1388,25 @@ def _runtime_definition(input_data: dict[str, Any]) -> dict[str, Any]:
 
 def _runtime_user_input(input_data: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in input_data.items() if key != "_runtimeV2"}
+
+
+def _chatflow_user_message_from_input(input_data: dict[str, Any]) -> str:
+    for key in ("sys.query", "USER_INPUT", "userMessage", "message", "query", "content"):
+        value = input_data.get(key)
+        if value is not None and str(value).strip():
+            return str(value)
+    return ""
+
+
+def _chatflow_answer_from_output(output: dict[str, Any]) -> str:
+    for key in ("answer", "final", "output", "content", "message", "text"):
+        value = output.get(key)
+        if value is not None and str(value).strip():
+            return str(value)
+    for value in output.values():
+        if isinstance(value, str) and value.strip():
+            return value
+    return ""
 
 
 def _definition_payload(definition: dict[str, Any]) -> dict[str, Any]:

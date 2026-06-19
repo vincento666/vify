@@ -39,6 +39,7 @@ from app.modules.workflow.infra.repository import WorkflowRepository
 from app.modules.workflow.web.schemas import (
     ChatflowChannelTestRequest,
     ChatflowChannelUpdateRequest,
+    ChatflowMessageRequest,
     WorkflowCreateRequest,
     WorkflowNodeRunRequest,
     WorkflowResumeRequest,
@@ -50,6 +51,7 @@ router = APIRouter(prefix="/api/v1/workflows", tags=["workflows"])
 chatflow_router = APIRouter(prefix="/api/v1/chatflows", tags=["chatflows"])
 resource_router = APIRouter(prefix="/api/v1/workflow-resources", tags=["workflow-resources"])
 runtime_v2_router = APIRouter(prefix="/api/v1/runtime-runs", tags=["runtime-runs"])
+_RUNTIME_V2_INLINE_COMPLETION_WAIT_MS = 450
 
 
 def get_workflow_service(
@@ -382,6 +384,30 @@ def run_chatflow_v2(
     return success(data)
 
 
+@chatflow_router.post("/{chatflow_id}/messages")
+def send_chatflow_message(
+    chatflow_id: int,
+    request: ChatflowMessageRequest,
+    session: Session = Depends(get_session),
+    service: ChatflowRuntimeV2Service = Depends(get_chatflow_runtime_v2_service),
+    event_stream_bus: RuntimeEventStreamBus | None = Depends(get_runtime_event_stream_bus),
+) -> dict[str, Any]:
+    input_data = _chatflow_message_runtime_input(chatflow_id, request)
+    data = service.start_run(chatflow_id, input_data, request.idempotency_key, request.version_id)
+    _attach_runtime_v2_transport(data, event_stream_bus)
+    if not data.get("idempotentReplay") and request.wait_timeout_ms >= _RUNTIME_V2_INLINE_COMPLETION_WAIT_MS:
+        service.complete_run(int(data["runId"]))
+    elif not data.get("idempotentReplay"):
+        _start_runtime_v2_completion_thread(
+            session,
+            int(data["runId"]),
+            owner_type="CHATFLOW",
+            event_stream_bus=event_stream_bus,
+        )
+    result = _wait_for_runtime_v2_result(service, int(data["runId"]), request.wait_timeout_ms)
+    return success(_chatflow_message_response(data, input_data, result, request.wait_timeout_ms))
+
+
 @chatflow_router.get("/{chatflow_id}/runs/{run_id}/debug")
 def get_chatflow_run_debug(
     chatflow_id: int,
@@ -496,6 +522,16 @@ def get_chatflow_session(
     service: WorkflowService = Depends(get_chatflow_service),
 ) -> dict[str, Any]:
     return success(service.get_session_state(chatflow_id, session_id))
+
+
+@chatflow_router.get("/{chatflow_id}/sessions/{session_id}/events")
+def list_chatflow_session_events(
+    chatflow_id: int,
+    session_id: str,
+    after_event_id: int = Query(default=0, alias="afterEventId", ge=0),
+    service: WorkflowService = Depends(get_chatflow_service),
+) -> dict[str, Any]:
+    return success(service.list_session_events(chatflow_id, session_id, after_event_id))
 
 
 @chatflow_router.get("/{chatflow_id}/runs/{run_id}/events")
@@ -635,6 +671,117 @@ def _start_runtime_v2_completion_thread(
                 ).complete_run(run_id)
 
     threading.Thread(target=complete, daemon=True).start()
+
+
+def _chatflow_message_runtime_input(chatflow_id: int, request: ChatflowMessageRequest) -> dict[str, Any]:
+    message = request.message
+    channel = str(request.channel or "api")
+    session_id = str(
+        request.session_id
+        or request.conversation_id
+        or f"chatflow-{chatflow_id}-session-{time.time_ns()}"
+    )
+    conversation_id = str(request.conversation_id or session_id)
+    channel_id = str(request.channel_id or channel)
+    input_data = dict(request.input)
+    input_data.update(
+        {
+            "message": message,
+            "userMessage": message,
+            "USER_INPUT": message,
+            "sys.query": message,
+            "sessionId": session_id,
+            "conversationId": conversation_id,
+            "sys.session_id": session_id,
+            "sys.conversation_id": conversation_id,
+            "channel": channel,
+            "channelId": channel_id,
+            "sys.channel": channel,
+            "sys.channel_id": channel_id,
+            "files": request.files,
+            "sys.files": request.files,
+            "metadata": request.metadata,
+        }
+    )
+    if request.user_id:
+        input_data["userId"] = request.user_id
+        input_data["sys.user_id"] = request.user_id
+    return input_data
+
+
+def _wait_for_runtime_v2_result(
+    service: ChatflowRuntimeV2Service,
+    run_id: int,
+    wait_timeout_ms: int,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + (wait_timeout_ms / 1000)
+    latest = service.get_result(run_id)
+    while wait_timeout_ms > 0 and time.monotonic() <= deadline:
+        status = str(latest.get("status") or "").upper()
+        if status in {"INTERRUPTED", "FAILED", "CANCELLED"}:
+            return latest
+        if status == "SUCCEEDED":
+            answer = _chatflow_gateway_answer(dict(latest.get("output") or {}))
+            if not answer or _runtime_v2_has_event(service, run_id, "assistant_message"):
+                return latest
+        time.sleep(min(0.05, max(0.0, deadline - time.monotonic())))
+        latest = service.get_result(run_id)
+    return latest
+
+
+def _runtime_v2_has_event(service: ChatflowRuntimeV2Service, run_id: int, event_type: str) -> bool:
+    try:
+        events = service.list_events(run_id).get("list") or []
+    except Exception:
+        return False
+    return any(isinstance(event, dict) and event.get("type") == event_type for event in events)
+
+
+def _chatflow_message_response(
+    start: dict[str, Any],
+    input_data: dict[str, Any],
+    result: dict[str, Any],
+    wait_timeout_ms: int,
+) -> dict[str, Any]:
+    run_id = int(start["runId"])
+    status = str(result.get("status") or start.get("status") or "RUNNING")
+    output = dict(result.get("output") or {})
+    checkpoint = result.get("checkpoint") if isinstance(result.get("checkpoint"), dict) else None
+    answer = _chatflow_gateway_answer(output)
+    response = {
+        "sessionId": str(start.get("sessionId") or input_data.get("sys.session_id") or ""),
+        "conversationId": str(input_data.get("sys.conversation_id") or start.get("sessionId") or ""),
+        "runId": run_id,
+        "status": status,
+        "answer": answer or None,
+        "output": output,
+        "requiresInput": status.upper() == "INTERRUPTED" or checkpoint is not None,
+        "checkpoint": checkpoint,
+        "statusRef": f"/api/v1/runtime-runs/{run_id}",
+        "eventsRef": start.get("eventsRef") or f"/api/v1/runtime-runs/{run_id}/events",
+        "eventStreamRef": start.get("eventStreamRef") or f"/api/v1/runtime-runs/{run_id}/events/stream?afterSequence=0",
+        "nodesRef": start.get("nodesRef") or f"/api/v1/runtime-runs/{run_id}/nodes",
+        "resultRef": start.get("resultRef") or f"/api/v1/runtime-runs/{run_id}/result",
+        "idempotentReplay": bool(start.get("idempotentReplay")),
+        "waitTimedOut": wait_timeout_ms > 0 and status.upper() == "RUNNING",
+        "transport": start.get("transport") or {},
+        "error": str(result.get("error") or ""),
+    }
+    if start.get("versionId") is not None:
+        response["versionId"] = start.get("versionId")
+        response["version"] = start.get("version")
+    return response
+
+
+def _chatflow_gateway_answer(output: dict[str, Any]) -> str:
+    for key in ("answer", "final", "output", "content", "message", "text"):
+        value = output.get(key)
+        if value is not None and str(value).strip():
+            return str(value)
+    for value in output.values():
+        if isinstance(value, str) and value.strip():
+            return value
+    return ""
 
 
 def _iter_runtime_v2_sse(

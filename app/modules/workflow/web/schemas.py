@@ -47,6 +47,23 @@ class WorkflowRunRequest(BaseModel):
     version_id: int | None = Field(default=None, alias="versionId")
 
 
+class ChatflowMessageRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    message: str
+    session_id: str | None = Field(default=None, alias="sessionId")
+    conversation_id: str | None = Field(default=None, alias="conversationId")
+    user_id: str | None = Field(default=None, alias="userId")
+    channel: str = "api"
+    channel_id: str | None = Field(default=None, alias="channelId")
+    input: dict[str, object] = Field(default_factory=dict)
+    files: list[dict[str, object]] = Field(default_factory=list)
+    metadata: dict[str, object] = Field(default_factory=dict)
+    idempotency_key: str | None = Field(default=None, alias="idempotencyKey")
+    wait_timeout_ms: int = Field(default=0, alias="waitTimeoutMs", ge=0, le=30000)
+    version_id: int | None = Field(default=None, alias="versionId")
+
+
 class ChatflowChannelUpdateRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 

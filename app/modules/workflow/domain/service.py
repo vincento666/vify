@@ -734,6 +734,19 @@ class WorkflowService:
         events = self._chatflow_state_repository.list_events(chatflow_id, run_id)
         return {"list": [_format_chatflow_event(event) for event in events], "total": len(events)}
 
+    def list_session_events(
+        self,
+        chatflow_id: int,
+        session_id: str,
+        after_event_id: int = 0,
+    ) -> dict[str, Any]:
+        if self._chatflow_state_repository is None:
+            raise BizError(ErrorCode.BAD_REQUEST, "Chatflow session state is not configured")
+        if self._chatflow_state_repository.get_session(chatflow_id, session_id) is None:
+            raise BizError(ErrorCode.NOT_FOUND, "Chatflow session not found")
+        events = self._chatflow_state_repository.list_session_events(chatflow_id, session_id, after_event_id)
+        return {"list": [_format_chatflow_event(event) for event in events], "total": len(events)}
+
     def resume_run(self, chatflow_id: int, run_id: int, request: WorkflowResumeRequest) -> dict[str, Any]:
         if self._flow_type != "CHATFLOW" or self._chatflow_state_repository is None:
             raise BizError(ErrorCode.BAD_REQUEST, "Chatflow resume is not configured")

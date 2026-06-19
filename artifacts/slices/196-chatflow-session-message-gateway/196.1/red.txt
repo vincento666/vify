@@ -1,0 +1,101 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/vincento/work/develop/hify
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 4 items
+
+tests/contract/test_chatflow_session_gateway_api.py FF                   [ 50%]
+tests/integration/workflow/test_chatflow_session_gateway.py FF           [100%]
+
+=================================== FAILURES ===================================
+_ ChatflowSessionGatewayApiContractTest.test_message_creates_session_and_returns_answer_when_omitted _
+
+self = <tests.contract.test_chatflow_session_gateway_api.ChatflowSessionGatewayApiContractTest testMethod=test_message_creates_session_and_returns_answer_when_omitted>
+
+    def test_message_creates_session_and_returns_answer_when_omitted(self) -> None:
+        with TestClient(app) as client:
+            chatflow = _create_message_chatflow(client, "contract-omitted")
+            response = client.post(
+                f"/api/v1/chatflows/{chatflow['id']}/messages",
+                json={
+                    "message": "Ada",
+                    "userId": "user-contract",
+                    "channel": "web",
+                    "waitTimeoutMs": 1200,
+                    "idempotencyKey": f"contract-omitted-{time.time_ns()}",
+                },
+            )
+
+>           self.assertEqual(response.status_code, 200, response.text)
+E           AssertionError: 404 != 200 : {"code":404,"message":"Not Found","data":null}
+
+tests/contract/test_chatflow_session_gateway_api.py:24: AssertionError
+_ ChatflowSessionGatewayApiContractTest.test_message_idempotency_key_replays_same_run _
+
+self = <tests.contract.test_chatflow_session_gateway_api.ChatflowSessionGatewayApiContractTest testMethod=test_message_idempotency_key_replays_same_run>
+
+    def test_message_idempotency_key_replays_same_run(self) -> None:
+        stamp = time.time_ns()
+        with TestClient(app) as client:
+            chatflow = _create_message_chatflow(client, "contract-idempotency")
+            first = client.post(
+                f"/api/v1/chatflows/{chatflow['id']}/messages",
+                json={"message": "Grace", "waitTimeoutMs": 1200, "idempotencyKey": f"same-turn-{stamp}"},
+            )
+>           self.assertEqual(first.status_code, 200, first.text)
+E           AssertionError: 404 != 200 : {"code":404,"message":"Not Found","data":null}
+
+tests/contract/test_chatflow_session_gateway_api.py:46: AssertionError
+_ ChatflowSessionGatewayIntegrationTest.test_auto_created_session_can_continue_on_second_message _
+
+self = <tests.integration.workflow.test_chatflow_session_gateway.ChatflowSessionGatewayIntegrationTest testMethod=test_auto_created_session_can_continue_on_second_message>
+
+    def test_auto_created_session_can_continue_on_second_message(self) -> None:
+        with TestClient(app) as client:
+            chatflow = _create_echo_chatflow(client, "continue")
+            first = client.post(
+                f"/api/v1/chatflows/{chatflow['id']}/messages",
+                json={"message": "first", "waitTimeoutMs": 1200, "idempotencyKey": f"first-{time.time_ns()}"},
+            )
+>           self.assertEqual(first.status_code, 200, first.text)
+E           AssertionError: 404 != 200 : {"code":404,"message":"Not Found","data":null}
+
+tests/integration/workflow/test_chatflow_session_gateway.py:17: AssertionError
+_ ChatflowSessionGatewayIntegrationTest.test_session_and_run_events_are_queryable_for_message_turns _
+
+self = <tests.integration.workflow.test_chatflow_session_gateway.ChatflowSessionGatewayIntegrationTest testMethod=test_session_and_run_events_are_queryable_for_message_turns>
+
+    def test_session_and_run_events_are_queryable_for_message_turns(self) -> None:
+        with TestClient(app) as client:
+            chatflow = _create_echo_chatflow(client, "events")
+            first = client.post(
+                f"/api/v1/chatflows/{chatflow['id']}/messages",
+                json={"message": "events-one", "waitTimeoutMs": 1200, "idempotencyKey": f"events-1-{time.time_ns()}"},
+            ).json()["data"]
+            second = client.post(
+                f"/api/v1/chatflows/{chatflow['id']}/messages",
+                json={
+                    "message": "events-two",
+>                   "sessionId": first["sessionId"],
+                                 ^^^^^^^^^^^^^^^^^^
+                    "waitTimeoutMs": 1200,
+                    "idempotencyKey": f"events-2-{time.time_ns()}",
+                },
+            ).json()["data"]
+E           TypeError: 'NoneType' object is not subscriptable
+
+tests/integration/workflow/test_chatflow_session_gateway.py:52: TypeError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/vincento/work/develop/hify/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/contract/test_chatflow_session_gateway_api.py::ChatflowSessionGatewayApiContractTest::test_message_creates_session_and_returns_answer_when_omitted
+FAILED tests/contract/test_chatflow_session_gateway_api.py::ChatflowSessionGatewayApiContractTest::test_message_idempotency_key_replays_same_run
+FAILED tests/integration/workflow/test_chatflow_session_gateway.py::ChatflowSessionGatewayIntegrationTest::test_auto_created_session_can_continue_on_second_message
+FAILED tests/integration/workflow/test_chatflow_session_gateway.py::ChatflowSessionGatewayIntegrationTest::test_session_and_run_events_are_queryable_for_message_turns
+========================= 4 failed, 1 warning in 0.87s =========================

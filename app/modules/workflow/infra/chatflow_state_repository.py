@@ -261,6 +261,24 @@ class ChatflowStateRepository:
         ).mappings().all()
         return [dict(row) for row in rows]
 
+    def list_session_events(
+        self,
+        chatflow_id: int,
+        session_id: str,
+        after_event_id: int = 0,
+    ) -> list[dict[str, Any]]:
+        rows = self._session.execute(
+            sa.select(self._event_table)
+            .where(
+                self._event_table.c.chatflow_id == chatflow_id,
+                self._event_table.c.session_id == session_id,
+                self._event_table.c.id > after_event_id,
+                self._event_table.c.deleted.is_(False),
+            )
+            .order_by(self._event_table.c.id.asc())
+        ).mappings().all()
+        return [dict(row) for row in rows]
+
     def find_resume_event_by_idempotency_key(
         self,
         chatflow_id: int,

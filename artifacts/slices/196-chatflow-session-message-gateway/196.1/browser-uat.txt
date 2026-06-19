@@ -1,0 +1,1 @@
+PASS chatflow session gateway UAT chatflow=1779 session=chatflow-1779-session-1781847460409118000 screenshot=/Users/vincento/work/develop/hify/artifacts/slices/196-chatflow-session-message-gateway/196.1/screenshots/chatflow-session-gateway.png
