@@ -275,6 +275,18 @@ describe('AI Assistant shell UI contract', () => {
     expect(content).not.toContain('<UpOutlined v-else />')
   })
 
+  it('keeps processed run echo headers left aligned without stretched grid text', () => {
+    expect(content).toContain('.ai-run-event-group__header {')
+    expect(content).toContain('justify-content: start;')
+    expect(content).toContain('justify-items: start;')
+    expect(content).toContain('text-align: left;')
+    expect(content).toContain('.ai-run-event-group__title-text {')
+    expect(content).toContain('font-size: 0.9375rem;')
+    expect(content).toContain('line-height: 1.25;')
+    expect(content).toContain('.ai-run-event-group__meta {')
+    expect(content).toContain('line-height: 1.25;')
+  })
+
   it('uses compact unified icon buttons and svg-only collapse arrows', () => {
     expect(content).toContain('CaretRightOutlined as CollapseChevron')
     expect(content).toContain('<CollapseChevron')

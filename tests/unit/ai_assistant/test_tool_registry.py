@@ -1,4 +1,7 @@
 import unittest
+import os
+import tempfile
+from pathlib import Path
 
 
 class AiAssistantToolRegistryTest(unittest.TestCase):
@@ -63,6 +66,32 @@ class AiAssistantToolRegistryTest(unittest.TestCase):
         self.assertEqual(result.output["limit"], 3)
         self.assertEqual(result.output["source"], "system_knowledge_base")
         self.assertIn("hits", result.output)
+
+    def test_run_shell_executes_controlled_workspace_command(self) -> None:
+        from app.modules.ai_assistant.domain.tools import ToolRegistry
+
+        with tempfile.TemporaryDirectory() as workspace:
+            previous = os.environ.get("HIFY_WORKSPACE_ROOT")
+            os.environ["HIFY_WORKSPACE_ROOT"] = workspace
+            try:
+                script = Path(workspace) / "tmp" / "controlled-shell.mjs"
+                script.parent.mkdir(parents=True)
+                script.write_text("console.log('PASS controlled shell')\n", encoding="utf-8")
+
+                result = ToolRegistry.with_builtin_tools().dispatch(
+                    "run_shell",
+                    {"command": "node tmp/controlled-shell.mjs"},
+                )
+            finally:
+                if previous is None:
+                    os.environ.pop("HIFY_WORKSPACE_ROOT", None)
+                else:
+                    os.environ["HIFY_WORKSPACE_ROOT"] = previous
+
+        self.assertEqual(result.status, "COMPLETED")
+        self.assertEqual(result.output["exitCode"], 0)
+        self.assertIn("PASS controlled shell", result.output["stdout"])
+        self.assertEqual(result.output["stderr"], "")
 
 
 if __name__ == "__main__":

@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from enum import StrEnum
 import os
 from pathlib import Path
+import shlex
+import subprocess
+from time import perf_counter
 from typing import Any, Callable
 
 from app.modules.customer_assistant.harness_adapter import (
@@ -144,7 +147,7 @@ class ToolRegistry:
             {
                 "echo_context": (echo_manifest, _echo_context),
                 "update_customer_profile": (business_write_manifest, _blocked_write),
-                "run_shell": (shell_manifest, _blocked_write),
+                "run_shell": (shell_manifest, _run_shell),
                 "customer_assistant_subagent_bridge": (customer_bridge_manifest, _customer_assistant_bridge),
                 "read_workspace_file": (_read_file_manifest(), _read_workspace_file),
                 "write_workspace_file": (_write_file_manifest(), _write_workspace_file),
@@ -333,6 +336,60 @@ def _write_workspace_file(payload: dict[str, Any]) -> ToolResult:
     return ToolResult(status="COMPLETED", output={"path": str(path.relative_to(_workspace_root())), "bytes": len(content)})
 
 
+def _run_shell(payload: dict[str, Any]) -> ToolResult:
+    command = str(payload.get("command") or "").strip()
+    if not command:
+        return ToolResult(status="FAILED", output={"command": command, "exitCode": 2, "stdout": "", "stderr": "command is required"})
+    try:
+        argv = shlex.split(command)
+    except ValueError as exc:
+        return ToolResult(status="FAILED", output={"command": command, "exitCode": 2, "stdout": "", "stderr": str(exc)})
+    started = perf_counter()
+    timeout_seconds = _shell_timeout_seconds(payload)
+    try:
+        completed = subprocess.run(  # noqa: S603 - argv is sandbox-validated and shell=False by default.
+            argv,
+            cwd=_workspace_root(),
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+            check=False,
+        )
+    except FileNotFoundError as exc:
+        return ToolResult(
+            status="FAILED",
+            output={
+                "command": command,
+                "exitCode": 127,
+                "stdout": "",
+                "stderr": str(exc),
+                "durationMs": _duration_ms(started),
+            },
+        )
+    except subprocess.TimeoutExpired as exc:
+        return ToolResult(
+            status="TIMED_OUT",
+            output={
+                "command": command,
+                "exitCode": 124,
+                "stdout": _truncate_output(exc.stdout or ""),
+                "stderr": _truncate_output(exc.stderr or "command timed out"),
+                "durationMs": _duration_ms(started),
+                "timeoutMs": int(timeout_seconds * 1000),
+            },
+        )
+    return ToolResult(
+        status="COMPLETED" if completed.returncode == 0 else "FAILED",
+        output={
+            "command": command,
+            "exitCode": completed.returncode,
+            "stdout": _truncate_output(completed.stdout),
+            "stderr": _truncate_output(completed.stderr),
+            "durationMs": _duration_ms(started),
+        },
+    )
+
+
 def _invoke_skill(payload: dict[str, Any]) -> ToolResult:
     return ToolResult(
         status="COMPLETED",
@@ -370,6 +427,20 @@ def _optional_int(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _shell_timeout_seconds(payload: dict[str, Any]) -> float:
+    requested = _optional_int(payload.get("timeoutMs")) or 10000
+    return max(0.5, min(requested, 30000) / 1000)
+
+
+def _duration_ms(started: float) -> int:
+    return max(1, int((perf_counter() - started) * 1000))
+
+
+def _truncate_output(output: str) -> str:
+    text = str(output or "")
+    return text[:12000]
 
 
 def _safe_workspace_path(payload: dict[str, Any]) -> Path:

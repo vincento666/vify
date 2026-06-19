@@ -2,6 +2,7 @@ import unittest
 from collections.abc import Generator
 import os
 import tempfile
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -39,7 +40,6 @@ class AiAssistantSecurityApiContractTest(unittest.TestCase):
         app.dependency_overrides.pop(get_settings, None)
         self._engine.dispose()
         self._workspace_dir.cleanup()
-        self._tmp_dir.cleanup()
 
     def test_smart_approval_read_only_tool_runs_without_approval(self) -> None:
         with TestClient(app) as client:
@@ -215,6 +215,44 @@ class AiAssistantSecurityApiContractTest(unittest.TestCase):
         self.assertEqual(message.json()["data"]["sandboxDenied"], True)
         self.assertIn("sandbox.denied", [event["type"] for event in events])
         self.assertNotIn("tool.call_started", [event["type"] for event in events])
+
+    def test_always_approve_runs_controlled_workspace_command(self) -> None:
+        script = Path(self._workspace_dir.name) / "tmp" / "controlled-shell-api.mjs"
+        script.parent.mkdir(parents=True, exist_ok=True)
+        script.write_text("console.log('PASS controlled shell api')\n", encoding="utf-8")
+
+        with TestClient(app) as client:
+            session_id = client.post("/api/v1/ai-assistant/sessions", json={"title": "Security"}).json()["data"]["id"]
+            message = client.post(
+                f"/api/v1/ai-assistant/sessions/{session_id}/messages",
+                json={
+                    "message": "run controlled shell",
+                    "idempotencyKey": "security-controlled-shell",
+                    "approvalMode": "always_approve",
+                    "toolName": "run_shell",
+                    "toolInput": {"command": "node tmp/controlled-shell-api.mjs"},
+                },
+            )
+            run_id = message.json()["data"]["runId"]
+            run = client.get(f"/api/v1/ai-assistant/runs/{run_id}").json()["data"]
+            inspector = client.get(f"/api/v1/ai-assistant/runs/{run_id}/inspector").json()["data"]
+            events = client.get(f"/api/v1/ai-assistant/runs/{run_id}/events").json()["data"]["list"]
+            approvals = client.get("/api/v1/ai-assistant/approvals").json()["data"]["list"]
+
+        event_types = [event["type"] for event in events]
+        self.assertEqual(message.json()["data"]["status"], "COMPLETED")
+        self.assertIn("PASS controlled shell api", message.json()["data"]["finalAnswer"])
+        self.assertFalse(message.json()["data"]["approvalRequired"])
+        self.assertFalse(message.json()["data"]["sandboxDenied"])
+        self.assertEqual(run["status"], "COMPLETED")
+        self.assertEqual(approvals, [])
+        self.assertIn("tool.call_started", event_types)
+        self.assertIn("tool.call_output", event_types)
+        self.assertIn("tool.call_completed", event_types)
+        self.assertNotIn("sandbox.denied", event_types)
+        self.assertEqual(inspector["toolCalls"][0]["toolName"], "run_shell")
+        self.assertEqual(inspector["toolCalls"][0]["output"]["exitCode"], 0)
+        self.assertIn("PASS controlled shell api", inspector["toolCalls"][0]["output"]["stdout"])
 
     def _session_override(self) -> Generator[Session, None, None]:
         with self._factory() as session:

@@ -65,7 +65,7 @@ async function installDeterministicRoutes(page) {
       payload.toolInput = { command: `node ${targetPath}` }
       delete payload.toolCalls
     } else {
-      payload.approvalMode = 'ask_each_time'
+      payload.approvalMode = 'always_approve'
       payload.toolCalls = [
         {
           toolName: 'write_workspace_file',
@@ -87,6 +87,11 @@ async function configureLiveModel(page) {
   await page.getByTestId('ai-assistant-model-config-icon').click()
   await page.getByTestId('ai-assistant-model-base-url').fill('https://openrouter.ai/api/v1')
   await page.getByTestId('ai-assistant-model-api-key').fill(openRouterApiKey)
+}
+
+async function switchToFullAccess(page) {
+  await page.getByTestId('ai-assistant-permission-mode').click()
+  await page.getByRole('menuitem', { name: '完全访问权限' }).click()
 }
 
 async function submitPrompt(page, text) {
@@ -115,27 +120,22 @@ async function waitForRunTerminal(page, runId) {
 }
 
 async function expandAllRunEchoes(page) {
-  await page.evaluate(() => {
-    for (const header of document.querySelectorAll('[data-testid="ai-assistant-run-event-group-header"]')) {
-      if (header.getAttribute('aria-expanded') === 'false') header.click()
-    }
-    for (const header of document.querySelectorAll('[data-testid="ai-assistant-event-card-header"]')) {
-      if (header.getAttribute('aria-expanded') === 'false') header.click()
-    }
-  })
+  await expandHeaders(page, '[data-testid="ai-assistant-run-event-group-header"]')
+  await page.waitForTimeout(100)
+  await expandHeaders(page, '[data-testid="ai-assistant-event-card-header"]')
+  await page.waitForTimeout(100)
+  await expandHeaders(page, '[data-testid="ai-assistant-tool-invocation-header"]')
 }
 
-async function approveLatestWrite(page) {
-  await page.getByTestId('ai-assistant-approval-approve').last().waitFor({ state: 'visible', timeout: 60000 })
-  const approvalResponse = page.waitForResponse(
-    (response) =>
-      response.request().method() === 'POST' &&
-      response.url().includes('/api/v1/ai-assistant/approvals/') &&
-      response.url().endsWith('/approve'),
-    { timeout: 30000 },
-  )
-  await page.getByTestId('ai-assistant-approval-approve').last().click()
-  assert((await approvalResponse).ok(), 'expected approval API to succeed')
+async function expandHeaders(page, selector) {
+  const headers = page.locator(selector)
+  const count = await headers.count()
+  for (let index = 0; index < count; index += 1) {
+    const header = headers.nth(index)
+    if ((await header.getAttribute('aria-expanded')) === 'false') {
+      await header.click({ force: true })
+    }
+  }
 }
 
 async function collectUiState(page) {
@@ -166,6 +166,7 @@ async function collectUiState(page) {
       runHeaders: textList('[data-testid="ai-assistant-run-event-group-header"]'),
       eventHeaders: textList('[data-testid="ai-assistant-event-card-header"]'),
       eventDetails: textList('[data-testid="ai-assistant-event-detail-panel"]'),
+      toolInvocationDetails: textList('[data-testid="ai-assistant-tool-invocation-details"]'),
       userMessages: textList('[data-testid="ai-assistant-user-message"]'),
       finalAnswers: textList('[data-testid="ai-assistant-run-final-answer"]'),
       taskRows: textList('[data-testid="ai-assistant-task-row"]'),
@@ -197,6 +198,7 @@ async function run() {
     await page.goto(`${baseUrl}/ai-assistant`, { waitUntil: 'networkidle' })
     await page.getByTestId('ai-assistant-shell').waitFor({ state: 'visible', timeout: 10000 })
     await page.getByTestId('ai-assistant-new-session').click()
+    await switchToFullAccess(page)
     await configureLiveModel(page)
 
     const savePrompt = [
@@ -207,9 +209,6 @@ async function run() {
       '最后用中文总结保存和读回结果。',
     ].join('')
     const saveRun = await submitPrompt(page, savePrompt)
-    await page.getByTestId('ai-assistant-approval-approve').last().waitFor({ state: 'visible', timeout: 60000 })
-    await page.screenshot({ path: path.join(projectRoot, outDir, 'screenshots/code-save-before-approval.png'), fullPage: true })
-    await approveLatestWrite(page)
     await page.getByTestId('ai-assistant-run-final-answer').last().waitFor({ state: 'visible', timeout: 60000 })
     await expandAllRunEchoes(page)
     await page.screenshot({ path: path.join(projectRoot, outDir, 'screenshots/code-save-completed.png'), fullPage: true })
@@ -223,7 +222,7 @@ async function run() {
 
     const shellPrompt = [
       `请运行刚才保存的测试：node ${targetPath}。`,
-      '如果当前 harness 沙箱阻断 shell，请把阻断结果作为可回溯事件显示。',
+      '请用完全访问权限下的受控命令执行能力运行，并把 stdout 作为可回溯事件显示。',
     ].join('')
     const shellRun = await submitPrompt(page, shellPrompt)
     const terminalShellRun = await waitForRunTerminal(page, shellRun.runId)
@@ -255,22 +254,25 @@ async function run() {
     }
     fs.writeFileSync(path.join(projectRoot, outDir, 'code-save-test-uat.json'), JSON.stringify(summary, null, 2))
 
-    assert(saveEventTypes.includes('approval.required'), 'expected write approval event')
-    assert(saveEventTypes.includes('approval.granted'), 'expected approval granted event')
+    assert(!saveEventTypes.includes('approval.required'), 'expected full access to avoid write approval pause')
     assert(saveEventTypes.includes('tool.call_output'), 'expected write/read tool output events')
-    assert(shellEventTypes.includes('sandbox.denied'), 'expected run_shell to be blocked by sandbox.denied')
-    assert(
-      terminalShellRun.status === 'DENIED' || terminalShellRun.result?.sandboxDenied,
-      `expected shell run denied, got ${terminalShellRun.status}`,
-    )
+    assert(!shellEventTypes.includes('sandbox.denied'), 'expected controlled run_shell command to pass sandbox')
+    assert(shellEventTypes.includes('tool.call_completed'), 'expected controlled shell tool to complete')
+    assert(terminalShellRun.status === 'COMPLETED', `expected controlled shell run to complete, got ${terminalShellRun.status}`)
     assert(state.runHeaders.length >= 1, `expected at least one persisted run record, got ${state.runHeaders.length}`)
     assert(state.eventHeaders.some((text) => text.includes('已编辑')), `expected file edit echo, got ${state.eventHeaders.join(' | ')}`)
     assert(state.eventHeaders.some((text) => text.includes('已读取')), `expected file read echo, got ${state.eventHeaders.join(' | ')}`)
     assert(
-      state.eventHeaders.some((text) => text.includes('沙箱')) ||
-        state.eventDetails.some((text) => text.includes('sandbox') || text.includes('shell-like')) ||
-        state.recentErrors.some((text) => text.includes('沙箱') || text.includes('shell-like')),
-      `expected visible sandbox denial echo, got headers=${state.eventHeaders.join(' | ')}, errors=${state.recentErrors.join(' | ')}`,
+      state.eventHeaders.some((text) => text.includes('命令执行')),
+      `expected visible command execution echo, got headers=${state.eventHeaders.join(' | ')}`,
+    )
+    assert(
+      state.toolInvocationDetails.some((text) => text.includes('PASS ai-assistant-code-save-test-uat')),
+      `expected command stdout in tool detail, got details=${state.toolInvocationDetails.join(' | ')}`,
+    )
+    assert(
+      state.finalAnswers.some((text) => text.includes('PASS ai-assistant-code-save-test-uat')),
+      `expected command stdout in final answer, got answers=${state.finalAnswers.join(' | ')}`,
     )
     assert(state.finalAnswers.length >= 1, 'expected final answer for saved-code run')
     assert(state.iconButtonSizes.length === 1, `expected unified icon button size, got ${state.iconButtonSizes.join(', ')}`)

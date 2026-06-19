@@ -1921,6 +1921,8 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
   grid-template-columns: auto auto auto auto;
   gap: 0.5rem;
   align-items: center;
+  justify-content: start;
+  justify-items: start;
   padding: 0.75rem;
   color: inherit;
   text-align: left;
@@ -1966,9 +1968,15 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
   white-space: nowrap;
 }
 
+.ai-run-event-group__title-text {
+  font-size: 0.9375rem;
+  line-height: 1.25;
+}
+
 .ai-run-event-group__meta {
   color: var(--color-text-tertiary, #8b92a8);
   font-size: 0.75rem;
+  line-height: 1.25;
   white-space: nowrap;
 }
 

@@ -1,0 +1,36 @@
+..F.                                                                     [100%]
+=================================== FAILURES ===================================
+_ AiAssistantToolRegistryTest.test_run_shell_executes_controlled_workspace_command _
+
+self = <tests.unit.ai_assistant.test_tool_registry.AiAssistantToolRegistryTest testMethod=test_run_shell_executes_controlled_workspace_command>
+
+    def test_run_shell_executes_controlled_workspace_command(self) -> None:
+        from app.modules.ai_assistant.domain.tools import ToolRegistry
+    
+        with tempfile.TemporaryDirectory() as workspace:
+            previous = os.environ.get("HIFY_WORKSPACE_ROOT")
+            os.environ["HIFY_WORKSPACE_ROOT"] = workspace
+            try:
+                script = Path(workspace) / "tmp" / "controlled-shell.mjs"
+                script.parent.mkdir(parents=True)
+                script.write_text("console.log('PASS controlled shell')\n", encoding="utf-8")
+    
+                result = ToolRegistry.with_builtin_tools().dispatch(
+                    "run_shell",
+                    {"command": "node tmp/controlled-shell.mjs"},
+                )
+            finally:
+                if previous is None:
+                    os.environ.pop("HIFY_WORKSPACE_ROOT", None)
+                else:
+                    os.environ["HIFY_WORKSPACE_ROOT"] = previous
+    
+>       self.assertEqual(result.status, "COMPLETED")
+E       AssertionError: 'BLOCKED' != 'COMPLETED'
+E       - BLOCKED
+E       + COMPLETED
+
+tests/unit/ai_assistant/test_tool_registry.py:91: AssertionError
+=========================== short test summary info ============================
+FAILED tests/unit/ai_assistant/test_tool_registry.py::AiAssistantToolRegistryTest::test_run_shell_executes_controlled_workspace_command
+1 failed, 3 passed in 0.02s

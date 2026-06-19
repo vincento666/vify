@@ -1,0 +1,33 @@
+F...F.                                                                   [100%]
+=================================== FAILURES ===================================
+_ AiAssistantSecurityBoundaryTest.test_controlled_node_command_is_allowed_by_sandbox _
+
+self = <tests.unit.ai_assistant.test_security_boundary.AiAssistantSecurityBoundaryTest testMethod=test_controlled_node_command_is_allowed_by_sandbox>
+
+    def test_controlled_node_command_is_allowed_by_sandbox(self) -> None:
+        from app.modules.ai_assistant.domain.sandbox import SandboxPolicy, SandboxVerdict
+    
+        decision = SandboxPolicy().evaluate("run_shell", {"command": "node tmp/ai-assistant-code-save-test-uat.mjs"})
+    
+>       self.assertEqual(decision.verdict, SandboxVerdict.ALLOW)
+E       AssertionError: <SandboxVerdict.DENY: 'DENY'> != <SandboxVerdict.ALLOW: 'ALLOW'>
+
+tests/unit/ai_assistant/test_security_boundary.py:51: AssertionError
+_ AiAssistantSecurityBoundaryTest.test_shell_operator_command_is_denied_by_sandbox _
+
+self = <tests.unit.ai_assistant.test_security_boundary.AiAssistantSecurityBoundaryTest testMethod=test_shell_operator_command_is_denied_by_sandbox>
+
+    def test_shell_operator_command_is_denied_by_sandbox(self) -> None:
+        from app.modules.ai_assistant.domain.sandbox import SandboxPolicy, SandboxVerdict
+    
+        decision = SandboxPolicy().evaluate("run_shell", {"command": "node tmp/test.mjs && rm -rf tmp"})
+    
+        self.assertEqual(decision.verdict, SandboxVerdict.DENY)
+>       self.assertIn("shell operator", decision.reason)
+E       AssertionError: 'shell operator' not found in 'shell-like execution is blocked by the Phase 1 sandbox'
+
+tests/unit/ai_assistant/test_security_boundary.py:60: AssertionError
+=========================== short test summary info ============================
+FAILED tests/unit/ai_assistant/test_security_boundary.py::AiAssistantSecurityBoundaryTest::test_controlled_node_command_is_allowed_by_sandbox
+FAILED tests/unit/ai_assistant/test_security_boundary.py::AiAssistantSecurityBoundaryTest::test_shell_operator_command_is_denied_by_sandbox
+2 failed, 4 passed in 0.02s

@@ -290,3 +290,28 @@
       `git diff --check`.
 - [x] Save evidence under
       `artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.20-code-save-test-uat/`.
+
+## 193.21 Controlled Shell Approval And Echo Header Alignment
+
+- [x] RED: sandbox boundary test fails while `run_shell` still blocks every
+      command, including controlled `node tmp/...` workspace test commands.
+- [x] RED: tool registry test fails while `run_shell` remains a blocked
+      placeholder instead of returning stdout/stderr/exitCode.
+- [x] RED: API contract fails while a successful controlled shell run does not
+      surface stdout in the final answer.
+- [x] RED: frontend shell contract fails while the folded `已处理` task echo
+      header lacks explicit left-aligned grid/font constraints.
+- [x] Allow only sandbox-approved controlled command execution under
+      `always_approve`, keeping shell operators, non-allowlisted executables,
+      node eval/print flags, and non-workspace script paths denied.
+- [x] Execute allowed commands with `shell=False`, workspace cwd, timeout, and
+      bounded stdout/stderr capture.
+- [x] Update pressure UAT to switch to `完全访问权限`, save/read code, run the
+      saved node test through AI Assistant, and verify stdout in command detail
+      plus final answer.
+- [x] Restore folded `已处理` header text to left-aligned compact row layout.
+- [x] Revalidate with focused frontend unit, `remScaleClosure`, frontend build,
+      AI Assistant Python unit/contract gates, deterministic pressure UAT, and
+      in-app browser UAT measurement.
+- [x] Save evidence under
+      `artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.21-controlled-shell-approval/`.

@@ -389,11 +389,12 @@ class AiAssistantHarnessService:
             payload={"toolName": tool_name, "status": tool_result.status},
             tool_call_id=int(tool_call["id"]),
         )
-        final_answer = f"回显结果：{tool_result.output.get('echo', '')}"
+        tool_call_payload = _tool_call_payload(tool_call)
+        final_answer = _tool_execution_answer([tool_call_payload])
         self._repository.append_message(session_id, "assistant", final_answer, run_id=run_id)
         response_payload = {
             "finalAnswer": final_answer,
-            "toolCalls": [_tool_call_payload(tool_call)],
+            "toolCalls": [tool_call_payload],
             "approvalRequired": False,
             "sandboxDenied": False,
         }
@@ -410,7 +411,7 @@ class AiAssistantHarnessService:
             run=completed,
             replayed=False,
             final_answer=final_answer,
-            tool_calls=[_tool_call_payload(tool_call)],
+            tool_calls=[tool_call_payload],
         )
 
     def _planner_for(self, model_config: LivePlannerConfig | None) -> QwenLivePlanner | None:
@@ -1520,7 +1521,7 @@ def _text_chunks(text: str) -> list[str]:
 
 def _tool_output_summary(tool_call: dict[str, Any]) -> str:
     output = dict(tool_call.get("output") or {})
-    for key in ("echo", "path", "skillName", "status"):
+    for key in ("echo", "path", "skillName", "stdout", "stderr", "message", "status"):
         value = output.get(key)
         if value:
             return str(value)
