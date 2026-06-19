@@ -2830,7 +2830,11 @@ def _message_gateway_payload(turn_payload: dict[str, Any]) -> dict[str, Any]:
     session_id = int(turn_payload["sessionId"])
     run_id = int(turn_payload["runId"])
     status = _message_gateway_status(turn_payload)
-    after_sequence = _last_event_sequence(turn_payload.get("events") or [])
+    events = turn_payload.get("events") if isinstance(turn_payload.get("events"), list) else []
+    event_summary = _message_gateway_event_summary(events)
+    latency_ms = _message_gateway_latency_ms(events)
+    retryable = _message_gateway_retryable(turn_payload, status)
+    after_sequence = _last_event_sequence(events)
     chatflow_session = _turn_chatflow_session(turn_payload.get("taskSummaries") or []) or turn_payload.get("chatflowSession")
     return {
         **turn_payload,
@@ -2839,13 +2843,87 @@ def _message_gateway_payload(turn_payload: dict[str, Any]) -> dict[str, Any]:
         "runId": run_id,
         "status": status,
         "answer": str(turn_payload.get("customerReplyDraft") or turn_payload.get("operatorRecommendation") or ""),
+        "latencyMs": latency_ms,
+        "usage": _message_gateway_usage_summary(events),
+        "retryable": retryable,
+        "eventSummary": event_summary,
+        "runSummary": {
+            "status": status,
+            "latencyMs": latency_ms,
+            "eventCount": len(event_summary),
+            "taskCount": len([task for task in turn_payload.get("taskSummaries") or [] if isinstance(task, dict)]),
+            "retryable": retryable,
+        },
         "requiresInput": _message_gateway_requires_input(turn_payload, status),
         "eventsRef": f"/api/v1/customer-assistant/sessions/{session_id}/events",
         "eventStreamRef": event_stream_ref(session_id, after_sequence=0),
         "resumeStreamRef": event_stream_ref(session_id, after_sequence=after_sequence),
         "chatflowSession": chatflow_session,
-        "recovery": _turn_recovery_projection(session_id, turn_payload.get("events") or [], chatflow_session),
+        "recovery": _turn_recovery_projection(session_id, events, chatflow_session),
     }
+
+
+def _message_gateway_event_summary(events: list[Any]) -> list[dict[str, Any]]:
+    summary: list[dict[str, Any]] = []
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        item: dict[str, Any] = {
+            "sequence": _non_negative_int(event.get("sequence")),
+            "type": str(event.get("type") or ""),
+            "visibility": str(event.get("visibility") or "operator"),
+            "source": str(event.get("source") or "customer_assistant"),
+            "runId": _optional_int(event.get("runId")),
+            "taskId": _optional_int(event.get("taskId")),
+            "createdAt": event.get("createdAt"),
+        }
+        status = payload.get("status")
+        if status is not None:
+            item["status"] = str(status)
+        summary.append(item)
+    return summary
+
+
+def _message_gateway_latency_ms(events: list[Any]) -> int:
+    for event in reversed(events):
+        if not isinstance(event, dict):
+            continue
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        latency_ms = _optional_int(payload.get("latencyMs") or payload.get("elapsedMs"))
+        if latency_ms is not None:
+            return max(latency_ms, 0)
+    return 0
+
+
+def _message_gateway_usage_summary(events: list[Any]) -> dict[str, Any]:
+    totals = {"inputTokens": 0, "outputTokens": 0, "totalTokens": 0, "estimated": False}
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+        usage = payload.get("usage") if isinstance(payload.get("usage"), dict) else {}
+        totals["inputTokens"] += _non_negative_int(
+            usage.get("inputTokens") or usage.get("input_tokens") or usage.get("prompt_tokens")
+        )
+        totals["outputTokens"] += _non_negative_int(
+            usage.get("outputTokens") or usage.get("output_tokens") or usage.get("completion_tokens")
+        )
+        event_total = _non_negative_int(usage.get("totalTokens") or usage.get("total_tokens"))
+        totals["totalTokens"] += event_total
+        totals["estimated"] = bool(totals["estimated"] or usage.get("estimated"))
+    if totals["totalTokens"] == 0:
+        totals["totalTokens"] = int(totals["inputTokens"]) + int(totals["outputTokens"])
+    return totals
+
+
+def _message_gateway_retryable(turn_payload: dict[str, Any], status: str) -> bool:
+    if status == "FAILED":
+        return True
+    return any(
+        isinstance(task, dict) and str(task.get("status") or "") == "FAILED"
+        for task in turn_payload.get("taskSummaries") or []
+    )
 
 
 def _turn_chatflow_session(task_summaries: list[dict[str, Any]] | Any) -> dict[str, Any] | None:
@@ -3056,6 +3134,14 @@ def _optional_int(value: Any) -> int | None:
     except (TypeError, ValueError):
         return None
     return parsed if parsed > 0 else None
+
+
+def _non_negative_int(value: Any) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return parsed if parsed >= 0 else 0
 
 
 def _run_id_from_worker_run_id(worker_run_id: str) -> int:

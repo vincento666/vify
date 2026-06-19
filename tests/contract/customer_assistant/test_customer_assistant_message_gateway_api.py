@@ -59,6 +59,17 @@ class CustomerAssistantMessageGatewayContractTest(unittest.TestCase):
         self.assertEqual(data["status"], "WAITING")
         self.assertEqual(data["requiresInput"], True)
         self.assertTrue(data["answer"])
+        self.assertIsInstance(data["latencyMs"], int)
+        self.assertGreaterEqual(data["latencyMs"], 0)
+        self.assertEqual(
+            data["usage"],
+            {"inputTokens": 0, "outputTokens": 0, "totalTokens": 0, "estimated": False},
+        )
+        self.assertFalse(data["retryable"])
+        self.assertEqual(data["runSummary"]["status"], "WAITING")
+        self.assertEqual(data["runSummary"]["eventCount"], len(data["eventSummary"]))
+        self.assertTrue(any(event["type"] == "message.completed" for event in data["eventSummary"]))
+        self.assertTrue(all("payload" not in event for event in data["eventSummary"]))
         self.assertEqual(data["eventsRef"], f"/api/v1/customer-assistant/sessions/{session_id}/events")
         self.assertEqual(
             data["eventStreamRef"],
