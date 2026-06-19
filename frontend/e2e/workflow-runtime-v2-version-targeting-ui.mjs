@@ -52,10 +52,10 @@ try {
   const runtimeV2Result = versions.getByTestId('workflow-version-run-v2-result')
   await runtimeV2Result.waitFor({ state: 'visible', timeout: 10000 })
   const resultText = await runtimeV2Result.textContent()
-  assert(resultText?.includes('Runtime v2 版本 v1'), `Expected runtime v2 UI result for v1, got ${resultText}`)
+  assert(resultText?.includes('实时运行版本 v1'), `Expected realtime UI result for v1, got ${resultText}`)
   assert(resultText?.includes(`versionId ${publishV1.id}`), `Expected runtime v2 UI versionId ${publishV1.id}, got ${resultText}`)
   assert(/RUNNING|SUCCEEDED|COMPLETED|FAILED|INTERRUPTED|WAITING|CANCELLED/.test(resultText || ''), `Expected runtime v2 status, got ${resultText}`)
-  assert(resultText?.includes('debugRef /api/v1/runtime-runs/'), `Expected runtime v2 debug/result ref, got ${resultText}`)
+  assert(!resultText?.includes('debugRef'), `Expected product-facing result without debug ref, got ${resultText}`)
   assert(publishV2.version === 2, `Expected second published version to be v2, got ${publishV2.version}`)
 
   if (screenshotPath) {

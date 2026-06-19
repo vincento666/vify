@@ -64,7 +64,7 @@ try {
   const waitingState = dock.getByTestId('chatflow-waiting-state')
   await waitingState.getByText('question_1').waitFor({ state: 'visible', timeout: 8000 })
   await dock.getByText('等待输入').waitFor({ state: 'visible', timeout: 8000 })
-  await waitingState.getByText('Checkpoint #', { exact: false }).waitFor({ state: 'visible', timeout: 8000 })
+  await waitingState.getByText('请按下方表单补充信息', { exact: false }).waitFor({ state: 'visible', timeout: 8000 })
   await dock.getByLabel('回复内容').fill('refund')
   await dock.getByRole('button', { name: '提交回复继续', exact: true }).click()
 
