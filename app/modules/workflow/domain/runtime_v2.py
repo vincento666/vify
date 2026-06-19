@@ -335,12 +335,19 @@ class ChatflowRuntimeV2Service:
         edges = definition.get("edges") if definition else self._repository.list_edges(chatflow_id)
         nodes = definition.get("nodes") if definition else self._repository.list_nodes(chatflow_id)
         context = _context_from_input(input_data)
+        node_key = _resume_node_key_from_completed_runs(
+            self._repository.list_node_runs(run_id),
+            edges,
+            nodes,
+            context,
+            _next_node_key(edges, "start"),
+        )
         try:
             output = self._run_from_node(
                 chatflow_id=chatflow_id,
                 run_id=run_id,
                 session_id=session_id,
-                node_key=_next_node_key(edges, "start"),
+                node_key=node_key,
                 context=context,
                 input_data=input_data,
                 nodes=nodes,
@@ -1467,6 +1474,32 @@ def _next_node_key(
         if str(edge["source_node_key"]) == source and not edge.get("condition_expr"):
             return str(edge["target_node_key"])
     return None
+
+
+def _resume_node_key_from_completed_runs(
+    node_runs: list[dict[str, Any]],
+    edges: list[dict[str, Any]],
+    nodes: list[dict[str, Any]],
+    context: ExecutionContext,
+    initial_node_key: str | None,
+) -> str | None:
+    nodes_by_key = {str(node["node_key"]): node for node in nodes}
+    completed_outputs: dict[str, dict[str, Any]] = {}
+    for row in node_runs:
+        if str(row.get("status") or "").upper() != "COMPLETED":
+            continue
+        node_key = str(row.get("node_key") or "")
+        outputs = row.get("outputs")
+        if node_key and node_key not in completed_outputs and isinstance(outputs, dict):
+            completed_outputs[node_key] = dict(outputs)
+
+    current = initial_node_key
+    while current and current in completed_outputs:
+        output = completed_outputs[current]
+        context.set_output(current, output)
+        node = nodes_by_key.get(current)
+        current = _next_node_key(edges, current, output, str((node or {}).get("type") or "").upper())
+    return current
 
 
 def _requires_llm_information_collection(config: dict[str, Any]) -> bool:
