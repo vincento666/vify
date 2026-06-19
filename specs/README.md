@@ -106,6 +106,7 @@ defined in `docs/testing/acceptance-gates.md` before the next slice starts.
 | 068-restricted-react-worker-runtime-standardization | Standardized bounded ReAct worker runtime with tool policy and events |
 | 069-customer-assistant-two-stage-react-runtime-mvp | Smooth opt-in Two-Stage ReAct runtime for customer assistant |
 | 070-realtime-control-and-scale-out-transport | Late-stage realtime control and scale-out transport decision/spike |
+| 194-workflow-chatflow-productionization-phase1 | Productionize current text Workflow/Chatflow core nodes through runtime v2, unified error routing, API/Tool governance, validation, version snapshots, and UAT evidence |
 
 ## Required Files Per Spec
 

@@ -1,0 +1,159 @@
+.......FFFFF........                                                     [100%]
+=================================== FAILURES ===================================
+_______ test_publish_validation_rejects_error_branch_without_error_edge ________
+
+    def test_publish_validation_rejects_error_branch_without_error_edge() -> None:
+        validation = _publish_validation(
+            {
+                "workflow": {"flowType": "WORKFLOW"},
+                "nodes": [
+                    {"node_key": "start", "type": "START", "config": {}},
+                    {
+                        "node_key": "tool_call_1",
+                        "type": "TOOL_CALL",
+                        "config": {
+                            "resourceType": "MCP_TOOL",
+                            "resourceId": "mcp:1:lookup_order",
+                            "serverIds": [1],
+                            "toolName": "lookup_order",
+                            "errorBehavior": "branch",
+                        },
+                    },
+                    {"node_key": "end", "type": "END", "config": {}},
+                ],
+                "edges": [
+                    {"source_node_key": "start", "target_node_key": "tool_call_1", "condition_expr": None},
+                    {"source_node_key": "tool_call_1", "target_node_key": "end", "condition_expr": None},
+                ],
+            }
+        )
+
+>       assert validation["valid"] is False
+E       assert True is False
+
+tests/unit/workflow/test_publish_validation.py:86: AssertionError
+_________ test_publish_validation_rejects_unknown_variable_references __________
+
+    def test_publish_validation_rejects_unknown_variable_references() -> None:
+        validation = _publish_validation(
+            {
+                "workflow": {"flowType": "WORKFLOW"},
+                "nodes": [
+                    {"node_key": "start", "type": "START", "config": {}},
+                    {"node_key": "message_1", "type": "MESSAGE", "config": {"content": "{{missing_node.answer}}"}},
+                    {"node_key": "end", "type": "END", "config": {"outputVariable": "final", "output": "{{message_1.content}}"}},
+                ],
+                "edges": [
+                    {"source_node_key": "start", "target_node_key": "message_1", "condition_expr": None},
+                    {"source_node_key": "message_1", "target_node_key": "end", "condition_expr": None},
+                ],
+            }
+        )
+
+>       assert validation["valid"] is False
+E       assert True is False
+
+tests/unit/workflow/test_publish_validation.py:106: AssertionError
+____________ test_publish_validation_rejects_system_variable_writes ____________
+
+    def test_publish_validation_rejects_system_variable_writes() -> None:
+        validation = _publish_validation(
+            {
+                "workflow": {"flowType": "CHATFLOW"},
+                "nodes": [
+                    {"node_key": "start", "type": "START", "config": {}},
+                    {
+                        "node_key": "variable_assign_1",
+                        "type": "VARIABLE_ASSIGN",
+                        "config": {
+                            "targetScope": "sys",
+                            "targetVariable": "query",
+                            "source": "{{start.sys.query}}",
+                        },
+                    },
+                    {"node_key": "end", "type": "END", "config": {"outputVariable": "final", "output": "{{sys.query}}"}},
+                ],
+                "edges": [
+                    {"source_node_key": "start", "target_node_key": "variable_assign_1", "condition_expr": None},
+                    {"source_node_key": "variable_assign_1", "target_node_key": "end", "condition_expr": None},
+                ],
+            }
+        )
+
+>       assert validation["valid"] is False
+E       assert True is False
+
+tests/unit/workflow/test_publish_validation.py:134: AssertionError
+______ test_publish_validation_rejects_required_config_and_invalid_types _______
+
+    def test_publish_validation_rejects_required_config_and_invalid_types() -> None:
+        validation = _publish_validation(
+            {
+                "workflow": {"flowType": "WORKFLOW"},
+                "nodes": [
+                    {"node_key": "start", "type": "START", "config": {}},
+                    {
+                        "node_key": "code_1",
+                        "type": "CODE",
+                        "config": {
+                            "language": "python",
+                            "code": "",
+                            "outputParameters": [{"name": "result", "type": "tuple"}],
+                        },
+                    },
+                    {"node_key": "end", "type": "END", "config": {"outputVariable": "final", "output": "{{code_1.result}}"}},
+                ],
+                "edges": [
+                    {"source_node_key": "start", "target_node_key": "code_1", "condition_expr": None},
+                    {"source_node_key": "code_1", "target_node_key": "end", "condition_expr": None},
+                ],
+            }
+        )
+
+>       assert validation["valid"] is False
+E       assert True is False
+
+tests/unit/workflow/test_publish_validation.py:162: AssertionError
+___________ test_publish_validation_rejects_invalid_model_config_id ____________
+
+    def test_publish_validation_rejects_invalid_model_config_id() -> None:
+        validation = _publish_validation(
+            {
+                "workflow": {"flowType": "WORKFLOW"},
+                "nodes": [
+                    {"node_key": "start", "type": "START", "config": {}},
+                    {
+                        "node_key": "llm_1",
+                        "type": "LLM",
+                        "config": {
+                            "prompt": "hello",
+                            "outputVariable": "answer",
+                            "modelConfigId": "not-a-number",
+                        },
+                    },
+                    {"node_key": "end", "type": "END", "config": {"outputVariable": "final", "output": "{{llm_1.answer}}"}},
+                ],
+                "edges": [
+                    {"source_node_key": "start", "target_node_key": "llm_1", "condition_expr": None},
+                    {"source_node_key": "llm_1", "target_node_key": "end", "condition_expr": None},
+                ],
+            }
+        )
+
+>       assert validation["valid"] is False
+E       assert True is False
+
+tests/unit/workflow/test_publish_validation.py:191: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/vincento/work/develop/hify/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/unit/workflow/test_publish_validation.py::test_publish_validation_rejects_error_branch_without_error_edge
+FAILED tests/unit/workflow/test_publish_validation.py::test_publish_validation_rejects_unknown_variable_references
+FAILED tests/unit/workflow/test_publish_validation.py::test_publish_validation_rejects_system_variable_writes
+FAILED tests/unit/workflow/test_publish_validation.py::test_publish_validation_rejects_required_config_and_invalid_types
+FAILED tests/unit/workflow/test_publish_validation.py::test_publish_validation_rejects_invalid_model_config_id
+5 failed, 15 passed, 1 warning in 2.47s
