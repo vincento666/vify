@@ -2,6 +2,7 @@ import json
 import threading
 import time
 from collections.abc import Iterable
+from functools import lru_cache
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -9,6 +10,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.core.config import Settings, get_settings
 from app.core.database import get_session
 from app.core.errors import BizError, ErrorCode
 from app.core.host.context import RequestContext
@@ -32,6 +34,7 @@ from app.modules.workflow.infra.api_resource_repository import ApiResourceReposi
 from app.modules.workflow.infra.channel_repository import ChatflowChannelRepository
 from app.modules.workflow.infra.chatflow_state_repository import ChatflowStateRepository
 from app.modules.workflow.infra.publish_repository import WorkflowPublishRepository
+from app.modules.workflow.infra.realtime.redis_streams import RedisRuntimeEventStreamBus, RuntimeEventStreamBus
 from app.modules.workflow.infra.repository import WorkflowRepository
 from app.modules.workflow.web.schemas import (
     ChatflowChannelTestRequest,
@@ -121,14 +124,26 @@ def get_observe_service(session: Session = Depends(get_session)) -> ObserveServi
     return ObserveService(session)
 
 
+def get_runtime_event_stream_bus(settings: Settings = Depends(get_settings)) -> RuntimeEventStreamBus | None:
+    if not settings.redis_url:
+        return None
+    return _redis_runtime_event_stream_bus(settings.redis_url)
+
+
+@lru_cache(maxsize=4)
+def _redis_runtime_event_stream_bus(redis_url: str) -> RuntimeEventStreamBus:
+    return RedisRuntimeEventStreamBus.from_url(redis_url)
+
+
 def get_chatflow_runtime_v2_service(
     session: Session = Depends(get_session),
     request_context: RequestContext = Depends(get_request_context),
+    event_stream_bus: RuntimeEventStreamBus | None = Depends(get_runtime_event_stream_bus),
 ) -> ChatflowRuntimeV2Service:
     llm_service = _runtime_v2_llm_service(session, flow_type="CHATFLOW", request_context=request_context)
     return ChatflowRuntimeV2Service(
         WorkflowRepository(session),
-        ChatflowStateRepository(session),
+        ChatflowStateRepository(session, event_stream_bus=event_stream_bus),
         publish_repository=WorkflowPublishRepository(session),
         knowledge_facade=KnowledgeFacade(session),
         llm_completer_resolver=llm_service.runtime_v2_llm_completer,
@@ -141,11 +156,12 @@ def get_chatflow_runtime_v2_service(
 def get_workflow_runtime_v2_service(
     session: Session = Depends(get_session),
     request_context: RequestContext = Depends(get_request_context),
+    event_stream_bus: RuntimeEventStreamBus | None = Depends(get_runtime_event_stream_bus),
 ) -> WorkflowRuntimeV2Service:
     llm_service = _runtime_v2_llm_service(session, flow_type="WORKFLOW", request_context=request_context)
     return WorkflowRuntimeV2Service(
         WorkflowRepository(session),
-        ChatflowStateRepository(session),
+        ChatflowStateRepository(session, event_stream_bus=event_stream_bus),
         WorkflowPublishRepository(session),
         knowledge_facade=KnowledgeFacade(session),
         llm_completer_resolver=llm_service.runtime_v2_llm_completer,
@@ -214,10 +230,17 @@ def run_workflow_v2(
     request: WorkflowRunRequest,
     session: Session = Depends(get_session),
     service: WorkflowRuntimeV2Service = Depends(get_workflow_runtime_v2_service),
+    event_stream_bus: RuntimeEventStreamBus | None = Depends(get_runtime_event_stream_bus),
 ) -> dict[str, Any]:
     data = service.start_run(workflow_id, dict(request.input), request.idempotency_key, request.version_id)
+    _attach_runtime_v2_transport(data, event_stream_bus)
     if not data.get("idempotentReplay"):
-        _start_runtime_v2_completion_thread(session, int(data["runId"]), owner_type="WORKFLOW")
+        _start_runtime_v2_completion_thread(
+            session,
+            int(data["runId"]),
+            owner_type="WORKFLOW",
+            event_stream_bus=event_stream_bus,
+        )
     return success(data)
 
 
@@ -345,10 +368,17 @@ def run_chatflow_v2(
     request: WorkflowRunRequest,
     session: Session = Depends(get_session),
     service: ChatflowRuntimeV2Service = Depends(get_chatflow_runtime_v2_service),
+    event_stream_bus: RuntimeEventStreamBus | None = Depends(get_runtime_event_stream_bus),
 ) -> dict[str, Any]:
     data = service.start_run(chatflow_id, dict(request.input), request.idempotency_key, request.version_id)
+    _attach_runtime_v2_transport(data, event_stream_bus)
     if not data.get("idempotentReplay"):
-        _start_runtime_v2_completion_thread(session, int(data["runId"]), owner_type="CHATFLOW")
+        _start_runtime_v2_completion_thread(
+            session,
+            int(data["runId"]),
+            owner_type="CHATFLOW",
+            event_stream_bus=event_stream_bus,
+        )
     return success(data)
 
 
@@ -528,6 +558,7 @@ def stream_runtime_v2_events(
     test_limit: int | None = Query(default=None, alias="_testLimit", ge=1, le=1000),
     test_heartbeat_limit: int | None = Query(default=None, alias="_testHeartbeatLimit", ge=1, le=1000),
     service: ChatflowRuntimeV2Service = Depends(get_chatflow_runtime_v2_service),
+    event_stream_bus: RuntimeEventStreamBus | None = Depends(get_runtime_event_stream_bus),
 ) -> StreamingResponse:
     return StreamingResponse(
         _iter_runtime_v2_sse(
@@ -537,6 +568,7 @@ def stream_runtime_v2_events(
             heartbeat_ms=heartbeat_ms,
             test_limit=test_limit,
             test_heartbeat_limit=test_heartbeat_limit,
+            event_stream_bus=event_stream_bus,
         ),
         media_type="text/event-stream",
     )
@@ -563,7 +595,13 @@ def _accepts_event_stream(request: Request) -> bool:
     return "text/event-stream" in str(request.headers.get("accept") or "").lower()
 
 
-def _start_runtime_v2_completion_thread(session: Session, run_id: int, *, owner_type: str = "CHATFLOW") -> None:
+def _start_runtime_v2_completion_thread(
+    session: Session,
+    run_id: int,
+    *,
+    owner_type: str = "CHATFLOW",
+    event_stream_bus: RuntimeEventStreamBus | None = None,
+) -> None:
     bind = session.get_bind()
     if bind is None:
         return
@@ -575,7 +613,7 @@ def _start_runtime_v2_completion_thread(session: Session, run_id: int, *, owner_
                 llm_service = _runtime_v2_llm_service(background_session, flow_type="WORKFLOW")
                 WorkflowRuntimeV2Service(
                     WorkflowRepository(background_session),
-                    ChatflowStateRepository(background_session),
+                    ChatflowStateRepository(background_session, event_stream_bus=event_stream_bus),
                     WorkflowPublishRepository(background_session),
                     knowledge_facade=KnowledgeFacade(background_session),
                     llm_completer_resolver=llm_service.runtime_v2_llm_completer,
@@ -587,7 +625,7 @@ def _start_runtime_v2_completion_thread(session: Session, run_id: int, *, owner_
                 llm_service = _runtime_v2_llm_service(background_session, flow_type="CHATFLOW")
                 ChatflowRuntimeV2Service(
                     WorkflowRepository(background_session),
-                    ChatflowStateRepository(background_session),
+                    ChatflowStateRepository(background_session, event_stream_bus=event_stream_bus),
                     publish_repository=WorkflowPublishRepository(background_session),
                     knowledge_facade=KnowledgeFacade(background_session),
                     llm_completer_resolver=llm_service.runtime_v2_llm_completer,
@@ -607,12 +645,20 @@ def _iter_runtime_v2_sse(
     heartbeat_ms: int,
     test_limit: int | None,
     test_heartbeat_limit: int | None,
+    event_stream_bus: RuntimeEventStreamBus | None = None,
 ) -> Iterable[str]:
     last_sequence = after_sequence
     emitted = 0
     heartbeats = 0
     while True:
-        rows = service.list_events(run_id, after_sequence=last_sequence)["list"]
+        rows = _runtime_v2_stream_events(
+            service,
+            event_stream_bus=event_stream_bus,
+            run_id=run_id,
+            after_sequence=last_sequence,
+            heartbeat_ms=heartbeat_ms,
+            count=test_limit or 100,
+        )
         if rows:
             for row in rows:
                 last_sequence = int(row["sequence"])
@@ -626,6 +672,41 @@ def _iter_runtime_v2_sse(
         if test_heartbeat_limit is not None and heartbeats >= test_heartbeat_limit:
             return
         time.sleep(heartbeat_ms / 1000)
+
+
+def _runtime_v2_stream_events(
+    service: ChatflowRuntimeV2Service,
+    *,
+    event_stream_bus: RuntimeEventStreamBus | None,
+    run_id: int,
+    after_sequence: int,
+    heartbeat_ms: int,
+    count: int,
+) -> list[dict[str, Any]]:
+    if event_stream_bus is not None:
+        try:
+            rows = event_stream_bus.read_after(
+                run_id=run_id,
+                after_sequence=after_sequence,
+                count=count,
+                block_ms=heartbeat_ms,
+            )
+            if rows:
+                return rows
+        except Exception:
+            pass
+    return list(service.list_events(run_id, after_sequence=after_sequence)["list"])
+
+
+def _attach_runtime_v2_transport(data: dict[str, Any], event_stream_bus: RuntimeEventStreamBus | None) -> None:
+    transport = data.get("transport")
+    if not isinstance(transport, dict):
+        return
+    if event_stream_bus is None:
+        transport.setdefault("redisStreams", "not_configured")
+        return
+    transport["redisStreams"] = "enabled"
+    transport["redisPubsub"] = "redis_streams_realtime_buffer"
 
 
 def _iter_chatflow_run_sse(data: dict[str, Any]) -> Iterable[str]:

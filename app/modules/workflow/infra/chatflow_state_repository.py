@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.database import Base
 from app.core.db_write import insert_and_fetch
 from app.core.schema import register_baseline_tables
+from app.modules.workflow.infra.realtime.redis_streams import RuntimeEventStreamBus
 
 register_baseline_tables()
 
@@ -17,8 +18,9 @@ _SEQUENCE_RETRY_ATTEMPTS = 3
 
 
 class ChatflowStateRepository:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, event_stream_bus: RuntimeEventStreamBus | None = None) -> None:
         self._session = session
+        self._event_stream_bus = event_stream_bus
         self._session_table = Base.metadata.tables["chatflow_session"]
         self._event_table = Base.metadata.tables["chatflow_event"]
         self._checkpoint_table = Base.metadata.tables["chatflow_checkpoint"]
@@ -92,12 +94,21 @@ class ChatflowStateRepository:
                     },
                 )
                 self._session.commit()
+                self._publish_event(row)
                 return row
             except sa.exc.IntegrityError as exc:
                 self._session.rollback()
                 if attempt == _SEQUENCE_RETRY_ATTEMPTS - 1 or not _is_sequence_conflict(exc):
                     raise
         raise RuntimeError("Could not append chatflow event after sequence retries")
+
+    def _publish_event(self, row: dict[str, Any]) -> None:
+        if self._event_stream_bus is None:
+            return
+        try:
+            self._event_stream_bus.publish(row)
+        except Exception:
+            return
 
     def create_checkpoint(
         self,

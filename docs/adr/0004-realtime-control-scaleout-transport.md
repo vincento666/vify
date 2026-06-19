@@ -53,3 +53,15 @@ No WebSocket, Redis, or new pub/sub dependency is added in 070. Runtime task,
 worker, Chatflow, Workflow, and SOP router semantics remain unchanged. A future
 transport spike must first attach measured evidence that SSE + durable polling
 is insufficient for a concrete product scenario.
+
+## 2026-06-19 Update: Runtime V2 Redis Streams Buffer
+
+Spec 195 supersedes the Redis part of the 070 MVP decision for the production
+upgrade roadmap. Redis Streams are now allowed as an optional realtime event
+buffer for runtime v2 SSE fanout, while the durable DB event ledger remains the
+source of truth.
+
+The 070 WebSocket decision still stands: no WebSocket is introduced without a
+bidirectional control scenario. Redis Streams in 195 do not change task,
+worker, Chatflow, Workflow, or SOP semantics; missed stream frames must still
+recover through `/api/v1/runtime-runs/{runId}/events?afterSequence=...`.
