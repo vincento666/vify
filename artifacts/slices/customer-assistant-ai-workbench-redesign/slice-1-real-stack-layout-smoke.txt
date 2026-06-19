@@ -1,0 +1,36 @@
+{
+  "href": "http://127.0.0.1:5228/customer-assistant?hifyHostContext=%7B%22apiBaseUrl%22%3A%22%2Fapi%22%2C%22actorId%22%3A%22operator-208-three-column%22%2C%22actorName%22%3A%22Three%20Column%20UAT%20Operator%22%2C%22tenantId%22%3A%22mvp-demo-tenant%22%2C%22orgId%22%3A%22mvp-demo-org%22%2C%22permissions%22%3A%5B%22customer_assistant%3Aread%22%2C%22customer_assistant%3Aoperate%22%5D%2C%22source%22%3A%22codex-real-stack-smoke%22%2C%22requestId%22%3A%22req-208-customer-assistant-three-column%22%7D&story=refund_baggage_parallel",
+  "title": "Hify",
+  "tabLabels": [
+    "聚焦",
+    "AI助手",
+    "办理",
+    "证据",
+    "配置"
+  ],
+  "hasFocusCards": true,
+  "focusVisible": true,
+  "shell": {
+    "height": 783.984375,
+    "viewportHeight": 900,
+    "overflow": "hidden"
+  },
+  "columns": [
+    {
+      "testid": "customer-assistant-left-column",
+      "height": 783.984375,
+      "overflowY": "auto"
+    },
+    {
+      "testid": "customer-assistant-center-column",
+      "height": 783.984375,
+      "overflowY": "auto"
+    },
+    {
+      "testid": "customer-assistant-ai-workbench-column",
+      "height": 783.984375,
+      "overflowY": "auto"
+    }
+  ],
+  "focusText": " 意图识别 情绪识别当前诉求等待旅客输入情绪状态稳定先确认旅客诉求和关键信息，再推进后续办理。 业务办理指引 话术推荐暂无坐席建议发送复制编辑重生成 业务办理确认 高敏确认 暂无待确认动作 "
+}

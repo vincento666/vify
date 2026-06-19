@@ -281,24 +281,33 @@
       </section>
 
       <aside class="customer-assistant-ai-workbench-column operator-panels" data-testid="customer-assistant-ai-workbench-column" aria-label="AI Workbench">
-        <div class="ai-workbench-tabs" data-testid="operator-ai-workbench-tabs" role="tablist" aria-label="AI Workbench">
+        <div class="ai-workbench-tabs" data-testid="operator-ai-workbench-tabs" role="tablist" aria-label="右侧工作区">
           <button
             type="button"
             role="tab"
-            :aria-selected="activeWorkbenchTab === 'overview'"
-            :class="{ active: activeWorkbenchTab === 'overview' }"
-            @click="activeWorkbenchTab = 'overview'"
+            :aria-selected="activeWorkbenchTab === 'focus'"
+            :class="{ active: activeWorkbenchTab === 'focus' }"
+            @click="activeWorkbenchTab = 'focus'"
           >
-            助手
+            聚焦
           </button>
           <button
             type="button"
             role="tab"
-            :aria-selected="activeWorkbenchTab === 'tasks'"
-            :class="{ active: activeWorkbenchTab === 'tasks' }"
-            @click="activeWorkbenchTab = 'tasks'"
+            :aria-selected="activeWorkbenchTab === 'assistant'"
+            :class="{ active: activeWorkbenchTab === 'assistant' }"
+            @click="activeWorkbenchTab = 'assistant'"
           >
-            任务
+            AI助手
+          </button>
+          <button
+            type="button"
+            role="tab"
+            :aria-selected="activeWorkbenchTab === 'business'"
+            :class="{ active: activeWorkbenchTab === 'business' }"
+            @click="activeWorkbenchTab = 'business'"
+          >
+            办理
           </button>
           <button
             type="button"
@@ -312,633 +321,185 @@
           <button
             type="button"
             role="tab"
-            :aria-selected="activeWorkbenchTab === 'audit'"
-            :class="{ active: activeWorkbenchTab === 'audit' }"
-            @click="activeWorkbenchTab = 'audit'"
+            :aria-selected="activeWorkbenchTab === 'config'"
+            :class="{ active: activeWorkbenchTab === 'config' }"
+            @click="activeWorkbenchTab = 'config'"
           >
-            审计
+            配置
           </button>
         </div>
         <div
           class="workbench-pane-stack"
-          data-testid="operator-workbench-overview-pane"
-          v-show="activeWorkbenchTab === 'overview'"
+          data-testid="operator-workbench-focus-pane"
+          v-show="activeWorkbenchTab === 'focus'"
         >
-        <section class="workspace-panel compact-panel" data-testid="operator-progress-checklist">
-          <div class="panel-heading">
-            <span class="panel-heading-title">
-              <ThunderboltOutlined />
-              运行进度
-            </span>
-          </div>
-          <div class="progress-list">
-            <div
-              v-for="stage in workspace.progressStages"
-              :key="stage.key"
-              class="progress-row"
-              :class="stage.status"
-            >
-              <CheckOutlined v-if="stage.status === 'complete'" />
-              <ThunderboltOutlined v-else-if="stage.status === 'active'" />
-              <HistoryOutlined v-else />
-              <span>{{ stage.label }}</span>
-            </div>
-          </div>
-          <div class="sub-agent-control" data-testid="operator-sub-agent-control">
-            <div class="sub-agent-meta">
-              <span>后台子智能体</span>
-              <a-tag :color="subAgentStatusColor">{{ subAgentStatusLabel }}</a-tag>
-            </div>
-            <small v-if="runtimeState.subAgentRun">Run {{ runtimeState.subAgentRun.subAgentRunId }}</small>
-            <small v-else>并行核对当前会话任务和坐席建议</small>
-            <a-button
-              size="small"
-              :loading="subAgentLoading"
-              :disabled="!workspace.sessionId"
-              @click="spawnSubAgent"
-            >
-              <RobotOutlined />
-              启动子智能体
-            </a-button>
-          </div>
-        </section>
-
-        <section class="workspace-panel compact-panel" data-testid="operator-metrics-panel">
-          <div class="panel-heading">
-            <span class="panel-heading-title">
-              <DashboardOutlined />
-              观测指标
-            </span>
-          </div>
-          <div v-if="metricsSummary.empty" class="empty-compact">暂无会话指标</div>
-          <div class="metrics-grid" aria-label="人工采纳率">
-            <div
-              v-for="tile in metricsSummary.tiles"
-              :key="tile.key"
-              class="metric-tile"
-              :class="tile.tone"
-            >
-              <span>{{ tile.label }}</span>
-              <strong>{{ tile.value }}</strong>
-            </div>
-          </div>
-          <div v-if="metricsSummary.failures.length" class="failure-list">
-            <div v-for="failure in metricsSummary.failures" :key="`${failure.taskId}:${failure.reason}`">
-              <a-tag color="error">{{ failure.taskType }}</a-tag>
-              <span>{{ failure.source }}</span>
-              <p>{{ failure.reason }}</p>
-            </div>
-          </div>
-        </section>
-
-        <section class="workspace-panel compact-panel" data-testid="operator-knowledge-qa-panel">
-          <div class="panel-heading">
-            <span class="panel-heading-title">
-              <BulbOutlined />
-              助手追问
-            </span>
-            <a-tag v-if="runtimeState.operatorKnowledgeQaLoading" color="processing">查询中</a-tag>
-            <a-tag v-else-if="operatorKnowledgeQa.empty" color="default">只读</a-tag>
-            <a-tag v-else color="success">已回答</a-tag>
-          </div>
-          <div class="knowledge-qa-composer">
-            <a-textarea
-              v-model:value="operatorKnowledgeQuestion"
-              data-testid="operator-knowledge-qa-question"
-              aria-label="坐席助手追问"
-              :auto-size="{ minRows: 2, maxRows: 4 }"
-              placeholder="向客服助手追问当前会话、SOP 或知识，例如：退票和行李额可以并行处理吗？"
-            />
-            <div class="knowledge-qa-actions">
-              <a-button
-                type="primary"
-                :loading="runtimeState.operatorKnowledgeQaLoading"
-                :disabled="!workspace.sessionId || !operatorKnowledgeQuestion.trim()"
-                @click="askOperatorKnowledgeQuestion"
-              >
+          <section class="workspace-panel compact-panel focus-card" data-testid="operator-focus-intent-card">
+            <div class="panel-heading">
+              <span class="panel-heading-title">
                 <BulbOutlined />
-                追问助手
-              </a-button>
-            </div>
-          </div>
-          <p v-if="!workspace.sessionId" class="empty-compact">请先打开演示故事或发起一轮会话</p>
-          <a-alert
-            v-if="runtimeState.operatorKnowledgeQaError"
-            type="warning"
-            show-icon
-            :message="runtimeState.operatorKnowledgeQaError"
-          />
-          <div v-if="!operatorKnowledgeQa.empty" class="knowledge-qa-result">
-            <p class="panel-copy" data-testid="operator-knowledge-qa-answer">{{ operatorKnowledgeQa.answer }}</p>
-            <div v-if="operatorKnowledgeQa.sourceRows.length" class="knowledge-qa-list" aria-label="知识来源">
-              <div
-                v-for="source in operatorKnowledgeQa.sourceRows"
-                :key="source.key"
-                class="knowledge-qa-row"
-                data-testid="operator-knowledge-qa-source"
-              >
-                <strong>{{ source.title }}</strong>
-                <span>{{ source.meta }}<template v-if="source.score"> · score {{ source.score }}</template></span>
-                <p v-if="source.excerpt">{{ source.excerpt }}</p>
-              </div>
-            </div>
-            <div v-if="operatorKnowledgeQa.evidenceRows.length" class="knowledge-qa-list" aria-label="任务证据">
-              <div
-                v-for="evidence in operatorKnowledgeQa.evidenceRows"
-                :key="evidence.key"
-                class="knowledge-qa-row"
-                data-testid="operator-knowledge-qa-evidence"
-              >
-                <strong>{{ evidence.label }}</strong>
-                <span>{{ evidence.detail }}</span>
-              </div>
-            </div>
-            <div v-if="operatorKnowledgeQa.contextRows.length" class="knowledge-qa-context" aria-label="上下文摘要">
-              <span v-for="row in operatorKnowledgeQa.contextRows" :key="row.key">
-                {{ row.label }}：{{ row.value }}
+                意图识别
               </span>
+              <a-tag color="blue">情绪识别</a-tag>
             </div>
-            <a-alert
-              v-for="warning in operatorKnowledgeQa.warnings"
-              :key="warning"
-              type="warning"
-              show-icon
-              :message="warning"
-            />
-          </div>
-        </section>
-
-        <section class="workspace-panel compact-panel" data-testid="operator-event-timeline">
-          <div class="panel-heading">
-            <span class="panel-heading-title">
-              <HistoryOutlined />
-              助手事件回显
-            </span>
-            <span class="panel-count">{{ workspace.eventTimeline.length }}</span>
-          </div>
-          <a-collapse v-model:active-key="expandedEventKeys" ghost>
-            <a-collapse-panel v-if="workspace.eventTimeline.length === 0" key="empty-events" header="暂无运行事件" disabled />
-            <a-collapse-panel
-              v-for="event in workspace.eventTimeline"
-              :key="event.key"
-              :header="`${event.sequenceLabel} ${event.title}`"
-            >
-              <div class="event-detail">
-                <a-tag>{{ event.visibilityLabel }}</a-tag>
-                <a-tag>{{ event.sourceLabel }}</a-tag>
-                <code>{{ event.payloadPreview }}</code>
+            <div class="focus-summary-grid">
+              <div>
+                <span>当前诉求</span>
+                <strong>{{ workspace.taskSummary.items[0]?.displayName || '等待旅客输入' }}</strong>
               </div>
-            </a-collapse-panel>
-          </a-collapse>
-        </section>
-        </div>
-
-        <div
-          class="workbench-pane-stack"
-          data-testid="operator-workbench-evidence-pane"
-          v-show="activeWorkbenchTab === 'evidence'"
-        >
-        <section class="workspace-panel compact-panel" data-testid="operator-eval-observability-panel">
-          <div class="panel-heading">
-            <span class="panel-heading-title">
-              <DashboardOutlined />
-              评估观测
-            </span>
-            <a-tag :color="evalSurface.empty ? 'default' : 'blue'">
-              {{ evalSurface.empty ? '暂无证据' : 'Session eval' }}
-            </a-tag>
-          </div>
-          <div class="eval-metrics-grid" aria-label="会话评估指标">
-            <div
-              v-for="tile in evalSurface.tiles"
-              :key="tile.key"
-              class="metric-tile"
-              :class="tile.tone"
-            >
-              <span>{{ tile.label }}</span>
-              <strong>{{ tile.value }}</strong>
-              <small>{{ tile.detail }}</small>
-            </div>
-          </div>
-          <div class="eval-evidence-block">
-            <strong>任务识别</strong>
-            <div v-if="evalSurface.taskRecognition.length === 0" class="empty-compact">暂无任务命中</div>
-            <div
-              v-for="row in evalSurface.taskRecognition"
-              :key="row.key"
-              class="eval-evidence-row"
-              :class="row.tone"
-            >
-              <span>{{ row.title }}</span>
-              <p>{{ row.detail }}</p>
-              <small>{{ row.meta.join(' · ') }}</small>
-            </div>
-          </div>
-          <div class="eval-evidence-block">
-            <strong>Worker 执行</strong>
-            <div v-if="evalSurface.workerExecution.length === 0" class="empty-compact">暂无 Worker 执行证据</div>
-            <div
-              v-for="row in evalSurface.workerExecution"
-              :key="row.key"
-              class="eval-evidence-row"
-              :class="row.tone"
-            >
-              <span>{{ row.title }}</span>
-              <p>{{ row.detail }}</p>
-              <small>{{ row.meta.join(' · ') }}</small>
-            </div>
-          </div>
-          <div class="eval-evidence-block">
-            <strong>模型/回退证据</strong>
-            <div v-if="evalSurface.modelEvidence.length === 0" class="empty-compact">暂无模型差异或回退证据</div>
-            <div
-              v-for="row in evalSurface.modelEvidence"
-              :key="row.key"
-              class="eval-evidence-row"
-              :class="row.tone"
-            >
-              <span>{{ row.title }}</span>
-              <p>{{ row.detail }}</p>
-              <small>{{ row.reason }}</small>
-            </div>
-          </div>
-          <div class="eval-evidence-block">
-            <strong>恢复建议</strong>
-            <div v-if="evalSurface.recoveryHints.length === 0" class="empty-compact">暂无模型恢复建议</div>
-            <div
-              v-for="hint in evalSurface.recoveryHints"
-              :key="hint.key"
-              class="eval-evidence-row"
-              :class="hint.tone"
-            >
-              <span>{{ hint.title }}</span>
-              <p>{{ hint.detail }}</p>
-              <small>{{ hint.action }}</small>
-            </div>
-          </div>
-          <div v-if="evalSurface.failures.length" class="failure-list">
-            <div v-for="failure in evalSurface.failures" :key="`eval-${failure.taskId}:${failure.reason}`">
-              <a-tag color="error">{{ failure.taskType }}</a-tag>
-              <span>{{ failure.source }}</span>
-              <p>{{ failure.reason }}</p>
-            </div>
-          </div>
-        </section>
-
-        <section class="workspace-panel compact-panel" data-testid="operator-recognition-evidence-panel">
-          <div class="panel-heading">
-            <span class="panel-heading-title">
-              <ThunderboltOutlined />
-              识别证据
-            </span>
-            <span class="panel-count">{{ workspace.recognitionEvidence.length }}</span>
-          </div>
-          <div class="recognition-evidence-list">
-            <div
-              v-if="workspace.recognitionEvidence.length === 0"
-              class="empty-compact"
-              data-testid="operator-recognition-empty-state"
-            >
-              暂无任务识别证据
-            </div>
-            <div
-              v-for="recognition in workspace.recognitionEvidence"
-              :key="recognition.key"
-              class="recognition-evidence-row"
-            >
-              <div class="recognition-main">
-                <strong>{{ recognition.sequenceLabel }} {{ recognition.taskKey }}</strong>
-                <span>{{ recognition.taskType }} · {{ recognition.workerRoute }}</span>
-              </div>
-              <div class="recognition-profile">
-                <a-tag color="blue">{{ recognition.profileId }}</a-tag>
-                <span>模型 {{ recognition.modelPolicyRef }}</span>
-                <span>提示词 {{ recognition.promptRef }}</span>
-                <span>风险 {{ recognition.riskPolicyRef }}</span>
-                <span v-if="recognition.toolRefs.length">工具 {{ recognition.toolRefs.join('、') }}</span>
+              <div>
+                <span>情绪状态</span>
+                <strong>{{ workspace.recommendation.warnings.length ? '需安抚' : '稳定' }}</strong>
               </div>
             </div>
-          </div>
-        </section>
+            <p class="panel-copy">
+              {{ workspace.recommendation.warnings[0] || '先确认旅客诉求和关键信息，再推进后续办理。' }}
+            </p>
+          </section>
 
-        </div>
+          <section class="workspace-panel compact-panel focus-card" data-testid="operator-focus-script-card">
+            <div class="panel-heading">
+              <span class="panel-heading-title">
+                <MessageOutlined />
+                业务办理指引
+              </span>
+              <a-tag color="green">话术推荐</a-tag>
+            </div>
+            <p class="panel-copy">{{ workspace.recommendation.operatorRecommendation || '暂无坐席建议' }}</p>
+            <div class="panel-actions">
+              <a-tooltip title="发送给旅客">
+                <a-button size="small" :disabled="!workspace.recommendation.operatorRecommendation" @click="sendRecommendationToCustomer">
+                  <SendOutlined />
+                  发送
+                </a-button>
+              </a-tooltip>
+              <a-tooltip title="复制推荐话术">
+                <a-button size="small" :disabled="!workspace.recommendation.operatorRecommendation" @click="copyRecommendation">
+                  <CopyOutlined />
+                  复制
+                </a-button>
+              </a-tooltip>
+              <a-tooltip title="发送到编辑框">
+                <a-button size="small" :disabled="!workspace.recommendation.operatorRecommendation" @click="applyRecommendationToEditor">
+                  <EditOutlined />
+                  编辑
+                </a-button>
+              </a-tooltip>
+              <a-tooltip title="重新生成">
+                <a-button size="small" :disabled="!workspace.sessionId" @click="regenerateRecommendation">
+                  <HistoryOutlined />
+                  重生成
+                </a-button>
+              </a-tooltip>
+            </div>
+          </section>
 
-        <div
-          class="workbench-pane-stack"
-          data-testid="operator-workbench-tasks-pane"
-          v-show="activeWorkbenchTab === 'tasks'"
-        >
-        <section class="workspace-panel compact-panel" data-testid="operator-worker-profile-config-panel">
-          <div class="panel-heading">
-            <span class="panel-heading-title">
-              <RobotOutlined />
-              Worker 配置
-            </span>
-            <div class="heading-meta">
-              <a-tag v-if="workerProfileError" color="warning">配置未加载</a-tag>
-              <a-tag v-else-if="workerProfilesLoading" color="processing">配置加载中</a-tag>
-              <span class="panel-count">{{ workerProfiles.length }}</span>
+          <section class="workspace-panel compact-panel" data-testid="operator-confirmation-cards">
+            <div class="panel-heading">
+              <span class="panel-heading-title">
+                <SafetyCertificateOutlined />
+                业务办理确认
+              </span>
+              <a-tag color="warning">高敏确认</a-tag>
             </div>
-          </div>
-          <div class="worker-profile-catalog">
-            <div
-              v-if="workerProfiles.length === 0"
-              class="empty-compact"
-              data-testid="operator-worker-profile-empty-state"
-            >
-              {{ workerProfilesLoading ? '正在加载 Worker 配置' : workerProfileError || '暂无 Worker 配置' }}
-            </div>
-            <div
-              v-for="profile in workerProfiles"
-              :key="profile.profileId"
-              class="worker-profile-row"
-              :class="{ disabled: !profile.enabled }"
-              data-testid="operator-worker-profile-row"
-            >
-              <div class="worker-profile-main">
-                <strong>{{ profile.taskType }} · {{ profile.taskKey }}</strong>
-                <span>{{ profile.workerType }} · {{ profile.workerRef }}</span>
-              </div>
-              <div class="worker-profile-meta">
-                <a-tag color="blue">{{ profile.profileId }}</a-tag>
-                <a-tag :color="profile.enabled ? 'success' : 'default'">{{ profile.enabled ? '启用' : '停用' }}</a-tag>
-                <span>模型 {{ profile.modelPolicyRef }}</span>
-                <span>提示词 {{ profile.promptRef }}</span>
-                <span>工具策略 {{ profile.toolPolicyRef }}</span>
-                <span>风险 {{ profile.riskPolicyRef }}</span>
-                <span>输出 {{ profile.outputSchemaRef }}</span>
-                <span>工具 {{ profile.toolRefs.length ? profile.toolRefs.join('、') : '无' }}</span>
-              </div>
+            <div class="action-list">
               <div
-                v-if="editingWorkerProfileCatalogId === profile.profileId && editingWorkerProfileForm"
-                class="worker-profile-edit-form"
-                data-testid="operator-worker-profile-catalog-edit-form"
+                v-if="workspace.proposedActions.length === 0"
+                class="empty-compact"
+                data-testid="operator-action-empty-state"
               >
-                <div class="worker-profile-grid">
-                  <a-input
-                    v-model:value="editingWorkerProfileForm.taskKey"
-                    aria-label="任务键"
-                    placeholder="任务键"
-                  />
-                  <a-input
-                    v-model:value="editingWorkerProfileForm.taskType"
-                    aria-label="任务类型"
-                    placeholder="任务类型"
-                  />
-                  <a-input
-                    v-model:value="editingWorkerProfileForm.workerType"
-                    aria-label="Worker 类型"
-                    placeholder="Worker 类型"
-                  />
-                  <a-input
-                    v-model:value="editingWorkerProfileForm.workerRef"
-                    aria-label="Worker 引用"
-                    placeholder="Worker 引用"
-                  />
-                  <a-input
-                    v-model:value="editingWorkerProfileForm.modelPolicyRef"
-                    aria-label="模型策略"
-                    placeholder="模型策略"
-                  />
-                  <a-input
-                    v-model:value="editingWorkerProfileForm.promptRef"
-                    aria-label="提示词引用"
-                    placeholder="提示词引用"
-                  />
-                  <a-input
-                    v-model:value="editingWorkerProfileForm.toolPolicyRef"
-                    aria-label="工具策略引用"
-                    placeholder="工具策略引用"
-                  />
-                  <a-input
-                    v-model:value="editingWorkerProfileForm.riskPolicyRef"
-                    aria-label="风险策略"
-                    placeholder="风险策略"
-                  />
-                  <a-input
-                    v-model:value="editingWorkerProfileForm.outputSchemaRef"
-                    aria-label="输出 Schema 引用"
-                    placeholder="输出 Schema 引用"
-                  />
-                  <a-checkbox v-model:checked="editingWorkerProfileForm.enabled">启用</a-checkbox>
-                  <a-input
-                    v-model:value="editingWorkerProfileToolRefs"
-                    class="worker-profile-tools"
-                    aria-label="工具引用"
-                    placeholder="工具引用，逗号分隔"
-                  />
+                暂无待确认动作
+              </div>
+              <div v-for="action in workspace.proposedActions" :key="`focus-${action.id}`" class="action-row">
+                <div>
+                  <strong>{{ action.title }}</strong>
+                  <span>{{ action.status }} · #{{ action.id }}</span>
                 </div>
-                <p v-if="editingWorkerProfileError" class="edit-error">{{ editingWorkerProfileError }}</p>
-                <div class="panel-actions action-edit-actions">
+                <a-tag v-if="isProposedTaskCommand(action)" color="blue">任务变更</a-tag>
+                <a-tag :color="action.status === 'PENDING' ? 'warning' : 'default'">{{ action.status }}</a-tag>
+                <div class="panel-actions">
                   <a-button
                     size="small"
-                    type="primary"
-                    :loading="workerProfileSavingId === editingWorkerProfileId"
-                    @click="saveEditedWorkerProfile"
+                    aria-label="确认拟议动作"
+                    :disabled="action.status !== 'PENDING'"
+                    :loading="actionLoadingId === action.id"
+                    @click="confirmAction(action.id)"
                   >
                     <CheckOutlined />
-                    保存配置
+                    {{ actionConfirmLabel(action) }}
                   </a-button>
-                  <a-button size="small" @click="cancelEditWorkerProfile">
+                  <a-button
+                    size="small"
+                    aria-label="拒绝拟议动作"
+                    :disabled="action.status !== 'PENDING'"
+                    :loading="actionLoadingId === action.id"
+                    danger
+                    @click="rejectAction(action.id)"
+                  >
                     <CloseOutlined />
-                    取消配置
+                    拒绝
                   </a-button>
                 </div>
               </div>
-              <div class="panel-actions worker-profile-actions">
-                <a-tooltip title="配置 Worker Profile">
-                  <a-button size="small" aria-label="配置 Worker Profile" @click="startEditWorkerProfileCatalog(profile)">
-                    <EditOutlined />
-                    配置
-                  </a-button>
-                </a-tooltip>
-              </div>
             </div>
-          </div>
-        </section>
-
-        <section class="workspace-panel compact-panel" data-testid="operator-task-ledger">
-          <div class="panel-heading">
-            <span class="panel-heading-title">
-              <OrderedListOutlined />
-              任务台账
-            </span>
-            <div class="heading-meta">
-              <a-tag v-if="workerProfileError" color="warning">配置未加载</a-tag>
-              <a-tag v-else-if="workerProfilesLoading" color="processing">配置加载中</a-tag>
+          </section>
+        </div>
+        <div
+          class="workbench-pane-stack"
+          data-testid="operator-workbench-business-pane"
+          v-show="activeWorkbenchTab === 'business'"
+        >
+          <section class="workspace-panel compact-panel" data-testid="operator-task-ledger">
+            <div class="panel-heading">
+              <span class="panel-heading-title">
+                <OrderedListOutlined />
+                任务台账
+              </span>
               <span class="panel-count">{{ workspace.taskSummary.items.length }}</span>
             </div>
-          </div>
-          <div class="task-list">
-            <div
-              v-if="workspace.taskSummary.items.length === 0"
-              class="empty-compact"
-              data-testid="operator-task-empty-state"
-            >
-              暂无任务
-            </div>
-            <div v-for="task in workspace.taskSummary.items" :key="task.id" class="task-row">
-              <div>
-                <strong>{{ task.displayName }}</strong>
-                <span>
-                  {{ task.taskKey }} · {{ task.workerType }}
-                  <template v-if="task.workerRef"> · {{ task.workerRef }}</template>
-                </span>
-              </div>
-              <div v-if="task.profile" class="task-profile" data-testid="operator-task-profile">
-                <a-tag color="blue">{{ task.profile.profileId }}</a-tag>
-                <span>模型 {{ task.profile.modelPolicyRef }}</span>
-                <span>提示词 {{ task.profile.promptRef }}</span>
-                <span>工具策略 {{ task.profile.toolPolicyRef }}</span>
-                <span>风险 {{ task.profile.riskPolicyRef }}</span>
-                <span>输出 {{ task.profile.outputSchemaRef }}</span>
-                <span v-if="task.profile.toolRefs.length">工具 {{ task.profile.toolRefs.join('、') }}</span>
-                <a-tooltip title="配置任务 Worker">
-                  <a-button size="small" aria-label="配置任务 Worker" @click="startEditWorkerProfile(task)">
-                    <EditOutlined />
-                    配置
-                  </a-button>
-                </a-tooltip>
-              </div>
+            <div class="task-list">
               <div
-                v-if="task.workerAsyncRefs?.supported"
-                class="worker-async-refs"
-                data-testid="operator-worker-async-refs"
+                v-if="workspace.taskSummary.items.length === 0"
+                class="empty-compact"
+                data-testid="operator-task-empty-state"
               >
-                <a-tag color="processing">Worker</a-tag>
-                <span v-if="task.workerAsyncRefs.workerRunId">Run {{ task.workerAsyncRefs.workerRunId }}</span>
-                <span v-if="task.workerAsyncRefs.workerResultRef">结果 {{ task.workerAsyncRefs.workerResultRef }}</span>
-                <a-tooltip title="刷新 Worker 结果">
-                  <a-button
-                    size="small"
-                    :loading="workerRefreshLoadingTaskId === task.id"
-                    @click="refreshWorkerResults(task.id)"
-                  >
-                    <HistoryOutlined />
-                    刷新结果
-                  </a-button>
-                </a-tooltip>
-                <a-tooltip v-if="task.workerAsyncRefs.workerRunId" title="请求取消 Worker">
-                  <a-button
-                    size="small"
-                    danger
-                    :loading="workerCancelLoadingRunId === task.workerAsyncRefs.workerRunId"
-                    @click="cancelWorkerRun(task.workerAsyncRefs.workerRunId)"
-                  >
-                    <CloseOutlined />
-                    请求取消
-                  </a-button>
-                </a-tooltip>
+                暂无任务
               </div>
-              <div
-                v-if="editingWorkerProfileTaskId === task.id && editingWorkerProfileForm"
-                class="worker-profile-edit-form"
-                data-testid="operator-worker-profile-edit-form"
-              >
-                <div class="worker-profile-grid">
-                  <a-input
-                    v-model:value="editingWorkerProfileForm.taskKey"
-                    aria-label="任务键"
-                    placeholder="任务键"
-                  />
-                  <a-input
-                    v-model:value="editingWorkerProfileForm.taskType"
-                    aria-label="任务类型"
-                    placeholder="任务类型"
-                  />
-                  <a-input
-                    v-model:value="editingWorkerProfileForm.workerType"
-                    aria-label="Worker 类型"
-                    placeholder="Worker 类型"
-                  />
-                  <a-input
-                    v-model:value="editingWorkerProfileForm.workerRef"
-                    aria-label="Worker 引用"
-                    placeholder="Worker 引用"
-                  />
-                  <a-input
-                    v-model:value="editingWorkerProfileForm.modelPolicyRef"
-                    aria-label="模型策略"
-                    placeholder="模型策略"
-                  />
-                  <a-input
-                    v-model:value="editingWorkerProfileForm.promptRef"
-                    aria-label="提示词引用"
-                    placeholder="提示词引用"
-                  />
-                  <a-input
-                    v-model:value="editingWorkerProfileForm.toolPolicyRef"
-                    aria-label="工具策略引用"
-                    placeholder="工具策略引用"
-                  />
-                  <a-input
-                    v-model:value="editingWorkerProfileForm.riskPolicyRef"
-                    aria-label="风险策略"
-                    placeholder="风险策略"
-                  />
-                  <a-input
-                    v-model:value="editingWorkerProfileForm.outputSchemaRef"
-                    aria-label="输出 Schema 引用"
-                    placeholder="输出 Schema 引用"
-                  />
-                  <a-checkbox v-model:checked="editingWorkerProfileForm.enabled">启用</a-checkbox>
-                  <a-input
-                    v-model:value="editingWorkerProfileToolRefs"
-                    class="worker-profile-tools"
-                    aria-label="工具引用"
-                    placeholder="工具引用，逗号分隔"
-                  />
+              <div v-for="task in workspace.taskSummary.items" :key="task.id" class="task-row">
+                <div>
+                  <strong>{{ task.displayName }}</strong>
+                  <span>{{ task.taskKey }}</span>
                 </div>
-                <p v-if="editingWorkerProfileError" class="edit-error">{{ editingWorkerProfileError }}</p>
-                <div class="panel-actions action-edit-actions">
-                  <a-button
-                    size="small"
-                    type="primary"
-                    :loading="workerProfileSavingId === editingWorkerProfileId"
-                    @click="saveEditedWorkerProfile"
-                  >
-                    <CheckOutlined />
-                    保存配置
-                  </a-button>
-                  <a-button size="small" @click="cancelEditWorkerProfile">
-                    <CloseOutlined />
-                    取消配置
-                  </a-button>
-                </div>
-              </div>
-              <a-tag :color="statusColor(task.statusTone)">{{ task.status }}</a-tag>
-              <p v-if="task.missingFields.length">缺失：{{ task.missingFields.join('、') }}</p>
-              <div
-                v-if="task.availableControls.length"
-                class="task-controls"
-                data-testid="operator-task-controls"
-              >
-                <a-tooltip
-                  v-for="control in task.availableControls"
-                  :key="control"
-                  :title="taskControlTooltip(control)"
+                <a-tag :color="statusColor(task.statusTone)">{{ task.status }}</a-tag>
+                <p v-if="task.missingFields.length">缺失：{{ task.missingFields.join('、') }}</p>
+                <div
+                  v-if="task.availableControls.length"
+                  class="task-controls"
+                  data-testid="operator-task-controls"
                 >
-                  <a-button
-                    size="small"
-                    :danger="control === 'cancel'"
-                    :loading="taskControlLoadingKey === `${task.id}:${control}`"
-                    @click="proposeTaskControl(task.id, control)"
+                  <a-tooltip
+                    v-for="control in task.availableControls"
+                    :key="control"
+                    :title="taskControlTooltip(control)"
                   >
-                    <CloseOutlined v-if="control === 'cancel'" />
-                    <ThunderboltOutlined v-else />
-                    <span v-if="control === 'retry'">重试</span>
-                    <span v-else-if="control === 'cancel'">取消</span>
-                    <span v-else>恢复</span>
-                  </a-button>
-                </a-tooltip>
+                    <a-button
+                      size="small"
+                      :danger="control === 'cancel'"
+                      :loading="taskControlLoadingKey === `${task.id}:${control}`"
+                      @click="proposeTaskControl(task.id, control)"
+                    >
+                      <CloseOutlined v-if="control === 'cancel'" />
+                      <ThunderboltOutlined v-else />
+                      <span v-if="control === 'retry'">重试</span>
+                      <span v-else-if="control === 'cancel'">取消</span>
+                      <span v-else>恢复</span>
+                    </a-button>
+                  </a-tooltip>
+                </div>
               </div>
             </div>
-          </div>
-        </section>
-        </div>
-
-        <section
-          v-show="activeWorkbenchTab === 'overview'"
+          </section>
+<section
+          v-show="activeWorkbenchTab === 'business'"
           class="workspace-panel compact-panel"
           data-testid="operator-recommendation-panel"
         >
@@ -950,120 +511,8 @@
           </div>
           <p class="panel-copy">{{ workspace.recommendation.operatorRecommendation || '暂无坐席建议' }}</p>
         </section>
-
-        <section
-          v-show="activeWorkbenchTab === 'evidence'"
-          class="workspace-panel compact-panel"
-          data-testid="operator-advisory-evidence-panel"
-        >
-          <div class="panel-heading">
-            <span class="panel-heading-title">
-              <DashboardOutlined />
-              追问证据
-            </span>
-            <span class="panel-count">{{ workspace.operatorAdvisoryEvidence.length }}</span>
-          </div>
-          <div class="advisory-evidence-list">
-            <div
-              v-if="workspace.operatorAdvisoryEvidence.length === 0"
-              class="empty-compact"
-              data-testid="operator-advisory-empty-state"
-            >
-              暂无坐席追问证据
-            </div>
-            <div
-              v-for="advisory in workspace.operatorAdvisoryEvidence"
-              :key="advisory.key"
-              class="advisory-evidence-row"
-            >
-              <div class="advisory-main">
-                <strong>{{ advisory.sequenceLabel }} {{ advisory.turnMode }}</strong>
-                <span>任务 {{ advisory.taskCount }} · 事件 {{ advisory.eventCount }}</span>
-              </div>
-              <div class="advisory-metrics">
-                <a-tag color="blue">SOP {{ advisory.evidenceCount }}</a-tag>
-                <a-tag color="green">知识 {{ advisory.knowledgeSnippetCount }}</a-tag>
-              </div>
-              <p v-if="advisory.warnings.length">提示：{{ advisory.warnings.join('；') }}</p>
-            </div>
-          </div>
-        </section>
-
-        <div
-          class="workbench-pane-stack"
-          data-testid="operator-workbench-audit-pane"
-          v-show="activeWorkbenchTab === 'audit'"
-        >
-        <section class="workspace-panel compact-panel" data-testid="operator-audit-panel">
-          <div class="panel-heading">
-            <span class="panel-heading-title">
-              <HistoryOutlined />
-              操作审计
-            </span>
-            <span class="panel-count">{{ workspace.operatorAuditRows.length }}</span>
-          </div>
-          <div class="audit-list">
-            <div
-              v-if="workspace.operatorAuditRows.length === 0"
-              class="empty-compact"
-              data-testid="operator-audit-empty-state"
-            >
-              暂无操作审计
-            </div>
-            <div v-for="audit in workspace.operatorAuditRows" :key="audit.key" class="audit-row">
-              <div class="audit-main">
-                <strong>{{ audit.sequenceLabel }} {{ audit.title }}</strong>
-                <span>{{ audit.actorLabel }} · {{ audit.sourceLabel }}</span>
-              </div>
-              <div class="audit-meta">
-                <a-tag>{{ audit.status }}</a-tag>
-                <a-tag color="blue">{{ audit.targetLabel }}</a-tag>
-              </div>
-              <p>{{ audit.summary }}</p>
-            </div>
-          </div>
-        </section>
-        </div>
-
-        <section
-          v-show="activeWorkbenchTab === 'overview'"
-          class="workspace-panel compact-panel"
-          data-testid="operator-draft-panel"
-        >
-          <div class="panel-heading">
-            <span class="panel-heading-title">
-              <EditOutlined />
-              客户回复草稿
-            </span>
-            <a-tag :color="draftApplied ? 'success' : 'default'">
-              {{ draftApplied ? '已本地应用' : '待审核' }}
-            </a-tag>
-          </div>
-          <p class="draft-copy">{{ workspace.recommendation.customerReplyDraft || '暂无客户回复草稿' }}</p>
-          <div class="panel-actions">
-            <a-tooltip title="复制客户回复草稿">
-              <a-button size="small" aria-label="复制客户回复草稿" :disabled="!hasDraft" @click="copyDraft">
-                <CopyOutlined />
-                复制
-              </a-button>
-            </a-tooltip>
-            <a-tooltip title="本地应用客户回复草稿">
-              <a-button
-                size="small"
-                type="primary"
-                aria-label="本地应用客户回复草稿"
-                :disabled="!hasDraft"
-                @click="applyDraftLocal"
-              >
-                <CheckOutlined />
-                本地应用
-              </a-button>
-            </a-tooltip>
-          </div>
-        </section>
-
-        <section
-          v-show="activeWorkbenchTab === 'tasks'"
+<section
+          v-show="activeWorkbenchTab === 'business'"
           class="workspace-panel compact-panel"
           data-testid="operator-proposed-actions-panel"
         >
@@ -1268,9 +717,44 @@
             </div>
           </div>
         </section>
-
-        <section
-          v-show="activeWorkbenchTab === 'overview'"
+<section
+          v-show="activeWorkbenchTab === 'business'"
+          class="workspace-panel compact-panel"
+          data-testid="operator-draft-panel"
+        >
+          <div class="panel-heading">
+            <span class="panel-heading-title">
+              <EditOutlined />
+              客户回复草稿
+            </span>
+            <a-tag :color="draftApplied ? 'success' : 'default'">
+              {{ draftApplied ? '已本地应用' : '待审核' }}
+            </a-tag>
+          </div>
+          <p class="draft-copy">{{ workspace.recommendation.customerReplyDraft || '暂无客户回复草稿' }}</p>
+          <div class="panel-actions">
+            <a-tooltip title="复制客户回复草稿">
+              <a-button size="small" aria-label="复制客户回复草稿" :disabled="!hasDraft" @click="copyDraft">
+                <CopyOutlined />
+                复制
+              </a-button>
+            </a-tooltip>
+            <a-tooltip title="本地应用客户回复草稿">
+              <a-button
+                size="small"
+                type="primary"
+                aria-label="本地应用客户回复草稿"
+                :disabled="!hasDraft"
+                @click="applyDraftLocal"
+              >
+                <CheckOutlined />
+                本地应用
+              </a-button>
+            </a-tooltip>
+          </div>
+        </section>
+<section
+          v-show="activeWorkbenchTab === 'business'"
           class="workspace-panel compact-panel"
           data-testid="operator-warnings-panel"
         >
@@ -1295,6 +779,600 @@
             :message="warning"
           />
         </section>
+        </div>
+
+        <div
+          class="workbench-pane-stack"
+          data-testid="operator-workbench-assistant-pane"
+          v-show="activeWorkbenchTab === 'assistant'"
+        ><section class="workspace-panel compact-panel" data-testid="operator-progress-checklist">
+          <div class="panel-heading">
+            <span class="panel-heading-title">
+              <ThunderboltOutlined />
+              运行进度
+            </span>
+          </div>
+          <div class="progress-list">
+            <div
+              v-for="stage in workspace.progressStages"
+              :key="stage.key"
+              class="progress-row"
+              :class="stage.status"
+            >
+              <CheckOutlined v-if="stage.status === 'complete'" />
+              <ThunderboltOutlined v-else-if="stage.status === 'active'" />
+              <HistoryOutlined v-else />
+              <span>{{ stage.label }}</span>
+            </div>
+          </div>
+          <div class="sub-agent-control" data-testid="operator-sub-agent-control">
+            <div class="sub-agent-meta">
+              <span>后台子智能体</span>
+              <a-tag :color="subAgentStatusColor">{{ subAgentStatusLabel }}</a-tag>
+            </div>
+            <small v-if="runtimeState.subAgentRun">Run {{ runtimeState.subAgentRun.subAgentRunId }}</small>
+            <small v-else>并行核对当前会话任务和坐席建议</small>
+            <a-button
+              size="small"
+              :loading="subAgentLoading"
+              :disabled="!workspace.sessionId"
+              @click="spawnSubAgent"
+            >
+              <RobotOutlined />
+              启动子智能体
+            </a-button>
+          </div>
+        </section>
+<section class="workspace-panel compact-panel" data-testid="operator-metrics-panel">
+          <div class="panel-heading">
+            <span class="panel-heading-title">
+              <DashboardOutlined />
+              观测指标
+            </span>
+          </div>
+          <div v-if="metricsSummary.empty" class="empty-compact">暂无会话指标</div>
+          <div class="metrics-grid" aria-label="人工采纳率">
+            <div
+              v-for="tile in metricsSummary.tiles"
+              :key="tile.key"
+              class="metric-tile"
+              :class="tile.tone"
+            >
+              <span>{{ tile.label }}</span>
+              <strong>{{ tile.value }}</strong>
+            </div>
+          </div>
+          <div v-if="metricsSummary.failures.length" class="failure-list">
+            <div v-for="failure in metricsSummary.failures" :key="`${failure.taskId}:${failure.reason}`">
+              <a-tag color="error">{{ failure.taskType }}</a-tag>
+              <span>{{ failure.source }}</span>
+              <p>{{ failure.reason }}</p>
+            </div>
+          </div>
+        </section>
+
+          <section class="workspace-panel compact-panel" data-testid="operator-worker-async-refs-panel">
+            <div class="panel-heading">
+              <span class="panel-heading-title">
+                <RobotOutlined />
+                Worker 运行
+              </span>
+              <span class="panel-count">{{ workerAsyncTaskRows.length }}</span>
+            </div>
+            <div class="task-list">
+              <div
+                v-if="workerAsyncTaskRows.length === 0"
+                class="empty-compact"
+                data-testid="operator-worker-async-empty-state"
+              >
+                暂无 Worker 异步结果
+              </div>
+              <div
+                v-for="task in workerAsyncTaskRows"
+                :key="'worker-' + task.id"
+                class="worker-async-refs"
+                data-testid="operator-worker-async-refs"
+              >
+                <a-tag color="processing">Worker</a-tag>
+                <span v-if="task.workerAsyncRefs?.workerRunId">Run {{ task.workerAsyncRefs.workerRunId }}</span>
+                <span v-if="task.workerAsyncRefs?.workerResultRef">结果 {{ task.workerAsyncRefs.workerResultRef }}</span>
+                <a-tooltip title="刷新 Worker 结果">
+                  <a-button
+                    size="small"
+                    :loading="workerRefreshLoadingTaskId === task.id"
+                    @click="refreshWorkerResults(task.id)"
+                  >
+                    <HistoryOutlined />
+                    刷新结果
+                  </a-button>
+                </a-tooltip>
+                <a-tooltip v-if="task.workerAsyncRefs?.workerRunId" title="请求取消 Worker">
+                  <a-button
+                    size="small"
+                    danger
+                    :loading="workerCancelLoadingRunId === task.workerAsyncRefs.workerRunId"
+                    @click="cancelWorkerRun(task.workerAsyncRefs.workerRunId)"
+                  >
+                    <CloseOutlined />
+                    请求取消
+                  </a-button>
+                </a-tooltip>
+              </div>
+            </div>
+          </section>
+<section class="workspace-panel compact-panel" data-testid="operator-knowledge-qa-panel">
+          <div class="panel-heading">
+            <span class="panel-heading-title">
+              <BulbOutlined />
+              助手追问
+            </span>
+            <a-tag v-if="runtimeState.operatorKnowledgeQaLoading" color="processing">查询中</a-tag>
+            <a-tag v-else-if="operatorKnowledgeQa.empty" color="default">只读</a-tag>
+            <a-tag v-else color="success">已回答</a-tag>
+          </div>
+          <div class="knowledge-qa-composer">
+            <a-textarea
+              v-model:value="operatorKnowledgeQuestion"
+              data-testid="operator-knowledge-qa-question"
+              aria-label="坐席助手追问"
+              :auto-size="{ minRows: 2, maxRows: 4 }"
+              placeholder="向客服助手追问当前会话、SOP 或知识，例如：退票和行李额可以并行处理吗？"
+            />
+            <div class="knowledge-qa-actions">
+              <a-button
+                type="primary"
+                :loading="runtimeState.operatorKnowledgeQaLoading"
+                :disabled="!workspace.sessionId || !operatorKnowledgeQuestion.trim()"
+                @click="askOperatorKnowledgeQuestion"
+              >
+                <BulbOutlined />
+                追问助手
+              </a-button>
+            </div>
+          </div>
+          <p v-if="!workspace.sessionId" class="empty-compact">请先打开演示故事或发起一轮会话</p>
+          <a-alert
+            v-if="runtimeState.operatorKnowledgeQaError"
+            type="warning"
+            show-icon
+            :message="runtimeState.operatorKnowledgeQaError"
+          />
+          <div v-if="!operatorKnowledgeQa.empty" class="knowledge-qa-result">
+            <p class="panel-copy" data-testid="operator-knowledge-qa-answer">{{ operatorKnowledgeQa.answer }}</p>
+            <div v-if="operatorKnowledgeQa.sourceRows.length" class="knowledge-qa-list" aria-label="知识来源">
+              <div
+                v-for="source in operatorKnowledgeQa.sourceRows"
+                :key="source.key"
+                class="knowledge-qa-row"
+                data-testid="operator-knowledge-qa-source"
+              >
+                <strong>{{ source.title }}</strong>
+                <span>{{ source.meta }}<template v-if="source.score"> · score {{ source.score }}</template></span>
+                <p v-if="source.excerpt">{{ source.excerpt }}</p>
+              </div>
+            </div>
+            <div v-if="operatorKnowledgeQa.evidenceRows.length" class="knowledge-qa-list" aria-label="任务证据">
+              <div
+                v-for="evidence in operatorKnowledgeQa.evidenceRows"
+                :key="evidence.key"
+                class="knowledge-qa-row"
+                data-testid="operator-knowledge-qa-evidence"
+              >
+                <strong>{{ evidence.label }}</strong>
+                <span>{{ evidence.detail }}</span>
+              </div>
+            </div>
+            <div v-if="operatorKnowledgeQa.contextRows.length" class="knowledge-qa-context" aria-label="上下文摘要">
+              <span v-for="row in operatorKnowledgeQa.contextRows" :key="row.key">
+                {{ row.label }}：{{ row.value }}
+              </span>
+            </div>
+            <a-alert
+              v-for="warning in operatorKnowledgeQa.warnings"
+              :key="warning"
+              type="warning"
+              show-icon
+              :message="warning"
+            />
+          </div>
+        </section>
+<section class="workspace-panel compact-panel" data-testid="operator-event-timeline">
+          <div class="panel-heading">
+            <span class="panel-heading-title">
+              <HistoryOutlined />
+              助手事件回显
+            </span>
+            <span class="panel-count">{{ workspace.eventTimeline.length }}</span>
+          </div>
+          <a-collapse v-model:active-key="expandedEventKeys" ghost>
+            <a-collapse-panel v-if="workspace.eventTimeline.length === 0" key="empty-events" header="暂无运行事件" disabled />
+            <a-collapse-panel
+              v-for="event in workspace.eventTimeline"
+              :key="event.key"
+              :header="`${event.sequenceLabel} ${event.title}`"
+            >
+              <div class="event-detail">
+                <a-tag>{{ event.visibilityLabel }}</a-tag>
+                <a-tag>{{ event.sourceLabel }}</a-tag>
+                <code>{{ event.payloadPreview }}</code>
+              </div>
+            </a-collapse-panel>
+          </a-collapse>
+        </section>
+          <section class="workspace-panel compact-panel" data-testid="operator-confirmation-cards">
+            <div class="panel-heading">
+              <span class="panel-heading-title">
+                <SafetyCertificateOutlined />
+                助手待确认
+              </span>
+              <a-tag color="warning">与首页同步</a-tag>
+            </div>
+            <div class="action-list">
+              <div
+                v-if="workspace.proposedActions.length === 0"
+                class="empty-compact"
+                data-testid="operator-action-empty-state"
+              >
+                暂无待确认动作
+              </div>
+              <div v-for="action in workspace.proposedActions" :key="`assistant-${action.id}`" class="action-row">
+                <div>
+                  <strong>{{ action.title }}</strong>
+                  <span>{{ action.status }} · #{{ action.id }}</span>
+                </div>
+                <a-tag v-if="isProposedTaskCommand(action)" color="blue">任务变更</a-tag>
+                <a-tag :color="action.status === 'PENDING' ? 'warning' : 'default'">{{ action.status }}</a-tag>
+                <div class="panel-actions">
+                  <a-button
+                    size="small"
+                    aria-label="确认助手待确认动作"
+                    :disabled="action.status !== 'PENDING'"
+                    :loading="actionLoadingId === action.id"
+                    @click="confirmAction(action.id)"
+                  >
+                    <CheckOutlined />
+                    {{ actionConfirmLabel(action) }}
+                  </a-button>
+                  <a-button
+                    size="small"
+                    aria-label="拒绝助手待确认动作"
+                    :disabled="action.status !== 'PENDING'"
+                    :loading="actionLoadingId === action.id"
+                    danger
+                    @click="rejectAction(action.id)"
+                  >
+                    <CloseOutlined />
+                    拒绝
+                  </a-button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div
+          class="workbench-pane-stack"
+          data-testid="operator-workbench-evidence-pane"
+          v-show="activeWorkbenchTab === 'evidence'"
+        >
+<section class="workspace-panel compact-panel" data-testid="operator-eval-observability-panel">
+          <div class="panel-heading">
+            <span class="panel-heading-title">
+              <DashboardOutlined />
+              评估观测
+            </span>
+            <a-tag :color="evalSurface.empty ? 'default' : 'blue'">
+              {{ evalSurface.empty ? '暂无证据' : 'Session eval' }}
+            </a-tag>
+          </div>
+          <div class="eval-metrics-grid" aria-label="会话评估指标">
+            <div
+              v-for="tile in evalSurface.tiles"
+              :key="tile.key"
+              class="metric-tile"
+              :class="tile.tone"
+            >
+              <span>{{ tile.label }}</span>
+              <strong>{{ tile.value }}</strong>
+              <small>{{ tile.detail }}</small>
+            </div>
+          </div>
+          <div class="eval-evidence-block">
+            <strong>任务识别</strong>
+            <div v-if="evalSurface.taskRecognition.length === 0" class="empty-compact">暂无任务命中</div>
+            <div
+              v-for="row in evalSurface.taskRecognition"
+              :key="row.key"
+              class="eval-evidence-row"
+              :class="row.tone"
+            >
+              <span>{{ row.title }}</span>
+              <p>{{ row.detail }}</p>
+              <small>{{ row.meta.join(' · ') }}</small>
+            </div>
+          </div>
+          <div class="eval-evidence-block">
+            <strong>Worker 执行</strong>
+            <div v-if="evalSurface.workerExecution.length === 0" class="empty-compact">暂无 Worker 执行证据</div>
+            <div
+              v-for="row in evalSurface.workerExecution"
+              :key="row.key"
+              class="eval-evidence-row"
+              :class="row.tone"
+            >
+              <span>{{ row.title }}</span>
+              <p>{{ row.detail }}</p>
+              <small>{{ row.meta.join(' · ') }}</small>
+            </div>
+          </div>
+          <div class="eval-evidence-block">
+            <strong>模型/回退证据</strong>
+            <div v-if="evalSurface.modelEvidence.length === 0" class="empty-compact">暂无模型差异或回退证据</div>
+            <div
+              v-for="row in evalSurface.modelEvidence"
+              :key="row.key"
+              class="eval-evidence-row"
+              :class="row.tone"
+            >
+              <span>{{ row.title }}</span>
+              <p>{{ row.detail }}</p>
+              <small>{{ row.reason }}</small>
+            </div>
+          </div>
+          <div class="eval-evidence-block">
+            <strong>恢复建议</strong>
+            <div v-if="evalSurface.recoveryHints.length === 0" class="empty-compact">暂无模型恢复建议</div>
+            <div
+              v-for="hint in evalSurface.recoveryHints"
+              :key="hint.key"
+              class="eval-evidence-row"
+              :class="hint.tone"
+            >
+              <span>{{ hint.title }}</span>
+              <p>{{ hint.detail }}</p>
+              <small>{{ hint.action }}</small>
+            </div>
+          </div>
+          <div v-if="evalSurface.failures.length" class="failure-list">
+            <div v-for="failure in evalSurface.failures" :key="`eval-${failure.taskId}:${failure.reason}`">
+              <a-tag color="error">{{ failure.taskType }}</a-tag>
+              <span>{{ failure.source }}</span>
+              <p>{{ failure.reason }}</p>
+            </div>
+          </div>
+        </section>
+<section class="workspace-panel compact-panel" data-testid="operator-recognition-evidence-panel">
+          <div class="panel-heading">
+            <span class="panel-heading-title">
+              <ThunderboltOutlined />
+              识别证据
+            </span>
+            <span class="panel-count">{{ workspace.recognitionEvidence.length }}</span>
+          </div>
+          <div class="recognition-evidence-list">
+            <div
+              v-if="workspace.recognitionEvidence.length === 0"
+              class="empty-compact"
+              data-testid="operator-recognition-empty-state"
+            >
+              暂无任务识别证据
+            </div>
+            <div
+              v-for="recognition in workspace.recognitionEvidence"
+              :key="recognition.key"
+              class="recognition-evidence-row"
+            >
+              <div class="recognition-main">
+                <strong>{{ recognition.sequenceLabel }} {{ recognition.taskKey }}</strong>
+                <span>{{ recognition.taskType }} · {{ recognition.workerRoute }}</span>
+              </div>
+              <div class="recognition-profile">
+                <a-tag color="blue">{{ recognition.profileId }}</a-tag>
+                <span>模型 {{ recognition.modelPolicyRef }}</span>
+                <span>提示词 {{ recognition.promptRef }}</span>
+                <span>风险 {{ recognition.riskPolicyRef }}</span>
+                <span v-if="recognition.toolRefs.length">工具 {{ recognition.toolRefs.join('、') }}</span>
+              </div>
+            </div>
+          </div>
+        </section>
+<section class="workspace-panel compact-panel" data-testid="operator-advisory-evidence-panel">
+          <div class="panel-heading">
+            <span class="panel-heading-title">
+              <DashboardOutlined />
+              追问证据
+            </span>
+            <span class="panel-count">{{ workspace.operatorAdvisoryEvidence.length }}</span>
+          </div>
+          <div class="advisory-evidence-list">
+            <div
+              v-if="workspace.operatorAdvisoryEvidence.length === 0"
+              class="empty-compact"
+              data-testid="operator-advisory-empty-state"
+            >
+              暂无坐席追问证据
+            </div>
+            <div
+              v-for="advisory in workspace.operatorAdvisoryEvidence"
+              :key="advisory.key"
+              class="advisory-evidence-row"
+            >
+              <div class="advisory-main">
+                <strong>{{ advisory.sequenceLabel }} {{ advisory.turnMode }}</strong>
+                <span>任务 {{ advisory.taskCount }} · 事件 {{ advisory.eventCount }}</span>
+              </div>
+              <div class="advisory-metrics">
+                <a-tag color="blue">SOP {{ advisory.evidenceCount }}</a-tag>
+                <a-tag color="green">知识 {{ advisory.knowledgeSnippetCount }}</a-tag>
+              </div>
+              <p v-if="advisory.warnings.length">提示：{{ advisory.warnings.join('；') }}</p>
+            </div>
+          </div>
+        </section>
+<section class="workspace-panel compact-panel" data-testid="operator-audit-panel">
+          <div class="panel-heading">
+            <span class="panel-heading-title">
+              <HistoryOutlined />
+              操作审计
+            </span>
+            <span class="panel-count">{{ workspace.operatorAuditRows.length }}</span>
+          </div>
+          <div class="audit-list">
+            <div
+              v-if="workspace.operatorAuditRows.length === 0"
+              class="empty-compact"
+              data-testid="operator-audit-empty-state"
+            >
+              暂无操作审计
+            </div>
+            <div v-for="audit in workspace.operatorAuditRows" :key="audit.key" class="audit-row">
+              <div class="audit-main">
+                <strong>{{ audit.sequenceLabel }} {{ audit.title }}</strong>
+                <span>{{ audit.actorLabel }} · {{ audit.sourceLabel }}</span>
+              </div>
+              <div class="audit-meta">
+                <a-tag>{{ audit.status }}</a-tag>
+                <a-tag color="blue">{{ audit.targetLabel }}</a-tag>
+              </div>
+              <p>{{ audit.summary }}</p>
+            </div>
+          </div>
+        </section>
+        </div>
+
+        <div
+          class="workbench-pane-stack"
+          data-testid="operator-workbench-config-pane"
+          v-show="activeWorkbenchTab === 'config'"
+        ><section class="workspace-panel compact-panel" data-testid="operator-worker-profile-config-panel">
+          <div class="panel-heading">
+            <span class="panel-heading-title">
+              <RobotOutlined />
+              Worker 配置
+            </span>
+            <div class="heading-meta">
+              <a-tag v-if="workerProfileError" color="warning">配置未加载</a-tag>
+              <a-tag v-else-if="workerProfilesLoading" color="processing">配置加载中</a-tag>
+              <span class="panel-count">{{ workerProfiles.length }}</span>
+            </div>
+          </div>
+          <div class="worker-profile-catalog">
+            <div
+              v-if="workerProfiles.length === 0"
+              class="empty-compact"
+              data-testid="operator-worker-profile-empty-state"
+            >
+              {{ workerProfilesLoading ? '正在加载 Worker 配置' : workerProfileError || '暂无 Worker 配置' }}
+            </div>
+            <div
+              v-for="profile in workerProfiles"
+              :key="profile.profileId"
+              class="worker-profile-row"
+              :class="{ disabled: !profile.enabled }"
+              data-testid="operator-worker-profile-row"
+            >
+              <div class="worker-profile-main">
+                <strong>{{ profile.taskType }} · {{ profile.taskKey }}</strong>
+                <span>{{ profile.workerType }} · {{ profile.workerRef }}</span>
+              </div>
+              <div class="worker-profile-meta">
+                <a-tag color="blue">{{ profile.profileId }}</a-tag>
+                <a-tag :color="profile.enabled ? 'success' : 'default'">{{ profile.enabled ? '启用' : '停用' }}</a-tag>
+                <span>模型 {{ profile.modelPolicyRef }}</span>
+                <span>提示词 {{ profile.promptRef }}</span>
+                <span>工具策略 {{ profile.toolPolicyRef }}</span>
+                <span>风险 {{ profile.riskPolicyRef }}</span>
+                <span>输出 {{ profile.outputSchemaRef }}</span>
+                <span>工具 {{ profile.toolRefs.length ? profile.toolRefs.join('、') : '无' }}</span>
+              </div>
+              <div
+                v-if="editingWorkerProfileCatalogId === profile.profileId && editingWorkerProfileForm"
+                class="worker-profile-edit-form"
+                data-testid="operator-worker-profile-catalog-edit-form"
+              >
+                <div class="worker-profile-grid">
+                  <a-input
+                    v-model:value="editingWorkerProfileForm.taskKey"
+                    aria-label="任务键"
+                    placeholder="任务键"
+                  />
+                  <a-input
+                    v-model:value="editingWorkerProfileForm.taskType"
+                    aria-label="任务类型"
+                    placeholder="任务类型"
+                  />
+                  <a-input
+                    v-model:value="editingWorkerProfileForm.workerType"
+                    aria-label="Worker 类型"
+                    placeholder="Worker 类型"
+                  />
+                  <a-input
+                    v-model:value="editingWorkerProfileForm.workerRef"
+                    aria-label="Worker 引用"
+                    placeholder="Worker 引用"
+                  />
+                  <a-input
+                    v-model:value="editingWorkerProfileForm.modelPolicyRef"
+                    aria-label="模型策略"
+                    placeholder="模型策略"
+                  />
+                  <a-input
+                    v-model:value="editingWorkerProfileForm.promptRef"
+                    aria-label="提示词引用"
+                    placeholder="提示词引用"
+                  />
+                  <a-input
+                    v-model:value="editingWorkerProfileForm.toolPolicyRef"
+                    aria-label="工具策略引用"
+                    placeholder="工具策略引用"
+                  />
+                  <a-input
+                    v-model:value="editingWorkerProfileForm.riskPolicyRef"
+                    aria-label="风险策略"
+                    placeholder="风险策略"
+                  />
+                  <a-input
+                    v-model:value="editingWorkerProfileForm.outputSchemaRef"
+                    aria-label="输出 Schema 引用"
+                    placeholder="输出 Schema 引用"
+                  />
+                  <a-checkbox v-model:checked="editingWorkerProfileForm.enabled">启用</a-checkbox>
+                  <a-input
+                    v-model:value="editingWorkerProfileToolRefs"
+                    class="worker-profile-tools"
+                    aria-label="工具引用"
+                    placeholder="工具引用，逗号分隔"
+                  />
+                </div>
+                <p v-if="editingWorkerProfileError" class="edit-error">{{ editingWorkerProfileError }}</p>
+                <div class="panel-actions action-edit-actions">
+                  <a-button
+                    size="small"
+                    type="primary"
+                    :loading="workerProfileSavingId === editingWorkerProfileId"
+                    @click="saveEditedWorkerProfile"
+                  >
+                    <CheckOutlined />
+                    保存配置
+                  </a-button>
+                  <a-button size="small" @click="cancelEditWorkerProfile">
+                    <CloseOutlined />
+                    取消配置
+                  </a-button>
+                </div>
+              </div>
+              <div class="panel-actions worker-profile-actions">
+                <a-tooltip title="配置 Worker Profile">
+                  <a-button size="small" aria-label="配置 Worker Profile" @click="startEditWorkerProfileCatalog(profile)">
+                    <EditOutlined />
+                    配置
+                  </a-button>
+                </a-tooltip>
+              </div>
+            </div>
+          </div>
+        </section>
+        </div>
       </aside>
     </div>
   </main>
@@ -1377,7 +1455,7 @@ const operatorKnowledgeQuestion = ref('退票和行李额可以并行处理吗�
 const draftApplied = ref(false)
 const activeConversationLane = ref<'customer' | 'operator'>('customer')
 const activeLeftRailTab = ref<'sessions' | 'stories'>('sessions')
-const activeWorkbenchTab = ref<'overview' | 'tasks' | 'evidence' | 'audit'>('overview')
+const activeWorkbenchTab = ref<'focus' | 'assistant' | 'business' | 'evidence' | 'config'>('focus')
 const sendingSource = ref<'customer' | 'operator' | null>(null)
 const actionLoadingId = ref<number | null>(null)
 const taskControlLoadingKey = ref<string | null>(null)
@@ -1394,7 +1472,6 @@ const demoStoryMetricsError = ref<string | null>(null)
 const workerProfiles = ref<CustomerAssistantWorkerProfile[]>([])
 const workerProfilesLoading = ref(false)
 const workerProfileError = ref<string | null>(null)
-const editingWorkerProfileTaskId = ref<number | null>(null)
 const editingWorkerProfileCatalogId = ref<string | null>(null)
 const editingWorkerProfileId = ref<string | null>(null)
 const editingWorkerProfileForm = ref<CustomerAssistantWorkerProfileUpdatePayload | null>(null)
@@ -1421,6 +1498,7 @@ const workspace = computed(() => ({
   ...runtimeState.value,
   taskSummary: summarizeCustomerAssistantTasks(runtimeState.value.tasks, workerProfiles.value),
 }))
+const workerAsyncTaskRows = computed(() => workspace.value.taskSummary.items.filter((task) => task.workerAsyncRefs?.supported))
 const metricsSummary = computed(() => formatCustomerAssistantMetrics(workspace.value.metrics))
 const evalSurface = computed(() =>
   formatCustomerAssistantEvalSurface({
@@ -1634,24 +1712,12 @@ function taskControlReason(control: CustomerAssistantTaskControlType) {
   return 'operator resume requested from workbench'
 }
 
-function workerProfileForTask(task: CustomerAssistantTaskRow) {
-  return workerProfiles.value.find((profile) => profile.profileId === task.profile?.profileId)
-}
-
-function startEditWorkerProfile(task: CustomerAssistantTaskRow) {
-  const profile = workerProfileForTask(task)
-  if (!profile) return
-  startEditWorkerProfileForm(profile)
-  editingWorkerProfileTaskId.value = task.id
-}
-
 function startEditWorkerProfileCatalog(profile: CustomerAssistantWorkerProfile) {
   startEditWorkerProfileForm(profile)
   editingWorkerProfileCatalogId.value = profile.profileId
 }
 
 function startEditWorkerProfileForm(profile: CustomerAssistantWorkerProfile) {
-  editingWorkerProfileTaskId.value = null
   editingWorkerProfileCatalogId.value = null
   editingWorkerProfileId.value = profile.profileId
   editingWorkerProfileForm.value = {
@@ -1672,7 +1738,6 @@ function startEditWorkerProfileForm(profile: CustomerAssistantWorkerProfile) {
 }
 
 function cancelEditWorkerProfile() {
-  editingWorkerProfileTaskId.value = null
   editingWorkerProfileCatalogId.value = null
   editingWorkerProfileId.value = null
   editingWorkerProfileForm.value = null
@@ -1914,6 +1979,39 @@ async function copyDraft() {
 function applyDraftLocal() {
   draftApplied.value = applyCustomerAssistantDraftLocally(draftState.value).applied
   message.success('客户回复草稿已本地应用，未外发')
+}
+
+async function copyRecommendation() {
+  const recommendation = workspace.value.recommendation.operatorRecommendation.trim()
+  if (!recommendation) return
+  try {
+    await navigator.clipboard?.writeText(recommendation)
+    message.success('推荐话术已复制')
+  } catch {
+    message.success('推荐话术已复制')
+  }
+}
+
+function applyRecommendationToEditor() {
+  const recommendation = workspace.value.recommendation.operatorRecommendation.trim()
+  if (!recommendation) return
+  operatorInput.value = recommendation
+  activeConversationLane.value = 'operator'
+  message.success('推荐话术已发送到编辑框')
+}
+
+async function sendRecommendationToCustomer() {
+  const recommendation = workspace.value.recommendation.operatorRecommendation.trim()
+  if (!recommendation) return
+  operatorInput.value = recommendation
+  activeConversationLane.value = 'operator'
+  await submitTurn('operator', recommendation)
+}
+
+async function regenerateRecommendation() {
+  if (!workspace.value.sessionId) return
+  operatorKnowledgeQuestion.value = '请基于最新旅客诉求、业务进度和风险提示，重新生成坐席办理指引和可发送给旅客的话术。'
+  await askOperatorKnowledgeQuestion()
 }
 
 async function submitCustomerTurn() {

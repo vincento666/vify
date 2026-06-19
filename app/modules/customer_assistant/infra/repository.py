@@ -492,7 +492,7 @@ class CustomerAssistantRepository:
         ).mappings().one_or_none()
         return dict(row) if row else None
 
-    def mark_worker_running(self, worker_run_id: int) -> dict[str, Any] | None:
+    def mark_worker_running(self, worker_run_id: int, *, record_event: bool = True) -> dict[str, Any] | None:
         run = self.get_worker_run(worker_run_id)
         if run is None or str(run["status"]) in _TERMINAL_WORKER_STATUSES:
             return run
@@ -509,7 +509,8 @@ class CustomerAssistantRepository:
             .values(status="RUNNING", started_at=now, updated_at=now)
         )
         self._session.commit()
-        self.append_worker_event(worker_run_id, "worker_run_started", {"workerRunId": _worker_run_public_id(worker_run_id)})
+        if record_event:
+            self.append_worker_event(worker_run_id, "worker_run_started", {"workerRunId": _worker_run_public_id(worker_run_id)})
         return self.get_worker_run(worker_run_id)
 
     def complete_worker_run(

@@ -531,6 +531,27 @@ describe('customer assistant view model', () => {
     expect(JSON.stringify(qa)).not.toContain('MU5137-8899')
   })
 
+  it('shows the explicit no-source fallback message when copilot answers without knowledge hits', () => {
+    const qa = formatCustomerAssistantOperatorKnowledgeQa({
+      sessionId: 12,
+      question: '这次退票还需要补什么信息？',
+      answer: '还需要客户提供订单号，当前先基于会话和任务状态给出建议。',
+      sources: [],
+      evidence: [],
+      contextSummary: {
+        sessionId: 12,
+        taskCount: 1,
+        pendingActionCount: 1,
+      } as Record<string, unknown>,
+      warnings: [],
+    })
+
+    expect(qa.answer).toBe(
+      '未命中知识库，基于当前会话上下文回答：还需要客户提供订单号，当前先基于会话和任务状态给出建议。',
+    )
+    expect(qa.sourceRows).toEqual([])
+  })
+
   it('formats session metrics as compact operator tiles and redacted failure rows', () => {
     const metrics = formatCustomerAssistantMetrics({
       ...mockCustomerAssistantMetrics,

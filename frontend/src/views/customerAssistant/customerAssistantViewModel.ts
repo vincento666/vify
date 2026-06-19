@@ -551,10 +551,15 @@ export function formatCustomerAssistantOperatorKnowledgeQa(
       warnings: [],
     }
   }
+  const answer = redactOperatorKnowledgeText(qa.answer)
+  const answerWithSourceContext =
+    qa.sources.length === 0 && answer && !answer.startsWith('未命中知识库')
+      ? `未命中知识库，基于当前会话上下文回答：${answer}`
+      : answer
   return {
     empty: false,
     question: redactOperatorKnowledgeText(qa.question),
-    answer: redactOperatorKnowledgeText(qa.answer),
+    answer: answerWithSourceContext,
     sourceRows: qa.sources.map((source, index) => ({
       key: `source-${source.knowledgeBaseId}-${source.faqId ?? source.documentId ?? source.chunkId ?? index}`,
       title: redactOperatorKnowledgeText(stringField(source.title, '未命名来源')),

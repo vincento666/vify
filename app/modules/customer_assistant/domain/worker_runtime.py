@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError
 from time import monotonic
 from typing import Any
+from threading import Lock
 
 from sqlalchemy.orm import Session
 
@@ -16,7 +17,7 @@ from app.modules.customer_assistant.infra.repository import CustomerAssistantRep
 
 
 WORKER_RUN_PREFIX = "customer-assistant-worker-run-"
-DEFAULT_WAIT_DEADLINE_SECONDS = 0.1
+DEFAULT_WAIT_DEADLINE_SECONDS = 0.02
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,7 @@ class _StartedWorkerRun:
     wait_deadline_seconds: float
     future: Future[WorkerResult] | None = None
     immediate_result: WorkerResult | None = None
+    defer_submit: bool = False
 
 
 class CustomerAssistantWorkerRuntime:
@@ -44,7 +46,11 @@ class CustomerAssistantWorkerRuntime:
         self._async_worker_types = async_worker_types or {"stub_qa"}
         self._wait_deadline_seconds = wait_deadline_seconds
         self._task_timeout_seconds = task_timeout_seconds
-        self._executor = ThreadPoolExecutor(max_workers=max(1, max_concurrency))
+        self._worker_executor = ThreadPoolExecutor(max_workers=max(1, max_concurrency))
+        self._persistence_lock = Lock()
+        self._persisted_worker_run_ids: set[int] = set()
+        self._deferred_lock = Lock()
+        self._deferred_submissions: list[tuple[_StartedWorkerRun, str]] = []
 
     def supports(self, task: TaskItem) -> bool:
         return task.worker_type in self._async_worker_types
@@ -78,8 +84,8 @@ class CustomerAssistantWorkerRuntime:
         message: str,
         actor: str,
     ) -> list[WorkerResult]:
-        started = [
-            self._start_worker_run(
+        prepared = [
+            self._prepare_worker_run(
                 repository,
                 session_id=session_id,
                 parent_run_id=parent_run_id,
@@ -89,9 +95,24 @@ class CustomerAssistantWorkerRuntime:
             )
             for task in tasks
         ]
-        return self._join_started_worker_runs(repository, started)
+        started = [
+            self._submit_worker_run(worker_run, message) if not worker_run.defer_submit else worker_run
+            for worker_run in prepared
+        ]
+        results = self._join_started_worker_runs(repository, started)
+        for worker_run in started:
+            if worker_run.defer_submit:
+                self._defer_worker_run(worker_run, message)
+        return results
 
-    def _start_worker_run(
+    def flush_deferred_submissions(self) -> None:
+        with self._deferred_lock:
+            submissions = list(self._deferred_submissions)
+            self._deferred_submissions.clear()
+        for worker_run, message in submissions:
+            self._submit_worker_run(worker_run, message)
+
+    def _prepare_worker_run(
         self,
         repository: CustomerAssistantRepository,
         *,
@@ -143,14 +164,31 @@ class CustomerAssistantWorkerRuntime:
                     wait_deadline_seconds=wait_deadline_seconds,
                 ),
             )
-        repository.mark_worker_running(worker_run_id)
-        future = self._executor.submit(self._execute_worker_run, worker_run_id, task, message)
         return _StartedWorkerRun(
             task=task,
             worker_run_id=worker_run_id,
             wait_deadline_seconds=wait_deadline_seconds,
-            future=future,
+            defer_submit=self._should_defer_submit(task),
         )
+
+    def _submit_worker_run(self, worker_run: _StartedWorkerRun, message: str) -> _StartedWorkerRun:
+        if worker_run.immediate_result is not None:
+            return worker_run
+        future = self._worker_executor.submit(
+            self._call_worker,
+            worker_run.task,
+            message,
+        )
+        future.add_done_callback(
+            lambda done, started=worker_run: self._persist_completed_future(started, done)
+        )
+        return replace(worker_run, future=future)
+
+    def _defer_worker_run(self, worker_run: _StartedWorkerRun, message: str) -> None:
+        if worker_run.immediate_result is not None:
+            return
+        with self._deferred_lock:
+            self._deferred_submissions.append((worker_run, message))
 
     def _join_started_worker_runs(
         self,
@@ -175,7 +213,7 @@ class CustomerAssistantWorkerRuntime:
                 )
                 continue
             remaining = worker_run.wait_deadline_seconds - (monotonic() - join_started)
-            if remaining <= 0 and not future.done():
+            if remaining <= 0:
                 results.append(
                     self._pending_result(
                         repository,
@@ -186,7 +224,9 @@ class CustomerAssistantWorkerRuntime:
                 )
                 continue
             try:
-                results.append(future.result(timeout=max(0.0, remaining)))
+                result = _with_refs(future.result(timeout=max(0.0, remaining)), worker_async_refs(worker_run.worker_run_id))
+                self._persist_worker_result_once(repository, worker_run.worker_run_id, result)
+                results.append(result)
             except TimeoutError:
                 results.append(
                     self._pending_result(
@@ -207,11 +247,13 @@ class CustomerAssistantWorkerRuntime:
         wait_deadline_seconds: float,
     ) -> WorkerResult:
         refs = worker_async_refs(worker_run_id)
-        repository.append_worker_event(
-            worker_run_id,
-            "worker_run_pending",
-            {"workerRunId": refs["workerRunId"], "status": "RUNNING", "waitDeadlineSeconds": wait_deadline_seconds},
-        )
+        current = repository.get_worker_run(worker_run_id)
+        if current is not None and str(current["status"]) in _TERMINAL_WORKER_STATUSES:
+            return worker_result_from_worker_run(task, current, refs=refs)
+        repository.mark_worker_running(worker_run_id, record_event=False)
+        current = repository.get_worker_run(worker_run_id)
+        if current is not None and str(current["status"]) in _TERMINAL_WORKER_STATUSES:
+            return worker_result_from_worker_run(task, current, refs=refs)
         return WorkerResult(
             task_id=int(task.id or 0),
             worker_type=task.worker_type,
@@ -236,22 +278,55 @@ class CustomerAssistantWorkerRuntime:
             return self._task_timeout_seconds
         return DEFAULT_WAIT_DEADLINE_SECONDS
 
-    def _execute_worker_run(self, worker_run_id: int, task: TaskItem, message: str) -> WorkerResult:
+    def _should_defer_submit(self, task: TaskItem) -> bool:
+        return self._wait_deadline_seconds is None and task.worker_type != "chatflow_sop"
+
+    def _call_worker(self, task: TaskItem, message: str) -> WorkerResult:
+        worker = self._workers.get(task.worker_type)
+        if worker is None:
+            return WorkerResult(
+                task_id=int(task.id or 0),
+                worker_type=task.worker_type,
+                status=TaskStatus.FAILED,
+                error={"code": "WORKER_NOT_FOUND", "message": f"No worker registered for type: {task.worker_type}"},
+            )
+        return self._run_with_timeout(worker, task, message)
+
+    def _persist_completed_future(self, worker_run: _StartedWorkerRun, future: Future[WorkerResult]) -> None:
+        try:
+            result = future.result()
+        except Exception as exc:
+            result = WorkerResult(
+                task_id=int(worker_run.task.id or 0),
+                worker_type=worker_run.task.worker_type,
+                status=TaskStatus.FAILED,
+                error={"code": "WORKER_FAILED", "message": str(exc)},
+            )
         with self._session_factory() as session:
             repository = CustomerAssistantRepository(session)
+            self._persist_worker_result_once(
+                repository,
+                worker_run.worker_run_id,
+                _with_refs(result, worker_async_refs(worker_run.worker_run_id)),
+            )
+
+    def _persist_worker_result_once(
+        self,
+        repository: CustomerAssistantRepository,
+        worker_run_id: int,
+        result: WorkerResult,
+    ) -> None:
+        with self._persistence_lock:
+            if worker_run_id in self._persisted_worker_run_ids:
+                return
+            current = repository.get_worker_run(worker_run_id)
+            if current is None:
+                self._persisted_worker_run_ids.add(worker_run_id)
+                return
+            if str(current["status"]) in _TERMINAL_WORKER_STATUSES:
+                self._persisted_worker_run_ids.add(worker_run_id)
+                return
             repository.mark_worker_running(worker_run_id)
-            worker = self._workers.get(task.worker_type)
-            if worker is None:
-                result = WorkerResult(
-                    task_id=int(task.id or 0),
-                    worker_type=task.worker_type,
-                    status=TaskStatus.FAILED,
-                    error={"code": "WORKER_NOT_FOUND", "message": f"No worker registered for type: {task.worker_type}"},
-                )
-            else:
-                result = self._run_with_timeout(worker, task, message)
-            refs = worker_async_refs(worker_run_id)
-            result = _with_refs(result, refs)
             for event in result.events:
                 repository.append_worker_event(
                     worker_run_id,
@@ -266,52 +341,17 @@ class CustomerAssistantWorkerRuntime:
                 result_payload=_worker_result_payload(result),
                 error=result.error,
             )
-            return result
+            self._persisted_worker_run_ids.add(worker_run_id)
 
     def _run_with_timeout(self, worker: TaskWorker, task: TaskItem, message: str) -> WorkerResult:
-        executor = ThreadPoolExecutor(max_workers=1)
         try:
-            future = executor.submit(worker.run, task, message)
-            return future.result(timeout=self._task_timeout_seconds)
+            started_at = monotonic()
+            result = worker.run(task, message)
+            if monotonic() - started_at <= self._task_timeout_seconds:
+                return result
+            return self._timeout_result(task)
         except TimeoutError:
-            events = [
-                {
-                    "type": "worker_timeout_started",
-                    "source": "customer_assistant_worker",
-                    "payload": {"taskId": task.id, "workerType": task.worker_type},
-                },
-                {
-                    "type": "worker_timed_out",
-                    "source": "customer_assistant_worker",
-                    "payload": {"taskId": task.id, "workerType": task.worker_type},
-                },
-            ]
-            evidence: dict[str, Any] = {}
-            if task.worker_type == "chatflow_sop":
-                cancellation = {
-                    "supported": False,
-                    "reason": "Chatflow v2 cooperative cancellation is not supported by this worker runtime.",
-                }
-                evidence["chatflowCancellation"] = cancellation
-                events.append(
-                    {
-                        "type": "chatflow_v2_cancel_unsupported",
-                        "source": "customer_assistant_worker",
-                        "payload": {
-                            "taskId": task.id,
-                            "workerType": task.worker_type,
-                            "cancellation": cancellation,
-                        },
-                    }
-                )
-            return WorkerResult(
-                task_id=int(task.id or 0),
-                worker_type=task.worker_type,
-                status=TaskStatus.FAILED,
-                evidence=evidence,
-                events=events,
-                error={"code": "WORKER_TIMEOUT", "message": "worker timed out"},
-            )
+            return self._timeout_result(task)
         except Exception as exc:
             return WorkerResult(
                 task_id=int(task.id or 0),
@@ -319,8 +359,46 @@ class CustomerAssistantWorkerRuntime:
                 status=TaskStatus.FAILED,
                 error={"code": "WORKER_FAILED", "message": str(exc)},
             )
-        finally:
-            executor.shutdown(wait=False, cancel_futures=True)
+
+    def _timeout_result(self, task: TaskItem) -> WorkerResult:
+        events = [
+            {
+                "type": "worker_timeout_started",
+                "source": "customer_assistant_worker",
+                "payload": {"taskId": task.id, "workerType": task.worker_type},
+            },
+            {
+                "type": "worker_timed_out",
+                "source": "customer_assistant_worker",
+                "payload": {"taskId": task.id, "workerType": task.worker_type},
+            },
+        ]
+        evidence: dict[str, Any] = {}
+        if task.worker_type == "chatflow_sop":
+            cancellation = {
+                "supported": False,
+                "reason": "Chatflow v2 cooperative cancellation is not supported by this worker runtime.",
+            }
+            evidence["chatflowCancellation"] = cancellation
+            events.append(
+                {
+                    "type": "chatflow_v2_cancel_unsupported",
+                    "source": "customer_assistant_worker",
+                    "payload": {
+                        "taskId": task.id,
+                        "workerType": task.worker_type,
+                        "cancellation": cancellation,
+                    },
+                }
+            )
+        return WorkerResult(
+            task_id=int(task.id or 0),
+            worker_type=task.worker_type,
+            status=TaskStatus.FAILED,
+            evidence=evidence,
+            events=events,
+            error={"code": "WORKER_TIMEOUT", "message": "worker timed out"},
+        )
 
 
 def worker_async_refs(worker_run_id: int) -> dict[str, Any]:

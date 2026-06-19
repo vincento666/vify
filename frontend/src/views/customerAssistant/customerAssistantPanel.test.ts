@@ -49,23 +49,27 @@ describe('CustomerAssistantPanel UI contract', () => {
       'customer-assistant-ai-workbench-column',
       'customer-conversation-lane',
       'operator-conversation-lane',
-      'operator-workbench-overview-pane',
-      'operator-workbench-tasks-pane',
+      'operator-workbench-focus-pane',
+      'operator-workbench-business-pane',
+      'operator-workbench-assistant-pane',
       'operator-workbench-evidence-pane',
-      'operator-workbench-audit-pane',
+      'operator-workbench-config-pane',
+      'operator-task-ledger',
+      'operator-recommendation-panel',
+      'operator-proposed-actions-panel',
+      'operator-draft-panel',
+      'operator-warnings-panel',
       'operator-progress-checklist',
       'operator-sub-agent-control',
       'operator-metrics-panel',
-      'operator-recognition-evidence-panel',
+      'operator-worker-async-refs-panel',
       'operator-knowledge-qa-panel',
-      'operator-task-ledger',
-      'operator-recommendation-panel',
+      'operator-event-timeline',
+      'operator-eval-observability-panel',
+      'operator-recognition-evidence-panel',
       'operator-advisory-evidence-panel',
       'operator-audit-panel',
-      'operator-draft-panel',
-      'operator-proposed-actions-panel',
-      'operator-event-timeline',
-      'operator-warnings-panel',
+      'operator-worker-profile-config-panel',
     ]) {
       expect(content).toContain(`data-testid="${testId}"`)
     }
@@ -79,54 +83,126 @@ describe('CustomerAssistantPanel UI contract', () => {
       /data-testid="customer-assistant-center-column"[\s\S]*data-testid="customer-conversation-lane"[\s\S]*data-testid="operator-conversation-lane"/,
     )
     expect(content).toMatch(
-      /data-testid="customer-assistant-ai-workbench-column"[\s\S]*data-testid="operator-ai-workbench-tabs"[\s\S]*data-testid="operator-task-ledger"[\s\S]*data-testid="operator-proposed-actions-panel"/,
+      /data-testid="customer-assistant-ai-workbench-column"[\s\S]*data-testid="operator-ai-workbench-tabs"[\s\S]*data-testid="operator-workbench-focus-pane"[\s\S]*data-testid="operator-workbench-config-pane"/,
     )
     expect(section(content, 'customer-assistant-center-column')).not.toContain('operator-task-ledger')
-    expect(section(content, 'customer-assistant-center-column')).not.toContain('operator-proposed-actions-panel')
+    expect(section(content, 'customer-assistant-center-column')).not.toContain('operator-worker-profile-config-panel')
   })
 
-  it('uses tabs to keep the operator workbench from stacking every panel below the conversation', () => {
-    expect(content).toContain("const activeConversationLane = ref<'customer' | 'operator'>('customer')")
-    expect(content).toContain("const activeLeftRailTab = ref<'sessions' | 'stories'>('sessions')")
-    expect(content).toContain("const activeWorkbenchTab = ref<'overview' | 'tasks' | 'evidence' | 'audit'>('overview')")
-    expect(content).toContain('data-testid="customer-assistant-conversation-tabs"')
-    expect(content).toContain('旅客')
-    expect(content).toContain('坐席')
-    expect(content).toContain('v-show="activeConversationLane === \'customer\'"')
-    expect(content).toContain('v-show="activeConversationLane === \'operator\'"')
-    expect(content).toContain('data-testid="customer-assistant-left-tabs"')
-    expect(content).toContain('data-testid="operator-workbench-overview-pane"')
-    expect(content).toContain('data-testid="operator-workbench-tasks-pane"')
-    expect(content).toContain('data-testid="operator-workbench-evidence-pane"')
-    expect(content).toContain('data-testid="operator-workbench-audit-pane"')
-    expect(content).toContain('v-show="activeWorkbenchTab === \'overview\'"')
-    expect(content).toContain('v-show="activeWorkbenchTab === \'tasks\'"')
-    expect(content).toContain('v-show="activeWorkbenchTab === \'evidence\'"')
-    expect(content).toContain('v-show="activeWorkbenchTab === \'audit\'"')
+  it('uses tabs to switch between focus, assistant, business, evidence, and config panes', () => {
+    expect(content).toContain(
+      "const activeWorkbenchTab = ref<'focus' | 'assistant' | 'business' | 'evidence' | 'config'>('focus')",
+    )
+    expect(content).toContain('data-testid="operator-ai-workbench-tabs"')
+    expect(content).toContain('聚焦')
+    expect(content).toContain('AI助手')
+    expect(content).toContain('办理')
+    expect(content).toContain('证据')
+    expect(content).toContain('配置')
+    expect(content).toContain("v-show=\"activeWorkbenchTab === 'focus'\"")
+    expect(content).toContain("v-show=\"activeWorkbenchTab === 'assistant'\"")
+    expect(content).toContain("v-show=\"activeWorkbenchTab === 'business'\"")
+    expect(content).toContain("v-show=\"activeWorkbenchTab === 'evidence'\"")
+    expect(content).toContain("v-show=\"activeWorkbenchTab === 'config'\"")
+    expect(content).not.toContain("activeWorkbenchTab === 'overview'")
+    expect(content).not.toContain("activeWorkbenchTab === 'tasks'")
+    expect(content).not.toContain("activeWorkbenchTab === 'audit'")
   })
 
-  it('keeps the center operator lane passenger-facing and moves assistant Q&A into the workbench', () => {
+  it('defaults the right workbench to business focus and keeps technical panels out of the default pane', () => {
+    const focusPane = betweenTestIds(content, 'operator-workbench-focus-pane', 'operator-workbench-business-pane')
+
+    expect(focusPane).toContain('data-testid="operator-focus-intent-card"')
+    expect(focusPane).toContain('data-testid="operator-focus-script-card"')
+    expect(focusPane).toContain('data-testid="operator-confirmation-cards"')
+    expect(focusPane).toContain('意图识别')
+    expect(focusPane).toContain('情绪识别')
+    expect(focusPane).toContain('业务办理指引')
+    expect(focusPane).toContain('话术推荐')
+    expect(focusPane).toContain('业务办理确认')
+    expect(focusPane).not.toContain('data-testid="operator-task-ledger"')
+    expect(focusPane).not.toContain('data-testid="operator-progress-checklist"')
+    expect(focusPane).not.toContain('data-testid="operator-worker-async-refs-panel"')
+    expect(focusPane).not.toContain('data-testid="operator-knowledge-qa-panel"')
+    expect(focusPane).not.toContain('data-testid="operator-event-timeline"')
+    expect(focusPane).not.toContain('data-testid="operator-worker-profile-config-panel"')
+    expect(focusPane).not.toContain('modelPolicyRef')
+    expect(focusPane).not.toContain('promptRef')
+    expect(focusPane).not.toContain('workerRunId')
+    expect(focusPane).not.toContain('Worker 配置')
+  })
+
+  it('keeps the assistant tab for follow-up, progress, and synchronized confirmation cards', () => {
+    const assistantPane = betweenTestIds(content, 'operator-workbench-assistant-pane', 'operator-workbench-evidence-pane')
+
+    expect(assistantPane).toContain('data-testid="operator-progress-checklist"')
+    expect(assistantPane).toContain('data-testid="operator-sub-agent-control"')
+    expect(assistantPane).toContain('data-testid="operator-metrics-panel"')
+    expect(assistantPane).toContain('data-testid="operator-worker-async-refs-panel"')
+    expect(assistantPane).toContain('data-testid="operator-knowledge-qa-panel"')
+    expect(assistantPane).toContain('data-testid="operator-event-timeline"')
+    expect(assistantPane).toContain('data-testid="operator-confirmation-cards"')
+    expect(assistantPane).toContain('askOperatorKnowledgeQuestion')
+    expect(assistantPane).toContain('workerRefreshLoadingTaskId')
+    expect(assistantPane).toContain('cancelWorkerRun')
+    expect(assistantPane).not.toContain('data-testid="operator-eval-observability-panel"')
+    expect(assistantPane).not.toContain('data-testid="operator-recognition-evidence-panel"')
+    expect(assistantPane).not.toContain('data-testid="operator-task-ledger"')
+    expect(assistantPane).not.toContain('data-testid="operator-worker-profile-config-panel"')
+  })
+
+  it('keeps full task handling in the business tab while sharing confirmation card state', () => {
+    const focusPane = betweenTestIds(content, 'operator-workbench-focus-pane', 'operator-workbench-business-pane')
+    const businessPane = betweenTestIds(content, 'operator-workbench-business-pane', 'operator-workbench-assistant-pane')
+    const assistantPane = betweenTestIds(content, 'operator-workbench-assistant-pane', 'operator-workbench-evidence-pane')
+
+    expect(businessPane).toContain('data-testid="operator-task-ledger"')
+    expect(businessPane).toContain('data-testid="operator-recommendation-panel"')
+    expect(businessPane).toContain('data-testid="operator-proposed-actions-panel"')
+    expect(businessPane).toContain('data-testid="operator-draft-panel"')
+    expect(businessPane).toContain('data-testid="operator-warnings-panel"')
+    expect(businessPane).toContain('data-testid="operator-task-controls"')
+    expect(businessPane).not.toContain('data-testid="operator-worker-async-refs"')
+    expect(businessPane).not.toContain('modelPolicyRef')
+    expect(businessPane).not.toContain('promptRef')
+    expect(focusPane).toContain('workspace.proposedActions')
+    expect(assistantPane).toContain('workspace.proposedActions')
+    expect(businessPane).toContain('workspace.proposedActions')
+  })
+
+  it('keeps the config tab for worker profile configuration', () => {
+    const configPane = section(content, 'operator-workbench-config-pane')
+
+    expect(configPane).toContain('data-testid="operator-worker-profile-config-panel"')
+    expect(configPane).toContain('workerProfiles')
+    expect(configPane).toContain('profile.taskType')
+    expect(configPane).toContain('profile.taskKey')
+    expect(configPane).toContain('profile.workerType')
+    expect(configPane).toContain('profile.workerRef')
+    expect(configPane).toContain('profile.modelPolicyRef')
+    expect(configPane).toContain('profile.promptRef')
+    expect(configPane).toContain('profile.toolPolicyRef')
+    expect(configPane).toContain('profile.riskPolicyRef')
+    expect(configPane).toContain('profile.outputSchemaRef')
+    expect(configPane).toContain('operator-worker-profile-catalog-edit-form')
+    expect(configPane).toContain('startEditWorkerProfileCatalog')
+    expect(configPane).toContain('saveEditedWorkerProfile')
+    expect(content).toContain('updateCustomerAssistantWorkerProfile')
+  })
+
+  it('keeps the center operator lane passenger-facing and free of assistant tooling', () => {
     const centerColumn = section(content, 'customer-assistant-center-column')
     const operatorLane = section(content, 'operator-conversation-lane')
-    const overviewPane = betweenTestIds(content, 'operator-workbench-overview-pane', 'operator-workbench-evidence-pane')
-    const evidencePane = betweenTestIds(content, 'operator-workbench-evidence-pane', 'operator-workbench-tasks-pane')
-    const auditPane = section(content, 'operator-workbench-audit-pane')
 
     expect(operatorLane).toContain('坐席发话')
     expect(operatorLane).toContain('旅客对话')
     expect(operatorLane).toContain('模拟坐席发话')
     expect(operatorLane).toContain('发送给旅客的话术')
     expect(operatorLane).not.toContain('追问助手')
-    expect(operatorLane).not.toContain('向客服助手追问')
-    expect(operatorLane).not.toContain('Assistant</a-tag>')
+    expect(operatorLane).not.toContain('Worker 配置')
+    expect(operatorLane).not.toContain('operator-task-ledger')
     expect(centerColumn).not.toContain('operatorKnowledgeQuestion')
-    expect(centerColumn).not.toContain('operator-knowledge-qa-panel')
-
-    expect(overviewPane).toContain('data-testid="operator-knowledge-qa-panel"')
-    expect(overviewPane).toContain('data-testid="operator-event-timeline"')
-    expect(overviewPane).toContain('askOperatorKnowledgeQuestion')
-    expect(evidencePane).not.toContain('data-testid="operator-knowledge-qa-panel"')
-    expect(auditPane).not.toContain('data-testid="operator-event-timeline"')
+    expect(centerColumn).not.toContain('operator-worker-profile-config-panel')
   })
 
   it('keeps compact viewports as a three-column shell instead of collapsing into a vertical panel stack', () => {
@@ -173,19 +249,6 @@ describe('CustomerAssistantPanel UI contract', () => {
     expect(content).toContain('createCustomerAssistantRuntimeState()')
   })
 
-  it('renders progress checklist and keeps timeline collapsed by default', () => {
-    const progressPanel = section(content, 'operator-progress-checklist')
-
-    expect(progressPanel).toContain('data-testid="operator-sub-agent-control"')
-    expect(progressPanel).toContain('workspace.progressStages')
-    expect(progressPanel).toContain('stage.label')
-    expect(progressPanel).toContain('spawnSubAgent')
-    expect(progressPanel).toContain('subAgentLoading')
-    expect(progressPanel).toContain('subAgentStatusLabel')
-    expect(content).toContain('const expandedEventKeys = ref<string[]>([])')
-    expect(section(content, 'customer-conversation-lane')).not.toContain('operator-sub-agent-control')
-  })
-
   it('renders draft delivery controls only in the operator proposed-action panel', () => {
     const actionPanel = section(content, 'operator-proposed-actions-panel')
 
@@ -197,7 +260,7 @@ describe('CustomerAssistantPanel UI contract', () => {
     expect(section(content, 'customer-conversation-lane')).not.toContain('外发草稿')
   })
 
-  it('renders observability metrics in the operator panel without raw payload details', () => {
+  it('renders observability metrics in the assistant panel without raw payload details', () => {
     const metricsPanel = section(content, 'operator-metrics-panel')
 
     expect(metricsPanel).toContain('metricsSummary.tiles')
@@ -206,13 +269,33 @@ describe('CustomerAssistantPanel UI contract', () => {
     expect(metricsPanel).not.toContain('compactPayload')
   })
 
-  it('renders aggregate seeded demo metrics above the story picker', () => {
-    const storyStrip = section(content, 'customer-assistant-demo-stories')
+  it('renders task controls in the business ledger and keeps worker refs out of the default pane', () => {
+    const businessPane = betweenTestIds(content, 'operator-workbench-business-pane', 'operator-workbench-assistant-pane')
 
-    expect(storyStrip).toContain('data-testid="customer-assistant-demo-metrics"')
-    expect(storyStrip).toContain('demoStoryMetricsSummary.tiles')
-    expect(storyStrip).toContain('演示总览')
-    expect(content).toContain('loadDemoStoryMetrics')
+    expect(businessPane).toContain('data-testid="operator-task-controls"')
+    expect(businessPane).toContain('proposeTaskControl')
+    expect(businessPane).toContain('重试')
+    expect(businessPane).toContain('取消')
+    expect(businessPane).toContain('恢复')
+    expect(businessPane).not.toContain('workerRunId')
+    expect(businessPane).not.toContain('modelPolicyRef')
+    expect(businessPane).not.toContain('promptRef')
+    expect(businessPane).not.toContain('refreshWorkerResults')
+    expect(businessPane).not.toContain('cancelWorkerRun')
+  })
+
+  it('renders action execution and decision receipts in the business panel', () => {
+    const actionPanel = section(content, 'operator-proposed-actions-panel')
+
+    expect(actionPanel).toContain('data-testid="operator-action-receipt"')
+    expect(actionPanel).toContain('data-testid="operator-action-decision-receipt"')
+    expect(actionPanel).toContain('formatCustomerAssistantActionReceipt(action)')
+    expect(actionPanel).toContain('formatCustomerAssistantActionDecisionReceipt(action)')
+    expect(actionPanel).toContain('decisionReceipt.note')
+    expect(actionPanel).toContain('decisionReceipt.reason')
+    expect(actionPanel).toContain('执行回执')
+    expect(actionPanel).toContain('决策回执')
+    expect(section(content, 'customer-conversation-lane')).not.toContain('operator-action-decision-receipt')
   })
 
   it('renders the seeded session inbox as an operator dashboard outside the customer lane', () => {
@@ -230,182 +313,40 @@ describe('CustomerAssistantPanel UI contract', () => {
     expect(section(content, 'customer-conversation-lane')).not.toContain('openSessionInboxRow')
   })
 
-  it('distinguishes proposed task commands from executable actions', () => {
-    expect(content).toContain('isProposedTaskCommand')
-    expect(content).toContain('isCustomerReplyDraftAction')
-    expect(content).toContain('确认任务变更')
-    expect(content).toContain(
-      `:disabled="action.status !== 'CONFIRMED' || isProposedTaskCommand(action) || isCustomerReplyDraftAction(action)"`,
-    )
-  })
+  it('renders the worker profile catalog as a dedicated config panel', () => {
+    const configPane = section(content, 'operator-workbench-config-pane')
 
-  it('renders action execution receipts in the operator proposed-action panel', () => {
-    const actionPanel = section(content, 'operator-proposed-actions-panel')
-
-    expect(actionPanel).toContain('data-testid="operator-action-receipt"')
-    expect(actionPanel).toContain('formatCustomerAssistantActionReceipt(action)')
-    expect(actionPanel).toContain('receipt.auditRows')
-    expect(actionPanel).toContain('执行回执')
-  })
-
-  it('renders action decision receipts in the operator proposed-action panel', () => {
-    const actionPanel = section(content, 'operator-proposed-actions-panel')
-
-    expect(actionPanel).toContain('data-testid="operator-action-decision-receipt"')
-    expect(actionPanel).toContain('formatCustomerAssistantActionDecisionReceipt(action)')
-    expect(actionPanel).toContain('decisionReceipt.note')
-    expect(actionPanel).toContain('decisionReceipt.reason')
-    expect(actionPanel).toContain('决策回执')
-    expect(section(content, 'customer-conversation-lane')).not.toContain('operator-action-decision-receipt')
-  })
-
-  it('renders retry cancel and resume task controls in the operator ledger', () => {
-    const taskLedger = section(content, 'operator-task-ledger')
-
-    expect(taskLedger).toContain('data-testid="operator-task-controls"')
-    expect(taskLedger).toContain('proposeTaskControl')
-    expect(taskLedger).toContain('重试')
-    expect(taskLedger).toContain('取消')
-    expect(taskLedger).toContain('恢复')
-    expect(section(content, 'customer-conversation-lane')).not.toContain('proposeTaskControl')
-  })
-
-  it('renders pending worker refs and manual refresh controls in the operator ledger', () => {
-    const taskLedger = section(content, 'operator-task-ledger')
-
-    expect(taskLedger).toContain('data-testid="operator-worker-async-refs"')
-    expect(taskLedger).toContain('task.workerAsyncRefs.workerRunId')
-    expect(taskLedger).toContain('refreshWorkerResults')
-    expect(taskLedger).toContain('刷新结果')
-    expect(taskLedger).toContain('cancelWorkerRun')
-    expect(taskLedger).toContain('请求取消')
-  })
-
-  it('renders pending proposed action edit controls in the operator panel', () => {
-    const actionPanel = section(content, 'operator-proposed-actions-panel')
-
-    expect(actionPanel).toContain('data-testid="operator-action-edit-form"')
-    expect(actionPanel).toContain('startEditAction')
-    expect(actionPanel).toContain('saveEditedAction')
-    expect(content).toContain('updateCustomerAssistantRuntimeAction')
-    expect(section(content, 'customer-conversation-lane')).not.toContain('operator-action-edit-form')
-  })
-
-  it('renders decision note controls in pending operator proposed-action rows', () => {
-    const actionPanel = section(content, 'operator-proposed-actions-panel')
-
-    expect(actionPanel).toContain('data-testid="operator-action-decision-form"')
-    expect(actionPanel).toContain('aria-label="确认备注"')
-    expect(actionPanel).toContain('aria-label="拒绝原因"')
-    expect(actionPanel).toContain('actionDecisionDraft(action.id).confirmNote')
-    expect(actionPanel).toContain('actionDecisionDraft(action.id).rejectReason')
-    expect(section(content, 'customer-conversation-lane')).not.toContain('operator-action-decision-form')
-  })
-
-  it('renders configured worker profile metadata in task rows', () => {
-    const taskLedger = section(content, 'operator-task-ledger')
-
-    expect(taskLedger).toContain('data-testid="operator-task-profile"')
-    expect(taskLedger).toContain('task.profile.profileId')
-    expect(taskLedger).toContain('task.profile.modelPolicyRef')
-    expect(taskLedger).toContain('task.profile.riskPolicyRef')
-    expect(taskLedger).toContain('task.profile.toolRefs')
-  })
-
-  it('renders the configured worker profile catalog as a dedicated operator panel', () => {
-    const profilePanel = section(content, 'operator-worker-profile-config-panel')
-
-    expect(profilePanel).toContain('workerProfiles')
-    expect(profilePanel).toContain('profile.taskType')
-    expect(profilePanel).toContain('profile.taskKey')
-    expect(profilePanel).toContain('profile.workerType')
-    expect(profilePanel).toContain('profile.workerRef')
-    expect(profilePanel).toContain('profile.modelPolicyRef')
-    expect(profilePanel).toContain('profile.promptRef')
-    expect(profilePanel).toContain('profile.toolRefs')
-    expect(profilePanel).toContain('profile.toolPolicyRef')
-    expect(profilePanel).toContain('profile.riskPolicyRef')
-    expect(profilePanel).toContain('profile.outputSchemaRef')
-    expect(profilePanel).toContain('startEditWorkerProfile')
-    expect(profilePanel).toContain('saveEditedWorkerProfile')
+    expect(configPane).toContain('workerProfiles')
+    expect(configPane).toContain('profile.taskType')
+    expect(configPane).toContain('profile.taskKey')
+    expect(configPane).toContain('profile.workerType')
+    expect(configPane).toContain('profile.workerRef')
+    expect(configPane).toContain('profile.modelPolicyRef')
+    expect(configPane).toContain('profile.promptRef')
+    expect(configPane).toContain('profile.toolRefs')
+    expect(configPane).toContain('profile.toolPolicyRef')
+    expect(configPane).toContain('profile.riskPolicyRef')
+    expect(configPane).toContain('profile.outputSchemaRef')
+    expect(configPane).toContain('startEditWorkerProfileCatalog')
+    expect(configPane).toContain('saveEditedWorkerProfile')
     expect(section(content, 'customer-conversation-lane')).not.toContain('operator-worker-profile-config-panel')
   })
 
-  it('renders worker profile edit controls in the operator task ledger', () => {
-    const taskLedger = section(content, 'operator-task-ledger')
+  it('renders worker async refs and assistant evidence in the assistant panel', () => {
+    const assistantPane = betweenTestIds(content, 'operator-workbench-assistant-pane', 'operator-workbench-evidence-pane')
+    const evidencePane = betweenTestIds(content, 'operator-workbench-evidence-pane', 'operator-workbench-config-pane')
 
-    expect(taskLedger).toContain('data-testid="operator-worker-profile-edit-form"')
-    expect(taskLedger).toContain('startEditWorkerProfile')
-    expect(taskLedger).toContain('saveEditedWorkerProfile')
-    expect(content).toContain('updateCustomerAssistantWorkerProfile')
-    expect(section(content, 'customer-conversation-lane')).not.toContain('operator-worker-profile-edit-form')
-  })
-
-  it('renders the eval observability surface as a dedicated read-only panel', () => {
-    const evalPanel = section(content, 'operator-eval-observability-panel')
-
-    expect(evalPanel).toContain('evalSurface.tiles')
-    expect(evalPanel).toContain('evalSurface.taskRecognition')
-    expect(evalPanel).toContain('evalSurface.workerExecution')
-    expect(evalPanel).toContain('evalSurface.modelEvidence')
-    expect(evalPanel).toContain('evalSurface.recoveryHints')
-    expect(evalPanel).toContain('evalSurface.failures')
-    expect(evalPanel).toContain('任务识别')
-    expect(evalPanel).toContain('Worker 执行')
-    expect(evalPanel).toContain('模型/回退证据')
-    expect(evalPanel).toContain('恢复建议')
-    expect(content).toContain('formatCustomerAssistantEvalSurface')
-    expect(section(content, 'operator-event-timeline')).not.toContain('evalSurface.modelEvidence')
-    expect(section(content, 'customer-conversation-lane')).not.toContain('operator-eval-observability-panel')
-  })
-
-  it('renders task recognition evidence as a dedicated operator panel', () => {
-    const evidencePanel = section(content, 'operator-recognition-evidence-panel')
-
-    expect(evidencePanel).toContain('workspace.recognitionEvidence')
-    expect(evidencePanel).toContain('recognition.profileId')
-    expect(evidencePanel).toContain('recognition.modelPolicyRef')
-    expect(evidencePanel).toContain('recognition.riskPolicyRef')
-    expect(evidencePanel).toContain('operator-recognition-empty-state')
-    expect(section(content, 'operator-event-timeline')).not.toContain('recognition.profileId')
-  })
-
-  it('renders operator knowledge Q&A as a dedicated compact panel', () => {
-    const qaPanel = section(content, 'operator-knowledge-qa-panel')
-
-    expect(qaPanel).toContain('operatorKnowledgeQuestion')
-    expect(qaPanel).toContain('askOperatorKnowledgeQuestion')
-    expect(qaPanel).toContain('operatorKnowledgeQa.sourceRows')
-    expect(qaPanel).toContain('operatorKnowledgeQa.evidenceRows')
-    expect(qaPanel).toContain('operatorKnowledgeQa.contextRows')
-    expect(qaPanel).toContain('operatorKnowledgeQa.warnings')
-    expect(qaPanel).toContain('data-testid="operator-knowledge-qa-answer"')
-    expect(qaPanel).toContain('data-testid="operator-knowledge-qa-source"')
-    expect(qaPanel).toContain('data-testid="operator-knowledge-qa-evidence"')
-    expect(qaPanel).not.toContain('JSON.stringify')
-    expect(qaPanel).not.toContain('compactPayload')
-    expect(section(content, 'customer-conversation-lane')).not.toContain('operator-knowledge-qa-panel')
-  })
-
-  it('renders operator advisory knowledge evidence as a dedicated panel', () => {
-    const evidencePanel = section(content, 'operator-advisory-evidence-panel')
-
-    expect(evidencePanel).toContain('workspace.operatorAdvisoryEvidence')
-    expect(evidencePanel).toContain('advisory.knowledgeSnippetCount')
-    expect(evidencePanel).toContain('advisory.taskCount')
-    expect(evidencePanel).toContain('advisory.warnings')
-    expect(evidencePanel).toContain('operator-advisory-empty-state')
-    expect(section(content, 'operator-event-timeline')).not.toContain('advisory.knowledgeSnippetCount')
-  })
-
-  it('renders operator audit rows as a compact read-only panel', () => {
-    const auditPanel = section(content, 'operator-audit-panel')
-
-    expect(auditPanel).toContain('workspace.operatorAuditRows')
-    expect(auditPanel).toContain('audit.summary')
-    expect(auditPanel).toContain('audit.targetLabel')
-    expect(auditPanel).toContain('operator-audit-empty-state')
-    expect(auditPanel).not.toContain('compactPayload')
+    expect(assistantPane).toContain('data-testid="operator-worker-async-refs"')
+    expect(assistantPane).toContain('workerRefreshLoadingTaskId')
+    expect(assistantPane).toContain('refreshWorkerResults')
+    expect(assistantPane).toContain('cancelWorkerRun')
+    expect(assistantPane).toContain('askOperatorKnowledgeQuestion')
+    expect(assistantPane).toContain('operatorKnowledgeQa.sourceRows')
+    expect(assistantPane).toContain('operatorKnowledgeQa.evidenceRows')
+    expect(assistantPane).toContain('data-testid="operator-confirmation-cards"')
+    expect(evidencePane).toContain('evalSurface.workerExecution')
+    expect(evidencePane).toContain('workspace.operatorAdvisoryEvidence')
+    expect(evidencePane).toContain('workspace.operatorAuditRows')
   })
 
   it('deep-links and auto-opens seeded demo stories through the route query', () => {

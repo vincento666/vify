@@ -1,0 +1,14 @@
+> vitest run src/views/customerAssistant/customerAssistantStoryLinks.test.ts src/views/customerAssistant/customerAssistantInteractions.test.ts src/views/customerAssistant/customerAssistantEventStream.test.ts src/views/customerAssistant/customerAssistantPanel.test.ts src/views/customerAssistant/customerAssistantViewModel.test.ts src/views/customerAssistant/customerAssistantRuntime.test.ts src/views/customerAssistant/customerAssistantFixtures.test.ts
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ ✓ src/views/customerAssistant/customerAssistantStoryLinks.test.ts (4 tests) 2ms
+ ✓ src/views/customerAssistant/customerAssistantFixtures.test.ts (2 tests) 7ms
+ ✓ src/views/customerAssistant/customerAssistantPanel.test.ts (21 tests) 7ms
+ ✓ src/views/customerAssistant/customerAssistantInteractions.test.ts (6 tests) 4ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts (23 tests) 10ms
+ ✓ src/views/customerAssistant/customerAssistantRuntime.test.ts (15 tests) 56ms
+ ✓ src/views/customerAssistant/customerAssistantEventStream.test.ts (2 tests) 177ms
+ Test Files  7 passed (7)
+      Tests  73 passed (73)
+   Start at  00:51:05
+   Duration  537ms (transform 361ms, setup 0ms, collect 474ms, tests 264ms, environment 1ms, prepare 582ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m

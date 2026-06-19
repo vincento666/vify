@@ -1,0 +1,24 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/vincento/work/develop/hify
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 40 items
+
+tests/unit/customer_assistant/test_domain_models.py .                    [  2%]
+tests/unit/customer_assistant/test_eval_data.py ...                      [ 10%]
+tests/unit/customer_assistant/test_live_react_acceptance_gate.py ....... [ 27%]
+..                                                                       [ 32%]
+tests/unit/customer_assistant/test_llm_primary.py .                      [ 35%]
+tests/unit/customer_assistant/test_optional_live_batch.py .              [ 37%]
+tests/unit/customer_assistant/test_promotion_report.py .                 [ 40%]
+tests/unit/customer_assistant/test_react_core_controller.py ..           [ 45%]
+tests/unit/customer_assistant/test_react_worker.py ........              [ 65%]
+tests/unit/customer_assistant/test_scheduler.py ..                       [ 70%]
+tests/unit/customer_assistant/test_shadow.py .                           [ 72%]
+tests/unit/customer_assistant/test_synthetic_eval_cases.py .             [ 75%]
+tests/unit/customer_assistant/test_worker_profile_catalog.py ......      [ 90%]
+tests/unit/ai_assistant/test_tool_registry.py ....                       [100%]
+
+============================== 40 passed in 0.48s ==============================

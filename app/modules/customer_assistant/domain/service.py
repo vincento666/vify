@@ -609,6 +609,7 @@ class CustomerAssistantService:
 
         payload = _turn_result_payload(result, replayed=False)
         self._repository.complete_run(run_id, payload)
+        self._flush_deferred_async_worker_submissions()
         return payload
 
     def _run_core_with_optional_primary_selector(
@@ -799,6 +800,8 @@ class CustomerAssistantService:
 
     def list_tasks(self, session_id: int) -> dict[str, Any]:
         self._ensure_session(session_id)
+        self._repository.refresh_external_writes()
+        self._consume_completed_async_worker_results(session_id, actor="system")
         rows = self._repository.list_tasks(session_id)
         return {"list": [_format_task(row) for row in rows], "total": len(rows)}
 
@@ -1155,6 +1158,7 @@ class CustomerAssistantService:
             source="operator_advisory",
             actor=actor,
         )
+        self._flush_deferred_async_worker_submissions()
         return _format_action(updated)
 
     def reject_action(self, action_id: int, *, reason: str | None = None) -> dict[str, Any]:
@@ -1462,6 +1466,19 @@ class CustomerAssistantService:
         action_rows = self._repository.list_proposed_actions(session_id)
         task_summaries = [_format_task(row) for row in task_rows]
         proposed_actions = _sort_formatted_actions([_format_action(row) for row in action_rows])
+        if _all_worker_results_pending(worker_results):
+            result = self._aggregator.aggregate(
+                run_id=run_id,
+                session_id=session_id,
+                task_summaries=task_summaries,
+                worker_results=worker_results,
+                proposed_actions=proposed_actions,
+                events=[],
+            )
+            pending_warnings = _worker_result_warnings(worker_results)
+            if pending_warnings:
+                result = replace(result, warnings=[*result.warnings, *pending_warnings])
+            return replace(result, events=[_format_event(row) for row in self._repository.list_events(session_id)])
         recommendation_started_at = datetime.now()
         self._repository.append_event(
             session_id,
@@ -1644,6 +1661,10 @@ class CustomerAssistantService:
             session_id=session_id,
             tasks=tuple(_task_item(row) for row in self._repository.list_tasks(session_id)),
         )
+
+    def _flush_deferred_async_worker_submissions(self) -> None:
+        if self._async_worker_runtime is not None:
+            self._async_worker_runtime.flush_deferred_submissions()
 
     def _ensure_session(self, session_id: int) -> None:
         session = self._repository.get_session(session_id)
@@ -3117,6 +3138,10 @@ def _worker_result_warnings(worker_results: list[WorkerResult]) -> list[str]:
         elif result.status == TaskStatus.FAILED:
             warnings.append(f"worker failed for task {result.task_id}; inspect worker events before replying.")
     return warnings
+
+
+def _all_worker_results_pending(worker_results: list[WorkerResult]) -> bool:
+    return bool(worker_results) and all(result.status == TaskStatus.RUNNING for result in worker_results)
 
 
 def _worker_run_task_version(worker_run: dict[str, Any]) -> int | None:

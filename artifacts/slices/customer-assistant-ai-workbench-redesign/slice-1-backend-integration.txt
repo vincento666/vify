@@ -1,0 +1,54 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/vincento/work/develop/hify
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 82 items
+
+tests/integration/customer_assistant/test_chatflow_sop_worker_v2_adapter.py . [  1%]
+......                                                                   [  8%]
+tests/integration/customer_assistant/test_demo_story_api.py ...          [ 12%]
+tests/integration/customer_assistant/test_draft_delivery_outbox.py ..    [ 14%]
+tests/integration/customer_assistant/test_event_timing.py ..             [ 17%]
+tests/integration/customer_assistant/test_ledger.py .                    [ 18%]
+tests/integration/customer_assistant/test_llm_primary_runtime.py ...     [ 21%]
+tests/integration/customer_assistant/test_llm_promotion_readiness.py .   [ 23%]
+tests/integration/customer_assistant/test_metrics_api.py ..              [ 25%]
+tests/integration/customer_assistant/test_mvp_demo_bootstrap_contract.py . [ 26%]
+.                                                                        [ 28%]
+tests/integration/customer_assistant/test_mvp_demo_seed.py ...           [ 31%]
+tests/integration/customer_assistant/test_one_click_demo_seed.py ..      [ 34%]
+tests/integration/customer_assistant/test_operator_advisory_knowledge.py . [ 35%]
+                                                                         [ 35%]
+tests/integration/customer_assistant/test_operator_audit_trace.py .      [ 36%]
+tests/integration/customer_assistant/test_operator_knowledge_qa.py .     [ 37%]
+tests/integration/customer_assistant/test_operator_turn_mode.py ....     [ 42%]
+tests/integration/customer_assistant/test_proposed_action_atomic_mutations.py . [ 43%]
+                                                                         [ 43%]
+tests/integration/customer_assistant/test_proposed_action_decision_notes.py . [ 45%]
+                                                                         [ 45%]
+tests/integration/customer_assistant/test_proposed_action_edit.py ..     [ 47%]
+tests/integration/customer_assistant/test_proposed_action_execution.py . [ 48%]
+..                                                                       [ 51%]
+tests/integration/customer_assistant/test_proposed_action_operator_attribution.py . [ 52%]
+.                                                                        [ 53%]
+tests/integration/customer_assistant/test_react_worker_integration.py .. [ 56%]
+                                                                         [ 56%]
+tests/integration/customer_assistant/test_repository.py ....             [ 60%]
+tests/integration/customer_assistant/test_shadow_live_opt_in.py s        [ 62%]
+tests/integration/customer_assistant/test_shadow_runtime.py ..           [ 64%]
+tests/integration/customer_assistant/test_spawn_sub_agent_tenant_access.py . [ 65%]
+.                                                                        [ 67%]
+tests/integration/customer_assistant/test_task_controls.py ..            [ 69%]
+tests/integration/customer_assistant/test_two_stage_runtime.py .....     [ 75%]
+tests/integration/customer_assistant/test_worker_profiles.py ..........  [ 87%]
+tests/integration/customer_assistant/test_workers.py ..........          [100%]
+
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/vincento/work/develop/hify/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============= 81 passed, 1 skipped, 1 warning in 64.85s (0:01:04) ==============
