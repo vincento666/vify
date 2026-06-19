@@ -218,3 +218,25 @@
       backend unit/integration/contract/e2e, and in-app browser UAT.
 - [x] Save evidence under
       `artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.16-tool-echo-summary-aggregation/`.
+
+## 193.17 File Echo Separation And Tool Summary UI
+
+- [x] RED: frontend timeline contract fails while grouped tool output still
+      exposes multiple internal tool invocation cards instead of one product
+      summary.
+- [x] RED: frontend timeline contract fails until file read/write/create
+      events become Codex-like top-level file echo nodes instead of generic
+      `工具调用` nodes.
+- [x] Split `read_workspace_file`, `write_workspace_file`, and
+      `create_workspace_file` into `file` timeline buckets with Chinese
+      `已读取/已编辑/已创建 N 个文件` headers and structured path/result details.
+- [x] Keep non-file tools as a single summarized `工具调用`/`命令执行` invocation
+      with formatted Chinese input/output rows, including `invoke_skill` as
+      `使用技能` and no visible `skill=tdd` raw string.
+- [x] Update processed-run meta and status icon handling so file operations are
+      counted separately from tool calls in the folded task header.
+- [x] Revalidate with focused frontend unit, `remScaleClosure`, full frontend
+      unit, frontend build, full AI Assistant backend unit/integration/contract/e2e,
+      real OpenRouter qwen3.5-27b browser UAT, and `git diff --check`.
+- [x] Save evidence under
+      `artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.17-file-echo-and-tool-summary-ui/`.

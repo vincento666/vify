@@ -178,7 +178,69 @@
                     class="ai-event__details"
                     data-testid="ai-assistant-event-detail-panel"
                   >
-                    <dl class="ai-event__detail-grid">
+                    <div
+                      v-if="eventItem.toolInvocations?.length"
+                      class="ai-tool-invocation-list"
+                      data-testid="ai-assistant-tool-invocation-list"
+                    >
+                      <article
+                        v-for="toolInvocation in eventItem.toolInvocations"
+                        :key="toolInvocation.id"
+                        class="ai-tool-invocation"
+                        :class="`tone-${toolInvocation.tone}`"
+                        data-testid="ai-assistant-tool-invocation"
+                      >
+                        <button
+                          class="ai-tool-invocation__header"
+                          type="button"
+                          data-testid="ai-assistant-tool-invocation-header"
+                          :aria-expanded="isToolInvocationExpanded(eventItem, toolInvocation)"
+                          @click="toggleToolInvocation(eventItem, toolInvocation)"
+                        >
+                          <span class="ai-tool-invocation__status" :class="`tone-${toolInvocation.tone}`">
+                            <LoadingOutlined v-if="toolInvocation.tone === 'running'" class="ai-event__spinner" />
+                            <CheckCircleOutlined v-else-if="toolInvocation.tone === 'success'" />
+                            <ExclamationCircleOutlined v-else-if="toolInvocation.tone === 'danger'" />
+                            <ClockCircleOutlined v-else />
+                          </span>
+                          <strong>{{ toolInvocation.title }}</strong>
+                          <small>{{ toolInvocation.subtitle || toolInvocation.statusText }}</small>
+                          <span>{{ toolInvocation.statusText }}</span>
+                          <ChevronRight
+                            class="ai-collapse-chevron"
+                            :class="{ expanded: isToolInvocationExpanded(eventItem, toolInvocation) }"
+                          />
+                        </button>
+                        <dl
+                          v-if="isToolInvocationExpanded(eventItem, toolInvocation)"
+                          class="ai-tool-invocation__details"
+                          data-testid="ai-assistant-tool-invocation-details"
+                        >
+                          <div
+                            v-for="row in toolInvocationRows(toolInvocation)"
+                            :key="`${row.section}-${row.label}`"
+                            class="ai-tool-invocation__row"
+                          >
+                            <dt>{{ row.section }} · {{ row.label }}</dt>
+                            <dd>
+                              <pre v-if="row.monospace">{{ row.value }}</pre>
+                              <span v-else>{{ row.value }}</span>
+                              <span
+                                v-if="row.testId === 'ai-assistant-tool-detail-input'"
+                                class="ai-event__detail-anchor"
+                                data-testid="ai-assistant-tool-detail-input"
+                              />
+                              <span
+                                v-if="row.testId === 'ai-assistant-tool-detail-output'"
+                                class="ai-event__detail-anchor"
+                                data-testid="ai-assistant-tool-detail-output"
+                              />
+                            </dd>
+                          </div>
+                        </dl>
+                      </article>
+                    </div>
+                    <dl v-if="formatEventDetailRows(eventItem).length > 0" class="ai-event__detail-grid">
                       <div
                         v-for="row in formatEventDetailRows(eventItem)"
                         :key="row.label"
@@ -574,6 +636,7 @@ import {
   DeleteOutlined,
   DislikeOutlined,
   DownOutlined,
+  EditOutlined,
   ExclamationCircleOutlined,
   LikeOutlined,
   LoadingOutlined,
@@ -609,7 +672,12 @@ import {
   type AiAssistantToolCall,
 } from '@/api/aiAssistant'
 import { openAiAssistantEventStream, type AiAssistantEventStream } from './aiAssistantEventStream'
-import { buildAiAssistantTimeline, type AiAssistantTimelineItem } from './aiAssistantTimeline'
+import {
+  buildAiAssistantTimeline,
+  type AiAssistantTimelineItem,
+  type AiAssistantToolInvocation,
+  type AiAssistantToolInvocationRow,
+} from './aiAssistantTimeline'
 
 interface AiAssistantRunThread {
   run: AiAssistantRun
@@ -669,6 +737,7 @@ const sending = ref(false)
 const events = ref<AiAssistantEvent[]>([])
 const inspector = ref<AiAssistantRunInspector | null>(null)
 const expandedEventIds = ref<Set<string>>(new Set())
+const expandedToolInvocationIds = ref<Set<string>>(new Set())
 const processedGroupExpanded = ref<Record<string, boolean>>({})
 const completionFeedback = ref<Record<number, 'like' | 'dislike'>>({})
 let activeEventStream: AiAssistantEventStream | null = null
@@ -1079,8 +1148,13 @@ function finalAnswerFromRun(run: AiAssistantRun) {
 
 function processedGroupMeta(items: AiAssistantTimelineItem[]) {
   const thoughtCount = items.filter((item) => item.kind === 'model-thought').length
+  const fileCount = items.filter((item) => item.kind === 'file').length
   const toolCount = items.filter((item) => item.kind === 'tool' || item.kind === 'tool-output').length
-  return `思考 ${thoughtCount} 次 / 工具调用 ${toolCount} 次`
+  return [
+    `思考 ${thoughtCount} 次`,
+    fileCount > 0 ? `文件操作 ${fileCount} 次` : '',
+    `工具调用 ${toolCount} 次`,
+  ].filter(Boolean).join(' / ')
 }
 
 function isProcessedGroupRunning(item: AiAssistantRunPresentationItem, thread: AiAssistantRunThread) {
@@ -1334,7 +1408,7 @@ function toolLabel(toolName: string) {
       customer_assistant_subagent_bridge: '客服助手子任务桥接',
       read_workspace_file: '读取工作区文件',
       write_workspace_file: '写入工作区文件',
-      invoke_skill: '技能意图',
+      invoke_skill: '使用技能',
       search_knowledge_base: '知识库检索',
     }[toolName] ?? toolName
   )
@@ -1376,6 +1450,7 @@ function isDangerStatus(status: string) {
 function eventStatusIcon(item: AiAssistantTimelineItem, _thread: AiAssistantRunThread) {
   const { kind, tone } = item
   if (tone === 'danger') return ExclamationCircleOutlined
+  if (kind === 'file') return EditOutlined
   if (kind === 'tool' || kind === 'tool-output') return ToolOutlined
   return ClockCircleOutlined
 }
@@ -1389,6 +1464,37 @@ function toggleEventCard(itemId: string) {
 
 function isEventExpanded(itemId: string) {
   return expandedEventIds.value.has(itemId)
+}
+
+function toolInvocationKey(item: AiAssistantTimelineItem, invocation: AiAssistantToolInvocation) {
+  return `${item.id}:${invocation.id}`
+}
+
+function toggleToolInvocation(item: AiAssistantTimelineItem, invocation: AiAssistantToolInvocation) {
+  const key = toolInvocationKey(item, invocation)
+  const next = new Set(expandedToolInvocationIds.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  expandedToolInvocationIds.value = next
+}
+
+function isToolInvocationExpanded(item: AiAssistantTimelineItem, invocation: AiAssistantToolInvocation) {
+  return expandedToolInvocationIds.value.has(toolInvocationKey(item, invocation))
+}
+
+function toolInvocationRows(invocation: AiAssistantToolInvocation) {
+  return [
+    ...markToolInvocationRows(invocation.inputRows, '输入', 'ai-assistant-tool-detail-input'),
+    ...markToolInvocationRows(invocation.outputRows, '输出', 'ai-assistant-tool-detail-output'),
+  ]
+}
+
+function markToolInvocationRows(
+  rows: AiAssistantToolInvocationRow[],
+  section: '输入' | '输出',
+  testId: string,
+) {
+  return rows.map((row) => ({ ...row, section, testId: row.testId ?? testId }))
 }
 
 function formatEventDetailRows(item: AiAssistantTimelineItem) {
@@ -1973,6 +2079,103 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
 
 .ai-event__detail-row pre {
   max-height: 14rem;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.ai-tool-invocation-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.ai-tool-invocation {
+  display: grid;
+  gap: 0.375rem;
+  box-shadow: inset 0 0.0625rem 0 var(--color-border-default, #e3e6ef);
+  padding-top: 0.5rem;
+}
+
+.ai-tool-invocation:first-child {
+  box-shadow: none;
+  padding-top: 0;
+}
+
+.ai-tool-invocation__header {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.25rem 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.ai-tool-invocation__header strong,
+.ai-tool-invocation__header small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-tool-invocation__header small,
+.ai-tool-invocation__header span {
+  color: var(--color-text-tertiary, #8b92a8);
+}
+
+.ai-tool-invocation__status {
+  width: 1rem;
+  height: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-border-strong, #c7ccd8);
+}
+
+.ai-tool-invocation__status.tone-running {
+  color: var(--color-primary-600, #4f46e5);
+}
+
+.ai-tool-invocation__status.tone-success {
+  color: var(--color-success-500, #10b981);
+}
+
+.ai-tool-invocation__status.tone-danger {
+  color: var(--color-danger-500, #ef4444);
+}
+
+.ai-tool-invocation__details {
+  display: grid;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0 0 0.375rem 1.5rem;
+}
+
+.ai-tool-invocation__row {
+  display: grid;
+  grid-template-columns: 6rem minmax(0, 1fr);
+  gap: 0.625rem;
+}
+
+.ai-tool-invocation__row dt {
+  color: var(--color-text-tertiary, #8b92a8);
+  font-weight: 700;
+}
+
+.ai-tool-invocation__row dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--color-text-secondary, #4b5268);
+}
+
+.ai-tool-invocation__row pre {
+  max-height: 10rem;
   margin: 0;
   overflow: auto;
   white-space: pre-wrap;

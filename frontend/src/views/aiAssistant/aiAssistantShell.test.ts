@@ -211,7 +211,25 @@ describe('AI Assistant shell UI contract', () => {
     expect(content).toContain("item.kind === 'processed'")
     expect(content).toContain("item.kind === 'assistant-output'")
     expect(content).toContain('思考')
+    expect(content).toContain('文件操作')
     expect(content).toContain('工具调用')
+    expect(content).toContain("kind === 'file'")
+    expect(content).toContain('EditOutlined')
+  })
+
+  it('renders nested formatted tool invocations inside one summarized tool event', () => {
+    expect(content).toContain('eventItem.toolInvocations')
+    expect(content).toContain('data-testid="ai-assistant-tool-invocation-list"')
+    expect(content).toContain('data-testid="ai-assistant-tool-invocation"')
+    expect(content).toContain('data-testid="ai-assistant-tool-invocation-header"')
+    expect(content).toContain('data-testid="ai-assistant-tool-invocation-details"')
+    expect(content).toContain('toggleToolInvocation')
+    expect(content).toContain('isToolInvocationExpanded')
+    expect(content).toContain('toolInvocationRows')
+    expect(content).toContain('使用技能')
+    expect(content).not.toContain('技能意图')
+    expect(content).not.toContain('skill={{')
+    expect(content).not.toContain('skill=')
   })
 
   it('renders user bubbles with subtle fill and completion summary cards with actions', () => {
@@ -360,7 +378,7 @@ describe('AI Assistant shell UI contract', () => {
       '临时密钥',
       '读取工作区文件',
       '写入工作区文件',
-      '技能意图',
+      '使用技能',
       '知识库检索',
       '可观测性',
     ]) {

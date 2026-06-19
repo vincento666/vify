@@ -65,8 +65,11 @@ describe('ai assistant execution timeline', () => {
     expect(timeline.map((item) => item.kind)).toEqual(['model-output', 'tool'])
     expect(timeline[0].summary).toBe('我先读取文件。')
     expect(timeline[1].title).toBe('工具调用')
-    expect(timeline[1].details.map((detail) => detail.label)).toEqual(['结果'])
-    expect(timeline[1].details[0].value).toBe('工具调用\n输出：hello')
+    expect(timeline[1].details).toEqual([])
+    expect(timeline[1].toolInvocations?.[0].title).toBe('工具调用')
+    expect(timeline[1].toolInvocations?.[0].outputRows).toContainEqual(
+      expect.objectContaining({ label: '工具调用 · 已完成', value: '输出：hello' }),
+    )
     expect(timeline.some((item) => item.approvalId === 9)).toBe(false)
   })
 
@@ -94,7 +97,7 @@ describe('ai assistant execution timeline', () => {
 
     expect(timeline.map((item) => item.kind)).toEqual([
       'model-output',
-      'tool',
+      'file',
       'model-output',
     ])
     expect(timeline[0].summary).toBe('我先读取文件。')
@@ -204,12 +207,16 @@ describe('ai assistant execution timeline', () => {
     const timeline = buildAiAssistantTimeline(events)
 
     expect(timeline).toHaveLength(1)
-    expect(timeline[0].kind).toBe('tool')
-    expect(timeline[0].title).toBe('工具调用')
+    expect(timeline[0].kind).toBe('file')
+    expect(timeline[0].title).toBe('已读取 1 个文件')
     expect(timeline[0].tone).toBe('success')
-    expect(timeline[0].details.map((detail) => detail.label)).toEqual(['结果'])
-    expect(timeline[0].details[0].value).toBe('读取工作区文件\n输入：path=AGENTS.md\n输出：project instructions')
-    expect(timeline[0].details[0].value).not.toContain('{')
+    expect(timeline[0].details).toContainEqual(
+      expect.objectContaining({ label: '输入', value: expect.stringContaining('路径：AGENTS.md') }),
+    )
+    expect(timeline[0].details).toContainEqual(
+      expect.objectContaining({ label: '结果', value: expect.stringContaining('内容预览：project instructions') }),
+    )
+    expect(timeline[0].toolInvocations).toBeUndefined()
   })
 
   it('summarizes multiple low-level tool calls into one foldable tool echo item', () => {
@@ -246,19 +253,124 @@ describe('ai assistant execution timeline', () => {
 
     const timeline = buildAiAssistantTimeline(events)
 
-    expect(timeline.map((item) => item.title)).toEqual(['思考过程', '工具调用'])
+    expect(timeline.map((item) => item.title)).toEqual([
+      '思考过程',
+      '已读取 1 个文件',
+      '工具调用',
+      '已编辑 1 个文件',
+      '已读取 1 个文件',
+    ])
     expect(timeline.filter((item) => item.title === '工具调用')).toHaveLength(1)
-    expect(timeline[1].tone).toBe('success')
-    expect(timeline[1].summary).toBe('已汇总 4 次工具调用')
-    expect(timeline[1].details).toHaveLength(1)
-    expect(timeline[1].details[0].label).toBe('结果')
-    expect(timeline[1].details[0].value).toContain('读取工作区文件')
-    expect(timeline[1].details[0].value).toContain('输入：path=specs/README.md')
-    expect(timeline[1].details[0].value).toContain('知识库检索')
-    expect(timeline[1].details[0].value).toContain('输入：query=退票规则 harness 规则')
-    expect(timeline[1].details[0].value).toContain('写入工作区文件')
-    expect(timeline[1].details[0].value).toContain('输出：已写入 tmp/ai-assistant-fuzzy-uat-2.md')
-    expect(timeline[1].details[0].value).not.toContain('{')
+    expect(timeline[1]).toMatchObject({
+      kind: 'file',
+      title: '已读取 1 个文件',
+      tone: 'success',
+    })
+    expect(timeline[1].details[1].value).toContain('内容预览：规范索引')
+    expect(timeline[2].tone).toBe('success')
+    expect(timeline[2].summary).toBe('已汇总 1 次工具调用')
+    expect(timeline[2].details).toEqual([])
+    expect(timeline[2].toolInvocations).toHaveLength(1)
+    expect(timeline[2].toolInvocations?.[0]).toMatchObject({
+      title: '知识库检索',
+      subtitle: '退票规则 harness 规则',
+      statusText: '已完成',
+    })
+    expect(timeline[2].toolInvocations?.[0].inputRows).toContainEqual(
+      expect.objectContaining({
+        label: '调用工具',
+        value: expect.stringContaining('知识库检索：退票规则 harness 规则'),
+      }),
+    )
+    expect(timeline[2].toolInvocations?.[0].inputRows).toContainEqual(
+      expect.objectContaining({
+        label: '知识库检索 · 退票规则 harness 规则',
+        value: expect.stringContaining('查询：退票规则 harness 规则'),
+      }),
+    )
+    expect(timeline[3]).toMatchObject({ kind: 'file', title: '已编辑 1 个文件' })
+    expect(timeline[3].details).toContainEqual(
+      expect.objectContaining({
+        label: '结果',
+        value: expect.stringContaining('结果：已写入 tmp/ai-assistant-fuzzy-uat-2.md（36 bytes）'),
+      }),
+    )
+    expect(JSON.stringify(timeline)).not.toContain('skill=')
+  })
+
+  it('builds one product-grade summarized invocation instead of many raw tool blocks', () => {
+    const events: AiAssistantEvent[] = [
+      event(1, 'model.thought_summary', '思考摘要', '需要读取规范、检索知识库、使用技能并写入校验文件。', {}),
+      event(2, 'tool.call_output', '工具输出', '规范索引', {
+        toolName: 'read_workspace_file',
+        input: { path: 'specs/README.md' },
+        output: { path: 'specs/README.md', content: '规范索引正文'.repeat(80), truncated: false },
+      }),
+      event(3, 'tool.call_output', '工具输出', '知识库结果', {
+        toolName: 'search_knowledge_base',
+        input: { query: '退票规则 harness 规则' },
+        output: { query: '退票规则 harness 规则', hits: [] },
+      }),
+      event(4, 'tool.call_output', '工具输出', '技能结果', {
+        toolName: 'invoke_skill',
+        input: { skillName: 'tdd', instruction: '按红绿重构整理风险和证据' },
+        output: { skillName: 'tdd', instruction: '按红绿重构整理风险和证据', status: 'RECORDED' },
+      }),
+      event(5, 'tool.call_output', '工具输出', '写入结果', {
+        toolName: 'write_workspace_file',
+        input: { path: 'tmp/ai-assistant-fuzzy-uat-2.md', content: '三段式中文校验记录' },
+        output: { path: 'tmp/ai-assistant-fuzzy-uat-2.md', bytes: 36 },
+      }),
+    ]
+
+    const timeline = buildAiAssistantTimeline(events)
+    const readItem = timeline[1]
+    const toolItem = timeline[2]
+    const writeItem = timeline[3]
+
+    expect(timeline.map((item) => item.title)).toEqual([
+      '思考过程',
+      '已读取 1 个文件',
+      '工具调用',
+      '已编辑 1 个文件',
+    ])
+    expect(readItem.kind).toBe('file')
+    expect(readItem.details[1].value).toContain('内容预览：规范索引正文')
+    expect(toolItem.details).toEqual([])
+    expect(toolItem.toolInvocations).toHaveLength(1)
+    expect(toolItem.toolInvocations?.[0]).toMatchObject({
+      title: '工具调用',
+      subtitle: '调用 2 个工具',
+      statusText: '已完成',
+      tone: 'success',
+    })
+    expect(toolItem.toolInvocations?.[0].inputRows).toContainEqual({
+      label: '调用工具',
+      value: expect.stringContaining('使用技能：tdd'),
+      monospace: true,
+    })
+    expect(toolItem.toolInvocations?.[0].inputRows).toContainEqual(
+      expect.objectContaining({
+        label: '使用技能 · tdd',
+        value: '技能：tdd\n说明：按红绿重构整理风险和证据',
+      }),
+    )
+    expect(toolItem.toolInvocations?.[0].outputRows).toContainEqual(
+      expect.objectContaining({
+        label: '知识库检索 · 退票规则 harness 规则',
+        value: '结果：命中 0 条',
+      }),
+    )
+    expect(toolItem.toolInvocations?.[0].outputRows).toContainEqual(
+      expect.objectContaining({
+        label: '使用技能 · tdd',
+        value: '结果：已记录技能意图\n说明：按红绿重构整理风险和证据',
+      }),
+    )
+    expect(writeItem.kind).toBe('file')
+    expect(writeItem.details[1].value).toContain('结果：已写入 tmp/ai-assistant-fuzzy-uat-2.md（36 bytes）')
+    expect(JSON.stringify(toolItem.toolInvocations)).not.toContain('skill=tdd')
+    expect(JSON.stringify(toolItem.toolInvocations)).not.toContain('技能调用')
   })
 
   it('keeps a single summarized tool echo item running while outputs are pending', () => {
@@ -275,14 +387,24 @@ describe('ai assistant execution timeline', () => {
 
     const timeline = buildAiAssistantTimeline(events)
 
-    expect(timeline).toHaveLength(1)
+    expect(timeline).toHaveLength(2)
     expect(timeline[0]).toMatchObject({
+      kind: 'file',
+      title: '已读取 1 个文件',
+      tone: 'running',
+    })
+    expect(timeline[0].details[1].value).toContain('结果：等待结果')
+    expect(timeline[1]).toMatchObject({
       kind: 'tool',
       title: '工具调用',
       tone: 'running',
-      summary: '已汇总 2 次工具调用',
+      summary: '已汇总 1 次工具调用',
     })
-    expect(timeline[0].details[0].value).toContain('输出：等待结果')
+    expect(timeline[1].toolInvocations).toHaveLength(1)
+    expect(timeline[1].toolInvocations?.[0].statusText).toBe('运行中')
+    expect(timeline[1].toolInvocations?.[0].outputRows).toContainEqual(
+      expect.objectContaining({ label: '知识库检索 · harness 规则', value: '结果：等待结果' }),
+    )
   })
 
   it('merges completed events back into the active tool group when only completion has a tool call id', () => {
@@ -307,11 +429,18 @@ describe('ai assistant execution timeline', () => {
     const timeline = buildAiAssistantTimeline(events)
 
     expect(timeline).toHaveLength(1)
-    expect(timeline[0].summary).toBe('已汇总 1 次工具调用')
-    expect(timeline[0].details[0].value).toBe(
-      '写入工作区文件\n输入：path=tmp/merged-tool.md，content=ok\n输出：已写入 tmp/merged-tool.md（2 bytes）',
+    expect(timeline[0]).toMatchObject({
+      kind: 'file',
+      title: '已编辑 1 个文件',
+      summary: '已编辑 1 个文件',
+    })
+    expect(timeline[0].details).toContainEqual(
+      expect.objectContaining({ label: '输入', value: expect.stringContaining('路径：tmp/merged-tool.md') }),
     )
-    expect(timeline[0].details[0].value).not.toContain('等待结果')
+    expect(timeline[0].details).toContainEqual(
+      expect.objectContaining({ label: '结果', value: expect.stringContaining('结果：已写入 tmp/merged-tool.md（2 bytes）') }),
+    )
+    expect(JSON.stringify(timeline[0].details)).not.toContain('等待结果')
   })
 
   it('renders completed empty tool outputs from status instead of a pending placeholder', () => {
@@ -333,8 +462,9 @@ describe('ai assistant execution timeline', () => {
     const timeline = buildAiAssistantTimeline(events)
 
     expect(timeline[0].tone).toBe('success')
-    expect(timeline[0].details[0].value).toContain('输出：未找到 tmp/missing.md')
-    expect(timeline[0].details[0].value).not.toContain('等待结果')
+    expect(timeline[0]).toMatchObject({ kind: 'file', title: '已读取 1 个文件' })
+    expect(timeline[0].details[1].value).toContain('结果：未找到 tmp/missing.md')
+    expect(JSON.stringify(timeline[0].details)).not.toContain('等待结果')
   })
 
   it('renders only supported execution echo event categories in processed groups', () => {
@@ -356,9 +486,9 @@ describe('ai assistant execution timeline', () => {
 
     const timeline = buildAiAssistantTimeline(events)
 
-    expect(timeline.map((item) => item.title)).toEqual(['思考过程', '工具调用', '审批通过'])
-    expect(timeline.map((item) => item.kind)).toEqual(['model-thought', 'tool', 'approval'])
-    expect(timeline[1].details[0].value).toBe('读取工作区文件\n输出：文件正文')
+    expect(timeline.map((item) => item.title)).toEqual(['思考过程', '已读取 1 个文件', '审批通过'])
+    expect(timeline.map((item) => item.kind)).toEqual(['model-thought', 'file', 'approval'])
+    expect(timeline[1].details[1].value).toContain('内容预览：文件正文')
     expect(timeline[2].details).toEqual([{ label: '内容', value: 'operator-ui 已批准 写入工作区文件。' }])
   })
 
@@ -374,7 +504,10 @@ describe('ai assistant execution timeline', () => {
 
     expect(timeline).toHaveLength(1)
     expect(timeline[0].title).toBe('命令执行')
-    expect(timeline[0].details[0].value).toBe('终端命令\n输出：created tmp/demo.txt\nread tmp/demo.txt')
+    expect(timeline[0].toolInvocations?.[0].title).toBe('终端命令')
+    expect(timeline[0].toolInvocations?.[0].outputRows).toContainEqual(
+      expect.objectContaining({ label: '终端命令', value: '输出：created tmp/demo.txt\nread tmp/demo.txt' }),
+    )
   })
 })
 

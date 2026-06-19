@@ -5,6 +5,7 @@ export type AiAssistantTimelineKind =
   | 'model'
   | 'model-output'
   | 'model-thought'
+  | 'file'
   | 'tool'
   | 'tool-output'
   | 'approval'
@@ -26,10 +27,28 @@ export interface AiAssistantTimelineItem {
   approvalId?: number
   phase?: string
   source?: string
+  toolInvocations?: AiAssistantToolInvocation[]
 }
 
 export interface AiAssistantTimelineDetail {
   label: '调用详情' | '输入' | '输出' | '内容' | '结果'
+  value: string
+  monospace?: boolean
+  testId?: string
+}
+
+export interface AiAssistantToolInvocation {
+  id: string
+  title: string
+  subtitle: string
+  statusText: string
+  tone: AiAssistantTimelineItem['tone']
+  inputRows: AiAssistantToolInvocationRow[]
+  outputRows: AiAssistantToolInvocationRow[]
+}
+
+export interface AiAssistantToolInvocationRow {
+  label: string
   value: string
   monospace?: boolean
   testId?: string
@@ -51,9 +70,8 @@ interface ToolEventGroup {
 export function buildAiAssistantTimeline(events: AiAssistantEvent[]): AiAssistantTimelineItem[] {
   const sortedEvents = events.slice().sort((left, right) => left.sequence - right.sequence)
   const toolGroups = collectToolGroups(sortedEvents)
-  const toolSummaryItem = toolGroupsToTimelineItem(toolGroups)
-  const toolSummarySequence = toolSummaryItem?.sequence
-  let renderedToolSummary = false
+  const summaryItems = groupedToolTimelineItems(toolGroups)
+  const summaryItemsBySequence = new Map(summaryItems.map((item) => [item.sequence, item]))
   const toolEventSequences = new Set(toolGroups.flatMap((group) => group.events.map((event) => event.sequence)))
   const timeline: AiAssistantTimelineItem[] = []
   let modelStreamGroup: AiAssistantEvent[] = []
@@ -70,10 +88,8 @@ export function buildAiAssistantTimeline(events: AiAssistantEvent[]): AiAssistan
     modelStreamGroup = []
 
     if (toolEventSequences.has(event.sequence)) {
-      if (toolSummaryItem && !renderedToolSummary && event.sequence === toolSummarySequence) {
-        timeline.push(toolSummaryItem)
-        renderedToolSummary = true
-      }
+      const summaryItem = summaryItemsBySequence.get(event.sequence)
+      if (summaryItem) timeline.push(summaryItem)
       continue
     }
 
@@ -289,15 +305,185 @@ function toolGroupsToTimelineItem(groups: ToolEventGroup[]): AiAssistantTimeline
       fromSequence: firstSequence,
       toSequence: lastSequence,
     }),
-    details: [
-      {
-        label: '结果',
-        value: summarizeToolGroups(orderedGroups),
-        monospace: true,
-        testId: 'ai-assistant-tool-detail-output',
-      },
-    ],
+    details: [],
+    toolInvocations: [toolGroupsToSummaryInvocation(orderedGroups)],
   }
+}
+
+function groupedToolTimelineItems(groups: ToolEventGroup[]): AiAssistantTimelineItem[] {
+  const orderedGroups = groups.slice().sort((left, right) => left.firstSequence - right.firstSequence)
+  const buckets: ToolEventGroup[][] = []
+  let currentBucket: ToolEventGroup[] = []
+  let currentBucketType: string | null = null
+
+  for (const group of orderedGroups) {
+    const bucketType = toolBucketType(group.toolName)
+    if (currentBucketType && currentBucketType !== bucketType) {
+      buckets.push(currentBucket)
+      currentBucket = []
+    }
+    currentBucket.push(group)
+    currentBucketType = bucketType
+  }
+  if (currentBucket.length > 0) buckets.push(currentBucket)
+
+  return buckets
+    .map((bucket) => {
+      if (bucket.every((group) => isFileToolName(group.toolName))) return fileGroupsToTimelineItem(bucket)
+      return toolGroupsToTimelineItem(bucket)
+    })
+    .filter((item): item is AiAssistantTimelineItem => Boolean(item))
+}
+
+function fileGroupsToTimelineItem(groups: ToolEventGroup[]): AiAssistantTimelineItem | undefined {
+  if (groups.length === 0) return undefined
+  const orderedGroups = groups.slice().sort((left, right) => left.firstSequence - right.firstSequence)
+  const events = orderedGroups.flatMap((group) => group.events).sort((left, right) => left.sequence - right.sequence)
+  const firstEvent = events[0]
+  const resultEvent = events[events.length - 1]
+  const firstSequence = Math.min(...orderedGroups.map((group) => group.firstSequence))
+  const lastSequence = Math.max(...orderedGroups.map((group) => group.lastSequence))
+  const title = fileGroupsTitle(orderedGroups)
+  return {
+    id: `${firstEvent.runId}-${firstSequence}-${lastSequence}-file-summary`,
+    eventId: resultEvent.id,
+    sequence: firstSequence,
+    kind: 'file',
+    tone: toolGroupsTone(orderedGroups),
+    title,
+    summary: title,
+    payloadPreview: compactPayload({
+      fileCount: uniqueFilePaths(orderedGroups).length || orderedGroups.length,
+      operations: orderedGroups.map((group) => group.toolName),
+      statuses: orderedGroups.map((group) => group.status || toolGroupTone(group)),
+      fromSequence: firstSequence,
+      toSequence: lastSequence,
+    }),
+    details: fileGroupsToDetails(orderedGroups),
+  }
+}
+
+function toolBucketType(toolName: string) {
+  if (toolName === 'read_workspace_file') return 'file-read'
+  if (toolName === 'write_workspace_file') return 'file-write'
+  if (toolName === 'create_workspace_file') return 'file-create'
+  return 'tool'
+}
+
+function isFileToolName(toolName: string) {
+  return toolBucketType(toolName).startsWith('file-')
+}
+
+function fileGroupsTitle(groups: ToolEventGroup[]) {
+  const count = uniqueFilePaths(groups).length || groups.length
+  if (groups.every((group) => group.toolName === 'read_workspace_file')) return `已读取 ${count} 个文件`
+  if (groups.every((group) => group.toolName === 'create_workspace_file')) return `已创建 ${count} 个文件`
+  if (groups.every((group) => group.toolName === 'write_workspace_file')) return `已编辑 ${count} 个文件`
+  return `已处理 ${count} 个文件`
+}
+
+function fileGroupsToDetails(groups: ToolEventGroup[]): AiAssistantTimelineDetail[] {
+  const input = groups
+    .map((group) => {
+      const path = workspacePathFromValue(group.input) || workspacePathFromValue(group.output) || toolInvocationSubtitle(group)
+      const rows = toolInputRows(group)
+      return `${fileOperationLabel(group.toolName)}：${path || '未命名文件'}${rows.length > 0 ? `\n${rowsToBlock(rows)}` : ''}`
+    })
+    .join('\n\n')
+  const output = groups
+    .map((group) => {
+      const path = workspacePathFromValue(group.input) || workspacePathFromValue(group.output) || toolInvocationSubtitle(group)
+      const rows = toolOutputRows(group)
+      return `${fileOperationLabel(group.toolName)}：${path || '未命名文件'}${rows.length > 0 ? `\n${rowsToBlock(rows)}` : ''}`
+    })
+    .join('\n\n')
+  const details: AiAssistantTimelineDetail[] = [
+    { label: '输入', value: input, monospace: true },
+    { label: '结果', value: output, monospace: true },
+  ]
+  return details.filter((row) => row.value.trim() !== '')
+}
+
+function fileOperationLabel(toolName: string) {
+  if (toolName === 'read_workspace_file') return '读取'
+  if (toolName === 'create_workspace_file') return '创建'
+  if (toolName === 'write_workspace_file') return '编辑'
+  return '文件'
+}
+
+function uniqueFilePaths(groups: ToolEventGroup[]) {
+  return Array.from(
+    new Set(
+      groups
+        .map((group) => workspacePathFromValue(group.input) || workspacePathFromValue(group.output))
+        .filter(Boolean),
+    ),
+  )
+}
+
+function toolGroupsToSummaryInvocation(groups: ToolEventGroup): AiAssistantToolInvocation
+function toolGroupsToSummaryInvocation(groups: ToolEventGroup[]): AiAssistantToolInvocation
+function toolGroupsToSummaryInvocation(groups: ToolEventGroup | ToolEventGroup[]): AiAssistantToolInvocation {
+  const orderedGroups = (Array.isArray(groups) ? groups : [groups]).slice().sort((left, right) => left.firstSequence - right.firstSequence)
+  const invocations = orderedGroups.map(toolGroupToInvocation)
+  const first = orderedGroups[0]
+  const single = invocations.length === 1 ? invocations[0] : undefined
+  return {
+    id: `${first.id}-summary`,
+    title: single?.title ?? '工具调用',
+    subtitle: single?.subtitle || `调用 ${invocations.length} 个工具`,
+    statusText: toolGroupsStatusText(orderedGroups),
+    tone: toolGroupsTone(orderedGroups),
+    inputRows: toolSummaryInputRows(invocations),
+    outputRows: toolSummaryOutputRows(invocations),
+  }
+}
+
+function toolGroupsStatusText(groups: ToolEventGroup[]) {
+  if (groups.some((group) => toolGroupTone(group) === 'danger')) return '失败'
+  if (groups.some((group) => toolGroupTone(group) === 'running')) return '运行中'
+  if (groups.length === 1) return toolInvocationStatusText(groups[0])
+  return '已完成'
+}
+
+function toolSummaryInputRows(invocations: AiAssistantToolInvocation[]): AiAssistantToolInvocationRow[] {
+  return [
+    {
+      label: '调用工具',
+      value: invocations.map(invocationSummaryLine).join('\n'),
+      monospace: true,
+    },
+    ...invocations
+      .filter((invocation) => invocation.inputRows.length > 0)
+      .map((invocation) => ({
+        label: invocationSectionLabel(invocation),
+        value: rowsToBlock(invocation.inputRows),
+        monospace: true,
+      })),
+  ]
+}
+
+function toolSummaryOutputRows(invocations: AiAssistantToolInvocation[]): AiAssistantToolInvocationRow[] {
+  return invocations
+    .filter((invocation) => invocation.outputRows.length > 0)
+    .map((invocation) => ({
+      label: invocationSectionLabel(invocation),
+      value: rowsToBlock(invocation.outputRows),
+      monospace: true,
+    }))
+}
+
+function invocationSummaryLine(invocation: AiAssistantToolInvocation) {
+  const subject = invocation.subtitle ? `${invocation.title}：${invocation.subtitle}` : invocation.title
+  return `${subject}（${invocation.statusText}）`
+}
+
+function invocationSectionLabel(invocation: AiAssistantToolInvocation) {
+  return invocation.subtitle ? `${invocation.title} · ${invocation.subtitle}` : invocation.title
+}
+
+function rowsToBlock(rows: AiAssistantToolInvocationRow[]) {
+  return rows.map((row) => `${row.label}：${row.value}`).join('\n')
 }
 
 
@@ -358,16 +544,106 @@ function summarizeToolOutput(toolName: string, output: unknown) {
   )
 }
 
-function summarizeToolGroups(groups: ToolEventGroup[]) {
-  return groups
-    .map((group) => {
-      const rows = [toolDisplayName(group.toolName)]
-      const input = summarizeToolInput(group.toolName, group.input)
-      if (input) rows.push(`输入：${input}`)
-      rows.push(`输出：${summarizeToolOutput(group.toolName, group.output) || summarizeToolStatus(group) || '等待结果'}`)
-      return rows.join('\n')
-    })
-    .join('\n\n')
+function toolGroupToInvocation(group: ToolEventGroup): AiAssistantToolInvocation {
+  return {
+    id: group.id,
+    title: toolDisplayName(group.toolName),
+    subtitle: toolInvocationSubtitle(group),
+    statusText: toolInvocationStatusText(group),
+    tone: toolGroupTone(group),
+    inputRows: toolInputRows(group),
+    outputRows: toolOutputRows(group),
+  }
+}
+
+function toolInvocationSubtitle(group: ToolEventGroup) {
+  if (group.toolName === 'invoke_skill') return fieldValue(group.input, 'skillName') || fieldValue(group.output, 'skillName')
+  if (group.toolName === 'search_knowledge_base') return fieldValue(group.input, 'query') || fieldValue(group.output, 'query')
+  if (group.toolName === 'run_shell') return truncateInline(fieldValue(group.input, 'command') || fieldValue(group.input, 'args'))
+  return fieldValue(group.input, 'path') || fieldValue(group.output, 'path') || toolInvocationStatusText(group)
+}
+
+function toolInvocationStatusText(group: ToolEventGroup) {
+  const outputStatus = fieldValue(group.output, 'status')
+  if (group.toolName === 'invoke_skill' && outputStatus === 'RECORDED') return '已记录'
+  if (group.status === 'NOT_FOUND') return '未找到'
+  if (group.status === 'FAILED') return '失败'
+  if (group.completed || group.output !== undefined) return '已完成'
+  return '运行中'
+}
+
+function toolInputRows(group: ToolEventGroup): AiAssistantToolInvocationRow[] {
+  const input = group.input
+  if (!isRecord(input)) return input === undefined ? [] : [{ label: '输入', value: truncateInline(String(input)) }]
+  if (group.toolName === 'invoke_skill') {
+    return compactRows([
+      ['技能', fieldValue(input, 'skillName')],
+      ['说明', fieldValue(input, 'instruction')],
+    ])
+  }
+  if (group.toolName === 'search_knowledge_base') {
+    return compactRows([
+      ['查询', fieldValue(input, 'query')],
+      ['知识库', fieldValue(input, 'knowledgeBaseId')],
+      ['数量', fieldValue(input, 'limit')],
+    ])
+  }
+  if (group.toolName === 'write_workspace_file') {
+    return compactRows([
+      ['路径', fieldValue(input, 'path')],
+      ['内容预览', truncateBlock(fieldValue(input, 'content')), true],
+    ])
+  }
+  if (group.toolName === 'read_workspace_file') {
+    return compactRows([['路径', fieldValue(input, 'path')]])
+  }
+  if (group.toolName === 'run_shell') {
+    return compactRows([
+      ['命令', fieldValue(input, 'command') || fieldValue(input, 'args'), true],
+      ['工作目录', fieldValue(input, 'cwd')],
+    ])
+  }
+  return objectRows(input, '输入')
+}
+
+function toolOutputRows(group: ToolEventGroup): AiAssistantToolInvocationRow[] {
+  const output = group.output
+  if (group.toolName === 'invoke_skill') {
+    return compactRows([
+      ['结果', group.output === undefined ? summarizeToolStatus(group) || '等待结果' : '已记录技能意图'],
+      ['说明', fieldValue(output, 'instruction')],
+    ])
+  }
+  if (group.toolName === 'search_knowledge_base') {
+    const hits = isRecord(output) && Array.isArray(output.hits) ? output.hits.length : undefined
+    return compactRows([
+      ['结果', hits === undefined ? summarizeToolStatus(group) || '等待结果' : `命中 ${hits} 条`],
+      ['来源', fieldValue(output, 'source')],
+    ])
+  }
+  if (group.toolName === 'read_workspace_file') {
+    const status = summarizeToolStatus(group)
+    const content = fieldValue(output, 'content') || fieldValue(output, 'text')
+    return compactRows([
+      ['结果', status || (content ? `已读取 ${fieldValue(output, 'path') || toolInvocationSubtitle(group)}` : '等待结果')],
+      ['内容预览', truncateBlock(content), true],
+    ])
+  }
+  if (group.toolName === 'write_workspace_file') {
+    return compactRows([['结果', summarizeToolOutput(group.toolName, output) || summarizeToolStatus(group) || '等待结果']])
+  }
+  if (group.toolName === 'run_shell') {
+    const stdout = fieldValue(output, 'stdout')
+    const stderr = fieldValue(output, 'stderr')
+    const result = summarizeToolStatus(group) || (!stdout && !stderr ? summarizeToolOutput(group.toolName, output) : '')
+    return compactRows([
+      ['输出', truncateBlock(stdout), true],
+      ['错误', truncateBlock(stderr), true],
+      ['结果', result || (!stdout && !stderr ? '等待结果' : '')],
+    ])
+  }
+  const summary = summarizeToolOutput(group.toolName, output) || summarizeToolStatus(group) || '等待结果'
+  return output === undefined ? [{ label: '结果', value: summary }] : objectRows(output, '输出', summary)
 }
 
 function summarizeToolStatus(group: ToolEventGroup) {
@@ -383,32 +659,62 @@ function workspacePathFromValue(value: unknown) {
   return isRecord(value) ? stringValue(value.path) : ''
 }
 
-function summarizeToolInput(toolName: string, input: unknown) {
-  if (input === undefined || input === null) return ''
-  if (typeof input === 'string') return truncateInline(input)
-  if (!isRecord(input)) return truncateInline(String(input))
+function compactRows(rows: Array<[string, string | number | undefined, boolean?]>): AiAssistantToolInvocationRow[] {
+  return rows
+    .map(([label, value, monospace]) => ({
+      label,
+      value: value === undefined || value === null ? '' : String(value).trim(),
+      monospace,
+    }))
+    .filter((row) => row.value !== '')
+}
 
-  const path = stringValue(input.path)
-  const query = stringValue(input.query)
-  const command = stringValue(input.command)
-  const skillName = stringValue(input.skillName)
-  const instruction = stringValue(input.instruction)
-  const content = stringValue(input.content)
-  const message = stringValue(input.message)
-  const args = stringValue(input.args)
-  const parts: string[] = []
+function objectRows(value: unknown, fallbackLabel: string, summary?: string): AiAssistantToolInvocationRow[] {
+  if (!isRecord(value)) return summary ? [{ label: '结果', value: summary }] : []
+  const rows = Object.entries(value)
+    .map(([key, rowValue]) => ({
+      label: readableFieldLabel(key, fallbackLabel),
+      value: formatFieldValue(rowValue),
+      monospace: typeof rowValue === 'object' && rowValue !== null,
+    }))
+    .filter((row) => row.value !== '')
+  return summary && rows.length === 0 ? [{ label: '结果', value: summary }] : rows
+}
 
-  if (toolName === 'run_shell' && command) parts.push(`command=${command}`)
-  else if (path) parts.push(`path=${path}`)
-  if (query) parts.push(`query=${query}`)
-  if (skillName) parts.push(`skill=${skillName}`)
-  if (instruction) parts.push(`instruction=${truncateInline(instruction)}`)
-  if (message) parts.push(`message=${truncateInline(message)}`)
-  if (args) parts.push(`args=${truncateInline(args)}`)
-  if (content) parts.push(`content=${truncateInline(content)}`)
+function readableFieldLabel(key: string, fallbackLabel: string) {
+  const labels: Record<string, string> = {
+    path: '路径',
+    content: '内容预览',
+    text: '内容',
+    stdout: '输出',
+    stderr: '错误',
+    message: '消息',
+    status: '状态',
+    query: '查询',
+    source: '来源',
+    hits: '命中',
+    bytes: '字节',
+    skillName: '技能',
+    instruction: '说明',
+  }
+  return labels[key] || fallbackLabel
+}
 
-  if (parts.length > 0) return parts.join('，')
-  return truncateInline(prettyPayload(input).replace(/[{}\n"]/g, ' ').replace(/\s+/g, ' ').trim())
+function formatFieldValue(value: unknown) {
+  if (value === undefined || value === null) return ''
+  if (typeof value === 'string') return truncateBlock(value)
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (Array.isArray(value)) return value.length === 0 ? '0 条' : truncateBlock(prettyPayload(value))
+  return truncateBlock(prettyPayload(value))
+}
+
+function fieldValue(value: unknown, key: string) {
+  if (!isRecord(value)) return ''
+  const raw = value[key]
+  if (raw === undefined || raw === null) return ''
+  if (typeof raw === 'string') return raw.trim()
+  if (typeof raw === 'number' || typeof raw === 'boolean') return String(raw)
+  return prettyPayload(raw)
 }
 
 function toolDisplayName(toolName: string) {
@@ -416,10 +722,16 @@ function toolDisplayName(toolName: string) {
     read_workspace_file: '读取工作区文件',
     write_workspace_file: '写入工作区文件',
     search_knowledge_base: '知识库检索',
-    invoke_skill: '技能调用',
+    invoke_skill: '使用技能',
     run_shell: '终端命令',
   }
   return labels[toolName] || '工具调用'
+}
+
+function truncateBlock(value: string) {
+  const text = value.trim()
+  if (text.length <= 600) return text
+  return `${text.slice(0, 597)}...`
 }
 
 function truncateInline(value: string) {

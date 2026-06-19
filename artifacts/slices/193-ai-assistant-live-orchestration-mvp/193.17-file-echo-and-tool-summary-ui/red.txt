@@ -1,0 +1,17 @@
+RED evidence for 193.17 File Echo Separation And Tool Summary UI
+
+Command:
+rtk npm --prefix frontend run test:unit -- src/views/aiAssistant/aiAssistantTimeline.test.ts
+
+Expected failure before implementation:
+- summarizes multiple low-level tool calls into one foldable tool echo item
+  expected toolInvocations length 1, received 4
+- builds one product-grade summarized invocation instead of many raw tool blocks
+  expected toolInvocations length 1, received 4
+- keeps a single summarized tool echo item running while outputs are pending
+  expected toolInvocations length 1, received 2
+
+After the user clarified that file read/write/create should be separated like
+Codex file echoes, the same contract was tightened so file operations assert
+`kind: file` with `已读取/已编辑/已创建 N 个文件` titles, and only non-file
+tools remain in the summarized `工具调用` invocation.
