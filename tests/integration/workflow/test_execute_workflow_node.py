@@ -15,7 +15,7 @@ class ExecuteWorkflowNodeIntegrationTest(unittest.TestCase):
             child = _create_child_workflow(client, stamp, status="PUBLISHED")
             parent = _create_parent_workflow(client, stamp, int(child["id"]))
             response = client.post(
-                f"/api/v1/workflows/{parent['id']}/runs",
+                f"/api/v1/workflows/{parent['id']}/runs-legacy",
                 json={"input": {"ticket": "A-917"}},
             )
 
@@ -58,7 +58,7 @@ class ExecuteWorkflowNodeIntegrationTest(unittest.TestCase):
             child = _create_child_workflow(client, stamp, status="DRAFT")
             parent = _create_parent_workflow(client, stamp, int(child["id"]))
             response = client.post(
-                f"/api/v1/workflows/{parent['id']}/runs",
+                f"/api/v1/workflows/{parent['id']}/runs-legacy",
                 json={"input": {"ticket": "A-000"}},
             )
 
@@ -101,7 +101,7 @@ class ExecuteWorkflowNodeIntegrationTest(unittest.TestCase):
             )
             self.assertEqual(response.status_code, 200, response.text)
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"ticket": "loop"}},
             )
 

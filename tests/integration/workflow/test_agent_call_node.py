@@ -17,7 +17,7 @@ class AgentCallNodeIntegrationTest(unittest.TestCase):
         with TestClient(app) as client:
             workflow = _create_agent_call_flow(client, int(agent_id), "WORKFLOW")
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"ticket": "A-221"}},
             )
 
@@ -141,7 +141,7 @@ class AgentCallNodeIntegrationTest(unittest.TestCase):
         with TestClient(app) as client:
             workflow = _create_agent_call_flow(client, 999_999_991, "WORKFLOW")
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"ticket": "missing-agent"}},
             )
 
@@ -154,7 +154,7 @@ class AgentCallNodeIntegrationTest(unittest.TestCase):
         with TestClient(app) as client:
             workflow = _create_agent_call_flow(client, int(agent_id), "WORKFLOW")
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"ticket": "disabled-agent"}},
             )
 
@@ -167,7 +167,7 @@ class AgentCallNodeIntegrationTest(unittest.TestCase):
         with TestClient(app) as client:
             workflow = _create_agent_call_flow(client, int(agent_id), "WORKFLOW")
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"ticket": "nested-workflow-agent"}},
             )
 
@@ -180,7 +180,7 @@ class AgentCallNodeIntegrationTest(unittest.TestCase):
         with TestClient(app) as client:
             workflow = _create_agent_call_flow(client, int(agent_id), "WORKFLOW", timeout_ms=0)
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"ticket": "timeout-agent"}},
             )
 

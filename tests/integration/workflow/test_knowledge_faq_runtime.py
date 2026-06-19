@@ -16,7 +16,7 @@ class KnowledgeFaqRuntimeIntegrationTest(unittest.TestCase):
         with TestClient(app) as client:
             workflow = _create_knowledge_flow(client, kb_id, "WORKFLOW")
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"userMessage": "refund order"}},
             )
             debug_response = client.get(

@@ -50,7 +50,7 @@ class TransferToHumanNodeIntegrationTest(unittest.TestCase):
         with TestClient(app) as client:
             workflow = _create_transfer_workflow(client, stamp)
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"userMessage": "help"}},
             )
 

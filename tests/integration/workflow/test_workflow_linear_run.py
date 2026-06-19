@@ -34,7 +34,7 @@ class WorkflowLinearRunTest(unittest.TestCase):
             workflow = _create_linear_workflow(client)
 
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"userMessage": "reset password"}},
             )
 

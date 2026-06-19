@@ -18,7 +18,7 @@ class WorkflowFailureBehaviorTest(unittest.TestCase):
                 ],
                 edges=[{"sourceNodeKey": "llm", "targetNodeKey": "end", "condition": None}],
             )
-            response = client.post(f"/api/v1/workflows/{workflow['id']}/runs", json={"input": {"userMessage": "hi"}})
+            response = client.post(f"/api/v1/workflows/{workflow['id']}/runs-legacy", json={"input": {"userMessage": "hi"}})
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("START node not found", response.json()["message"])
@@ -34,7 +34,7 @@ class WorkflowFailureBehaviorTest(unittest.TestCase):
                 ],
                 edges=[{"sourceNodeKey": "start", "targetNodeKey": "unknown", "condition": None}],
             )
-            response = client.post(f"/api/v1/workflows/{workflow['id']}/runs", json={"input": {"userMessage": "hi"}})
+            response = client.post(f"/api/v1/workflows/{workflow['id']}/runs-legacy", json={"input": {"userMessage": "hi"}})
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("Unknown node type", response.json()["message"])
@@ -58,7 +58,7 @@ class WorkflowFailureBehaviorTest(unittest.TestCase):
                     {"sourceNodeKey": "loop", "targetNodeKey": "loop", "condition": None},
                 ],
             )
-            response = client.post(f"/api/v1/workflows/{workflow['id']}/runs", json={"input": {"userMessage": "hi"}})
+            response = client.post(f"/api/v1/workflows/{workflow['id']}/runs-legacy", json={"input": {"userMessage": "hi"}})
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("step limit exceeded", response.json()["message"])

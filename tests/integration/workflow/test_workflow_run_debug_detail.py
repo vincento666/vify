@@ -27,7 +27,7 @@ class WorkflowRunDebugDetailTest(unittest.TestCase):
                 },
             ).json()["data"]
             run = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"USER_INPUT": "embedded debug"}},
             ).json()["data"]
 

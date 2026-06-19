@@ -11,7 +11,7 @@ class WorkflowTransformNodesIntegrationTest(unittest.TestCase):
         with TestClient(app) as client:
             workflow = _create_transform_workflow(client)
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"first": "Ada", "last": "Lovelace", "score": 97}},
             )
 
@@ -27,7 +27,7 @@ class WorkflowTransformNodesIntegrationTest(unittest.TestCase):
         with TestClient(app) as client:
             workflow = _create_javascript_code_workflow(client)
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"first": "Ada", "last": "Lovelace"}},
             )
 
@@ -41,7 +41,7 @@ class WorkflowTransformNodesIntegrationTest(unittest.TestCase):
         with TestClient(app) as client:
             workflow = _create_javascript_exports_main_args_code_workflow(client)
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"first": "Ada", "last": "Lovelace"}},
             )
 
@@ -55,7 +55,7 @@ class WorkflowTransformNodesIntegrationTest(unittest.TestCase):
         with TestClient(app) as client:
             workflow = _create_python_main_args_code_workflow(client)
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"input": "Ada", "suffix": "OK"}},
             )
 
@@ -69,7 +69,7 @@ class WorkflowTransformNodesIntegrationTest(unittest.TestCase):
         with TestClient(app) as client:
             workflow = _create_json_parse_node_workflow(client)
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"raw": "{bad json"}},
             )
 
@@ -83,7 +83,7 @@ class WorkflowTransformNodesIntegrationTest(unittest.TestCase):
         with TestClient(app) as client:
             workflow = _create_json_parse_bracket_path_workflow(client)
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={
                     "input": {
                         "raw": '{"items":[{"sku":"A1","qty":1},{"sku":"B2","qty":2}],"customer":{"tags":["gold"]}}',

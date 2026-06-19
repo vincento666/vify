@@ -15,7 +15,7 @@ class WorkflowResourcePolicyIntegrationTest(unittest.TestCase):
             server = _create_mcp(client, f"017.5 Missing Credential {stamp}", "mock://tools?credential=missing")
             workflow = _create_tool_workflow(client, stamp, int(server["id"]))
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"orderId": "A-100"}},
             )
 
@@ -34,7 +34,7 @@ class WorkflowResourcePolicyIntegrationTest(unittest.TestCase):
                 end_output="success={{tool_call_1.success}} error={{tool_call_1.error}}",
             )
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"orderId": "A-101"}},
             )
 
@@ -59,7 +59,7 @@ class WorkflowResourcePolicyIntegrationTest(unittest.TestCase):
                 config_patch={"retryCount": 1},
             )
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"orderId": "A-102"}},
             )
 
@@ -85,7 +85,7 @@ class WorkflowResourcePolicyIntegrationTest(unittest.TestCase):
                 ],
             )
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"orderId": "A-103"}},
             )
 
@@ -98,7 +98,7 @@ class WorkflowResourcePolicyIntegrationTest(unittest.TestCase):
             server = _create_mcp(client, f"017.5 Branch {stamp}", "mock://tools")
             workflow = _create_branching_tool_workflow(client, stamp, int(server["id"]))
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"orderId": "A-104"}},
             )
 

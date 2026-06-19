@@ -13,7 +13,7 @@ class WorkflowToolCallNodeIntegrationTest(unittest.TestCase):
             server_id = _create_mcp_server(client)
             workflow = _create_tool_call_workflow(client, server_id)
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"orderId": "A-100"}},
             )
             debug_response = client.get(
@@ -62,7 +62,7 @@ class WorkflowToolCallNodeIntegrationTest(unittest.TestCase):
             server_id = _create_mcp_server(client)
             workflow = _create_tool_call_workflow(client, server_id, structured_as_text=True)
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"orderId": "A-500"}},
             )
 

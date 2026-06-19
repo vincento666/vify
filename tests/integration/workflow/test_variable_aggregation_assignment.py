@@ -11,7 +11,7 @@ class WorkflowVariableAggregationAssignmentTest(unittest.TestCase):
         with TestClient(app) as client:
             workflow = _create_grouped_variable_aggregation_workflow(client)
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"primary": "", "fallback": "vip refund", "region": "CN"}},
             )
 
@@ -22,7 +22,7 @@ class WorkflowVariableAggregationAssignmentTest(unittest.TestCase):
         with TestClient(app) as client:
             workflow = _create_variable_workflow(client)
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"primary": "", "fallback": "vip refund"}},
             )
 
@@ -44,7 +44,7 @@ class WorkflowVariableAggregationAssignmentTest(unittest.TestCase):
         with TestClient(app) as client:
             workflow = _create_raw_json_assignment_workflow(client)
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"raw": '{"name":"Ada"}'}},
             )
 
@@ -55,7 +55,7 @@ class WorkflowVariableAggregationAssignmentTest(unittest.TestCase):
         with TestClient(app) as client:
             workflow = _create_operation_assignment_workflow(client)
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"conversation.score": 7, "delta": 3}},
             )
 

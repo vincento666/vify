@@ -43,7 +43,7 @@ class WorkflowLlmResourceIntegrationTest(unittest.TestCase):
                 "rerank": True,
             }])
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"userMessage": "refund"}},
             )
 
@@ -77,7 +77,7 @@ class WorkflowLlmResourceIntegrationTest(unittest.TestCase):
                 "name": "weather",
             }])
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"userMessage": "weather"}},
             )
 

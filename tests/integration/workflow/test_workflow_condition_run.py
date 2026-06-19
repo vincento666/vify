@@ -15,18 +15,18 @@ class WorkflowConditionRunTest(unittest.TestCase):
             workflow = _create_condition_workflow(client, server.url)
 
             vip_response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"userMessage": "hello", "intent": "vip"}},
             )
             vip_debug_response = client.get(
                 f"/api/v1/workflows/{workflow['id']}/runs/{vip_response.json()['data']['runId']}/debug"
             )
             billing_response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"userMessage": "invoice", "intent": "billing"}},
             )
             default_response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"userMessage": "hello", "intent": "unknown"}},
             )
 
@@ -47,11 +47,11 @@ class WorkflowConditionRunTest(unittest.TestCase):
         with TestClient(app) as client:
             workflow = _create_variable_right_condition_workflow(client)
             matched_response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"intent": "vip"}},
             )
             default_response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"intent": "billing"}},
             )
 
@@ -64,11 +64,11 @@ class WorkflowConditionRunTest(unittest.TestCase):
         with TestClient(app) as client:
             workflow = _create_length_empty_condition_workflow(client)
             matched_response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"message": "hello"}},
             )
             fallback_response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"message": "hi", "optional": "filled"}},
             )
 

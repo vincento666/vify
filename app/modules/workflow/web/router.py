@@ -217,8 +217,80 @@ def update_workflow(
     return success(service.update(workflow_id, request))
 
 
+def _start_workflow_runtime_v2_gateway(
+    workflow_id: int,
+    request: WorkflowRunRequest,
+    *,
+    session: Session,
+    service: WorkflowRuntimeV2Service,
+    event_stream_bus: RuntimeEventStreamBus | None,
+) -> dict[str, Any]:
+    data = service.start_run(workflow_id, dict(request.input), request.idempotency_key, request.version_id)
+    _attach_runtime_v2_transport(data, event_stream_bus)
+    if not data.get("idempotentReplay"):
+        _start_runtime_v2_completion_thread(
+            session,
+            int(data["runId"]),
+            owner_type="WORKFLOW",
+            event_stream_bus=event_stream_bus,
+        )
+    return data
+
+
 @router.post("/{workflow_id}/runs")
 def run_workflow(
+    workflow_id: int,
+    request: WorkflowRunRequest,
+    session: Session = Depends(get_session),
+    service: WorkflowRuntimeV2Service = Depends(get_workflow_runtime_v2_service),
+    event_stream_bus: RuntimeEventStreamBus | None = Depends(get_runtime_event_stream_bus),
+) -> dict[str, Any]:
+    return success(
+        _start_workflow_runtime_v2_gateway(
+            workflow_id,
+            request,
+            session=session,
+            service=service,
+            event_stream_bus=event_stream_bus,
+        )
+    )
+
+
+@router.post("/{workflow_id}/runs:stream")
+def stream_workflow_run(
+    workflow_id: int,
+    request: WorkflowRunRequest,
+    after_sequence: int = Query(default=0, alias="afterSequence", ge=0),
+    heartbeat_ms: int = Query(default=1000, alias="heartbeatMs", ge=100, le=30000),
+    test_limit: int | None = Query(default=None, alias="_testLimit", ge=1, le=1000),
+    test_heartbeat_limit: int | None = Query(default=None, alias="_testHeartbeatLimit", ge=1, le=1000),
+    session: Session = Depends(get_session),
+    service: WorkflowRuntimeV2Service = Depends(get_workflow_runtime_v2_service),
+    event_stream_bus: RuntimeEventStreamBus | None = Depends(get_runtime_event_stream_bus),
+) -> StreamingResponse:
+    data = _start_workflow_runtime_v2_gateway(
+        workflow_id,
+        request,
+        session=session,
+        service=service,
+        event_stream_bus=event_stream_bus,
+    )
+    return StreamingResponse(
+        _iter_runtime_v2_sse(
+            service,
+            run_id=int(data["runId"]),
+            after_sequence=after_sequence,
+            heartbeat_ms=heartbeat_ms,
+            test_limit=test_limit,
+            test_heartbeat_limit=test_heartbeat_limit,
+            event_stream_bus=event_stream_bus,
+        ),
+        media_type="text/event-stream",
+    )
+
+
+@router.post("/{workflow_id}/runs-legacy")
+def run_workflow_legacy(
     workflow_id: int,
     request: WorkflowRunRequest,
     service: WorkflowService = Depends(get_workflow_service),
@@ -234,16 +306,15 @@ def run_workflow_v2(
     service: WorkflowRuntimeV2Service = Depends(get_workflow_runtime_v2_service),
     event_stream_bus: RuntimeEventStreamBus | None = Depends(get_runtime_event_stream_bus),
 ) -> dict[str, Any]:
-    data = service.start_run(workflow_id, dict(request.input), request.idempotency_key, request.version_id)
-    _attach_runtime_v2_transport(data, event_stream_bus)
-    if not data.get("idempotentReplay"):
-        _start_runtime_v2_completion_thread(
-            session,
-            int(data["runId"]),
-            owner_type="WORKFLOW",
+    return success(
+        _start_workflow_runtime_v2_gateway(
+            workflow_id,
+            request,
+            session=session,
+            service=service,
             event_stream_bus=event_stream_bus,
         )
-    return success(data)
+    )
 
 
 @router.get("/{workflow_id}/runs/{run_id}/debug")

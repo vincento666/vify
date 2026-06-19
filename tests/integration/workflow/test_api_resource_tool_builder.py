@@ -27,7 +27,7 @@ class ApiResourceToolBuilderIntegrationTest(unittest.TestCase):
             )
             workflow = _create_api_tool_workflow(client, str(api_tool["resourceId"]))
             run_response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"orderId": "A-100"}},
             )
             debug_response = client.get(
@@ -71,7 +71,7 @@ class ApiResourceToolBuilderIntegrationTest(unittest.TestCase):
             api_resource = _create_api_resource(client, server.url)
             workflow = _create_api_resource_call_workflow(client, int(api_resource["id"]))
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs",
+                f"/api/v1/workflows/{workflow['id']}/runs-legacy",
                 json={"input": {"orderId": "A-220"}},
             )
 
