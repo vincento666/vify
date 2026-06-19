@@ -1,0 +1,1 @@
+PASS no naked px matches in CustomerAssistantPanel.vue or customerAssistantPanel.test.ts

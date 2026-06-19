@@ -1,0 +1,1 @@
+PASS in-app Browser desktop customer assistant three-column shell UAT viewport=1440x900

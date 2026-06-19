@@ -1,0 +1,14 @@
+
+> hify-web@0.0.1 test:unit
+> vitest run src/views/customerAssistant/customerAssistantPanel.test.ts
+
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+
+ ✓ src/views/customerAssistant/customerAssistantPanel.test.ts (26 tests) 7ms
+
+ Test Files  1 passed (1)
+      Tests  26 passed (26)
+   Start at  19:16:48
+   Duration  475ms (transform 51ms, setup 0ms, collect 48ms, tests 7ms, environment 0ms, prepare 165ms)

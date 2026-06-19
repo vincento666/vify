@@ -1,0 +1,119 @@
+{
+  "pass": true,
+  "assertions": {
+    "centerContainsCustomerLane": true,
+    "centerContainsOperatorLane": true,
+    "centerExcludesProposedActions": true,
+    "centerExcludesTaskLedger": true,
+    "columnsInOrder": true,
+    "leftContainsDemoStories": true,
+    "leftContainsSessionInbox": true,
+    "noHorizontalOverflow": true,
+    "nonOverlapping": true,
+    "rightContainsProposedActions": true,
+    "rightContainsTaskLedger": true,
+    "rightContainsWorkbenchTabs": true,
+    "sameRow": true,
+    "shellVisible": true
+  },
+  "document": {
+    "bodyScrollWidth": 1440,
+    "clientWidth": 1440,
+    "scrollWidth": 1440
+  },
+  "rects": {
+    "center": {
+      "bottom": 1194.296875,
+      "height": 1058.546875,
+      "right": 992.734375,
+      "width": 467.0859375,
+      "x": 525.6484375,
+      "y": 135.75
+    },
+    "customerLane": {
+      "bottom": 657.7734375,
+      "height": 522.0234375,
+      "right": 992.734375,
+      "width": 467.0859375,
+      "x": 525.6484375,
+      "y": 135.75
+    },
+    "demoStories": {
+      "bottom": 1129.25,
+      "height": 556.78125,
+      "right": 511.1484375,
+      "width": 290.015625,
+      "x": 221.1328125,
+      "y": 572.46875
+    },
+    "left": {
+      "bottom": 1129.25,
+      "height": 993.5,
+      "right": 511.1484375,
+      "width": 290.015625,
+      "x": 221.1328125,
+      "y": 135.75
+    },
+    "operatorLane": {
+      "bottom": 1194.296875,
+      "height": 522.0234375,
+      "right": 992.734375,
+      "width": 467.0859375,
+      "x": 525.6484375,
+      "y": 672.2734375
+    },
+    "proposedActions": {
+      "bottom": 2098.125,
+      "height": 77.078125,
+      "right": 1413.25,
+      "width": 406.015625,
+      "x": 1007.234375,
+      "y": 2021.046875
+    },
+    "right": {
+      "bottom": 2298.28125,
+      "height": 2162.53125,
+      "right": 1413.25,
+      "width": 406.015625,
+      "x": 1007.234375,
+      "y": 135.75
+    },
+    "sessionInbox": {
+      "bottom": 557.96875,
+      "height": 422.21875,
+      "right": 511.1484375,
+      "width": 290.015625,
+      "x": 221.1328125,
+      "y": 135.75
+    },
+    "shell": {
+      "bottom": 2298.28125,
+      "height": 2162.53125,
+      "right": 1413.25,
+      "width": 1192.1171875,
+      "x": 221.1328125,
+      "y": 135.75
+    },
+    "taskLedger": {
+      "bottom": 1604.84375,
+      "height": 77.328125,
+      "right": 1413.25,
+      "width": 406.015625,
+      "x": 1007.234375,
+      "y": 1527.515625
+    },
+    "workbenchTabs": {
+      "bottom": 178.15625,
+      "height": 42.40625,
+      "right": 1413.25,
+      "width": 406.015625,
+      "x": 1007.234375,
+      "y": 135.75
+    }
+  },
+  "url": "http://127.0.0.1:5228/customer-assistant?hifyHostContext={%22apiBaseUrl%22:%22/api%22,%22actorId%22:%22operator-208-three-column%22,%22actorName%22:%22Three+Column+UAT+Operator%22,%22tenantId%22:%22mvp-demo-tenant%22,%22orgId%22:%22mvp-demo-org%22,%22permissions%22:[%22customer_assistant:read%22,%22customer_assistant:operate%22],%22source%22:%22codex-inapp-browser-uat%22,%22requestId%22:%22req-208-customer-assistant-three-column%22}&story=refund_baggage_parallel",
+  "viewport": {
+    "height": 900,
+    "width": 1440
+  }
+}

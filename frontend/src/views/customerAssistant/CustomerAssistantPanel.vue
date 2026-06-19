@@ -31,119 +31,123 @@
       description="当前回复来自相同 idempotencyKey 的历史结果。"
     />
 
-    <section class="session-inbox-dashboard" data-testid="operator-session-inbox-dashboard" aria-label="多客户会话">
-      <div class="session-inbox-heading">
-        <span class="panel-heading-title">
-          <DashboardOutlined />
-          多客户会话
-        </span>
-        <div class="heading-meta">
-          <a-tag v-if="demoStoriesLoading" color="processing">加载中</a-tag>
-          <a-tag v-else color="blue">{{ sessionInboxRows.length }} 会话</a-tag>
-          <a-tag v-if="demoStoryError" color="warning">{{ demoStoryError }}</a-tag>
-        </div>
-      </div>
-      <div class="session-inbox-summary" aria-label="会话队列状态">
-        <div class="metric-tile processing">
-          <span>活跃会话</span>
-          <strong>{{ sessionInboxSummary.active }}</strong>
-        </div>
-        <div class="metric-tile warning">
-          <span>待确认</span>
-          <strong>{{ sessionInboxSummary.pending }}</strong>
-        </div>
-        <div class="metric-tile error">
-          <span>阻塞等待</span>
-          <strong>{{ sessionInboxSummary.blocked }}</strong>
-        </div>
-        <div class="metric-tile success">
-          <span>完成归档</span>
-          <strong>{{ sessionInboxSummary.completed }}</strong>
-        </div>
-      </div>
-      <div class="session-inbox-list">
-        <button
-          v-for="row in sessionInboxRows"
-          :key="row.storyId"
-          type="button"
-          class="session-inbox-row"
-          :class="[row.statusKind, { selected: row.storyId === selectedDemoStoryId }]"
-          data-testid="operator-session-inbox-row"
-          @click="openSessionInboxRow(row)"
-        >
-          <span class="session-inbox-main">
-            <strong>{{ row.customerName }}</strong>
-            <span>{{ row.storyTitle }}</span>
-          </span>
-          <span class="session-inbox-meta">
-            <a-tag>{{ `Session #${row.sessionId}` }}</a-tag>
-            <a-tag :color="sessionInboxStatusColor(row.statusKind)">{{ row.statusLabel }}</a-tag>
-            <span>{{ row.taskCount }} 任务</span>
-            <span>{{ row.pendingActionCount }} 待确认</span>
-            <span>{{ row.lastActivityLabel }}</span>
-          </span>
-          <small>{{ row.statusDetail }}</small>
-        </button>
-        <div v-if="sessionInboxRows.length === 0" class="empty-state">
-          {{ demoStoriesLoading ? '正在加载多客户会话' : '暂无会话，请先执行 demo seed' }}
-        </div>
-      </div>
-    </section>
-
-    <section class="demo-story-strip" data-testid="customer-assistant-demo-stories" aria-label="演示故事线">
-      <div class="demo-story-heading">
-        <span class="panel-heading-title">
-          <CustomerServiceOutlined />
-          演示故事线
-        </span>
-        <a-tag v-if="selectedDemoStory" color="blue">
-          {{ selectedDemoStory.customerName }} · {{ selectedDemoStory.maskedPhone }}
-        </a-tag>
-      </div>
-      <div class="demo-story-metrics" data-testid="customer-assistant-demo-metrics">
-        <div class="demo-story-metrics-header">
-          <span>演示总览</span>
-          <a-tag v-if="demoStoryMetricsLoading" color="processing">加载中</a-tag>
-          <a-tag v-else-if="demoStoryMetrics" color="blue">
-            {{ demoStoryMetrics.storyCount }} 条故事 · {{ demoStoryMetrics.sessionCount }} 会话
-          </a-tag>
-          <a-tag v-if="demoStoryMetricsError" color="warning">{{ demoStoryMetricsError }}</a-tag>
-        </div>
-        <div class="demo-story-metrics-grid">
-          <div
-            v-for="tile in demoStoryMetricsSummary.tiles"
-            :key="`demo-${tile.key}`"
-            class="metric-tile"
-            :class="tile.tone"
-          >
-            <span>{{ tile.label }}</span>
-            <strong>{{ tile.value }}</strong>
+    <div class="customer-assistant-shell" data-testid="customer-assistant-three-column-shell">
+      <aside class="customer-assistant-left-column" data-testid="customer-assistant-left-column" aria-label="乘客与会话">
+        <section class="session-inbox-dashboard" data-testid="operator-session-inbox-dashboard" aria-label="多客户会话">
+          <div class="session-inbox-heading">
+            <span class="panel-heading-title">
+              <DashboardOutlined />
+              多客户会话
+            </span>
+            <div class="heading-meta">
+              <a-tag v-if="demoStoriesLoading" color="processing">加载中</a-tag>
+              <a-tag v-else color="blue">{{ sessionInboxRows.length }} 会话</a-tag>
+              <a-tag v-if="demoStoryError" color="warning">{{ demoStoryError }}</a-tag>
+            </div>
           </div>
-        </div>
-      </div>
-      <div class="demo-story-list">
-        <a-button
-          v-for="story in demoStories"
-          :key="story.storyId"
-          class="demo-story-button"
-          :type="story.storyId === selectedDemoStoryId ? 'primary' : 'default'"
-          :loading="demoStoryLoadingId === story.storyId"
-          @click="loadDemoStory(story.storyId)"
-        >
-          <ThunderboltOutlined />
-          <span>{{ story.title }}</span>
-          <small>{{ story.customerName }} · {{ story.taskCount }} 任务 · {{ story.pendingActionCount }} 待确认</small>
-        </a-button>
-        <a-button v-if="demoStories.length === 0" class="demo-story-button" disabled :loading="demoStoriesLoading">
-          <HistoryOutlined />
-          <span>{{ demoStoriesLoading ? '正在加载演示故事' : '暂无演示故事' }}</span>
-          <small>{{ demoStoryError || '请先执行 demo seed' }}</small>
-        </a-button>
-      </div>
-    </section>
+          <div class="session-inbox-summary" aria-label="会话队列状态">
+            <div class="metric-tile processing">
+              <span>活跃会话</span>
+              <strong>{{ sessionInboxSummary.active }}</strong>
+            </div>
+            <div class="metric-tile warning">
+              <span>待确认</span>
+              <strong>{{ sessionInboxSummary.pending }}</strong>
+            </div>
+            <div class="metric-tile error">
+              <span>阻塞等待</span>
+              <strong>{{ sessionInboxSummary.blocked }}</strong>
+            </div>
+            <div class="metric-tile success">
+              <span>完成归档</span>
+              <strong>{{ sessionInboxSummary.completed }}</strong>
+            </div>
+          </div>
+          <div class="session-inbox-list">
+            <button
+              v-for="row in sessionInboxRows"
+              :key="row.storyId"
+              type="button"
+              class="session-inbox-row"
+              :class="[row.statusKind, { selected: row.storyId === selectedDemoStoryId }]"
+              data-testid="operator-session-inbox-row"
+              @click="openSessionInboxRow(row)"
+            >
+              <span class="session-inbox-main">
+                <strong>{{ row.customerName }}</strong>
+                <span>{{ row.storyTitle }}</span>
+              </span>
+              <span class="session-inbox-meta">
+                <a-tag>{{ `Session #${row.sessionId}` }}</a-tag>
+                <a-tag :color="sessionInboxStatusColor(row.statusKind)">{{ row.statusLabel }}</a-tag>
+                <span>{{ row.taskCount }} 任务</span>
+                <span>{{ row.pendingActionCount }} 待确认</span>
+                <span>{{ row.lastActivityLabel }}</span>
+              </span>
+              <small>{{ row.statusDetail }}</small>
+            </button>
+            <div v-if="sessionInboxRows.length === 0" class="empty-state">
+              {{ demoStoriesLoading ? '正在加载多客户会话' : '暂无会话，请先执行 demo seed' }}
+            </div>
+          </div>
+        </section>
 
-    <div class="workspace-grid">
-      <section class="workspace-panel conversation-panel" data-testid="customer-conversation-lane">
+        <section class="demo-story-strip" data-testid="customer-assistant-demo-stories" aria-label="演示故事线">
+          <div class="demo-story-heading">
+            <span class="panel-heading-title">
+              <CustomerServiceOutlined />
+              演示故事线
+            </span>
+            <a-tag v-if="selectedDemoStory" color="blue">
+              {{ selectedDemoStory.customerName }} · {{ selectedDemoStory.maskedPhone }}
+            </a-tag>
+          </div>
+          <div class="demo-story-metrics" data-testid="customer-assistant-demo-metrics">
+            <div class="demo-story-metrics-header">
+              <span>演示总览</span>
+              <a-tag v-if="demoStoryMetricsLoading" color="processing">加载中</a-tag>
+              <a-tag v-else-if="demoStoryMetrics" color="blue">
+                {{ demoStoryMetrics.storyCount }} 条故事 · {{ demoStoryMetrics.sessionCount }} 会话
+              </a-tag>
+              <a-tag v-if="demoStoryMetricsError" color="warning">{{ demoStoryMetricsError }}</a-tag>
+            </div>
+            <div class="demo-story-metrics-grid">
+              <div
+                v-for="tile in demoStoryMetricsSummary.tiles"
+                :key="`demo-${tile.key}`"
+                class="metric-tile"
+                :class="tile.tone"
+              >
+                <span>{{ tile.label }}</span>
+                <strong>{{ tile.value }}</strong>
+              </div>
+            </div>
+          </div>
+          <div class="demo-story-list">
+            <a-button
+              v-for="story in demoStories"
+              :key="story.storyId"
+              class="demo-story-button"
+              :type="story.storyId === selectedDemoStoryId ? 'primary' : 'default'"
+              :loading="demoStoryLoadingId === story.storyId"
+              @click="loadDemoStory(story.storyId)"
+            >
+              <ThunderboltOutlined />
+              <span>{{ story.title }}</span>
+              <small>{{ story.customerName }} · {{ story.taskCount }} 任务 · {{ story.pendingActionCount }} 待确认</small>
+            </a-button>
+            <a-button v-if="demoStories.length === 0" class="demo-story-button" disabled :loading="demoStoriesLoading">
+              <HistoryOutlined />
+              <span>{{ demoStoriesLoading ? '正在加载演示故事' : '暂无演示故事' }}</span>
+              <small>{{ demoStoryError || '请先执行 demo seed' }}</small>
+            </a-button>
+          </div>
+        </section>
+      </aside>
+
+      <section class="customer-assistant-center-column" data-testid="customer-assistant-center-column" aria-label="业务会话">
+        <div class="conversation-stack">
+          <section class="workspace-panel conversation-panel" data-testid="customer-conversation-lane">
         <div class="panel-heading">
           <span class="panel-heading-title">
             <MessageOutlined />
@@ -183,7 +187,7 @@
         </div>
       </section>
 
-      <section class="workspace-panel conversation-panel" data-testid="operator-conversation-lane">
+          <section class="workspace-panel conversation-panel" data-testid="operator-conversation-lane">
         <div class="panel-heading">
           <span class="panel-heading-title">
             <RobotOutlined />
@@ -220,9 +224,16 @@
             追问助手
           </a-button>
         </div>
+          </section>
+        </div>
       </section>
 
-      <aside class="operator-panels" aria-label="坐席操作面板">
+      <aside class="customer-assistant-ai-workbench-column operator-panels" data-testid="customer-assistant-ai-workbench-column" aria-label="AI Workbench">
+        <div class="ai-workbench-tabs" data-testid="operator-ai-workbench-tabs" role="tablist" aria-label="AI Workbench">
+          <span role="tab" aria-selected="true">Assist</span>
+          <span role="tab" aria-selected="false">Tasks</span>
+          <span role="tab" aria-selected="false">Copilot</span>
+        </div>
         <section class="workspace-panel compact-panel" data-testid="operator-progress-checklist">
           <div class="panel-heading">
             <span class="panel-heading-title">
@@ -2034,6 +2045,17 @@ function stringValue(value: unknown, fallback: string) {
   line-height: 1.4;
 }
 
+.customer-assistant-left-column .session-inbox-summary,
+.customer-assistant-left-column .session-inbox-row,
+.customer-assistant-left-column .demo-story-metrics-grid,
+.customer-assistant-left-column .demo-story-list {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.customer-assistant-left-column .session-inbox-meta {
+  align-items: flex-start;
+}
+
 .demo-story-strip {
   display: grid;
   gap: 0.75rem;
@@ -2103,11 +2125,53 @@ function stringValue(value: unknown, fallback: string) {
   color: #e7f0ff;
 }
 
-.workspace-grid {
+.customer-assistant-shell {
   display: grid;
-  grid-template-columns: minmax(18rem, 1fr) minmax(20rem, 1.1fr) minmax(22rem, 0.95fr);
+  grid-template-columns: minmax(17rem, 20rem) minmax(0, 1fr) minmax(22rem, 28rem);
   gap: 1rem;
   align-items: start;
+}
+
+.customer-assistant-left-column,
+.customer-assistant-center-column,
+.customer-assistant-ai-workbench-column,
+.conversation-stack {
+  min-width: 0;
+}
+
+.customer-assistant-left-column,
+.conversation-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.ai-workbench-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem;
+  border: 0.0625rem solid #d9e6f7;
+  border-radius: 0.5rem;
+  background: #f7fbff;
+}
+
+.ai-workbench-tabs span {
+  flex: 1;
+  min-width: 0;
+  padding: 0.45rem 0.5rem;
+  border-radius: 0.35rem;
+  color: #4d5b70;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+}
+
+.ai-workbench-tabs span[aria-selected="true"] {
+  background: #ffffff;
+  color: #2456a7;
+  box-shadow: 0 0.0625rem 0.25rem rgb(36 86 167 / 12%);
 }
 
 .workspace-panel {
@@ -2699,15 +2763,16 @@ function stringValue(value: unknown, fallback: string) {
   gap: 0.45rem;
 }
 
-@media (max-width: 86rem) {
-  .workspace-grid {
-    grid-template-columns: minmax(18rem, 1fr) minmax(18rem, 1fr);
+@media (max-width: 74rem) {
+  .customer-assistant-shell {
+    grid-template-columns: minmax(17rem, 20rem) minmax(0, 1fr);
   }
 
-  .operator-panels {
+  .customer-assistant-ai-workbench-column {
     grid-column: 1 / -1;
     display: grid;
-    grid-template-columns: repeat(2, minmax(18rem, 1fr));
+    grid-template-columns: repeat(2, minmax(17rem, 1fr));
+    gap: 0.75rem;
   }
 }
 
@@ -2718,7 +2783,7 @@ function stringValue(value: unknown, fallback: string) {
     grid-template-columns: 1fr;
   }
 
-  .workspace-grid,
+  .customer-assistant-shell,
   .operator-panels,
   .action-decision-form {
     display: flex;

@@ -30,6 +30,10 @@ describe('CustomerAssistantPanel UI contract', () => {
   it('renders the required operator workspace regions', () => {
     for (const testId of [
       'customer-assistant-workspace',
+      'customer-assistant-three-column-shell',
+      'customer-assistant-left-column',
+      'customer-assistant-center-column',
+      'customer-assistant-ai-workbench-column',
       'customer-conversation-lane',
       'operator-conversation-lane',
       'operator-progress-checklist',
@@ -48,6 +52,20 @@ describe('CustomerAssistantPanel UI contract', () => {
     ]) {
       expect(content).toContain(`data-testid="${testId}"`)
     }
+  })
+
+  it('keeps the product shell in left center and right workbench columns', () => {
+    expect(content).toMatch(
+      /data-testid="customer-assistant-left-column"[\s\S]*data-testid="operator-session-inbox-dashboard"[\s\S]*data-testid="customer-assistant-demo-stories"/,
+    )
+    expect(content).toMatch(
+      /data-testid="customer-assistant-center-column"[\s\S]*data-testid="customer-conversation-lane"[\s\S]*data-testid="operator-conversation-lane"/,
+    )
+    expect(content).toMatch(
+      /data-testid="customer-assistant-ai-workbench-column"[\s\S]*data-testid="operator-ai-workbench-tabs"[\s\S]*data-testid="operator-task-ledger"[\s\S]*data-testid="operator-proposed-actions-panel"/,
+    )
+    expect(section(content, 'customer-assistant-center-column')).not.toContain('operator-task-ledger')
+    expect(section(content, 'customer-assistant-center-column')).not.toContain('operator-proposed-actions-panel')
   })
 
   it('keeps internal task controls out of the customer lane', () => {
