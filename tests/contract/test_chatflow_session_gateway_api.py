@@ -27,6 +27,16 @@ class ChatflowSessionGatewayApiContractTest(unittest.TestCase):
 
         self.assertEqual(data["status"], "SUCCEEDED")
         self.assertEqual(data["answer"], "sent: Hello Ada")
+        self.assertEqual(data["result"], {"final": "sent: Hello Ada"})
+        self.assertIsInstance(data["latencyMs"], int)
+        self.assertGreaterEqual(data["latencyMs"], 0)
+        self.assertEqual(
+            data["usage"],
+            {"inputTokens": 0, "outputTokens": 0, "totalTokens": 0, "estimated": False},
+        )
+        self.assertFalse(data["retryable"])
+        self.assertTrue(data["events"])
+        self.assertTrue(all("payload" not in event for event in data["events"]))
         self.assertTrue(data["sessionId"])
         self.assertEqual(data["conversationId"], data["sessionId"])
         self.assertGreater(data["runId"], 0)

@@ -831,7 +831,12 @@ def _chatflow_message_response(
         "runId": run_id,
         "status": status,
         "answer": answer or None,
+        "result": dict(result.get("result") or output),
         "output": output,
+        "latencyMs": _chatflow_response_latency_ms(result),
+        "usage": _chatflow_response_usage(result),
+        "retryable": bool(result.get("retryable")),
+        "events": _chatflow_response_events(result),
         "requiresInput": status.upper() == "INTERRUPTED" or checkpoint is not None,
         "checkpoint": checkpoint,
         "statusRef": f"/api/v1/runtime-runs/{run_id}",
@@ -848,6 +853,37 @@ def _chatflow_message_response(
         response["versionId"] = start.get("versionId")
         response["version"] = start.get("version")
     return response
+
+
+def _chatflow_response_latency_ms(result: dict[str, Any]) -> int:
+    try:
+        parsed = int(result.get("latencyMs") or 0)
+    except (TypeError, ValueError):
+        return 0
+    return parsed if parsed >= 0 else 0
+
+
+def _chatflow_response_usage(result: dict[str, Any]) -> dict[str, Any]:
+    usage = result.get("usage") if isinstance(result.get("usage"), dict) else {}
+    return {
+        "inputTokens": _chatflow_response_usage_int(usage.get("inputTokens")),
+        "outputTokens": _chatflow_response_usage_int(usage.get("outputTokens")),
+        "totalTokens": _chatflow_response_usage_int(usage.get("totalTokens")),
+        "estimated": bool(usage.get("estimated", False)),
+    }
+
+
+def _chatflow_response_usage_int(value: Any) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return parsed if parsed >= 0 else 0
+
+
+def _chatflow_response_events(result: dict[str, Any]) -> list[dict[str, Any]]:
+    events = result.get("events") if isinstance(result.get("events"), list) else []
+    return [dict(event) for event in events if isinstance(event, dict)]
 
 
 def _chatflow_gateway_answer(output: dict[str, Any]) -> str:
