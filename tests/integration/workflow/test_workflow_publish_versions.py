@@ -133,6 +133,23 @@ class WorkflowPublishVersionsTest(unittest.TestCase):
         self.assertEqual(publish_response.status_code, 400)
         self.assertIn("handoff queue", publish_response.json()["message"])
 
+    def test_publish_rejects_execute_workflow_target_without_published_version(self) -> None:
+        with TestClient(app) as client:
+            child = self._create_workflow(client, "draft-child")
+            parent = self._create_execute_workflow_parent(client, int(child["id"]))
+            publish_response = client.post(f"/api/v1/workflows/{parent['id']}/publish")
+
+        self.assertEqual(publish_response.status_code, 400, publish_response.text)
+        self.assertIn("published version", publish_response.json()["message"])
+
+    def test_publish_rejects_llm_node_with_disabled_model_config(self) -> None:
+        with TestClient(app) as client:
+            workflow = self._create_llm_workflow(client, model_config_id=999999999)
+            publish_response = client.post(f"/api/v1/workflows/{workflow['id']}/publish")
+
+        self.assertEqual(publish_response.status_code, 400, publish_response.text)
+        self.assertIn("modelConfigId", publish_response.json()["message"])
+
     def _create_workflow(self, client: TestClient, output: str) -> dict:
         response = client.post(
             "/api/v1/workflows",
@@ -190,6 +207,69 @@ class WorkflowPublishVersionsTest(unittest.TestCase):
             },
         )
         self.assertEqual(response.status_code, 200)
+
+    def _create_execute_workflow_parent(self, client: TestClient, child_id: int) -> dict:
+        response = client.post(
+            "/api/v1/workflows",
+            json={
+                "name": f"Publish Parent {time.time_ns()}",
+                "description": "",
+                "nodes": [
+                    {"nodeKey": "start", "type": "START", "name": "Start", "config": {}},
+                    {
+                        "nodeKey": "execute_workflow_1",
+                        "type": "EXECUTE_WORKFLOW",
+                        "name": "Call Child",
+                        "config": {
+                            "targetWorkflowId": child_id,
+                            "inputMappings": [],
+                            "outputMappings": [{"source": "final", "target": "childFinal"}],
+                            "outputParameters": [
+                                {"name": "childFinal", "type": "string"},
+                                {"name": "nestedRunId", "type": "number"},
+                                {"name": "status", "type": "string"},
+                            ],
+                        },
+                    },
+                    {"nodeKey": "end", "type": "END", "name": "End", "config": {"outputVariable": "final", "output": "{{execute_workflow_1.childFinal}}"}},
+                ],
+                "edges": [
+                    {"sourceNodeKey": "start", "targetNodeKey": "execute_workflow_1", "condition": None},
+                    {"sourceNodeKey": "execute_workflow_1", "targetNodeKey": "end", "condition": None},
+                ],
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        return response.json()["data"]
+
+    def _create_llm_workflow(self, client: TestClient, model_config_id: int) -> dict:
+        response = client.post(
+            "/api/v1/workflows",
+            json={
+                "name": f"Publish LLM Model {time.time_ns()}",
+                "description": "",
+                "nodes": [
+                    {"nodeKey": "start", "type": "START", "name": "Start", "config": {}},
+                    {
+                        "nodeKey": "llm_1",
+                        "type": "LLM",
+                        "name": "LLM",
+                        "config": {
+                            "modelConfigId": model_config_id,
+                            "prompt": "Hello",
+                            "outputVariable": "answer",
+                        },
+                    },
+                    {"nodeKey": "end", "type": "END", "name": "End", "config": {"outputVariable": "final", "output": "{{llm_1.answer}}"}},
+                ],
+                "edges": [
+                    {"sourceNodeKey": "start", "targetNodeKey": "llm_1", "condition": None},
+                    {"sourceNodeKey": "llm_1", "targetNodeKey": "end", "condition": None},
+                ],
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        return response.json()["data"]
 
 
 if __name__ == "__main__":
