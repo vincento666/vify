@@ -1,0 +1,50 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+_ RuntimeV2ErrorRoutingIntegrationTest.test_code_node_branch_routes_error_to_error_edge _
+
+self = <tests.integration.workflow.test_runtime_v2_error_routing.RuntimeV2ErrorRoutingIntegrationTest testMethod=test_code_node_branch_routes_error_to_error_edge>
+
+    def test_code_node_branch_routes_error_to_error_edge(self) -> None:
+        with TestClient(app) as client:
+            chatflow = _create_error_routing_chatflow(client, error_behavior="branch")
+            started = client.post(
+                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                json={"input": {"sys.query": "branch"}},
+            )
+>           self.assertEqual(started.status_code, 200, started.text)
+E           AssertionError: 400 != 200 : {"code":400,"message":"Unsupported runtime v2 graph: {'supported': False, 'fallbackScope': 'whole_graph', 'unsupportedNodes': [], 'unsupportedPatterns': ['branching_edges'], 'branchValidationErrors': [], 'supportedNodeTypes': ['AGENT_CALL', 'API_CALL', 'CODE', 'CONDITION', 'END', 'EXECUTE_WORKFLOW', 'HUMAN_INPUT', 'INFORMATION_COLLECTION', 'INTENT_RECOGNITION', 'JSON_PARSE', 'KNOWLEDGE', 'LLM', 'MESSAGE', 'QUESTION', 'START', 'TEXT_PROCESS', 'TOOL_CALL', 'TRANSFER_TO_HUMAN', 'VARIABLE_AGGREGATION', 'VARIABLE_ASSIGN']}","data":null}
+
+tests/integration/workflow/test_runtime_v2_error_routing.py:46: AssertionError
+_ RuntimeV2ErrorRoutingIntegrationTest.test_code_node_continue_exposes_error_and_continues_default_outlet _
+
+self = <tests.integration.workflow.test_runtime_v2_error_routing.RuntimeV2ErrorRoutingIntegrationTest testMethod=test_code_node_continue_exposes_error_and_continues_default_outlet>
+
+    def test_code_node_continue_exposes_error_and_continues_default_outlet(self) -> None:
+        with TestClient(app) as client:
+            chatflow = _create_error_routing_chatflow(client, error_behavior="continue")
+            started = client.post(
+                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                json={"input": {"sys.query": "continue"}},
+            )
+            self.assertEqual(started.status_code, 200, started.text)
+            run = started.json()["data"]
+            terminal = _wait_for_result(client, run["resultRef"])
+            nodes = client.get(run["nodesRef"]).json()["data"]["list"]
+            events = client.get(run["eventsRef"]).json()["data"]["list"]
+
+>       self.assertEqual(terminal["status"], "SUCCEEDED")
+E       AssertionError: 'FAILED' != 'SUCCEEDED'
+E       - FAILED
+E       + SUCCEEDED
+
+tests/integration/workflow/test_runtime_v2_error_routing.py:25: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/vincento/work/develop/hify/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/integration/workflow/test_runtime_v2_error_routing.py::RuntimeV2ErrorRoutingIntegrationTest::test_code_node_branch_routes_error_to_error_edge
+FAILED tests/integration/workflow/test_runtime_v2_error_routing.py::RuntimeV2ErrorRoutingIntegrationTest::test_code_node_continue_exposes_error_and_continues_default_outlet
+2 failed, 1 warning in 1.57s
