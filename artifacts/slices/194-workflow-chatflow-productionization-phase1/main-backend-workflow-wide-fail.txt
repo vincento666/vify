@@ -1,0 +1,54 @@
+.................................................................................................................................... [ 58%]
+....................................F................................... [ 89%]
+.......................                                                  [100%]
+=================================== FAILURES ===================================
+_ RuntimeV2SafeNodeCoveragePack2Test.test_runtime_v2_compatibility_allows_pack2_nodes_without_opening_unknown_nodes _
+
+self = <tests.integration.workflow.test_runtime_v2_safe_node_coverage_pack2.RuntimeV2SafeNodeCoveragePack2Test testMethod=test_runtime_v2_compatibility_allows_pack2_nodes_without_opening_unknown_nodes>
+
+    def test_runtime_v2_compatibility_allows_pack2_nodes_without_opening_unknown_nodes(self) -> None:
+        supported = RuntimeV2CompatibilityChecker.check(
+            [
+                {"nodeKey": "start", "type": "START", "config": {}},
+                {"nodeKey": "exec_1", "type": "EXECUTE_WORKFLOW", "config": {}},
+                {"nodeKey": "llm_1", "type": "LLM", "config": {"prompt": "summarize"}},
+                {"nodeKey": "code_1", "type": "CODE", "config": {"code": "result = {'output': 'ok'}"}},
+                {"nodeKey": "handoff_1", "type": "TRANSFER_TO_HUMAN", "config": {}},
+                {"nodeKey": "end", "type": "END", "config": {}},
+            ],
+            [
+                {"sourceNodeKey": "start", "targetNodeKey": "exec_1"},
+                {"sourceNodeKey": "exec_1", "targetNodeKey": "llm_1"},
+                {"sourceNodeKey": "llm_1", "targetNodeKey": "code_1"},
+                {"sourceNodeKey": "code_1", "targetNodeKey": "handoff_1"},
+                {"sourceNodeKey": "handoff_1", "targetNodeKey": "end"},
+            ],
+        )
+        rejected = RuntimeV2CompatibilityChecker.check(
+            [
+                {"nodeKey": "start", "type": "START", "config": {}},
+                {"nodeKey": "tool_1", "type": "TOOL_CALL", "config": {}},
+            ],
+            [{"sourceNodeKey": "start", "targetNodeKey": "tool_1"}],
+        )
+
+        self.assertTrue(supported["supported"], supported)
+        self.assertIn("EXECUTE_WORKFLOW", supported["supportedNodeTypes"])
+        self.assertIn("LLM", supported["supportedNodeTypes"])
+        self.assertIn("CODE", supported["supportedNodeTypes"])
+        self.assertIn("TRANSFER_TO_HUMAN", supported["supportedNodeTypes"])
+        self.assertFalse(rejected["supported"])
+>       self.assertEqual(rejected["unsupportedNodes"][0]["nodeType"], "TOOL_CALL")
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       IndexError: list index out of range
+
+tests/integration/workflow/test_runtime_v2_safe_node_coverage_pack2.py:161: IndexError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/vincento/work/develop/hify/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/integration/workflow/test_runtime_v2_safe_node_coverage_pack2.py::RuntimeV2SafeNodeCoveragePack2Test::test_runtime_v2_compatibility_allows_pack2_nodes_without_opening_unknown_nodes
+1 failed, 226 passed, 1 warning, 12 subtests passed in 46.53s

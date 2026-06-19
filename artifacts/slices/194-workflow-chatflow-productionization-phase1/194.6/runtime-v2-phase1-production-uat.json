@@ -1,0 +1,207 @@
+{
+  "baseUrl": "http://127.0.0.1:15194",
+  "stamp": 1781800566336,
+  "versionBinding": {
+    "workflowId": 1702,
+    "publishV1": {
+      "id": 222,
+      "workflowId": 1702,
+      "flowType": "WORKFLOW",
+      "version": 1,
+      "active": true,
+      "validation": {
+        "valid": true,
+        "errors": []
+      },
+      "snapshot": {
+        "edges": [
+          {
+            "id": 10927,
+            "deleted": false,
+            "created_at": "2026-06-19T00:36:06",
+            "updated_at": "2026-06-19T00:36:06",
+            "workflow_id": 1702,
+            "condition_expr": null,
+            "source_node_key": "start",
+            "target_node_key": "end"
+          }
+        ],
+        "nodes": [
+          {
+            "id": 12703,
+            "name": "开始",
+            "type": "START",
+            "config": {
+              "ui": {
+                "position": {
+                  "x": 120,
+                  "y": 180
+                }
+              }
+            },
+            "deleted": false,
+            "node_key": "start",
+            "created_at": "2026-06-19T00:36:06",
+            "updated_at": "2026-06-19T00:36:06",
+            "workflow_id": 1702
+          },
+          {
+            "id": 12704,
+            "name": "结束",
+            "type": "END",
+            "config": {
+              "ui": {
+                "position": {
+                  "x": 600,
+                  "y": 180
+                }
+              },
+              "output": "published-v1",
+              "outputVariable": "final"
+            },
+            "deleted": false,
+            "node_key": "end",
+            "created_at": "2026-06-19T00:36:06",
+            "updated_at": "2026-06-19T00:36:06",
+            "workflow_id": 1702
+          }
+        ],
+        "workflow": {
+          "id": 1702,
+          "name": "194 Phase1 Version Binding 1781800566336",
+          "status": "DRAFT",
+          "flowType": "WORKFLOW",
+          "description": "phase1 immutable published version UAT"
+        }
+      },
+      "createdAt": "2026-06-19T00:36:06",
+      "updatedAt": "2026-06-19T00:36:06"
+    },
+    "publishV2": {
+      "id": 223,
+      "workflowId": 1702,
+      "flowType": "WORKFLOW",
+      "version": 2,
+      "active": true,
+      "validation": {
+        "valid": true,
+        "errors": []
+      },
+      "snapshot": {
+        "edges": [
+          {
+            "id": 10928,
+            "deleted": false,
+            "created_at": "2026-06-19T00:36:06",
+            "updated_at": "2026-06-19T00:36:06",
+            "workflow_id": 1702,
+            "condition_expr": null,
+            "source_node_key": "start",
+            "target_node_key": "end"
+          }
+        ],
+        "nodes": [
+          {
+            "id": 12705,
+            "name": "开始",
+            "type": "START",
+            "config": {
+              "ui": {
+                "position": {
+                  "x": 120,
+                  "y": 180
+                }
+              }
+            },
+            "deleted": false,
+            "node_key": "start",
+            "created_at": "2026-06-19T00:36:06",
+            "updated_at": "2026-06-19T00:36:06",
+            "workflow_id": 1702
+          },
+          {
+            "id": 12706,
+            "name": "结束",
+            "type": "END",
+            "config": {
+              "ui": {
+                "position": {
+                  "x": 600,
+                  "y": 180
+                }
+              },
+              "output": "published-v2",
+              "outputVariable": "final"
+            },
+            "deleted": false,
+            "node_key": "end",
+            "created_at": "2026-06-19T00:36:06",
+            "updated_at": "2026-06-19T00:36:06",
+            "workflow_id": 1702
+          }
+        ],
+        "workflow": {
+          "id": 1702,
+          "name": "194 Phase1 Version Binding 1781800566336",
+          "status": "DRAFT",
+          "flowType": "WORKFLOW",
+          "description": "phase1 immutable published version UAT"
+        }
+      },
+      "createdAt": "2026-06-19T00:36:07",
+      "updatedAt": "2026-06-19T00:36:07"
+    },
+    "targetedV1": {
+      "runId": 1217,
+      "status": "SUCCEEDED",
+      "output": {
+        "final": "published-v1"
+      },
+      "debugUrl": "/workflows/1702/canvas?runId=1217&debug=1",
+      "debug_url": "/workflows/1702/canvas?runId=1217&debug=1",
+      "versionId": 222,
+      "version": 1
+    },
+    "activeV2": {
+      "runId": 1218,
+      "status": "SUCCEEDED",
+      "output": {
+        "final": "published-v2"
+      },
+      "debugUrl": "/workflows/1702/canvas?runId=1218&debug=1",
+      "debug_url": "/workflows/1702/canvas?runId=1218&debug=1",
+      "versionId": 223,
+      "version": 2
+    }
+  },
+  "negativePublishValidation": {
+    "apiWorkflowId": 1703,
+    "apiMessage": "api_1 resourceId is required",
+    "toolWorkflowId": 1704,
+    "toolMessage": "tool_1 tool resource is required"
+  },
+  "runtimeV2ErrorDebug": {
+    "chatflowId": 1705,
+    "runId": 1219,
+    "screenshot": "/Users/vincento/work/develop/hify/artifacts/slices/194-workflow-chatflow-productionization-phase1/194.6/screenshots/runtime-v2-error-debug.png",
+    "terminal": {
+      "runId": 1219,
+      "ownerType": "CHATFLOW",
+      "ownerId": 1705,
+      "status": "SUCCEEDED",
+      "output": {
+        "final": "error route: division by zero"
+      },
+      "error": "",
+      "checkpoint": null,
+      "eventsRef": "/api/v1/runtime-runs/1219/events",
+      "eventStreamRef": "/api/v1/runtime-runs/1219/events/stream?afterSequence=0",
+      "resultRef": "/api/v1/runtime-runs/1219/result",
+      "chatflowId": 1705
+    }
+  },
+  "governancePanel": {
+    "chatflowId": 1706,
+    "screenshot": "/Users/vincento/work/develop/hify/artifacts/slices/194-workflow-chatflow-productionization-phase1/194.6/screenshots/api-tool-governance-panel.png"
+  }
+}
