@@ -36,6 +36,7 @@ from app.modules.workflow.infra.chatflow_state_repository import ChatflowStateRe
 from app.modules.workflow.infra.publish_repository import WorkflowPublishRepository
 from app.modules.workflow.infra.realtime.redis_streams import RedisRuntimeEventStreamBus, RuntimeEventStreamBus
 from app.modules.workflow.infra.repository import WorkflowRepository
+from app.modules.workflow.infra.runtime_job_repository import RuntimeJobRepository
 from app.modules.workflow.web.schemas import (
     ChatflowChannelTestRequest,
     ChatflowChannelUpdateRequest,
@@ -228,10 +229,18 @@ def _start_workflow_runtime_v2_gateway(
     data = service.start_run(workflow_id, dict(request.input), request.idempotency_key, request.version_id)
     _attach_runtime_v2_transport(data, event_stream_bus)
     if not data.get("idempotentReplay"):
+        job = RuntimeJobRepository(session).enqueue(
+            run_id=int(data["runId"]),
+            owner_type="WORKFLOW",
+            owner_id=workflow_id,
+            job_type="runtime_v2_completion",
+            payload={"workflowId": workflow_id, "versionId": data.get("versionId")},
+        )
         _start_runtime_v2_completion_thread(
             session,
             int(data["runId"]),
             owner_type="WORKFLOW",
+            job_id=int(job["id"]),
             event_stream_bus=event_stream_bus,
         )
     return data
@@ -707,6 +716,7 @@ def _start_runtime_v2_completion_thread(
     run_id: int,
     *,
     owner_type: str = "CHATFLOW",
+    job_id: int | None = None,
     event_stream_bus: RuntimeEventStreamBus | None = None,
 ) -> None:
     bind = session.get_bind()
@@ -715,31 +725,42 @@ def _start_runtime_v2_completion_thread(
     factory = sessionmaker(bind=bind, autoflush=False, autocommit=False, expire_on_commit=False)
 
     def complete() -> None:
+        worker_id = f"inline-runtime-v2-{run_id}-{time.time_ns()}"
         with factory() as background_session:
-            if owner_type.upper() == "WORKFLOW":
-                llm_service = _runtime_v2_llm_service(background_session, flow_type="WORKFLOW")
-                WorkflowRuntimeV2Service(
-                    WorkflowRepository(background_session),
-                    ChatflowStateRepository(background_session, event_stream_bus=event_stream_bus),
-                    WorkflowPublishRepository(background_session),
-                    knowledge_facade=KnowledgeFacade(background_session),
-                    llm_completer_resolver=llm_service.runtime_v2_llm_completer,
-                    agent_invoker_resolver=llm_service.runtime_v2_agent_invoker,
-                    mcp_tool_executor=llm_service.runtime_v2_mcp_tool_executor(),
-                    api_tool_executor=llm_service.runtime_v2_api_tool_executor(),
-                ).complete_run(run_id)
-            else:
-                llm_service = _runtime_v2_llm_service(background_session, flow_type="CHATFLOW")
-                ChatflowRuntimeV2Service(
-                    WorkflowRepository(background_session),
-                    ChatflowStateRepository(background_session, event_stream_bus=event_stream_bus),
-                    publish_repository=WorkflowPublishRepository(background_session),
-                    knowledge_facade=KnowledgeFacade(background_session),
-                    llm_completer_resolver=llm_service.runtime_v2_llm_completer,
-                    agent_invoker_resolver=llm_service.runtime_v2_agent_invoker,
-                    mcp_tool_executor=llm_service.runtime_v2_mcp_tool_executor(),
-                    api_tool_executor=llm_service.runtime_v2_api_tool_executor(),
-                ).complete_run(run_id)
+            job_repository = RuntimeJobRepository(background_session) if job_id is not None else None
+            if job_repository is not None and job_repository.claim(job_id, worker_id=worker_id, lease_seconds=300) is None:
+                return
+            try:
+                if owner_type.upper() == "WORKFLOW":
+                    llm_service = _runtime_v2_llm_service(background_session, flow_type="WORKFLOW")
+                    WorkflowRuntimeV2Service(
+                        WorkflowRepository(background_session),
+                        ChatflowStateRepository(background_session, event_stream_bus=event_stream_bus),
+                        WorkflowPublishRepository(background_session),
+                        knowledge_facade=KnowledgeFacade(background_session),
+                        llm_completer_resolver=llm_service.runtime_v2_llm_completer,
+                        agent_invoker_resolver=llm_service.runtime_v2_agent_invoker,
+                        mcp_tool_executor=llm_service.runtime_v2_mcp_tool_executor(),
+                        api_tool_executor=llm_service.runtime_v2_api_tool_executor(),
+                    ).complete_run(run_id)
+                else:
+                    llm_service = _runtime_v2_llm_service(background_session, flow_type="CHATFLOW")
+                    ChatflowRuntimeV2Service(
+                        WorkflowRepository(background_session),
+                        ChatflowStateRepository(background_session, event_stream_bus=event_stream_bus),
+                        publish_repository=WorkflowPublishRepository(background_session),
+                        knowledge_facade=KnowledgeFacade(background_session),
+                        llm_completer_resolver=llm_service.runtime_v2_llm_completer,
+                        agent_invoker_resolver=llm_service.runtime_v2_agent_invoker,
+                        mcp_tool_executor=llm_service.runtime_v2_mcp_tool_executor(),
+                        api_tool_executor=llm_service.runtime_v2_api_tool_executor(),
+                    ).complete_run(run_id)
+            except Exception as exc:
+                if job_repository is not None:
+                    job_repository.fail(job_id, worker_id=worker_id, error=str(exc))
+                return
+            if job_repository is not None:
+                job_repository.complete(job_id, worker_id=worker_id)
 
     threading.Thread(target=complete, daemon=True).start()
 

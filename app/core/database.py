@@ -117,6 +117,11 @@ def _ensure_compatible_schema(engine: Engine) -> None:
         if "customer_assistant_event" in table_names
         else set()
     )
+    runtime_job_columns = (
+        {column["name"] for column in inspector.get_columns("runtime_jobs")}
+        if "runtime_jobs" in table_names
+        else set()
+    )
 
     with engine.begin() as connection:
         if "flow_type" not in workflow_columns:
@@ -191,6 +196,12 @@ def _ensure_compatible_schema(engine: Engine) -> None:
                     "ADD COLUMN actor VARCHAR(30) NOT NULL DEFAULT 'customer'"
                 )
             )
+        if "runtime_jobs" in table_names and "lease_token" not in runtime_job_columns:
+            connection.execute(
+                sa.text("ALTER TABLE runtime_jobs ADD COLUMN lease_token VARCHAR(120) NOT NULL DEFAULT ''")
+            )
+        if "runtime_jobs" in table_names and "last_heartbeat_at" not in runtime_job_columns:
+            connection.execute(sa.text("ALTER TABLE runtime_jobs ADD COLUMN last_heartbeat_at DATETIME"))
 
 
 def _create_index_if_missing(

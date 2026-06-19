@@ -17,6 +17,7 @@ def register_baseline_tables() -> None:
         register_chatflow_state_tables(metadata)
         register_chatflow_channel_tables(metadata)
         register_workflow_publish_tables(metadata)
+        register_runtime_job_tables(metadata)
         register_handoff_tables(metadata)
         register_audit_tables(metadata)
         register_knowledge_vector_tables(metadata)
@@ -264,6 +265,7 @@ def register_baseline_tables() -> None:
     register_chatflow_state_tables(metadata)
     register_chatflow_channel_tables(metadata)
     register_workflow_publish_tables(metadata)
+    register_runtime_job_tables(metadata)
     register_handoff_tables(metadata)
     register_audit_tables(metadata)
     register_agent_version_tables(metadata)
@@ -422,6 +424,41 @@ def register_workflow_publish_tables(metadata: sa.MetaData) -> None:
         *timestamps(),
         sa.UniqueConstraint("workflow_id", "flow_type", "version", name="idx_workflow_version_unique"),
         sa.Index("idx_workflow_version_workflow_id", "workflow_id"),
+    )
+
+
+def register_runtime_job_tables(metadata: sa.MetaData) -> None:
+    if "runtime_jobs" in metadata.tables:
+        return
+
+    sa.Table(
+        "runtime_jobs",
+        metadata,
+        id_column(),
+        sa.Column("run_id", BIGINT, nullable=False),
+        sa.Column("owner_type", sa.String(20), nullable=False),
+        sa.Column("owner_id", BIGINT, nullable=False),
+        sa.Column("job_type", sa.String(60), nullable=False, server_default="runtime_v2_completion"),
+        sa.Column("status", sa.String(30), nullable=False, server_default="QUEUED"),
+        sa.Column("priority", sa.Integer(), nullable=False, server_default="100"),
+        sa.Column("attempt_count", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("max_attempts", sa.Integer(), nullable=False, server_default="3"),
+        sa.Column("lease_owner", sa.String(120), nullable=False, server_default=""),
+        sa.Column("lease_token", sa.String(120), nullable=False, server_default=""),
+        sa.Column("lease_expires_at", sa.DateTime(), nullable=True),
+        sa.Column("last_heartbeat_at", sa.DateTime(), nullable=True),
+        sa.Column("available_at", sa.DateTime(), nullable=True),
+        sa.Column("started_at", sa.DateTime(), nullable=True),
+        sa.Column("finished_at", sa.DateTime(), nullable=True),
+        sa.Column("last_error", sa.Text(), nullable=True),
+        sa.Column("payload", sa.JSON(), nullable=True),
+        deleted_column(),
+        *timestamps(),
+        sa.UniqueConstraint("run_id", "job_type", name="idx_runtime_jobs_run_type"),
+        sa.Index("idx_runtime_jobs_run_id", "run_id"),
+        sa.Index("idx_runtime_jobs_status_available", "status", "available_at"),
+        sa.Index("idx_runtime_jobs_lease_expiry", "status", "lease_expires_at"),
+        sa.Index("idx_runtime_jobs_owner", "owner_type", "owner_id"),
     )
 
 
