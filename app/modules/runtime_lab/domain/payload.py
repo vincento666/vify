@@ -5,7 +5,16 @@ from app.modules.runtime_lab.domain.router import RouteDecision
 
 
 def format_turn(turn: Any) -> dict[str, Any]:
+    gateway = turn.gateway or {}
     return {
+        "sessionId": gateway.get("sessionId"),
+        "conversationId": gateway.get("conversationId"),
+        "currentSopId": gateway.get("currentSopId"),
+        "runId": gateway.get("runId"),
+        "intent": gateway.get("intent"),
+        "status": gateway.get("status"),
+        "answer": gateway.get("answer"),
+        "latencyMs": gateway.get("latencyMs", 0),
         "reply": turn.reply,
         "routeDecision": format_route_decision(turn.route_decision),
         "activeTask": format_task(turn.active_task) if turn.active_task else None,

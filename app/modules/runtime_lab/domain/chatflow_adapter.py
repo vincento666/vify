@@ -68,6 +68,7 @@ class ChatflowSopRuntimeAdapter:
             )
             self._runtime_v2_service.complete_run(int(started["runId"]))
             run = self._runtime_v2_service.get_result(int(started["runId"]))
+            run["sessionId"] = str(started.get("sessionId") or "")
             run["events"] = self._runtime_v2_service.list_events(int(started["runId"]))["list"]
             run["checkpointId"] = _checkpoint_id_from_result(run)
             run["runtimeRefs"] = _runtime_refs(started)
@@ -132,6 +133,7 @@ class ChatflowSopRuntimeAdapter:
                     _resume_data(request),
                     str(request.metadata.get("idempotencyKey") or _v2_idempotency_key(request)),
                 )
+                run["sessionId"] = str(meta.get("sessionId") or "")
                 run["events"] = self._runtime_v2_service.list_events(run_id)["list"]
                 run["checkpointId"] = _checkpoint_id_from_result(run)
                 run["runtimeRefs"] = dict(meta.get("runtimeRefs") or {})
@@ -230,13 +232,19 @@ class ChatflowSopRuntimeAdapter:
 
 
 def _runtime_input(request: SopExecutionRequest, resume_node: str | None = None) -> dict[str, Any]:
+    session_id = str(
+        request.metadata.get("chatflowSessionId")
+        or request.metadata.get("chatflow_session_id")
+        or f"runtime-lab-{request.runtime_session_id}-{request.runtime_task_id or 'new'}-{request.sop_id}"
+    )
     conversation_id = str(
         request.metadata.get("conversationId")
         or request.metadata.get("conversation_id")
-        or f"runtime-lab-{request.runtime_session_id}-{request.runtime_task_id or 'new'}-{request.sop_id}"
+        or session_id
     )
     runtime_input: dict[str, Any] = {
         "sys.query": request.message,
+        "sys.session_id": session_id,
         "sys.conversation_id": conversation_id,
         "sys.user_id": str(request.metadata.get("userId") or request.metadata.get("user_id") or ""),
         "sys.channel": str(request.metadata.get("channel") or "runtime-lab"),

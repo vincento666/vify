@@ -7,6 +7,7 @@ class RuntimeLabMessageRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     message: str
+    session_id: int | None = Field(default=None, alias="sessionId")
     idempotency_key: str | None = Field(default=None, alias="idempotencyKey")
     enabled_sop_ids: list[str] | None = Field(default=None, alias="enabledSopIds")
     route_settings: dict[str, Any] | None = Field(default=None, alias="routeSettings")

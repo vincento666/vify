@@ -37,6 +37,7 @@ class RuntimeLabTurn:
     suspended_tasks: list[dict[str, Any]]
     resume_offer: dict[str, Any] | None
     events: list[dict[str, Any]]
+    gateway: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -1135,14 +1136,47 @@ class RuntimeLabService:
         decision: RouteDecision,
         resume_offer: dict[str, Any] | None = None,
     ) -> RuntimeLabTurn:
+        active_task = self._repository.get_active_task(session_id)
+        suspended_tasks = self._repository.list_tasks(session_id, statuses={"SUSPENDED"})
         return RuntimeLabTurn(
             reply=reply,
             route_decision=decision,
-            active_task=self._repository.get_active_task(session_id),
-            suspended_tasks=self._repository.list_tasks(session_id, statuses={"SUSPENDED"}),
+            active_task=active_task,
+            suspended_tasks=suspended_tasks,
             resume_offer=resume_offer,
             events=self._repository.list_events(session_id),
+            gateway=self._gateway_projection(session_id, reply, decision, active_task, resume_offer),
         )
+
+    def _gateway_projection(
+        self,
+        session_id: int,
+        reply: str,
+        decision: RouteDecision,
+        active_task: dict[str, Any] | None,
+        resume_offer: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        task = active_task
+        if task is None and decision.active_task_id is not None:
+            task = self._repository.get_task(int(decision.active_task_id))
+        checkpoint = self._repository.get_latest_checkpoint(int(task["id"])) if task is not None else None
+        meta = _chatflow_meta_from_checkpoint_row(checkpoint)
+        current_sop_id = str(
+            (task or {}).get("sop_id")
+            or decision.target_sop_id
+            or (resume_offer or {}).get("sopId")
+            or ""
+        )
+        return {
+            "sessionId": session_id,
+            "conversationId": f"runtime-lab:{session_id}",
+            "currentSopId": current_sop_id,
+            "runId": _int_or_none(meta.get("runId")),
+            "intent": decision.target_sop_id or current_sop_id or None,
+            "status": _gateway_status(task, decision),
+            "answer": reply,
+            "latencyMs": _decision_latency_ms(decision),
+        }
 
     def _handoff_turn(self, session_id: int, message: str, decision: RouteDecision) -> RuntimeLabTurn:
         self._repository.append_event(session_id, "HANDOFF_DECIDED", _decision_payload(decision))
@@ -2057,6 +2091,45 @@ def _sop_checkpoint_from_row(
         scoped_variables=dict(scoped_variables) if isinstance(scoped_variables, dict) else _scoped_variables(collected),
         version=1,
     )
+
+
+def _chatflow_meta_from_checkpoint_row(checkpoint: dict[str, Any] | None) -> Mapping[str, Any]:
+    if checkpoint is None:
+        return {}
+    scoped_variables = checkpoint.get("scoped_variables")
+    if not isinstance(scoped_variables, Mapping):
+        return {}
+    meta = scoped_variables.get("__chatflow")
+    return meta if isinstance(meta, Mapping) else {}
+
+
+def _int_or_none(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _gateway_status(task: dict[str, Any] | None, decision: RouteDecision) -> str:
+    if decision.action == "COMPLETE_TASK":
+        return "COMPLETED"
+    if task is None:
+        return decision.action
+    status = str(task.get("status") or "")
+    if status == "RUNNING":
+        return "WAITING"
+    return status or decision.action
+
+
+def _decision_latency_ms(decision: RouteDecision) -> int:
+    policy_gate = decision.policy_gate if isinstance(decision.policy_gate, Mapping) else {}
+    value = policy_gate.get("elapsedMs")
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _checkpoint_with_collected(checkpoint: SopCheckpoint, collected: dict[str, Any]) -> SopCheckpoint:

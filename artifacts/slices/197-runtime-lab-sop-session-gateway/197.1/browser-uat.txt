@@ -1,0 +1,1 @@
+PASS runtime lab SOP session gateway UAT session=30 screenshot=/Users/vincento/work/develop/hify/artifacts/slices/197-runtime-lab-sop-session-gateway/197.1/screenshots/runtime-lab-sop-router-session-gateway.png

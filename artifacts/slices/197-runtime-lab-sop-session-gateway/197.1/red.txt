@@ -1,0 +1,88 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/vincento/work/develop/hify
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 3 items
+
+tests/contract/test_runtime_lab_session_message_gateway_api.py FF        [ 66%]
+tests/integration/runtime_lab/test_sop_router_session_gateway.py F       [100%]
+
+=================================== FAILURES ===================================
+_ RuntimeLabSessionMessageGatewayApiContractTest.test_message_gateway_auto_creates_session_and_returns_sop_projection _
+
+self = <tests.contract.test_runtime_lab_session_message_gateway_api.RuntimeLabSessionMessageGatewayApiContractTest testMethod=test_message_gateway_auto_creates_session_and_returns_sop_projection>
+
+    def test_message_gateway_auto_creates_session_and_returns_sop_projection(self) -> None:
+        stamp = time.time_ns()
+        with TestClient(app) as client:
+            chatflow = _create_chatflow_sop(client, stamp)
+            app.dependency_overrides[get_runtime_lab_service] = _runtime_service_override(int(chatflow["id"]))
+
+            response = client.post(
+                "/api/v1/runtime-lab/messages",
+                json={"message": "我要退票", "idempotencyKey": f"runtime-lab-gateway-{stamp}"},
+            )
+
+>       self.assertEqual(response.status_code, 200, response.text)
+E       AssertionError: 404 != 200 : {"code":404,"message":"Not Found","data":null}
+
+tests/contract/test_runtime_lab_session_message_gateway_api.py:38: AssertionError
+_ RuntimeLabSessionMessageGatewayApiContractTest.test_message_gateway_reuses_session_and_links_trace_run _
+
+self = <tests.contract.test_runtime_lab_session_message_gateway_api.RuntimeLabSessionMessageGatewayApiContractTest testMethod=test_message_gateway_reuses_session_and_links_trace_run>
+
+    def test_message_gateway_reuses_session_and_links_trace_run(self) -> None:
+        stamp = time.time_ns()
+        with TestClient(app) as client:
+            chatflow = _create_chatflow_sop(client, stamp)
+            app.dependency_overrides[get_runtime_lab_service] = _runtime_service_override(int(chatflow["id"]))
+
+            first = client.post(
+                "/api/v1/runtime-lab/messages",
+                json={"message": "我要退票", "idempotencyKey": f"runtime-lab-gateway-first-{stamp}"},
+            ).json()["data"]
+            second_response = client.post(
+                "/api/v1/runtime-lab/messages",
+                json={
+>                   "sessionId": first["sessionId"],
+                                 ^^^^^^^^^^^^^^^^^^
+                    "message": "手机号 13800138000",
+                    "idempotencyKey": f"runtime-lab-gateway-second-{stamp}",
+                },
+            )
+E           TypeError: 'NoneType' object is not subscriptable
+
+tests/contract/test_runtime_lab_session_message_gateway_api.py:63: TypeError
+_ SopRouterSessionGatewayProjectionTest.test_existing_session_message_endpoint_returns_gateway_projection _
+
+self = <test_sop_router_session_gateway.SopRouterSessionGatewayProjectionTest testMethod=test_existing_session_message_endpoint_returns_gateway_projection>
+
+    def test_existing_session_message_endpoint_returns_gateway_projection(self) -> None:
+        with TestClient(app) as client:
+            created = client.post("/api/v1/runtime-lab/sessions")
+            session_id = created.json()["data"]["id"]
+            response = client.post(
+                f"/api/v1/runtime-lab/sessions/{session_id}/messages",
+                json={"message": "我要退票", "idempotencyKey": f"session-path-{time.time_ns()}"},
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        data = response.json()["data"]
+>       self.assertEqual(data["sessionId"], session_id)
+                         ^^^^^^^^^^^^^^^^^
+E       KeyError: 'sessionId'
+
+tests/integration/runtime_lab/test_sop_router_session_gateway.py:21: KeyError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/vincento/work/develop/hify/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/contract/test_runtime_lab_session_message_gateway_api.py::RuntimeLabSessionMessageGatewayApiContractTest::test_message_gateway_auto_creates_session_and_returns_sop_projection
+FAILED tests/contract/test_runtime_lab_session_message_gateway_api.py::RuntimeLabSessionMessageGatewayApiContractTest::test_message_gateway_reuses_session_and_links_trace_run
+FAILED tests/integration/runtime_lab/test_sop_router_session_gateway.py::SopRouterSessionGatewayProjectionTest::test_existing_session_message_endpoint_returns_gateway_projection
+========================= 3 failed, 1 warning in 0.97s =========================

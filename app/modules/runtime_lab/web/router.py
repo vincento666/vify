@@ -148,6 +148,19 @@ def create_session(service: RuntimeLabService = Depends(get_runtime_lab_service)
     return success(format_session(service.create_session()))
 
 
+@router.post("/messages")
+def post_gateway_message(
+    request: RuntimeLabMessageRequest,
+    service: RuntimeLabService = Depends(get_runtime_lab_service),
+    session: Session = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> dict[str, Any]:
+    runtime_session_id = request.session_id
+    if runtime_session_id is None:
+        runtime_session_id = int(service.create_session()["id"])
+    return _post_runtime_lab_message(runtime_session_id, request, service, session, settings)
+
+
 @router.post("/sessions/{session_id}/messages")
 def post_message(
     session_id: int,
@@ -155,6 +168,16 @@ def post_message(
     service: RuntimeLabService = Depends(get_runtime_lab_service),
     session: Session = Depends(get_session),
     settings: Settings = Depends(get_settings),
+) -> dict[str, Any]:
+    return _post_runtime_lab_message(session_id, request, service, session, settings)
+
+
+def _post_runtime_lab_message(
+    session_id: int,
+    request: RuntimeLabMessageRequest,
+    service: RuntimeLabService,
+    session: Session,
+    settings: Settings,
 ) -> dict[str, Any]:
     effective_policy = RuntimePolicyResolver(RuntimePolicyRepository(session), settings).resolve()
     route_settings_signature = _runtime_lab_route_settings_signature(request.route_settings)

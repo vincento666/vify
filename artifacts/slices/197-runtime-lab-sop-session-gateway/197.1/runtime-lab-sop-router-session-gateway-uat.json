@@ -1,0 +1,1522 @@
+{
+  "first": {
+    "sessionId": 30,
+    "conversationId": "runtime-lab:30",
+    "currentSopId": "refund_ticket",
+    "runId": null,
+    "intent": "refund_ticket",
+    "status": "START_SOP",
+    "answer": "SOP执行失败，请稍后重试或转人工。",
+    "latencyMs": 0,
+    "reply": "SOP执行失败，请稍后重试或转人工。",
+    "routeDecision": {
+      "action": "START_SOP",
+      "reason": "Strong explicit SOP candidate accepted before classifier: sop:refund_ticket",
+      "targetSopId": "refund_ticket",
+      "activeTaskId": null,
+      "matchedKeyword": "退票",
+      "candidates": [
+        {
+          "candidate_id": "sop:refund_ticket",
+          "candidate_type": "SOP_INTENT",
+          "target_id": "refund_ticket",
+          "display_name": "退票",
+          "source": "explicit_signal",
+          "score": 1.2,
+          "score_breakdown": {
+            "keyword": 1.2,
+            "alias": 0,
+            "semantic": 0
+          },
+          "matched_terms": [
+            "退票"
+          ],
+          "risk_level": "LOW",
+          "requires_classifier": false,
+          "reason": "Matched strong trigger template: refund_ticket:phrase"
+        },
+        {
+          "candidate_id": "sop:refund_ticket",
+          "candidate_type": "SOP_INTENT",
+          "target_id": "refund_ticket",
+          "display_name": "退票",
+          "source": "mock_semantic_recall",
+          "score": 0.78,
+          "score_breakdown": {
+            "keyword": 0,
+            "alias": 0,
+            "semantic": 0.78
+          },
+          "matched_terms": [
+            "weak_refund_request"
+          ],
+          "risk_level": "LOW",
+          "requires_classifier": true,
+          "reason": "Mock semantic fixture matched SOP intent"
+        }
+      ],
+      "candidateSources": [
+        "explicit_signal",
+        "mock_semantic_recall"
+      ],
+      "policyGate": {
+        "stage": "pre_classifier",
+        "decisionAction": "START_SOP",
+        "steps": [
+          {
+            "id": "candidate_recall",
+            "name": "candidate_recall",
+            "label": "候选召回",
+            "elapsedMs": 0,
+            "input": {
+              "message": "我要退票",
+              "enabledSopIds": null
+            },
+            "output": {
+              "candidateCount": 2,
+              "candidates": [
+                {
+                  "candidate_id": "sop:refund_ticket",
+                  "candidate_type": "SOP_INTENT",
+                  "target_id": "refund_ticket",
+                  "display_name": "退票",
+                  "source": "explicit_signal",
+                  "score": 1.2,
+                  "score_breakdown": {
+                    "keyword": 1.2,
+                    "alias": 0,
+                    "semantic": 0
+                  },
+                  "matched_terms": [
+                    "退票"
+                  ],
+                  "risk_level": "LOW",
+                  "requires_classifier": false,
+                  "reason": "Matched strong trigger template: refund_ticket:phrase"
+                },
+                {
+                  "candidate_id": "sop:refund_ticket",
+                  "candidate_type": "SOP_INTENT",
+                  "target_id": "refund_ticket",
+                  "display_name": "退票",
+                  "source": "mock_semantic_recall",
+                  "score": 0.78,
+                  "score_breakdown": {
+                    "keyword": 0,
+                    "alias": 0,
+                    "semantic": 0.78
+                  },
+                  "matched_terms": [
+                    "weak_refund_request"
+                  ],
+                  "risk_level": "LOW",
+                  "requires_classifier": true,
+                  "reason": "Mock semantic fixture matched SOP intent"
+                }
+              ]
+            },
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0,
+              "totalTokens": 0,
+              "estimated": false
+            }
+          },
+          {
+            "id": "pre_classifier_policy",
+            "name": "pre_classifier_policy",
+            "label": "轻量策略闸门",
+            "elapsedMs": 0,
+            "input": {
+              "activeTask": false,
+              "suspendedTaskCount": 0
+            },
+            "output": {
+              "decision": {
+                "action": "START_SOP",
+                "reason": "Strong explicit SOP candidate accepted before classifier: sop:refund_ticket",
+                "targetSopId": "refund_ticket",
+                "activeTaskId": null,
+                "matchedKeyword": "退票",
+                "candidates": [],
+                "candidateSources": [],
+                "policyGate": null,
+                "classifierRequest": null,
+                "classifierResult": null,
+                "finalDecision": {
+                  "action": "START_SOP",
+                  "targetSopId": "refund_ticket",
+                  "activeTaskId": null,
+                  "sourceLayer": "sop_arbitration",
+                  "reasonCode": "START_SOP"
+                },
+                "handoff": null,
+                "faqAnswer": null,
+                "ragAnswer": null,
+                "agentAnswer": null
+              }
+            },
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0,
+              "totalTokens": 0,
+              "estimated": false
+            }
+          }
+        ],
+        "elapsedMs": 0
+      },
+      "classifierRequest": null,
+      "classifierResult": null,
+      "handoff": null,
+      "faqAnswer": null,
+      "ragAnswer": null,
+      "agentAnswer": null,
+      "finalDecision": {
+        "action": "START_SOP",
+        "targetSopId": "refund_ticket",
+        "activeTaskId": null,
+        "sourceLayer": "sop_arbitration",
+        "reasonCode": "START_SOP"
+      }
+    },
+    "activeTask": null,
+    "suspendedTasks": [],
+    "resumeOffer": null,
+    "events": [
+      {
+        "id": 298,
+        "sessionId": 30,
+        "sequence": 1,
+        "eventType": "SESSION_CREATED",
+        "payload": {},
+        "createdAt": "2026-06-19T13:54:06"
+      },
+      {
+        "id": 299,
+        "sessionId": 30,
+        "sequence": 2,
+        "eventType": "USER_MESSAGE",
+        "payload": {
+          "message": "我要退票"
+        },
+        "createdAt": "2026-06-19T13:54:06"
+      },
+      {
+        "id": 300,
+        "sessionId": 30,
+        "sequence": 3,
+        "eventType": "ROUTE_DECISION",
+        "payload": {
+          "action": "START_SOP",
+          "reason": "Strong explicit SOP candidate accepted before classifier: sop:refund_ticket",
+          "handoff": null,
+          "faqAnswer": null,
+          "ragAnswer": null,
+          "candidates": [
+            {
+              "score": 1.2,
+              "reason": "Matched strong trigger template: refund_ticket:phrase",
+              "source": "explicit_signal",
+              "target_id": "refund_ticket",
+              "risk_level": "LOW",
+              "candidate_id": "sop:refund_ticket",
+              "display_name": "退票",
+              "matched_terms": [
+                "退票"
+              ],
+              "candidate_type": "SOP_INTENT",
+              "score_breakdown": {
+                "alias": 0,
+                "keyword": 1.2,
+                "semantic": 0
+              },
+              "requires_classifier": false
+            },
+            {
+              "score": 0.78,
+              "reason": "Mock semantic fixture matched SOP intent",
+              "source": "mock_semantic_recall",
+              "target_id": "refund_ticket",
+              "risk_level": "LOW",
+              "candidate_id": "sop:refund_ticket",
+              "display_name": "退票",
+              "matched_terms": [
+                "weak_refund_request"
+              ],
+              "candidate_type": "SOP_INTENT",
+              "score_breakdown": {
+                "alias": 0,
+                "keyword": 0,
+                "semantic": 0.78
+              },
+              "requires_classifier": true
+            }
+          ],
+          "policyGate": {
+            "stage": "pre_classifier",
+            "steps": [
+              {
+                "id": "candidate_recall",
+                "name": "candidate_recall",
+                "input": {
+                  "message": "我要退票",
+                  "enabledSopIds": null
+                },
+                "label": "候选召回",
+                "usage": {
+                  "estimated": false,
+                  "inputTokens": 0,
+                  "totalTokens": 0,
+                  "outputTokens": 0
+                },
+                "output": {
+                  "candidates": [
+                    {
+                      "score": 1.2,
+                      "reason": "Matched strong trigger template: refund_ticket:phrase",
+                      "source": "explicit_signal",
+                      "target_id": "refund_ticket",
+                      "risk_level": "LOW",
+                      "candidate_id": "sop:refund_ticket",
+                      "display_name": "退票",
+                      "matched_terms": [
+                        "退票"
+                      ],
+                      "candidate_type": "SOP_INTENT",
+                      "score_breakdown": {
+                        "alias": 0,
+                        "keyword": 1.2,
+                        "semantic": 0
+                      },
+                      "requires_classifier": false
+                    },
+                    {
+                      "score": 0.78,
+                      "reason": "Mock semantic fixture matched SOP intent",
+                      "source": "mock_semantic_recall",
+                      "target_id": "refund_ticket",
+                      "risk_level": "LOW",
+                      "candidate_id": "sop:refund_ticket",
+                      "display_name": "退票",
+                      "matched_terms": [
+                        "weak_refund_request"
+                      ],
+                      "candidate_type": "SOP_INTENT",
+                      "score_breakdown": {
+                        "alias": 0,
+                        "keyword": 0,
+                        "semantic": 0.78
+                      },
+                      "requires_classifier": true
+                    }
+                  ],
+                  "candidateCount": 2
+                },
+                "elapsedMs": 0
+              },
+              {
+                "id": "pre_classifier_policy",
+                "name": "pre_classifier_policy",
+                "input": {
+                  "activeTask": false,
+                  "suspendedTaskCount": 0
+                },
+                "label": "轻量策略闸门",
+                "usage": {
+                  "estimated": false,
+                  "inputTokens": 0,
+                  "totalTokens": 0,
+                  "outputTokens": 0
+                },
+                "output": {
+                  "decision": {
+                    "action": "START_SOP",
+                    "reason": "Strong explicit SOP candidate accepted before classifier: sop:refund_ticket",
+                    "handoff": null,
+                    "faqAnswer": null,
+                    "ragAnswer": null,
+                    "candidates": [],
+                    "policyGate": null,
+                    "agentAnswer": null,
+                    "targetSopId": "refund_ticket",
+                    "activeTaskId": null,
+                    "finalDecision": {
+                      "action": "START_SOP",
+                      "reasonCode": "START_SOP",
+                      "sourceLayer": "sop_arbitration",
+                      "targetSopId": "refund_ticket",
+                      "activeTaskId": null
+                    },
+                    "matchedKeyword": "退票",
+                    "candidateSources": [],
+                    "classifierResult": null,
+                    "classifierRequest": null
+                  }
+                },
+                "elapsedMs": 0
+              }
+            ],
+            "elapsedMs": 0,
+            "decisionAction": "START_SOP"
+          },
+          "agentAnswer": null,
+          "targetSopId": "refund_ticket",
+          "activeTaskId": null,
+          "finalDecision": {
+            "action": "START_SOP",
+            "reasonCode": "START_SOP",
+            "sourceLayer": "sop_arbitration",
+            "targetSopId": "refund_ticket",
+            "activeTaskId": null
+          },
+          "matchedKeyword": "退票",
+          "candidateSources": [
+            "explicit_signal",
+            "mock_semantic_recall"
+          ],
+          "classifierResult": null,
+          "classifierRequest": null
+        },
+        "createdAt": "2026-06-19T13:54:06"
+      },
+      {
+        "id": 301,
+        "sessionId": 30,
+        "sequence": 4,
+        "eventType": "ERROR",
+        "payload": {
+          "error": {
+            "code": "CHATFLOW_START_FAILED",
+            "message": "Chatflow not found",
+            "runtimeCode": "CHATFLOW_V2_START_FAILED"
+          },
+          "events": [],
+          "source": "SOP_ADAPTER"
+        },
+        "createdAt": "2026-06-19T13:54:06"
+      }
+    ]
+  },
+  "second": {
+    "sessionId": 30,
+    "conversationId": "runtime-lab:30",
+    "currentSopId": "",
+    "runId": null,
+    "intent": null,
+    "status": "AGENT_FALLBACK",
+    "answer": "我先帮您整理诉求：订单号 CA1001。该问题未匹配到标准办理流程，建议以机场或航司官方信息为准。",
+    "latencyMs": 3,
+    "reply": "我先帮您整理诉求：订单号 CA1001。该问题未匹配到标准办理流程，建议以机场或航司官方信息为准。",
+    "routeDecision": {
+      "action": "AGENT_FALLBACK",
+      "reason": "Controlled fallback Agent answered unresolved user request",
+      "targetSopId": null,
+      "activeTaskId": null,
+      "matchedKeyword": null,
+      "candidates": [
+        {
+          "candidate_id": "agent:fallback",
+          "candidate_type": "AGENT_FALLBACK",
+          "target_id": "fallback_agent",
+          "display_name": "Controlled fallback Agent",
+          "source": "agent_candidate_recall",
+          "score": 0.66,
+          "score_breakdown": {
+            "keyword": 0,
+            "alias": 0,
+            "semantic": 0.66
+          },
+          "matched_terms": [],
+          "risk_level": "MEDIUM",
+          "requires_classifier": true,
+          "reason": "No shallow or scoped finite route signal",
+          "payload": {
+            "deferred_agent": true
+          }
+        }
+      ],
+      "candidateSources": [
+        "agent_candidate_recall"
+      ],
+      "policyGate": {
+        "stage": "post_classifier",
+        "decisionAction": "AGENT_FALLBACK",
+        "steps": [
+          {
+            "id": "candidate_recall",
+            "name": "candidate_recall",
+            "label": "候选召回",
+            "elapsedMs": 2,
+            "input": {
+              "message": "订单号 CA1001",
+              "enabledSopIds": null
+            },
+            "output": {
+              "candidateCount": 0,
+              "candidates": []
+            },
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0,
+              "totalTokens": 0,
+              "estimated": false
+            }
+          },
+          {
+            "id": "agent_candidate_recall",
+            "name": "agent_candidate_recall",
+            "label": "agent_candidate_recall",
+            "elapsedMs": 0,
+            "input": {
+              "message": "订单号 CA1001",
+              "enabledSopIds": null
+            },
+            "output": {
+              "candidateCount": 1,
+              "candidates": [
+                {
+                  "candidate_id": "agent:fallback",
+                  "candidate_type": "AGENT_FALLBACK",
+                  "target_id": "fallback_agent",
+                  "display_name": "Controlled fallback Agent",
+                  "source": "agent_candidate_recall",
+                  "score": 0.66,
+                  "score_breakdown": {
+                    "keyword": 0,
+                    "alias": 0,
+                    "semantic": 0.66
+                  },
+                  "matched_terms": [],
+                  "risk_level": "MEDIUM",
+                  "requires_classifier": true,
+                  "reason": "No shallow or scoped finite route signal",
+                  "payload": {
+                    "deferred_agent": true
+                  }
+                }
+              ]
+            },
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0,
+              "totalTokens": 0,
+              "estimated": false
+            }
+          },
+          {
+            "id": "pre_classifier_policy",
+            "name": "pre_classifier_policy",
+            "label": "轻量策略闸门",
+            "elapsedMs": 0,
+            "input": {
+              "activeTask": false,
+              "suspendedTaskCount": 0
+            },
+            "output": {
+              "decision": null
+            },
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0,
+              "totalTokens": 0,
+              "estimated": false
+            }
+          },
+          {
+            "id": "llm_intent_arbitration",
+            "name": "llm_intent_arbitration",
+            "label": "LLM有限意图仲裁",
+            "elapsedMs": 0,
+            "input": {
+              "message": "订单号 CA1001",
+              "sessionState": {
+                "activeTask": false,
+                "suspendedTaskCount": 0
+              },
+              "candidates": [
+                {
+                  "candidate_id": "agent:fallback",
+                  "candidate_type": "AGENT_FALLBACK",
+                  "name": "Controlled fallback Agent",
+                  "score": 0.66,
+                  "matched_terms": [],
+                  "requires_classifier": true,
+                  "reason": "No shallow or scoped finite route signal"
+                }
+              ],
+              "allowedActions": [
+                "CONTINUE_ACTIVE_SOP",
+                "START_SOP",
+                "SUSPEND_AND_START",
+                "RESUME_TASK",
+                "CLARIFY",
+                "REJECT_SWITCH_CONTINUE_ACTIVE",
+                "ANSWER_FAQ",
+                "ANSWER_RAG",
+                "AGENT_FALLBACK"
+              ],
+              "thresholds": {
+                "classifierMinConfidence": 0.6
+              }
+            },
+            "output": {
+              "selected_action": "AGENT_FALLBACK",
+              "selected_candidate_id": "agent:fallback",
+              "confidence": 0.66,
+              "rationale": "Selected top finite candidate agent:fallback",
+              "needs_clarification": false,
+              "clarification_question": null,
+              "arbitrator_mode": "fake",
+              "used_real_llm": false
+            },
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0,
+              "totalTokens": 0,
+              "estimated": false
+            }
+          },
+          {
+            "id": "post_classifier_policy",
+            "name": "post_classifier_policy",
+            "label": "仲裁后策略闸门",
+            "elapsedMs": 0,
+            "input": {
+              "selected_action": "AGENT_FALLBACK",
+              "selected_candidate_id": "agent:fallback",
+              "confidence": 0.66,
+              "rationale": "Selected top finite candidate agent:fallback",
+              "needs_clarification": false,
+              "clarification_question": null,
+              "arbitrator_mode": "fake",
+              "used_real_llm": false
+            },
+            "output": {
+              "action": "AGENT_FALLBACK",
+              "reason": "Selected top finite candidate agent:fallback",
+              "targetSopId": null,
+              "activeTaskId": null,
+              "matchedKeyword": null,
+              "candidates": [],
+              "candidateSources": [],
+              "policyGate": null,
+              "classifierRequest": null,
+              "classifierResult": null,
+              "finalDecision": {
+                "action": "AGENT_FALLBACK",
+                "targetSopId": null,
+                "activeTaskId": null
+              },
+              "handoff": null,
+              "faqAnswer": null,
+              "ragAnswer": null,
+              "agentAnswer": {}
+            },
+            "usage": {
+              "inputTokens": 0,
+              "outputTokens": 0,
+              "totalTokens": 0,
+              "estimated": false
+            }
+          }
+        ],
+        "elapsedMs": 3
+      },
+      "classifierRequest": {
+        "message": "订单号 CA1001",
+        "sessionState": {
+          "activeTask": false,
+          "suspendedTaskCount": 0
+        },
+        "candidates": [
+          {
+            "candidate_id": "agent:fallback",
+            "candidate_type": "AGENT_FALLBACK",
+            "name": "Controlled fallback Agent",
+            "score": 0.66,
+            "matched_terms": [],
+            "requires_classifier": true,
+            "reason": "No shallow or scoped finite route signal"
+          }
+        ],
+        "allowedActions": [
+          "CONTINUE_ACTIVE_SOP",
+          "START_SOP",
+          "SUSPEND_AND_START",
+          "RESUME_TASK",
+          "CLARIFY",
+          "REJECT_SWITCH_CONTINUE_ACTIVE",
+          "ANSWER_FAQ",
+          "ANSWER_RAG",
+          "AGENT_FALLBACK"
+        ],
+        "thresholds": {
+          "classifierMinConfidence": 0.6
+        }
+      },
+      "classifierResult": {
+        "selected_action": "AGENT_FALLBACK",
+        "selected_candidate_id": "agent:fallback",
+        "confidence": 0.66,
+        "rationale": "Selected top finite candidate agent:fallback",
+        "needs_clarification": false,
+        "clarification_question": null,
+        "arbitrator_mode": "fake",
+        "used_real_llm": false
+      },
+      "handoff": null,
+      "faqAnswer": null,
+      "ragAnswer": null,
+      "agentAnswer": {
+        "sourceLayer": "agent_policy",
+        "reasonCode": "AGENT_ANSWER",
+        "responseType": "answer",
+        "answer": "我先帮您整理诉求：订单号 CA1001。该问题未匹配到标准办理流程，建议以机场或航司官方信息为准。",
+        "clarificationQuestion": "",
+        "handoffReason": "",
+        "confidence": 0.68,
+        "citations": [],
+        "safetyFlags": [],
+        "proposedActions": [],
+        "mutatesSopState": false,
+        "policyEvidence": {
+          "accepted": true
+        }
+      },
+      "finalDecision": {
+        "action": "AGENT_FALLBACK",
+        "targetSopId": null,
+        "activeTaskId": null,
+        "sourceLayer": "agent_policy",
+        "reasonCode": "AGENT_ANSWER"
+      }
+    },
+    "activeTask": null,
+    "suspendedTasks": [],
+    "resumeOffer": null,
+    "events": [
+      {
+        "id": 298,
+        "sessionId": 30,
+        "sequence": 1,
+        "eventType": "SESSION_CREATED",
+        "payload": {},
+        "createdAt": "2026-06-19T13:54:06"
+      },
+      {
+        "id": 299,
+        "sessionId": 30,
+        "sequence": 2,
+        "eventType": "USER_MESSAGE",
+        "payload": {
+          "message": "我要退票"
+        },
+        "createdAt": "2026-06-19T13:54:06"
+      },
+      {
+        "id": 300,
+        "sessionId": 30,
+        "sequence": 3,
+        "eventType": "ROUTE_DECISION",
+        "payload": {
+          "action": "START_SOP",
+          "reason": "Strong explicit SOP candidate accepted before classifier: sop:refund_ticket",
+          "handoff": null,
+          "faqAnswer": null,
+          "ragAnswer": null,
+          "candidates": [
+            {
+              "score": 1.2,
+              "reason": "Matched strong trigger template: refund_ticket:phrase",
+              "source": "explicit_signal",
+              "target_id": "refund_ticket",
+              "risk_level": "LOW",
+              "candidate_id": "sop:refund_ticket",
+              "display_name": "退票",
+              "matched_terms": [
+                "退票"
+              ],
+              "candidate_type": "SOP_INTENT",
+              "score_breakdown": {
+                "alias": 0,
+                "keyword": 1.2,
+                "semantic": 0
+              },
+              "requires_classifier": false
+            },
+            {
+              "score": 0.78,
+              "reason": "Mock semantic fixture matched SOP intent",
+              "source": "mock_semantic_recall",
+              "target_id": "refund_ticket",
+              "risk_level": "LOW",
+              "candidate_id": "sop:refund_ticket",
+              "display_name": "退票",
+              "matched_terms": [
+                "weak_refund_request"
+              ],
+              "candidate_type": "SOP_INTENT",
+              "score_breakdown": {
+                "alias": 0,
+                "keyword": 0,
+                "semantic": 0.78
+              },
+              "requires_classifier": true
+            }
+          ],
+          "policyGate": {
+            "stage": "pre_classifier",
+            "steps": [
+              {
+                "id": "candidate_recall",
+                "name": "candidate_recall",
+                "input": {
+                  "message": "我要退票",
+                  "enabledSopIds": null
+                },
+                "label": "候选召回",
+                "usage": {
+                  "estimated": false,
+                  "inputTokens": 0,
+                  "totalTokens": 0,
+                  "outputTokens": 0
+                },
+                "output": {
+                  "candidates": [
+                    {
+                      "score": 1.2,
+                      "reason": "Matched strong trigger template: refund_ticket:phrase",
+                      "source": "explicit_signal",
+                      "target_id": "refund_ticket",
+                      "risk_level": "LOW",
+                      "candidate_id": "sop:refund_ticket",
+                      "display_name": "退票",
+                      "matched_terms": [
+                        "退票"
+                      ],
+                      "candidate_type": "SOP_INTENT",
+                      "score_breakdown": {
+                        "alias": 0,
+                        "keyword": 1.2,
+                        "semantic": 0
+                      },
+                      "requires_classifier": false
+                    },
+                    {
+                      "score": 0.78,
+                      "reason": "Mock semantic fixture matched SOP intent",
+                      "source": "mock_semantic_recall",
+                      "target_id": "refund_ticket",
+                      "risk_level": "LOW",
+                      "candidate_id": "sop:refund_ticket",
+                      "display_name": "退票",
+                      "matched_terms": [
+                        "weak_refund_request"
+                      ],
+                      "candidate_type": "SOP_INTENT",
+                      "score_breakdown": {
+                        "alias": 0,
+                        "keyword": 0,
+                        "semantic": 0.78
+                      },
+                      "requires_classifier": true
+                    }
+                  ],
+                  "candidateCount": 2
+                },
+                "elapsedMs": 0
+              },
+              {
+                "id": "pre_classifier_policy",
+                "name": "pre_classifier_policy",
+                "input": {
+                  "activeTask": false,
+                  "suspendedTaskCount": 0
+                },
+                "label": "轻量策略闸门",
+                "usage": {
+                  "estimated": false,
+                  "inputTokens": 0,
+                  "totalTokens": 0,
+                  "outputTokens": 0
+                },
+                "output": {
+                  "decision": {
+                    "action": "START_SOP",
+                    "reason": "Strong explicit SOP candidate accepted before classifier: sop:refund_ticket",
+                    "handoff": null,
+                    "faqAnswer": null,
+                    "ragAnswer": null,
+                    "candidates": [],
+                    "policyGate": null,
+                    "agentAnswer": null,
+                    "targetSopId": "refund_ticket",
+                    "activeTaskId": null,
+                    "finalDecision": {
+                      "action": "START_SOP",
+                      "reasonCode": "START_SOP",
+                      "sourceLayer": "sop_arbitration",
+                      "targetSopId": "refund_ticket",
+                      "activeTaskId": null
+                    },
+                    "matchedKeyword": "退票",
+                    "candidateSources": [],
+                    "classifierResult": null,
+                    "classifierRequest": null
+                  }
+                },
+                "elapsedMs": 0
+              }
+            ],
+            "elapsedMs": 0,
+            "decisionAction": "START_SOP"
+          },
+          "agentAnswer": null,
+          "targetSopId": "refund_ticket",
+          "activeTaskId": null,
+          "finalDecision": {
+            "action": "START_SOP",
+            "reasonCode": "START_SOP",
+            "sourceLayer": "sop_arbitration",
+            "targetSopId": "refund_ticket",
+            "activeTaskId": null
+          },
+          "matchedKeyword": "退票",
+          "candidateSources": [
+            "explicit_signal",
+            "mock_semantic_recall"
+          ],
+          "classifierResult": null,
+          "classifierRequest": null
+        },
+        "createdAt": "2026-06-19T13:54:06"
+      },
+      {
+        "id": 301,
+        "sessionId": 30,
+        "sequence": 4,
+        "eventType": "ERROR",
+        "payload": {
+          "error": {
+            "code": "CHATFLOW_START_FAILED",
+            "message": "Chatflow not found",
+            "runtimeCode": "CHATFLOW_V2_START_FAILED"
+          },
+          "events": [],
+          "source": "SOP_ADAPTER"
+        },
+        "createdAt": "2026-06-19T13:54:06"
+      },
+      {
+        "id": 302,
+        "sessionId": 30,
+        "sequence": 5,
+        "eventType": "USER_MESSAGE",
+        "payload": {
+          "message": "订单号 CA1001"
+        },
+        "createdAt": "2026-06-19T13:54:06"
+      },
+      {
+        "id": 303,
+        "sessionId": 30,
+        "sequence": 6,
+        "eventType": "ROUTE_DECISION",
+        "payload": {
+          "action": "AGENT_FALLBACK",
+          "reason": "Selected top finite candidate agent:fallback",
+          "handoff": null,
+          "faqAnswer": null,
+          "ragAnswer": null,
+          "candidates": [
+            {
+              "score": 0.66,
+              "reason": "No shallow or scoped finite route signal",
+              "source": "agent_candidate_recall",
+              "payload": {
+                "deferred_agent": true
+              },
+              "target_id": "fallback_agent",
+              "risk_level": "MEDIUM",
+              "candidate_id": "agent:fallback",
+              "display_name": "Controlled fallback Agent",
+              "matched_terms": [],
+              "candidate_type": "AGENT_FALLBACK",
+              "score_breakdown": {
+                "alias": 0,
+                "keyword": 0,
+                "semantic": 0.66
+              },
+              "requires_classifier": true
+            }
+          ],
+          "policyGate": {
+            "stage": "post_classifier",
+            "steps": [
+              {
+                "id": "candidate_recall",
+                "name": "candidate_recall",
+                "input": {
+                  "message": "订单号 CA1001",
+                  "enabledSopIds": null
+                },
+                "label": "候选召回",
+                "usage": {
+                  "estimated": false,
+                  "inputTokens": 0,
+                  "totalTokens": 0,
+                  "outputTokens": 0
+                },
+                "output": {
+                  "candidates": [],
+                  "candidateCount": 0
+                },
+                "elapsedMs": 2
+              },
+              {
+                "id": "agent_candidate_recall",
+                "name": "agent_candidate_recall",
+                "input": {
+                  "message": "订单号 CA1001",
+                  "enabledSopIds": null
+                },
+                "label": "agent_candidate_recall",
+                "usage": {
+                  "estimated": false,
+                  "inputTokens": 0,
+                  "totalTokens": 0,
+                  "outputTokens": 0
+                },
+                "output": {
+                  "candidates": [
+                    {
+                      "score": 0.66,
+                      "reason": "No shallow or scoped finite route signal",
+                      "source": "agent_candidate_recall",
+                      "payload": {
+                        "deferred_agent": true
+                      },
+                      "target_id": "fallback_agent",
+                      "risk_level": "MEDIUM",
+                      "candidate_id": "agent:fallback",
+                      "display_name": "Controlled fallback Agent",
+                      "matched_terms": [],
+                      "candidate_type": "AGENT_FALLBACK",
+                      "score_breakdown": {
+                        "alias": 0,
+                        "keyword": 0,
+                        "semantic": 0.66
+                      },
+                      "requires_classifier": true
+                    }
+                  ],
+                  "candidateCount": 1
+                },
+                "elapsedMs": 0
+              },
+              {
+                "id": "pre_classifier_policy",
+                "name": "pre_classifier_policy",
+                "input": {
+                  "activeTask": false,
+                  "suspendedTaskCount": 0
+                },
+                "label": "轻量策略闸门",
+                "usage": {
+                  "estimated": false,
+                  "inputTokens": 0,
+                  "totalTokens": 0,
+                  "outputTokens": 0
+                },
+                "output": {
+                  "decision": null
+                },
+                "elapsedMs": 0
+              },
+              {
+                "id": "llm_intent_arbitration",
+                "name": "llm_intent_arbitration",
+                "input": {
+                  "message": "订单号 CA1001",
+                  "candidates": [
+                    {
+                      "name": "Controlled fallback Agent",
+                      "score": 0.66,
+                      "reason": "No shallow or scoped finite route signal",
+                      "candidate_id": "agent:fallback",
+                      "matched_terms": [],
+                      "candidate_type": "AGENT_FALLBACK",
+                      "requires_classifier": true
+                    }
+                  ],
+                  "thresholds": {
+                    "classifierMinConfidence": 0.6
+                  },
+                  "sessionState": {
+                    "activeTask": false,
+                    "suspendedTaskCount": 0
+                  },
+                  "allowedActions": [
+                    "CONTINUE_ACTIVE_SOP",
+                    "START_SOP",
+                    "SUSPEND_AND_START",
+                    "RESUME_TASK",
+                    "CLARIFY",
+                    "REJECT_SWITCH_CONTINUE_ACTIVE",
+                    "ANSWER_FAQ",
+                    "ANSWER_RAG",
+                    "AGENT_FALLBACK"
+                  ]
+                },
+                "label": "LLM有限意图仲裁",
+                "usage": {
+                  "estimated": false,
+                  "inputTokens": 0,
+                  "totalTokens": 0,
+                  "outputTokens": 0
+                },
+                "output": {
+                  "rationale": "Selected top finite candidate agent:fallback",
+                  "confidence": 0.66,
+                  "used_real_llm": false,
+                  "arbitrator_mode": "fake",
+                  "selected_action": "AGENT_FALLBACK",
+                  "needs_clarification": false,
+                  "selected_candidate_id": "agent:fallback",
+                  "clarification_question": null
+                },
+                "elapsedMs": 0
+              },
+              {
+                "id": "post_classifier_policy",
+                "name": "post_classifier_policy",
+                "input": {
+                  "rationale": "Selected top finite candidate agent:fallback",
+                  "confidence": 0.66,
+                  "used_real_llm": false,
+                  "arbitrator_mode": "fake",
+                  "selected_action": "AGENT_FALLBACK",
+                  "needs_clarification": false,
+                  "selected_candidate_id": "agent:fallback",
+                  "clarification_question": null
+                },
+                "label": "仲裁后策略闸门",
+                "usage": {
+                  "estimated": false,
+                  "inputTokens": 0,
+                  "totalTokens": 0,
+                  "outputTokens": 0
+                },
+                "output": {
+                  "action": "AGENT_FALLBACK",
+                  "reason": "Selected top finite candidate agent:fallback",
+                  "handoff": null,
+                  "faqAnswer": null,
+                  "ragAnswer": null,
+                  "candidates": [],
+                  "policyGate": null,
+                  "agentAnswer": {},
+                  "targetSopId": null,
+                  "activeTaskId": null,
+                  "finalDecision": {
+                    "action": "AGENT_FALLBACK",
+                    "targetSopId": null,
+                    "activeTaskId": null
+                  },
+                  "matchedKeyword": null,
+                  "candidateSources": [],
+                  "classifierResult": null,
+                  "classifierRequest": null
+                },
+                "elapsedMs": 0
+              }
+            ],
+            "elapsedMs": 3,
+            "decisionAction": "AGENT_FALLBACK"
+          },
+          "agentAnswer": {},
+          "targetSopId": null,
+          "activeTaskId": null,
+          "finalDecision": {
+            "action": "AGENT_FALLBACK",
+            "targetSopId": null,
+            "activeTaskId": null
+          },
+          "matchedKeyword": null,
+          "candidateSources": [
+            "agent_candidate_recall"
+          ],
+          "classifierResult": {
+            "rationale": "Selected top finite candidate agent:fallback",
+            "confidence": 0.66,
+            "used_real_llm": false,
+            "arbitrator_mode": "fake",
+            "selected_action": "AGENT_FALLBACK",
+            "needs_clarification": false,
+            "selected_candidate_id": "agent:fallback",
+            "clarification_question": null
+          },
+          "classifierRequest": {
+            "message": "订单号 CA1001",
+            "candidates": [
+              {
+                "name": "Controlled fallback Agent",
+                "score": 0.66,
+                "reason": "No shallow or scoped finite route signal",
+                "candidate_id": "agent:fallback",
+                "matched_terms": [],
+                "candidate_type": "AGENT_FALLBACK",
+                "requires_classifier": true
+              }
+            ],
+            "thresholds": {
+              "classifierMinConfidence": 0.6
+            },
+            "sessionState": {
+              "activeTask": false,
+              "suspendedTaskCount": 0
+            },
+            "allowedActions": [
+              "CONTINUE_ACTIVE_SOP",
+              "START_SOP",
+              "SUSPEND_AND_START",
+              "RESUME_TASK",
+              "CLARIFY",
+              "REJECT_SWITCH_CONTINUE_ACTIVE",
+              "ANSWER_FAQ",
+              "ANSWER_RAG",
+              "AGENT_FALLBACK"
+            ]
+          }
+        },
+        "createdAt": "2026-06-19T13:54:06"
+      },
+      {
+        "id": 304,
+        "sessionId": 30,
+        "sequence": 7,
+        "eventType": "AGENT_POLICY_DECISION",
+        "payload": {
+          "action": "AGENT_FALLBACK",
+          "reason": "Controlled fallback Agent answered unresolved user request",
+          "handoff": null,
+          "faqAnswer": null,
+          "ragAnswer": null,
+          "candidates": [
+            {
+              "score": 0.66,
+              "reason": "No shallow or scoped finite route signal",
+              "source": "agent_candidate_recall",
+              "payload": {
+                "deferred_agent": true
+              },
+              "target_id": "fallback_agent",
+              "risk_level": "MEDIUM",
+              "candidate_id": "agent:fallback",
+              "display_name": "Controlled fallback Agent",
+              "matched_terms": [],
+              "candidate_type": "AGENT_FALLBACK",
+              "score_breakdown": {
+                "alias": 0,
+                "keyword": 0,
+                "semantic": 0.66
+              },
+              "requires_classifier": true
+            }
+          ],
+          "policyGate": {
+            "stage": "post_classifier",
+            "steps": [
+              {
+                "id": "candidate_recall",
+                "name": "candidate_recall",
+                "input": {
+                  "message": "订单号 CA1001",
+                  "enabledSopIds": null
+                },
+                "label": "候选召回",
+                "usage": {
+                  "estimated": false,
+                  "inputTokens": 0,
+                  "totalTokens": 0,
+                  "outputTokens": 0
+                },
+                "output": {
+                  "candidates": [],
+                  "candidateCount": 0
+                },
+                "elapsedMs": 2
+              },
+              {
+                "id": "agent_candidate_recall",
+                "name": "agent_candidate_recall",
+                "input": {
+                  "message": "订单号 CA1001",
+                  "enabledSopIds": null
+                },
+                "label": "agent_candidate_recall",
+                "usage": {
+                  "estimated": false,
+                  "inputTokens": 0,
+                  "totalTokens": 0,
+                  "outputTokens": 0
+                },
+                "output": {
+                  "candidates": [
+                    {
+                      "score": 0.66,
+                      "reason": "No shallow or scoped finite route signal",
+                      "source": "agent_candidate_recall",
+                      "payload": {
+                        "deferred_agent": true
+                      },
+                      "target_id": "fallback_agent",
+                      "risk_level": "MEDIUM",
+                      "candidate_id": "agent:fallback",
+                      "display_name": "Controlled fallback Agent",
+                      "matched_terms": [],
+                      "candidate_type": "AGENT_FALLBACK",
+                      "score_breakdown": {
+                        "alias": 0,
+                        "keyword": 0,
+                        "semantic": 0.66
+                      },
+                      "requires_classifier": true
+                    }
+                  ],
+                  "candidateCount": 1
+                },
+                "elapsedMs": 0
+              },
+              {
+                "id": "pre_classifier_policy",
+                "name": "pre_classifier_policy",
+                "input": {
+                  "activeTask": false,
+                  "suspendedTaskCount": 0
+                },
+                "label": "轻量策略闸门",
+                "usage": {
+                  "estimated": false,
+                  "inputTokens": 0,
+                  "totalTokens": 0,
+                  "outputTokens": 0
+                },
+                "output": {
+                  "decision": null
+                },
+                "elapsedMs": 0
+              },
+              {
+                "id": "llm_intent_arbitration",
+                "name": "llm_intent_arbitration",
+                "input": {
+                  "message": "订单号 CA1001",
+                  "candidates": [
+                    {
+                      "name": "Controlled fallback Agent",
+                      "score": 0.66,
+                      "reason": "No shallow or scoped finite route signal",
+                      "candidate_id": "agent:fallback",
+                      "matched_terms": [],
+                      "candidate_type": "AGENT_FALLBACK",
+                      "requires_classifier": true
+                    }
+                  ],
+                  "thresholds": {
+                    "classifierMinConfidence": 0.6
+                  },
+                  "sessionState": {
+                    "activeTask": false,
+                    "suspendedTaskCount": 0
+                  },
+                  "allowedActions": [
+                    "CONTINUE_ACTIVE_SOP",
+                    "START_SOP",
+                    "SUSPEND_AND_START",
+                    "RESUME_TASK",
+                    "CLARIFY",
+                    "REJECT_SWITCH_CONTINUE_ACTIVE",
+                    "ANSWER_FAQ",
+                    "ANSWER_RAG",
+                    "AGENT_FALLBACK"
+                  ]
+                },
+                "label": "LLM有限意图仲裁",
+                "usage": {
+                  "estimated": false,
+                  "inputTokens": 0,
+                  "totalTokens": 0,
+                  "outputTokens": 0
+                },
+                "output": {
+                  "rationale": "Selected top finite candidate agent:fallback",
+                  "confidence": 0.66,
+                  "used_real_llm": false,
+                  "arbitrator_mode": "fake",
+                  "selected_action": "AGENT_FALLBACK",
+                  "needs_clarification": false,
+                  "selected_candidate_id": "agent:fallback",
+                  "clarification_question": null
+                },
+                "elapsedMs": 0
+              },
+              {
+                "id": "post_classifier_policy",
+                "name": "post_classifier_policy",
+                "input": {
+                  "rationale": "Selected top finite candidate agent:fallback",
+                  "confidence": 0.66,
+                  "used_real_llm": false,
+                  "arbitrator_mode": "fake",
+                  "selected_action": "AGENT_FALLBACK",
+                  "needs_clarification": false,
+                  "selected_candidate_id": "agent:fallback",
+                  "clarification_question": null
+                },
+                "label": "仲裁后策略闸门",
+                "usage": {
+                  "estimated": false,
+                  "inputTokens": 0,
+                  "totalTokens": 0,
+                  "outputTokens": 0
+                },
+                "output": {
+                  "action": "AGENT_FALLBACK",
+                  "reason": "Selected top finite candidate agent:fallback",
+                  "handoff": null,
+                  "faqAnswer": null,
+                  "ragAnswer": null,
+                  "candidates": [],
+                  "policyGate": null,
+                  "agentAnswer": {},
+                  "targetSopId": null,
+                  "activeTaskId": null,
+                  "finalDecision": {
+                    "action": "AGENT_FALLBACK",
+                    "targetSopId": null,
+                    "activeTaskId": null
+                  },
+                  "matchedKeyword": null,
+                  "candidateSources": [],
+                  "classifierResult": null,
+                  "classifierRequest": null
+                },
+                "elapsedMs": 0
+              }
+            ],
+            "elapsedMs": 3,
+            "decisionAction": "AGENT_FALLBACK"
+          },
+          "agentAnswer": {
+            "answer": "我先帮您整理诉求：订单号 CA1001。该问题未匹配到标准办理流程，建议以机场或航司官方信息为准。",
+            "citations": [],
+            "confidence": 0.68,
+            "reasonCode": "AGENT_ANSWER",
+            "safetyFlags": [],
+            "sourceLayer": "agent_policy",
+            "responseType": "answer",
+            "handoffReason": "",
+            "policyEvidence": {
+              "accepted": true
+            },
+            "mutatesSopState": false,
+            "proposedActions": [],
+            "clarificationQuestion": ""
+          },
+          "targetSopId": null,
+          "activeTaskId": null,
+          "finalDecision": {
+            "action": "AGENT_FALLBACK",
+            "reasonCode": "AGENT_ANSWER",
+            "sourceLayer": "agent_policy",
+            "targetSopId": null,
+            "activeTaskId": null
+          },
+          "matchedKeyword": null,
+          "candidateSources": [
+            "agent_candidate_recall"
+          ],
+          "classifierResult": {
+            "rationale": "Selected top finite candidate agent:fallback",
+            "confidence": 0.66,
+            "used_real_llm": false,
+            "arbitrator_mode": "fake",
+            "selected_action": "AGENT_FALLBACK",
+            "needs_clarification": false,
+            "selected_candidate_id": "agent:fallback",
+            "clarification_question": null
+          },
+          "classifierRequest": {
+            "message": "订单号 CA1001",
+            "candidates": [
+              {
+                "name": "Controlled fallback Agent",
+                "score": 0.66,
+                "reason": "No shallow or scoped finite route signal",
+                "candidate_id": "agent:fallback",
+                "matched_terms": [],
+                "candidate_type": "AGENT_FALLBACK",
+                "requires_classifier": true
+              }
+            ],
+            "thresholds": {
+              "classifierMinConfidence": 0.6
+            },
+            "sessionState": {
+              "activeTask": false,
+              "suspendedTaskCount": 0
+            },
+            "allowedActions": [
+              "CONTINUE_ACTIVE_SOP",
+              "START_SOP",
+              "SUSPEND_AND_START",
+              "RESUME_TASK",
+              "CLARIFY",
+              "REJECT_SWITCH_CONTINUE_ACTIVE",
+              "ANSWER_FAQ",
+              "ANSWER_RAG",
+              "AGENT_FALLBACK"
+            ]
+          }
+        },
+        "createdAt": "2026-06-19T13:54:06"
+      },
+      {
+        "id": 305,
+        "sessionId": 30,
+        "sequence": 8,
+        "eventType": "AGENT_FALLBACK_ANSWERED",
+        "payload": {
+          "answer": "我先帮您整理诉求：订单号 CA1001。该问题未匹配到标准办理流程，建议以机场或航司官方信息为准。",
+          "citations": [],
+          "confidence": 0.68,
+          "reasonCode": "AGENT_ANSWER",
+          "safetyFlags": [],
+          "sourceLayer": "agent_policy",
+          "responseType": "answer",
+          "handoffReason": "",
+          "policyEvidence": {
+            "accepted": true
+          },
+          "mutatesSopState": false,
+          "proposedActions": [],
+          "clarificationQuestion": ""
+        },
+        "createdAt": "2026-06-19T13:54:06"
+      }
+    ]
+  },
+  "eventTypes": [
+    "SESSION_CREATED",
+    "USER_MESSAGE",
+    "ROUTE_DECISION",
+    "ERROR",
+    "USER_MESSAGE",
+    "ROUTE_DECISION",
+    "AGENT_POLICY_DECISION",
+    "AGENT_FALLBACK_ANSWERED"
+  ],
+  "eventsTotal": 8
+}
