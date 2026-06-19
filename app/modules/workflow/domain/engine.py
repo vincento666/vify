@@ -210,7 +210,11 @@ class LlmNodeExecutor:
             str(node["node_key"]),
             output_variable,
             answer,
-            {"toolCalls": tool_calls, **_debug_extra_from_completer(self._completer)},
+            {
+                "toolCalls": tool_calls,
+                "toolSettings": _llm_tool_settings(config),
+                **_debug_extra_from_completer(self._completer),
+            },
         )
 
     def _output_with_stream_events(
@@ -967,10 +971,24 @@ class MessageNodeExecutor:
         output_variable = str(config.get("outputVariable") or "content")
         content = context.render(str(config.get("content") or config.get("message") or ""))
         stream_output = str(config.get("streamOutput") or "inherit").lower()
+        stream_target = str(config.get("streamTarget") or "message").strip() or "message"
+        fallback_mode = str(config.get("fallbackMode") or "aggregate").strip() or "aggregate"
         events: list[dict[str, Any]] = []
         if stream_output in {"enabled", "true", "1", "inherit"}:
-            events.append({"type": "message_delta", "nodeKey": node["node_key"], "content": content})
-        events.append({"type": "message_done", "nodeKey": node["node_key"], "content": content})
+            events.append({
+                "type": "message_delta",
+                "nodeKey": node["node_key"],
+                "content": content,
+                "target": stream_target,
+                "fallbackMode": fallback_mode,
+            })
+        events.append({
+            "type": "message_done",
+            "nodeKey": node["node_key"],
+            "content": content,
+            "target": stream_target,
+            "fallbackMode": fallback_mode,
+        })
         return {
             output_variable: content,
             "content": content,
@@ -1000,6 +1018,8 @@ class QuestionNodeExecutor:
                 "question": question,
                 "answerType": str(config.get("answerType") or "text"),
                 "options": config.get("options") if isinstance(config.get("options"), list) else [],
+                "resumeBehavior": str(config.get("resumeBehavior") or "wait"),
+                "timeoutSeconds": _non_negative_int(config.get("timeoutSeconds") or config.get("timeout_seconds"), default=0),
             },
             "events": [
                 {"type": "message_done", "nodeKey": node_key, "content": question},
@@ -1030,6 +1050,7 @@ class HumanInputNodeExecutor:
                 "prompt": prompt,
                 "approvalMode": str(config.get("approvalMode") or "input"),
                 "assigneeRole": str(config.get("assigneeRole") or ""),
+                "inputSchema": config.get("inputSchema") if isinstance(config.get("inputSchema"), list) else [],
             },
             "events": [
                 {"type": "interrupt", "nodeKey": node_key, "interruptType": "HUMAN_INPUT"},
@@ -1155,6 +1176,9 @@ class InformationCollectionNodeExecutor:
         }
         if not missing:
             _write_collection_targets(fields, collected, context)
+            if _bool_setting(config.get("writeToConversation"), default=False):
+                for key, value in collected.items():
+                    context.set_scope_value("conversation", str(key), value, "set")
             usage = output.get("__usage")
             if isinstance(usage, Mapping):
                 output["events"] = [_node_usage_event(node_key, usage)]
@@ -2568,6 +2592,14 @@ def _tool_choice_mode(config: dict[str, Any]) -> str:
     return str(config.get("toolChoiceMode") or config.get("tool_choice") or "auto").strip().lower()
 
 
+def _llm_tool_settings(config: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "toolChoiceMode": _tool_choice_mode(config),
+        "maxToolRounds": _positive_int(config.get("maxToolRounds") or config.get("max_tool_rounds"), default=1),
+        "toolResultMode": str(config.get("toolResultMode") or config.get("tool_result_mode") or "append").strip().lower(),
+    }
+
+
 def _callable_tool_server_ids(resources: list[dict[str, Any]]) -> list[int]:
     ids: list[int] = []
     for resource in resources:
@@ -2808,6 +2840,8 @@ def _llm_options(config: dict[str, Any]) -> dict[str, Any]:
         "stop",
         "seed",
         "toolChoiceMode",
+        "maxToolRounds",
+        "toolResultMode",
     }
     return {key: config[key] for key in keys if key in config}
 

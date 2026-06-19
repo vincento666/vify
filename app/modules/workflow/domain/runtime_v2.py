@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
@@ -10,9 +10,15 @@ from app.core.errors import BizError, ErrorCode
 from app.modules.knowledge.api.facade import KnowledgeFacade
 from app.modules.workflow.domain.context import ExecutionContext
 from app.modules.workflow.domain.engine import (
+    AgentCallNodeExecutor,
+    AgentInvocationFacade,
+    ApiCallNodeExecutor,
+    ApiToolExecutor,
+    CodeNodeExecutor,
     ConditionBranchPicker,
     ConditionNodeExecutor,
     EndNodeExecutor,
+    ExecuteWorkflowNodeExecutor,
     HumanInputNodeExecutor,
     InformationCollectionNodeExecutor,
     IntentRecognitionNodeExecutor,
@@ -20,13 +26,17 @@ from app.modules.workflow.domain.engine import (
     KnowledgeNodeExecutor,
     LlmNodeExecutor,
     TextProcessNodeExecutor,
+    ToolCallNodeExecutor,
     VariableAggregationNodeExecutor,
     VariableAssignNodeExecutor,
     WorkflowInterrupt,
     WorkflowLlmCompleter,
-    _mapped_arguments,
-    _mapped_output,
-    _target_workflow_id,
+)
+from app.modules.chat.domain.tool_runner import McpToolExecutor
+from app.modules.workflow.domain.graph_validation import (
+    validate_node_contracts,
+    validate_node_endpoints,
+    validate_variable_references,
 )
 from app.modules.workflow.infra.chatflow_state_repository import ChatflowStateRepository
 from app.modules.workflow.infra.publish_repository import WorkflowPublishRepository
@@ -41,6 +51,7 @@ _SUPPORTED_CORE_NODE_TYPES = {
     "QUESTION",
     "HUMAN_INPUT",
     "LLM",
+    "CODE",
     "TEXT_PROCESS",
     "JSON_PARSE",
     "VARIABLE_ASSIGN",
@@ -49,13 +60,18 @@ _SUPPORTED_CORE_NODE_TYPES = {
     "INTENT_RECOGNITION",
     "INFORMATION_COLLECTION",
     "KNOWLEDGE",
+    "API_CALL",
+    "TOOL_CALL",
     "EXECUTE_WORKFLOW",
     "TRANSFER_TO_HUMAN",
+    "AGENT_CALL",
     "END",
 }
 _RUNTIME_V2_CANCELLABLE_STATUSES = {"RUNNING", "INTERRUPTED"}
 _RUNTIME_V2_TERMINAL_STATUSES = {"SUCCEEDED", "FAILED", "CANCELLED"}
+_RUNTIME_V2_ERROR_POLICY_NODE_TYPES = {"LLM", "API_CALL", "TOOL_CALL", "CODE", "EXECUTE_WORKFLOW", "AGENT_CALL"}
 RuntimeV2LlmCompleterResolver = Callable[[int], WorkflowLlmCompleter | None]
+RuntimeV2AgentInvokerResolver = Callable[[int], AgentInvocationFacade | None]
 
 
 class RuntimeV2RefBuilder:
@@ -81,10 +97,12 @@ class RuntimeV2CompatibilityChecker:
     def check(nodes: list[dict[str, Any]], edges: list[dict[str, Any]]) -> dict[str, Any]:
         unsupported_nodes: list[dict[str, str]] = []
         node_types_by_key: dict[str, str] = {}
+        node_configs_by_key: dict[str, dict[str, Any]] = {}
         for node in nodes:
             node_type = str(node.get("type") or "").upper()
             node_key = str(node.get("nodeKey") or node.get("node_key") or "")
             node_types_by_key[node_key] = node_type
+            node_configs_by_key[node_key] = dict(node.get("config") or {})
             if node_type not in _SUPPORTED_CORE_NODE_TYPES:
                 unsupported_nodes.append(
                     {
@@ -93,6 +111,15 @@ class RuntimeV2CompatibilityChecker:
                     }
                 )
                 continue
+            config = dict(node.get("config") or {})
+            if node_type == "API_CALL":
+                reason = _runtime_v2_api_call_unsupported_reason(config)
+                if reason:
+                    unsupported_nodes.append({"nodeKey": node_key, "nodeType": node_type, "reason": reason})
+            if node_type == "TOOL_CALL":
+                reason = _runtime_v2_tool_call_unsupported_reason(config)
+                if reason:
+                    unsupported_nodes.append({"nodeKey": node_key, "nodeType": node_type, "reason": reason})
             if node_type == "INFORMATION_COLLECTION" and _requires_llm_information_collection(dict(node.get("config") or {})):
                 unsupported_nodes.append(
                     {
@@ -107,15 +134,37 @@ class RuntimeV2CompatibilityChecker:
             source = str(edge.get("sourceNodeKey") or edge.get("source_node_key") or "")
             outgoing_counts[source] = outgoing_counts.get(source, 0) + 1
         for source, count in outgoing_counts.items():
-            if count > 1 and node_types_by_key.get(source) not in {"CONDITION", "INTENT_RECOGNITION"}:
+            source_type = node_types_by_key.get(source)
+            source_config = node_configs_by_key.get(source, {})
+            if (
+                count > 1
+                and source_type not in {"CONDITION", "INTENT_RECOGNITION"}
+                and not _runtime_v2_allows_error_branching(str(source_type or ""), source_config)
+            ):
                 if "branching_edges" not in unsupported_patterns:
                     unsupported_patterns.append("branching_edges")
-        supported = not unsupported_nodes and not unsupported_patterns
+        endpoint_issues = validate_node_endpoints(nodes, edges)
+        contract_issues = validate_node_contracts(nodes)
+        reference_issues = validate_variable_references(nodes)
+        validation_issues = [*endpoint_issues, *contract_issues, *reference_issues]
+        branch_validation_errors = [issue["code"] for issue in validation_issues]
+        has_branch_endpoint_issue = any(issue["nodeType"] in {"CONDITION", "INTENT_RECOGNITION"} for issue in endpoint_issues)
+        has_regular_endpoint_issue = any(issue["nodeType"] not in {"CONDITION", "INTENT_RECOGNITION"} for issue in endpoint_issues)
+        if has_branch_endpoint_issue and "branch_edges_incomplete" not in unsupported_patterns:
+            unsupported_patterns.append("branch_edges_incomplete")
+        if has_regular_endpoint_issue and "node_endpoints_incomplete" not in unsupported_patterns:
+            unsupported_patterns.append("node_endpoints_incomplete")
+        if contract_issues and "node_contract_invalid" not in unsupported_patterns:
+            unsupported_patterns.append("node_contract_invalid")
+        if reference_issues and "variable_references_invalid" not in unsupported_patterns:
+            unsupported_patterns.append("variable_references_invalid")
+        supported = not unsupported_nodes and not unsupported_patterns and not branch_validation_errors
         return {
             "supported": supported,
             "fallbackScope": "" if supported else "whole_graph",
             "unsupportedNodes": unsupported_nodes,
             "unsupportedPatterns": unsupported_patterns,
+            "branchValidationErrors": branch_validation_errors,
             "supportedNodeTypes": sorted(_SUPPORTED_CORE_NODE_TYPES),
         }
 
@@ -149,6 +198,9 @@ class ChatflowRuntimeV2Service:
         knowledge_facade: KnowledgeFacade | None = None,
         llm_completer: WorkflowLlmCompleter | None = None,
         llm_completer_resolver: RuntimeV2LlmCompleterResolver | None = None,
+        agent_invoker_resolver: RuntimeV2AgentInvokerResolver | None = None,
+        mcp_tool_executor: McpToolExecutor | None = None,
+        api_tool_executor: ApiToolExecutor | None = None,
     ) -> None:
         self._repository = repository
         self._state_repository = state_repository
@@ -160,7 +212,11 @@ class ChatflowRuntimeV2Service:
         self._knowledge_facade = knowledge_facade
         self._llm_completer = llm_completer
         self._llm_completer_resolver = llm_completer_resolver
+        self._agent_invoker_resolver = agent_invoker_resolver
+        self._mcp_tool_executor = mcp_tool_executor
+        self._api_tool_executor = api_tool_executor
         self._llm_completer_cache: dict[int, WorkflowLlmCompleter | None] = {}
+        self._agent_invoker_cache: dict[int, AgentInvocationFacade | None] = {}
 
     def start_run(
         self,
@@ -549,6 +605,7 @@ class ChatflowRuntimeV2Service:
     ) -> dict[str, Any]:
         node_key = str(node["node_key"])
         node_type = str(node["type"]).upper()
+        started_at = time.perf_counter()
         node_run_id = self._repository.create_node_run(run_id, node_key, node_type, inputs=input_data)
         self._append_event(
             session_id=session_id,
@@ -577,6 +634,8 @@ class ChatflowRuntimeV2Service:
                 output = self._question_output(chatflow_id, run_id, session_id, node, context, input_data)
             elif node_type == "HUMAN_INPUT":
                 output = HumanInputNodeExecutor().execute(node, context)
+            elif node_type == "CODE":
+                output = CodeNodeExecutor().execute(node, context)
             elif node_type == "TEXT_PROCESS":
                 output = TextProcessNodeExecutor().execute(node, context)
             elif node_type == "JSON_PARSE":
@@ -592,15 +651,33 @@ class ChatflowRuntimeV2Service:
             elif node_type == "INFORMATION_COLLECTION":
                 output = InformationCollectionNodeExecutor().execute(node, context)
             elif node_type == "LLM":
-                output = LlmNodeExecutor(self._llm_completer_for(chatflow_id), self._knowledge_facade).execute(node, context)
+                output = LlmNodeExecutor(
+                    self._llm_completer_for(chatflow_id),
+                    self._knowledge_facade,
+                    self._mcp_tool_executor,
+                ).execute(node, context)
             elif node_type == "KNOWLEDGE":
                 if self._knowledge_facade is None:
                     raise ValueError("Runtime v2 KNOWLEDGE node requires KnowledgeFacade")
                 output = KnowledgeNodeExecutor(self._knowledge_facade).execute(node, context)
+            elif node_type == "API_CALL":
+                reason = _runtime_v2_api_call_unsupported_reason(dict(node.get("config") or {}))
+                if reason:
+                    raise ValueError(f"Runtime v2 API_CALL is not compatible: {reason}")
+                output = ApiCallNodeExecutor(self._api_tool_executor).execute(node, context)
+                output = _with_runtime_v2_execution_evidence_defaults(output)
+            elif node_type == "TOOL_CALL":
+                reason = _runtime_v2_tool_call_unsupported_reason(dict(node.get("config") or {}))
+                if reason:
+                    raise ValueError(f"Runtime v2 TOOL_CALL is not compatible: {reason}")
+                output = ToolCallNodeExecutor(self._mcp_tool_executor, self._api_tool_executor).execute(node, context)
+                output = _with_runtime_v2_execution_evidence_defaults(output)
             elif node_type == "EXECUTE_WORKFLOW":
-                output = self._execute_workflow_output(run_id, node, context)
+                output = self._execute_workflow_output(chatflow_id, node, context)
             elif node_type == "TRANSFER_TO_HUMAN":
                 output = self._transfer_to_human_output(chatflow_id, run_id, session_id, node, context, input_data)
+            elif node_type == "AGENT_CALL":
+                output = AgentCallNodeExecutor(self._agent_invoker_for(chatflow_id)).execute(node, context)
             elif node_type == "END":
                 output = EndNodeExecutor().execute(node, context)
             else:
@@ -641,6 +718,41 @@ class ChatflowRuntimeV2Service:
                 variable_scopes=context.scopes_snapshot(),
             ) from interrupted
         except Exception as exc:
+            handled_output = _runtime_v2_handled_error_output(node_type, node, exc, started_at)
+            if handled_output is not None:
+                self._repository.finish_node_run(node_run_id, "SUCCEEDED", handled_output)
+                self._append_event(
+                    session_id=session_id,
+                    chatflow_id=chatflow_id,
+                    run_id=run_id,
+                    event_type="workflow_node_error_handled",
+                    node_key=node_key,
+                    payload={
+                        "nodeType": node_type,
+                        "nodeRunId": node_run_id,
+                        "errorBehavior": handled_output["errorBehavior"],
+                        "route": handled_output.get("route"),
+                        "error": handled_output["error"],
+                        "output": handled_output,
+                    },
+                )
+                self._append_event(
+                    session_id=session_id,
+                    chatflow_id=chatflow_id,
+                    run_id=run_id,
+                    event_type="workflow_node_completed",
+                    node_key=node_key,
+                    payload={"nodeType": node_type, "nodeRunId": node_run_id, "output": handled_output},
+                )
+                self._append_event(
+                    session_id=session_id,
+                    chatflow_id=chatflow_id,
+                    run_id=run_id,
+                    event_type="node_status_changed",
+                    node_key=node_key,
+                    payload={"nodeType": node_type, "nodeRunId": node_run_id, "status": "COMPLETED"},
+                )
+                return handled_output
             self._repository.finish_node_run(node_run_id, "FAILED", {}, error=str(exc))
             self._append_event(
                 session_id=session_id,
@@ -697,6 +809,9 @@ class ChatflowRuntimeV2Service:
             "nodeKey": node_key,
             "question": context.render(str(config.get("question") or "")),
             "answerType": str(config.get("answerType") or "text"),
+            "options": config.get("options") if isinstance(config.get("options"), list) else [],
+            "resumeBehavior": str(config.get("resumeBehavior") or "wait"),
+            "timeoutSeconds": _optional_int(config.get("timeoutSeconds") or config.get("timeout_seconds")) or 0,
         }
         checkpoint = self._state_repository.create_checkpoint(
             session_id=session_id,
@@ -726,43 +841,25 @@ class ChatflowRuntimeV2Service:
 
     def _execute_workflow_output(
         self,
-        run_id: int,
+        workflow_id: int,
         node: dict[str, Any],
         context: ExecutionContext,
     ) -> dict[str, Any]:
-        config = dict(node.get("config") or {})
-        target_workflow_id = _target_workflow_id(config)
-        if target_workflow_id is None:
-            raise ValueError("EXECUTE_WORKFLOW requires targetWorkflowId")
-        mapped_input = _mapped_arguments(config, context)
-        raw_mock_output = (
-            config.get("mockOutput")
-            if "mockOutput" in config
-            else config.get("mock_output", config.get("mockResult", config.get("mock_result", {})))
-        )
-        mock_output = _render_runtime_templates(raw_mock_output, context)
-        if not isinstance(mock_output, dict):
-            mock_output = {"result": mock_output}
-        if not mock_output:
-            mock_output = {
-                "result": f"runtime-v2 mock workflow {target_workflow_id}",
-                "targetWorkflowId": target_workflow_id,
-            }
-        mapped_output = _mapped_output(config, mock_output)
-        output = dict(mapped_output)
-        output.update(
-            {
-                "nestedRunId": 0,
-                "status": "SUCCEEDED",
-                "latencyMs": 0,
-                "mappedInputSummary": dict(mapped_input),
-                "mappedOutputSummary": dict(mapped_output),
-                "targetWorkflowId": target_workflow_id,
-                "mocked": True,
-                "mockRunId": f"runtime-v2-mock-{run_id}-{node['node_key']}",
-                "error": "",
-            }
-        )
+        repository: Any = self._repository
+        if self._publish_repository is not None:
+            repository = _PublishedSnapshotWorkflowRepository(self._repository, self._publish_repository)
+        target_workflow_id = _target_workflow_id_from_config(dict(node.get("config") or {}))
+        output = ExecuteWorkflowNodeExecutor(
+            repository,
+            workflow_id,
+            (),
+            knowledge_facade=self._knowledge_facade,
+            llm_completer=self._llm_completer_for(workflow_id),
+            mcp_tool_executor=self._mcp_tool_executor,
+            api_tool_executor=self._api_tool_executor,
+            agent_invoker=self._agent_invoker_for(workflow_id),
+        ).execute(node, context)
+        output.update(_nested_version_output(repository, target_workflow_id))
         return output
 
     def _transfer_to_human_output(
@@ -956,6 +1053,13 @@ class ChatflowRuntimeV2Service:
             self._llm_completer_cache[chatflow_id] = self._llm_completer_resolver(chatflow_id)
         return self._llm_completer_cache[chatflow_id]
 
+    def _agent_invoker_for(self, chatflow_id: int) -> AgentInvocationFacade | None:
+        if self._agent_invoker_resolver is None:
+            return None
+        if chatflow_id not in self._agent_invoker_cache:
+            self._agent_invoker_cache[chatflow_id] = self._agent_invoker_resolver(chatflow_id)
+        return self._agent_invoker_cache[chatflow_id]
+
     def _run_has_status(self, run_id: int, status: str) -> bool:
         run = self._run_or_404(run_id)
         return str(run["status"]).upper() == status.upper()
@@ -1018,6 +1122,9 @@ class WorkflowRuntimeV2Service(ChatflowRuntimeV2Service):
         knowledge_facade: KnowledgeFacade | None = None,
         llm_completer: WorkflowLlmCompleter | None = None,
         llm_completer_resolver: RuntimeV2LlmCompleterResolver | None = None,
+        agent_invoker_resolver: RuntimeV2AgentInvokerResolver | None = None,
+        mcp_tool_executor: McpToolExecutor | None = None,
+        api_tool_executor: ApiToolExecutor | None = None,
     ) -> None:
         super().__init__(
             repository,
@@ -1030,7 +1137,84 @@ class WorkflowRuntimeV2Service(ChatflowRuntimeV2Service):
             knowledge_facade=knowledge_facade,
             llm_completer=llm_completer,
             llm_completer_resolver=llm_completer_resolver,
+            agent_invoker_resolver=agent_invoker_resolver,
+            mcp_tool_executor=mcp_tool_executor,
+            api_tool_executor=api_tool_executor,
         )
+
+
+class _PublishedSnapshotWorkflowRepository:
+    def __init__(self, base: WorkflowRepository, publish_repository: WorkflowPublishRepository) -> None:
+        self._base = base
+        self._publish_repository = publish_repository
+        self._version_cache: dict[int, Mapping[str, Any] | None] = {}
+
+    def active_version_for(self, workflow_id: int) -> Mapping[str, Any] | None:
+        if workflow_id not in self._version_cache:
+            self._version_cache[workflow_id] = self._publish_repository.active_version(workflow_id, "WORKFLOW")
+        return self._version_cache[workflow_id]
+
+    def list_nodes(self, workflow_id: int) -> list[dict[str, Any]]:
+        snapshot = self._snapshot_for(workflow_id)
+        if snapshot is None:
+            return self._base.list_nodes(workflow_id)
+        nodes = snapshot.get("nodes")
+        return [dict(node) for node in nodes] if isinstance(nodes, list) else []
+
+    def list_edges(self, workflow_id: int) -> list[dict[str, Any]]:
+        snapshot = self._snapshot_for(workflow_id)
+        if snapshot is None:
+            return self._base.list_edges(workflow_id)
+        edges = snapshot.get("edges")
+        return [dict(edge) for edge in edges] if isinstance(edges, list) else []
+
+    def get(self, workflow_id: int, flow_type: str | None = None) -> dict[str, Any] | None:
+        return self._base.get(workflow_id, flow_type)
+
+    def create_run(self, workflow_id: int, input_values: dict[str, Any]) -> int:
+        version = self.active_version_for(workflow_id)
+        if version is not None:
+            input_values = _with_nested_version_metadata(input_values, version)
+        return self._base.create_run(workflow_id, input_values)
+
+    def finish_run(
+        self,
+        run_id: int,
+        status: str,
+        output: dict[str, Any],
+        error: str = "",
+        elapsed_ms: int = 0,
+    ) -> None:
+        self._base.finish_run(run_id, status, output, error, elapsed_ms)
+
+    def create_node_run(
+        self,
+        workflow_run_id: int,
+        node_key: str,
+        node_type: str,
+        inputs: dict[str, Any] | None = None,
+    ) -> int:
+        return self._base.create_node_run(workflow_run_id, node_key, node_type, inputs=inputs)
+
+    def finish_node_run(
+        self,
+        node_run_id: int,
+        status: str,
+        outputs: dict[str, Any],
+        error: str = "",
+        elapsed_ms: int = 0,
+    ) -> None:
+        self._base.finish_node_run(node_run_id, status, outputs, error, elapsed_ms)
+
+    def list_node_runs(self, run_id: int) -> list[dict[str, Any]]:
+        return self._base.list_node_runs(run_id)
+
+    def _snapshot_for(self, workflow_id: int) -> Mapping[str, Any] | None:
+        version = self.active_version_for(workflow_id)
+        if version is None:
+            return None
+        snapshot = version.get("snapshot")
+        return snapshot if isinstance(snapshot, Mapping) else None
 
 
 class _RuntimeV2Interrupt(Exception):
@@ -1066,6 +1250,34 @@ def _start_payload(start: RuntimeV2Start) -> dict[str, Any]:
     if start.owner_type == "WORKFLOW":
         payload["debugUrl"] = f"/workflows/{start.owner_id}/canvas?runId={start.run_id}&debug=1&runtime=v2"
     return payload
+
+
+def _nested_version_output(repository: Any, target_workflow_id: int | None) -> dict[str, int]:
+    if target_workflow_id is None or not isinstance(repository, _PublishedSnapshotWorkflowRepository):
+        return {}
+    version = repository.active_version_for(target_workflow_id)
+    if version is None:
+        return {}
+    return {"nestedVersionId": int(version["id"]), "nestedVersion": int(version["version"])}
+
+
+def _with_nested_version_metadata(input_values: dict[str, Any], version: Mapping[str, Any]) -> dict[str, Any]:
+    runtime_metadata = input_values.get("_runtimeV2")
+    metadata = dict(runtime_metadata) if isinstance(runtime_metadata, Mapping) else {}
+    metadata["definitionSource"] = "published"
+    metadata["versionId"] = int(version["id"])
+    metadata["version"] = int(version["version"])
+    return {**dict(input_values), "_runtimeV2": metadata}
+
+
+def _target_workflow_id_from_config(config: Mapping[str, Any]) -> int | None:
+    raw_id = config.get("targetWorkflowId") or config.get("target_workflow_id") or config.get("workflowId")
+    if raw_id in (None, ""):
+        return None
+    try:
+        return int(raw_id)
+    except (TypeError, ValueError):
+        return None
 
 
 def _context_from_input(input_data: dict[str, Any]) -> ExecutionContext:
@@ -1208,6 +1420,99 @@ def _requires_llm_information_collection(config: dict[str, Any]) -> bool:
     return extractor_mode in {"llm", "model", "ai"}
 
 
+def _runtime_v2_api_call_unsupported_reason(config: dict[str, Any]) -> str:
+    resource_id = str(config.get("resourceId") or config.get("resource_id") or "").strip()
+    if not resource_id:
+        return "api_call_requires_api_resource"
+    if not (resource_id.startswith("api-resource:") or resource_id.isdigit()):
+        return "api_call_requires_api_resource"
+    return ""
+
+
+def _runtime_v2_tool_call_unsupported_reason(config: dict[str, Any]) -> str:
+    resource_type = str(config.get("resourceType") or config.get("resource_type") or config.get("type") or "MCP_TOOL")
+    resource_type = resource_type.strip().upper().replace("-", "_")
+    resource_id = str(config.get("resourceId") or config.get("resource_id") or "").strip()
+    tool_name = str(config.get("toolName") or config.get("tool_name") or config.get("name") or "").strip()
+    if not resource_id or not tool_name:
+        return "tool_call_requires_resource"
+    if resource_type in {"API_TOOL", "API_RESOURCE"}:
+        if resource_type in {"API_TOOL", "API_RESOURCE"} and not (
+            resource_id.startswith("api-tool:") or resource_id.startswith("api-resource:") or resource_id.isdigit()
+        ):
+            return "tool_call_requires_resource"
+    if resource_type == "MCP_TOOL" and not _runtime_v2_has_server_ids(config):
+        return "tool_call_requires_resource"
+    return ""
+
+
+def _runtime_v2_allows_error_branching(node_type: str, config: dict[str, Any]) -> bool:
+    return node_type in _RUNTIME_V2_ERROR_POLICY_NODE_TYPES and _runtime_v2_error_behavior(config) == "branch"
+
+
+def _runtime_v2_has_server_ids(config: dict[str, Any]) -> bool:
+    server_ids = config.get("serverIds") if "serverIds" in config else config.get("server_ids")
+    if isinstance(server_ids, list):
+        return any(_optional_int(item) is not None for item in server_ids)
+    raw_server_id = config.get("serverId") if "serverId" in config else config.get("server_id")
+    return _optional_int(raw_server_id) is not None
+
+
+def _runtime_v2_error_behavior(config: dict[str, Any]) -> str:
+    return str(config.get("errorBehavior") or config.get("error_behavior") or "fail").strip().lower() or "fail"
+
+
+def _runtime_v2_handled_error_output(
+    node_type: str,
+    node: dict[str, Any],
+    exc: Exception,
+    started_at: float,
+) -> dict[str, Any] | None:
+    if node_type not in _RUNTIME_V2_ERROR_POLICY_NODE_TYPES:
+        return None
+    config = dict(node.get("config") or {})
+    error_behavior = _runtime_v2_error_behavior(config)
+    if error_behavior not in {"continue", "branch"}:
+        return None
+    error_message = str(exc)
+    latency_ms = max(0, int((time.perf_counter() - started_at) * 1000))
+    evidence = {
+        "status": "FAILED",
+        "errorMessage": error_message,
+        "latencyMs": latency_ms,
+        "retryCount": 0,
+        "attempts": 1,
+        "handled": True,
+        "errorBehavior": error_behavior,
+    }
+    output: dict[str, Any] = {
+        "success": False,
+        "error": error_message,
+        "errorBehavior": error_behavior,
+        "evidence": evidence,
+    }
+    if error_behavior == "branch":
+        output["route"] = "error"
+        evidence["route"] = "error"
+    output_variable = str(config.get("outputVariable") or config.get("output_variable") or "").strip()
+    if output_variable and output_variable not in output:
+        output[output_variable] = ""
+    return output
+
+
+def _with_runtime_v2_execution_evidence_defaults(output: dict[str, Any]) -> dict[str, Any]:
+    evidence = output.get("evidence")
+    if not isinstance(evidence, dict):
+        return output
+    enriched = dict(evidence)
+    enriched.setdefault("status", "FAILED" if enriched.get("errorMessage") else "SUCCEEDED")
+    enriched.setdefault("errorMessage", "")
+    enriched.setdefault("latencyMs", 0)
+    enriched.setdefault("retryCount", 0)
+    enriched.setdefault("attempts", 1)
+    return {**output, "evidence": enriched}
+
+
 def _format_runtime_event(event: dict[str, Any]) -> dict[str, Any]:
     payload = dict(event.get("payload") or {})
     formatted = {
@@ -1265,16 +1570,6 @@ def _runtime_event_node_state(event_type: str, payload: dict[str, Any]) -> str:
         "workflow_node_skipped": "SKIPPED",
         "handoff_requested": "WAITING",
     }.get(event_type, "")
-
-
-def _render_runtime_templates(value: Any, context: ExecutionContext) -> Any:
-    if isinstance(value, dict):
-        return {str(key): _render_runtime_templates(item, context) for key, item in value.items()}
-    if isinstance(value, list):
-        return [_render_runtime_templates(item, context) for item in value]
-    if isinstance(value, str):
-        return context.render(value)
-    return value
 
 
 def _positive_int(value: Any) -> int | None:

@@ -101,13 +101,94 @@ class RuntimeV2ProviderBackedLlmBindingTest(unittest.TestCase):
         self.assertEqual(debug["fallback"]["attempts"][-1], {"model": "runtime-v2-fallback-model", "status": "succeeded"})
         self.assertNotIn("sk-runtime-v2-provider-test", str(llm_node["outputs"]))
 
+    def test_chatflow_runs_v2_uses_node_model_config_without_live_agent(self) -> None:
+        model_config_id = _seed_live_model_config(model_id="runtime-v2-direct-node-model")
+        fake_client = FakeOpenAIChatClient(response_payload=_assistant_payload("RUNTIME_V2_DIRECT_MODEL_OK"))
 
-def _seed_live_agent(model_id: str, extra_params: dict[str, Any] | None = None) -> int:
-    _cleanup_seeded_live_agents()
+        with patch("app.modules.workflow.domain.service.ProviderBackedOpenAIChatClient", lambda _config: fake_client):
+            with TestClient(app) as client:
+                chatflow = _create_llm_chatflow(client, llm_config={"modelConfigId": model_config_id})
+                started = client.post(
+                    f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                    json={
+                        "input": {
+                            "sys.query": "direct node model",
+                            "sys.conversation_id": f"runtime-v2-direct-{time.time_ns()}",
+                            "sys.user_id": "runtime-v2-user",
+                            "sys.channel": "web",
+                        }
+                    },
+                ).json()["data"]
+                terminal = _wait_for_result(client, started["resultRef"], "SUCCEEDED")
+                nodes = client.get(started["nodesRef"]).json()["data"]["list"]
+
+        self.assertEqual(terminal["output"]["answer"], "RUNTIME_V2_DIRECT_MODEL_OK")
+        self.assertNotIn("LLM mock:", str(terminal["output"]))
+        self.assertEqual(fake_client.captured_payload["model"], "runtime-v2-direct-node-model")
+        llm_node = next(node for node in nodes if node["nodeKey"] == "llm")
+        self.assertEqual(llm_node["outputs"]["__debug"]["llm"]["model"], "runtime-v2-test-response-model")
+        self.assertEqual(llm_node["outputs"]["__usage"]["totalTokens"], 18)
+
+    def test_chatflow_runs_v2_prefers_node_model_config_over_default_live_agent(self) -> None:
+        model_config_id = _seed_live_model_config(model_id="runtime-v2-direct-node-model")
+        _seed_live_agent(model_id="runtime-v2-contaminating-agent-model", cleanup=False)
+        fake_client = FakeOpenAIChatClient(response_payload=_assistant_payload("RUNTIME_V2_DIRECT_MODEL_OK"))
+
+        with patch("app.modules.workflow.domain.service.ProviderBackedOpenAIChatClient", lambda _config: fake_client):
+            with TestClient(app) as client:
+                chatflow = _create_llm_chatflow(client, llm_config={"modelConfigId": model_config_id})
+                started = client.post(
+                    f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                    json={
+                        "input": {
+                            "sys.query": "direct node model",
+                            "sys.conversation_id": f"runtime-v2-direct-priority-{time.time_ns()}",
+                            "sys.user_id": "runtime-v2-user",
+                            "sys.channel": "web",
+                        }
+                    },
+                ).json()["data"]
+                terminal = _wait_for_result(client, started["resultRef"], "SUCCEEDED")
+
+        self.assertEqual(terminal["output"]["answer"], "RUNTIME_V2_DIRECT_MODEL_OK")
+        self.assertEqual(fake_client.captured_payload["model"], "runtime-v2-direct-node-model")
+
+
+def _seed_live_agent(model_id: str, extra_params: dict[str, Any] | None = None, cleanup: bool = True) -> int:
+    model_config_id = _seed_live_model_config(model_id, extra_params, cleanup=cleanup)
+    now = datetime.now()
+    agent = Base.metadata.tables["agent"]
+    with get_session_factory()() as session:
+        agent_id = insert_and_get_id(
+            session,
+            agent,
+            {
+                "name": f"Runtime V2 Agent {time.time_ns()}",
+                "description": "",
+                "system_prompt": "You are a runtime v2 test agent.",
+                "model_config_id": model_config_id,
+                "temperature": 0.13,
+                "max_tokens": 96,
+                "max_context_turns": 6,
+                "opening_message": "",
+                "suggested_questions": [],
+                "workflow_id": None,
+                "enabled": True,
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        session.commit()
+    return int(agent_id)
+
+
+def _seed_live_model_config(model_id: str, extra_params: dict[str, Any] | None = None, cleanup: bool = True) -> int:
+    if cleanup:
+        _cleanup_seeded_live_agents()
     now = datetime.now()
     provider = Base.metadata.tables["provider"]
     model_config = Base.metadata.tables["model_config"]
-    agent = Base.metadata.tables["agent"]
     with get_session_factory()() as session:
         provider_id = insert_and_get_id(
             session,
@@ -139,28 +220,8 @@ def _seed_live_agent(model_id: str, extra_params: dict[str, Any] | None = None) 
                 "updated_at": now,
             },
         )
-        agent_id = insert_and_get_id(
-            session,
-            agent,
-            {
-                "name": f"Runtime V2 Agent {time.time_ns()}",
-                "description": "",
-                "system_prompt": "You are a runtime v2 test agent.",
-                "model_config_id": model_config_id,
-                "temperature": 0.13,
-                "max_tokens": 96,
-                "max_context_turns": 6,
-                "opening_message": "",
-                "suggested_questions": [],
-                "workflow_id": None,
-                "enabled": True,
-                "deleted": False,
-                "created_at": now,
-                "updated_at": now,
-            },
-        )
         session.commit()
-    return int(agent_id)
+    return int(model_config_id)
 
 
 def _cleanup_seeded_live_agents() -> None:
@@ -223,7 +284,9 @@ def _create_llm_workflow(client: TestClient) -> dict[str, Any]:
     return response.json()["data"]
 
 
-def _create_llm_chatflow(client: TestClient) -> dict[str, Any]:
+def _create_llm_chatflow(client: TestClient, llm_config: dict[str, Any] | None = None) -> dict[str, Any]:
+    config = {"prompt": "Chatflow runtime v2 prompt: {{sys.query}}", "outputVariable": "answer"}
+    config.update(llm_config or {})
     response = client.post(
         "/api/v1/chatflows",
         json={
@@ -235,7 +298,7 @@ def _create_llm_chatflow(client: TestClient) -> dict[str, Any]:
                     "nodeKey": "llm",
                     "type": "LLM",
                     "name": "Provider LLM",
-                    "config": {"prompt": "Chatflow runtime v2 prompt: {{sys.query}}", "outputVariable": "answer"},
+                    "config": config,
                 },
                 {"nodeKey": "end", "type": "END", "name": "End", "config": {"outputVariable": "answer"}},
             ],

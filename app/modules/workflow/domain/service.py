@@ -17,7 +17,7 @@ from app.modules.chat.domain.llm_request import (
     ProviderChatConfig,
 )
 from app.modules.chat.domain.orchestrator import ChatOrchestrator
-from app.modules.chat.domain.tool_runner import McpToolExecutor
+from app.modules.chat.domain.tool_runner import McpToolExecutor, ToolExecutionResult
 from app.modules.chat.domain.tool_schema import ToolDefinition
 from app.modules.chat.domain.service import ChatService
 from app.modules.chat.infra.repository import ChatRepository
@@ -34,6 +34,11 @@ from app.modules.workflow.domain.channel import (
 from app.modules.workflow.domain.engine import ApiToolExecutor, WorkflowExecutionEngine, WorkflowExecutionError
 from app.modules.workflow.domain.engine import AgentInvocationResult
 from app.modules.workflow.domain.engine import WorkflowLlmCompleter
+from app.modules.workflow.domain.graph_validation import (
+    validate_node_contracts,
+    validate_node_endpoints,
+    validate_variable_references,
+)
 from app.modules.workflow.infra.channel_repository import ChatflowChannelRepository
 from app.modules.workflow.infra.chatflow_state_repository import ChatflowStateRepository
 from app.modules.workflow.infra.publish_repository import WorkflowPublishRepository
@@ -318,6 +323,9 @@ class WorkflowService:
             "edges": self._repository.list_edges(workflow_id),
         })
         validation = _publish_validation(snapshot)
+        readiness_errors = self._publish_readiness_errors(workflow_id, snapshot)
+        if readiness_errors:
+            validation = {"valid": False, "errors": [*validation["errors"], *readiness_errors]}
         if not validation["valid"]:
             raise BizError(ErrorCode.BAD_REQUEST, validation["errors"][0])
         version = self._publish_repository.next_version(workflow_id, self._flow_type)
@@ -366,7 +374,11 @@ class WorkflowService:
         if published_version is None:
             raise BizError(ErrorCode.BAD_REQUEST, "No active published version")
         snapshot = published_version.get("snapshot") if isinstance(published_version.get("snapshot"), dict) else {}
-        snapshot_repository = _SnapshotWorkflowRepository(self._repository, snapshot)
+        snapshot_repository = _SnapshotWorkflowRepository(
+            self._repository,
+            snapshot,
+            publish_repository=self._publish_repository,
+        )
         input_data = dict(request.input)
         if self._flow_type == "CHATFLOW":
             input_data = self._chatflow_runtime_input(workflow_id, input_data)
@@ -410,6 +422,75 @@ class WorkflowService:
         if row is None:
             raise BizError(ErrorCode.NOT_FOUND, "Published version not found")
         return row
+
+    def _publish_readiness_errors(self, workflow_id: int, snapshot: Mapping[str, Any]) -> list[str]:
+        nodes = snapshot.get("nodes") if isinstance(snapshot.get("nodes"), list) else []
+        errors: list[str] = []
+        for node in nodes:
+            if not isinstance(node, Mapping):
+                continue
+            node_key = str(node.get("node_key") or node.get("nodeKey") or "").strip()
+            node_type = str(node.get("type") or "").upper()
+            config = node.get("config") if isinstance(node.get("config"), Mapping) else {}
+            if node_type == "EXECUTE_WORKFLOW":
+                errors.extend(self._execute_workflow_readiness_errors(workflow_id, node_key, config))
+            elif node_type == "LLM":
+                errors.extend(self._llm_model_readiness_errors(node_key, config))
+            elif node_type == "AGENT_CALL":
+                errors.extend(self._agent_readiness_errors(node_key, config))
+        return errors
+
+    def _execute_workflow_readiness_errors(
+        self,
+        workflow_id: int,
+        node_key: str,
+        config: Mapping[str, Any],
+    ) -> list[str]:
+        target_id = _optional_positive_int(config.get("targetWorkflowId") or config.get("target_workflow_id") or config.get("workflowId"))
+        if target_id is None:
+            return []
+        if target_id == workflow_id:
+            return [f"{node_key} target workflow cannot be recursive"]
+        target = self._repository.get(target_id, "WORKFLOW")
+        if target is None:
+            return [f"{node_key} target workflow not found"]
+        if str(target.get("flow_type") or "WORKFLOW").upper() != "WORKFLOW":
+            return [f"{node_key} target must be a Workflow"]
+        if self._publish_repository is None:
+            return [f"{node_key} target workflow published version cannot be verified"]
+        if self._publish_repository.active_version(target_id, "WORKFLOW") is None:
+            return [f"{node_key} target workflow must have an active published version"]
+        return []
+
+    def _llm_model_readiness_errors(self, node_key: str, config: Mapping[str, Any]) -> list[str]:
+        if self._model_facade is None:
+            return []
+        raw_model_config_id = config.get("modelConfigId") or config.get("model_config_id")
+        model_config_id = _optional_positive_int(raw_model_config_id)
+        if raw_model_config_id not in (None, "") and model_config_id is not None:
+            try:
+                self._model_facade.get_enabled_model_config(model_config_id)
+            except BizError:
+                return [f"{node_key} modelConfigId is not ready"]
+        model_id = str(config.get("modelId") or config.get("model_id") or "").strip()
+        if model_id and self._model_facade.find_enabled_model_config_by_model_id(model_id) is None:
+            return [f"{node_key} modelId is not ready: {model_id}"]
+        return []
+
+    def _agent_readiness_errors(self, node_key: str, config: Mapping[str, Any]) -> list[str]:
+        if self._agent_repository is None:
+            return []
+        target_agent_id = _optional_positive_int(config.get("targetAgentId") or config.get("target_agent_id") or config.get("agentId"))
+        if target_agent_id is None:
+            return []
+        agent = self._agent_repository.get(target_agent_id)
+        if agent is None:
+            return [f"{node_key} target agent not found"]
+        if not bool(agent.get("enabled")):
+            return [f"{node_key} target agent is disabled"]
+        if agent.get("workflow_id") is not None:
+            return [f"{node_key} workflow-bound agent is not allowed"]
+        return []
 
     def _debug_url_fields(self, workflow_id: int, run_id: int) -> dict[str, str]:
         prefix = "chatflows" if self._flow_type == "CHATFLOW" else "workflows"
@@ -808,13 +889,16 @@ class WorkflowService:
     def _has_start_node(self, workflow_id: int) -> bool:
         return any(node["type"] == "START" for node in self._repository.list_nodes(workflow_id))
 
-    def _llm_completer(self, workflow_id: int) -> _AgentBackedWorkflowLlmCompleter | None:
+    def _llm_completer(self, workflow_id: int) -> WorkflowLlmCompleter | None:
         nodes = self._repository.list_nodes(workflow_id)
         if not any(
             node["type"] == "LLM" or _is_llm_intent_node(node) or _is_llm_information_collection_node(node)
             for node in nodes
         ):
             return None
+        node_config_completer = self._node_config_llm_completer(workflow_id)
+        if node_config_completer is not None:
+            return node_config_completer
         if self._agent_repository is None or self._model_facade is None:
             return None
         agent = self._preferred_live_llm_agent()
@@ -833,15 +917,44 @@ class WorkflowService:
         )
 
     def runtime_v2_llm_completer(self, workflow_id: int) -> WorkflowLlmCompleter | None:
+        node_config_completer = self._node_config_llm_completer(workflow_id)
+        if node_config_completer is not None:
+            return node_config_completer
         try:
-            return self._llm_completer(workflow_id)
+            completer = self._llm_completer(workflow_id)
+            if completer is not None:
+                return completer
         except BizError as exc:
             if exc.message in {
                 "Workflow LLM agent is not configured",
                 "Workflow LLM agent must use a real provider",
             }:
-                return None
-            raise
+                pass
+            else:
+                raise
+        return None
+
+    def _node_config_llm_completer(self, workflow_id: int) -> WorkflowLlmCompleter | None:
+        nodes = self._repository.list_nodes(workflow_id)
+        if not any(node["type"] == "LLM" and _has_node_model_config(node.get("config")) for node in nodes):
+            return None
+        if self._model_facade is None:
+            return None
+        return _NodeConfigWorkflowLlmCompleter(
+            model_facade=self._model_facade,
+            request_builder=self._request_builder,
+            parser=self._parser,
+            llm_client_factory=self._llm_client_factory,
+        )
+
+    def runtime_v2_agent_invoker(self, workflow_id: int) -> _ChatServiceAgentInvocationFacade | None:
+        return self._agent_invoker_for(workflow_id)
+
+    def runtime_v2_mcp_tool_executor(self) -> McpToolExecutor | None:
+        return self._mcp_tool_executor
+
+    def runtime_v2_api_tool_executor(self) -> ApiToolExecutor | None:
+        return self._api_tool_executor
 
     def _preferred_live_llm_agent(self) -> dict[str, Any] | None:
         if self._agent_repository is None:
@@ -939,6 +1052,198 @@ class _ChatServiceAgentInvocationFacade:
         )
 
 
+class _NodeConfigWorkflowLlmCompleter:
+    def __init__(
+        self,
+        model_facade: ProviderModelFacade,
+        request_builder: OpenAIChatRequestBuilder,
+        parser: OpenAIAdapterParser,
+        llm_client_factory: LlmClientFactory,
+    ) -> None:
+        self._model_facade = model_facade
+        self._request_builder = request_builder
+        self._parser = parser
+        self._llm_client_factory = llm_client_factory
+        self._last_call_debug: dict[str, Any] = {}
+
+    def complete_prompt(self, prompt: str, options: dict[str, Any] | None = None) -> str:
+        options = options or {}
+        model_config = self._active_model_config(options)
+        payload = self._request_builder.build(
+            model=str(options.get("model") or model_config.model_id),
+            messages=self._messages(prompt, str(options.get("systemPrompt") or "")),
+            temperature=_optional_float(options.get("temperature"), None),
+            max_tokens=_optional_int(options.get("maxTokens") or options.get("max_tokens"), None),
+            extra_params=self._extra_params(options, model_config),
+        )
+        started_at = perf_counter()
+        response, fallback_debug = self._complete_with_fallback(payload, model_config)
+        elapsed_ms = int((perf_counter() - started_at) * 1000)
+        result = self._parser.parse_chat_response(response)
+        self._last_call_debug = {
+            "model": str(response.get("model") or fallback_debug.get("effectiveModel") or payload.get("model") or model_config.model_id),
+            "elapsedMs": elapsed_ms,
+            "input": _redact_llm_payload(payload),
+            "output": {
+                "content": result.content,
+                "finishReason": result.finish_reason,
+            },
+            "usage": _usage_from_llm_response(response, payload, result.content),
+        }
+        if fallback_debug:
+            self._last_call_debug.update(
+                {
+                    "requestModel": fallback_debug["requestModel"],
+                    "fallbackModel": fallback_debug["fallbackModel"],
+                    "fallbackUsed": True,
+                    "fallbackReason": fallback_debug["fallbackReason"],
+                    "fallback": fallback_debug["fallback"],
+                }
+            )
+        return result.content
+
+    def supports_tool_calls(self) -> bool:
+        return True
+
+    def complete_prompt_with_tools(
+        self,
+        prompt: str,
+        options: dict[str, Any] | None,
+        tools: list[ToolDefinition],
+        tool_ids: list[int],
+        mcp_facade: McpToolExecutor,
+    ) -> tuple[str, list[dict[str, Any]]]:
+        options = options or {}
+        model_config = self._active_model_config(options)
+        if str(model_config.provider_type or "").upper() not in {"OPENAI", "OPENAI_COMPATIBLE"}:
+            raise WorkflowExecutionError("Selected Workflow LLM provider/model does not support tool calls")
+        messages = self._messages(prompt, str(options.get("systemPrompt") or ""))
+        result = ChatOrchestrator(
+            request_builder=self._request_builder,
+            parser=self._parser,
+        ).run(
+            model=str(options.get("model") or model_config.model_id),
+            messages=messages,
+            tools=tools,
+            tool_ids=tool_ids,
+            mcp_facade=mcp_facade,
+            llm_client=self._llm_client(model_config),
+            temperature=_optional_float(options.get("temperature"), None),
+            max_tokens=_optional_int(options.get("maxTokens") or options.get("max_tokens"), None),
+            extra_params=self._extra_params(options, model_config),
+        )
+        prompt_text = "\n".join(message.content for message in messages)
+        self._last_call_debug = {
+            "model": str(options.get("model") or model_config.model_id),
+            "elapsedMs": 0,
+            "input": {"messages": [{"role": "user", "content": prompt_text}], "tools": [tool.name for tool in tools]},
+            "output": {"content": result.final_content},
+            "usage": _estimated_usage(prompt_text, result.final_content),
+        }
+        return result.final_content, [
+            _llm_tool_call_evidence(item)
+            for item in result.tool_results
+        ]
+
+    def _messages(self, prompt: str, node_system_prompt: str = "") -> list[ChatRequestMessage]:
+        messages: list[ChatRequestMessage] = []
+        if node_system_prompt:
+            messages.append(ChatRequestMessage(role="system", content=node_system_prompt))
+        messages.append(ChatRequestMessage(role="user", content=prompt))
+        return messages
+
+    def _active_model_config(self, options: Mapping[str, Any]) -> ModelConfigDto:
+        raw_model_config_id = options.get("modelConfigId") or options.get("model_config_id")
+        if raw_model_config_id not in (None, ""):
+            try:
+                return self._model_facade.get_enabled_model_config(int(raw_model_config_id))
+            except (TypeError, ValueError) as exc:
+                raise WorkflowExecutionError("LLM node modelConfigId is invalid") from exc
+        raw_model = str(options.get("model") or "").strip()
+        if raw_model and hasattr(self._model_facade, "find_enabled_model_config_by_model_id"):
+            matched = self._model_facade.find_enabled_model_config_by_model_id(raw_model)  # type: ignore[attr-defined]
+            if matched is not None:
+                return matched
+        raise WorkflowExecutionError("LLM node modelConfigId is required")
+
+    def _extra_params(self, options: dict[str, Any], model_config: ModelConfigDto) -> dict[str, Any]:
+        extra_params = dict(model_config.extra_params or {})
+        mapped = {
+            "top_p": options.get("topP") or options.get("top_p"),
+            "frequency_penalty": options.get("frequencyPenalty") or options.get("frequency_penalty"),
+            "presence_penalty": options.get("presencePenalty") or options.get("presence_penalty"),
+            "seed": options.get("seed"),
+        }
+        for key, value in mapped.items():
+            if value is not None and value != "":
+                extra_params[key] = _optional_float(value, value) if key != "seed" else _optional_int(value, value)
+        response_format = options.get("responseFormat") or options.get("response_format")
+        if isinstance(response_format, dict):
+            extra_params["response_format"] = response_format
+        elif str(response_format or "").upper() == "JSON":
+            extra_params["response_format"] = {"type": "json_object"}
+        stop = options.get("stopSequences") or options.get("stop")
+        if isinstance(stop, str) and stop.strip():
+            extra_params["stop"] = [item.strip() for item in stop.split("\n") if item.strip()]
+        elif isinstance(stop, list) and stop:
+            extra_params["stop"] = [str(item) for item in stop if str(item)]
+        tool_choice = str(options.get("toolChoiceMode") or "").strip().lower()
+        if tool_choice in {"auto", "required", "none"}:
+            extra_params["tool_choice"] = tool_choice
+        return extra_params
+
+    def _llm_client(self, model_config: ModelConfigDto) -> Any:
+        return self._llm_client_factory(
+            ProviderChatConfig(
+                provider_type=model_config.provider_type,
+                base_url=model_config.provider_base_url,
+                auth_config=model_config.provider_auth_config,
+            )
+        )
+
+    def _complete_with_fallback(self, payload: dict[str, Any], model_config: ModelConfigDto) -> tuple[dict[str, Any], dict[str, Any]]:
+        client = self._llm_client(model_config)
+        request_model = str(payload.get("model") or model_config.model_id)
+        try:
+            return client.complete(payload), {}
+        except Exception as exc:
+            fallback_model = self._fallback_model(model_config)
+            if not fallback_model or fallback_model == payload.get("model"):
+                raise WorkflowExecutionError(f"LLM provider request failed: {_provider_request_error_message(exc)}") from exc
+            primary_reason = _provider_request_error_message(exc)
+            attempts = [{"model": request_model, "status": "failed", "reason": primary_reason}]
+            fallback_payload = dict(payload)
+            fallback_payload["model"] = fallback_model
+            try:
+                response = client.complete(fallback_payload)
+            except Exception as fallback_exc:
+                attempts.append(
+                    {
+                        "model": fallback_model,
+                        "status": "failed",
+                        "reason": _provider_request_error_message(fallback_exc),
+                    }
+                )
+                raise WorkflowExecutionError(f"LLM provider request failed: {_provider_request_error_message(fallback_exc)}") from fallback_exc
+            attempts.append({"model": fallback_model, "status": "succeeded"})
+            return response, {
+                "requestModel": request_model,
+                "fallbackModel": fallback_model,
+                "fallbackReason": primary_reason,
+                "effectiveModel": fallback_model,
+                "fallback": {"attempted": True, "attempts": attempts},
+            }
+
+    def _fallback_model(self, model_config: ModelConfigDto) -> str:
+        extra_params = dict(model_config.extra_params or {})
+        return str(extra_params.get("fallbackModel") or extra_params.get("fallback_model") or "").strip()
+
+    def consume_last_call_debug(self) -> dict[str, Any]:
+        debug = dict(self._last_call_debug)
+        self._last_call_debug = {}
+        return debug
+
+
 class _AgentBackedWorkflowLlmCompleter:
     def __init__(
         self,
@@ -1031,13 +1336,7 @@ class _AgentBackedWorkflowLlmCompleter:
             "usage": _estimated_usage(prompt_text, result.final_content),
         }
         return result.final_content, [
-            {
-                "callId": item.call_id,
-                "toolName": item.name,
-                "success": item.success,
-                "content": item.content,
-                "errorMessage": item.error_message,
-            }
+            _llm_tool_call_evidence(item)
             for item in result.tool_results
         ]
 
@@ -1159,6 +1458,30 @@ def _redact_llm_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
     return redacted
 
 
+def _llm_tool_call_evidence(result: ToolExecutionResult) -> dict[str, Any]:
+    status = "SUCCEEDED" if result.success else "FAILED"
+    evidence = {
+        "toolName": result.name,
+        "adapter": "mcp",
+        "sanitizedInput": _redact_llm_payload(result.arguments),
+        "latencyMs": int(result.latency_ms or 0),
+        "status": status,
+        "errorMessage": result.error_message,
+        "retryCount": 0,
+        "attempts": 1,
+    }
+    return {
+        "callId": result.call_id,
+        "toolName": result.name,
+        "success": result.success,
+        "content": result.content,
+        "errorMessage": result.error_message,
+        "latencyMs": int(result.latency_ms or 0),
+        "arguments": _redact_llm_payload(result.arguments),
+        "evidence": evidence,
+    }
+
+
 def _provider_request_error_message(exc: Exception) -> str:
     text = str(exc)
     lowered = text.lower()
@@ -1263,6 +1586,12 @@ def _is_llm_information_collection_node(node: dict[str, Any]) -> bool:
     if not isinstance(config, dict):
         return False
     return str(config.get("extractorMode") or "").lower() == "llm"
+
+
+def _has_node_model_config(config: Any) -> bool:
+    if not isinstance(config, Mapping):
+        return False
+    return bool(str(config.get("modelConfigId") or config.get("model_config_id") or "").strip())
 
 
 def _chatflow_session_id(chatflow_id: int, run_id: int, input_data: dict[str, Any]) -> str:
@@ -1556,6 +1885,16 @@ def _optional_int(value: Any, fallback: Any) -> Any:
         return fallback
 
 
+def _optional_positive_int(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
 _SENSITIVE_CONFIG_KEYS = {
     "apikey",
     "secret",
@@ -1629,6 +1968,7 @@ def _not_template_secret_value(value: Any) -> bool:
 
 def _publish_validation(snapshot: Mapping[str, Any]) -> dict[str, Any]:
     nodes = snapshot.get("nodes") if isinstance(snapshot.get("nodes"), list) else []
+    edges = snapshot.get("edges") if isinstance(snapshot.get("edges"), list) else []
     flow_type = str((snapshot.get("workflow") if isinstance(snapshot.get("workflow"), Mapping) else {}).get("flowType") or "")
     node_keys = {str(node.get("node_key") or "") for node in nodes if isinstance(node, Mapping)}
     errors: list[str] = []
@@ -1656,6 +1996,11 @@ def _publish_validation(snapshot: Mapping[str, Any]) -> dict[str, Any]:
             errors.append(f"{node_key} target workflow is required")
         if node_type == "KNOWLEDGE" and not str(config.get("knowledgeBaseId") or "").strip():
             errors.append(f"{node_key} knowledge base is required")
+    branch_nodes = [dict(node) for node in nodes if isinstance(node, Mapping)]
+    branch_edges = [dict(edge) for edge in edges if isinstance(edge, Mapping)]
+    errors.extend(issue["message"] for issue in validate_node_endpoints(branch_nodes, branch_edges))
+    errors.extend(issue["message"] for issue in validate_variable_references(branch_nodes))
+    errors.extend(issue["message"] for issue in validate_node_contracts(branch_nodes))
     return {"valid": not errors, "errors": errors}
 
 
@@ -1670,9 +2015,16 @@ def _json_safe(value: Any) -> Any:
 
 
 class _SnapshotWorkflowRepository:
-    def __init__(self, base: WorkflowRepository, snapshot: Mapping[str, Any]) -> None:
+    def __init__(
+        self,
+        base: WorkflowRepository,
+        snapshot: Mapping[str, Any],
+        publish_repository: WorkflowPublishRepository | None = None,
+    ) -> None:
         self._base = base
         self._snapshot = snapshot
+        self._publish_repository = publish_repository
+        self._published_snapshot_cache: dict[int, Mapping[str, Any] | None] = {}
         workflow = snapshot.get("workflow") if isinstance(snapshot.get("workflow"), Mapping) else {}
         try:
             self._snapshot_workflow_id = int(workflow.get("id") or 0) if isinstance(workflow, Mapping) else 0
@@ -1680,15 +2032,17 @@ class _SnapshotWorkflowRepository:
             self._snapshot_workflow_id = 0
 
     def list_nodes(self, workflow_id: int) -> list[dict[str, Any]]:
-        if workflow_id != self._snapshot_workflow_id:
+        snapshot = self._snapshot_for(workflow_id)
+        if snapshot is None:
             return self._base.list_nodes(workflow_id)
-        nodes = self._snapshot.get("nodes")
+        nodes = snapshot.get("nodes")
         return [dict(node) for node in nodes] if isinstance(nodes, list) else []
 
     def list_edges(self, workflow_id: int) -> list[dict[str, Any]]:
-        if workflow_id != self._snapshot_workflow_id:
+        snapshot = self._snapshot_for(workflow_id)
+        if snapshot is None:
             return self._base.list_edges(workflow_id)
-        edges = self._snapshot.get("edges")
+        edges = snapshot.get("edges")
         return [dict(edge) for edge in edges] if isinstance(edges, list) else []
 
     def get(self, workflow_id: int, flow_type: str | None = None) -> dict[str, Any] | None:
@@ -1728,3 +2082,14 @@ class _SnapshotWorkflowRepository:
 
     def list_node_runs(self, run_id: int) -> list[dict[str, Any]]:
         return self._base.list_node_runs(run_id)
+
+    def _snapshot_for(self, workflow_id: int) -> Mapping[str, Any] | None:
+        if workflow_id == self._snapshot_workflow_id:
+            return self._snapshot
+        if self._publish_repository is None:
+            return None
+        if workflow_id not in self._published_snapshot_cache:
+            row = self._publish_repository.active_version(workflow_id, "WORKFLOW")
+            snapshot = row.get("snapshot") if isinstance(row, Mapping) and isinstance(row.get("snapshot"), Mapping) else None
+            self._published_snapshot_cache[workflow_id] = snapshot
+        return self._published_snapshot_cache[workflow_id]

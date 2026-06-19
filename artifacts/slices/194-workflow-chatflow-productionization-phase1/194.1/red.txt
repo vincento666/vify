@@ -1,0 +1,175 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/vincento/work/develop/hify
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 9 items
+
+tests/unit/workflow/test_runtime_v2_core.py F....                        [ 55%]
+tests/integration/workflow/test_runtime_v2_api_call_node.py FF           [ 77%]
+tests/integration/workflow/test_runtime_v2_tool_call_node.py F           [ 88%]
+tests/integration/workflow/test_runtime_v2_llm_callable_tools.py F       [100%]
+
+=================================== FAILURES ===================================
+_ RuntimeV2CoreTest.test_compatibility_checker_accepts_runtime_v2_resource_nodes_and_rejects_unsafe_api_call _
+
+self = <tests.unit.workflow.test_runtime_v2_core.RuntimeV2CoreTest testMethod=test_compatibility_checker_accepts_runtime_v2_resource_nodes_and_rejects_unsafe_api_call>
+
+    def test_compatibility_checker_accepts_runtime_v2_resource_nodes_and_rejects_unsafe_api_call(self) -> None:
+        supported = RuntimeV2CompatibilityChecker.check(
+            nodes=[
+                {"nodeKey": "start", "type": "START"},
+                {"nodeKey": "knowledge_1", "type": "KNOWLEDGE"},
+                {"nodeKey": "llm_1", "type": "LLM"},
+                {"nodeKey": "api_1", "type": "API_CALL", "config": {"resourceId": "api-resource:1"}},
+                {
+                    "nodeKey": "tool_1",
+                    "type": "TOOL_CALL",
+                    "config": {
+                        "resourceType": "MCP_TOOL",
+                        "resourceId": "mcp:1:lookup_order",
+                        "serverIds": [1],
+                        "toolName": "lookup_order",
+                    },
+                },
+                {"nodeKey": "end", "type": "END"},
+            ],
+            edges=[
+                {"sourceNodeKey": "start", "targetNodeKey": "knowledge_1"},
+                {"sourceNodeKey": "knowledge_1", "targetNodeKey": "llm_1"},
+                {"sourceNodeKey": "llm_1", "targetNodeKey": "api_1"},
+                {"sourceNodeKey": "api_1", "targetNodeKey": "tool_1"},
+                {"sourceNodeKey": "tool_1", "targetNodeKey": "end"},
+            ],
+        )
+        rejected = RuntimeV2CompatibilityChecker.check(
+            nodes=[
+                {"nodeKey": "start", "type": "START"},
+                {"nodeKey": "api_1", "type": "API_CALL", "config": {"method": "GET", "url": "https://example.test/raw"}},
+                {"nodeKey": "end", "type": "END"},
+            ],
+            edges=[
+                {"sourceNodeKey": "start", "targetNodeKey": "api_1"},
+                {"sourceNodeKey": "api_1", "targetNodeKey": "end"},
+            ],
+        )
+
+>       self.assertTrue(supported["supported"], supported)
+E       AssertionError: False is not true : {'supported': False, 'fallbackScope': 'whole_graph', 'unsupportedNodes': [{'nodeKey': 'api_1', 'nodeType': 'API_CALL'}, {'nodeKey': 'tool_1', 'nodeType': 'TOOL_CALL'}], 'unsupportedPatterns': [], 'branchValidationErrors': [], 'supportedNodeTypes': ['AGENT_CALL', 'CODE', 'CONDITION', 'END', 'EXECUTE_WORKFLOW', 'HUMAN_INPUT', 'INFORMATION_COLLECTION', 'INTENT_RECOGNITION', 'JSON_PARSE', 'KNOWLEDGE', 'LLM', 'MESSAGE', 'QUESTION', 'START', 'TEXT_PROCESS', 'TRANSFER_TO_HUMAN', 'VARIABLE_AGGREGATION', 'VARIABLE_ASSIGN']}
+
+tests/unit/workflow/test_runtime_v2_core.py:74: AssertionError
+_ RuntimeV2ApiCallNodeIntegrationTest.test_chatflow_runtime_v2_api_call_uses_api_resource_and_persists_sanitized_evidence _
+
+self = <tests.integration.workflow.test_runtime_v2_api_call_node.RuntimeV2ApiCallNodeIntegrationTest testMethod=test_chatflow_runtime_v2_api_call_uses_api_resource_and_persists_sanitized_evidence>
+
+    def test_chatflow_runtime_v2_api_call_uses_api_resource_and_persists_sanitized_evidence(self) -> None:
+        server = LocalApiServer()
+        server.start()
+        self.addCleanup(server.stop)
+
+        with TestClient(app) as client:
+            api_resource = _create_api_resource(client, server.url)
+            chatflow = _create_api_call_chatflow(client, int(api_resource["id"]))
+            started_response = client.post(
+                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                json={"input": {"orderId": "A-194"}},
+            )
+            started = started_response.json()["data"]
+>           terminal = _wait_for_result(client, started["resultRef"])
+                                                ^^^^^^^^^^^^^^^^^^^^
+E           TypeError: 'NoneType' object is not subscriptable
+
+tests/integration/workflow/test_runtime_v2_api_call_node.py:26: TypeError
+_ RuntimeV2ApiCallNodeIntegrationTest.test_runtime_v2_rejects_direct_url_api_call_at_compatibility_boundary _
+
+self = <tests.integration.workflow.test_runtime_v2_api_call_node.RuntimeV2ApiCallNodeIntegrationTest testMethod=test_runtime_v2_rejects_direct_url_api_call_at_compatibility_boundary>
+
+    def test_runtime_v2_rejects_direct_url_api_call_at_compatibility_boundary(self) -> None:
+        with TestClient(app) as client:
+            chatflow = _create_direct_url_api_call_chatflow(client)
+            response = client.post(
+                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                json={"input": {"orderId": "A-unsafe"}},
+            )
+
+        self.assertEqual(response.status_code, 400, response.text)
+>       self.assertIn("api_call_requires_api_resource", response.json()["message"])
+E       AssertionError: 'api_call_requires_api_resource' not found in "Unsupported runtime v2 graph: {'supported': False, 'fallbackScope': 'whole_graph', 'unsupportedNodes': [{'nodeKey': 'api_call_1', 'nodeType': 'API_CALL'}], 'unsupportedPatterns': [], 'branchValidationErrors': [], 'supportedNodeTypes': ['AGENT_CALL', 'CODE', 'CONDITION', 'END', 'EXECUTE_WORKFLOW', 'HUMAN_INPUT', 'INFORMATION_COLLECTION', 'INTENT_RECOGNITION', 'JSON_PARSE', 'KNOWLEDGE', 'LLM', 'MESSAGE', 'QUESTION', 'START', 'TEXT_PROCESS', 'TRANSFER_TO_HUMAN', 'VARIABLE_AGGREGATION', 'VARIABLE_ASSIGN']}"
+
+tests/integration/workflow/test_runtime_v2_api_call_node.py:60: AssertionError
+_ RuntimeV2ToolCallNodeIntegrationTest.test_chatflow_runtime_v2_tool_call_runs_mcp_tool_and_persists_tool_evidence _
+
+self = <tests.integration.workflow.test_runtime_v2_tool_call_node.RuntimeV2ToolCallNodeIntegrationTest testMethod=test_chatflow_runtime_v2_tool_call_runs_mcp_tool_and_persists_tool_evidence>
+
+    def test_chatflow_runtime_v2_tool_call_runs_mcp_tool_and_persists_tool_evidence(self) -> None:
+        with TestClient(app) as client:
+            server_id = _create_mcp_server(client)
+            chatflow = _create_tool_call_chatflow(client, server_id)
+            started_response = client.post(
+                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                json={"input": {"sys.query": "A-194"}},
+            )
+            started = started_response.json()["data"]
+>           terminal = _wait_for_result(client, started["resultRef"])
+                                                ^^^^^^^^^^^^^^^^^^^^
+E           TypeError: 'NoneType' object is not subscriptable
+
+tests/integration/workflow/test_runtime_v2_tool_call_node.py:21: TypeError
+_ RuntimeV2LlmCallableToolsIntegrationTest.test_chatflow_runtime_v2_llm_node_invokes_callable_mcp_tool _
+
+self = <tests.integration.workflow.test_runtime_v2_llm_callable_tools.RuntimeV2LlmCallableToolsIntegrationTest testMethod=test_chatflow_runtime_v2_llm_node_invokes_callable_mcp_tool>
+
+    def test_chatflow_runtime_v2_llm_node_invokes_callable_mcp_tool(self) -> None:
+        model_config_id = _seed_live_model_config(model_id="runtime-v2-callable-tools-model")
+        fake_client = FakeOpenAIChatClient(
+            response_payloads=[
+                _assistant_tool_call_payload("lookup_order", {"orderId": "A-194"}),
+                _assistant_payload("Final answer: Order A-194 status: SHIPPED"),
+            ],
+        )
+
+        with patch("app.modules.workflow.domain.service.ProviderBackedOpenAIChatClient", lambda _config: fake_client):
+            with TestClient(app) as client:
+                server_id = _create_mcp_server(client)
+                chatflow = _create_llm_tool_chatflow(client, server_id, model_config_id)
+                started_response = client.post(
+                    f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                    json={"input": {"sys.query": "Where is order A-194?"}},
+                )
+                started = started_response.json()["data"]
+>               terminal = _wait_for_result(client, started["resultRef"])
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/integration/workflow/test_runtime_v2_llm_callable_tools.py:43:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+client = <starlette.testclient.TestClient object at 0x109c8ab70>
+result_ref = '/api/v1/runtime-runs/493/result', wanted_status = 'SUCCEEDED'
+timeout = 5.0
+
+    def _wait_for_result(client: TestClient, result_ref: str, wanted_status: str = "SUCCEEDED", timeout: float = 5.0) -> dict[str, Any]:
+        deadline = time.monotonic() + timeout
+        latest: dict[str, Any] = {}
+        while time.monotonic() < deadline:
+            latest = client.get(result_ref).json()["data"]
+            if latest["status"] == wanted_status:
+                return latest
+            if latest["status"] in {"FAILED", "CANCELLED", "INTERRUPTED"} and latest["status"] != wanted_status:
+>               raise AssertionError(f"Expected {wanted_status}, got {latest}")
+E               AssertionError: Expected SUCCEEDED, got {'runId': 493, 'ownerType': 'CHATFLOW', 'ownerId': 851, 'status': 'FAILED', 'output': {}, 'error': 'LLM callable tools require a tool runtime', 'checkpoint': None, 'eventsRef': '/api/v1/runtime-runs/493/events', 'eventStreamRef': '/api/v1/runtime-runs/493/events/stream?afterSequence=0', 'resultRef': '/api/v1/runtime-runs/493/result', 'chatflowId': 851}
+
+tests/integration/workflow/test_runtime_v2_llm_callable_tools.py:98: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/vincento/work/develop/hify/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/unit/workflow/test_runtime_v2_core.py::RuntimeV2CoreTest::test_compatibility_checker_accepts_runtime_v2_resource_nodes_and_rejects_unsafe_api_call
+FAILED tests/integration/workflow/test_runtime_v2_api_call_node.py::RuntimeV2ApiCallNodeIntegrationTest::test_chatflow_runtime_v2_api_call_uses_api_resource_and_persists_sanitized_evidence
+FAILED tests/integration/workflow/test_runtime_v2_api_call_node.py::RuntimeV2ApiCallNodeIntegrationTest::test_runtime_v2_rejects_direct_url_api_call_at_compatibility_boundary
+FAILED tests/integration/workflow/test_runtime_v2_tool_call_node.py::RuntimeV2ToolCallNodeIntegrationTest::test_chatflow_runtime_v2_tool_call_runs_mcp_tool_and_persists_tool_evidence
+FAILED tests/integration/workflow/test_runtime_v2_llm_callable_tools.py::RuntimeV2LlmCallableToolsIntegrationTest::test_chatflow_runtime_v2_llm_node_invokes_callable_mcp_tool
+==================== 5 failed, 4 passed, 1 warning in 2.31s ====================

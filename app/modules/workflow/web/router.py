@@ -101,6 +101,8 @@ def _runtime_v2_llm_service(
         agent_repository=AgentRepository(session),
         model_facade=ProviderModelFacade(session),
         knowledge_facade=KnowledgeFacade(session),
+        mcp_tool_executor=McpFacade(session),
+        api_tool_executor=ApiResourceService(ApiResourceRepository(session)),
         request_context=request_context,
         preferred_llm_agent_name=preferred_llm_agent_name,
     )
@@ -130,6 +132,9 @@ def get_chatflow_runtime_v2_service(
         publish_repository=WorkflowPublishRepository(session),
         knowledge_facade=KnowledgeFacade(session),
         llm_completer_resolver=llm_service.runtime_v2_llm_completer,
+        agent_invoker_resolver=llm_service.runtime_v2_agent_invoker,
+        mcp_tool_executor=llm_service.runtime_v2_mcp_tool_executor(),
+        api_tool_executor=llm_service.runtime_v2_api_tool_executor(),
     )
 
 
@@ -144,6 +149,9 @@ def get_workflow_runtime_v2_service(
         WorkflowPublishRepository(session),
         knowledge_facade=KnowledgeFacade(session),
         llm_completer_resolver=llm_service.runtime_v2_llm_completer,
+        agent_invoker_resolver=llm_service.runtime_v2_agent_invoker,
+        mcp_tool_executor=llm_service.runtime_v2_mcp_tool_executor(),
+        api_tool_executor=llm_service.runtime_v2_api_tool_executor(),
     )
 
 
@@ -571,6 +579,9 @@ def _start_runtime_v2_completion_thread(session: Session, run_id: int, *, owner_
                     WorkflowPublishRepository(background_session),
                     knowledge_facade=KnowledgeFacade(background_session),
                     llm_completer_resolver=llm_service.runtime_v2_llm_completer,
+                    agent_invoker_resolver=llm_service.runtime_v2_agent_invoker,
+                    mcp_tool_executor=llm_service.runtime_v2_mcp_tool_executor(),
+                    api_tool_executor=llm_service.runtime_v2_api_tool_executor(),
                 ).complete_run(run_id)
             else:
                 llm_service = _runtime_v2_llm_service(background_session, flow_type="CHATFLOW")
@@ -580,6 +591,9 @@ def _start_runtime_v2_completion_thread(session: Session, run_id: int, *, owner_
                     publish_repository=WorkflowPublishRepository(background_session),
                     knowledge_facade=KnowledgeFacade(background_session),
                     llm_completer_resolver=llm_service.runtime_v2_llm_completer,
+                    agent_invoker_resolver=llm_service.runtime_v2_agent_invoker,
+                    mcp_tool_executor=llm_service.runtime_v2_mcp_tool_executor(),
+                    api_tool_executor=llm_service.runtime_v2_api_tool_executor(),
                 ).complete_run(run_id)
 
     threading.Thread(target=complete, daemon=True).start()

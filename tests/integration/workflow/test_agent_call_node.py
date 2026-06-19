@@ -105,6 +105,38 @@ class AgentCallNodeIntegrationTest(unittest.TestCase):
         node_output = _node_run_output(data["runId"], "agent_call_1")
         self.assertEqual(node_output["events"][0]["type"], "agent_delta")
 
+    def test_agent_call_runs_in_chatflow_runtime_v2(self) -> None:
+        agent_id = _seed_direct_agent()
+
+        with TestClient(app) as client:
+            chatflow = _create_agent_call_flow(client, int(agent_id), "CHATFLOW", history_mode="include")
+            started_response = client.post(
+                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                json={
+                    "input": {
+                        "sys.query": "continue ticket V2-445",
+                        "sys.conversation_id": f"agent-call-v2-{time.time_ns()}",
+                        "sys.user_id": "agent-call-user",
+                        "sys.channel": "web",
+                        "history": [
+                            {"role": "user", "content": "previous ticket was HIST-V2-445"},
+                            {"role": "assistant", "content": "I found the order."},
+                        ],
+                    }
+                },
+            )
+            self.assertEqual(started_response.status_code, 200, started_response.text)
+            started = started_response.json()["data"]
+            terminal = _wait_for_runtime_v2_result(client, started["resultRef"])
+            nodes = client.get(started["nodesRef"]).json()["data"]["list"]
+
+        self.assertEqual(terminal["status"], "SUCCEEDED")
+        self.assertIn("continue ticket V2-445", terminal["output"]["final"])
+        self.assertIn("previous ticket was HIST-V2-445", terminal["output"]["final"])
+        agent_node = next(node for node in nodes if node["nodeKey"] == "agent_call_1")
+        self.assertEqual(agent_node["status"], "COMPLETED")
+        self.assertGreater(agent_node["outputs"]["sessionId"], 0)
+
     def test_agent_call_rejects_missing_target_agent(self) -> None:
         with TestClient(app) as client:
             workflow = _create_agent_call_flow(client, 999_999_991, "WORKFLOW")
@@ -297,6 +329,19 @@ def _node_run_output(run_id: int, node_key: str) -> dict[str, object]:
             )
         ).mappings().one()
         return dict(row["outputs"])
+
+
+def _wait_for_runtime_v2_result(client: TestClient, result_ref: str, timeout: float = 5.0) -> dict[str, object]:
+    deadline = time.monotonic() + timeout
+    latest: dict[str, object] = {}
+    while time.monotonic() < deadline:
+        latest = client.get(result_ref).json()["data"]
+        if latest["status"] == "SUCCEEDED":
+            return latest
+        if latest["status"] in {"FAILED", "CANCELLED", "INTERRUPTED"}:
+            raise AssertionError(f"Expected SUCCEEDED, got {latest}")
+        time.sleep(0.1)
+    raise AssertionError(f"Timed out waiting for runtime v2 success; latest={latest}")
 
 
 if __name__ == "__main__":

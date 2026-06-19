@@ -195,8 +195,9 @@ class WorkflowServiceProviderLlmTest(unittest.TestCase):
 
         self.assertEqual(result["status"], "SUCCEEDED")
         self.assertEqual(result["output"]["answer"], "NODE_MODEL_RESPONSE")
-        self.assertEqual(model_facade.requested_ids, [601, 777])
+        self.assertEqual(model_facade.requested_ids, [777])
         self.assertEqual(fake_client.captured_payload["model"], "node-selected-model")
+        self.assertEqual(fake_client.captured_payload["messages"], [{"role": "user", "content": "Canvas prompt: node fixture"}])
         self.assertEqual(captured_configs[-1].base_url, "mock://success")
 
     def test_run_node_rejects_missing_node(self) -> None:
