@@ -257,3 +257,18 @@
       unit, frontend build, browser UAT, and `git diff --check`.
 - [x] Save evidence under
       `artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.18-file-echo-polish/`.
+
+## 193.19 Icon Button And Chevron Polish
+
+- [x] RED: frontend shell contract fails until icon-only buttons share one
+      compact size contract and collapse arrows use SVG icon components instead
+      of direction-character fallbacks.
+- [x] Replace timeline fold arrows with `CollapseChevron` SVG icons and mark
+      them `aria-hidden`.
+- [x] Add AI Assistant scoped icon button size variables and apply them to
+      session delete, message action, composer action, model config, and send
+      icon-only buttons.
+- [x] Revalidate with focused frontend unit, `remScaleClosure`, full frontend
+      unit, frontend build, `git diff --check`, and in-app browser UAT.
+- [x] Save evidence under
+      `artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.19-icon-button-polish/`.

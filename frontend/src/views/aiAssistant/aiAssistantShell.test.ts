@@ -254,7 +254,7 @@ describe('AI Assistant shell UI contract', () => {
   })
 
   it('uses compact right-side chevrons after title text for task and event folding', () => {
-    expect(content).toContain('ChevronRight')
+    expect(content).toContain('CollapseChevron')
     expect(content).toContain('class="ai-collapse-chevron"')
     expect(content).toContain('class="ai-run-event-group__title-text"')
     expect(content).toContain('class="ai-run-event-group__meta"')
@@ -273,6 +273,20 @@ describe('AI Assistant shell UI contract', () => {
     expect(content).not.toContain('<UpOutlined v-else />')
     expect(content).not.toContain('<DownOutlined v-if="!isEventExpanded(eventItem.id)" />')
     expect(content).not.toContain('<UpOutlined v-else />')
+  })
+
+  it('uses compact unified icon buttons and svg-only collapse arrows', () => {
+    expect(content).toContain('CaretRightOutlined as CollapseChevron')
+    expect(content).toContain('<CollapseChevron')
+    expect(content).toContain('aria-hidden="true"')
+    expect(content).toContain('--ai-icon-button-size: 1.875rem;')
+    expect(content).toContain('--ai-icon-glyph-size: 0.875rem;')
+    expect(content).toContain('.ai-shell :deep(.ant-btn-icon-only)')
+    expect(content).toContain('.ai-shell :deep(.ant-btn .anticon)')
+    expect(content).not.toContain('RightOutlined as ChevronRight')
+    expect(content).not.toContain('<ChevronRight')
+    expect(content).not.toContain('>›<')
+    expect(content).not.toContain('>><')
   })
 
   it('groups inspector stream chunks and hides stale approval actions', () => {

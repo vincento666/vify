@@ -120,8 +120,9 @@
               </span>
               <strong class="ai-run-event-group__title-text">已处理</strong>
               <small class="ai-run-event-group__meta">{{ processedGroupMeta(item.items) }}</small>
-              <ChevronRight
+              <CollapseChevron
                 class="ai-collapse-chevron"
+                aria-hidden="true"
                 :class="{ expanded: isProcessedGroupExpanded(item, thread) }"
               />
             </button>
@@ -168,8 +169,9 @@
                     @click="toggleEventCard(eventItem.id)"
                   >
                     <strong class="ai-event__title-text">{{ eventItem.title }}</strong>
-                    <ChevronRight
+                    <CollapseChevron
                       class="ai-collapse-chevron"
+                      aria-hidden="true"
                       :class="{ expanded: isEventExpanded(eventItem.id) }"
                     />
                   </button>
@@ -206,8 +208,9 @@
                           <strong>{{ toolInvocation.title }}</strong>
                           <small>{{ toolInvocation.subtitle || toolInvocation.statusText }}</small>
                           <span>{{ toolInvocation.statusText }}</span>
-                          <ChevronRight
+                          <CollapseChevron
                             class="ai-collapse-chevron"
+                            aria-hidden="true"
                             :class="{ expanded: isToolInvocationExpanded(eventItem, toolInvocation) }"
                           />
                         </button>
@@ -629,6 +632,7 @@
 
 <script setup lang="ts">
 import {
+  CaretRightOutlined as CollapseChevron,
   CheckCircleOutlined,
   ClearOutlined,
   CopyOutlined,
@@ -641,7 +645,6 @@ import {
   LikeOutlined,
   LoadingOutlined,
   PlusOutlined,
-  RightOutlined as ChevronRight,
   SafetyCertificateOutlined,
   SendOutlined,
   SettingOutlined,
@@ -1541,6 +1544,9 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
 
 <style scoped>
 .ai-shell {
+  --ai-icon-button-size: 1.875rem;
+  --ai-icon-button-radius: 0.375rem;
+  --ai-icon-glyph-size: 0.875rem;
   height: calc(100vh - var(--header-height, 3.5rem) - 3rem);
   max-height: calc(100vh - var(--header-height, 3.5rem) - 3rem);
   box-sizing: border-box;
@@ -1601,6 +1607,29 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
 .ai-shell :deep(.ant-tag) {
   border: 0;
   box-shadow: none;
+}
+
+.ai-shell :deep(.ant-btn .anticon) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--ai-icon-glyph-size);
+  line-height: 1;
+}
+
+.ai-shell :deep(.ant-btn-icon-only),
+.ai-session__delete,
+.ai-message__actions :deep(.ant-btn),
+.ai-composer__icon-button,
+.ai-composer__send {
+  width: var(--ai-icon-button-size);
+  min-width: var(--ai-icon-button-size);
+  height: var(--ai-icon-button-size);
+  padding: 0;
+  border-radius: var(--ai-icon-button-radius);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .ai-shell :deep(.ant-select-selector),
@@ -2240,9 +2269,9 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
 
 .ai-composer__icon-button,
 .ai-composer__permission {
-  min-width: 2rem;
-  height: 2rem;
-  border-radius: 0.5rem;
+  min-width: var(--ai-icon-button-size);
+  height: var(--ai-icon-button-size);
+  border-radius: var(--ai-icon-button-radius);
 }
 
 .ai-composer__permission {
@@ -2254,9 +2283,9 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
 }
 
 .ai-composer__send {
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: 0.5rem;
+  width: var(--ai-icon-button-size);
+  height: var(--ai-icon-button-size);
+  border-radius: var(--ai-icon-button-radius);
 }
 
 .ai-inspector {
