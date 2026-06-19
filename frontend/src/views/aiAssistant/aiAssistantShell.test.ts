@@ -211,7 +211,7 @@ describe('AI Assistant shell UI contract', () => {
     expect(content).toContain("item.kind === 'processed'")
     expect(content).toContain("item.kind === 'assistant-output'")
     expect(content).toContain('思考')
-    expect(content).toContain('文件操作')
+    expect(content).not.toContain('文件操作')
     expect(content).toContain('工具调用')
     expect(content).toContain("kind === 'file'")
     expect(content).toContain('EditOutlined')

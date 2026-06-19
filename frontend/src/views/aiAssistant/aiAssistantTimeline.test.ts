@@ -336,11 +336,14 @@ describe('ai assistant execution timeline', () => {
     ])
     expect(readItem.kind).toBe('file')
     expect(readItem.details[1].value).toContain('内容预览：规范索引正文')
+    expect(readItem.details[0].value).toBe('路径：specs/README.md')
+    expect(readItem.details[0].value).not.toContain('读取：specs/README.md')
+    expect(readItem.details[1].value).not.toContain('读取：specs/README.md')
     expect(toolItem.details).toEqual([])
     expect(toolItem.toolInvocations).toHaveLength(1)
     expect(toolItem.toolInvocations?.[0]).toMatchObject({
-      title: '工具调用',
-      subtitle: '调用 2 个工具',
+      title: '知识库检索、使用技能',
+      subtitle: '2 个工具',
       statusText: '已完成',
       tone: 'success',
     })
@@ -368,7 +371,10 @@ describe('ai assistant execution timeline', () => {
       }),
     )
     expect(writeItem.kind).toBe('file')
+    expect(writeItem.details[0].value).toBe('路径：tmp/ai-assistant-fuzzy-uat-2.md\n内容预览：三段式中文校验记录')
     expect(writeItem.details[1].value).toContain('结果：已写入 tmp/ai-assistant-fuzzy-uat-2.md（36 bytes）')
+    expect(writeItem.details[0].value).not.toContain('编辑：tmp/ai-assistant-fuzzy-uat-2.md')
+    expect(writeItem.details[1].value).not.toContain('编辑：tmp/ai-assistant-fuzzy-uat-2.md')
     expect(JSON.stringify(toolItem.toolInvocations)).not.toContain('skill=tdd')
     expect(JSON.stringify(toolItem.toolInvocations)).not.toContain('技能调用')
   })
@@ -467,6 +473,66 @@ describe('ai assistant execution timeline', () => {
     expect(JSON.stringify(timeline[0].details)).not.toContain('等待结果')
   })
 
+  it('deduplicates repeated file detail rows when the same path is read more than once', () => {
+    const events: AiAssistantEvent[] = [
+      {
+        ...event(1, 'tool.call_started', '工具开始', 'first read started', {
+          toolName: 'read_workspace_file',
+          input: { path: 'tmp/repeated.md' },
+        }),
+        toolCallId: 101,
+      },
+      {
+        ...event(2, 'tool.call_output', '工具输出', 'first read', {
+          toolName: 'read_workspace_file',
+          input: { path: 'tmp/repeated.md' },
+          output: { path: 'tmp/repeated.md', content: '重复内容' },
+        }),
+        toolCallId: 101,
+      },
+      {
+        ...event(3, 'tool.call_completed', '工具完成', 'first read done', {
+          toolName: 'read_workspace_file',
+          status: 'COMPLETED',
+        }),
+        toolCallId: 101,
+      },
+      {
+        ...event(4, 'tool.call_started', '工具开始', 'second read started', {
+          toolName: 'read_workspace_file',
+          input: { path: 'tmp/repeated.md' },
+        }),
+        toolCallId: 102,
+      },
+      {
+        ...event(5, 'tool.call_output', '工具输出', 'second read', {
+          toolName: 'read_workspace_file',
+          input: { path: 'tmp/repeated.md' },
+          output: { path: 'tmp/repeated.md', content: '重复内容' },
+        }),
+        toolCallId: 102,
+      },
+      {
+        ...event(6, 'tool.call_completed', '工具完成', 'second read done', {
+          toolName: 'read_workspace_file',
+          status: 'COMPLETED',
+        }),
+        toolCallId: 102,
+      },
+    ]
+
+    const timeline = buildAiAssistantTimeline(events)
+
+    expect(timeline).toHaveLength(1)
+    expect(timeline[0]).toMatchObject({ kind: 'file', title: '已读取 1 个文件' })
+    expect(timeline[0].details).toContainEqual({ label: '输入', value: '路径：tmp/repeated.md', monospace: true })
+    expect(timeline[0].details).toContainEqual({
+      label: '结果',
+      value: '结果：已读取 tmp/repeated.md\n内容预览：重复内容',
+      monospace: true,
+    })
+  })
+
   it('renders only supported execution echo event categories in processed groups', () => {
     const events: AiAssistantEvent[] = [
       event(1, 'run.started', '运行开始', 'started', {}),
@@ -488,7 +554,9 @@ describe('ai assistant execution timeline', () => {
 
     expect(timeline.map((item) => item.title)).toEqual(['思考过程', '已读取 1 个文件', '审批通过'])
     expect(timeline.map((item) => item.kind)).toEqual(['model-thought', 'file', 'approval'])
-    expect(timeline[1].details[1].value).toContain('内容预览：文件正文')
+    expect(timeline[1].details).toContainEqual(
+      expect.objectContaining({ label: '结果', value: expect.stringContaining('内容预览：文件正文') }),
+    )
     expect(timeline[2].details).toEqual([{ label: '内容', value: 'operator-ui 已批准 写入工作区文件。' }])
   })
 

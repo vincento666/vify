@@ -1148,13 +1148,8 @@ function finalAnswerFromRun(run: AiAssistantRun) {
 
 function processedGroupMeta(items: AiAssistantTimelineItem[]) {
   const thoughtCount = items.filter((item) => item.kind === 'model-thought').length
-  const fileCount = items.filter((item) => item.kind === 'file').length
   const toolCount = items.filter((item) => item.kind === 'tool' || item.kind === 'tool-output').length
-  return [
-    `思考 ${thoughtCount} 次`,
-    fileCount > 0 ? `文件操作 ${fileCount} 次` : '',
-    `工具调用 ${toolCount} 次`,
-  ].filter(Boolean).join(' / ')
+  return `思考 ${thoughtCount} 次 / 工具调用 ${toolCount} 次`
 }
 
 function isProcessedGroupRunning(item: AiAssistantRunPresentationItem, thread: AiAssistantRunThread) {

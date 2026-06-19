@@ -383,20 +383,18 @@ function fileGroupsTitle(groups: ToolEventGroup[]) {
 }
 
 function fileGroupsToDetails(groups: ToolEventGroup[]): AiAssistantTimelineDetail[] {
-  const input = groups
-    .map((group) => {
-      const path = workspacePathFromValue(group.input) || workspacePathFromValue(group.output) || toolInvocationSubtitle(group)
+  const input = uniqueBlocks(
+    groups.map((group) => {
       const rows = toolInputRows(group)
-      return `${fileOperationLabel(group.toolName)}：${path || '未命名文件'}${rows.length > 0 ? `\n${rowsToBlock(rows)}` : ''}`
-    })
-    .join('\n\n')
-  const output = groups
-    .map((group) => {
-      const path = workspacePathFromValue(group.input) || workspacePathFromValue(group.output) || toolInvocationSubtitle(group)
+      return rowsToBlock(rows)
+    }),
+  ).join('\n\n')
+  const output = uniqueBlocks(
+    groups.map((group) => {
       const rows = toolOutputRows(group)
-      return `${fileOperationLabel(group.toolName)}：${path || '未命名文件'}${rows.length > 0 ? `\n${rowsToBlock(rows)}` : ''}`
-    })
-    .join('\n\n')
+      return rowsToBlock(rows)
+    }),
+  ).join('\n\n')
   const details: AiAssistantTimelineDetail[] = [
     { label: '输入', value: input, monospace: true },
     { label: '结果', value: output, monospace: true },
@@ -404,11 +402,8 @@ function fileGroupsToDetails(groups: ToolEventGroup[]): AiAssistantTimelineDetai
   return details.filter((row) => row.value.trim() !== '')
 }
 
-function fileOperationLabel(toolName: string) {
-  if (toolName === 'read_workspace_file') return '读取'
-  if (toolName === 'create_workspace_file') return '创建'
-  if (toolName === 'write_workspace_file') return '编辑'
-  return '文件'
+function uniqueBlocks(blocks: string[]) {
+  return Array.from(new Set(blocks.map((block) => block.trim()).filter(Boolean)))
 }
 
 function uniqueFilePaths(groups: ToolEventGroup[]) {
@@ -430,13 +425,20 @@ function toolGroupsToSummaryInvocation(groups: ToolEventGroup | ToolEventGroup[]
   const single = invocations.length === 1 ? invocations[0] : undefined
   return {
     id: `${first.id}-summary`,
-    title: single?.title ?? '工具调用',
-    subtitle: single?.subtitle || `调用 ${invocations.length} 个工具`,
+    title: toolSummaryTitle(invocations),
+    subtitle: single?.subtitle || `${invocations.length} 个工具`,
     statusText: toolGroupsStatusText(orderedGroups),
     tone: toolGroupsTone(orderedGroups),
     inputRows: toolSummaryInputRows(invocations),
     outputRows: toolSummaryOutputRows(invocations),
   }
+}
+
+function toolSummaryTitle(invocations: AiAssistantToolInvocation[]) {
+  const titles = Array.from(new Set(invocations.map((invocation) => invocation.title).filter(Boolean)))
+  if (titles.length === 0) return '工具调用'
+  if (titles.length <= 3) return titles.join('、')
+  return `${titles.slice(0, 3).join('、')}等 ${titles.length} 个工具`
 }
 
 function toolGroupsStatusText(groups: ToolEventGroup[]) {
@@ -625,7 +627,7 @@ function toolOutputRows(group: ToolEventGroup): AiAssistantToolInvocationRow[] {
     const status = summarizeToolStatus(group)
     const content = fieldValue(output, 'content') || fieldValue(output, 'text')
     return compactRows([
-      ['结果', status || (content ? `已读取 ${fieldValue(output, 'path') || toolInvocationSubtitle(group)}` : '等待结果')],
+      ['结果', content ? `已读取 ${fieldValue(output, 'path') || toolInvocationSubtitle(group)}` : status || '等待结果'],
       ['内容预览', truncateBlock(content), true],
     ])
   }

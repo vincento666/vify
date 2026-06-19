@@ -1,0 +1,17 @@
+RED evidence for 193.18 File Echo Polish Follow-Up
+
+Command:
+rtk npm --prefix frontend run test:unit -- src/views/aiAssistant/aiAssistantTimeline.test.ts src/views/aiAssistant/aiAssistantShell.test.ts
+
+Expected failures before implementation:
+
+- Shell contract failed because `processedGroupMeta` still rendered `文件操作`.
+- Timeline contract failed because file detail input rendered
+  `读取：specs/README.md\n路径：specs/README.md` instead of only
+  `路径：specs/README.md`.
+- Timeline contract failed until repeated readbacks with separate tool call ids
+  deduped identical `路径` and result blocks.
+
+These failures matched the browser screenshot issues: duplicated file operation
+detail lines, file count in the `已处理` header, and repeated generic tool child
+headers.

@@ -240,3 +240,20 @@
       real OpenRouter qwen3.5-27b browser UAT, and `git diff --check`.
 - [x] Save evidence under
       `artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.17-file-echo-and-tool-summary-ui/`.
+
+## 193.18 File Echo Polish Follow-Up
+
+- [x] RED: frontend timeline contract fails while file details repeat both the
+      operation label and `路径` for the same file.
+- [x] RED: frontend shell contract fails until the folded `已处理` header stops
+      counting file operations.
+- [x] RED: frontend timeline contract fails until a multi-tool child header
+      shows concrete tool names instead of another generic `工具调用`.
+- [x] Remove duplicated `读取/编辑/创建：path` prefixes from file detail values
+      and dedupe identical repeated file detail blocks for repeated readback.
+- [x] Rename multi-tool invocation headers to a compact joined tool-name label
+      such as `知识库检索、使用技能`.
+- [x] Revalidate with focused frontend unit, `remScaleClosure`, full frontend
+      unit, frontend build, browser UAT, and `git diff --check`.
+- [x] Save evidence under
+      `artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.18-file-echo-polish/`.
