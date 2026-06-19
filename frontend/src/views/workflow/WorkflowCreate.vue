@@ -3547,8 +3547,7 @@
               <span>{{ chatflowCheckpoint?.pendingNodeKey || chatflowWaitingEvent?.nodeKey || 'pending' }}</span>
             </div>
             <p>
-              Checkpoint #{{ chatflowCheckpoint?.id || chatflowWaitingEvent?.checkpointId }}
-              · Event #{{ chatflowWaitingEvent?.id || chatflowCheckpoint?.eventId }}
+              请按下方表单补充信息，提交后会继续当前会话。
             </p>
             <div
               v-for="field in chatflowResumeFields"
@@ -3986,7 +3985,7 @@
                 :disabled="targetedRuntimeV2RunLoadingId === version.id"
                 @click="runPublishedVersionWithRuntimeV2(version.id)"
               >
-                Runtime v2 测试
+                实时测试
               </button>
               <button
                 v-if="version.canRollback"
@@ -4009,11 +4008,10 @@
             class="targeted-runtime-v2-run-result"
             data-testid="workflow-version-run-v2-result"
           >
-            Runtime v2 版本 v{{ targetedRuntimeV2RunResult.version }}
+            实时运行版本 v{{ targetedRuntimeV2RunResult.version }}
             · Run #{{ targetedRuntimeV2RunResult.runId }}
             · {{ targetedRuntimeV2RunResult.status }}
             · versionId {{ targetedRuntimeV2RunResult.versionId }}
-            · debugRef {{ targetedRuntimeV2RunResult.debugRef || targetedRuntimeV2RunResult.resultRef || targetedRuntimeV2RunResult.eventsRef }}
           </p>
         </section>
 
@@ -9319,9 +9317,9 @@ async function runPublishedVersionWithRuntimeV2(versionId: number) {
       ...started,
       debugRef: started.debugRef || started.eventsRef || started.resultRef || '',
     }
-    message.success('已启动 Runtime v2 版本测试')
+    message.success('已启动实时版本测试')
   } catch (e: any) {
-    message.error(e?.message || 'Runtime v2 版本测试失败')
+    message.error(e?.message || '实时版本测试失败')
   } finally {
     targetedRuntimeV2RunLoadingId.value = 0
   }
