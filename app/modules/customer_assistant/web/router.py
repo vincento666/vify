@@ -40,6 +40,7 @@ from app.modules.customer_assistant.domain.worker_runtime import CustomerAssista
 from app.modules.customer_assistant.domain.worker_profiles import CustomerAssistantWorkerProfileCatalog
 from app.modules.customer_assistant.infra.repository import CustomerAssistantRepository
 from app.modules.customer_assistant.web.schemas import (
+    CustomerAssistantMessageRequest,
     CustomerAssistantOperatorKnowledgeQaRequest,
     CustomerAssistantProposedActionDecisionRequest,
     CustomerAssistantProposedActionUpdateRequest,
@@ -307,6 +308,41 @@ def submit_turn(
     service: CustomerAssistantService = Depends(get_customer_assistant_service),
 ) -> dict[str, Any]:
     return success(service.handle_turn(session_id, request.message, request.idempotency_key, request.actor))
+
+
+@router.post("/messages")
+def submit_message(
+    request: CustomerAssistantMessageRequest,
+    _access: RequestContext = Depends(require_customer_assistant_operate),
+    service: CustomerAssistantService = Depends(get_customer_assistant_service),
+) -> dict[str, Any]:
+    return success(
+        service.handle_message(
+            session_id=request.session_id,
+            message=request.message,
+            idempotency_key=request.idempotency_key,
+            actor=request.actor,
+            wait_timeout_ms=request.wait_timeout_ms,
+        )
+    )
+
+
+@router.post("/sessions/{session_id}/messages")
+def submit_session_message(
+    session_id: int,
+    request: CustomerAssistantMessageRequest,
+    _access: RequestContext = Depends(require_customer_assistant_operate),
+    service: CustomerAssistantService = Depends(get_customer_assistant_service),
+) -> dict[str, Any]:
+    return success(
+        service.handle_message(
+            session_id=session_id,
+            message=request.message,
+            idempotency_key=request.idempotency_key,
+            actor=request.actor,
+            wait_timeout_ms=request.wait_timeout_ms,
+        )
+    )
 
 
 @router.post("/harness/spawn-sub-agent")

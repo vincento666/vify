@@ -264,6 +264,31 @@ class CustomerAssistantService:
 
         return self._execute_turn_for_run(int(run["id"]), session_id, message, actor, turn_mode)
 
+    def handle_message(
+        self,
+        *,
+        session_id: int | None,
+        message: str,
+        idempotency_key: str | None = None,
+        actor: CustomerAssistantActor = DEFAULT_CUSTOMER_ASSISTANT_ACTOR,
+        wait_timeout_ms: int | None = None,
+    ) -> dict[str, Any]:
+        if session_id is None:
+            created = self.create_session({})
+            session_id = int(created["id"])
+        turn_payload = self.handle_turn(session_id, message, idempotency_key, actor)
+        run_id = int(turn_payload["runId"])
+        if not turn_payload.get("replayed"):
+            self._append_message_gateway_events(session_id, run_id, message, turn_payload, actor)
+        refreshed_events = self.list_events(session_id)["list"]
+        return _message_gateway_payload(
+            {
+                **turn_payload,
+                "events": refreshed_events,
+                "waitTimeoutMs": wait_timeout_ms,
+            }
+        )
+
     def spawn_sub_agent(
         self,
         *,
@@ -1636,6 +1661,77 @@ class CustomerAssistantService:
         if str(host_context.get("tenantId") or "") != self._request_context.tenant_id:
             raise BizError(ErrorCode.FORBIDDEN, "Customer assistant session belongs to another tenant")
 
+    def _append_message_gateway_events(
+        self,
+        session_id: int,
+        run_id: int,
+        message: str,
+        turn_payload: dict[str, Any],
+        actor: str,
+    ) -> None:
+        gateway = _message_gateway_payload(turn_payload)
+        base_payload = {
+            "runId": run_id,
+            "conversationId": gateway["conversationId"],
+            "sessionId": session_id,
+            "message": message,
+            "status": gateway["status"],
+        }
+        answer = str(gateway.get("answer") or "")
+        if answer:
+            self._repository.append_event(
+                session_id,
+                "message.delta",
+                {**base_payload, "delta": answer},
+                run_id=run_id,
+                visibility="customer",
+                source="customer_assistant_gateway",
+                actor=actor,
+            )
+        self._repository.append_event(
+            session_id,
+            "message.completed",
+            {**base_payload, "answer": answer},
+            run_id=run_id,
+            visibility="customer",
+            source="customer_assistant_gateway",
+            actor=actor,
+        )
+        if gateway["requiresInput"]:
+            self._repository.append_event(
+                session_id,
+                "requires_input",
+                {
+                    **base_payload,
+                    "missingFields": _message_gateway_missing_fields(turn_payload),
+                    "pendingActionCount": len(turn_payload.get("proposedActions") or []),
+                },
+                run_id=run_id,
+                visibility="customer",
+                source="customer_assistant_gateway",
+                actor=actor,
+            )
+        if _message_gateway_handoff_requested(turn_payload):
+            self._repository.append_event(
+                session_id,
+                "handoff_requested",
+                base_payload,
+                run_id=run_id,
+                visibility="operator",
+                source="customer_assistant_gateway",
+                actor=actor,
+            )
+        run_event_type = "run.failed" if gateway["status"] == "FAILED" else "run.completed"
+        self._repository.append_event(
+            session_id,
+            run_event_type,
+            {**base_payload, "answer": answer},
+            run_id=run_id,
+            visibility="operator",
+            source="customer_assistant_gateway",
+            actor=actor,
+        )
+
     def _select_task_commands(
         self,
         session_id: int,
@@ -2713,6 +2809,7 @@ def _formatted_action_sort_key(action: dict[str, Any]) -> tuple[int, int, int]:
 
 
 def _turn_result_payload(result: AssistantTurnResult, *, replayed: bool) -> dict[str, Any]:
+    chatflow_session = _turn_chatflow_session(result.task_summaries)
     return {
         "runId": result.run_id,
         "sessionId": result.session_id,
@@ -2724,7 +2821,175 @@ def _turn_result_payload(result: AssistantTurnResult, *, replayed: bool) -> dict
         "warnings": sanitize_value(result.warnings),
         "events": result.events,
         "replayed": replayed,
+        "chatflowSession": chatflow_session,
+        "recovery": _turn_recovery_projection(result.session_id, result.events, chatflow_session),
     }
+
+
+def _message_gateway_payload(turn_payload: dict[str, Any]) -> dict[str, Any]:
+    session_id = int(turn_payload["sessionId"])
+    run_id = int(turn_payload["runId"])
+    status = _message_gateway_status(turn_payload)
+    after_sequence = _last_event_sequence(turn_payload.get("events") or [])
+    chatflow_session = _turn_chatflow_session(turn_payload.get("taskSummaries") or []) or turn_payload.get("chatflowSession")
+    return {
+        **turn_payload,
+        "sessionId": session_id,
+        "conversationId": f"customer-assistant:{session_id}",
+        "runId": run_id,
+        "status": status,
+        "answer": str(turn_payload.get("customerReplyDraft") or turn_payload.get("operatorRecommendation") or ""),
+        "requiresInput": _message_gateway_requires_input(turn_payload, status),
+        "eventsRef": f"/api/v1/customer-assistant/sessions/{session_id}/events",
+        "eventStreamRef": event_stream_ref(session_id, after_sequence=0),
+        "resumeStreamRef": event_stream_ref(session_id, after_sequence=after_sequence),
+        "chatflowSession": chatflow_session,
+        "recovery": _turn_recovery_projection(session_id, turn_payload.get("events") or [], chatflow_session),
+    }
+
+
+def _turn_chatflow_session(task_summaries: list[dict[str, Any]] | Any) -> dict[str, Any] | None:
+    if not isinstance(task_summaries, list):
+        return None
+    for task in reversed(task_summaries):
+        if not isinstance(task, dict):
+            continue
+        projected = _task_chatflow_session(task)
+        if projected is not None:
+            return projected
+    return None
+
+
+def _task_chatflow_session(task: dict[str, Any]) -> dict[str, Any] | None:
+    last_result = task.get("lastResult")
+    if isinstance(last_result, dict):
+        evidence = last_result.get("evidence")
+        if isinstance(evidence, dict) and isinstance(evidence.get("chatflowSession"), dict):
+            return sanitize_value(dict(evidence["chatflowSession"]))
+    checkpoint = task.get("checkpoint")
+    if not isinstance(checkpoint, dict):
+        return None
+    scoped_variables = checkpoint.get("scopedVariables") or checkpoint.get("scoped_variables")
+    if not isinstance(scoped_variables, dict):
+        return None
+    meta = scoped_variables.get("__chatflow")
+    if not isinstance(meta, dict):
+        return None
+    runtime_refs = dict(meta.get("runtimeRefs") or {})
+    run_id = _optional_int(meta.get("runId") or runtime_refs.get("runId"))
+    session_id = str(meta.get("sessionId") or "")
+    if not session_id:
+        return None
+    projection: dict[str, Any] = {
+        "gatewayMode": "messages:stream",
+        "sessionId": session_id,
+        "conversationId": session_id,
+        "assistantSessionId": _optional_int(task.get("sessionId")),
+        "currentSopId": str(task.get("workerRef") or ""),
+        "taskId": _optional_int(task.get("id")),
+        "taskKey": str(task.get("taskKey") or ""),
+        "status": str(task.get("status") or ""),
+        "runId": run_id,
+        "runtimeVersion": _optional_int(meta.get("runtimeVersion")),
+    }
+    if meta.get("checkpointId") is not None:
+        projection["checkpointId"] = _optional_int(meta.get("checkpointId"))
+    if run_id is not None:
+        projection["statusRef"] = runtime_refs.get("statusRef") or f"/api/v1/runtime-runs/{run_id}"
+        projection["eventsRef"] = runtime_refs.get("eventsRef") or f"/api/v1/runtime-runs/{run_id}/events"
+        projection["eventStreamRef"] = runtime_refs.get("eventStreamRef") or f"/api/v1/runtime-runs/{run_id}/events/stream?afterSequence=0"
+        projection["resultRef"] = runtime_refs.get("resultRef") or f"/api/v1/runtime-runs/{run_id}/result"
+    return sanitize_value(projection)
+
+
+def _turn_recovery_projection(
+    session_id: int,
+    events: list[Any],
+    chatflow_session: dict[str, Any] | None,
+) -> dict[str, Any]:
+    after_sequence = _last_event_sequence(events)
+    recovery: dict[str, Any] = {
+        "sessionId": session_id,
+        "afterSequence": after_sequence,
+        "eventsRef": f"/api/v1/customer-assistant/sessions/{session_id}/events",
+        "eventStreamRef": event_stream_ref(session_id, after_sequence=after_sequence),
+    }
+    if isinstance(chatflow_session, dict):
+        recovery["chatflowSessionId"] = chatflow_session.get("sessionId")
+        recovery["currentSopId"] = chatflow_session.get("currentSopId")
+        recovery["runtimeRunId"] = chatflow_session.get("runId")
+        if chatflow_session.get("eventStreamRef"):
+            recovery["chatflowEventStreamRef"] = chatflow_session.get("eventStreamRef")
+    return sanitize_value(recovery)
+
+
+def _message_gateway_status(turn_payload: dict[str, Any]) -> str:
+    task_statuses = {
+        str(task.get("status") or "")
+        for task in turn_payload.get("taskSummaries") or []
+        if isinstance(task, dict)
+    }
+    if "FAILED" in task_statuses:
+        return "FAILED"
+    if task_statuses.intersection({"PENDING", "RUNNING", "WAITING"}):
+        return "WAITING"
+    if turn_payload.get("warnings"):
+        return "WAITING"
+    return "COMPLETED"
+
+
+def _message_gateway_requires_input(turn_payload: dict[str, Any], status: str) -> bool:
+    if status == "WAITING":
+        return True
+    if turn_payload.get("proposedActions"):
+        return True
+    return bool(_message_gateway_missing_fields(turn_payload))
+
+
+def _message_gateway_missing_fields(turn_payload: dict[str, Any]) -> list[str]:
+    missing: list[str] = []
+    for task in turn_payload.get("taskSummaries") or []:
+        if not isinstance(task, dict):
+            continue
+        last_result = task.get("lastResult")
+        if isinstance(last_result, dict):
+            for value in last_result.get("missingFields") or []:
+                text = str(value or "").strip()
+                if text and text not in missing:
+                    missing.append(text)
+        checkpoint = task.get("checkpoint")
+        if isinstance(checkpoint, dict):
+            prompt = str(checkpoint.get("pendingPrompt") or checkpoint.get("pending_prompt") or "").strip()
+            if prompt and prompt not in missing:
+                missing.append(prompt)
+    return missing
+
+
+def _message_gateway_handoff_requested(turn_payload: dict[str, Any]) -> bool:
+    for action in turn_payload.get("proposedActions") or []:
+        if not isinstance(action, dict):
+            continue
+        action_type = str(action.get("actionType") or "").lower()
+        if "handoff" in action_type:
+            return True
+    for task in turn_payload.get("taskSummaries") or []:
+        if not isinstance(task, dict):
+            continue
+        if str(task.get("taskType") or "").upper() == "HANDOFF":
+            return True
+    return False
+
+
+def _last_event_sequence(events: list[Any]) -> int:
+    sequences = []
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        try:
+            sequences.append(int(event.get("sequence") or 0))
+        except (TypeError, ValueError):
+            continue
+    return max(sequences, default=0)
 
 
 def _sub_agent_run_payload(*, run_id: int, session_id: int, status: str) -> dict[str, Any]:

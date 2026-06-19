@@ -1,0 +1,82 @@
+> vitest run src/api/customerAssistant.test.ts
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ ❯ src/api/customerAssistant.test.ts (17 tests | 2 failed) 17ms
+   × customer-assistant frontend API client > uses the customer-assistant session and message endpoints 12ms
+     → expected 2nd "spy" call to have been called with [ …(2) ]
+   × customer-assistant frontend API client > sends actor through the turn endpoint 1ms
+     → expected "spy" to be called with arguments: [ …(2) ]
+Received:
+  1st spy call:
+@@ -1,7 +1,7 @@
+  [
+-   "/v1/customer-assistant/sessions/12/messages",
++   "/v1/customer-assistant/sessions/12/turns",
+    {
+      "actor": "operator",
+      "idempotencyKey": "047-actor",
+      "message": "请帮我看下退票建议",
+    },
+Number of calls: 1
+   ✓ customer-assistant frontend API client > spawns and reads customer-assistant sub-agent harness runs 0ms
+   ✓ customer-assistant frontend API client > delivers confirmed customer reply draft actions 0ms
+   ✓ customer-assistant frontend API client > lists task and event ledgers 0ms
+   ✓ customer-assistant frontend API client > loads session observability metrics 0ms
+   ✓ customer-assistant frontend API client > lists session-scoped operator audit rows 0ms
+   ✓ customer-assistant frontend API client > requests cancellation for a worker run 0ms
+   ✓ customer-assistant frontend API client > asks a session-scoped operator knowledge question 0ms
+   ✓ customer-assistant frontend API client > lists seeded demo stories 0ms
+   ✓ customer-assistant frontend API client > loads seeded demo story observability metrics 0ms
+   ✓ customer-assistant frontend API client > lists worker profile catalog entries for the workbench 0ms
+   ✓ customer-assistant frontend API client > updates worker profile catalog entries through the patch endpoint 0ms
+   ✓ customer-assistant frontend API client > confirms, rejects, and executes proposed actions through explicit endpoints 0ms
+   ✓ customer-assistant frontend API client > updates pending proposed actions through the patch endpoint 0ms
+   ✓ customer-assistant frontend API client > proposes task controls through the session task endpoint 0ms
+   ✓ customer-assistant frontend API client > refreshes pending worker results through the session endpoint 0ms
+ Test Files  1 failed (1)
+      Tests  2 failed | 15 passed (17)
+   Start at  14:04:39
+   Duration  268ms (transform 38ms, setup 0ms, collect 32ms, tests 17ms, environment 0ms, prepare 66ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/api/customerAssistant.test.ts > customer-assistant frontend API client > uses the customer-assistant session and message endpoints
+AssertionError: expected 2nd "spy" call to have been called with [ …(2) ]
+- Expected
++ Received
+  [
+-   "/v1/customer-assistant/sessions/12/messages",
++   "/v1/customer-assistant/sessions/12/turns",
+    {
+      "idempotencyKey": "046-red",
+      "message": "我要退票",
+    },
+  ]
+ ❯ src/api/customerAssistant.test.ts:39:31
+     37|       context: { customerId: 'C-046' },
+     38|     })
+     39|     expect(requestMocks.post).toHaveBeenNthCalledWith(2, '/v1/customer…
+       |                               ^
+     40|       message: '我要退票',
+     41|       idempotencyKey: '046-red',
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+ FAIL  src/api/customerAssistant.test.ts > customer-assistant frontend API client > sends actor through the turn endpoint
+AssertionError: expected "spy" to be called with arguments: [ …(2) ]
+Received:
+  1st spy call:
+@@ -1,7 +1,7 @@
+  [
+-   "/v1/customer-assistant/sessions/12/messages",
++   "/v1/customer-assistant/sessions/12/turns",
+    {
+      "actor": "operator",
+      "idempotencyKey": "047-actor",
+      "message": "请帮我看下退票建议",
+    },
+Number of calls: 1
+ ❯ src/api/customerAssistant.test.ts:56:31
+     54|     })
+     55|
+     56|     expect(requestMocks.post).toHaveBeenCalledWith('/v1/customer-assis…
+       |                               ^
+     57|       message: '请帮我看下退票建议',
+     58|       idempotencyKey: '047-actor',
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯

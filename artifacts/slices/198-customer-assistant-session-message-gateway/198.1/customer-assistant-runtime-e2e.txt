@@ -1,0 +1,47 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.9, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/vincento/work/develop/hify
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, anyio-4.13.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1 item
+
+tests/e2e/customer_assistant/test_customer_assistant_runtime_e2e.py F    [100%]
+
+=================================== FAILURES ===================================
+_ CustomerAssistantRuntimeE2ETest.test_refund_and_baggage_multitask_resume_proposed_action_and_events _
+
+self = <test_customer_assistant_runtime_e2e.CustomerAssistantRuntimeE2ETest testMethod=test_refund_and_baggage_multitask_resume_proposed_action_and_events>
+
+    def test_refund_and_baggage_multitask_resume_proposed_action_and_events(self) -> None:
+        with TestClient(app) as client:
+            session_id = client.post("/api/v1/customer-assistant/sessions", json={}).json()["data"]["id"]
+            first = _turn(client, session_id, "我要退票，也想问行李额", "multi-1")
+            replay = _turn(client, session_id, "我要退票，也想问行李额", "multi-1")
+            continued = _turn(client, session_id, "订单号 TK-100", "multi-2")
+            completed = _turn(client, session_id, "确认", "multi-3")
+            replay_completed = _turn(client, session_id, "确认", "multi-3")
+            tasks = client.get(f"/api/v1/customer-assistant/sessions/{session_id}/tasks").json()["data"]["list"]
+            events = client.get(f"/api/v1/customer-assistant/sessions/{session_id}/events").json()["data"]["list"]
+
+        self.assertEqual([summary["taskKey"] for summary in first["taskSummaries"]], ["refund_ticket", "baggage_qa"])
+>       self.assertEqual([summary["status"] for summary in first["taskSummaries"]], ["WAITING", "COMPLETED"])
+E       AssertionError: Lists differ: ['WAITING', 'RUNNING'] != ['WAITING', 'COMPLETED']
+E
+E       First differing element 1:
+E       'RUNNING'
+E       'COMPLETED'
+E
+E       - ['WAITING', 'RUNNING']
+E       + ['WAITING', 'COMPLETED']
+
+tests/e2e/customer_assistant/test_customer_assistant_runtime_e2e.py:43: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/vincento/work/develop/hify/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/e2e/customer_assistant/test_customer_assistant_runtime_e2e.py::CustomerAssistantRuntimeE2ETest::test_refund_and_baggage_multitask_resume_proposed_action_and_events
+========================= 1 failed, 1 warning in 8.58s =========================

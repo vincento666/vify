@@ -1,0 +1,1 @@
+PASS customer assistant message gateway UAT session=18 screenshot=/Users/vincento/work/develop/hify/artifacts/slices/198-customer-assistant-session-message-gateway/198.1/screenshots/customer-assistant-message-gateway.png

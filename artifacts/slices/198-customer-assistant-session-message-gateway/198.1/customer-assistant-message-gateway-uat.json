@@ -1,0 +1,3890 @@
+{
+  "first": {
+    "runId": 41,
+    "sessionId": 18,
+    "replyType": "DRAFT",
+    "operatorRecommendation": "Operator recommendations:\n- refund_ticket worker WAITING at collect_order_no",
+    "customerReplyDraft": "已开始退票，请提供订单号、手机号和乘机人信息。",
+    "taskSummaries": [
+      {
+        "id": 26,
+        "sessionId": 18,
+        "taskKey": "refund_ticket",
+        "taskType": "REFUND",
+        "businessKey": "refund_ticket",
+        "shortId": "RETI",
+        "status": "WAITING",
+        "workerType": "chatflow_sop",
+        "workerRef": "refund_ticket",
+        "checkpoint": {
+          "version": 1,
+          "collected": {
+            "actor": "customer",
+            "message": "我要退票"
+          },
+          "currentStep": "collect_order_no",
+          "sopRuntimeId": "fake:refund_ticket:26",
+          "currentNodeId": "collect_order_no",
+          "pendingPrompt": "请提供订单号、手机号和乘机人信息。",
+          "scopedVariables": {
+            "conversation.actor": "customer",
+            "conversation.message": "我要退票"
+          }
+        },
+        "lastResult": {
+          "error": null,
+          "events": [
+            {
+              "type": "worker_result_received",
+              "source": "chatflow_sop",
+              "payload": {
+                "type": "SOP_STARTED",
+                "sopId": "refund_ticket",
+                "currentStep": "collect_order_no"
+              }
+            }
+          ],
+          "status": "WAITING",
+          "taskId": 26,
+          "evidence": {
+            "sopId": "refund_ticket",
+            "currentStep": "collect_order_no"
+          },
+          "checkpoint": {
+            "version": 1,
+            "collected": {
+              "actor": "customer",
+              "message": "我要退票"
+            },
+            "currentStep": "collect_order_no",
+            "sopRuntimeId": "fake:refund_ticket:26",
+            "currentNodeId": "collect_order_no",
+            "pendingPrompt": "请提供订单号、手机号和乘机人信息。",
+            "scopedVariables": {
+              "conversation.actor": "customer",
+              "conversation.message": "我要退票"
+            }
+          },
+          "workerType": "chatflow_sop",
+          "workerRunId": "customer-assistant-worker-run-41",
+          "missingFields": [
+            "请提供订单号、手机号和乘机人信息。"
+          ],
+          "proposedActions": [],
+          "workerAsyncRefs": {
+            "scope": "customer_assistant_worker_run",
+            "supported": true,
+            "workerRunId": "customer-assistant-worker-run-41",
+            "workerEventsRef": "/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-41/events",
+            "workerResultRef": "/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-41/result",
+            "workerStatusRef": "/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-41",
+            "workerEventStreamRef": "/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-41/events/stream?afterSequence=0"
+          },
+          "customerReplyDraft": "已开始退票，请提供订单号、手机号和乘机人信息。",
+          "safeAutoActionsDone": [],
+          "operatorRecommendation": "refund_ticket worker WAITING at collect_order_no"
+        },
+        "workerAsyncRefs": {
+          "scope": "customer_assistant_worker_run",
+          "supported": true,
+          "workerRunId": "customer-assistant-worker-run-41",
+          "workerEventsRef": "/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-41/events",
+          "workerResultRef": "/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-41/result",
+          "workerStatusRef": "/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-41",
+          "workerEventStreamRef": "/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-41/events/stream?afterSequence=0"
+        },
+        "proposedActions": [],
+        "version": 2
+      }
+    ],
+    "proposedActions": [
+      {
+        "id": 38,
+        "sessionId": 18,
+        "runId": 41,
+        "taskId": null,
+        "actionKey": "reply-draft:41:send_customer_message",
+        "actionType": "send_customer_message",
+        "title": "发送客户回复草稿",
+        "payload": {
+          "draft": "已开始退票，请提供订单号、手机号和乘机人信息。",
+          "channel": "mock_web",
+          "metadata": {
+            "actor": "customer",
+            "runId": 41,
+            "source": "customer_assistant_recommendation",
+            "sessionId": 18
+          },
+          "recipient": {},
+          "conversationId": "customer-assistant-session-18"
+        },
+        "status": "PENDING",
+        "result": {}
+      }
+    ],
+    "warnings": [],
+    "events": [
+      {
+        "id": 1153,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 1,
+        "type": "run_started",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "actor": "customer",
+          "message": "我要退票",
+          "turnMode": "customer_task_turn",
+          "startedAt": "2026-06-19T14:08:43.335089"
+        },
+        "createdAt": "2026-06-19T14:08:43",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1153,
+            "sourceSequence": 1
+          }
+        }
+      },
+      {
+        "id": 1154,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 2,
+        "type": "operator_turn_classified",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "actor": "customer",
+          "turnMode": "customer_task_turn"
+        },
+        "createdAt": "2026-06-19T14:08:43",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1154,
+            "sourceSequence": 2
+          }
+        }
+      },
+      {
+        "id": 1155,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 3,
+        "type": "llm_primary_selected",
+        "visibility": "debug",
+        "source": "llm_primary",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "phase": "task_recognition",
+          "confidence": 0.82,
+          "commandCount": 1,
+          "selectedSource": "llm_primary"
+        },
+        "createdAt": "2026-06-19T14:08:43",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1155,
+            "sourceSequence": 3
+          }
+        }
+      },
+      {
+        "id": 1156,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 4,
+        "type": "task_recognized",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "actor": "customer",
+          "commands": [
+            {
+              "type": "ADD_TASK",
+              "reason": "deterministic_intent",
+              "taskKey": "refund_ticket",
+              "taskType": "REFUND",
+              "workerRef": "refund_ticket",
+              "workerType": "chatflow_sop",
+              "businessKey": "refund_ticket",
+              "profileRefs": {
+                "toolRefs": [
+                  "refund_policy_lookup"
+                ],
+                "profileId": "refund_ticket_chatflow",
+                "promptRef": "refund_ticket_sop_prompt",
+                "riskPolicyRef": "manual_confirm",
+                "toolPolicyRef": "customer_assistant_worker_tool_default",
+                "modelPolicyRef": "customer_assistant_chatflow_default",
+                "outputSchemaRef": "customer_assistant_worker_result_v1"
+              }
+            }
+          ]
+        },
+        "createdAt": "2026-06-19T14:08:43",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1156,
+            "sourceSequence": 4
+          }
+        }
+      },
+      {
+        "id": 1157,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 5,
+        "type": "task_added",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": 26,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "taskKey": "refund_ticket"
+        },
+        "createdAt": "2026-06-19T14:08:43",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": 26,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1157,
+            "sourceSequence": 5
+          }
+        }
+      },
+      {
+        "id": 1158,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 6,
+        "type": "task_started",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": 26,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "taskKey": "refund_ticket",
+          "startedAt": "2026-06-19T14:08:43.390507",
+          "workerType": "chatflow_sop",
+          "profileRefs": {
+            "toolRefs": [
+              "refund_policy_lookup"
+            ],
+            "profileId": "refund_ticket_chatflow",
+            "promptRef": "refund_ticket_sop_prompt",
+            "riskPolicyRef": "manual_confirm",
+            "toolPolicyRef": "customer_assistant_worker_tool_default",
+            "modelPolicyRef": "customer_assistant_chatflow_default",
+            "outputSchemaRef": "customer_assistant_worker_result_v1"
+          }
+        },
+        "createdAt": "2026-06-19T14:08:43",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": 26,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1158,
+            "sourceSequence": 6
+          },
+          "profileRefs": {
+            "toolRefs": [
+              "refund_policy_lookup"
+            ],
+            "profileId": "refund_ticket_chatflow",
+            "promptRef": "refund_ticket_sop_prompt",
+            "riskPolicyRef": "manual_confirm",
+            "toolPolicyRef": "customer_assistant_worker_tool_default",
+            "modelPolicyRef": "customer_assistant_chatflow_default",
+            "outputSchemaRef": "customer_assistant_worker_result_v1"
+          }
+        }
+      },
+      {
+        "id": 1159,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 7,
+        "type": "worker_started",
+        "visibility": "debug",
+        "source": "chatflow_sop",
+        "actor": "customer",
+        "taskId": 26,
+        "parentSpanId": null,
+        "spanId": "run-41:task-26:worker",
+        "payload": {
+          "spanId": "run-41:task-26:worker",
+          "taskKey": "refund_ticket",
+          "startedAt": "2026-06-19T14:08:43.390517",
+          "workerType": "chatflow_sop",
+          "profileRefs": {
+            "toolRefs": [
+              "refund_policy_lookup"
+            ],
+            "profileId": "refund_ticket_chatflow",
+            "promptRef": "refund_ticket_sop_prompt",
+            "riskPolicyRef": "manual_confirm",
+            "toolPolicyRef": "customer_assistant_worker_tool_default",
+            "modelPolicyRef": "customer_assistant_chatflow_default",
+            "outputSchemaRef": "customer_assistant_worker_result_v1"
+          }
+        },
+        "createdAt": "2026-06-19T14:08:43",
+        "observability": {
+          "sourceKind": "chatflow",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": 26,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1159,
+            "sourceSequence": 7
+          },
+          "profileRefs": {
+            "toolRefs": [
+              "refund_policy_lookup"
+            ],
+            "profileId": "refund_ticket_chatflow",
+            "promptRef": "refund_ticket_sop_prompt",
+            "riskPolicyRef": "manual_confirm",
+            "toolPolicyRef": "customer_assistant_worker_tool_default",
+            "modelPolicyRef": "customer_assistant_chatflow_default",
+            "outputSchemaRef": "customer_assistant_worker_result_v1"
+          }
+        }
+      },
+      {
+        "id": 1160,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 8,
+        "type": "worker_result_received",
+        "visibility": "debug",
+        "source": "chatflow_sop",
+        "actor": "customer",
+        "taskId": 26,
+        "parentSpanId": "run-41:task-26:worker",
+        "spanId": "run-41:task-26:worker:event-1",
+        "payload": {
+          "type": "SOP_STARTED",
+          "sopId": "refund_ticket",
+          "currentStep": "collect_order_no",
+          "workerRunId": "customer-assistant-worker-run-41"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "chatflow",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": 26,
+            "workerRunId": "customer-assistant-worker-run-41",
+            "runtimeRunId": null,
+            "sourceEventId": 1160,
+            "sourceSequence": 8
+          }
+        }
+      },
+      {
+        "id": 1161,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 9,
+        "type": "task_waiting",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": 26,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "taskKey": "refund_ticket",
+          "workerType": "chatflow_sop"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": 26,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1161,
+            "sourceSequence": 9
+          }
+        }
+      },
+      {
+        "id": 1162,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 10,
+        "type": "recommendation_started",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "startedAt": "2026-06-19T14:08:43.522664",
+          "taskCount": 1,
+          "proposedActionCount": 0
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1162,
+            "sourceSequence": 10
+          }
+        }
+      },
+      {
+        "id": 1163,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 11,
+        "type": "llm_primary_selected",
+        "visibility": "debug",
+        "source": "llm_primary",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "phase": "recommendation",
+          "selectedSource": "llm_primary"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1163,
+            "sourceSequence": 11
+          }
+        }
+      },
+      {
+        "id": 1164,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 12,
+        "type": "reply_draft_proposed",
+        "visibility": "operator",
+        "source": "customer_assistant_recommendation",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "status": "PENDING",
+          "channel": "mock_web",
+          "actionId": 38,
+          "actionType": "send_customer_message",
+          "draftLength": 23,
+          "conversationId": "customer-assistant-session-18"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1164,
+            "sourceSequence": 12
+          }
+        }
+      },
+      {
+        "id": 1165,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 13,
+        "type": "recommendation_completed",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "elapsedMs": 21,
+          "startedAt": "2026-06-19T14:08:43.522664",
+          "taskCount": 1,
+          "completedAt": "2026-06-19T14:08:43.543854",
+          "proposedActionCount": 1
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1165,
+            "sourceSequence": 13
+          }
+        }
+      },
+      {
+        "id": 1166,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 14,
+        "type": "recommendation_generated",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "elapsedMs": 21,
+          "startedAt": "2026-06-19T14:08:43.522664",
+          "taskCount": 1,
+          "completedAt": "2026-06-19T14:08:43.543854",
+          "proposedActionCount": 1
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1166,
+            "sourceSequence": 14
+          }
+        }
+      },
+      {
+        "id": 1167,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 15,
+        "type": "run_completed",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "actor": "customer",
+          "runId": 41
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": 41,
+            "sourceEventId": 1167,
+            "sourceSequence": 15
+          }
+        }
+      },
+      {
+        "id": 1168,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 16,
+        "type": "message.delta",
+        "visibility": "customer",
+        "source": "customer_assistant_gateway",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "delta": "已开始退票，请提供订单号、手机号和乘机人信息。",
+          "runId": 41,
+          "status": "WAITING",
+          "message": "我要退票",
+          "sessionId": 18,
+          "conversationId": "customer-assistant:18"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": 41,
+            "sourceEventId": 1168,
+            "sourceSequence": 16
+          }
+        }
+      },
+      {
+        "id": 1169,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 17,
+        "type": "message.completed",
+        "visibility": "customer",
+        "source": "customer_assistant_gateway",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "runId": 41,
+          "answer": "已开始退票，请提供订单号、手机号和乘机人信息。",
+          "status": "WAITING",
+          "message": "我要退票",
+          "sessionId": 18,
+          "conversationId": "customer-assistant:18"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": 41,
+            "sourceEventId": 1169,
+            "sourceSequence": 17
+          }
+        }
+      },
+      {
+        "id": 1170,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 18,
+        "type": "requires_input",
+        "visibility": "customer",
+        "source": "customer_assistant_gateway",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "runId": 41,
+          "status": "WAITING",
+          "message": "我要退票",
+          "sessionId": 18,
+          "missingFields": [
+            "请提供订单号、手机号和乘机人信息。"
+          ],
+          "conversationId": "customer-assistant:18",
+          "pendingActionCount": 1
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": 41,
+            "sourceEventId": 1170,
+            "sourceSequence": 18
+          }
+        }
+      },
+      {
+        "id": 1171,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 19,
+        "type": "run.completed",
+        "visibility": "operator",
+        "source": "customer_assistant_gateway",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "runId": 41,
+          "answer": "已开始退票，请提供订单号、手机号和乘机人信息。",
+          "status": "WAITING",
+          "message": "我要退票",
+          "sessionId": 18,
+          "conversationId": "customer-assistant:18"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": 41,
+            "sourceEventId": 1171,
+            "sourceSequence": 19
+          }
+        }
+      }
+    ],
+    "replayed": false,
+    "chatflowSession": null,
+    "recovery": {
+      "sessionId": 18,
+      "afterSequence": 19,
+      "eventsRef": "/api/v1/customer-assistant/sessions/18/events",
+      "eventStreamRef": "/api/v1/customer-assistant/sessions/18/events/stream?afterSequence=19"
+    },
+    "waitTimeoutMs": null,
+    "conversationId": "customer-assistant:18",
+    "status": "WAITING",
+    "answer": "已开始退票，请提供订单号、手机号和乘机人信息。",
+    "requiresInput": true,
+    "eventsRef": "/api/v1/customer-assistant/sessions/18/events",
+    "eventStreamRef": "/api/v1/customer-assistant/sessions/18/events/stream?afterSequence=0",
+    "resumeStreamRef": "/api/v1/customer-assistant/sessions/18/events/stream?afterSequence=19"
+  },
+  "second": {
+    "runId": 42,
+    "sessionId": 18,
+    "replyType": "DRAFT",
+    "operatorRecommendation": "Operator recommendations:\n- refund_ticket worker WAITING at confirm\n- 待人工确认动作 1 个。",
+    "customerReplyDraft": "已记录订单号 [REDACTED]。已完成退票政策说明、业务查询和变量聚合。请回复 confirm 或 确认 完成办理。",
+    "taskSummaries": [
+      {
+        "id": 26,
+        "sessionId": 18,
+        "taskKey": "refund_ticket",
+        "taskType": "REFUND",
+        "businessKey": "refund_ticket",
+        "shortId": "RETI",
+        "status": "WAITING",
+        "workerType": "chatflow_sop",
+        "workerRef": "refund_ticket",
+        "checkpoint": {
+          "version": 1,
+          "collected": {
+            "actor": "customer",
+            "message": "我要退票",
+            "order_no": "[REDACTED]",
+            "node_trace": [
+              "INFORMATION_COLLECTION",
+              "VARIABLE_PARSE",
+              "LLM",
+              "API_CALL",
+              "CONDITION",
+              "VARIABLE_AGGREGATION",
+              "QUESTION"
+            ],
+            "last_user_message": "订单号 [REDACTED]"
+          },
+          "currentStep": "confirm",
+          "sopRuntimeId": "fake:refund_ticket:26",
+          "currentNodeId": "confirm",
+          "pendingPrompt": "请回复 confirm 或 确认 完成办理。",
+          "scopedVariables": {
+            "conversation.actor": "customer",
+            "conversation.message": "我要退票",
+            "conversation.order_no": "[REDACTED]",
+            "conversation.node_trace": [
+              "INFORMATION_COLLECTION",
+              "VARIABLE_PARSE",
+              "LLM",
+              "API_CALL",
+              "CONDITION",
+              "VARIABLE_AGGREGATION",
+              "QUESTION"
+            ],
+            "conversation.last_user_message": "订单号 [REDACTED]"
+          }
+        },
+        "lastResult": {
+          "error": null,
+          "events": [
+            {
+              "type": "worker_result_received",
+              "source": "chatflow_sop",
+              "payload": {
+                "type": "SOP_CONTINUED",
+                "sopId": "refund_ticket",
+                "currentStep": "confirm"
+              }
+            }
+          ],
+          "status": "WAITING",
+          "taskId": 26,
+          "evidence": {
+            "sopId": "refund_ticket",
+            "currentStep": "confirm"
+          },
+          "checkpoint": {
+            "version": 1,
+            "collected": {
+              "actor": "customer",
+              "message": "我要退票",
+              "order_no": "[REDACTED]",
+              "node_trace": [
+                "INFORMATION_COLLECTION",
+                "VARIABLE_PARSE",
+                "LLM",
+                "API_CALL",
+                "CONDITION",
+                "VARIABLE_AGGREGATION",
+                "QUESTION"
+              ],
+              "last_user_message": "订单号 [REDACTED]"
+            },
+            "currentStep": "confirm",
+            "sopRuntimeId": "fake:refund_ticket:26",
+            "currentNodeId": "confirm",
+            "pendingPrompt": "请回复 confirm 或 确认 完成办理。",
+            "scopedVariables": {
+              "conversation.actor": "customer",
+              "conversation.message": "我要退票",
+              "conversation.order_no": "[REDACTED]",
+              "conversation.node_trace": [
+                "INFORMATION_COLLECTION",
+                "VARIABLE_PARSE",
+                "LLM",
+                "API_CALL",
+                "CONDITION",
+                "VARIABLE_AGGREGATION",
+                "QUESTION"
+              ],
+              "conversation.last_user_message": "订单号 [REDACTED]"
+            }
+          },
+          "workerType": "chatflow_sop",
+          "workerRunId": "customer-assistant-worker-run-42",
+          "missingFields": [
+            "请回复 confirm 或 确认 完成办理。"
+          ],
+          "proposedActions": [],
+          "workerAsyncRefs": {
+            "scope": "customer_assistant_worker_run",
+            "supported": true,
+            "workerRunId": "customer-assistant-worker-run-42",
+            "workerEventsRef": "/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-42/events",
+            "workerResultRef": "/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-42/result",
+            "workerStatusRef": "/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-42",
+            "workerEventStreamRef": "/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-42/events/stream?afterSequence=0"
+          },
+          "customerReplyDraft": "已记录订单号 [REDACTED]。已完成退票政策说明、业务查询和变量聚合。请回复 confirm 或 确认 完成办理。",
+          "safeAutoActionsDone": [],
+          "operatorRecommendation": "refund_ticket worker WAITING at confirm"
+        },
+        "workerAsyncRefs": {
+          "scope": "customer_assistant_worker_run",
+          "supported": true,
+          "workerRunId": "customer-assistant-worker-run-42",
+          "workerEventsRef": "/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-42/events",
+          "workerResultRef": "/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-42/result",
+          "workerStatusRef": "/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-42",
+          "workerEventStreamRef": "/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-42/events/stream?afterSequence=0"
+        },
+        "proposedActions": [],
+        "version": 3
+      }
+    ],
+    "proposedActions": [
+      {
+        "id": 38,
+        "sessionId": 18,
+        "runId": 41,
+        "taskId": null,
+        "actionKey": "reply-draft:41:send_customer_message",
+        "actionType": "send_customer_message",
+        "title": "发送客户回复草稿",
+        "payload": {
+          "draft": "已开始退票，请提供订单号、手机号和乘机人信息。",
+          "channel": "mock_web",
+          "metadata": {
+            "actor": "customer",
+            "runId": 41,
+            "source": "customer_assistant_recommendation",
+            "sessionId": 18
+          },
+          "recipient": {},
+          "conversationId": "customer-assistant-session-18"
+        },
+        "status": "PENDING",
+        "result": {}
+      }
+    ],
+    "warnings": [],
+    "events": [
+      {
+        "id": 1153,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 1,
+        "type": "run_started",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "actor": "customer",
+          "message": "我要退票",
+          "turnMode": "customer_task_turn",
+          "startedAt": "2026-06-19T14:08:43.335089"
+        },
+        "createdAt": "2026-06-19T14:08:43",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1153,
+            "sourceSequence": 1
+          }
+        }
+      },
+      {
+        "id": 1154,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 2,
+        "type": "operator_turn_classified",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "actor": "customer",
+          "turnMode": "customer_task_turn"
+        },
+        "createdAt": "2026-06-19T14:08:43",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1154,
+            "sourceSequence": 2
+          }
+        }
+      },
+      {
+        "id": 1155,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 3,
+        "type": "llm_primary_selected",
+        "visibility": "debug",
+        "source": "llm_primary",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "phase": "task_recognition",
+          "confidence": 0.82,
+          "commandCount": 1,
+          "selectedSource": "llm_primary"
+        },
+        "createdAt": "2026-06-19T14:08:43",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1155,
+            "sourceSequence": 3
+          }
+        }
+      },
+      {
+        "id": 1156,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 4,
+        "type": "task_recognized",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "actor": "customer",
+          "commands": [
+            {
+              "type": "ADD_TASK",
+              "reason": "deterministic_intent",
+              "taskKey": "refund_ticket",
+              "taskType": "REFUND",
+              "workerRef": "refund_ticket",
+              "workerType": "chatflow_sop",
+              "businessKey": "refund_ticket",
+              "profileRefs": {
+                "toolRefs": [
+                  "refund_policy_lookup"
+                ],
+                "profileId": "refund_ticket_chatflow",
+                "promptRef": "refund_ticket_sop_prompt",
+                "riskPolicyRef": "manual_confirm",
+                "toolPolicyRef": "customer_assistant_worker_tool_default",
+                "modelPolicyRef": "customer_assistant_chatflow_default",
+                "outputSchemaRef": "customer_assistant_worker_result_v1"
+              }
+            }
+          ]
+        },
+        "createdAt": "2026-06-19T14:08:43",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1156,
+            "sourceSequence": 4
+          }
+        }
+      },
+      {
+        "id": 1157,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 5,
+        "type": "task_added",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": 26,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "taskKey": "refund_ticket"
+        },
+        "createdAt": "2026-06-19T14:08:43",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": 26,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1157,
+            "sourceSequence": 5
+          }
+        }
+      },
+      {
+        "id": 1158,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 6,
+        "type": "task_started",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": 26,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "taskKey": "refund_ticket",
+          "startedAt": "2026-06-19T14:08:43.390507",
+          "workerType": "chatflow_sop",
+          "profileRefs": {
+            "toolRefs": [
+              "refund_policy_lookup"
+            ],
+            "profileId": "refund_ticket_chatflow",
+            "promptRef": "refund_ticket_sop_prompt",
+            "riskPolicyRef": "manual_confirm",
+            "toolPolicyRef": "customer_assistant_worker_tool_default",
+            "modelPolicyRef": "customer_assistant_chatflow_default",
+            "outputSchemaRef": "customer_assistant_worker_result_v1"
+          }
+        },
+        "createdAt": "2026-06-19T14:08:43",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": 26,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1158,
+            "sourceSequence": 6
+          },
+          "profileRefs": {
+            "toolRefs": [
+              "refund_policy_lookup"
+            ],
+            "profileId": "refund_ticket_chatflow",
+            "promptRef": "refund_ticket_sop_prompt",
+            "riskPolicyRef": "manual_confirm",
+            "toolPolicyRef": "customer_assistant_worker_tool_default",
+            "modelPolicyRef": "customer_assistant_chatflow_default",
+            "outputSchemaRef": "customer_assistant_worker_result_v1"
+          }
+        }
+      },
+      {
+        "id": 1159,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 7,
+        "type": "worker_started",
+        "visibility": "debug",
+        "source": "chatflow_sop",
+        "actor": "customer",
+        "taskId": 26,
+        "parentSpanId": null,
+        "spanId": "run-41:task-26:worker",
+        "payload": {
+          "spanId": "run-41:task-26:worker",
+          "taskKey": "refund_ticket",
+          "startedAt": "2026-06-19T14:08:43.390517",
+          "workerType": "chatflow_sop",
+          "profileRefs": {
+            "toolRefs": [
+              "refund_policy_lookup"
+            ],
+            "profileId": "refund_ticket_chatflow",
+            "promptRef": "refund_ticket_sop_prompt",
+            "riskPolicyRef": "manual_confirm",
+            "toolPolicyRef": "customer_assistant_worker_tool_default",
+            "modelPolicyRef": "customer_assistant_chatflow_default",
+            "outputSchemaRef": "customer_assistant_worker_result_v1"
+          }
+        },
+        "createdAt": "2026-06-19T14:08:43",
+        "observability": {
+          "sourceKind": "chatflow",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": 26,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1159,
+            "sourceSequence": 7
+          },
+          "profileRefs": {
+            "toolRefs": [
+              "refund_policy_lookup"
+            ],
+            "profileId": "refund_ticket_chatflow",
+            "promptRef": "refund_ticket_sop_prompt",
+            "riskPolicyRef": "manual_confirm",
+            "toolPolicyRef": "customer_assistant_worker_tool_default",
+            "modelPolicyRef": "customer_assistant_chatflow_default",
+            "outputSchemaRef": "customer_assistant_worker_result_v1"
+          }
+        }
+      },
+      {
+        "id": 1160,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 8,
+        "type": "worker_result_received",
+        "visibility": "debug",
+        "source": "chatflow_sop",
+        "actor": "customer",
+        "taskId": 26,
+        "parentSpanId": "run-41:task-26:worker",
+        "spanId": "run-41:task-26:worker:event-1",
+        "payload": {
+          "type": "SOP_STARTED",
+          "sopId": "refund_ticket",
+          "currentStep": "collect_order_no",
+          "workerRunId": "customer-assistant-worker-run-41"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "chatflow",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": 26,
+            "workerRunId": "customer-assistant-worker-run-41",
+            "runtimeRunId": null,
+            "sourceEventId": 1160,
+            "sourceSequence": 8
+          }
+        }
+      },
+      {
+        "id": 1161,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 9,
+        "type": "task_waiting",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": 26,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "taskKey": "refund_ticket",
+          "workerType": "chatflow_sop"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": 26,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1161,
+            "sourceSequence": 9
+          }
+        }
+      },
+      {
+        "id": 1162,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 10,
+        "type": "recommendation_started",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "startedAt": "2026-06-19T14:08:43.522664",
+          "taskCount": 1,
+          "proposedActionCount": 0
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1162,
+            "sourceSequence": 10
+          }
+        }
+      },
+      {
+        "id": 1163,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 11,
+        "type": "llm_primary_selected",
+        "visibility": "debug",
+        "source": "llm_primary",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "phase": "recommendation",
+          "selectedSource": "llm_primary"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1163,
+            "sourceSequence": 11
+          }
+        }
+      },
+      {
+        "id": 1164,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 12,
+        "type": "reply_draft_proposed",
+        "visibility": "operator",
+        "source": "customer_assistant_recommendation",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "status": "PENDING",
+          "channel": "mock_web",
+          "actionId": 38,
+          "actionType": "send_customer_message",
+          "draftLength": 23,
+          "conversationId": "customer-assistant-session-18"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1164,
+            "sourceSequence": 12
+          }
+        }
+      },
+      {
+        "id": 1165,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 13,
+        "type": "recommendation_completed",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "elapsedMs": 21,
+          "startedAt": "2026-06-19T14:08:43.522664",
+          "taskCount": 1,
+          "completedAt": "2026-06-19T14:08:43.543854",
+          "proposedActionCount": 1
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1165,
+            "sourceSequence": 13
+          }
+        }
+      },
+      {
+        "id": 1166,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 14,
+        "type": "recommendation_generated",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "elapsedMs": 21,
+          "startedAt": "2026-06-19T14:08:43.522664",
+          "taskCount": 1,
+          "completedAt": "2026-06-19T14:08:43.543854",
+          "proposedActionCount": 1
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1166,
+            "sourceSequence": 14
+          }
+        }
+      },
+      {
+        "id": 1167,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 15,
+        "type": "run_completed",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "actor": "customer",
+          "runId": 41
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": 41,
+            "sourceEventId": 1167,
+            "sourceSequence": 15
+          }
+        }
+      },
+      {
+        "id": 1168,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 16,
+        "type": "message.delta",
+        "visibility": "customer",
+        "source": "customer_assistant_gateway",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "delta": "已开始退票，请提供订单号、手机号和乘机人信息。",
+          "runId": 41,
+          "status": "WAITING",
+          "message": "我要退票",
+          "sessionId": 18,
+          "conversationId": "customer-assistant:18"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": 41,
+            "sourceEventId": 1168,
+            "sourceSequence": 16
+          }
+        }
+      },
+      {
+        "id": 1169,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 17,
+        "type": "message.completed",
+        "visibility": "customer",
+        "source": "customer_assistant_gateway",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "runId": 41,
+          "answer": "已开始退票，请提供订单号、手机号和乘机人信息。",
+          "status": "WAITING",
+          "message": "我要退票",
+          "sessionId": 18,
+          "conversationId": "customer-assistant:18"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": 41,
+            "sourceEventId": 1169,
+            "sourceSequence": 17
+          }
+        }
+      },
+      {
+        "id": 1170,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 18,
+        "type": "requires_input",
+        "visibility": "customer",
+        "source": "customer_assistant_gateway",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "runId": 41,
+          "status": "WAITING",
+          "message": "我要退票",
+          "sessionId": 18,
+          "missingFields": [
+            "请提供订单号、手机号和乘机人信息。"
+          ],
+          "conversationId": "customer-assistant:18",
+          "pendingActionCount": 1
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": 41,
+            "sourceEventId": 1170,
+            "sourceSequence": 18
+          }
+        }
+      },
+      {
+        "id": 1171,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 19,
+        "type": "run.completed",
+        "visibility": "operator",
+        "source": "customer_assistant_gateway",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "runId": 41,
+          "answer": "已开始退票，请提供订单号、手机号和乘机人信息。",
+          "status": "WAITING",
+          "message": "我要退票",
+          "sessionId": 18,
+          "conversationId": "customer-assistant:18"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": 41,
+            "sourceEventId": 1171,
+            "sourceSequence": 19
+          }
+        }
+      },
+      {
+        "id": 1172,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 20,
+        "type": "run_started",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "actor": "customer",
+          "message": "订单号 [REDACTED]",
+          "turnMode": "customer_task_turn",
+          "startedAt": "2026-06-19T14:08:43.661176"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1172,
+            "sourceSequence": 20
+          }
+        }
+      },
+      {
+        "id": 1173,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 21,
+        "type": "operator_turn_classified",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "actor": "customer",
+          "turnMode": "customer_task_turn"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1173,
+            "sourceSequence": 21
+          }
+        }
+      },
+      {
+        "id": 1174,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 22,
+        "type": "llm_primary_selected",
+        "visibility": "debug",
+        "source": "llm_primary",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "phase": "task_recognition",
+          "confidence": 0.82,
+          "commandCount": 1,
+          "selectedSource": "llm_primary"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1174,
+            "sourceSequence": 22
+          }
+        }
+      },
+      {
+        "id": 1175,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 23,
+        "type": "task_recognized",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "actor": "customer",
+          "commands": [
+            {
+              "type": "RETAIN_TASK",
+              "reason": "deterministic_intent",
+              "taskKey": "refund_ticket",
+              "taskType": "REFUND",
+              "workerRef": "refund_ticket",
+              "workerType": "chatflow_sop",
+              "businessKey": "refund_ticket",
+              "profileRefs": {
+                "toolRefs": [
+                  "refund_policy_lookup"
+                ],
+                "profileId": "refund_ticket_chatflow",
+                "promptRef": "refund_ticket_sop_prompt",
+                "riskPolicyRef": "manual_confirm",
+                "toolPolicyRef": "customer_assistant_worker_tool_default",
+                "modelPolicyRef": "customer_assistant_chatflow_default",
+                "outputSchemaRef": "customer_assistant_worker_result_v1"
+              }
+            }
+          ]
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1175,
+            "sourceSequence": 23
+          }
+        }
+      },
+      {
+        "id": 1176,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 24,
+        "type": "task_retained",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": 26,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "taskKey": "refund_ticket"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": 26,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1176,
+            "sourceSequence": 24
+          }
+        }
+      },
+      {
+        "id": 1177,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 25,
+        "type": "task_started",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": 26,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "taskKey": "refund_ticket",
+          "startedAt": "2026-06-19T14:08:43.686627",
+          "workerType": "chatflow_sop",
+          "profileRefs": {
+            "toolRefs": [
+              "refund_policy_lookup"
+            ],
+            "profileId": "refund_ticket_chatflow",
+            "promptRef": "refund_ticket_sop_prompt",
+            "riskPolicyRef": "manual_confirm",
+            "toolPolicyRef": "customer_assistant_worker_tool_default",
+            "modelPolicyRef": "customer_assistant_chatflow_default",
+            "outputSchemaRef": "customer_assistant_worker_result_v1"
+          }
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": 26,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1177,
+            "sourceSequence": 25
+          },
+          "profileRefs": {
+            "toolRefs": [
+              "refund_policy_lookup"
+            ],
+            "profileId": "refund_ticket_chatflow",
+            "promptRef": "refund_ticket_sop_prompt",
+            "riskPolicyRef": "manual_confirm",
+            "toolPolicyRef": "customer_assistant_worker_tool_default",
+            "modelPolicyRef": "customer_assistant_chatflow_default",
+            "outputSchemaRef": "customer_assistant_worker_result_v1"
+          }
+        }
+      },
+      {
+        "id": 1178,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 26,
+        "type": "worker_started",
+        "visibility": "debug",
+        "source": "chatflow_sop",
+        "actor": "customer",
+        "taskId": 26,
+        "parentSpanId": null,
+        "spanId": "run-42:task-26:worker",
+        "payload": {
+          "spanId": "run-42:task-26:worker",
+          "taskKey": "refund_ticket",
+          "startedAt": "2026-06-19T14:08:43.686636",
+          "workerType": "chatflow_sop",
+          "profileRefs": {
+            "toolRefs": [
+              "refund_policy_lookup"
+            ],
+            "profileId": "refund_ticket_chatflow",
+            "promptRef": "refund_ticket_sop_prompt",
+            "riskPolicyRef": "manual_confirm",
+            "toolPolicyRef": "customer_assistant_worker_tool_default",
+            "modelPolicyRef": "customer_assistant_chatflow_default",
+            "outputSchemaRef": "customer_assistant_worker_result_v1"
+          }
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "chatflow",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": 26,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1178,
+            "sourceSequence": 26
+          },
+          "profileRefs": {
+            "toolRefs": [
+              "refund_policy_lookup"
+            ],
+            "profileId": "refund_ticket_chatflow",
+            "promptRef": "refund_ticket_sop_prompt",
+            "riskPolicyRef": "manual_confirm",
+            "toolPolicyRef": "customer_assistant_worker_tool_default",
+            "modelPolicyRef": "customer_assistant_chatflow_default",
+            "outputSchemaRef": "customer_assistant_worker_result_v1"
+          }
+        }
+      },
+      {
+        "id": 1179,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 27,
+        "type": "worker_result_received",
+        "visibility": "debug",
+        "source": "chatflow_sop",
+        "actor": "customer",
+        "taskId": 26,
+        "parentSpanId": "run-42:task-26:worker",
+        "spanId": "run-42:task-26:worker:event-1",
+        "payload": {
+          "type": "SOP_CONTINUED",
+          "sopId": "refund_ticket",
+          "currentStep": "confirm",
+          "workerRunId": "customer-assistant-worker-run-42"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "chatflow",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": 26,
+            "workerRunId": "customer-assistant-worker-run-42",
+            "runtimeRunId": null,
+            "sourceEventId": 1179,
+            "sourceSequence": 27
+          }
+        }
+      },
+      {
+        "id": 1180,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 28,
+        "type": "task_waiting",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": 26,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "taskKey": "refund_ticket",
+          "workerType": "chatflow_sop"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": 26,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1180,
+            "sourceSequence": 28
+          }
+        }
+      },
+      {
+        "id": 1181,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 29,
+        "type": "recommendation_started",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "startedAt": "2026-06-19T14:08:43.767419",
+          "taskCount": 1,
+          "proposedActionCount": 1
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1181,
+            "sourceSequence": 29
+          }
+        }
+      },
+      {
+        "id": 1182,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 30,
+        "type": "llm_primary_selected",
+        "visibility": "debug",
+        "source": "llm_primary",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "phase": "recommendation",
+          "selectedSource": "llm_primary"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1182,
+            "sourceSequence": 30
+          }
+        }
+      },
+      {
+        "id": 1183,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 31,
+        "type": "recommendation_completed",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "elapsedMs": 8,
+          "startedAt": "2026-06-19T14:08:43.767419",
+          "taskCount": 1,
+          "completedAt": "2026-06-19T14:08:43.776307",
+          "proposedActionCount": 1
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1183,
+            "sourceSequence": 31
+          }
+        }
+      },
+      {
+        "id": 1184,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 32,
+        "type": "recommendation_generated",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "elapsedMs": 8,
+          "startedAt": "2026-06-19T14:08:43.767419",
+          "taskCount": 1,
+          "completedAt": "2026-06-19T14:08:43.776307",
+          "proposedActionCount": 1
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1184,
+            "sourceSequence": 32
+          }
+        }
+      },
+      {
+        "id": 1185,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 33,
+        "type": "run_completed",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "actor": "customer",
+          "runId": 42
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": 42,
+            "sourceEventId": 1185,
+            "sourceSequence": 33
+          }
+        }
+      },
+      {
+        "id": 1186,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 34,
+        "type": "message.delta",
+        "visibility": "customer",
+        "source": "customer_assistant_gateway",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "delta": "已记录订单号 [REDACTED]。已完成退票政策说明、业务查询和变量聚合。请回复 confirm 或 确认 完成办理。",
+          "runId": 42,
+          "status": "WAITING",
+          "message": "订单号 [REDACTED]",
+          "sessionId": 18,
+          "conversationId": "customer-assistant:18"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": 42,
+            "sourceEventId": 1186,
+            "sourceSequence": 34
+          }
+        }
+      },
+      {
+        "id": 1187,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 35,
+        "type": "message.completed",
+        "visibility": "customer",
+        "source": "customer_assistant_gateway",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "runId": 42,
+          "answer": "已记录订单号 [REDACTED]。已完成退票政策说明、业务查询和变量聚合。请回复 confirm 或 确认 完成办理。",
+          "status": "WAITING",
+          "message": "订单号 [REDACTED]",
+          "sessionId": 18,
+          "conversationId": "customer-assistant:18"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": 42,
+            "sourceEventId": 1187,
+            "sourceSequence": 35
+          }
+        }
+      },
+      {
+        "id": 1188,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 36,
+        "type": "requires_input",
+        "visibility": "customer",
+        "source": "customer_assistant_gateway",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "runId": 42,
+          "status": "WAITING",
+          "message": "订单号 [REDACTED]",
+          "sessionId": 18,
+          "missingFields": [
+            "请回复 confirm 或 确认 完成办理。"
+          ],
+          "conversationId": "customer-assistant:18",
+          "pendingActionCount": 1
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": 42,
+            "sourceEventId": 1188,
+            "sourceSequence": 36
+          }
+        }
+      },
+      {
+        "id": 1189,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 37,
+        "type": "run.completed",
+        "visibility": "operator",
+        "source": "customer_assistant_gateway",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "runId": 42,
+          "answer": "已记录订单号 [REDACTED]。已完成退票政策说明、业务查询和变量聚合。请回复 confirm 或 确认 完成办理。",
+          "status": "WAITING",
+          "message": "订单号 [REDACTED]",
+          "sessionId": 18,
+          "conversationId": "customer-assistant:18"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": 42,
+            "sourceEventId": 1189,
+            "sourceSequence": 37
+          }
+        }
+      }
+    ],
+    "replayed": false,
+    "chatflowSession": null,
+    "recovery": {
+      "sessionId": 18,
+      "afterSequence": 37,
+      "eventsRef": "/api/v1/customer-assistant/sessions/18/events",
+      "eventStreamRef": "/api/v1/customer-assistant/sessions/18/events/stream?afterSequence=37"
+    },
+    "waitTimeoutMs": null,
+    "conversationId": "customer-assistant:18",
+    "status": "WAITING",
+    "answer": "已记录订单号 [REDACTED]。已完成退票政策说明、业务查询和变量聚合。请回复 confirm 或 确认 完成办理。",
+    "requiresInput": true,
+    "eventsRef": "/api/v1/customer-assistant/sessions/18/events",
+    "eventStreamRef": "/api/v1/customer-assistant/sessions/18/events/stream?afterSequence=0",
+    "resumeStreamRef": "/api/v1/customer-assistant/sessions/18/events/stream?afterSequence=37"
+  },
+  "replay": {
+    "runId": 42,
+    "events": [
+      {
+        "id": 1153,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 1,
+        "type": "run_started",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "actor": "customer",
+          "message": "我要退票",
+          "turnMode": "customer_task_turn",
+          "startedAt": "2026-06-19T14:08:43.335089"
+        },
+        "createdAt": "2026-06-19T14:08:43",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1153,
+            "sourceSequence": 1
+          }
+        }
+      },
+      {
+        "id": 1154,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 2,
+        "type": "operator_turn_classified",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "actor": "customer",
+          "turnMode": "customer_task_turn"
+        },
+        "createdAt": "2026-06-19T14:08:43",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1154,
+            "sourceSequence": 2
+          }
+        }
+      },
+      {
+        "id": 1155,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 3,
+        "type": "llm_primary_selected",
+        "visibility": "debug",
+        "source": "llm_primary",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "phase": "task_recognition",
+          "confidence": 0.82,
+          "commandCount": 1,
+          "selectedSource": "llm_primary"
+        },
+        "createdAt": "2026-06-19T14:08:43",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1155,
+            "sourceSequence": 3
+          }
+        }
+      },
+      {
+        "id": 1156,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 4,
+        "type": "task_recognized",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "actor": "customer",
+          "commands": [
+            {
+              "type": "ADD_TASK",
+              "reason": "deterministic_intent",
+              "taskKey": "refund_ticket",
+              "taskType": "REFUND",
+              "workerRef": "refund_ticket",
+              "workerType": "chatflow_sop",
+              "businessKey": "refund_ticket",
+              "profileRefs": {
+                "toolRefs": [
+                  "refund_policy_lookup"
+                ],
+                "profileId": "refund_ticket_chatflow",
+                "promptRef": "refund_ticket_sop_prompt",
+                "riskPolicyRef": "manual_confirm",
+                "toolPolicyRef": "customer_assistant_worker_tool_default",
+                "modelPolicyRef": "customer_assistant_chatflow_default",
+                "outputSchemaRef": "customer_assistant_worker_result_v1"
+              }
+            }
+          ]
+        },
+        "createdAt": "2026-06-19T14:08:43",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1156,
+            "sourceSequence": 4
+          }
+        }
+      },
+      {
+        "id": 1157,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 5,
+        "type": "task_added",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": 26,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "taskKey": "refund_ticket"
+        },
+        "createdAt": "2026-06-19T14:08:43",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": 26,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1157,
+            "sourceSequence": 5
+          }
+        }
+      },
+      {
+        "id": 1158,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 6,
+        "type": "task_started",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": 26,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "taskKey": "refund_ticket",
+          "startedAt": "2026-06-19T14:08:43.390507",
+          "workerType": "chatflow_sop",
+          "profileRefs": {
+            "toolRefs": [
+              "refund_policy_lookup"
+            ],
+            "profileId": "refund_ticket_chatflow",
+            "promptRef": "refund_ticket_sop_prompt",
+            "riskPolicyRef": "manual_confirm",
+            "toolPolicyRef": "customer_assistant_worker_tool_default",
+            "modelPolicyRef": "customer_assistant_chatflow_default",
+            "outputSchemaRef": "customer_assistant_worker_result_v1"
+          }
+        },
+        "createdAt": "2026-06-19T14:08:43",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": 26,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1158,
+            "sourceSequence": 6
+          },
+          "profileRefs": {
+            "toolRefs": [
+              "refund_policy_lookup"
+            ],
+            "profileId": "refund_ticket_chatflow",
+            "promptRef": "refund_ticket_sop_prompt",
+            "riskPolicyRef": "manual_confirm",
+            "toolPolicyRef": "customer_assistant_worker_tool_default",
+            "modelPolicyRef": "customer_assistant_chatflow_default",
+            "outputSchemaRef": "customer_assistant_worker_result_v1"
+          }
+        }
+      },
+      {
+        "id": 1159,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 7,
+        "type": "worker_started",
+        "visibility": "debug",
+        "source": "chatflow_sop",
+        "actor": "customer",
+        "taskId": 26,
+        "parentSpanId": null,
+        "spanId": "run-41:task-26:worker",
+        "payload": {
+          "spanId": "run-41:task-26:worker",
+          "taskKey": "refund_ticket",
+          "startedAt": "2026-06-19T14:08:43.390517",
+          "workerType": "chatflow_sop",
+          "profileRefs": {
+            "toolRefs": [
+              "refund_policy_lookup"
+            ],
+            "profileId": "refund_ticket_chatflow",
+            "promptRef": "refund_ticket_sop_prompt",
+            "riskPolicyRef": "manual_confirm",
+            "toolPolicyRef": "customer_assistant_worker_tool_default",
+            "modelPolicyRef": "customer_assistant_chatflow_default",
+            "outputSchemaRef": "customer_assistant_worker_result_v1"
+          }
+        },
+        "createdAt": "2026-06-19T14:08:43",
+        "observability": {
+          "sourceKind": "chatflow",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": 26,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1159,
+            "sourceSequence": 7
+          },
+          "profileRefs": {
+            "toolRefs": [
+              "refund_policy_lookup"
+            ],
+            "profileId": "refund_ticket_chatflow",
+            "promptRef": "refund_ticket_sop_prompt",
+            "riskPolicyRef": "manual_confirm",
+            "toolPolicyRef": "customer_assistant_worker_tool_default",
+            "modelPolicyRef": "customer_assistant_chatflow_default",
+            "outputSchemaRef": "customer_assistant_worker_result_v1"
+          }
+        }
+      },
+      {
+        "id": 1160,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 8,
+        "type": "worker_result_received",
+        "visibility": "debug",
+        "source": "chatflow_sop",
+        "actor": "customer",
+        "taskId": 26,
+        "parentSpanId": "run-41:task-26:worker",
+        "spanId": "run-41:task-26:worker:event-1",
+        "payload": {
+          "type": "SOP_STARTED",
+          "sopId": "refund_ticket",
+          "currentStep": "collect_order_no",
+          "workerRunId": "customer-assistant-worker-run-41"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "chatflow",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": 26,
+            "workerRunId": "customer-assistant-worker-run-41",
+            "runtimeRunId": null,
+            "sourceEventId": 1160,
+            "sourceSequence": 8
+          }
+        }
+      },
+      {
+        "id": 1161,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 9,
+        "type": "task_waiting",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": 26,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "taskKey": "refund_ticket",
+          "workerType": "chatflow_sop"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": 26,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1161,
+            "sourceSequence": 9
+          }
+        }
+      },
+      {
+        "id": 1162,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 10,
+        "type": "recommendation_started",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "startedAt": "2026-06-19T14:08:43.522664",
+          "taskCount": 1,
+          "proposedActionCount": 0
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1162,
+            "sourceSequence": 10
+          }
+        }
+      },
+      {
+        "id": 1163,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 11,
+        "type": "llm_primary_selected",
+        "visibility": "debug",
+        "source": "llm_primary",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "phase": "recommendation",
+          "selectedSource": "llm_primary"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1163,
+            "sourceSequence": 11
+          }
+        }
+      },
+      {
+        "id": 1164,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 12,
+        "type": "reply_draft_proposed",
+        "visibility": "operator",
+        "source": "customer_assistant_recommendation",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "status": "PENDING",
+          "channel": "mock_web",
+          "actionId": 38,
+          "actionType": "send_customer_message",
+          "draftLength": 23,
+          "conversationId": "customer-assistant-session-18"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1164,
+            "sourceSequence": 12
+          }
+        }
+      },
+      {
+        "id": 1165,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 13,
+        "type": "recommendation_completed",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "elapsedMs": 21,
+          "startedAt": "2026-06-19T14:08:43.522664",
+          "taskCount": 1,
+          "completedAt": "2026-06-19T14:08:43.543854",
+          "proposedActionCount": 1
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1165,
+            "sourceSequence": 13
+          }
+        }
+      },
+      {
+        "id": 1166,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 14,
+        "type": "recommendation_generated",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "elapsedMs": 21,
+          "startedAt": "2026-06-19T14:08:43.522664",
+          "taskCount": 1,
+          "completedAt": "2026-06-19T14:08:43.543854",
+          "proposedActionCount": 1
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1166,
+            "sourceSequence": 14
+          }
+        }
+      },
+      {
+        "id": 1167,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 15,
+        "type": "run_completed",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "actor": "customer",
+          "runId": 41
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": 41,
+            "sourceEventId": 1167,
+            "sourceSequence": 15
+          }
+        }
+      },
+      {
+        "id": 1168,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 16,
+        "type": "message.delta",
+        "visibility": "customer",
+        "source": "customer_assistant_gateway",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "delta": "已开始退票，请提供订单号、手机号和乘机人信息。",
+          "runId": 41,
+          "status": "WAITING",
+          "message": "我要退票",
+          "sessionId": 18,
+          "conversationId": "customer-assistant:18"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": 41,
+            "sourceEventId": 1168,
+            "sourceSequence": 16
+          }
+        }
+      },
+      {
+        "id": 1169,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 17,
+        "type": "message.completed",
+        "visibility": "customer",
+        "source": "customer_assistant_gateway",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "runId": 41,
+          "answer": "已开始退票，请提供订单号、手机号和乘机人信息。",
+          "status": "WAITING",
+          "message": "我要退票",
+          "sessionId": 18,
+          "conversationId": "customer-assistant:18"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": 41,
+            "sourceEventId": 1169,
+            "sourceSequence": 17
+          }
+        }
+      },
+      {
+        "id": 1170,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 18,
+        "type": "requires_input",
+        "visibility": "customer",
+        "source": "customer_assistant_gateway",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "runId": 41,
+          "status": "WAITING",
+          "message": "我要退票",
+          "sessionId": 18,
+          "missingFields": [
+            "请提供订单号、手机号和乘机人信息。"
+          ],
+          "conversationId": "customer-assistant:18",
+          "pendingActionCount": 1
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": 41,
+            "sourceEventId": 1170,
+            "sourceSequence": 18
+          }
+        }
+      },
+      {
+        "id": 1171,
+        "sessionId": 18,
+        "runId": 41,
+        "sequence": 19,
+        "type": "run.completed",
+        "visibility": "operator",
+        "source": "customer_assistant_gateway",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "runId": 41,
+          "answer": "已开始退票，请提供订单号、手机号和乘机人信息。",
+          "status": "WAITING",
+          "message": "我要退票",
+          "sessionId": 18,
+          "conversationId": "customer-assistant:18"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 41,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": 41,
+            "sourceEventId": 1171,
+            "sourceSequence": 19
+          }
+        }
+      },
+      {
+        "id": 1172,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 20,
+        "type": "run_started",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "actor": "customer",
+          "message": "订单号 [REDACTED]",
+          "turnMode": "customer_task_turn",
+          "startedAt": "2026-06-19T14:08:43.661176"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1172,
+            "sourceSequence": 20
+          }
+        }
+      },
+      {
+        "id": 1173,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 21,
+        "type": "operator_turn_classified",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "actor": "customer",
+          "turnMode": "customer_task_turn"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1173,
+            "sourceSequence": 21
+          }
+        }
+      },
+      {
+        "id": 1174,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 22,
+        "type": "llm_primary_selected",
+        "visibility": "debug",
+        "source": "llm_primary",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "phase": "task_recognition",
+          "confidence": 0.82,
+          "commandCount": 1,
+          "selectedSource": "llm_primary"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1174,
+            "sourceSequence": 22
+          }
+        }
+      },
+      {
+        "id": 1175,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 23,
+        "type": "task_recognized",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "actor": "customer",
+          "commands": [
+            {
+              "type": "RETAIN_TASK",
+              "reason": "deterministic_intent",
+              "taskKey": "refund_ticket",
+              "taskType": "REFUND",
+              "workerRef": "refund_ticket",
+              "workerType": "chatflow_sop",
+              "businessKey": "refund_ticket",
+              "profileRefs": {
+                "toolRefs": [
+                  "refund_policy_lookup"
+                ],
+                "profileId": "refund_ticket_chatflow",
+                "promptRef": "refund_ticket_sop_prompt",
+                "riskPolicyRef": "manual_confirm",
+                "toolPolicyRef": "customer_assistant_worker_tool_default",
+                "modelPolicyRef": "customer_assistant_chatflow_default",
+                "outputSchemaRef": "customer_assistant_worker_result_v1"
+              }
+            }
+          ]
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1175,
+            "sourceSequence": 23
+          }
+        }
+      },
+      {
+        "id": 1176,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 24,
+        "type": "task_retained",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": 26,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "taskKey": "refund_ticket"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": 26,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1176,
+            "sourceSequence": 24
+          }
+        }
+      },
+      {
+        "id": 1177,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 25,
+        "type": "task_started",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": 26,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "taskKey": "refund_ticket",
+          "startedAt": "2026-06-19T14:08:43.686627",
+          "workerType": "chatflow_sop",
+          "profileRefs": {
+            "toolRefs": [
+              "refund_policy_lookup"
+            ],
+            "profileId": "refund_ticket_chatflow",
+            "promptRef": "refund_ticket_sop_prompt",
+            "riskPolicyRef": "manual_confirm",
+            "toolPolicyRef": "customer_assistant_worker_tool_default",
+            "modelPolicyRef": "customer_assistant_chatflow_default",
+            "outputSchemaRef": "customer_assistant_worker_result_v1"
+          }
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": 26,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1177,
+            "sourceSequence": 25
+          },
+          "profileRefs": {
+            "toolRefs": [
+              "refund_policy_lookup"
+            ],
+            "profileId": "refund_ticket_chatflow",
+            "promptRef": "refund_ticket_sop_prompt",
+            "riskPolicyRef": "manual_confirm",
+            "toolPolicyRef": "customer_assistant_worker_tool_default",
+            "modelPolicyRef": "customer_assistant_chatflow_default",
+            "outputSchemaRef": "customer_assistant_worker_result_v1"
+          }
+        }
+      },
+      {
+        "id": 1178,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 26,
+        "type": "worker_started",
+        "visibility": "debug",
+        "source": "chatflow_sop",
+        "actor": "customer",
+        "taskId": 26,
+        "parentSpanId": null,
+        "spanId": "run-42:task-26:worker",
+        "payload": {
+          "spanId": "run-42:task-26:worker",
+          "taskKey": "refund_ticket",
+          "startedAt": "2026-06-19T14:08:43.686636",
+          "workerType": "chatflow_sop",
+          "profileRefs": {
+            "toolRefs": [
+              "refund_policy_lookup"
+            ],
+            "profileId": "refund_ticket_chatflow",
+            "promptRef": "refund_ticket_sop_prompt",
+            "riskPolicyRef": "manual_confirm",
+            "toolPolicyRef": "customer_assistant_worker_tool_default",
+            "modelPolicyRef": "customer_assistant_chatflow_default",
+            "outputSchemaRef": "customer_assistant_worker_result_v1"
+          }
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "chatflow",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": 26,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1178,
+            "sourceSequence": 26
+          },
+          "profileRefs": {
+            "toolRefs": [
+              "refund_policy_lookup"
+            ],
+            "profileId": "refund_ticket_chatflow",
+            "promptRef": "refund_ticket_sop_prompt",
+            "riskPolicyRef": "manual_confirm",
+            "toolPolicyRef": "customer_assistant_worker_tool_default",
+            "modelPolicyRef": "customer_assistant_chatflow_default",
+            "outputSchemaRef": "customer_assistant_worker_result_v1"
+          }
+        }
+      },
+      {
+        "id": 1179,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 27,
+        "type": "worker_result_received",
+        "visibility": "debug",
+        "source": "chatflow_sop",
+        "actor": "customer",
+        "taskId": 26,
+        "parentSpanId": "run-42:task-26:worker",
+        "spanId": "run-42:task-26:worker:event-1",
+        "payload": {
+          "type": "SOP_CONTINUED",
+          "sopId": "refund_ticket",
+          "currentStep": "confirm",
+          "workerRunId": "customer-assistant-worker-run-42"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "chatflow",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": 26,
+            "workerRunId": "customer-assistant-worker-run-42",
+            "runtimeRunId": null,
+            "sourceEventId": 1179,
+            "sourceSequence": 27
+          }
+        }
+      },
+      {
+        "id": 1180,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 28,
+        "type": "task_waiting",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": 26,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "taskKey": "refund_ticket",
+          "workerType": "chatflow_sop"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": 26,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1180,
+            "sourceSequence": 28
+          }
+        }
+      },
+      {
+        "id": 1181,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 29,
+        "type": "recommendation_started",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "startedAt": "2026-06-19T14:08:43.767419",
+          "taskCount": 1,
+          "proposedActionCount": 1
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1181,
+            "sourceSequence": 29
+          }
+        }
+      },
+      {
+        "id": 1182,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 30,
+        "type": "llm_primary_selected",
+        "visibility": "debug",
+        "source": "llm_primary",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "phase": "recommendation",
+          "selectedSource": "llm_primary"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1182,
+            "sourceSequence": 30
+          }
+        }
+      },
+      {
+        "id": 1183,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 31,
+        "type": "recommendation_completed",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "elapsedMs": 8,
+          "startedAt": "2026-06-19T14:08:43.767419",
+          "taskCount": 1,
+          "completedAt": "2026-06-19T14:08:43.776307",
+          "proposedActionCount": 1
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1183,
+            "sourceSequence": 31
+          }
+        }
+      },
+      {
+        "id": 1184,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 32,
+        "type": "recommendation_generated",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "elapsedMs": 8,
+          "startedAt": "2026-06-19T14:08:43.767419",
+          "taskCount": 1,
+          "completedAt": "2026-06-19T14:08:43.776307",
+          "proposedActionCount": 1
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": null,
+            "sourceEventId": 1184,
+            "sourceSequence": 32
+          }
+        }
+      },
+      {
+        "id": 1185,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 33,
+        "type": "run_completed",
+        "visibility": "operator",
+        "source": "customer_assistant",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "actor": "customer",
+          "runId": 42
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "assistant",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": 42,
+            "sourceEventId": 1185,
+            "sourceSequence": 33
+          }
+        }
+      },
+      {
+        "id": 1186,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 34,
+        "type": "message.delta",
+        "visibility": "customer",
+        "source": "customer_assistant_gateway",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "delta": "已记录订单号 [REDACTED]。已完成退票政策说明、业务查询和变量聚合。请回复 confirm 或 确认 完成办理。",
+          "runId": 42,
+          "status": "WAITING",
+          "message": "订单号 [REDACTED]",
+          "sessionId": 18,
+          "conversationId": "customer-assistant:18"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": 42,
+            "sourceEventId": 1186,
+            "sourceSequence": 34
+          }
+        }
+      },
+      {
+        "id": 1187,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 35,
+        "type": "message.completed",
+        "visibility": "customer",
+        "source": "customer_assistant_gateway",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "runId": 42,
+          "answer": "已记录订单号 [REDACTED]。已完成退票政策说明、业务查询和变量聚合。请回复 confirm 或 确认 完成办理。",
+          "status": "WAITING",
+          "message": "订单号 [REDACTED]",
+          "sessionId": 18,
+          "conversationId": "customer-assistant:18"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": 42,
+            "sourceEventId": 1187,
+            "sourceSequence": 35
+          }
+        }
+      },
+      {
+        "id": 1188,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 36,
+        "type": "requires_input",
+        "visibility": "customer",
+        "source": "customer_assistant_gateway",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "runId": 42,
+          "status": "WAITING",
+          "message": "订单号 [REDACTED]",
+          "sessionId": 18,
+          "missingFields": [
+            "请回复 confirm 或 确认 完成办理。"
+          ],
+          "conversationId": "customer-assistant:18",
+          "pendingActionCount": 1
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": 42,
+            "sourceEventId": 1188,
+            "sourceSequence": 36
+          }
+        }
+      },
+      {
+        "id": 1189,
+        "sessionId": 18,
+        "runId": 42,
+        "sequence": 37,
+        "type": "run.completed",
+        "visibility": "operator",
+        "source": "customer_assistant_gateway",
+        "actor": "customer",
+        "taskId": null,
+        "parentSpanId": null,
+        "spanId": null,
+        "payload": {
+          "runId": 42,
+          "answer": "已记录订单号 [REDACTED]。已完成退票政策说明、业务查询和变量聚合。请回复 confirm 或 确认 完成办理。",
+          "status": "WAITING",
+          "message": "订单号 [REDACTED]",
+          "sessionId": 18,
+          "conversationId": "customer-assistant:18"
+        },
+        "createdAt": "2026-06-19T14:08:44",
+        "observability": {
+          "sourceKind": "worker",
+          "eventMode": "live",
+          "correlationRefs": {
+            "assistantRunId": 42,
+            "taskId": null,
+            "workerRunId": null,
+            "runtimeRunId": 42,
+            "sourceEventId": 1189,
+            "sourceSequence": 37
+          }
+        }
+      }
+    ],
+    "recovery": {
+      "sessionId": 18,
+      "afterSequence": 37,
+      "eventsRef": "/api/v1/customer-assistant/sessions/18/events",
+      "eventStreamRef": "/api/v1/customer-assistant/sessions/18/events/stream?afterSequence=37"
+    },
+    "replayed": true,
+    "warnings": [],
+    "replyType": "DRAFT",
+    "sessionId": 18,
+    "taskSummaries": [
+      {
+        "id": 26,
+        "status": "WAITING",
+        "shortId": "RETI",
+        "taskKey": "refund_ticket",
+        "version": 3,
+        "taskType": "REFUND",
+        "sessionId": 18,
+        "workerRef": "refund_ticket",
+        "checkpoint": {
+          "version": 1,
+          "collected": {
+            "actor": "customer",
+            "message": "我要退票",
+            "order_no": "[REDACTED]",
+            "node_trace": [
+              "INFORMATION_COLLECTION",
+              "VARIABLE_PARSE",
+              "LLM",
+              "API_CALL",
+              "CONDITION",
+              "VARIABLE_AGGREGATION",
+              "QUESTION"
+            ],
+            "last_user_message": "订单号 [REDACTED]"
+          },
+          "currentStep": "confirm",
+          "sopRuntimeId": "fake:refund_ticket:26",
+          "currentNodeId": "confirm",
+          "pendingPrompt": "请回复 confirm 或 确认 完成办理。",
+          "scopedVariables": {
+            "conversation.actor": "customer",
+            "conversation.message": "我要退票",
+            "conversation.order_no": "[REDACTED]",
+            "conversation.node_trace": [
+              "INFORMATION_COLLECTION",
+              "VARIABLE_PARSE",
+              "LLM",
+              "API_CALL",
+              "CONDITION",
+              "VARIABLE_AGGREGATION",
+              "QUESTION"
+            ],
+            "conversation.last_user_message": "订单号 [REDACTED]"
+          }
+        },
+        "lastResult": {
+          "error": null,
+          "events": [
+            {
+              "type": "worker_result_received",
+              "source": "chatflow_sop",
+              "payload": {
+                "type": "SOP_CONTINUED",
+                "sopId": "refund_ticket",
+                "currentStep": "confirm"
+              }
+            }
+          ],
+          "status": "WAITING",
+          "taskId": 26,
+          "evidence": {
+            "sopId": "refund_ticket",
+            "currentStep": "confirm"
+          },
+          "checkpoint": {
+            "version": 1,
+            "collected": {
+              "actor": "customer",
+              "message": "我要退票",
+              "order_no": "[REDACTED]",
+              "node_trace": [
+                "INFORMATION_COLLECTION",
+                "VARIABLE_PARSE",
+                "LLM",
+                "API_CALL",
+                "CONDITION",
+                "VARIABLE_AGGREGATION",
+                "QUESTION"
+              ],
+              "last_user_message": "订单号 [REDACTED]"
+            },
+            "currentStep": "confirm",
+            "sopRuntimeId": "fake:refund_ticket:26",
+            "currentNodeId": "confirm",
+            "pendingPrompt": "请回复 confirm 或 确认 完成办理。",
+            "scopedVariables": {
+              "conversation.actor": "customer",
+              "conversation.message": "我要退票",
+              "conversation.order_no": "[REDACTED]",
+              "conversation.node_trace": [
+                "INFORMATION_COLLECTION",
+                "VARIABLE_PARSE",
+                "LLM",
+                "API_CALL",
+                "CONDITION",
+                "VARIABLE_AGGREGATION",
+                "QUESTION"
+              ],
+              "conversation.last_user_message": "订单号 [REDACTED]"
+            }
+          },
+          "workerType": "chatflow_sop",
+          "workerRunId": "customer-assistant-worker-run-42",
+          "missingFields": [
+            "请回复 confirm 或 确认 完成办理。"
+          ],
+          "proposedActions": [],
+          "workerAsyncRefs": {
+            "scope": "customer_assistant_worker_run",
+            "supported": true,
+            "workerRunId": "customer-assistant-worker-run-42",
+            "workerEventsRef": "/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-42/events",
+            "workerResultRef": "/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-42/result",
+            "workerStatusRef": "/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-42",
+            "workerEventStreamRef": "/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-42/events/stream?afterSequence=0"
+          },
+          "customerReplyDraft": "已记录订单号 [REDACTED]。已完成退票政策说明、业务查询和变量聚合。请回复 confirm 或 确认 完成办理。",
+          "safeAutoActionsDone": [],
+          "operatorRecommendation": "refund_ticket worker WAITING at confirm"
+        },
+        "workerType": "chatflow_sop",
+        "businessKey": "refund_ticket",
+        "proposedActions": [],
+        "workerAsyncRefs": {
+          "scope": "customer_assistant_worker_run",
+          "supported": true,
+          "workerRunId": "customer-assistant-worker-run-42",
+          "workerEventsRef": "/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-42/events",
+          "workerResultRef": "/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-42/result",
+          "workerStatusRef": "/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-42",
+          "workerEventStreamRef": "/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-42/events/stream?afterSequence=0"
+        }
+      }
+    ],
+    "chatflowSession": null,
+    "proposedActions": [
+      {
+        "id": 38,
+        "runId": 41,
+        "title": "发送客户回复草稿",
+        "result": {},
+        "status": "PENDING",
+        "taskId": null,
+        "payload": {
+          "draft": "已开始退票，请提供订单号、手机号和乘机人信息。",
+          "channel": "mock_web",
+          "metadata": {
+            "actor": "customer",
+            "runId": 41,
+            "source": "customer_assistant_recommendation",
+            "sessionId": 18
+          },
+          "recipient": {},
+          "conversationId": "customer-assistant-session-18"
+        },
+        "actionKey": "reply-draft:41:send_customer_message",
+        "sessionId": 18,
+        "actionType": "send_customer_message"
+      }
+    ],
+    "customerReplyDraft": "已记录订单号 [REDACTED]。已完成退票政策说明、业务查询和变量聚合。请回复 confirm 或 确认 完成办理。",
+    "operatorRecommendation": "Operator recommendations:\n- refund_ticket worker WAITING at confirm\n- 待人工确认动作 1 个。",
+    "waitTimeoutMs": null,
+    "conversationId": "customer-assistant:18",
+    "status": "WAITING",
+    "answer": "已记录订单号 [REDACTED]。已完成退票政策说明、业务查询和变量聚合。请回复 confirm 或 确认 完成办理。",
+    "requiresInput": true,
+    "eventsRef": "/api/v1/customer-assistant/sessions/18/events",
+    "eventStreamRef": "/api/v1/customer-assistant/sessions/18/events/stream?afterSequence=0",
+    "resumeStreamRef": "/api/v1/customer-assistant/sessions/18/events/stream?afterSequence=37"
+  },
+  "eventTypes": [
+    "run_started",
+    "operator_turn_classified",
+    "llm_primary_selected",
+    "task_recognized",
+    "task_added",
+    "task_started",
+    "worker_started",
+    "worker_result_received",
+    "task_waiting",
+    "recommendation_started",
+    "llm_primary_selected",
+    "reply_draft_proposed",
+    "recommendation_completed",
+    "recommendation_generated",
+    "run_completed",
+    "message.delta",
+    "message.completed",
+    "requires_input",
+    "run.completed",
+    "run_started",
+    "operator_turn_classified",
+    "llm_primary_selected",
+    "task_recognized",
+    "task_retained",
+    "task_started",
+    "worker_started",
+    "worker_result_received",
+    "task_waiting",
+    "recommendation_started",
+    "llm_primary_selected",
+    "recommendation_completed",
+    "recommendation_generated",
+    "run_completed",
+    "message.delta",
+    "message.completed",
+    "requires_input",
+    "run.completed"
+  ],
+  "eventsTotal": 37,
+  "recovered": {
+    "id": 1169,
+    "sessionId": 18,
+    "runId": 41,
+    "sequence": 17,
+    "type": "message.completed",
+    "visibility": "customer",
+    "source": "customer_assistant_gateway",
+    "actor": "customer",
+    "taskId": null,
+    "parentSpanId": null,
+    "spanId": null,
+    "payload": {
+      "runId": 41,
+      "answer": "已开始退票，请提供订单号、手机号和乘机人信息。",
+      "status": "WAITING",
+      "message": "我要退票",
+      "sessionId": 18,
+      "conversationId": "customer-assistant:18"
+    },
+    "createdAt": "2026-06-19T14:08:44",
+    "observability": {
+      "sourceKind": "worker",
+      "eventMode": "live",
+      "correlationRefs": {
+        "assistantRunId": 41,
+        "taskId": null,
+        "workerRunId": null,
+        "runtimeRunId": 41,
+        "sourceEventId": 1169,
+        "sourceSequence": 17
+      }
+    }
+  }
+}

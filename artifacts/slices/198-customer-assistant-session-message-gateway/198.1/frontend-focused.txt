@@ -1,0 +1,9 @@
+> vitest run src/api/customerAssistant.test.ts
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ ✓ src/api/customerAssistant.test.ts (17 tests) 351ms
+   ✓ customer-assistant frontend API client > uses the customer-assistant session and message endpoints  302ms
+ Test Files  1 passed (1)
+      Tests  17 passed (17)
+   Start at  14:07:08
+   Duration  2.60s (transform 667ms, setup 0ms, collect 457ms, tests 351ms, environment 0ms, prepare 397ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m

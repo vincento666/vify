@@ -18,6 +18,11 @@ class CustomerAssistantTurnRequest(BaseModel):
     actor: CustomerAssistantActor = DEFAULT_CUSTOMER_ASSISTANT_ACTOR
 
 
+class CustomerAssistantMessageRequest(CustomerAssistantTurnRequest):
+    session_id: int | None = Field(default=None, alias="sessionId")
+    wait_timeout_ms: int | None = Field(default=None, alias="waitTimeoutMs", ge=0)
+
+
 class CustomerAssistantOperatorKnowledgeQaRequest(BaseModel):
     question: str = Field(min_length=1)
 

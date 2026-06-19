@@ -15,7 +15,7 @@ describe('customer-assistant frontend API client', () => {
     requestMocks.post.mockReset()
   })
 
-  it('uses the customer-assistant session and turn endpoints', async () => {
+  it('uses the customer-assistant session and message endpoints', async () => {
     requestMocks.post
       .mockResolvedValueOnce({ id: 12, status: 'ACTIVE' })
       .mockResolvedValueOnce({ runId: 31, customerReplyDraft: '请补充订单号。' })
@@ -36,13 +36,13 @@ describe('customer-assistant frontend API client', () => {
     expect(requestMocks.post).toHaveBeenNthCalledWith(1, '/v1/customer-assistant/sessions', {
       context: { customerId: 'C-046' },
     })
-    expect(requestMocks.post).toHaveBeenNthCalledWith(2, '/v1/customer-assistant/sessions/12/turns', {
+    expect(requestMocks.post).toHaveBeenNthCalledWith(2, '/v1/customer-assistant/sessions/12/messages', {
       message: '我要退票',
       idempotencyKey: '046-red',
     })
   })
 
-  it('sends actor through the turn endpoint', async () => {
+  it('sends actor through the message endpoint', async () => {
     requestMocks.post.mockResolvedValueOnce({ runId: 47 })
 
     const { sendCustomerAssistantTurn } = await import('./customerAssistant')
@@ -53,7 +53,7 @@ describe('customer-assistant frontend API client', () => {
       actor: 'operator',
     })
 
-    expect(requestMocks.post).toHaveBeenCalledWith('/v1/customer-assistant/sessions/12/turns', {
+    expect(requestMocks.post).toHaveBeenCalledWith('/v1/customer-assistant/sessions/12/messages', {
       message: '请帮我看下退票建议',
       idempotencyKey: '047-actor',
       actor: 'operator',

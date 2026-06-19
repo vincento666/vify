@@ -16,6 +16,7 @@ class ChatflowSopWorker:
 
     def run(self, task: TaskItem, message: str) -> WorkerResult:
         checkpoint = _checkpoint_from_dict(task.checkpoint)
+        chatflow_session_id = _chatflow_session_id(task)
         request = SopExecutionRequest(
             runtime_session_id=task.session_id,
             runtime_task_id=task.id,
@@ -29,6 +30,8 @@ class ChatflowSopWorker:
                 "source": "customer_assistant",
                 "actor": "operator",
                 "sop_key": task.worker_ref,
+                "chatflowSessionId": chatflow_session_id,
+                "conversationId": chatflow_session_id,
                 "task_id": str(task.id or ""),
                 "task_key": task.task_key,
                 "session_id": str(task.session_id),
@@ -49,6 +52,7 @@ class ChatflowSopWorker:
                 evidence["chatflowRuntimeRefs"] = dict(chatflow_meta["runtimeRefs"])
             if chatflow_meta.get("fallbackReason"):
                 evidence["fallbackReason"] = chatflow_meta.get("fallbackReason")
+            evidence["chatflowSession"] = _chatflow_session_projection(task, chatflow_meta, status)
         return WorkerResult(
             task_id=int(task.id or 0),
             worker_type=task.worker_type,
@@ -134,6 +138,48 @@ def _chatflow_meta(checkpoint: dict[str, Any]) -> dict[str, Any]:
         return {}
     meta = scoped_variables.get("__chatflow")
     return dict(meta) if isinstance(meta, dict) else {}
+
+
+def _chatflow_session_id(task: TaskItem) -> str:
+    return f"customer-assistant-{task.session_id}-{task.id or 'new'}-{task.worker_ref}"
+
+
+def _chatflow_session_projection(
+    task: TaskItem,
+    meta: dict[str, Any],
+    status: TaskStatus,
+) -> dict[str, Any]:
+    runtime_refs = dict(meta.get("runtimeRefs") or {})
+    run_id = _optional_int(meta.get("runId") or runtime_refs.get("runId"))
+    session_id = str(meta.get("sessionId") or _chatflow_session_id(task))
+    projection: dict[str, Any] = {
+        "gatewayMode": "messages:stream",
+        "sessionId": session_id,
+        "conversationId": session_id,
+        "assistantSessionId": task.session_id,
+        "currentSopId": task.worker_ref,
+        "taskId": task.id,
+        "taskKey": task.task_key,
+        "status": status.value,
+        "runId": run_id,
+        "runtimeVersion": _optional_int(meta.get("runtimeVersion")),
+    }
+    if meta.get("checkpointId") is not None:
+        projection["checkpointId"] = _optional_int(meta.get("checkpointId"))
+    if run_id is not None:
+        projection["statusRef"] = runtime_refs.get("statusRef") or f"/api/v1/runtime-runs/{run_id}"
+        projection["eventsRef"] = runtime_refs.get("eventsRef") or f"/api/v1/runtime-runs/{run_id}/events"
+        projection["eventStreamRef"] = runtime_refs.get("eventStreamRef") or f"/api/v1/runtime-runs/{run_id}/events/stream?afterSequence=0"
+        projection["resultRef"] = runtime_refs.get("resultRef") or f"/api/v1/runtime-runs/{run_id}/result"
+    return projection
+
+
+def _optional_int(value: Any) -> int | None:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
 
 
 def _chatflow_error(error: dict[str, Any] | None) -> dict[str, Any] | None:

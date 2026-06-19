@@ -250,6 +250,13 @@ export interface CustomerAssistantEvent {
 export interface CustomerAssistantTurnResult {
   runId: number
   sessionId: number
+  conversationId?: string
+  status?: string
+  answer?: string
+  requiresInput?: boolean
+  eventsRef?: string
+  eventStreamRef?: string
+  resumeStreamRef?: string
   replyType: string
   operatorRecommendation: string
   customerReplyDraft: string
@@ -289,6 +296,7 @@ export interface CustomerAssistantTurnPayload {
   message: string
   idempotencyKey?: string
   actor?: 'customer' | 'operator' | 'system'
+  waitTimeoutMs?: number
 }
 
 export interface CustomerAssistantSubAgentPayload {
@@ -314,11 +322,12 @@ export const updateCustomerAssistantWorkerProfile = (
 ) => patch<CustomerAssistantWorkerProfile>(`/v1/customer-assistant/worker-profiles/${profileId}`, payload)
 
 export const sendCustomerAssistantTurn = (sessionId: number, payload: CustomerAssistantTurnPayload) => {
-  const { message, idempotencyKey, actor } = payload
-  return post<CustomerAssistantTurnResult>(`/v1/customer-assistant/sessions/${sessionId}/turns`, {
+  const { message, idempotencyKey, actor, waitTimeoutMs } = payload
+  return post<CustomerAssistantTurnResult>(`/v1/customer-assistant/sessions/${sessionId}/messages`, {
     message,
     idempotencyKey,
     ...(actor ? { actor } : {}),
+    ...(waitTimeoutMs === undefined ? {} : { waitTimeoutMs }),
   })
 }
 

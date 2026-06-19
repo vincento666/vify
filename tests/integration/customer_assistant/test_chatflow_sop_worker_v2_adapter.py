@@ -191,6 +191,58 @@ class ChatflowSopWorkerV2AdapterTest(unittest.TestCase):
         self.assertGreater(refs["sourceEventId"], 0)
         self.assertGreater(refs["sourceSequence"], 0)
 
+    def test_customer_assistant_turn_projects_chatflow_session_gateway_refs(self) -> None:
+        with TestClient(app) as client:
+            chatflow = _create_question_chatflow(client)
+            with _session() as session:
+                factory = sessionmaker(bind=session.get_bind(), autoflush=False, autocommit=False, expire_on_commit=False)
+                workers = {
+                    "chatflow_sop": ChatflowSopWorker(_adapter(session, {"refund_ticket": chatflow["id"]})),
+                }
+                service = CustomerAssistantService(
+                    CustomerAssistantRepository(session),
+                    scheduler=LocalWorkerScheduler(workers),
+                    async_worker_runtime=CustomerAssistantWorkerRuntime(
+                        workers=workers,
+                        session_factory=factory,
+                        async_worker_types={"chatflow_sop"},
+                        wait_deadline_seconds=2,
+                        task_timeout_seconds=5,
+                    ),
+                )
+                assistant_session = service.create_session()
+                session_id = int(assistant_session["id"])
+
+                waiting = service.handle_turn(session_id, "我要退票", "198-gateway-start")
+                resumed = service.handle_turn(session_id, "订单号是 TK19801", "198-gateway-resume")
+                tasks = service.list_tasks(session_id)["list"]
+
+        waiting_gateway = waiting["chatflowSession"]
+        resumed_gateway = resumed["chatflowSession"]
+        self.assertEqual(waiting_gateway["gatewayMode"], "messages:stream")
+        self.assertEqual(waiting_gateway["assistantSessionId"], session_id)
+        self.assertEqual(waiting_gateway["currentSopId"], "refund_ticket")
+        self.assertTrue(waiting_gateway["sessionId"].startswith(f"customer-assistant-{session_id}-"))
+        self.assertEqual(waiting_gateway["conversationId"], waiting_gateway["sessionId"])
+        self.assertEqual(waiting_gateway["status"], "WAITING")
+        self.assertGreater(waiting_gateway["runId"], 0)
+        self.assertIn("/api/v1/runtime-runs/", waiting_gateway["eventStreamRef"])
+        self.assertEqual(waiting["recovery"]["sessionId"], session_id)
+        self.assertEqual(waiting["recovery"]["chatflowSessionId"], waiting_gateway["sessionId"])
+        self.assertGreater(waiting["recovery"]["afterSequence"], 0)
+        self.assertIn(
+            f"/api/v1/customer-assistant/sessions/{session_id}/events/stream",
+            waiting["recovery"]["eventStreamRef"],
+        )
+
+        self.assertEqual(resumed_gateway["sessionId"], waiting_gateway["sessionId"])
+        self.assertEqual(resumed_gateway["status"], "COMPLETED")
+        refund_task = next(task for task in tasks if task["taskKey"] == "refund_ticket")
+        self.assertEqual(
+            refund_task["lastResult"]["evidence"]["chatflowSession"]["sessionId"],
+            waiting_gateway["sessionId"],
+        )
+
 
 def _legacy_stub_baggage_profiles() -> CustomerAssistantWorkerProfileCatalog:
     return CustomerAssistantWorkerProfileCatalog.from_json(
