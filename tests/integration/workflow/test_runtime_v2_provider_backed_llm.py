@@ -46,6 +46,10 @@ class RuntimeV2ProviderBackedLlmBindingTest(unittest.TestCase):
                 events = client.get(started["eventsRef"]).json()["data"]["list"]
 
         self.assertEqual(terminal["output"]["answer"], "RUNTIME_V2_PROVIDER_OK")
+        self.assertEqual(
+            terminal["usage"],
+            {"inputTokens": 11, "outputTokens": 7, "totalTokens": 18, "estimated": False},
+        )
         self.assertNotIn("LLM mock:", str(terminal["output"]))
         self.assertEqual(fake_client.captured_payload["model"], "runtime-v2-node-model")
         self.assertEqual(fake_client.captured_payload["temperature"], 0.23)

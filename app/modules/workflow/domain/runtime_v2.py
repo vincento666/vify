@@ -576,14 +576,23 @@ class ChatflowRuntimeV2Service:
         owner_type = self._owner_type_for_run(run)
         runtime_metadata = _runtime_metadata(dict(run.get("input") or {}))
         checkpoint = self._state_repository.get_waiting_checkpoint(chatflow_id, run_id)
+        node_runs = self._repository.list_node_runs(run_id)
+        events = self._state_repository.list_events(chatflow_id, run_id)
+        output = dict(run.get("output") or {})
         result = {
             "runId": run_id,
             "ownerType": owner_type,
             "ownerId": chatflow_id,
             "status": str(run["status"]),
-            "output": dict(run.get("output") or {}),
+            "result": output,
+            "output": output,
             "error": str(run.get("error") or ""),
+            "latencyMs": _runtime_result_latency_ms(run, node_runs),
+            "usage": _runtime_usage_summary(node_runs),
+            "retryable": _runtime_result_retryable(run),
+            "events": [_format_runtime_event_summary(event) for event in events],
             "checkpoint": _format_runtime_checkpoint(checkpoint),
+            "statusRef": f"/api/v1/runtime-runs/{run_id}",
             "eventsRef": f"/api/v1/runtime-runs/{run_id}/events",
             "eventStreamRef": f"/api/v1/runtime-runs/{run_id}/events/stream?afterSequence=0",
             "resultRef": f"/api/v1/runtime-runs/{run_id}/result",
@@ -1657,6 +1666,77 @@ def _runtime_event_node_state(event_type: str, payload: dict[str, Any]) -> str:
         "workflow_node_skipped": "SKIPPED",
         "handoff_requested": "WAITING",
     }.get(event_type, "")
+
+
+def _format_runtime_event_summary(event: dict[str, Any]) -> dict[str, Any]:
+    payload = dict(event.get("payload") or {})
+    formatted: dict[str, Any] = {
+        "sequence": int(event["sequence"]),
+        "type": str(event["event_type"]),
+        "status": _runtime_event_node_state(str(event["event_type"]), payload),
+        "createdAt": format_datetime(event["created_at"]),
+    }
+    if event.get("checkpoint_id"):
+        formatted["checkpointId"] = int(event["checkpoint_id"])
+    return formatted
+
+
+def _runtime_result_latency_ms(run: Mapping[str, Any], node_runs: list[dict[str, Any]]) -> int:
+    elapsed_ms = _runtime_non_negative_int(run.get("elapsed_ms"), 0)
+    if elapsed_ms:
+        return elapsed_ms
+    return sum(_runtime_non_negative_int(row.get("elapsed_ms"), 0) for row in node_runs)
+
+
+def _runtime_usage_summary(node_runs: list[dict[str, Any]]) -> dict[str, Any]:
+    input_tokens = 0
+    output_tokens = 0
+    total_tokens = 0
+    estimated = False
+    for row in node_runs:
+        outputs = row.get("outputs") if isinstance(row.get("outputs"), Mapping) else {}
+        usage = outputs.get("__usage") if isinstance(outputs.get("__usage"), Mapping) else {}
+        if not usage:
+            continue
+        input_value = _runtime_usage_value(usage, "inputTokens", "input_tokens", "promptTokens", "prompt_tokens")
+        output_value = _runtime_usage_value(
+            usage,
+            "outputTokens",
+            "output_tokens",
+            "completionTokens",
+            "completion_tokens",
+        )
+        total_value = _runtime_usage_value(usage, "totalTokens", "total_tokens")
+        input_tokens += input_value
+        output_tokens += output_value
+        total_tokens += total_value if total_value else input_value + output_value
+        estimated = estimated or bool(usage.get("estimated"))
+    return {
+        "inputTokens": input_tokens,
+        "outputTokens": output_tokens,
+        "totalTokens": total_tokens,
+        "estimated": estimated,
+    }
+
+
+def _runtime_usage_value(usage: Mapping[str, Any], *keys: str) -> int:
+    for key in keys:
+        value = usage.get(key)
+        if value is not None:
+            return _runtime_non_negative_int(value, 0)
+    return 0
+
+
+def _runtime_non_negative_int(value: Any, default: int = 0) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed >= 0 else default
+
+
+def _runtime_result_retryable(run: Mapping[str, Any]) -> bool:
+    return str(run.get("status") or "").upper() == "FAILED"
 
 
 def _positive_int(value: Any) -> int | None:
