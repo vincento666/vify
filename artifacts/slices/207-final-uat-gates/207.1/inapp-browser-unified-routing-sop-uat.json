@@ -1,0 +1,261 @@
+{
+  "surface": "Codex In-app Browser",
+  "sessionId": 5,
+  "routeAction": "COMPLETE_TASK",
+  "taskText": [
+    "refund_ticketCOMPLETED"
+  ],
+  "trace": {
+    "sopId": "refund_ticket",
+    "status": "COMPLETED",
+    "runId": 14,
+    "statusRef": "/api/v1/runtime-runs/14",
+    "eventsRef": "/api/v1/runtime-runs/14/events",
+    "eventStreamRef": "/api/v1/runtime-runs/14/events/stream?afterSequence=0",
+    "resultRef": "/api/v1/runtime-runs/14/result"
+  },
+  "run": {
+    "runId": 14,
+    "ownerType": "CHATFLOW",
+    "ownerId": 5,
+    "status": "SUCCEEDED",
+    "result": {
+      "final": "LLM mock: 业务：退票办理。方案：LLM mock: 业务：退票办理。已收集：订单号=TK207，手机号=13800138000，乘机人姓名=张测试。用户原话：我要退票。会话上下文：订单号=TK207，航线=，原出行时间=，乘机人=张测试，手机号=13800138000。说明预计可退金额、手续费、到账周期和是否影响其他航段。 请询问用户是否确认继续。。用户确认回复：。如果用户确认办理，请回复已提交或已完成，并给出必要编号；如果用户表示先不办、只是咨询或否定，请明确未提交业务变更。"
+    },
+    "output": {
+      "final": "LLM mock: 业务：退票办理。方案：LLM mock: 业务：退票办理。已收集：订单号=TK207，手机号=13800138000，乘机人姓名=张测试。用户原话：我要退票。会话上下文：订单号=TK207，航线=，原出行时间=，乘机人=张测试，手机号=13800138000。说明预计可退金额、手续费、到账周期和是否影响其他航段。 请询问用户是否确认继续。。用户确认回复：。如果用户确认办理，请回复已提交或已完成，并给出必要编号；如果用户表示先不办、只是咨询或否定，请明确未提交业务变更。"
+    },
+    "error": "",
+    "latencyMs": 0,
+    "usage": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "totalTokens": 0,
+      "estimated": false
+    },
+    "retryable": false,
+    "events": [
+      {
+        "sequence": 1,
+        "type": "workflow_run_started",
+        "status": "",
+        "createdAt": "2026-06-19T18:42:31"
+      },
+      {
+        "sequence": 2,
+        "type": "user_message",
+        "status": "",
+        "createdAt": "2026-06-19T18:42:31"
+      },
+      {
+        "sequence": 3,
+        "type": "workflow_node_started",
+        "status": "RUNNING",
+        "createdAt": "2026-06-19T18:42:31"
+      },
+      {
+        "sequence": 4,
+        "type": "node_status_changed",
+        "status": "RUNNING",
+        "createdAt": "2026-06-19T18:42:31"
+      },
+      {
+        "sequence": 5,
+        "type": "workflow_node_waiting",
+        "status": "WAITING",
+        "createdAt": "2026-06-19T18:42:31",
+        "checkpointId": 23
+      },
+      {
+        "sequence": 6,
+        "type": "node_status_changed",
+        "status": "WAITING",
+        "createdAt": "2026-06-19T18:42:31"
+      },
+      {
+        "sequence": 7,
+        "type": "workflow_run_interrupted",
+        "status": "",
+        "createdAt": "2026-06-19T18:42:31"
+      },
+      {
+        "sequence": 8,
+        "type": "workflow_run_resumed",
+        "status": "",
+        "createdAt": "2026-06-19T18:42:32",
+        "checkpointId": 23
+      },
+      {
+        "sequence": 9,
+        "type": "workflow_node_started",
+        "status": "RUNNING",
+        "createdAt": "2026-06-19T18:42:32"
+      },
+      {
+        "sequence": 10,
+        "type": "node_status_changed",
+        "status": "RUNNING",
+        "createdAt": "2026-06-19T18:42:32"
+      },
+      {
+        "sequence": 11,
+        "type": "workflow_node_completed",
+        "status": "COMPLETED",
+        "createdAt": "2026-06-19T18:42:32"
+      },
+      {
+        "sequence": 12,
+        "type": "node_status_changed",
+        "status": "COMPLETED",
+        "createdAt": "2026-06-19T18:42:32"
+      },
+      {
+        "sequence": 13,
+        "type": "workflow_node_started",
+        "status": "RUNNING",
+        "createdAt": "2026-06-19T18:42:32"
+      },
+      {
+        "sequence": 14,
+        "type": "node_status_changed",
+        "status": "RUNNING",
+        "createdAt": "2026-06-19T18:42:32"
+      },
+      {
+        "sequence": 15,
+        "type": "workflow_node_completed",
+        "status": "COMPLETED",
+        "createdAt": "2026-06-19T18:42:32"
+      },
+      {
+        "sequence": 16,
+        "type": "node_status_changed",
+        "status": "COMPLETED",
+        "createdAt": "2026-06-19T18:42:32"
+      },
+      {
+        "sequence": 17,
+        "type": "workflow_node_started",
+        "status": "RUNNING",
+        "createdAt": "2026-06-19T18:42:32"
+      },
+      {
+        "sequence": 18,
+        "type": "node_status_changed",
+        "status": "RUNNING",
+        "createdAt": "2026-06-19T18:42:32"
+      },
+      {
+        "sequence": 19,
+        "type": "workflow_node_waiting",
+        "status": "WAITING",
+        "createdAt": "2026-06-19T18:42:32",
+        "checkpointId": 24
+      },
+      {
+        "sequence": 20,
+        "type": "node_status_changed",
+        "status": "WAITING",
+        "createdAt": "2026-06-19T18:42:32"
+      },
+      {
+        "sequence": 21,
+        "type": "workflow_run_interrupted",
+        "status": "",
+        "createdAt": "2026-06-19T18:42:32"
+      },
+      {
+        "sequence": 22,
+        "type": "workflow_run_resumed",
+        "status": "",
+        "createdAt": "2026-06-19T18:42:33",
+        "checkpointId": 24
+      },
+      {
+        "sequence": 23,
+        "type": "workflow_node_started",
+        "status": "RUNNING",
+        "createdAt": "2026-06-19T18:42:33"
+      },
+      {
+        "sequence": 24,
+        "type": "node_status_changed",
+        "status": "RUNNING",
+        "createdAt": "2026-06-19T18:42:33"
+      },
+      {
+        "sequence": 25,
+        "type": "workflow_node_completed",
+        "status": "COMPLETED",
+        "createdAt": "2026-06-19T18:42:33"
+      },
+      {
+        "sequence": 26,
+        "type": "node_status_changed",
+        "status": "COMPLETED",
+        "createdAt": "2026-06-19T18:42:33"
+      },
+      {
+        "sequence": 27,
+        "type": "workflow_node_started",
+        "status": "RUNNING",
+        "createdAt": "2026-06-19T18:42:33"
+      },
+      {
+        "sequence": 28,
+        "type": "node_status_changed",
+        "status": "RUNNING",
+        "createdAt": "2026-06-19T18:42:33"
+      },
+      {
+        "sequence": 29,
+        "type": "workflow_node_completed",
+        "status": "COMPLETED",
+        "createdAt": "2026-06-19T18:42:33"
+      },
+      {
+        "sequence": 30,
+        "type": "node_status_changed",
+        "status": "COMPLETED",
+        "createdAt": "2026-06-19T18:42:33"
+      },
+      {
+        "sequence": 31,
+        "type": "workflow_node_started",
+        "status": "RUNNING",
+        "createdAt": "2026-06-19T18:42:33"
+      },
+      {
+        "sequence": 32,
+        "type": "node_status_changed",
+        "status": "RUNNING",
+        "createdAt": "2026-06-19T18:42:33"
+      },
+      {
+        "sequence": 33,
+        "type": "workflow_node_completed",
+        "status": "COMPLETED",
+        "createdAt": "2026-06-19T18:42:33"
+      },
+      {
+        "sequence": 34,
+        "type": "node_status_changed",
+        "status": "COMPLETED",
+        "createdAt": "2026-06-19T18:42:33"
+      },
+      {
+        "sequence": 35,
+        "type": "workflow_run_completed",
+        "status": "",
+        "createdAt": "2026-06-19T18:42:33"
+      }
+    ],
+    "checkpoint": null,
+    "statusRef": "/api/v1/runtime-runs/14",
+    "eventsRef": "/api/v1/runtime-runs/14/events",
+    "eventStreamRef": "/api/v1/runtime-runs/14/events/stream?afterSequence=0",
+    "resultRef": "/api/v1/runtime-runs/14/result",
+    "chatflowId": 5
+  },
+  "screenshot": "/Users/vincento/work/develop/hify/artifacts/slices/207-final-uat-gates/207.1/screenshots/inapp-browser-unified-routing-sop.png"
+}

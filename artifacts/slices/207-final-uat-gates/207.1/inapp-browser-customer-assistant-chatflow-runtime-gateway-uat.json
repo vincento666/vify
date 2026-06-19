@@ -1,0 +1,58 @@
+{
+  "surface": "Codex In-app Browser",
+  "sessionId": 16,
+  "task": {
+    "taskId": 17,
+    "taskKey": "refund_ticket",
+    "status": "COMPLETED",
+    "workerType": "chatflow_sop",
+    "workerRunId": "customer-assistant-worker-run-25",
+    "workerAsyncRefs": {
+      "scope": "customer_assistant_worker_run",
+      "supported": true,
+      "workerRunId": "customer-assistant-worker-run-25",
+      "workerEventsRef": "/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-25/events",
+      "workerResultRef": "/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-25/result",
+      "workerStatusRef": "/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-25",
+      "workerEventStreamRef": "/api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-25/events/stream?afterSequence=0"
+    }
+  },
+  "chatflowRuntime": {
+    "runId": 16,
+    "sessionId": "customer-assistant-16-17-refund_ticket",
+    "runtimeVersion": 2,
+    "resumeMode": "complete",
+    "runtimeRefs": {
+      "runId": 16,
+      "nodesRef": "/api/v1/runtime-runs/16/nodes",
+      "eventsRef": "/api/v1/runtime-runs/16/events",
+      "resultRef": "/api/v1/runtime-runs/16/result",
+      "statusRef": "/api/v1/runtime-runs/16",
+      "eventStreamRef": "/api/v1/runtime-runs/16/events/stream?afterSequence=0"
+    }
+  },
+  "runtime": {
+    "run": {
+      "runId": 16,
+      "ownerType": "CHATFLOW",
+      "status": "SUCCEEDED"
+    },
+    "result": {
+      "status": "SUCCEEDED",
+      "ownerType": "CHATFLOW",
+      "retryable": false,
+      "latencyMs": 0
+    },
+    "eventSources": [
+      "chatflow_runtime_v2"
+    ],
+    "streamFrameContainsV2": true
+  },
+  "pageState": {
+    "eventTextTail": "草稿执行动作 运行事件 124#1 run_started#2 operator_turn_classified#3 llm_primary_selected#4 task_recognized#5 task_added#6 task_started#7 worker_started#8 workflow_run_started#9 user_message#10 workflow_node_started#11 node_status_changed#12 workflow_node_completed#13 node_status_changed#14 workflow_node_started#15 node_status_changed#16 workflow_node_completed#17 node_status_changed#18 workflow_node_started#19 node_status_changed#20 workflow_node_waiting#21 node_status_changed#22 workflow_run_interrupted#23 worker_result_received#24 worker_result_received#25 worker_result_received#26 worker_result_received#27 worker_result_received#28 worker_result_received#29 worker_result_received#30 worker_result_received#31 worker_result_received#32 worker_result_received#33 worker_result_received#34 worker_result_received#35 worker_result_received#36 worker_result_received#37 worker_result_received#38 worker_result_received#39 task_waiting#40 recommendation_started#41 llm_primary_selected#42 recommendation_completed#43 recommendation_generated#44 run_completed#45 message.delta#46 message.completed#47 requires_input#48 run.completed#49 run_started#50 operator_turn_classified#51 llm_primary_selected#52 task_recognized#53 task_retained#54 task_started#55 worker_started#56 workflow_run_started#57 user_message#58 workflow_node_started#59 node_status_changed#60 workflow_node_completed#61 node_status_changed#62 workflow_node_started#63 node_status_changed#64 workflow_node_completed#65 node_status_changed#66 workflow_node_started#67 node_status_changed#68 workflow_node_waiting#69 node_status_changed#70 workflow_run_interrupted#71 workflow_run_resumed#72 workflow_node_started#73 node_status_changed#74 workflow_node_completed#75 node_status_changed#76 workflow_node_started#77 node_status_changed#78 workflow_node_completed#79 node_status_changed#80 workflow_node_started#81 node_status_changed#82 workflow_node_completed#83 node_status_changed#84 workflow_run_completed#85 worker_result_received#86 worker_result_received#87 worker_result_received#88 worker_result_received#89 worker_result_received#90 worker_result_received#91 worker_result_received#92 worker_result_received#93 worker_result_received#94 worker_result_received#95 worker_result_received#96 worker_result_received#97 worker_result_received#98 worker_result_received#99 worker_result_received#100 worker_result_received#101 worker_result_received#102 worker_result_received#103 worker_result_received#104 worker_result_received#105 worker_result_received#106 worker_result_received#107 worker_result_received#108 worker_result_received#109 worker_result_received#110 worker_result_received#111 worker_result_received#112 worker_result_received#113 worker_result_received#114 worker_proposed_action#115 task_completed#116 recommendation_started#117 llm_primary_selected#118 recommendation_completed#119 recommendation_generated#120 run_completed#121 message.delta#122 message.completed#123 requires_input#124 run.completed 风险提示 暂无风险提示",
+    "sessionText": "Session #16等待输入 多客户会话 3 会话Customer assistant session belongs to another tenant活跃会话0待确认1阻塞等待2完成归档0赵女士退票 + 行李额并行Session #1待确认动作2 任务1 待确认14 事件 · 0 Worker1 个动作待人工确认陈先生发票申请中途切航班动态Session #2阻塞等待2 任务1 待确认2 事件 · 0 Worker1 个任务等待坐席或补充信息王先生Chatflow 阻塞收集信息后生成坐席建议Session #3阻塞等待1 任务1 待确认1 事件 · 0 Worker1 个任务等待坐席或补充信息 演示故事线 演示总览3 条故事 · 3 会话 人工采纳率0%待确认动作3活跃任务4运行事件17退票 + 行李额并行赵女士 · 2 任务 · 1 待确认发票申请中途切航班动态陈先生 · 2 任务 · 1 待确认Chatflow 阻塞收集信息后生成坐席建议王先生 · 1 任务 · 1 待确认 客户侧 Transcript客户确认草稿LLM mock: 业务：退票办理。方案：LLM mock: 业务：退票办理。已收集",
+    "taskText": "任务台账 1退票处理refund_ticket · chatflow_sop · refund_ticketrefund_ticket_chatflow模型 customer_assistant_chatflow_default提示词 refund_ticket_sop_prompt工具策略 customer_assistant_worker_tool_default风险 manual_confirm输出 customer_assistant_worker_result_v1工具 refund_policy_lookup配置WorkerRun customer-assistant-worker-run-25结果 /api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-25/result刷新结果请求取消COMPLETED | 退票处理refund_ticket · chatflow_sop · refund_ticketrefund_ticket_chatflow模型 customer_assistant_chatflow_default提示词 refund_ticket_sop_prompt工具策略 customer_assistant_worker_tool_default风险 manual_confirm输出 customer_assistant_worker_result_v1工具 refund_policy_lookup配置WorkerRun customer-assistant-worker-run-25结果 /api/v1/customer-assistant/worker-runs/customer-assistant-worker-run-25/result刷新结果请求取消COMPLETED",
+    "url": "http://127.0.0.1:5227/customer-assistant?hifyHostContext=%7B%22apiBaseUrl%22%3A%22%2Fapi%22%2C%22actorId%22%3A%22operator-207-inapp-b%22%2C%22actorName%22%3A%22InApp%20Browser%20Operator%20B%22%2C%22tenantId%22%3A%22tenant-207-inapp-b%22%2C%22orgId%22%3A%22org-207-inapp-b%22%2C%22permissions%22%3A%5B%22customer_assistant%3Aread%22%2C%22customer_assistant%3Aoperate%22%5D%2C%22source%22%3A%22codex-inapp-browser-uat%22%2C%22requestId%22%3A%22req-207-inapp-customer-assistant-uat-b%22%7D"
+  },
+  "screenshot": "/Users/vincento/work/develop/hify/artifacts/slices/207-final-uat-gates/207.1/screenshots/inapp-browser-customer-assistant-chatflow-runtime-gateway.png"
+}
