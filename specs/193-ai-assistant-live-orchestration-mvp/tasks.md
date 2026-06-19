@@ -366,3 +366,18 @@
       and Codex in-app browser UAT.
 - [x] Save evidence under
       `artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.24-collapse-chevron-restore/`.
+
+## 193.25 Scrollbar Gutter Stability
+
+- [x] RED: frontend shell contract fails while the center message stream does
+      not reserve scrollbar gutter space for expanded run echoes.
+- [x] Add stable scrollbar gutter to the center message stream and internal
+      side/right scroll columns.
+- [x] Keep message stream scrolling vertical-only and reduce the right padding
+      so the reserved scrollbar space stays close to the content without layout
+      jitter.
+- [x] Revalidate with focused frontend unit, AI Assistant shell/timeline unit,
+      `remScaleClosure`, full frontend unit, frontend build, `git diff --check`,
+      and Codex in-app browser UAT.
+- [x] Save evidence under
+      `artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.25-scrollbar-gutter-stability/`.

@@ -1,0 +1,40 @@
+{
+  "before": {
+    "clientHeight": 593,
+    "clientWidth": 303,
+    "hasOverflow": false,
+    "offsetWidth": 308,
+    "overflowX": "hidden",
+    "overflowY": "auto",
+    "paddingRight": "5.25px",
+    "scrollHeight": 593,
+    "scrollbarGutter": "stable"
+  },
+  "after": {
+    "clientHeight": 593,
+    "clientWidth": 303,
+    "hasOverflow": true,
+    "offsetWidth": 308,
+    "overflowX": "hidden",
+    "overflowY": "auto",
+    "paddingRight": "5.25px",
+    "scrollHeight": 915,
+    "scrollbarGutter": "stable"
+  },
+  "clientWidthDelta": 0,
+  "eventHeaders": [
+    {
+      "expanded": "true",
+      "text": "已编辑 1 个文件"
+    },
+    {
+      "expanded": "true",
+      "text": "已读取 1 个文件"
+    },
+    {
+      "expanded": "true",
+      "text": "已运行 1 条命令"
+    }
+  ],
+  "screenshot": "/Users/vincento/work/develop/hify/artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.25-scrollbar-gutter-stability/screenshots/scrollbar-gutter-stable-expanded.png"
+}

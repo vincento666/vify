@@ -1620,7 +1620,9 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
 .ai-shell__side,
 .ai-inspector {
   padding: 0.75rem;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
 }
 
 .ai-shell__brand,
@@ -1864,8 +1866,10 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
 
 .ai-stream {
   min-height: 0;
-  overflow: auto;
-  padding: 0.625rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  padding: 0.625rem 0.375rem 0.625rem 0.625rem;
 }
 
 .ai-empty {
@@ -2412,7 +2416,8 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .ai-inspector__header {
