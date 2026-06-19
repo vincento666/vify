@@ -1,0 +1,15 @@
+
+> hify-web@0.0.1 test:unit
+> vitest run src/views/customerAssistant/customerAssistantPanel.test.ts src/views/customerAssistant/customerAssistantViewModel.test.ts
+
+
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+
+ ✓ src/views/customerAssistant/customerAssistantPanel.test.ts (30 tests) 7ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts (22 tests) 6ms
+
+ Test Files  2 passed (2)
+      Tests  52 passed (52)
+   Start at  21:40:54
+   Duration  242ms (transform 56ms, setup 0ms, collect 68ms, tests 13ms, environment 0ms, prepare 86ms)
+

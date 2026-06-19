@@ -1,0 +1,12 @@
+PASS in-app browser customer assistant operator/workbench boundary UAT
+{
+  "activeConversationFillsAvailableColumn": true,
+  "assistantWorkbenchOwnsAssistantQa": true,
+  "centerOperatorPassengerFacing": true,
+  "columnsEqualHeight": true,
+  "columnsScrollInternally": true,
+  "hiddenNonOverviewPanes": true,
+  "pageNoVerticalOverflow": true,
+  "shellOneScreen": true,
+  "threeColumnGrid": true
+}

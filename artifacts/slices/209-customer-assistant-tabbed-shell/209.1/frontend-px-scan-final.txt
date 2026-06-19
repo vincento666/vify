@@ -1,0 +1,1 @@
+PASS: no naked px/rpx/vw/vh in customer assistant diff beyond intentional/tested 100vh shell-height rule

@@ -1,0 +1,69 @@
+
+> hify-web@0.0.1 test:unit
+> vitest run src/views/customerAssistant/customerAssistantPanel.test.ts src/views/customerAssistant/customerAssistantViewModel.test.ts
+
+
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+
+ ❯ src/views/customerAssistant/customerAssistantPanel.test.ts (30 tests | 1 failed) 13ms
+   ✓ CustomerAssistantPanel UI contract > renders the required operator workspace regions 2ms
+   ✓ CustomerAssistantPanel UI contract > keeps the product shell in left center and right workbench columns 1ms
+   ✓ CustomerAssistantPanel UI contract > uses tabs to keep the operator workbench from stacking every panel below the conversation 0ms
+   × CustomerAssistantPanel UI contract > keeps the center operator lane passenger-facing and moves assistant Q&A into the workbench 5ms
+     → expected 'data-testid="operator-conversation-la…' to contain '坐席发话'
+   ✓ CustomerAssistantPanel UI contract > keeps compact viewports as a three-column shell instead of collapsing into a vertical panel stack 0ms
+   ✓ CustomerAssistantPanel UI contract > constrains the shell to one viewport and scrolls overflowing columns internally 1ms
+   ✓ CustomerAssistantPanel UI contract > keeps internal task controls out of the customer lane 0ms
+   ✓ CustomerAssistantPanel UI contract > uses Ant Design Vue primitives and avoids Element Plus and card nesting 0ms
+   ✓ CustomerAssistantPanel UI contract > does not seed the production panel with mock runtime data 0ms
+   ✓ CustomerAssistantPanel UI contract > renders progress checklist and keeps timeline collapsed by default 0ms
+   ✓ CustomerAssistantPanel UI contract > renders draft delivery controls only in the operator proposed-action panel 0ms
+   ✓ CustomerAssistantPanel UI contract > renders observability metrics in the operator panel without raw payload details 0ms
+   ✓ CustomerAssistantPanel UI contract > renders aggregate seeded demo metrics above the story picker 0ms
+   ✓ CustomerAssistantPanel UI contract > renders the seeded session inbox as an operator dashboard outside the customer lane 0ms
+   ✓ CustomerAssistantPanel UI contract > distinguishes proposed task commands from executable actions 0ms
+   ✓ CustomerAssistantPanel UI contract > renders action execution receipts in the operator proposed-action panel 0ms
+   ✓ CustomerAssistantPanel UI contract > renders action decision receipts in the operator proposed-action panel 0ms
+   ✓ CustomerAssistantPanel UI contract > renders retry cancel and resume task controls in the operator ledger 0ms
+   ✓ CustomerAssistantPanel UI contract > renders pending worker refs and manual refresh controls in the operator ledger 0ms
+   ✓ CustomerAssistantPanel UI contract > renders pending proposed action edit controls in the operator panel 0ms
+   ✓ CustomerAssistantPanel UI contract > renders decision note controls in pending operator proposed-action rows 0ms
+   ✓ CustomerAssistantPanel UI contract > renders configured worker profile metadata in task rows 0ms
+   ✓ CustomerAssistantPanel UI contract > renders the configured worker profile catalog as a dedicated operator panel 0ms
+   ✓ CustomerAssistantPanel UI contract > renders worker profile edit controls in the operator task ledger 0ms
+   ✓ CustomerAssistantPanel UI contract > renders the eval observability surface as a dedicated read-only panel 0ms
+   ✓ CustomerAssistantPanel UI contract > renders task recognition evidence as a dedicated operator panel 0ms
+   ✓ CustomerAssistantPanel UI contract > renders operator knowledge Q&A as a dedicated compact panel 0ms
+   ✓ CustomerAssistantPanel UI contract > renders operator advisory knowledge evidence as a dedicated panel 0ms
+   ✓ CustomerAssistantPanel UI contract > renders operator audit rows as a compact read-only panel 0ms
+   ✓ CustomerAssistantPanel UI contract > deep-links and auto-opens seeded demo stories through the route query 0ms
+ ❯ src/views/customerAssistant/customerAssistantViewModel.test.ts (22 tests | 1 failed) 11ms
+   × customer assistant view model > normalizes customer and operator lanes without mixing internal controls into the conversation lanes 5ms
+     → expected [ 'operator', 'assistant' ] to deeply equal [ 'operator' ]
+   ✓ customer assistant view model > summarizes task statuses, missing fields, and display names 0ms
+   ✓ customer assistant view model > attaches configured worker profile metadata to task rows 0ms
+   ✓ customer assistant view model > matches worker profiles for business-scoped task keys 0ms
+   ✓ customer assistant view model > derives permitted operator task controls from task status 0ms
+   ✓ customer assistant view model > projects durable worker async refs onto running task rows 1ms
+   ✓ customer assistant view model > keeps recommendation and customer draft as separate operator panel state 0ms
+   ✓ customer assistant view model > updates proposed action state immutably from confirm/reject API responses 0ms
+   ✓ customer assistant view model > formats executed proposed action receipts with sanitized audit values 0ms
+   ✓ customer assistant view model > formats confirmed and rejected proposed action decision receipts 0ms
+   ✓ customer assistant view model > formats runtime events as compact operator timeline rows 0ms
+   ✓ customer assistant view model > redacts sensitive values in runtime event timeline payload previews 0ms
+   ✓ customer assistant view model > formats operator audit rows without raw payload details 0ms
+   ✓ customer assistant view model > formats task recognition evidence without exposing raw customer text 0ms
+   ✓ customer assistant view model > includes recognition evidence in the built operator state 0ms
+   ✓ customer assistant view model > formats operator advisory evidence without exposing raw customer context 0ms
+   ✓ customer assistant view model > includes operator advisory evidence in the built operator state 0ms
+   ✓ customer assistant view model > formats operator knowledge Q&A without raw payload leaks 1ms
+   ✓ customer assistant view model > formats session metrics as compact operator tiles and redacted failure rows 0ms
+   ✓ customer assistant view model > formats empty metrics safely before a session exists 0ms
+   ✓ customer assistant view model > builds a product-readable eval surface from existing session evidence 1ms
+   ✓ customer assistant view model > derives live progress stages from L1 events 0ms
+
+ Test Files  2 failed (2)
+      Tests  2 failed | 50 passed (52)
+   Start at  21:37:49
+   Duration  285ms (transform 78ms, setup 0ms, collect 100ms, tests 24ms, environment 0ms, prepare 85ms)
+

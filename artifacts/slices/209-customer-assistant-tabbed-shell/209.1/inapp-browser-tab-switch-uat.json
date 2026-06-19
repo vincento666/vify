@@ -1,0 +1,27 @@
+{
+  "pass": true,
+  "tasksState": {
+    "customerLane": false,
+    "operatorLane": true,
+    "overviewPane": false,
+    "taskLedger": true,
+    "tasksPane": true
+  },
+  "evidenceState": {
+    "evidencePane": true,
+    "knowledge": true,
+    "recognition": true,
+    "tasksPane": false
+  },
+  "auditState": {
+    "auditPane": true,
+    "auditPanel": true,
+    "eventTimeline": true,
+    "evidencePane": false
+  },
+  "storyState": {
+    "sessionPane": false,
+    "storyPane": true,
+    "storyStrip": true
+  }
+}

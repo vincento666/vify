@@ -1,0 +1,113 @@
+
+> hify-web@0.0.1 test:unit
+> vitest run
+
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+
+ ✓ src/views/evaluation/experimentRunViewModel.test.ts (3 tests) 2ms
+ ✓ src/views/evaluation/compareViewModel.test.ts (2 tests) 2ms
+ ✓ src/utils/uiScale.test.ts (4 tests) 5ms
+ ✓ src/router/evaluation-routes.test.ts (2 tests) 164ms
+ ✓ src/router/agent-workbench-routes.test.ts (1 test) 184ms
+ ✓ src/router/workflow-routes.test.ts (2 tests) 247ms
+ ✓ src/views/customerAssistant/customerAssistantEventStream.test.ts (2 tests) 132ms
+ ✓ src/router/ai-assistant-routes.test.ts (1 test) 38ms
+ ✓ src/router/unified-routing-chat-lab-routes.test.ts (1 test) 695ms
+   ✓ unified routing chat lab route > exposes a top-level composer menu entry and dedicated route  694ms
+ ✓ src/router/customer-assistant-routes.test.ts (2 tests) 164ms
+ ✓ src/views/evaluation/runReportViewModel.test.ts (2 tests) 4ms
+ ✓ src/views/evaluation/csvToolsViewModel.test.ts (1 test) 7ms
+ ✓ src/views/evaluation/evaluationTabs.test.ts (2 tests) 2ms
+ ✓ src/api/provider.test.ts (1 test) 12ms
+ ✓ src/views/aiAssistant/aiAssistantTimeline.test.ts (15 tests) 14ms
+ ✓ src/views/evaluation/evaluatorViewModel.test.ts (1 test) 3ms
+ ✓ src/views/evaluation/evalSetViewModel.test.ts (4 tests) 2ms
+ ✓ src/views/workflow/workflowCanvasResponsiveLayout.test.ts (2 tests) 4ms
+ ✓ src/views/customerAssistant/customerAssistantRuntime.test.ts (15 tests) 82ms
+ ✓ src/views/workflow/flowGraph.test.ts (18 tests) 14ms
+ ✓ src/views/mcp/mcpAntMigration.test.ts (1 test) 2ms
+ ✓ src/utils/feedbackAntMigration.test.ts (3 tests) 5ms
+ ✓ src/api/customerAssistant.test.ts (17 tests) 36ms
+ ✓ src/views/evaluation/llmEvaluatorWorkbench.test.ts (2 tests) 2ms
+ ✓ src/views/workflow/nodeConfig.test.ts (21 tests) 28ms
+ ✓ src/api/runtimeLab.test.ts (6 tests) 36ms
+ ✓ src/api/workflow.test.ts (3 tests) 56ms
+ ✓ src/api/aiAssistant.test.ts (2 tests) 39ms
+ ✓ src/views/agent/agentPreviewDebug.test.ts (2 tests) 26ms
+ ✓ src/views/aiAssistant/aiAssistantShell.test.ts (23 tests) 13ms
+ ✓ src/views/workflow/chatflowDebugTimeline.test.ts (6 tests) 4ms
+ ✓ src/views/workflow/inlineVariableText.test.ts (5 tests) 3ms
+ ✓ src/views/workflow/workflowValidation.test.ts (10 tests) 14ms
+ ✓ src/views/workflow/variableCatalog.test.ts (11 tests) 7ms
+ ✓ src/views/agent/agentWorkbench.test.ts (11 tests) 7ms
+ ✓ src/views/evaluation/evaluationWorkbenchActions.test.ts (6 tests) 5ms
+ ✓ src/views/workflow/workflowCanvasResponsiveProgressiveCollapse.test.ts (5 tests) 25ms
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts (5 tests) 10ms
+ ✓ src/remScaleClosure.test.ts (1 test) 13ms
+ ✓ src/views/workflow/workflowPhase9UxConvergence.test.ts (2 tests) 7ms
+ ✓ src/api/workflowRuntimeV2.test.ts (3 tests) 12ms
+ ✓ src/views/customerAssistant/customerAssistantPanel.test.ts (28 tests) 10ms
+ ✓ src/views/workflow/workflowCanvasRemGovernance.test.ts (3 tests) 8ms
+ ✓ src/views/customerAssistant/customerAssistantInteractions.test.ts (6 tests) 132ms
+ ✓ src/views/chat/unifiedRoutingChatLab.test.ts (13 tests) 9ms
+ ✓ src/views/workflow/workflowNodeRunStatusBadge.test.ts (2 tests) 9ms
+ ✓ src/components/base/hifyFormDialogAntMigration.test.ts (1 test) 2ms
+ ✓ src/components/base/hifyTableSizing.test.ts (2 tests) 3ms
+ ✓ src/app/legacyElementPlusIsolation.test.ts (3 tests) 23ms
+ ✓ src/host/request.test.ts (2 tests) 16ms
+ ✓ src/views/agentChatRemGovernance.test.ts (1 test) 23ms
+ ✓ src/views/workflow/nodePalette.test.ts (3 tests) 33ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts (22 tests) 48ms
+ ✓ src/views/workflow/runPathEdges.test.ts (4 tests) 5ms
+ ✓ src/views/agent/agentListRemGovernance.test.ts (1 test) 3ms
+ ✓ src/views/workflow/llmModelOptions.test.ts (3 tests) 2ms
+ ✓ src/views/workflow/nodeTestFixtures.test.ts (9 tests) 38ms
+ ✓ src/views/evaluation/experimentStepperViewModel.test.ts (3 tests) 33ms
+ ✓ src/views/evaluation/evaluationAntMigration.test.ts (1 test) 27ms
+ ✓ src/views/workflow/chatflowPublish.test.ts (4 tests) 2ms
+ ✓ src/router/runDebugDeepLinks.test.ts (3 tests) 2ms
+ ✓ src/views/workflow/runtimeV2Debug.test.ts (4 tests) 7ms
+ ✓ src/views/chat/runtimeLabAntMigration.test.ts (1 test) 2ms
+ ✓ src/views/managementRemGovernance.test.ts (1 test) 10ms
+ ✓ src/views/customerAssistant/customerAssistantFixtures.test.ts (2 tests) 2ms
+ ✓ src/views/workflow/chatflowRunProfile.test.ts (2 tests) 4ms
+ ✓ src/views/knowledge/documentListRemGovernance.test.ts (3 tests) 28ms
+ ✓ src/views/workflow/workflowPublish.test.ts (4 tests) 7ms
+ ✓ src/views/agent/agentWorkbenchAntMigration.test.ts (1 test) 14ms
+ ✓ src/views/workflow/chatflowVariables.test.ts (3 tests) 6ms
+ ✓ src/views/knowledge/knowledgeListRemGovernance.test.ts (2 tests) 3ms
+ ✓ src/views/workflow/canvasControls.test.ts (5 tests) 13ms
+ ✓ src/views/workflow/chatflowRunDebug.test.ts (5 tests) 3ms
+ ✓ src/views/workflow/observeRedirect.test.ts (3 tests) 3ms
+ ✓ src/views/workflow/workflowRunDebug.test.ts (7 tests) 4ms
+ ✓ src/views/workflow/observeDashboard.test.ts (2 tests) 2ms
+ ✓ src/views/aiAssistant/aiAssistantUatScript.test.ts (1 test) 3ms
+ ✓ src/views/workflow/chatflowTrialRun.test.ts (4 tests) 33ms
+ ✓ src/views/workflow/resourceRegistry.test.ts (1 test) 3ms
+ ✓ src/utils/remGovernance.test.ts (2 tests) 6ms
+ ✓ src/views/workflow/workflowListAntMigration.test.ts (1 test) 2ms
+ ✓ src/views/workflow/composerSurfaceState.test.ts (4 tests) 4ms
+ ✓ src/views/customerAssistant/customerAssistantStoryLinks.test.ts (4 tests) 7ms
+ ✓ src/app/antDesignDocs.test.ts (2 tests) 4ms
+ ✓ src/appNavigation.test.ts (2 tests) 4ms
+ ✓ src/views/workflow/floatingPanelGeometry.test.ts (1 test) 2ms
+ ✓ src/api/hostFetchIntegration.test.ts (3 tests) 6ms
+ ✓ src/views/knowledge/knowledgeAntMigration.test.ts (1 test) 7ms
+ ✓ src/views/evaluation/relatedExperimentsViewModel.test.ts (2 tests) 5ms
+ ✓ src/views/provider/providerRemGovernance.test.ts (1 test) 2ms
+ ✓ src/views/evaluation/evaluatorVersionSelection.test.ts (2 tests) 5ms
+ ✓ src/views/workflow/apiResourceAntMigration.test.ts (1 test) 8ms
+ ✓ src/views/provider/providerListAntMigration.test.ts (1 test) 1ms
+ ✓ src/views/chat/chatViewAntMigration.test.ts (1 test) 2ms
+ ✓ src/views/agent/agentList.test.ts (2 tests) 3ms
+ ✓ src/views/agent/agentListAntMigration.test.ts (1 test) 5ms
+ ✓ src/app/ant-design.test.ts (2 tests) 2ms
+ ✓ src/utils/request.test.ts (3 tests) 2ms
+
+ Test Files  98 passed (98)
+      Tests  427 passed (427)
+   Start at  19:34:23
+   Duration  6.11s (transform 1.63s, setup 0ms, collect 10.52s, tests 2.78s, environment 8.08s, prepare 11.47s)
+

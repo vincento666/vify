@@ -24,11 +24,11 @@ import {
 } from './customerAssistantViewModel'
 
 describe('customer assistant view model', () => {
-  it('normalizes customer and operator lanes without mixing internal controls into the customer lane', () => {
+  it('normalizes customer and operator lanes without mixing internal controls into the conversation lanes', () => {
     const state = buildCustomerAssistantState({
       sessionId: 12,
       customerInput: '我要退票',
-      operatorInput: '请给我处置建议',
+      operatorInput: '我会先帮您核对订单和行李规则',
       turnResult: mockCustomerAssistantTurnResult,
     })
 
@@ -47,12 +47,14 @@ describe('customer assistant view model', () => {
     })
     expect(state.customerMessages.every((item) => item.controls.length === 0)).toBe(true)
 
-    expect(state.operatorMessages.map((item) => item.role)).toEqual(['operator', 'assistant'])
-    expect(state.operatorMessages[1]).toMatchObject({
+    expect(state.operatorMessages.map((item) => item.role)).toEqual(['operator'])
+    expect(state.operatorMessages[0]).toMatchObject({
       lane: 'operator',
-      content: mockCustomerAssistantTurnResult.operatorRecommendation,
-      source: 'assistant',
+      content: '我会先帮您核对订单和行李规则',
+      source: 'operator',
     })
+    expect(state.operatorMessages.every((item) => item.source !== 'assistant')).toBe(true)
+    expect(state.recommendation.operatorRecommendation).toBe(mockCustomerAssistantTurnResult.operatorRecommendation)
   })
 
   it('summarizes task statuses, missing fields, and display names', () => {

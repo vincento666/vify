@@ -298,11 +298,6 @@ export function buildCustomerAssistantState(input: BuildCustomerAssistantStateIn
   if (input.operatorInput) {
     operatorMessages.push(message('operator-input', 'operator', 'operator', 'operator', input.operatorInput, false))
   }
-  if (turn?.operatorRecommendation) {
-    operatorMessages.push(
-      message('operator-recommendation', 'operator', 'assistant', 'assistant', turn.operatorRecommendation, false),
-    )
-  }
 
   return {
     sessionId,

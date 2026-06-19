@@ -20,6 +20,15 @@ function section(content: string, testId: string) {
   return end < 0 ? content.slice(start) : content.slice(start, end)
 }
 
+function betweenTestIds(content: string, startTestId: string, endTestId: string) {
+  const startMarker = `data-testid="${startTestId}"`
+  const endMarker = `data-testid="${endTestId}"`
+  const start = content.indexOf(startMarker)
+  if (start < 0) return ''
+  const end = content.indexOf(endMarker, start + startMarker.length)
+  return end < 0 ? content.slice(start) : content.slice(start, end)
+}
+
 function regexMatches(content: string, pattern: RegExp) {
   return Array.from(content.matchAll(pattern), (match) => match[0])
 }
@@ -32,10 +41,18 @@ describe('CustomerAssistantPanel UI contract', () => {
       'customer-assistant-workspace',
       'customer-assistant-three-column-shell',
       'customer-assistant-left-column',
+      'customer-assistant-left-tabs',
+      'customer-assistant-left-session-pane',
+      'customer-assistant-left-story-pane',
       'customer-assistant-center-column',
+      'customer-assistant-conversation-tabs',
       'customer-assistant-ai-workbench-column',
       'customer-conversation-lane',
       'operator-conversation-lane',
+      'operator-workbench-overview-pane',
+      'operator-workbench-tasks-pane',
+      'operator-workbench-evidence-pane',
+      'operator-workbench-audit-pane',
       'operator-progress-checklist',
       'operator-sub-agent-control',
       'operator-metrics-panel',
@@ -68,10 +85,70 @@ describe('CustomerAssistantPanel UI contract', () => {
     expect(section(content, 'customer-assistant-center-column')).not.toContain('operator-proposed-actions-panel')
   })
 
+  it('uses tabs to keep the operator workbench from stacking every panel below the conversation', () => {
+    expect(content).toContain("const activeConversationLane = ref<'customer' | 'operator'>('customer')")
+    expect(content).toContain("const activeLeftRailTab = ref<'sessions' | 'stories'>('sessions')")
+    expect(content).toContain("const activeWorkbenchTab = ref<'overview' | 'tasks' | 'evidence' | 'audit'>('overview')")
+    expect(content).toContain('data-testid="customer-assistant-conversation-tabs"')
+    expect(content).toContain('旅客')
+    expect(content).toContain('坐席')
+    expect(content).toContain('v-show="activeConversationLane === \'customer\'"')
+    expect(content).toContain('v-show="activeConversationLane === \'operator\'"')
+    expect(content).toContain('data-testid="customer-assistant-left-tabs"')
+    expect(content).toContain('data-testid="operator-workbench-overview-pane"')
+    expect(content).toContain('data-testid="operator-workbench-tasks-pane"')
+    expect(content).toContain('data-testid="operator-workbench-evidence-pane"')
+    expect(content).toContain('data-testid="operator-workbench-audit-pane"')
+    expect(content).toContain('v-show="activeWorkbenchTab === \'overview\'"')
+    expect(content).toContain('v-show="activeWorkbenchTab === \'tasks\'"')
+    expect(content).toContain('v-show="activeWorkbenchTab === \'evidence\'"')
+    expect(content).toContain('v-show="activeWorkbenchTab === \'audit\'"')
+  })
+
+  it('keeps the center operator lane passenger-facing and moves assistant Q&A into the workbench', () => {
+    const centerColumn = section(content, 'customer-assistant-center-column')
+    const operatorLane = section(content, 'operator-conversation-lane')
+    const overviewPane = betweenTestIds(content, 'operator-workbench-overview-pane', 'operator-workbench-evidence-pane')
+    const evidencePane = betweenTestIds(content, 'operator-workbench-evidence-pane', 'operator-workbench-tasks-pane')
+    const auditPane = section(content, 'operator-workbench-audit-pane')
+
+    expect(operatorLane).toContain('坐席发话')
+    expect(operatorLane).toContain('旅客对话')
+    expect(operatorLane).toContain('模拟坐席发话')
+    expect(operatorLane).toContain('发送给旅客的话术')
+    expect(operatorLane).not.toContain('追问助手')
+    expect(operatorLane).not.toContain('向客服助手追问')
+    expect(operatorLane).not.toContain('Assistant</a-tag>')
+    expect(centerColumn).not.toContain('operatorKnowledgeQuestion')
+    expect(centerColumn).not.toContain('operator-knowledge-qa-panel')
+
+    expect(overviewPane).toContain('data-testid="operator-knowledge-qa-panel"')
+    expect(overviewPane).toContain('data-testid="operator-event-timeline"')
+    expect(overviewPane).toContain('askOperatorKnowledgeQuestion')
+    expect(evidencePane).not.toContain('data-testid="operator-knowledge-qa-panel"')
+    expect(auditPane).not.toContain('data-testid="operator-event-timeline"')
+  })
+
+  it('keeps compact viewports as a three-column shell instead of collapsing into a vertical panel stack', () => {
+    expect(content).toContain('grid-template-columns: repeat(4, minmax(0, 1fr));')
+    expect(content).toMatch(/@media \(max-width: 58rem\)[\s\S]*\.customer-assistant-shell \{[\s\S]*grid-template-columns: minmax\(10\.5rem, 11rem\) minmax\(0, 1fr\) minmax\(10\.5rem, 11rem\);/)
+    expect(content).not.toMatch(/@media \(max-width: 58rem\)[\s\S]*\.customer-assistant-shell,[\s\S]*display: flex/)
+  })
+
+  it('constrains the shell to one viewport and scrolls overflowing columns internally', () => {
+    expect(content).toMatch(/\.customer-assistant-shell \{[\s\S]*height: calc\(100vh - 8rem\);[\s\S]*overflow: hidden;/)
+    expect(content).toMatch(/\.customer-assistant-left-column,[\s\S]*\.customer-assistant-center-column,[\s\S]*\.customer-assistant-ai-workbench-column \{[\s\S]*height: 100%;[\s\S]*max-height: 100%;[\s\S]*overflow-y: auto;/)
+    expect(content).toMatch(/\.customer-assistant-left-column,[\s\S]*\.customer-assistant-center-column,[\s\S]*\.conversation-stack \{[\s\S]*display: flex;[\s\S]*flex-direction: column;/)
+    expect(content).toMatch(/\.conversation-stack \{[\s\S]*flex: 1 1 auto;[\s\S]*min-height: 0;/)
+    expect(content).toMatch(/\.conversation-stack > \.conversation-panel \{[\s\S]*flex: 1 1 auto;[\s\S]*min-height: 0;/)
+    expect(content).toMatch(/\.message-stream \{[\s\S]*min-height: 0;[\s\S]*max-height: none;/)
+    expect(content).toMatch(/@media \(max-width: 58rem\)[\s\S]*\.customer-assistant-shell \{[\s\S]*height: calc\(100vh - 8rem\);/)
+  })
+
   it('keeps internal task controls out of the customer lane', () => {
     const customerLane = section(content, 'customer-conversation-lane')
 
-    expect(customerLane).toContain('客户侧')
+    expect(customerLane).toContain('旅客')
     expect(customerLane).not.toContain('operator-task-ledger')
     expect(customerLane).not.toContain('operator-metrics-panel')
     expect(customerLane).not.toContain('confirmCustomerAssistantAction')

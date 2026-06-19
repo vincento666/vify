@@ -1,0 +1,14 @@
+
+> hify-web@0.0.1 test:unit
+> vitest run src/remScaleClosure.test.ts
+
+
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+
+ ✓ src/remScaleClosure.test.ts (1 test) 17ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  21:41:19
+   Duration  272ms (transform 16ms, setup 0ms, collect 12ms, tests 17ms, environment 0ms, prepare 39ms)
+

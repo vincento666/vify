@@ -1,0 +1,10 @@
+PASS in-app Browser compact customer assistant tabbed shell UAT viewport=715x832
+{
+  "columnsEqualHeight": true,
+  "columnsScrollInternally": true,
+  "compactMetricsSingleRow": true,
+  "pageNoVerticalOverflow": true,
+  "shellOneScreen": true,
+  "tabsVisible": true,
+  "threeColumnGrid": true
+}

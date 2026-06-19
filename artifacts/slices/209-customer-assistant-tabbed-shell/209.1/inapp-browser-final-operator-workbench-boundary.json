@@ -1,0 +1,138 @@
+{
+  "assertions": {
+    "activeConversationFillsAvailableColumn": true,
+    "assistantWorkbenchOwnsAssistantQa": true,
+    "centerOperatorPassengerFacing": true,
+    "columnsEqualHeight": true,
+    "columnsScrollInternally": true,
+    "hiddenNonOverviewPanes": true,
+    "pageNoVerticalOverflow": true,
+    "shellOneScreen": true,
+    "threeColumnGrid": true
+  },
+  "data": {
+    "center": {
+      "bottom": 827.796875,
+      "clientHeight": 720,
+      "display": "flex",
+      "height": 720,
+      "overflowY": "auto",
+      "scrollHeight": 720,
+      "text": "旅客 坐席 旅客窗口 Transcript客户我要退 [REDACTED] 的票，同时确认改签后行李额还在不在。模拟客户输入 坐席窗口 旅客对话 暂无坐席发话 模拟坐席发话",
+      "width": 297,
+      "x": 231,
+      "y": 107.796875
+    },
+    "conversation": {
+      "bottom": 827.796875,
+      "clientHeight": 676,
+      "display": "flex",
+      "height": 675.6953125,
+      "overflowY": "visible",
+      "scrollHeight": 676,
+      "text": "旅客窗口 Transcript客户我要退 [REDACTED] 的票，同时确认改签后行李额还在不在。模拟客户输入 坐席窗口 旅客对话 暂无坐席发话 模拟坐席发话",
+      "width": 297,
+      "x": 231,
+      "y": 152.1015625
+    },
+    "document": {
+      "bodyScrollHeight": 832,
+      "clientHeight": 832,
+      "scrollHeight": 832
+    },
+    "left": {
+      "bottom": 827.796875,
+      "clientHeight": 720,
+      "display": "flex",
+      "height": 720,
+      "overflowY": "auto",
+      "scrollHeight": 732,
+      "text": "会话 故事 多客户会话 3 会话活跃0确认1阻塞2归档0赵女士退票 + 行李额并行Session #1待确认动作2 任务1 待确认14 事件 · 0 Worker1 个动作待人工确认陈先生发票申请中途切航班动态Session #2阻塞等待2 任务1 待确认2 事件 · 0 Worker1 个任务等待坐席或补充信息王先生Chatflow 阻塞收集信息后生成坐席建议Session #3阻塞等待1 任务1 待确认1 事件 · 0 Worker1 个任务等待坐席或补充信息 演示故事线 赵女士 · 138****1024演示总览3 条故事 · 3 会话 人工采纳率0%待确认动作3活跃任务4运行事件17退票 + 行李额并行赵女士 · 2 任务 · 1 待确认发票申请中途切航班动态陈先生 · 2 任务 · 1 待确认Chatflow 阻塞收集信息后生成坐席建议王先生 · 1 任务 · 1 待确认",
+      "width": 154,
+      "x": 70,
+      "y": 107.796875
+    },
+    "operatorInput": {
+      "ariaLabel": "坐席发话",
+      "placeholder": "发送给旅客的话术"
+    },
+    "operatorLane": {
+      "bottom": 827.796875,
+      "clientHeight": 675,
+      "display": "flex",
+      "height": 675.6953125,
+      "overflowY": "visible",
+      "scrollHeight": 675,
+      "text": "坐席窗口 旅客对话 暂无坐席发话 模拟坐席发话",
+      "width": 297,
+      "x": 231,
+      "y": 152.1015625
+    },
+    "operatorLaneCopy": "坐席窗口 旅客对话 暂无坐席发话 模拟坐席发话",
+    "qa": {
+      "bottom": 705.53125,
+      "clientHeight": 140,
+      "display": "block",
+      "height": 141.34375,
+      "overflowY": "visible",
+      "scrollHeight": 140,
+      "text": "助手追问 只读追问助手",
+      "width": 254.9296875,
+      "x": 535,
+      "y": 564.1875
+    },
+    "right": {
+      "bottom": 827.796875,
+      "clientHeight": 715,
+      "display": "flex",
+      "height": 720,
+      "overflowY": "auto",
+      "scrollHeight": 1648,
+      "text": "助手 任务 证据 审计 运行进度 Recognizing tasksRunning workersGenerating recommendationReady for operator后台子智能体未启动并行核对当前会话任务和坐席建议启动子智能体 观测指标 人工采纳率0%待确认动作1活跃任务2运行事件14 助手追问 只读追问助手 助手事件回显 14#1 mvp_demo_task_seeded#2 mvp_demo_task_seeded#3 run_started#4 operator_turn_classified#5 llm_primary_fallback#6 recommendation_started#7 llm_primary_selected#8 recommendation_completed#9 recommendation_generated#10 run_completed#11 message.delta#12 message.completed#13 requires_input#14 run.completed 评估观测 Session eval任务命中0no recognized taskWorker 执行0started 0 · result 0 · failed 0模型证据2diff 0 · fallback 1采纳率0%0/0 adopted · pending 1任务识别暂无任务命中Worker 执行refund_ticket:MU5137-8899refund_ticket:MU5137-8899 · chatflow_sop · refund_ticketRUNNINGbaggage_service:MU5137-8899baggage_service:MU5137-8899 · chatflow_sop · baggage_serviceRUNNING模型/回退证据模型回退task_recognition · low_confidencelow_confidence模型路径选中recommendation · llm_primaryselected恢复建议模型异常恢复task_recognition · low_confidence检查模型策略、提示词和输出 Schema；继续使用当前确定性回退结果并观察下一轮输出。 识别",
+      "width": 154,
+      "x": 535,
+      "y": 107.796875
+    },
+    "rightCopy": "助手 任务 证据 审计 运行进度 Recognizing tasksRunning workersGenerating recommendationReady for operator后台子智能体未启动并行核对当前会话任务和坐席建议启动子智能体 观测指标 人工采纳率0%待确认动作1活跃任务2运行事件14 助手追问 只读追问助手 助手事件回显 14#1 mvp_demo_task_seeded#2 mvp_demo_task_seeded#3 run_started#4 operator_turn_classified#5 llm_primary_fallback#6 recommendation_started#7 llm_primary_selected#8 recommendation_completed#9 recommendation_generated#10 run_completed#11 message.delta#12 message.completed#13 requires_input#14 run.completed 评估观测 Session eval任务命中0no recognized taskWorker 执行0started 0 · result 0 · failed 0模型证据2diff 0 · fallback 1采纳率0%0/0 adopted · pending 1任务识别暂无任务命中Worker 执行refund_ticket:MU5137-8899refund_ticket:MU5137-8899 · chatflow_sop · refund_ticketRUNNINGbaggage_service:MU5137-8899baggage_service:MU5137-8899 · chatflow_sop · baggage_serviceRUNNING模型/回退证据模型回退task_recognition · low_confidencelow_confidence模型路径选中recommendation · llm_primaryselected恢复建议模型异常恢复task_recognition · low_confidence检查模型策略、提示词和输出 Schema；继续使用当前确定性回退结果并观察下一轮输出。 识别证据 0 暂无任务识别证据 Worker 配置 3REFUND · refund_ticketchatflow_sop · refund_ticketrefund_ticket_chatflow启用模型 customer_assistant_chatflow_default提示词 refund_ticket_sop_prompt工具策略 customer_assistant_worker_tool_default风险 manual_confirm输出 customer_assistant_worker_result_v1工具 refund_policy_lookup配置QA · baggage_qastub_qa · baggage_allowancebaggage_allowance_stub启用模型 fake_stub_qa_model提示词 baggage_allowance_prompt工具策略 customer_assistant_worker_tool_default风险 read_only输出 customer_assistant_worker_result_v1工具 无",
+    "shell": {
+      "bottom": 827.796875,
+      "clientHeight": 720,
+      "display": "grid",
+      "height": 720,
+      "overflowY": "hidden",
+      "scrollHeight": 720,
+      "text": "会话 故事 多客户会话 3 会话活跃0确认1阻塞2归档0赵女士退票 + 行李额并行Session #1待确认动作2 任务1 待确认14 事件 · 0 Worker1 个动作待人工确认陈先生发票申请中途切航班动态Session #2阻塞等待2 任务1 待确认2 事件 · 0 Worker1 个任务等待坐席或补充信息王先生Chatflow 阻塞收集信息后生成坐席建议Session #3阻塞等待1 任务1 待确认1 事件 · 0 Worker1 个任务等待坐席或补充信息 演示故事线 赵女士 · 138****1024演示总览3 条故事 · 3 会话 人工采纳率0%待确认动作3活跃任务4运行事件17退票 + 行李额并行赵女士 · 2 任务 · 1 待确认发票申请中途切航班动态陈先生 · 2 任务 · 1 待确认Chatflow 阻塞收集信息后生成坐席建议王先生 · 1 任务 · 1 待确认 旅客 坐席 旅客窗口 Transcript客户我要退 [REDACTED] 的票，同时确认改签后行李额还在不在。模拟客户输入 坐席窗口 旅客对话 暂无坐席发话 模拟坐席发话 助手 任务 证据 审计 运行进度 Recognizing tasksRunning workersGenerating recommendationReady for operator后台子智能体未启动并行核对当前会话任务和坐席建议启动子智能体 观测指标 人工采纳率0%待确认动作1活跃任务2运行事件14 助手追问 只读追问助手 助手事件回显 14#1 mvp_demo_task_seeded#2 mvp_demo_task_seeded#3 run_started#4 operator_turn_classified#5 llm_primary_fallback#6 recommendation_started#7 llm_primary_selected#8 recommendation_completed#9 recommendation_generated#10 run_completed#11 message.delta#12 message.completed#13 requires_input#14 run.completed 评估观测 Session eval任务命中0no recognized tas",
+      "width": 619,
+      "x": 70,
+      "y": 107.796875
+    },
+    "shellTemplate": "154px 297px 154px",
+    "timeline": {
+      "bottom": 1446.125,
+      "clientHeight": 733,
+      "display": "block",
+      "height": 733.59375,
+      "overflowY": "visible",
+      "scrollHeight": 733,
+      "text": "助手事件回显 14#1 mvp_demo_task_seeded#2 mvp_demo_task_seeded#3 run_started#4 operator_turn_classified#5 llm_primary_fallback#6 recommendation_started#7 llm_primary_selected#8 recommendation_completed#9 recommendation_generated#10 run_completed#11 message.delta#12 message.completed#13 requires_input#14 run.completed",
+      "width": 254.9296875,
+      "x": 535,
+      "y": 712.53125
+    },
+    "url": "http://127.0.0.1:5228/customer-assistant?hifyHostContext={%22apiBaseUrl%22:%22/api%22,%22actorId%22:%22operator-208-three-column%22,%22actorName%22:%22Three+Column+UAT+Operator%22,%22tenantId%22:%22mvp-demo-tenant%22,%22orgId%22:%22mvp-demo-org%22,%22permissions%22:[%22customer_assistant:read%22,%22customer_assistant:operate%22],%22source%22:%22codex-inapp-browser-uat%22,%22requestId%22:%22req-208-customer-assistant-three-column%22}&story=refund_baggage_parallel",
+    "viewport": {
+      "height": 832,
+      "width": 715
+    },
+    "visible": {
+      "auditPane": false,
+      "customerLane": false,
+      "eventTimeline": true,
+      "evidencePane": false,
+      "operatorLane": true,
+      "overviewPane": true,
+      "qa": true
+    }
+  },
+  "pass": true
+}
