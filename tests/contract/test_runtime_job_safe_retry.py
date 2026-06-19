@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from app.core.database import get_session_factory
 from app.main import app
 from app.modules.workflow.infra.repository import WorkflowRepository
+from app.modules.workflow.infra.runtime_job_repository import RuntimeJobRepository
 from app.modules.workflow.runtime_job_worker import build_workflow_runtime_job_worker
 
 
@@ -33,7 +34,9 @@ class RuntimeJobSafeRetryTest(unittest.TestCase):
                 node_run_id = repository.create_node_run(run_id, "message_1", "MESSAGE", inputs={"sys.query": "safe retry"})
                 repository.finish_node_run(node_run_id, "COMPLETED", {"content": "first"})
                 worker = build_workflow_runtime_job_worker(session, worker_id="safe-retry-worker")
-                worker_result = worker.run_once()
+                job = RuntimeJobRepository(session).get_by_run(run_id)
+                self.assertIsNotNone(job)
+                worker_result = worker.run_once(int(job["id"]))
 
             result = _wait_for_result(client, started["resultRef"])
             nodes = client.get(started["nodesRef"]).json()["data"]["list"]

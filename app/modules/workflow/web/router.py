@@ -226,10 +226,23 @@ def _start_workflow_runtime_v2_gateway(
     session: Session,
     service: WorkflowRuntimeV2Service,
     event_stream_bus: RuntimeEventStreamBus | None,
+    request_context: RequestContext | None = None,
 ) -> dict[str, Any]:
     data = service.start_run(workflow_id, dict(request.input), request.idempotency_key, request.version_id)
     _attach_runtime_v2_transport(data, event_stream_bus)
     if not data.get("idempotentReplay"):
+        AuditRepository(session).record(
+            action="WORKFLOW_RUN",
+            resource_type="WORKFLOW_RUN",
+            resource_id=int(data["runId"]),
+            metadata={
+                "workflowId": workflow_id,
+                "status": data.get("status"),
+                **({"version": data.get("version")} if data.get("version") is not None else {}),
+                **({"versionId": data.get("versionId")} if data.get("versionId") is not None else {}),
+            },
+            request_context=request_context,
+        )
         job = RuntimeJobRepository(session).enqueue(
             run_id=int(data["runId"]),
             owner_type="WORKFLOW",
@@ -254,6 +267,7 @@ def run_workflow(
     session: Session = Depends(get_session),
     service: WorkflowRuntimeV2Service = Depends(get_workflow_runtime_v2_service),
     event_stream_bus: RuntimeEventStreamBus | None = Depends(get_runtime_event_stream_bus),
+    request_context: RequestContext = Depends(get_request_context),
 ) -> dict[str, Any]:
     return success(
         _start_workflow_runtime_v2_gateway(
@@ -262,6 +276,7 @@ def run_workflow(
             session=session,
             service=service,
             event_stream_bus=event_stream_bus,
+            request_context=request_context,
         )
     )
 
@@ -277,6 +292,7 @@ def stream_workflow_run(
     session: Session = Depends(get_session),
     service: WorkflowRuntimeV2Service = Depends(get_workflow_runtime_v2_service),
     event_stream_bus: RuntimeEventStreamBus | None = Depends(get_runtime_event_stream_bus),
+    request_context: RequestContext = Depends(get_request_context),
 ) -> StreamingResponse:
     data = _start_workflow_runtime_v2_gateway(
         workflow_id,
@@ -284,6 +300,7 @@ def stream_workflow_run(
         session=session,
         service=service,
         event_stream_bus=event_stream_bus,
+        request_context=request_context,
     )
     return StreamingResponse(
         _iter_runtime_v2_sse(
@@ -315,6 +332,7 @@ def run_workflow_v2(
     session: Session = Depends(get_session),
     service: WorkflowRuntimeV2Service = Depends(get_workflow_runtime_v2_service),
     event_stream_bus: RuntimeEventStreamBus | None = Depends(get_runtime_event_stream_bus),
+    request_context: RequestContext = Depends(get_request_context),
 ) -> dict[str, Any]:
     return success(
         _start_workflow_runtime_v2_gateway(
@@ -323,6 +341,7 @@ def run_workflow_v2(
             session=session,
             service=service,
             event_stream_bus=event_stream_bus,
+            request_context=request_context,
         )
     )
 

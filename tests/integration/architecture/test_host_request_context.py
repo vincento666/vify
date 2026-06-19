@@ -29,6 +29,8 @@ class HostRequestContextIntegrationTest(unittest.TestCase):
         model_id = _seed_model()
         with TestClient(app) as client:
             workflow = _create_echo_workflow(client, "WORKFLOW", headers=HOST_HEADERS)
+            publish_response = client.post(f"/api/v1/workflows/{workflow['id']}/publish", headers=HOST_HEADERS)
+            self.assertEqual(publish_response.status_code, 200, publish_response.text)
             workflow_run_response = client.post(
                 f"/api/v1/workflows/{workflow['id']}/runs",
                 json={"input": {"userMessage": "host-context"}},
@@ -36,8 +38,6 @@ class HostRequestContextIntegrationTest(unittest.TestCase):
             )
             self.assertEqual(workflow_run_response.status_code, 200, workflow_run_response.text)
             workflow_run = workflow_run_response.json()["data"]
-            publish_response = client.post(f"/api/v1/workflows/{workflow['id']}/publish", headers=HOST_HEADERS)
-            self.assertEqual(publish_response.status_code, 200, publish_response.text)
 
             chatflow = _create_echo_workflow(client, "CHATFLOW", headers=HOST_HEADERS)
             chatflow_run_response = client.post(
@@ -72,7 +72,17 @@ class HostRequestContextIntegrationTest(unittest.TestCase):
             agent = agent_response.json()["data"]
 
             run = _run_evaluation_experiment(client, workflow["id"], headers=HOST_HEADERS)
-            audit = client.get("/api/v1/audit-records", params={"pageSize": 200}).json()["data"]["list"]
+            audit = _wait_for_audit_records(
+                client,
+                [
+                    ("WORKFLOW_RUN", "WORKFLOW_RUN", workflow_run["runId"]),
+                    ("WORKFLOW_PUBLISH", "WORKFLOW", workflow["id"]),
+                    ("CHATFLOW_RUN", "CHATFLOW_RUN", chatflow_run["runId"]),
+                    ("CHATFLOW_CHANNEL_UPDATE", "CHATFLOW_CHANNEL", f"{chatflow['id']}:web"),
+                    ("AGENT_CREATE", "AGENT", agent["id"]),
+                    ("EVALUATION_RUN", "EVALUATION_RUN", run["id"]),
+                ],
+            )
 
         self._assert_host_context(_find_audit(audit, "WORKFLOW_RUN", "WORKFLOW_RUN", workflow_run["runId"]))
         self._assert_host_context(_find_audit(audit, "WORKFLOW_PUBLISH", "WORKFLOW", workflow["id"]))
@@ -158,6 +168,29 @@ def _run_evaluation_experiment(client: TestClient, workflow_id: int, *, headers:
     if response.status_code != 200:
         raise AssertionError(response.text)
     return response.json()["data"]
+
+
+def _wait_for_audit_records(
+    client: TestClient,
+    expected: list[tuple[str, str, object]],
+) -> list[dict[str, object]]:
+    deadline = time.monotonic() + 5.0
+    audit: list[dict[str, object]] = []
+    while time.monotonic() < deadline:
+        audit = client.get("/api/v1/audit-records", params={"pageSize": 200}).json()["data"]["list"]
+        if all(_has_audit(audit, action, resource_type, resource_id) for action, resource_type, resource_id in expected):
+            return audit
+        time.sleep(0.05)
+    return audit
+
+
+def _has_audit(audit: list[dict[str, object]], action: str, resource_type: str, resource_id: object) -> bool:
+    return any(
+        record.get("action") == action
+        and record.get("resourceType") == resource_type
+        and str(record.get("resourceId")) == str(resource_id)
+        for record in audit
+    )
 
 
 def _find_audit(audit: list[dict[str, object]], action: str, resource_type: str, resource_id: object) -> dict[str, object]:
