@@ -51,11 +51,9 @@ interface ToolEventGroup {
 export function buildAiAssistantTimeline(events: AiAssistantEvent[]): AiAssistantTimelineItem[] {
   const sortedEvents = events.slice().sort((left, right) => left.sequence - right.sequence)
   const toolGroups = collectToolGroups(sortedEvents)
-  const toolGroupByDisplaySequence = new Map(
-    toolGroups
-      .map((group) => [toolGroupDisplaySequence(group), group] as const)
-      .filter((entry): entry is readonly [number, ToolEventGroup] => typeof entry[0] === 'number'),
-  )
+  const toolSummaryItem = toolGroupsToTimelineItem(toolGroups)
+  const toolSummarySequence = toolSummaryItem?.sequence
+  let renderedToolSummary = false
   const toolEventSequences = new Set(toolGroups.flatMap((group) => group.events.map((event) => event.sequence)))
   const timeline: AiAssistantTimelineItem[] = []
   let modelStreamGroup: AiAssistantEvent[] = []
@@ -72,8 +70,10 @@ export function buildAiAssistantTimeline(events: AiAssistantEvent[]): AiAssistan
     modelStreamGroup = []
 
     if (toolEventSequences.has(event.sequence)) {
-      const group = toolGroupByDisplaySequence.get(event.sequence)
-      if (group) timeline.push(toolGroupToTimelineItem(group))
+      if (toolSummaryItem && !renderedToolSummary && event.sequence === toolSummarySequence) {
+        timeline.push(toolSummaryItem)
+        renderedToolSummary = true
+      }
       continue
     }
 
@@ -212,6 +212,9 @@ function collectToolGroups(events: AiAssistantEvent[]) {
     if (!event.type.startsWith('tool.')) continue
     const key = toolEventKey(event)
     let group = activeGroups.get(key)
+    if (!group && event.type !== 'tool.call_started') {
+      group = findActiveToolGroup(activeGroups, event)
+    }
     if (event.type === 'tool.call_started' || !group) {
       group = createToolGroup(event, key)
       groups.push(group)
@@ -222,10 +225,24 @@ function collectToolGroups(events: AiAssistantEvent[]) {
     mergeToolEvent(group, event)
     if (event.type === 'tool.call_completed') {
       group.completed = true
-      activeGroups.delete(key)
+      deleteActiveToolGroup(activeGroups, group)
     }
   }
   return groups
+}
+
+function findActiveToolGroup(activeGroups: Map<string, ToolEventGroup>, event: AiAssistantEvent) {
+  const toolName = payloadString(event, 'toolName')
+  if (!toolName) return undefined
+  return Array.from(new Set(activeGroups.values()))
+    .filter((group) => !group.completed && group.toolName === toolName)
+    .sort((left, right) => right.lastSequence - left.lastSequence)[0]
+}
+
+function deleteActiveToolGroup(activeGroups: Map<string, ToolEventGroup>, completedGroup: ToolEventGroup) {
+  for (const [key, group] of activeGroups.entries()) {
+    if (group === completedGroup) activeGroups.delete(key)
+  }
 }
 
 function createToolGroup(event: AiAssistantEvent, key: string): ToolEventGroup {
@@ -248,36 +265,41 @@ function mergeToolEvent(group: ToolEventGroup, event: AiAssistantEvent) {
   if ('status' in event.payload && typeof event.payload.status === 'string') group.status = event.payload.status
 }
 
-function toolGroupToTimelineItem(group: ToolEventGroup): AiAssistantTimelineItem {
-  const resultEvent = group.events.find((event) => event.type === 'tool.call_output') ?? group.events[group.events.length - 1]
-  const result = summarizeToolOutput(group.toolName, group.output)
+function toolGroupsToTimelineItem(groups: ToolEventGroup[]): AiAssistantTimelineItem | undefined {
+  if (groups.length === 0) return undefined
+  const orderedGroups = groups.slice().sort((left, right) => left.firstSequence - right.firstSequence)
+  const events = orderedGroups.flatMap((group) => group.events).sort((left, right) => left.sequence - right.sequence)
+  const firstEvent = events[0]
+  const resultEvent = events[events.length - 1]
+  const firstSequence = Math.min(...orderedGroups.map((group) => group.firstSequence))
+  const lastSequence = Math.max(...orderedGroups.map((group) => group.lastSequence))
+  const allShellCommands = orderedGroups.every((group) => group.toolName === 'run_shell')
   return {
-    id: group.id,
+    id: `${firstEvent.runId}-${firstSequence}-${lastSequence}-tool-summary`,
     eventId: resultEvent.id,
-    sequence: resultEvent.sequence,
+    sequence: firstSequence,
     kind: 'tool',
-    tone: toolGroupTone(group),
-    title: toolGroupTitle(group.toolName),
-    summary: '',
+    tone: toolGroupsTone(orderedGroups),
+    title: allShellCommands ? '命令执行' : '工具调用',
+    summary: `已汇总 ${orderedGroups.length} 次工具调用`,
     payloadPreview: compactPayload({
-      toolName: group.toolName,
-      status: group.status,
-      hasInput: group.input !== undefined,
-      hasOutput: group.output !== undefined,
-      fromSequence: group.firstSequence,
-      toSequence: group.lastSequence,
+      callCount: orderedGroups.length,
+      toolNames: orderedGroups.map((group) => group.toolName),
+      statuses: orderedGroups.map((group) => group.status || toolGroupTone(group)),
+      fromSequence: firstSequence,
+      toSequence: lastSequence,
     }),
-    details: result ? [{ label: '结果', value: result }] : [],
+    details: [
+      {
+        label: '结果',
+        value: summarizeToolGroups(orderedGroups),
+        monospace: true,
+        testId: 'ai-assistant-tool-detail-output',
+      },
+    ],
   }
 }
 
-function toolGroupDisplaySequence(group: ToolEventGroup) {
-  return group.events.find((event) => event.type === 'tool.call_output')?.sequence
-}
-
-function toolGroupTitle(toolName: string) {
-  return toolName === 'run_shell' ? '命令执行' : '工具调用'
-}
 
 function shouldRenderEvent(event: AiAssistantEvent) {
   if (event.type === 'model.thought_summary') return true
@@ -289,6 +311,12 @@ function toolGroupTone(group: ToolEventGroup): AiAssistantTimelineItem['tone'] {
   if (group.status === 'FAILED') return 'danger'
   if (group.completed || group.output !== undefined) return 'success'
   return 'running'
+}
+
+function toolGroupsTone(groups: ToolEventGroup[]): AiAssistantTimelineItem['tone'] {
+  if (groups.some((group) => toolGroupTone(group) === 'danger')) return 'danger'
+  if (groups.some((group) => toolGroupTone(group) === 'running')) return 'running'
+  return 'success'
 }
 
 function toolEventKey(event: AiAssistantEvent) {
@@ -328,6 +356,76 @@ function summarizeToolOutput(toolName: string, output: unknown) {
     stringValue(output.message) ||
     prettyPayload(output)
   )
+}
+
+function summarizeToolGroups(groups: ToolEventGroup[]) {
+  return groups
+    .map((group) => {
+      const rows = [toolDisplayName(group.toolName)]
+      const input = summarizeToolInput(group.toolName, group.input)
+      if (input) rows.push(`输入：${input}`)
+      rows.push(`输出：${summarizeToolOutput(group.toolName, group.output) || summarizeToolStatus(group) || '等待结果'}`)
+      return rows.join('\n')
+    })
+    .join('\n\n')
+}
+
+function summarizeToolStatus(group: ToolEventGroup) {
+  if (!group.completed && group.status !== 'FAILED') return ''
+  const path = workspacePathFromValue(group.input) || workspacePathFromValue(group.output)
+  if (group.status === 'NOT_FOUND') return path ? `未找到 ${path}` : '未找到'
+  if (group.status === 'FAILED') return '执行失败'
+  if (group.completed) return '已完成'
+  return ''
+}
+
+function workspacePathFromValue(value: unknown) {
+  return isRecord(value) ? stringValue(value.path) : ''
+}
+
+function summarizeToolInput(toolName: string, input: unknown) {
+  if (input === undefined || input === null) return ''
+  if (typeof input === 'string') return truncateInline(input)
+  if (!isRecord(input)) return truncateInline(String(input))
+
+  const path = stringValue(input.path)
+  const query = stringValue(input.query)
+  const command = stringValue(input.command)
+  const skillName = stringValue(input.skillName)
+  const instruction = stringValue(input.instruction)
+  const content = stringValue(input.content)
+  const message = stringValue(input.message)
+  const args = stringValue(input.args)
+  const parts: string[] = []
+
+  if (toolName === 'run_shell' && command) parts.push(`command=${command}`)
+  else if (path) parts.push(`path=${path}`)
+  if (query) parts.push(`query=${query}`)
+  if (skillName) parts.push(`skill=${skillName}`)
+  if (instruction) parts.push(`instruction=${truncateInline(instruction)}`)
+  if (message) parts.push(`message=${truncateInline(message)}`)
+  if (args) parts.push(`args=${truncateInline(args)}`)
+  if (content) parts.push(`content=${truncateInline(content)}`)
+
+  if (parts.length > 0) return parts.join('，')
+  return truncateInline(prettyPayload(input).replace(/[{}\n"]/g, ' ').replace(/\s+/g, ' ').trim())
+}
+
+function toolDisplayName(toolName: string) {
+  const labels: Record<string, string> = {
+    read_workspace_file: '读取工作区文件',
+    write_workspace_file: '写入工作区文件',
+    search_knowledge_base: '知识库检索',
+    invoke_skill: '技能调用',
+    run_shell: '终端命令',
+  }
+  return labels[toolName] || '工具调用'
+}
+
+function truncateInline(value: string) {
+  const text = value.replace(/\s+/g, ' ').trim()
+  if (text.length <= 120) return text
+  return `${text.slice(0, 117)}...`
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

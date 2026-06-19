@@ -1,0 +1,43 @@
+RED 1 - repeated low-level tool calls rendered as repeated tool nodes
+
+Command:
+rtk npm --prefix frontend run test:unit -- src/views/aiAssistant/aiAssistantTimeline.test.ts
+
+Expected failure:
+ai assistant execution timeline > summarizes multiple low-level tool calls into one foldable tool echo item
+
+Observed failure:
+expected [ Array(5) ] to deeply equal [ '思考过程', '工具调用' ]
+
+Received titles:
+[
+  "思考过程",
+  "工具调用",
+  "工具调用",
+  "工具调用",
+  "工具调用"
+]
+
+RED 2 - running tool calls without outputs produced no visible summary
+
+Expected failure:
+ai assistant execution timeline > keeps a single summarized tool echo item running while outputs are pending
+
+Observed failure:
+expected [] to have a length of 1 but got 0
+
+RED 3 - completion events with only toolCallId created duplicate waiting details
+
+Expected failure:
+ai assistant execution timeline > merges completed events back into the active tool group when only completion has a tool call id
+
+Observed failure:
+expected '已汇总 2 次工具调用' to be '已汇总 1 次工具调用'
+
+RED 4 - completed empty output was displayed as pending
+
+Expected failure:
+ai assistant execution timeline > renders completed empty tool outputs from status instead of a pending placeholder
+
+Observed failure:
+expected '读取工作区文件\n输入：path=tmp/missing.md\n输出：等待结果' to contain '输出：未找到 tmp/missing.md'

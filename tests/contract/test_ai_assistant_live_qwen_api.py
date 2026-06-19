@@ -329,6 +329,111 @@ class AiAssistantLiveQwenApiContractTest(unittest.TestCase):
         )
         self.assertEqual(inspector.json()["data"]["approvalQueue"][0]["toolName"], "write_workspace_file")
 
+    def test_live_qwen_allows_same_file_read_after_write_in_later_react_round(self) -> None:
+        self._fake_client.replace_script(
+            [
+                (
+                    ["我先确认记录文件是否存在。"],
+                    {
+                        "choices": [
+                            {
+                                "message": {
+                                    "role": "assistant",
+                                    "content": "我先确认记录文件是否存在。",
+                                    "tool_calls": [
+                                        {
+                                            "id": "call_pre_read",
+                                            "type": "function",
+                                            "function": {
+                                                "name": "read_workspace_file",
+                                                "arguments": '{"path":"tmp/react-loop-readback-contract.md"}',
+                                            },
+                                        }
+                                    ],
+                                },
+                                "finish_reason": "tool_calls",
+                            }
+                        ],
+                        "usage": {"prompt_tokens": 20, "completion_tokens": 5, "total_tokens": 25},
+                    },
+                ),
+                (
+                    ["文件不存在，我写入后再核对。"],
+                    {
+                        "choices": [
+                            {
+                                "message": {
+                                    "role": "assistant",
+                                    "content": "文件不存在，我写入后再核对。",
+                                    "tool_calls": [
+                                        {
+                                            "id": "call_write_readback",
+                                            "type": "function",
+                                            "function": {
+                                                "name": "write_workspace_file",
+                                                "arguments": '{"path":"tmp/react-loop-readback-contract.md","content":"readback ok"}',
+                                            },
+                                        },
+                                        {
+                                            "id": "call_post_read",
+                                            "type": "function",
+                                            "function": {
+                                                "name": "read_workspace_file",
+                                                "arguments": '{"path":"tmp/react-loop-readback-contract.md"}',
+                                            },
+                                        },
+                                    ],
+                                },
+                                "finish_reason": "tool_calls",
+                            }
+                        ],
+                        "usage": {"prompt_tokens": 40, "completion_tokens": 8, "total_tokens": 48},
+                    },
+                ),
+                (
+                    ["核对完成。"],
+                    {
+                        "choices": [
+                            {
+                                "message": {
+                                    "role": "assistant",
+                                    "content": "核对完成。",
+                                    "tool_calls": [],
+                                },
+                                "finish_reason": "stop",
+                            }
+                        ],
+                        "usage": {"prompt_tokens": 60, "completion_tokens": 4, "total_tokens": 64},
+                    },
+                ),
+            ]
+        )
+        client = TestClient(app)
+        try:
+            created = client.post("/api/v1/ai-assistant/sessions", json={"title": "同路径回读"})
+            session_id = created.json()["data"]["id"]
+            message = client.post(
+                f"/api/v1/ai-assistant/sessions/{session_id}/messages",
+                json={
+                    "message": "确认 tmp/react-loop-readback-contract.md，必要时写入，写完后核对一遍内容",
+                    "idempotencyKey": "live-qwen-contract-read-after-write",
+                    "modelMode": "live",
+                    "approvalMode": "always_approve",
+                },
+            )
+            run_id = message.json()["data"]["runId"]
+            inspector = client.get(f"/api/v1/ai-assistant/runs/{run_id}/inspector")
+        finally:
+            client.close()
+
+        self.assertEqual(message.status_code, 200, message.text)
+        self.assertEqual(message.json()["data"]["status"], "COMPLETED")
+        self.assertEqual(
+            [tool["toolName"] for tool in inspector.json()["data"]["toolCalls"]],
+            ["read_workspace_file", "write_workspace_file", "read_workspace_file"],
+        )
+        self.assertEqual(inspector.json()["data"]["toolCalls"][2]["output"]["content"], "readback ok")
+
     def _service_override(self) -> Generator[AiAssistantHarnessService, None, None]:
         yield AiAssistantHarnessService(
             self._repository,

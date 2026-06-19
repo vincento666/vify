@@ -66,7 +66,7 @@ describe('ai assistant execution timeline', () => {
     expect(timeline[0].summary).toBe('我先读取文件。')
     expect(timeline[1].title).toBe('工具调用')
     expect(timeline[1].details.map((detail) => detail.label)).toEqual(['结果'])
-    expect(timeline[1].details[0].value).toBe('hello')
+    expect(timeline[1].details[0].value).toBe('工具调用\n输出：hello')
     expect(timeline.some((item) => item.approvalId === 9)).toBe(false)
   })
 
@@ -185,7 +185,7 @@ describe('ai assistant execution timeline', () => {
     expect(timeline[0].details[1].value).toBe('用户要求我执行一个复杂验收任务。')
   })
 
-  it('keeps only the tool result event as one foldable call without JSON input or invocation detail', () => {
+  it('keeps only one foldable tool result with readable input and output details', () => {
     const events: AiAssistantEvent[] = [
       event(1, 'tool.call_started', '工具开始', '读取工作区文件 已开始执行。', {
         toolName: 'read_workspace_file',
@@ -208,9 +208,133 @@ describe('ai assistant execution timeline', () => {
     expect(timeline[0].title).toBe('工具调用')
     expect(timeline[0].tone).toBe('success')
     expect(timeline[0].details.map((detail) => detail.label)).toEqual(['结果'])
-    expect(timeline[0].details[0].value).toBe('project instructions')
+    expect(timeline[0].details[0].value).toBe('读取工作区文件\n输入：path=AGENTS.md\n输出：project instructions')
     expect(timeline[0].details[0].value).not.toContain('{')
-    expect(timeline[0].details[0].value).not.toContain('AGENTS.md')
+  })
+
+  it('summarizes multiple low-level tool calls into one foldable tool echo item', () => {
+    const events: AiAssistantEvent[] = [
+      event(1, 'model.thought_summary', '思考摘要', '需要读取规范、检索知识库并写入校验文件。', {}),
+      event(2, 'tool.call_started', '工具开始', '读取工作区文件 已开始。', {
+        toolName: 'read_workspace_file',
+        input: { path: 'specs/README.md' },
+      }),
+      event(3, 'tool.call_output', '工具输出', '规范索引', {
+        toolName: 'read_workspace_file',
+        output: { content: '规范索引' },
+      }),
+      event(4, 'tool.call_completed', '工具完成', '读取工作区文件 已完成。', {
+        toolName: 'read_workspace_file',
+        status: 'OK',
+      }),
+      event(5, 'tool.call_output', '工具输出', '知识库结果', {
+        toolName: 'search_knowledge_base',
+        input: { query: '退票规则 harness 规则' },
+        output: { query: '退票规则 harness 规则', hits: [] },
+      }),
+      event(6, 'tool.call_output', '工具输出', '写入结果', {
+        toolName: 'write_workspace_file',
+        input: { path: 'tmp/ai-assistant-fuzzy-uat-2.md', content: '三段式中文校验记录' },
+        output: { path: 'tmp/ai-assistant-fuzzy-uat-2.md', bytes: 36 },
+      }),
+      event(7, 'tool.call_output', '工具输出', '回读内容', {
+        toolName: 'read_workspace_file',
+        input: { path: 'tmp/ai-assistant-fuzzy-uat-2.md' },
+        output: { content: '三段式中文校验记录' },
+      }),
+    ]
+
+    const timeline = buildAiAssistantTimeline(events)
+
+    expect(timeline.map((item) => item.title)).toEqual(['思考过程', '工具调用'])
+    expect(timeline.filter((item) => item.title === '工具调用')).toHaveLength(1)
+    expect(timeline[1].tone).toBe('success')
+    expect(timeline[1].summary).toBe('已汇总 4 次工具调用')
+    expect(timeline[1].details).toHaveLength(1)
+    expect(timeline[1].details[0].label).toBe('结果')
+    expect(timeline[1].details[0].value).toContain('读取工作区文件')
+    expect(timeline[1].details[0].value).toContain('输入：path=specs/README.md')
+    expect(timeline[1].details[0].value).toContain('知识库检索')
+    expect(timeline[1].details[0].value).toContain('输入：query=退票规则 harness 规则')
+    expect(timeline[1].details[0].value).toContain('写入工作区文件')
+    expect(timeline[1].details[0].value).toContain('输出：已写入 tmp/ai-assistant-fuzzy-uat-2.md')
+    expect(timeline[1].details[0].value).not.toContain('{')
+  })
+
+  it('keeps a single summarized tool echo item running while outputs are pending', () => {
+    const events: AiAssistantEvent[] = [
+      event(1, 'tool.call_started', '工具开始', '读取工作区文件 已开始。', {
+        toolName: 'read_workspace_file',
+        input: { path: 'specs/README.md' },
+      }),
+      event(2, 'tool.call_started', '工具开始', '知识库检索 已开始。', {
+        toolName: 'search_knowledge_base',
+        input: { query: 'harness 规则' },
+      }),
+    ]
+
+    const timeline = buildAiAssistantTimeline(events)
+
+    expect(timeline).toHaveLength(1)
+    expect(timeline[0]).toMatchObject({
+      kind: 'tool',
+      title: '工具调用',
+      tone: 'running',
+      summary: '已汇总 2 次工具调用',
+    })
+    expect(timeline[0].details[0].value).toContain('输出：等待结果')
+  })
+
+  it('merges completed events back into the active tool group when only completion has a tool call id', () => {
+    const events: AiAssistantEvent[] = [
+      event(1, 'tool.call_started', '工具开始', '写入工作区文件 已开始。', {
+        toolName: 'write_workspace_file',
+        input: { path: 'tmp/merged-tool.md', content: 'ok' },
+      }),
+      event(2, 'tool.call_output', '工具输出', '写入结果', {
+        toolName: 'write_workspace_file',
+        output: { path: 'tmp/merged-tool.md', bytes: 2 },
+      }),
+      {
+        ...event(3, 'tool.call_completed', '工具完成', '写入工作区文件 已完成。', {
+          toolName: 'write_workspace_file',
+          status: 'COMPLETED',
+        }),
+        toolCallId: 99,
+      },
+    ]
+
+    const timeline = buildAiAssistantTimeline(events)
+
+    expect(timeline).toHaveLength(1)
+    expect(timeline[0].summary).toBe('已汇总 1 次工具调用')
+    expect(timeline[0].details[0].value).toBe(
+      '写入工作区文件\n输入：path=tmp/merged-tool.md，content=ok\n输出：已写入 tmp/merged-tool.md（2 bytes）',
+    )
+    expect(timeline[0].details[0].value).not.toContain('等待结果')
+  })
+
+  it('renders completed empty tool outputs from status instead of a pending placeholder', () => {
+    const events: AiAssistantEvent[] = [
+      event(1, 'tool.call_started', '工具开始', '读取工作区文件 已开始。', {
+        toolName: 'read_workspace_file',
+        input: { path: 'tmp/missing.md' },
+      }),
+      event(2, 'tool.call_output', '工具输出', '', {
+        toolName: 'read_workspace_file',
+        output: { path: 'tmp/missing.md', content: '' },
+      }),
+      event(3, 'tool.call_completed', '工具完成', '读取工作区文件 未找到。', {
+        toolName: 'read_workspace_file',
+        status: 'NOT_FOUND',
+      }),
+    ]
+
+    const timeline = buildAiAssistantTimeline(events)
+
+    expect(timeline[0].tone).toBe('success')
+    expect(timeline[0].details[0].value).toContain('输出：未找到 tmp/missing.md')
+    expect(timeline[0].details[0].value).not.toContain('等待结果')
   })
 
   it('renders only supported execution echo event categories in processed groups', () => {
@@ -234,7 +358,7 @@ describe('ai assistant execution timeline', () => {
 
     expect(timeline.map((item) => item.title)).toEqual(['思考过程', '工具调用', '审批通过'])
     expect(timeline.map((item) => item.kind)).toEqual(['model-thought', 'tool', 'approval'])
-    expect(timeline[1].details).toEqual([{ label: '结果', value: '文件正文' }])
+    expect(timeline[1].details[0].value).toBe('读取工作区文件\n输出：文件正文')
     expect(timeline[2].details).toEqual([{ label: '内容', value: 'operator-ui 已批准 写入工作区文件。' }])
   })
 
@@ -250,7 +374,7 @@ describe('ai assistant execution timeline', () => {
 
     expect(timeline).toHaveLength(1)
     expect(timeline[0].title).toBe('命令执行')
-    expect(timeline[0].details).toEqual([{ label: '结果', value: 'created tmp/demo.txt\nread tmp/demo.txt' }])
+    expect(timeline[0].details[0].value).toBe('终端命令\n输出：created tmp/demo.txt\nread tmp/demo.txt')
   })
 })
 

@@ -571,6 +571,8 @@ class AiAssistantHarnessService:
         decisions: list[LivePlannerDecision] = []
         recorded_tool_calls: list[dict[str, Any]] = []
         seen_tool_keys: set[str] = set()
+        written_paths: set[str] = set()
+        read_after_write_keys: set[str] = set()
 
         for round_index in range(1, 5):
             decision = self._plan_with_live_model(
@@ -594,7 +596,13 @@ class AiAssistantHarnessService:
                     append_final_stream=False,
                 )
 
-            new_tool_calls = [call for call in decision.tool_calls if _tool_call_key(call) not in seen_tool_keys]
+            written_paths.update(_written_workspace_paths(recorded_tool_calls))
+            new_tool_calls = _new_live_tool_calls(
+                decision.tool_calls,
+                seen_tool_keys=seen_tool_keys,
+                written_paths=written_paths,
+                read_after_write_keys=read_after_write_keys,
+            )
             if not new_tool_calls:
                 final_answer = decision.final_answer or _tool_execution_answer(recorded_tool_calls)
                 return self._complete_live_run(
@@ -619,6 +627,7 @@ class AiAssistantHarnessService:
             recorded_tool_calls.extend(execution.recorded_tool_calls)
             if execution.terminal_result is not None:
                 return self._with_accumulated_tool_calls(execution.terminal_result, recorded_tool_calls)
+            written_paths.update(_written_workspace_paths(execution.recorded_tool_calls))
             messages = _react_messages_after_tools(messages, decision, new_tool_calls, execution.recorded_tool_calls)
 
         last_decision = decisions[-1]
@@ -1374,18 +1383,31 @@ def _supplement_required_tool_calls(message: str, tool_calls: list[dict[str, Any
     supplemented = [_canonical_tool_call(call) for call in tool_calls]
     seen = {_tool_call_key(call) for call in supplemented}
     tool_names = {str(call.get("toolName") or "") for call in supplemented}
+    write_paths = {
+        _workspace_path_from_tool_call(call)
+        for call in supplemented
+        if call.get("toolName") == "write_workspace_file" and _workspace_path_from_tool_call(call)
+    }
     staged_read_only_round = bool(supplemented) and tool_names <= {"read_workspace_file"}
 
     def add(tool_name: str, tool_input: dict[str, Any]) -> None:
         if tool_name in {"search_knowledge_base", "invoke_skill"} and tool_name in tool_names:
             return
         call = {"toolName": tool_name, "toolInput": tool_input}
+        if tool_name == "write_workspace_file":
+            path = _workspace_path_from_tool_call(call)
+            if path in write_paths:
+                return
         key = _tool_call_key(call)
         if key in seen:
             return
         supplemented.append(call)
         seen.add(key)
         tool_names.add(tool_name)
+        if tool_name == "write_workspace_file":
+            path = _workspace_path_from_tool_call(call)
+            if path:
+                write_paths.add(path)
 
     if not staged_read_only_round and _mentions_knowledge_search(message):
         add("search_knowledge_base", {"query": _knowledge_query(message)})
@@ -1511,6 +1533,57 @@ def _tool_execution_answer(recorded_tool_calls: list[dict[str, Any]]) -> str:
         _tool_output_summary(call) for call in recorded_tool_calls if _tool_output_summary(call)
     )
     return f"工具结果：{tool_summary}" if tool_summary else "工具执行已完成。"
+
+
+def _new_live_tool_calls(
+    tool_calls: list[dict[str, Any]],
+    *,
+    seen_tool_keys: set[str],
+    written_paths: set[str],
+    read_after_write_keys: set[str],
+) -> list[dict[str, Any]]:
+    planned_write_paths: set[str] = set()
+    new_calls: list[dict[str, Any]] = []
+    for call in tool_calls:
+        tool_name = str(call.get("toolName") or "")
+        path = _workspace_path_from_tool_call(call)
+        key = _tool_call_key(call)
+        if tool_name == "write_workspace_file" and path in written_paths:
+            planned_write_paths.add(path)
+            continue
+        if key not in seen_tool_keys:
+            new_calls.append(call)
+            if tool_name == "write_workspace_file" and path:
+                planned_write_paths.add(path)
+            continue
+        if (
+            tool_name == "read_workspace_file"
+            and path
+            and key not in read_after_write_keys
+            and (path in written_paths or path in planned_write_paths)
+        ):
+            new_calls.append(call)
+            read_after_write_keys.add(key)
+    return new_calls
+
+
+def _workspace_path_from_tool_call(tool_call: dict[str, Any]) -> str:
+    tool_input = tool_call.get("toolInput") or {}
+    if not isinstance(tool_input, dict):
+        return ""
+    path = tool_input.get("path")
+    return str(path) if path else ""
+
+
+def _written_workspace_paths(recorded_tool_calls: list[dict[str, Any]]) -> set[str]:
+    paths: set[str] = set()
+    for call in recorded_tool_calls:
+        if call.get("toolName") != "write_workspace_file":
+            continue
+        path = _workspace_path_from_tool_call({"toolInput": call.get("input") or {}})
+        if path:
+            paths.add(path)
+    return paths
 
 
 def _tool_call_key(tool_call: dict[str, Any]) -> str:

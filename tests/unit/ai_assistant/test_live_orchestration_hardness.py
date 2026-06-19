@@ -48,6 +48,20 @@ class AiAssistantLiveOrchestrationHardnessTest(unittest.TestCase):
 
         self.assertEqual([call["toolName"] for call in supplemented], ["read_workspace_file"])
 
+    def test_colloquial_verify_after_write_means_readback(self) -> None:
+        from app.modules.ai_assistant.domain.harness import _supplement_required_tool_calls
+
+        supplemented = _supplement_required_tool_calls(
+            "顺手在 tmp/ai-assistant-fuzzy-uat.md 留一份中文校验记录，写完后自己再核对一遍内容",
+            [{"toolName": "write_workspace_file", "toolInput": {"path": "tmp/ai-assistant-fuzzy-uat.md", "content": "记录"}}],
+        )
+
+        self.assertEqual(
+            [call["toolName"] for call in supplemented],
+            ["write_workspace_file", "read_workspace_file"],
+        )
+        self.assertEqual(supplemented[1]["toolInput"]["path"], "tmp/ai-assistant-fuzzy-uat.md")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -199,3 +199,22 @@
       real OpenRouter qwen3.5-27b smoke, and complex browser UAT.
 - [x] Save evidence under
       `artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.15-agent-echo-polish-uat/`.
+
+## 193.16 Tool Echo Summary Aggregation
+
+- [x] RED: frontend timeline contract fails while one ReAct run with multiple
+      low-level `tool.call_*` events renders repeated `工具调用` nodes instead of
+      one foldable summary event.
+- [x] RED: frontend timeline contract fails while running tool calls with no
+      output produce no visible summarized running node.
+- [x] RED: frontend timeline contract fails while completion-only `toolCallId`
+      events create duplicate waiting-result details.
+- [x] RED: frontend timeline contract fails while completed empty outputs such
+      as `NOT_FOUND` render `等待结果` instead of a real status summary.
+- [x] Aggregate all tool calls in a processed run into one visible `工具调用` or
+      `命令执行` event while preserving readable per-tool input/output details.
+- [x] Revalidate with focused frontend unit, AI Assistant shell unit,
+      `remScaleClosure`, full frontend unit, frontend build, full AI Assistant
+      backend unit/integration/contract/e2e, and in-app browser UAT.
+- [x] Save evidence under
+      `artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.16-tool-echo-summary-aggregation/`.
