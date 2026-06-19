@@ -1,4 +1,4 @@
-import { get, post, put, del } from '@/utils/request'
+import { get, post, put, del, type RequestOptions } from '@/utils/request'
 import type { PageResult } from '@/api/knowledge'
 
 export interface WorkflowListItem {
@@ -63,12 +63,19 @@ export function runWorkflow(id: number, input: Record<string, any>) {
   return post<any>(`/v1/workflows/${id}/runs`, { input })
 }
 
-export function runWorkflowV2(id: number, input: Record<string, any>, idempotencyKey?: string, versionId?: number) {
-  return post<any>(`/v1/workflows/${id}/runs-v2`, {
+export function runWorkflowV2(
+  id: number,
+  input: Record<string, any>,
+  idempotencyKey?: string,
+  versionId?: number,
+  options?: RequestOptions,
+) {
+  const payload = {
     input,
     ...(idempotencyKey ? { idempotencyKey } : {}),
     ...(typeof versionId === 'number' ? { versionId } : {}),
-  })
+  }
+  return options ? post<any>(`/v1/workflows/${id}/runs-v2`, payload, options) : post<any>(`/v1/workflows/${id}/runs-v2`, payload)
 }
 
 export function getWorkflowRunDebug(id: number, runId: number) {
@@ -122,12 +129,19 @@ export function runChatflow(id: number, input: Record<string, any>) {
   return post<any>(`/v1/chatflows/${id}/runs`, { input })
 }
 
-export function runChatflowV2(id: number, input: Record<string, any>, idempotencyKey?: string, versionId?: number) {
-  return post<any>(`/v1/chatflows/${id}/runs-v2`, {
+export function runChatflowV2(
+  id: number,
+  input: Record<string, any>,
+  idempotencyKey?: string,
+  versionId?: number,
+  options?: RequestOptions,
+) {
+  const payload = {
     input,
     ...(idempotencyKey ? { idempotencyKey } : {}),
     ...(typeof versionId === 'number' ? { versionId } : {}),
-  })
+  }
+  return options ? post<any>(`/v1/chatflows/${id}/runs-v2`, payload, options) : post<any>(`/v1/chatflows/${id}/runs-v2`, payload)
 }
 
 export function getChatflowRunDebug(id: number, runId: number) {
@@ -175,6 +189,13 @@ export function getRuntimeV2Run(runId: number) {
 
 export function cancelRuntimeV2Run(runId: number) {
   return post<any>(`/v1/runtime-runs/${runId}/cancel`, {})
+}
+
+export function resumeRuntimeV2Run(
+  runId: number,
+  data: { resumeData: Record<string, any>; idempotencyKey?: string },
+) {
+  return post<any>(`/v1/runtime-runs/${runId}/resume`, data)
 }
 
 export function listRuntimeV2Events(runId: number, params?: { afterSequence?: number }) {

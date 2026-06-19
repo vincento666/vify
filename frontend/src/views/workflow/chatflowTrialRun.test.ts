@@ -15,6 +15,8 @@ describe('chatflow trial run helpers', () => {
     expect(formatChatflowAssistantText({ output: '机器人收到' })).toBe('机器人收到')
     expect(formatChatflowAssistantText({ output: null })).toBe('暂无回复内容')
     expect(formatChatflowAssistantText({ interrupt: { type: 'TRANSFER_TO_HUMAN', message: '已转人工' } })).toBe('已转人工')
+    expect(formatChatflowAssistantText({ interrupt: { type: 'QUESTION', question: '主题？' } })).toBe('主题？')
+    expect(formatChatflowAssistantText({ interrupt: { nodeKey: 'question_1', question: '继续吗？' } })).toBe('继续吗？')
   })
 
   it('accumulates Chatflow stream events without duplicating final content', () => {

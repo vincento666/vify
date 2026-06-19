@@ -1,0 +1,123 @@
+> vitest run src/views/workflow/workflowValidation.test.ts src/views/workflow/chatflowDebugTimeline.test.ts src/views/workflow/chatflowRunDebug.test.ts
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ ❯ src/views/workflow/chatflowDebugTimeline.test.ts (6 tests | 1 failed) 5ms
+   ✓ chatflow debug timeline view model > orders events and exposes checkpoint labels 1ms
+   ✓ chatflow debug timeline view model > labels transfer-to-human handoff events with ticket context 0ms
+   ✓ chatflow debug timeline view model > formats runtime v2 node ids and workflow event names for chatflow timelines 0ms
+   × chatflow debug timeline view model > formats runtime v2 failure evidence while redacting sensitive headers and resume data 3ms
+     → expected '' to contain 'HTTP 502 upstream timeout'
+   ✓ chatflow debug timeline view model > flattens scoped variables for the debug dock 0ms
+   ✓ chatflow debug timeline view model > derives resume fields from waiting event schema 0ms
+ ❯ src/views/workflow/chatflowRunDebug.test.ts (5 tests | 1 failed) 8ms
+   ✓ chatflow run debug view model > summarizes session identity for the chatflow debug dock 1ms
+   ✓ chatflow run debug view model > keeps chatflow node call tree order 0ms
+   ✓ chatflow run debug view model > builds chatflow flamegraph rows from cumulative elapsed time 0ms
+   ✓ chatflow run debug view model > projects runtime v2 interrupted checkpoints as waiting chatflow session state 0ms
+   × chatflow run debug view model > keeps runtime v2 variable snapshots in chatflow session debug state 5ms
+     → expected { sessionId: 'session-91', …(8) } to match object { sessionId: 'session-91', …(7) }
+(1 matching property omitted from actual)
+ ❯ src/views/workflow/workflowValidation.test.ts (10 tests | 2 failed) 9ms
+   ✓ workflow graph validation > requires a reachable path from START to END 1ms
+   ✓ workflow graph validation > rejects disconnected non-fixed nodes before test run or publish 0ms
+   ✓ workflow graph validation > requires LLM nodes to select a concrete model before running 0ms
+   × workflow graph validation > requires API call governance before run or publish 5ms
+     → expected [] to deeply equal ArrayContaining{…}
+   × workflow graph validation > requires tool call timeout, retry, error policy, and output schema governance 1ms
+     → expected [] to deeply equal ArrayContaining{…}
+   ✓ workflow graph validation > requires regular node default output endpoints to connect downstream 0ms
+   ✓ workflow graph validation > requires every condition branch and fallback to have downstream edges 0ms
+   ✓ workflow graph validation > requires every intent and fallback to have downstream edges 0ms
+   ✓ workflow graph validation > rejects missing fixed nodes 0ms
+   ✓ workflow graph validation > deduplicates validation errors shared by run and publish checks 0ms
+ Test Files  3 failed (3)
+      Tests  4 failed | 17 passed (21)
+   Start at  23:58:07
+   Duration  328ms (transform 78ms, setup 0ms, collect 114ms, tests 22ms, environment 0ms, prepare 254ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/views/workflow/chatflowDebugTimeline.test.ts > chatflow debug timeline view model > formats runtime v2 failure evidence while redacting sensitive headers and resume data
+AssertionError: expected '' to contain 'HTTP 502 upstream timeout'
+- Expected
++ Received
+- HTTP 502 upstream timeout
+ ❯ src/views/workflow/chatflowDebugTimeline.test.ts:121:31
+    119|       nodeKey: 'api_call_1',
+    120|     })
+    121|     expect(events[0].content).toContain('HTTP 502 upstream timeout')
+       |                               ^
+    122|     expect(events[0].content).toContain('status 502')
+    123|     expect(events[0].content).toContain('attempt 3/3')
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+ FAIL  src/views/workflow/chatflowRunDebug.test.ts > chatflow run debug view model > keeps runtime v2 variable snapshots in chatflow session debug state
+AssertionError: expected { sessionId: 'session-91', …(8) } to match object { sessionId: 'session-91', …(7) }
+(1 matching property omitted from actual)
+- Expected
++ Received
+@@ -3,18 +3,11 @@
+    "conversationId": "conv-91",
+    "currentRunId": 91,
+    "sessionId": "session-91",
+    "status": "waiting",
+    "userId": "user-91",
+-   "variables": {
+-     "conversation": {
+-       "topic": "refund",
+-     },
+-     "sys": {
+-       "query": "order status",
+-     },
+-   },
++   "variables": {},
+    "waitingEvent": {
+      "checkpointId": 7,
+      "id": 15,
+      "nodeKey": "human_input_1",
+    },
+ ❯ src/views/workflow/chatflowRunDebug.test.ts:109:21
+    107|     )
+    108|
+    109|     expect(session).toMatchObject({
+       |                     ^
+    110|       sessionId: 'session-91',
+    111|       conversationId: 'conv-91',
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+ FAIL  src/views/workflow/workflowValidation.test.ts > workflow graph validation > requires API call governance before run or publish
+AssertionError: expected [] to deeply equal ArrayContaining{…}
+- Expected
++ Received
+- ArrayContaining [
+-   "API 节点 api_call_1 需要配置认证策略",
+-   "API 节点 api_call_1 需要配置超时毫秒",
+-   "API 节点 api_call_1 需要配置重试次数",
+-   "API 节点 api_call_1 需要配置错误行为",
+-   "API 节点 api_call_1 需要配置输出 Schema",
+-   "API 节点 api_call_1 的敏感请求头 Authorization 需要加入脱敏列表",
+- ]
++ []
+ ❯ src/views/workflow/workflowValidation.test.ts:65:49
+     63|     graph = connectWorkflowNodes(graph, 'api_call_1', 'end')
+     64|
+     65|     expect(validateWorkflowGraph(graph).errors).toEqual(
+       |                                                 ^
+     66|       expect.arrayContaining([
+     67|         'API 节点 api_call_1 需要配置认证策略',
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+ FAIL  src/views/workflow/workflowValidation.test.ts > workflow graph validation > requires tool call timeout, retry, error policy, and output schema governance
+AssertionError: expected [] to deeply equal ArrayContaining{…}
+- Expected
++ Received
+- ArrayContaining [
+-   "工具节点 tool_call_1 需要配置超时毫秒",
+-   "工具节点 tool_call_1 需要配置重试次数",
+-   "工具节点 tool_call_1 需要配置错误行为",
+-   "工具节点 tool_call_1 需要配置输出 Schema",
+- ]
++ []
+ ❯ src/views/workflow/workflowValidation.test.ts:99:49
+     97|     graph = connectWorkflowNodes(graph, 'tool_call_1', 'end')
+     98|
+     99|     expect(validateWorkflowGraph(graph).errors).toEqual(
+       |                                                 ^
+    100|       expect.arrayContaining([
+    101|         '工具节点 tool_call_1 需要配置超时毫秒',
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯

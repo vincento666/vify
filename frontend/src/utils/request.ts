@@ -21,6 +21,10 @@ export class ApiError extends Error {
   }
 }
 
+export interface RequestOptions {
+  silentError?: boolean
+}
+
 export function unwrapEnvelope<T>(payload: ApiEnvelope<T>): T {
   if (!payload || typeof payload.code !== 'number') {
     throw new ApiError(500, 'Invalid API response', payload)
@@ -48,6 +52,10 @@ const instance = axios.create({
   timeout: 60000,
 })
 
+function shouldNotifyRequestError(config: unknown): boolean {
+  return !(config as { silentError?: boolean } | null | undefined)?.silentError
+}
+
 instance.interceptors.request.use((config) => {
   config.baseURL = resolveApiBaseUrl()
   for (const [key, value] of Object.entries(buildHostHeaders())) {
@@ -64,13 +72,13 @@ instance.interceptors.response.use(
       return unwrapEnvelope(response.data)
     } catch (error) {
       const message = error instanceof Error ? error.message : '请求失败'
-      notifyError(message)
+      if (shouldNotifyRequestError(response.config)) notifyError(message)
       return Promise.reject(error)
     }
   },
   (error) => {
     const clientError = toClientError(error)
-    notifyError(clientError.message || '网络异常')
+    if (shouldNotifyRequestError(error?.config)) notifyError(clientError.message || '网络异常')
     return Promise.reject(clientError)
   }
 )
@@ -78,8 +86,8 @@ instance.interceptors.response.use(
 export const get = <T>(url: string, params?: object): Promise<T> =>
   instance.get(url, { params })
 
-export const post = <T>(url: string, data?: object): Promise<T> =>
-  instance.post(url, data)
+export const post = <T>(url: string, data?: object, options?: RequestOptions): Promise<T> =>
+  options ? instance.post(url, data, options as any) : instance.post(url, data)
 
 export const patch = <T>(url: string, data?: object): Promise<T> =>
   instance.patch(url, data)

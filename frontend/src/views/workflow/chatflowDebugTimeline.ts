@@ -3,6 +3,7 @@ export type ChatflowEventLike = {
   sequence?: number
   type?: string
   nodeKey?: string
+  nodeId?: string
   payload?: Record<string, any>
   checkpointId?: number | null
   createdAt?: string
@@ -40,6 +41,14 @@ const EVENT_LABELS: Record<string, string> = {
   tool_call: '工具调用',
   node_started: '节点开始',
   node_completed: '节点完成',
+  workflow_run_started: '运行开始',
+  workflow_run_completed: '运行完成',
+  workflow_run_failed: '运行失败',
+  workflow_node_started: '节点开始',
+  workflow_node_waiting: '等待输入',
+  workflow_node_completed: '节点完成',
+  workflow_node_failed: '节点失败',
+  node_status_changed: '状态变更',
   handoff_requested: '转人工',
 }
 
@@ -51,7 +60,7 @@ export function formatChatflowTimeline(events: ChatflowEventLike[]): ChatflowTim
     .map((event) => {
       const type = String(event.type || '')
       const checkpoint = event.checkpointId ? `Checkpoint #${event.checkpointId}` : ''
-      const nodeKey = String(event.nodeKey || event.payload?.nodeKey || '')
+      const nodeKey = String(event.nodeKey || event.nodeId || event.payload?.nodeKey || event.payload?.nodeId || '')
       return {
         id: Number(event.id || 0),
         sequence: Number(event.sequence || 0),
@@ -115,12 +124,34 @@ function eventContent(event: ChatflowEventLike): string {
       payload.status,
     ].filter(Boolean).join(' · ')
   }
-  if (typeof payload.content === 'string') return payload.content
-  if (payload.output) return formatVariableValue(payload.output)
-  if (payload.resumeData) return formatVariableValue(payload.resumeData)
+  if (typeof payload.content === 'string' && payload.content.length > 0) return payload.content
+  if (payload.error || payload.evidence) return formatRuntimeEvidence(payload)
+  if (payload.output) return formatVariableValue(redactSensitiveValue(payload.output))
+  if (payload.resumeData) return formatVariableValue(redactSensitiveValue(payload.resumeData))
   if (payload.question) return String(payload.question)
   if (payload.followup) return String(payload.followup)
   return ''
+}
+
+function formatRuntimeEvidence(payload: Record<string, any>) {
+  const evidence = payload.evidence && typeof payload.evidence === 'object' ? payload.evidence : {}
+  const parts = [
+    payload.error ? String(payload.error) : '',
+    evidence.statusCode ? `status ${evidence.statusCode}` : '',
+    evidence.attempt || evidence.maxAttempts ? `attempt ${Number(evidence.attempt || 1)}/${Number(evidence.maxAttempts || evidence.attempt || 1)}` : '',
+    evidence.durationMs ? `${Number(evidence.durationMs)}ms` : '',
+    formatRequestEvidence(evidence.request),
+  ].filter(Boolean)
+  return parts.join(' · ')
+}
+
+function formatRequestEvidence(request: any) {
+  if (!request || typeof request !== 'object' || Array.isArray(request)) return ''
+  const requestLine = [request.method, request.url || request.endpoint].filter(Boolean).join(' ')
+  const headers = request.headers && typeof request.headers === 'object' && !Array.isArray(request.headers)
+    ? Object.entries(request.headers).map(([key, value]) => `${key}=${isSensitiveKey(key) ? '[REDACTED]' : String(value)}`)
+    : []
+  return [requestLine, ...headers].filter(Boolean).join(' · ')
 }
 
 function formatVariableValue(value: any): string {
@@ -128,4 +159,19 @@ function formatVariableValue(value: any): string {
   if (typeof value === 'string') return value
   if (typeof value === 'number' || typeof value === 'boolean') return String(value)
   return JSON.stringify(value)
+}
+
+function redactSensitiveValue(value: any): any {
+  if (Array.isArray(value)) return value.map((item) => redactSensitiveValue(item))
+  if (!value || typeof value !== 'object') return value
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [
+      key,
+      isSensitiveKey(key) ? '[REDACTED]' : redactSensitiveValue(item),
+    ]),
+  )
+}
+
+function isSensitiveKey(key: string) {
+  return /authorization|cookie|api[-_]?key|token|password|secret|credential/i.test(key)
 }

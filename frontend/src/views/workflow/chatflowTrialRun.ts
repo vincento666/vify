@@ -83,6 +83,9 @@ export function formatChatflowAssistantText(
 function formatOutputPayload(output: Record<string, unknown> | null | undefined): string {
   const payload = output || {}
   const interrupt = payload.interrupt as Record<string, unknown> | undefined
+  if (typeof interrupt?.question === 'string') return interrupt.question
+  if (typeof interrupt?.followup === 'string') return interrupt.followup
+  if (typeof interrupt?.prompt === 'string') return interrupt.prompt
   if (interrupt?.type === 'TRANSFER_TO_HUMAN' && typeof interrupt.message === 'string') return interrupt.message
 
   for (const key of ['final', 'output', 'answer', 'content']) {

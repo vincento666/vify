@@ -1,0 +1,10 @@
+> vitest run src/views/workflow/workflowValidation.test.ts src/views/workflow/chatflowDebugTimeline.test.ts src/views/workflow/chatflowRunDebug.test.ts
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ ✓ src/views/workflow/chatflowDebugTimeline.test.ts (6 tests) 10ms
+ ✓ src/views/workflow/chatflowRunDebug.test.ts (5 tests) 14ms
+ ✓ src/views/workflow/workflowValidation.test.ts (10 tests) 20ms
+ Test Files  3 passed (3)
+      Tests  21 passed (21)
+   Start at  00:03:49
+   Duration  877ms (transform 330ms, setup 0ms, collect 481ms, tests 44ms, environment 1ms, prepare 591ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m

@@ -464,6 +464,8 @@
                   class="node-run-status"
                   :class="`status-${String(nodeProps.data.runStatus).toLowerCase()}`"
                   data-testid="node-run-status"
+                  role="status"
+                  :aria-label="`节点运行状态：${nodeProps.data.runStatusLabel}`"
                 >
                   <span class="node-run-status-icon" aria-hidden="true"></span>
                   {{ nodeProps.data.runStatusLabel }}
@@ -968,6 +970,42 @@
             :id="configSectionContentId('技能')"
             class="config-section-content"
           >
+          <div class="llm-resource-fields llm-tool-settings" data-testid="llm-tool-settings">
+            <label>
+              工具选择
+              <a-select :virtual="false"
+                :value="fieldValue('toolChoiceMode') || 'auto'"
+                aria-label="工具选择"
+                @update:value="setFieldValue('toolChoiceMode', $event)"
+              >
+                <a-select-option value="auto">auto</a-select-option>
+                <a-select-option value="required">required</a-select-option>
+                <a-select-option value="disabled">disabled</a-select-option>
+              </a-select>
+            </label>
+            <label>
+              最大调用轮次
+              <a-input-number
+                :value="Number(fieldValue('maxToolRounds') || 1)"
+                :min="1"
+                :max="3"
+                :step="1"
+                aria-label="最大调用轮次"
+                @update:value="setFieldValue('maxToolRounds', $event ?? 1)"
+              />
+            </label>
+            <label>
+              工具结果
+              <a-select :virtual="false"
+                :value="fieldValue('toolResultMode') || 'append'"
+                aria-label="工具结果"
+                @update:value="setFieldValue('toolResultMode', $event)"
+              >
+                <a-select-option value="append">append</a-select-option>
+                <a-select-option value="separate">separate</a-select-option>
+              </a-select>
+            </label>
+          </div>
           <div v-if="!llmResources().length" class="resource-empty-state">暂未配置技能</div>
           <div v-else class="llm-resource-list" data-testid="llm-resource-list">
             <article
@@ -1152,16 +1190,6 @@
               <template v-if="endReturnMode() === 'text'">
                 <div class="end-response-heading">
                   <label>响应内容</label>
-                  <div class="end-response-actions">
-                    <label class="end-stream-switch">
-                      <span>流式输出</span>
-                      <a-switch
-                        :checked="switchFieldValue('streamOutput')"
-                        aria-label="流式输出"
-                        @update:checked="setSwitchFieldValue('streamOutput', $event)"
-                      />
-                    </label>
-                  </div>
                 </div>
                 <a-textarea
                   class="end-response-textarea"
@@ -2970,6 +2998,85 @@
           </div>
           </div>
         </section>
+
+        <section
+          v-if="isApiOrToolGovernanceNode()"
+          class="config-section"
+          data-testid="resource-governance-section"
+        >
+          <div class="section-title">
+            <span>G</span>
+            调用治理
+          </div>
+          <div class="llm-resource-fields" data-testid="resource-governance-fields">
+            <label v-if="selectedNode.type === 'API_CALL'">
+              认证策略
+              <a-select :virtual="false"
+                :value="String(fieldValue('authMode') || 'none')"
+                aria-label="认证策略"
+                @update:value="setFieldValue('authMode', $event)"
+              >
+                <a-select-option value="none">none</a-select-option>
+                <a-select-option value="bearer">bearer</a-select-option>
+                <a-select-option value="api_key">api_key</a-select-option>
+                <a-select-option value="basic">basic</a-select-option>
+              </a-select>
+            </label>
+            <label>
+              超时毫秒
+              <a-input-number
+                :value="resourceGovernanceNumberValue('timeoutMs', 'timeout')"
+                :min="100"
+                :max="120000"
+                :step="100"
+                aria-label="超时毫秒"
+                @update:value="setResourceGovernanceNumber('timeoutMs', $event ?? 0)"
+              />
+            </label>
+            <label>
+              重试次数
+              <a-input-number
+                :value="resourceGovernanceNumberValue('retryCount')"
+                :min="0"
+                :max="5"
+                :step="1"
+                aria-label="重试次数"
+                @update:value="setResourceGovernanceNumber('retryCount', $event ?? 0)"
+              />
+            </label>
+            <label>
+              错误行为
+              <a-select :virtual="false"
+                :value="String(fieldValue('errorBehavior') || 'fail')"
+                aria-label="错误行为"
+                @update:value="setFieldValue('errorBehavior', $event)"
+              >
+                <a-select-option value="fail">fail</a-select-option>
+                <a-select-option value="continue">continue</a-select-option>
+                <a-select-option value="branch">branch</a-select-option>
+              </a-select>
+            </label>
+            <label>
+              输出 Schema
+              <a-textarea
+                :value="resourceOutputSchemaText()"
+                aria-label="输出 Schema"
+                :rows="3"
+                placeholder='{"type":"object","properties":{"result":{"type":"string"}}}'
+                @update:value="setResourceOutputSchema"
+              />
+            </label>
+            <label>
+              敏感 Header
+              <a-input
+                :value="resourceSensitiveHeadersText()"
+                aria-label="敏感 Header"
+                placeholder="Authorization, X-API-Key"
+                @update:value="setResourceSensitiveHeaders"
+              />
+            </label>
+          </div>
+        </section>
       </aside>
 
       <aside v-if="nodeTestDrawerOpen && nodeTestTarget" class="node-test-drawer" data-testid="node-test-drawer">
@@ -3236,6 +3343,38 @@
               <span v-if="testResult.runId">Run #{{ testResult.runId }}</span>
             </div>
 
+            <section
+              v-if="chatflowSessionState?.status === 'waiting'"
+              class="chatflow-resume-card"
+              data-testid="chatflow-run-resume-card"
+            >
+              <div class="debug-section-title">
+                <strong>等待用户输入</strong>
+                <span>{{ chatflowCheckpoint?.pendingNodeKey || chatflowWaitingEvent?.nodeKey || 'pending' }}</span>
+              </div>
+              <div
+                v-for="field in chatflowResumeFields"
+                :key="field.key"
+                class="resume-field-row"
+              >
+                <label>{{ field.label }}</label>
+                <input
+                  :aria-label="field.label"
+                  :placeholder="field.placeholder"
+                  :value="chatflowResumeValues[field.key] || ''"
+                  @input="setChatflowResumeField(field.key, ($event.target as HTMLInputElement).value)"
+                />
+              </div>
+              <button
+                type="button"
+                class="resume-submit-button"
+                :disabled="chatflowResumeSubmitting"
+                @click="submitChatflowResume"
+              >
+                {{ chatflowResumeSubmitting ? '继续中...' : '提交回复继续' }}
+              </button>
+            </section>
+
             <div class="chatflow-composer">
               <div class="chatflow-composer-shell" data-testid="chatflow-composer-shell">
                 <div class="chatflow-composer-editor" data-testid="chatflow-composer-editor">
@@ -3358,10 +3497,10 @@
         <div v-if="debugDockTab === 'errors'" class="debug-dock-body debug-error-panel" data-testid="debug-error-panel">
           <div class="debug-error-summary">
             <strong>错误列表</strong>
-            <span>{{ [...validationErrors, ...publishValidationErrors].length }} 项</span>
+            <span>{{ debugDockErrors.length }} 项</span>
           </div>
-          <div v-if="validationErrors.length || publishValidationErrors.length" class="debug-error-list-card">
-            <article v-for="error in [...validationErrors, ...publishValidationErrors]" :key="error" class="debug-error-item">
+          <div v-if="debugDockErrors.length" class="debug-error-list-card">
+            <article v-for="error in debugDockErrors" :key="error" class="debug-error-item">
               <span aria-hidden="true">!</span>
               <p>{{ error }}</p>
             </article>
@@ -3953,6 +4092,7 @@ import {
   listWorkflowVersions,
   publishChatflowVersion,
   publishWorkflowVersion,
+  resumeRuntimeV2Run,
   rollbackChatflowVersion,
   rollbackWorkflowVersion,
   resumeChatflowRun,
@@ -4013,7 +4153,9 @@ import {
   buildChatflowRunCallTree,
   buildChatflowRunFlamegraph,
   chatflowRunNodeDetails as buildChatflowRunNodeDetails,
+  projectRuntimeV2ChatflowSessionState,
   summarizeChatflowRunDebug,
+  withChatflowSessionState,
   type ChatflowRunDebugDetail,
 } from './chatflowRunDebug'
 import { buildChatflowVariableScopes, type ChatflowVariableDefinition, type ChatflowVariableScope } from './chatflowVariables'
@@ -4085,7 +4227,7 @@ import { deriveRunPathEdgeClasses } from './runPathEdges'
 import { completeVariableBraceTrigger, insertInlineVariableReference, localizeInlineVariableReference } from './inlineVariableText'
 import { buildInlineVariableCatalog, buildVariableCatalog, type VariableCatalogGroup, type VariableCatalogType, type VariableDefinition } from './variableCatalog'
 import { evaluateWorkflowPublishGate } from './workflowPublish'
-import { validateWorkflowGraph } from './workflowValidation'
+import { mergeWorkflowValidationErrors, validateWorkflowGraph } from './workflowValidation'
 import { buildChatflowRunDebugLink, buildWorkflowRunDebugLink } from '@/router/runDebugDeepLinks'
 import {
   applyRuntimeV2EventsToDebugDetail,
@@ -4751,6 +4893,7 @@ const filteredNodePaletteGroups = computed(() => {
   return filterNodePaletteGroups(nodePaletteGroups.value, nodePaletteSearch.value)
 })
 const publishValidationErrors = computed(() => validateWorkflowGraph(graph.value).errors)
+const debugDockErrors = computed(() => mergeWorkflowValidationErrors(validationErrors.value, publishValidationErrors.value))
 const effectiveDirtySinceTestRun = computed(() =>
   dirtySinceTestRun.value && lastTestRunGraphSnapshot.value !== currentGraphSnapshot(),
 )
@@ -5206,7 +5349,7 @@ function debugStatusLabel(status: string | undefined) {
   const normalized = String(status || '').toUpperCase()
   return {
     SUCCEEDED: '成功',
-    COMPLETED: '完成',
+    COMPLETED: '成功',
     RUNNING: '运行中',
     FAILED: '失败',
     INTERRUPTED: '等待输入',
@@ -6421,7 +6564,12 @@ function setFieldValue(key: string, value: string | number | null | undefined) {
     updateSelectedNode({ name: String(value || '') })
     return
   }
-  updateSelectedNode({ config: { [key]: parseStructuredFieldValue(key, value ?? '') } })
+  const parsed = parseStructuredFieldValue(key, value ?? '')
+  const patch: Record<string, any> = { [key]: parsed }
+  if (selectedNode.value.type === 'API_CALL' && key === 'timeout') {
+    patch.timeoutMs = Number(parsed || 0) * 1000
+  }
+  updateSelectedNode({ config: patch })
 }
 
 function codeTemplateLanguageLabel() {
@@ -6545,6 +6693,73 @@ function formatLegacyDebugValue(value: unknown) {
   return String(value)
 }
 
+function isApiOrToolGovernanceNode() {
+  return selectedNode.value?.type === 'API_CALL' || selectedNode.value?.type === 'TOOL_CALL'
+}
+
+function resourceGovernanceNumberValue(primaryKey: string, fallbackKey = '') {
+  const primary = selectedNode.value?.config[primaryKey]
+  if (Number(primary) > 0 || primaryKey === 'retryCount') return Number(primary || 0)
+  const fallback = fallbackKey ? selectedNode.value?.config[fallbackKey] : 0
+  if (primaryKey === 'timeoutMs' && Number(fallback) > 0) return Number(fallback) * 1000
+  return Number(fallback || 0)
+}
+
+function setResourceGovernanceNumber(key: string, value: number | string) {
+  const next = Number(value || 0)
+  const patch: Record<string, any> = { [key]: next }
+  if (selectedNode.value?.type === 'API_CALL' && key === 'timeoutMs') {
+    patch.timeout = next > 0 ? Math.round(next / 1000) : 0
+  }
+  updateSelectedNode({ config: patch })
+}
+
+function resourceOutputSchemaText() {
+  const schema = selectedNode.value?.config.outputSchema
+  if (schema === undefined || schema === null || schema === '') return ''
+  return typeof schema === 'string' ? schema : JSON.stringify(schema)
+}
+
+function setResourceOutputSchema(value: string | number) {
+  const text = String(value || '').trim()
+  updateSelectedNode({ config: { outputSchema: parseJsonObjectOrText(text) } })
+}
+
+function resourceSensitiveHeadersText() {
+  const headers = selectedNode.value?.config.sensitiveHeaders
+  if (Array.isArray(headers)) return headers.join(', ')
+  return String(headers || '')
+}
+
+function setResourceSensitiveHeaders(value: string | number) {
+  const headers = String(value || '')
+    .split(/[,\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+  updateSelectedNode({ config: { sensitiveHeaders: headers } })
+}
+
+function parseJsonObjectOrText(text: string) {
+  if (!text) return ''
+  try {
+    return JSON.parse(text)
+  } catch {
+    return text
+  }
+}
+
+function resourceGovernanceDefaults(resource: WorkflowResource, defaults: Record<string, any>) {
+  const config = selectedNode.value?.config || {}
+  const metadata = resource.metadata || {}
+  const patch: Record<string, any> = {}
+  for (const [key, value] of Object.entries(defaults)) {
+    patch[key] = config[key] ?? metadata[key] ?? value
+  }
+  patch.outputSchema = config.outputSchema ?? resource.outputSchema ?? metadata.outputSchema ?? {}
+  patch.sensitiveHeaders = config.sensitiveHeaders ?? metadata.sensitiveHeaders ?? []
+  return patch
+}
+
 function selectWorkflowResource(field: { key: string; resourceTypes?: string[] }, resourceId: string) {
   const resource = workflowResources.value.find((item) => item.resourceId === resourceId)
   if (!resource) {
@@ -6560,9 +6775,22 @@ function selectWorkflowResource(field: { key: string; resourceTypes?: string[] }
     resourceId: resource.resourceId,
     resourceType,
   }
+  if (selectedNode.value?.type === 'API_CALL') {
+    Object.assign(patch, resourceGovernanceDefaults(resource, {
+      authMode: 'none',
+      timeoutMs: 30000,
+      retryCount: 0,
+      errorBehavior: 'fail',
+    }))
+  }
   if (selectedNode.value?.type === 'TOOL_CALL') {
     patch.toolName = toolName
     patch.serverIds = resourceType === 'MCP_TOOL' && serverId > 0 ? [serverId] : []
+    Object.assign(patch, resourceGovernanceDefaults(resource, {
+      timeoutMs: 30000,
+      retryCount: 0,
+      errorBehavior: 'fail',
+    }))
   }
   if (selectedNode.value?.type === 'KNOWLEDGE') {
     patch.knowledgeBaseId = metadata.knowledgeBaseId || metadata.id || resource.resourceId
@@ -8502,6 +8730,9 @@ async function loadRuntimeV2DebugDetail(runId: number, ownerType: 'WORKFLOW' | '
     ),
     run,
   )
+  if (ownerType === 'CHATFLOW') {
+    chatflowRunEvents.value = eventPage.list || []
+  }
   setRuntimeV2DebugDetail(ownerType, detail)
   updateRuntimeV2RunState(ownerType, detail, run)
   if (!isRuntimeV2TerminalStatus(detail.status)) {
@@ -8630,8 +8861,8 @@ async function runCanvasTestWithRuntimeV2(
   let started: RuntimeV2StartRef
   try {
     started = await (isChatflowMode.value
-      ? runChatflowV2(id, input, runtimeV2IdempotencyKey(ownerType, id))
-      : runWorkflowV2(id, input, runtimeV2IdempotencyKey(ownerType, id))) as RuntimeV2StartRef
+      ? runChatflowV2(id, input, runtimeV2IdempotencyKey(ownerType, id), undefined, { silentError: true })
+      : runWorkflowV2(id, input, runtimeV2IdempotencyKey(ownerType, id), undefined, { silentError: true })) as RuntimeV2StartRef
   } catch {
     return null
   }
@@ -8666,6 +8897,9 @@ async function observeRuntimeV2Run(
     const events = (eventPage.list || []) as RuntimeV2Event[]
     const nodes = (nodePage.list || []) as RuntimeV2Node[]
     afterSequence = Math.max(afterSequence, ...events.map((event) => Number(event.sequence || 0)))
+    if (ownerType === 'CHATFLOW') {
+      appendChatflowRuntimeV2Events(events)
+    }
     latestRun = run as RuntimeV2StartRef
     detail = mergeRuntimeV2RunToDebugDetail(
       applyRuntimeV2NodesToDebugDetail(
@@ -8723,6 +8957,29 @@ function setRuntimeV2DebugDetail(ownerType: string, detail: WorkflowRunDebugDeta
   }
 }
 
+function appendChatflowRuntimeV2Events(events: RuntimeV2Event[]) {
+  if (!events.length) return
+  const merged = new Map<string, any>()
+  for (const event of chatflowRunEvents.value || []) {
+    merged.set(runtimeV2EventKey(event), event)
+  }
+  for (const event of events) {
+    merged.set(runtimeV2EventKey(event), event)
+  }
+  chatflowRunEvents.value = Array.from(merged.values()).sort(
+    (left, right) => Number(left.sequence || 0) - Number(right.sequence || 0),
+  )
+}
+
+function runtimeV2EventKey(event: any) {
+  return [
+    Number(event.sequence || 0),
+    String(event.id || ''),
+    String(event.type || ''),
+    String(event.nodeId || event.nodeKey || ''),
+  ].join(':')
+}
+
 function currentRuntimeV2DebugDetail(ownerType: string): WorkflowRunDebugDetail | null {
   return ownerType === 'CHATFLOW' ? chatflowRunDebugDetail.value : workflowRunDebugDetail.value
 }
@@ -8738,15 +8995,16 @@ function updateRuntimeV2RunState(
   lastTestRunStatus.value = String(detail.status || run.status || '')
   lastRunOutput.value = detail.output || run.output || null
   if (ownerType === 'CHATFLOW') {
-    chatflowSessionState.value = {
-      ...(chatflowSessionState.value || {}),
-      sessionId: String((run as Record<string, any>).sessionId || chatflowSessionState.value?.sessionId || ''),
-      status: String(detail.status || run.status || ''),
-      currentRunId: Number(detail.runId || run.runId || 0),
-      variables: chatflowSessionState.value?.variables || {},
-      waitingEvent: (run as Record<string, any>).waitingEvent || chatflowSessionState.value?.waitingEvent || null,
-      checkpoint: (run as Record<string, any>).checkpoint || chatflowSessionState.value?.checkpoint || null,
-    } as ChatflowSessionState
+    const nextSession = projectRuntimeV2ChatflowSessionState(
+      run as Record<string, any>,
+      detail.status || run.status,
+      chatflowSessionState.value || null,
+    ) as ChatflowSessionState
+    chatflowSessionState.value = nextSession
+    chatflowRunDebugDetail.value = withChatflowSessionState(
+      (chatflowRunDebugDetail.value || detail) as ChatflowRunDebugDetail,
+      nextSession,
+    )
   }
 }
 
@@ -8816,6 +9074,13 @@ async function runCanvasTest() {
     lastTestRunStatus.value = String(result?.status || '')
     lastTestRunId.value = Number(result?.runId || 0)
     lastRunOutput.value = result?.output || null
+    if (!isChatflowMode.value && lastTestRunId.value) {
+      if (result?.runtimeVersion === 'v2') {
+        await loadRuntimeV2DebugDetail(lastTestRunId.value, 'WORKFLOW')
+      } else {
+        await loadWorkflowRunDebugDetail(lastTestRunId.value)
+      }
+    }
     dirtySinceTestRun.value = false
     lastTestRunGraphSnapshot.value = currentGraphSnapshot()
     if (isChatflowMode.value) {
@@ -8918,23 +9183,53 @@ async function submitChatflowResume() {
   const id = workflowId.value
   const runId = Number(testResult.value.runId || 0)
   const eventId = Number(chatflowWaitingEvent.value?.id || chatflowCheckpoint.value?.eventId || 0)
-  if (!id || !runId || !eventId) return
+  const resumeData = buildResumePayload(chatflowResumeFields.value, chatflowResumeValues.value)
+  const runtimeVersion = String(testResult.value.runtimeVersion || '')
+  if (!id || !runId || (runtimeVersion !== 'v2' && !eventId)) return
   chatflowResumeSubmitting.value = true
   try {
-    const resumed = await resumeChatflowRun(id, runId, {
-      eventId,
-      resumeData: buildResumePayload(chatflowResumeFields.value, chatflowResumeValues.value),
-    }) as Record<string, any>
+    const resumed = runtimeVersion === 'v2'
+      ? await resumeRuntimeV2Run(runId, {
+        resumeData,
+        idempotencyKey: runtimeV2IdempotencyKey('CHATFLOW', id),
+      }) as Record<string, any>
+      : await resumeChatflowRun(id, runId, {
+        eventId,
+        resumeData,
+      }) as Record<string, any>
     testResult.value = resumed
     lastTestRunStatus.value = String(resumed.status || '')
     lastTestRunId.value = Number(resumed.runId || 0)
     lastRunOutput.value = resumed.output || null
-    await loadChatflowDebugState(id, resumed)
+    appendChatflowResumeMessages(resumeData, resumed)
+    if (runtimeVersion === 'v2') {
+      testResult.value = { ...resumed, runtimeVersion: 'v2' }
+      await loadRuntimeV2DebugDetail(runId, 'CHATFLOW')
+    } else {
+      await loadChatflowDebugState(id, resumed)
+    }
   } catch (e: any) {
     validationErrors.value = [e?.message || '继续执行失败']
   } finally {
     chatflowResumeSubmitting.value = false
   }
+}
+
+function appendChatflowResumeMessages(resumeData: Record<string, any>, result: Record<string, any>) {
+  const answer = Object.values(resumeData)
+    .map((value) => String(value ?? '').trim())
+    .filter(Boolean)
+    .join(' ')
+  const content = formatChatflowAssistantText(
+    result?.output,
+    buildChatflowStreamPreview(result?.streamEvents, result?.output),
+  )
+  const timestamp = Date.now()
+  chatflowTrialMessages.value = [
+    ...chatflowTrialMessages.value,
+    ...(answer ? [{ id: timestamp, role: 'user' as const, content: answer }] : []),
+    { id: timestamp + 1, role: 'assistant' as const, content, streaming: false },
+  ]
 }
 
 async function publishWorkflow() {
@@ -10542,23 +10837,24 @@ onUnmounted(() => {
 
 .node-run-status {
   flex: 0 0 auto;
-  max-width: 7.5rem;
+  max-width: 7.7rem;
+  height: 1.4rem;
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.1875rem 0.4375rem;
+  gap: 0.2625rem;
+  padding: 0 0.4375rem;
   border-radius: 999rem;
   background: #eef1f7;
   color: #667085;
-  font-size: 0.6875rem;
+  font-size: 0.6125rem;
   font-weight: 800;
-  line-height: 1.2;
+  line-height: 1.4rem;
   white-space: nowrap;
 }
 
 .node-run-status-icon {
-  width: 0.625rem;
-  height: 0.625rem;
+  width: 0.7rem;
+  height: 0.7rem;
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
@@ -10568,9 +10864,10 @@ onUnmounted(() => {
   color: inherit;
 }
 
-.node-run-status.status-succeeded .node-run-status-icon::before {
+.node-run-status.status-succeeded .node-run-status-icon::before,
+.node-run-status.status-completed .node-run-status-icon::before {
   color: #fff;
-  font-size: 0.5rem;
+  font-size: 0.525rem;
   font-weight: 900;
   line-height: 1;
   content: "✓";
@@ -10578,15 +10875,16 @@ onUnmounted(() => {
 
 .node-run-status.status-failed .node-run-status-icon::before {
   color: #fff;
-  font-size: 0.5rem;
+  font-size: 0.525rem;
   font-weight: 900;
   line-height: 1;
   content: "!";
 }
 
-.node-run-status.status-interrupted .node-run-status-icon::before {
-  width: 0.25rem;
-  height: 0.25rem;
+.node-run-status.status-interrupted .node-run-status-icon::before,
+.node-run-status.status-waiting .node-run-status-icon::before {
+  width: 0.2625rem;
+  height: 0.2625rem;
   border-radius: 999rem;
   background: #fff;
   content: "";
@@ -10594,18 +10892,19 @@ onUnmounted(() => {
 
 .node-run-status.status-running .node-run-status-icon {
   background: transparent;
-  border: 0.125rem solid currentColor;
+  border: 0.0875rem solid currentColor;
   border-top-color: transparent;
   animation: node-run-spin 0.8s linear infinite;
 }
 
 .node-run-status small {
   color: inherit;
-  font-size: 0.625rem;
+  font-size: 0.525rem;
   font-weight: 800;
 }
 
-.node-run-status.status-succeeded {
+.node-run-status.status-succeeded,
+.node-run-status.status-completed {
   background: #dcf8e8;
   color: #159947;
 }
@@ -10615,7 +10914,8 @@ onUnmounted(() => {
   color: #d93042;
 }
 
-.node-run-status.status-interrupted {
+.node-run-status.status-interrupted,
+.node-run-status.status-waiting {
   background: #fff3d7;
   color: #b56b00;
 }
@@ -14792,6 +15092,15 @@ onUnmounted(() => {
   gap: 0.5rem;
   color: #8b94a8;
   font-size: 0.75rem;
+}
+
+.chatflow-resume-card {
+  display: grid;
+  gap: 0.625rem;
+  padding: 0.75rem;
+  border: 0.0625rem solid #dbe2f0;
+  border-radius: 0.75rem;
+  background: #f7f9ff;
 }
 
 .chatflow-composer {

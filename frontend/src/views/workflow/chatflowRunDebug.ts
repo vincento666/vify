@@ -23,6 +23,12 @@ export type ChatflowRunDebugDetail = WorkflowRunDebugDetail & {
   checkpoint?: any
 }
 
+export type ChatflowSessionDebugState = NonNullable<ChatflowRunDebugDetail['session']> & {
+  variables?: Record<string, any>
+  waitingEvent?: any
+  checkpoint?: any
+}
+
 export type ChatflowRunSummary = {
   runLabel: string
   statusLabel: string
@@ -54,4 +60,56 @@ export function buildChatflowRunFlamegraph(detail: ChatflowRunDebugDetail | null
 
 export function chatflowRunNodeDetails(detail: ChatflowRunDebugDetail | null | undefined): WorkflowRunNodeDetail[] {
   return Array.isArray(detail?.nodeDetails) ? detail.nodeDetails : []
+}
+
+export function projectRuntimeV2ChatflowSessionState(
+  run: Record<string, any>,
+  status: unknown,
+  previous: ChatflowSessionDebugState | null | undefined = null,
+): ChatflowSessionDebugState {
+  const checkpoint = run.checkpoint || previous?.checkpoint || null
+  const normalizedStatus = String(status || run.status || '').trim().toUpperCase()
+  const sessionStatus = checkpoint && ['INTERRUPTED', 'WAITING'].includes(normalizedStatus)
+    ? 'waiting'
+    : normalizeSessionStatus(normalizedStatus)
+  const sessionId = String(run.sessionId || previous?.sessionId || run.session_id || '')
+  return {
+    ...(previous || {}),
+    sessionId,
+    conversationId: String(run.conversationId || previous?.conversationId || sessionId),
+    userId: String(run.userId || previous?.userId || ''),
+    channel: String(run.channel || previous?.channel || ''),
+    status: sessionStatus,
+    currentRunId: Number(run.runId || previous?.currentRunId || 0),
+    variables: isRecord(run.variables) ? run.variables : previous?.variables || {},
+    waitingEvent: run.waitingEvent || previous?.waitingEvent || null,
+    checkpoint,
+  }
+}
+
+export function withChatflowSessionState(
+  detail: ChatflowRunDebugDetail,
+  session: ChatflowSessionDebugState | null | undefined,
+): ChatflowRunDebugDetail {
+  if (!session) return detail
+  return {
+    ...detail,
+    session,
+    variables: session.variables || {},
+    waitingEvent: session.waitingEvent || null,
+    checkpoint: session.checkpoint || null,
+  }
+}
+
+function normalizeSessionStatus(status: string) {
+  if (status === 'SUCCEEDED' || status === 'COMPLETED') return 'completed'
+  if (status === 'CANCELLED' || status === 'CANCELED') return 'cancelled'
+  if (status === 'FAILED') return 'failed'
+  if (status === 'RUNNING') return 'running'
+  if (status === 'INTERRUPTED' || status === 'WAITING') return 'waiting'
+  return status.toLowerCase()
+}
+
+function isRecord(value: unknown): value is Record<string, any> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }
