@@ -1,0 +1,137 @@
+{
+  "mode": "deterministic-tool-stress",
+  "saveRunId": 97,
+  "shellRunId": 98,
+  "shellStatus": "DENIED",
+  "savedFile": "tmp/ai-assistant-code-save-test-uat.mjs",
+  "savedBytes": 694,
+  "localTestOutput": "PASS ai-assistant-code-save-test-uat",
+  "saveEventTypes": [
+    "run.started",
+    "orchestration.phase_started",
+    "model.call_completed",
+    "scheduler.batch_started",
+    "approval.required",
+    "proposed_action.created",
+    "approval.granted",
+    "tool.call_started",
+    "tool.call_output",
+    "tool.call_completed",
+    "scheduler.batch_started",
+    "tool.call_started",
+    "tool.call_output",
+    "tool.call_completed",
+    "scheduler.batch_completed",
+    "run.completed"
+  ],
+  "shellEventTypes": [
+    "run.started",
+    "orchestration.phase_started",
+    "model.call_completed",
+    "sandbox.denied"
+  ],
+  "ui": {
+    "runHeaders": [
+      "已处理思考 0 次 / 工具调用 0 次"
+    ],
+    "eventHeaders": [
+      "已编辑 1 个文件",
+      "已读取 1 个文件"
+    ],
+    "eventDetails": [],
+    "userMessages": [
+      "请完成一次代码保存验收：编写一份可直接用 node 运行的 JS 测试代码并保存到 tmp/ai-assistant-code-save-test-uat.mjs；代码需要包含一个 classifyHarnessEvent 函数和三个自检 case；保存后请读回这个文件确认内容已经落盘；最后用中文总结保存和读回结果。06/19 15:16",
+      "请运行刚才保存的测试：node tmp/ai-assistant-code-save-test-uat.mjs。如果当前 harness 沙箱阻断 shell，请把阻断结果作为可回溯事件显示。06/19 15:16"
+    ],
+    "finalAnswers": [
+      "工具结果：tmp/ai-assistant-code-save-test-uat.mjs; tmp/ai-assistant-code-save-test-uat.mjs已完成 · 06/19 15:16"
+    ],
+    "taskRows": [
+      "请运行刚才保存的测试：node tmp/ai-assistant-code-save-test-uat.mjs。如果当前 harness 沙箱阻断 she...沙箱拒绝 / 0 个执行步骤"
+    ],
+    "toolRows": [],
+    "recentErrors": [
+      "沙箱拒绝shell-like execution is blocked by the Phase 1 sandbox"
+    ],
+    "approvalRows": [],
+    "iconOnlyButtons": [
+      {
+        "testId": "ai-assistant-delete-session",
+        "present": true,
+        "text": "",
+        "svgCount": 1,
+        "size": "27.19x27.19"
+      },
+      {
+        "testId": "ai-assistant-message-copy",
+        "present": true,
+        "text": "",
+        "svgCount": 1,
+        "size": "27.19x27.19"
+      },
+      {
+        "testId": "ai-assistant-completion-copy",
+        "present": true,
+        "text": "",
+        "svgCount": 1,
+        "size": "27.19x27.19"
+      },
+      {
+        "testId": "ai-assistant-completion-like",
+        "present": true,
+        "text": "",
+        "svgCount": 1,
+        "size": "27.19x27.19"
+      },
+      {
+        "testId": "ai-assistant-completion-dislike",
+        "present": true,
+        "text": "",
+        "svgCount": 1,
+        "size": "27.19x27.19"
+      },
+      {
+        "testId": "ai-assistant-add-context",
+        "present": true,
+        "text": "",
+        "svgCount": 1,
+        "size": "27.19x27.19"
+      },
+      {
+        "testId": "ai-assistant-model-config-icon",
+        "present": true,
+        "text": "",
+        "svgCount": 1,
+        "size": "27.19x27.19"
+      },
+      {
+        "testId": "ai-assistant-send",
+        "present": true,
+        "text": "",
+        "svgCount": 1,
+        "size": "27.19x27.19"
+      }
+    ],
+    "iconButtonSizes": [
+      "27.19x27.19"
+    ],
+    "chevrons": [
+      {
+        "text": "",
+        "hasSvg": true,
+        "ariaHidden": "true"
+      },
+      {
+        "text": "",
+        "hasSvg": true,
+        "ariaHidden": "true"
+      },
+      {
+        "text": "",
+        "hasSvg": true,
+        "ariaHidden": "true"
+      }
+    ],
+    "pageOverflowY": 0
+  }
+}

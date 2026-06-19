@@ -1,0 +1,10 @@
+file:///Users/vincento/work/develop/hify/frontend/e2e/ai-assistant-code-save-test-uat.mjs:42
+  if (!condition) throw new Error(message)
+                        ^
+
+Error: expected code write to require approval
+    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/ai-assistant-code-save-test-uat.mjs:42:25)
+    at run (file:///Users/vincento/work/develop/hify/frontend/e2e/ai-assistant-code-save-test-uat.mjs:198:5)
+    at async file:///Users/vincento/work/develop/hify/frontend/e2e/ai-assistant-code-save-test-uat.mjs:270:1
+
+Node.js v23.11.0

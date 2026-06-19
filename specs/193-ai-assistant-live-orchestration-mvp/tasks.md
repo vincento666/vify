@@ -272,3 +272,21 @@
       unit, frontend build, `git diff --check`, and in-app browser UAT.
 - [x] Save evidence under
       `artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.19-icon-button-polish/`.
+
+## 193.20 Code Save And Test Attempt Pressure UAT
+
+- [x] RED: frontend UAT script contract fails while
+      `ai-assistant-code-save-test-uat.mjs` is missing.
+- [x] Add a repeatable pressure UAT script that drives AI Assistant through
+      code generation, workspace file write approval, readback verification,
+      local execution of the saved code, and a shell test-run attempt.
+- [x] Verify current Phase 1 sandbox behavior: `run_shell` is denied with
+      `sandbox.denied` and the UI shows a visible `沙箱拒绝` error.
+- [x] Revalidate persisted replay in the in-app browser: expanded run shows
+      `已编辑 1 个文件` and `已读取 1 个文件`, while the right panel records
+      the shell sandbox denial.
+- [x] Revalidate with focused script contract, full frontend unit,
+      frontend build, deterministic tool-stress UAT, in-app browser UAT, and
+      `git diff --check`.
+- [x] Save evidence under
+      `artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.20-code-save-test-uat/`.

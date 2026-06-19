@@ -1,0 +1,19 @@
+> vitest run src/views/aiAssistant/aiAssistantUatScript.test.ts
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  15:06:03
+   Duration  253ms (transform 15ms, setup 0ms, collect 0ms, tests 0ms, environment 0ms, prepare 34ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/views/aiAssistant/aiAssistantUatScript.test.ts [ src/views/aiAssistant/aiAssistantUatScript.test.ts ]
+Error: ENOENT: no such file or directory, open '/Users/vincento/work/develop/hify/frontend/e2e/ai-assistant-code-save-test-uat.mjs'
+ ❯ readFrontendFile src/views/aiAssistant/aiAssistantUatScript.test.ts:12:10
+     10| 
+     11| function readFrontendFile(path: string) {
+     12|   return readFileSync(resolve(frontendRoot, path), 'utf8')
+       |          ^
+     13| }
+     14| 
+ ❯ src/views/aiAssistant/aiAssistantUatScript.test.ts:16:19
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯

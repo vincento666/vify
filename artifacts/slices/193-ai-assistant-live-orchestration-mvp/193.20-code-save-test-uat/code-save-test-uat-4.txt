@@ -1,0 +1,10 @@
+file:///Users/vincento/work/develop/hify/frontend/e2e/ai-assistant-code-save-test-uat.mjs:42
+  if (!condition) throw new Error(message)
+                        ^
+
+Error: expected two run records, got 1
+    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/ai-assistant-code-save-test-uat.mjs:42:25)
+    at run (file:///Users/vincento/work/develop/hify/frontend/e2e/ai-assistant-code-save-test-uat.mjs:266:5)
+    at async file:///Users/vincento/work/develop/hify/frontend/e2e/ai-assistant-code-save-test-uat.mjs:288:1
+
+Node.js v23.11.0
