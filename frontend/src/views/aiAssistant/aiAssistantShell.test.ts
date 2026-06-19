@@ -247,6 +247,12 @@ describe('AI Assistant shell UI contract', () => {
     expect(content).toContain('Shell')
   })
 
+  it('left aligns expanded shell result blocks with their command fold header', () => {
+    expect(content).toContain('.ai-shell-result {')
+    expect(content).toContain('margin-left: 0;')
+    expect(content).not.toContain('.ai-shell-result {\n  position: relative;\n  display: grid;\n  gap: 0.625rem;\n  margin-left: 1.5rem;')
+  })
+
   it('renders user bubbles with subtle fill and completion summary cards with actions', () => {
     expect(content).toContain('class="ai-message ai-message--user"')
     expect(content).toContain('class="ai-message ai-message--assistant"')

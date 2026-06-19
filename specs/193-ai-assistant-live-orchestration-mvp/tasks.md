@@ -338,3 +338,18 @@
       unit, frontend build, deterministic pressure UAT, and in-app browser UAT.
 - [x] Save evidence under
       `artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.22-command-echo-shell-result-ui/`.
+
+## 193.23 Shell Result Alignment Polish
+
+- [x] RED: frontend shell contract fails while expanded Shell result blocks keep
+      a third-level left indent under their command fold header.
+- [x] Remove the Shell result block left margin so the expanded command output
+      aligns with its foldable command header.
+- [x] Extend the pressure UAT script with a browser geometry assertion that
+      `shellResultLeftDelta` stays within `1px`.
+- [x] Revalidate with focused frontend unit, AI Assistant timeline/shell unit,
+      `remScaleClosure`, full frontend unit, frontend build, deterministic
+      pressure UAT, and Codex in-app browser UAT using OpenRouter
+      `qwen/qwen3.5-27b`.
+- [x] Save evidence under
+      `artifacts/slices/193-ai-assistant-live-orchestration-mvp/193.23-shell-result-alignment/`.

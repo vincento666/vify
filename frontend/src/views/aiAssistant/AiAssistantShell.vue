@@ -2243,7 +2243,7 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
   position: relative;
   display: grid;
   gap: 0.625rem;
-  margin-left: 1.5rem;
+  margin-left: 0;
   padding: 0.75rem;
   background: var(--color-bg-page, #f8f9fc);
   border-radius: var(--radius-md, 0.375rem);

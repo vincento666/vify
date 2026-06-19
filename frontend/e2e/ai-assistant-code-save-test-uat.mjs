@@ -142,6 +142,12 @@ async function collectUiState(page) {
   return page.evaluate(() => {
     const all = (selector) => Array.from(document.querySelectorAll(selector))
     const textList = (selector) => all(selector).map((node) => node.textContent?.trim() || '')
+    const shellHeader = document.querySelector(
+      '[data-testid="ai-assistant-tool-invocation-header"].ai-tool-invocation__header--shell',
+    )
+    const shellResult = document.querySelector('[data-testid="ai-assistant-shell-result"]')
+    const shellHeaderRect = shellHeader?.getBoundingClientRect()
+    const shellResultRect = shellResult?.getBoundingClientRect()
     const iconOnlyButtons = [
       'ai-assistant-delete-session',
       'ai-assistant-message-copy',
@@ -174,6 +180,8 @@ async function collectUiState(page) {
       shellResults: textList('[data-testid="ai-assistant-shell-result"]'),
       shellResultOutputs: textList('[data-testid="ai-assistant-shell-result-output"]'),
       shellResultCopyButtons: all('[data-testid="ai-assistant-shell-result-copy"]').length,
+      shellResultLeftDelta:
+        shellHeaderRect && shellResultRect ? Number((shellResultRect.left - shellHeaderRect.left).toFixed(2)) : null,
       userMessages: textList('[data-testid="ai-assistant-user-message"]'),
       finalAnswers: textList('[data-testid="ai-assistant-run-final-answer"]'),
       taskRows: textList('[data-testid="ai-assistant-task-row"]'),
@@ -300,6 +308,10 @@ async function run() {
     assert(
       state.shellResultCopyButtons >= 1,
       `expected shell result copy button, got ${state.shellResultCopyButtons}`,
+    )
+    assert(
+      state.shellResultLeftDelta !== null && Math.abs(state.shellResultLeftDelta) <= 1,
+      `expected shell result block to align with command header, got left delta ${state.shellResultLeftDelta}`,
     )
     assert(
       state.finalAnswers.some((text) => text.includes('PASS ai-assistant-code-save-test-uat')),
