@@ -303,15 +303,6 @@
           <button
             type="button"
             role="tab"
-            :aria-selected="activeWorkbenchTab === 'business'"
-            :class="{ active: activeWorkbenchTab === 'business' }"
-            @click="activeWorkbenchTab = 'business'"
-          >
-            办理
-          </button>
-          <button
-            type="button"
-            role="tab"
             :aria-selected="activeWorkbenchTab === 'evidence'"
             :class="{ active: activeWorkbenchTab === 'evidence' }"
             @click="activeWorkbenchTab = 'evidence'"
@@ -333,13 +324,23 @@
           data-testid="operator-workbench-focus-pane"
           v-show="activeWorkbenchTab === 'focus'"
         >
-          <section class="workspace-panel compact-panel focus-card" data-testid="operator-focus-intent-card">
+          <section class="workspace-panel compact-panel focus-card focus-status-bar" data-testid="operator-focus-status-bar">
+            <div>
+              <span>状态条</span>
+              <strong>{{ focusProjection.sessionStatus.label }}</strong>
+            </div>
+            <a-tag :color="focusStatusColor(focusProjection.sessionStatus.kind)">
+              {{ focusProjection.sessionStatus.detail }}
+            </a-tag>
+          </section>
+
+          <section class="workspace-panel compact-panel focus-card" data-testid="operator-focus-intent-emotion-card">
             <div class="panel-heading">
               <span class="panel-heading-title">
                 <BulbOutlined />
-                意图识别
+                任务意图
               </span>
-              <a-tag color="blue">情绪识别</a-tag>
+              <a-tag color="blue">情绪</a-tag>
             </div>
             <div class="focus-summary-grid">
               <div>
@@ -356,15 +357,37 @@
             </p>
           </section>
 
-          <section class="workspace-panel compact-panel focus-card" data-testid="operator-focus-script-card">
+          <section class="workspace-panel compact-panel focus-card" data-testid="operator-focus-business-object-summary">
+            <div class="panel-heading">
+              <span class="panel-heading-title">
+                <OrderedListOutlined />
+                业务对象摘要
+              </span>
+              <a-tag color="blue">{{ focusProjection.businessObjects.length }} 项</a-tag>
+            </div>
+            <div class="focus-object-grid">
+              <div
+                v-for="item in focusProjection.businessObjects"
+                :key="item.key"
+                class="focus-object-row"
+              >
+                <span>{{ item.label }}</span>
+                <strong>{{ item.value }}</strong>
+                <small>{{ item.detail }}</small>
+              </div>
+            </div>
+          </section>
+
+          <section class="workspace-panel compact-panel focus-card" data-testid="operator-focus-recommended-reply-card">
             <div class="panel-heading">
               <span class="panel-heading-title">
                 <MessageOutlined />
-                业务办理指引
+                推荐回复
               </span>
-              <a-tag color="green">话术推荐</a-tag>
+              <a-tag color="green">可发送话术</a-tag>
             </div>
             <p class="panel-copy">{{ workspace.recommendation.operatorRecommendation || '暂无坐席建议' }}</p>
+            <p class="draft-copy">{{ workspace.recommendation.customerReplyDraft || '暂无客户回复草稿' }}</p>
             <div class="panel-actions">
               <a-tooltip title="发送给旅客">
                 <a-button size="small" :disabled="!workspace.recommendation.operatorRecommendation" @click="sendRecommendationToCustomer">
@@ -393,46 +416,71 @@
             </div>
           </section>
 
-          <section class="workspace-panel compact-panel focus-card" data-testid="operator-focus-sop-progress-card">
+          <section class="workspace-panel compact-panel focus-card" data-testid="operator-focus-risk-sla-card">
+            <div class="panel-heading">
+              <span class="panel-heading-title">
+                <WarningOutlined />
+                风险与时效
+              </span>
+              <a-tag :color="riskTimingColor(focusProjection.riskTiming.tone)">
+                {{ focusProjection.riskTiming.tone === 'critical' ? '高风险' : '风险提示' }}
+              </a-tag>
+            </div>
+            <p class="panel-copy">{{ focusProjection.riskTiming.summary }}</p>
+            <div data-testid="operator-warnings-panel">
+              <div
+                v-if="focusProjection.riskTiming.warnings.length === 0"
+                class="empty-compact"
+                data-testid="operator-warning-empty-state"
+              >
+                暂无风险提示
+              </div>
+              <a-alert
+                v-for="warning in focusProjection.riskTiming.warnings"
+                :key="warning"
+                type="warning"
+                show-icon
+                :message="warning"
+              />
+            </div>
+            <small>{{ focusProjection.riskTiming.nextAction }}</small>
+          </section>
+
+          <section class="workspace-panel compact-panel focus-card" data-testid="operator-focus-sop-handling-tree">
             <div class="panel-heading">
               <span class="panel-heading-title">
                 <CheckOutlined />
-                SOP办理进度
+                SOP办理树
               </span>
-              <a-tag color="blue">{{ workspace.taskSummary.items.length }} 项</a-tag>
+              <a-tag color="blue">{{ focusProjection.sopNodes.length }} 节点</a-tag>
             </div>
             <div class="sop-progress-list">
-              <div v-if="workspace.taskSummary.items.length === 0" class="empty-compact">
-                暂无SOP办理进度
-              </div>
               <div
-                v-for="task in workspace.taskSummary.items"
-                :key="`focus-sop-${task.id}`"
+                v-for="node in focusProjection.sopNodes"
+                :key="node.key"
                 class="sop-progress-row"
                 data-testid="operator-focus-sop-progress-row"
               >
                 <div>
-                  <strong>{{ task.displayName }}</strong>
-                  <span v-if="task.missingFields.length">待补充：{{ task.missingFields.join('、') }}</span>
-                  <span v-else>关键信息已齐备</span>
+                  <strong>{{ node.label }}</strong>
+                  <span>{{ node.summary }}</span>
+                  <span v-if="node.missingInfo.length">缺失信息：{{ node.missingInfo.join('、') }}</span>
+                  <small>{{ node.nextAction }} · {{ node.evidenceLabel }}</small>
                 </div>
-                <a-tag :color="statusColor(task.statusTone)">{{ task.status }}</a-tag>
-                <a-tag v-if="task.proposedActions.length" color="warning">
-                  {{ task.proposedActions.length }} 个确认
-                </a-tag>
+                <a-tag :color="sopNodeStatusColor(node.status)">{{ sopNodeStatusLabel(node.status) }}</a-tag>
               </div>
             </div>
           </section>
 
-          <section class="workspace-panel compact-panel" data-testid="operator-confirmation-cards">
+          <section class="workspace-panel compact-panel" data-testid="operator-focus-sensitive-confirmation-card">
             <div class="panel-heading">
               <span class="panel-heading-title">
                 <SafetyCertificateOutlined />
-                业务办理确认
+                高敏确认
               </span>
-              <a-tag color="warning">高敏确认</a-tag>
+              <a-tag color="warning">{{ workspace.proposedActions.length }} 待处理</a-tag>
             </div>
-            <div class="action-list">
+            <div class="action-list" data-testid="operator-confirmation-cards">
               <div
                 v-if="workspace.proposedActions.length === 0"
                 class="empty-compact"
@@ -473,12 +521,7 @@
               </div>
             </div>
           </section>
-        </div>
-        <div
-          class="workbench-pane-stack"
-          data-testid="operator-workbench-business-pane"
-          v-show="activeWorkbenchTab === 'business'"
-        >
+
           <section class="workspace-panel compact-panel" data-testid="operator-task-ledger">
             <div class="panel-heading">
               <span class="panel-heading-title">
@@ -529,40 +572,32 @@
               </div>
             </div>
           </section>
-<section
-          v-show="activeWorkbenchTab === 'business'"
-          class="workspace-panel compact-panel"
-          data-testid="operator-recommendation-panel"
-        >
-          <div class="panel-heading">
-            <span class="panel-heading-title">
-              <BulbOutlined />
-              坐席建议
-            </span>
-          </div>
-          <p class="panel-copy">{{ workspace.recommendation.operatorRecommendation || '暂无坐席建议' }}</p>
-        </section>
-<section
-          v-show="activeWorkbenchTab === 'business'"
-          class="workspace-panel compact-panel"
-          data-testid="operator-proposed-actions-panel"
-        >
-          <div class="panel-heading">
-            <span class="panel-heading-title">
-              <SafetyCertificateOutlined />
-              待确认动作
-            </span>
-            <span class="panel-count">{{ workspace.proposedActions.length }}</span>
-          </div>
-          <div class="action-list">
-            <div
-              v-if="workspace.proposedActions.length === 0"
-              class="empty-compact"
-              data-testid="operator-action-empty-state"
-            >
-              暂无待确认动作
+          <section class="workspace-panel compact-panel" data-testid="operator-recommendation-panel">
+            <div class="panel-heading">
+              <span class="panel-heading-title">
+                <BulbOutlined />
+                坐席建议
+              </span>
             </div>
-            <div v-for="action in workspace.proposedActions" :key="action.id" class="action-row">
+            <p class="panel-copy">{{ workspace.recommendation.operatorRecommendation || '暂无坐席建议' }}</p>
+          </section>
+          <section class="workspace-panel compact-panel" data-testid="operator-proposed-actions-panel">
+            <div class="panel-heading">
+              <span class="panel-heading-title">
+                <SafetyCertificateOutlined />
+                待确认动作
+              </span>
+              <span class="panel-count">{{ workspace.proposedActions.length }}</span>
+            </div>
+            <div class="action-list">
+              <div
+                v-if="workspace.proposedActions.length === 0"
+                class="empty-compact"
+                data-testid="operator-action-empty-state"
+              >
+                暂无待确认动作
+              </div>
+              <div v-for="action in workspace.proposedActions" :key="action.id" class="action-row">
               <div>
                 <strong>{{ action.title }}</strong>
                 <span>{{ action.actionType }} · #{{ action.id }}</span>
@@ -747,69 +782,39 @@
               </div>
             </div>
           </div>
-        </section>
-<section
-          v-show="activeWorkbenchTab === 'business'"
-          class="workspace-panel compact-panel"
-          data-testid="operator-draft-panel"
-        >
-          <div class="panel-heading">
-            <span class="panel-heading-title">
-              <EditOutlined />
-              客户回复草稿
-            </span>
-            <a-tag :color="draftApplied ? 'success' : 'default'">
-              {{ draftApplied ? '已本地应用' : '待审核' }}
-            </a-tag>
-          </div>
-          <p class="draft-copy">{{ workspace.recommendation.customerReplyDraft || '暂无客户回复草稿' }}</p>
-          <div class="panel-actions">
-            <a-tooltip title="复制客户回复草稿">
-              <a-button size="small" aria-label="复制客户回复草稿" :disabled="!hasDraft" @click="copyDraft">
-                <CopyOutlined />
-                复制
-              </a-button>
-            </a-tooltip>
-            <a-tooltip title="本地应用客户回复草稿">
-              <a-button
-                size="small"
-                type="primary"
-                aria-label="本地应用客户回复草稿"
-                :disabled="!hasDraft"
-                @click="applyDraftLocal"
-              >
-                <CheckOutlined />
-                本地应用
-              </a-button>
-            </a-tooltip>
-          </div>
-        </section>
-<section
-          v-show="activeWorkbenchTab === 'business'"
-          class="workspace-panel compact-panel"
-          data-testid="operator-warnings-panel"
-        >
-          <div class="panel-heading">
-            <span class="panel-heading-title">
-              <WarningOutlined />
-              风险提示
-            </span>
-          </div>
-          <div
-            v-if="workspace.recommendation.warnings.length === 0"
-            class="empty-compact"
-            data-testid="operator-warning-empty-state"
-          >
-            暂无风险提示
-          </div>
-          <a-alert
-            v-for="warning in workspace.recommendation.warnings"
-            :key="warning"
-            type="warning"
-            show-icon
-            :message="warning"
-          />
-        </section>
+          </section>
+          <section class="workspace-panel compact-panel" data-testid="operator-draft-panel">
+            <div class="panel-heading">
+              <span class="panel-heading-title">
+                <EditOutlined />
+                客户回复草稿
+              </span>
+              <a-tag :color="draftApplied ? 'success' : 'default'">
+                {{ draftApplied ? '已本地应用' : '待审核' }}
+              </a-tag>
+            </div>
+            <p class="draft-copy">{{ workspace.recommendation.customerReplyDraft || '暂无客户回复草稿' }}</p>
+            <div class="panel-actions">
+              <a-tooltip title="复制客户回复草稿">
+                <a-button size="small" aria-label="复制客户回复草稿" :disabled="!hasDraft" @click="copyDraft">
+                  <CopyOutlined />
+                  复制
+                </a-button>
+              </a-tooltip>
+              <a-tooltip title="本地应用客户回复草稿">
+                <a-button
+                  size="small"
+                  type="primary"
+                  aria-label="本地应用客户回复草稿"
+                  :disabled="!hasDraft"
+                  @click="applyDraftLocal"
+                >
+                  <CheckOutlined />
+                  本地应用
+                </a-button>
+              </a-tooltip>
+            </div>
+          </section>
         </div>
 
         <div
@@ -818,19 +823,6 @@
           v-show="activeWorkbenchTab === 'assistant'"
         >
           <div data-testid="operator-assistant-chat-window" class="assistant-chat-window">
-            <header class="assistant-chat-header" data-testid="operator-assistant-chat-header">
-              <div>
-                <span class="panel-heading-title">
-                  <RobotOutlined />
-                  AI助手
-                </span>
-                <p>面向坐席的独立助手对话窗口，可追问当前会话、SOP 或知识。</p>
-              </div>
-              <a-tag :color="runtimeState.operatorKnowledgeQaLoading ? 'processing' : 'blue'">
-                {{ runtimeState.operatorKnowledgeQaLoading ? '查询中' : '可追问' }}
-              </a-tag>
-            </header>
-
             <div
               class="assistant-chat-messages"
               data-testid="operator-assistant-chat-messages"
@@ -852,12 +844,9 @@
                 >
                   <p>{{ operatorKnowledgeQa.question }}</p>
                 </section>
-                <section class="assistant-message assistant-message--assistant" data-testid="operator-knowledge-qa-panel">
-                  <div class="panel-heading">
-                    <span class="panel-heading-title">
-                      <BulbOutlined />
-                      助手回复
-                    </span>
+                <section class="assistant-message assistant-message--assistant" data-testid="operator-assistant-answer-message">
+                  <div class="assistant-message-title">
+                    <span>助手回复</span>
                     <a-tag v-if="runtimeState.operatorKnowledgeQaLoading" color="processing">查询中</a-tag>
                     <a-tag v-else-if="operatorKnowledgeQa.empty" color="default">等待追问</a-tag>
                     <a-tag v-else color="success">已回答</a-tag>
@@ -938,7 +927,17 @@
           data-testid="operator-workbench-evidence-pane"
           v-show="activeWorkbenchTab === 'evidence'"
         >
-<section class="workspace-panel compact-panel" data-testid="operator-eval-observability-panel">
+          <section class="workspace-panel compact-panel research-debug-banner">
+            <div class="panel-heading">
+              <span class="panel-heading-title">
+                <DashboardOutlined />
+                研究调试入口
+              </span>
+              <a-tag color="default">证据追溯</a-tag>
+            </div>
+            <p class="panel-copy">用于验证识别依据、规则命中、事件链路和审计记录；主办理闭环请回到聚焦。</p>
+          </section>
+          <section class="workspace-panel compact-panel" data-testid="operator-eval-observability-panel">
           <div class="panel-heading">
             <span class="panel-heading-title">
               <DashboardOutlined />
@@ -1023,8 +1022,8 @@
               <p>{{ failure.reason }}</p>
             </div>
           </div>
-        </section>
-<section class="workspace-panel compact-panel" data-testid="operator-recognition-evidence-panel">
+          </section>
+          <section class="workspace-panel compact-panel" data-testid="operator-recognition-evidence-panel">
           <div class="panel-heading">
             <span class="panel-heading-title">
               <ThunderboltOutlined />
@@ -1058,8 +1057,8 @@
               </div>
             </div>
           </div>
-        </section>
-<section class="workspace-panel compact-panel" data-testid="operator-advisory-evidence-panel">
+          </section>
+          <section class="workspace-panel compact-panel" data-testid="operator-advisory-evidence-panel">
           <div class="panel-heading">
             <span class="panel-heading-title">
               <DashboardOutlined />
@@ -1091,8 +1090,8 @@
               <p v-if="advisory.warnings.length">提示：{{ advisory.warnings.join('；') }}</p>
             </div>
           </div>
-        </section>
-<section class="workspace-panel compact-panel" data-testid="operator-audit-panel">
+          </section>
+          <section class="workspace-panel compact-panel" data-testid="operator-audit-panel">
           <div class="panel-heading">
             <span class="panel-heading-title">
               <HistoryOutlined />
@@ -1120,14 +1119,25 @@
               <p>{{ audit.summary }}</p>
             </div>
           </div>
-        </section>
+          </section>
         </div>
 
         <div
           class="workbench-pane-stack"
           data-testid="operator-workbench-config-pane"
           v-show="activeWorkbenchTab === 'config'"
-        ><section class="workspace-panel compact-panel" data-testid="operator-worker-profile-config-panel">
+        >
+          <section class="workspace-panel compact-panel research-debug-banner">
+            <div class="panel-heading">
+              <span class="panel-heading-title">
+                <RobotOutlined />
+                研究调试入口
+              </span>
+              <a-tag color="default">配置验证</a-tag>
+            </div>
+            <p class="panel-copy">用于验证 Worker Profile、runtime/harness 接入和研究版配置；生产壳中应下沉到后台配置。</p>
+          </section>
+          <section class="workspace-panel compact-panel" data-testid="operator-worker-profile-config-panel">
           <div class="panel-heading">
             <span class="panel-heading-title">
               <RobotOutlined />
@@ -1322,10 +1332,14 @@ import {
   formatCustomerAssistantActionDecisionReceipt,
   formatCustomerAssistantActionReceipt,
   formatCustomerAssistantEvalSurface,
+  formatCustomerAssistantFocusProjection,
   formatCustomerAssistantMetrics,
   formatCustomerAssistantOperatorKnowledgeQa,
   formatCustomerAssistantTurnStatus,
   summarizeCustomerAssistantTasks,
+  type CustomerAssistantFocusSessionStatus,
+  type CustomerAssistantRiskTimingSummary,
+  type CustomerAssistantSopNodeStatus,
   type CustomerAssistantTaskRow,
 } from './customerAssistantViewModel'
 
@@ -1335,7 +1349,7 @@ const operatorKnowledgeQuestion = ref('退票和行李额可以并行处理吗�
 const draftApplied = ref(false)
 const activeConversationLane = ref<'customer' | 'operator'>('customer')
 const activeLeftRailTab = ref<'sessions' | 'stories'>('sessions')
-const activeWorkbenchTab = ref<'focus' | 'assistant' | 'business' | 'evidence' | 'config'>('focus')
+const activeWorkbenchTab = ref<'focus' | 'assistant' | 'evidence' | 'config'>('focus')
 const sendingSource = ref<'customer' | 'operator' | null>(null)
 const actionLoadingId = ref<number | null>(null)
 const taskControlLoadingKey = ref<string | null>(null)
@@ -1374,6 +1388,13 @@ const workspace = computed(() => ({
   ...runtimeState.value,
   taskSummary: summarizeCustomerAssistantTasks(runtimeState.value.tasks, workerProfiles.value),
 }))
+const focusProjection = computed(() =>
+  formatCustomerAssistantFocusProjection({
+    taskSummary: workspace.value.taskSummary,
+    recommendation: workspace.value.recommendation,
+    proposedActions: workspace.value.proposedActions,
+  }),
+)
 const evalSurface = computed(() =>
   formatCustomerAssistantEvalSurface({
     taskSummary: workspace.value.taskSummary,
@@ -1458,6 +1479,51 @@ function sessionInboxStatusColor(statusKind: CustomerAssistantSessionInboxStatus
     completed: 'success',
   }
   return colors[statusKind]
+}
+
+function focusStatusColor(kind: CustomerAssistantFocusSessionStatus['kind']) {
+  const colors: Record<CustomerAssistantFocusSessionStatus['kind'], string> = {
+    idle: 'default',
+    waiting_customer: 'blue',
+    analyzing: 'processing',
+    waiting_operator: 'warning',
+    reply_ready: 'success',
+    processing: 'processing',
+    completed: 'success',
+  }
+  return colors[kind]
+}
+
+function sopNodeStatusColor(status: CustomerAssistantSopNodeStatus) {
+  const colors: Record<CustomerAssistantSopNodeStatus, string> = {
+    pending: 'default',
+    active: 'processing',
+    blocked: 'error',
+    complete: 'success',
+    warning: 'warning',
+  }
+  return colors[status]
+}
+
+function sopNodeStatusLabel(status: CustomerAssistantSopNodeStatus) {
+  const labels: Record<CustomerAssistantSopNodeStatus, string> = {
+    pending: '待处理',
+    active: '当前',
+    blocked: '待补充',
+    complete: '已完成',
+    warning: '风险',
+  }
+  return labels[status]
+}
+
+function riskTimingColor(tone: CustomerAssistantRiskTimingSummary['tone']) {
+  const colors: Record<CustomerAssistantRiskTimingSummary['tone'], string> = {
+    default: 'default',
+    success: 'success',
+    warning: 'warning',
+    critical: 'error',
+  }
+  return colors[tone]
 }
 
 function compactPayload(payload: Record<string, unknown>) {

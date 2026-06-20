@@ -1,144 +1,121 @@
 # Customer Assistant AI Workbench Redesign PRD
 
-Status: Slice 1 implemented
+Status: Spec 207 Slice A RED contract captured; implementation pending
 Date: 2026-06-20
 Owner: Product / Runtime Architecture
 
 ## Goal
 
-Refactor the customer assistant right-side workbench around operator tasks and
-business objects instead of runtime internals. The first shipped slice keeps the
-existing customer-assistant runtime and API gateway, but changes the operator
-surface so the default view highlights only the information needed to serve the
-traveler.
+Refactor the customer assistant right-side workbench around a single default
+operator handling surface. The previous split between `聚焦` and `办理` created
+two places for one closure loop. The new target removes `办理` and moves normal
+business handling into `聚焦`.
 
-Design principles:
+## Principles
 
-- User task first: the operator sees intent, emotion, next handling step,
-  recommended script, and pending business confirmations before runtime detail.
-- Business object first: tasks, proposed actions, customer reply drafts, and
-  audit evidence are grouped by what the operator needs to do.
-- Progressive disclosure: technical worker/profile/event evidence is available,
-  but not in the default view.
+- One default handling surface: the operator closes the current traveler task
+  from `聚焦`.
+- Chat stays chat: `AI助手` is a pure assistant conversation, not a second task
+  dashboard.
+- Research/debugging stays visible but secondary: `证据` and `配置` remain
+  reachable and are clearly marked as `研究调试入口`.
+- Passenger conversation stays in the center lane; internal task controls stay
+  out of the customer lane.
 
-## Implemented Information Architecture
+## Target Information Architecture
 
 The page remains a one-screen three-column shell:
 
 - Left column: multi-customer session and story navigation.
 - Center column: traveler/customer conversation and operator passenger-facing
   reply composer.
-- Right column: AI workbench with five tabs.
+- Right column: AI workbench with four tabs only.
 
 ### Right Tab 1: 聚焦
 
-Default tab. It contains only operator-critical cards:
+Default tab. It contains the complete operator handling loop:
 
-- `意图识别` / `情绪识别`
-- `业务办理指引` / `话术推荐`
-- `SOP办理进度`
-- `业务办理确认` / `高敏确认`
+- status bar;
+- task intent and emotion;
+- business object summary;
+- SOP handling tree;
+- risk and SLA/time-limit status;
+- recommended reply card;
+- sensitive confirmation card;
+- task ledger;
+- recommendation detail;
+- customer reply draft;
+- risk warnings;
+- confirmation controls;
+- execution, delivery, and decision receipts;
+- task controls such as retry/cancel/resume where supported.
 
-The recommendation card exposes icon actions:
-
-- send recommendation to traveler;
-- copy recommendation;
-- send recommendation to the operator editor;
-- regenerate guidance through the assistant path.
-
-The confirmation card uses the same `workspace.proposedActions` state as the
-full business panel and AI assistant tab, so confirm/reject status is shared.
-The default tab intentionally hides worker, model, prompt, raw runtime event,
-and profile configuration terms.
+The `聚焦` pane may share existing durable state such as
+`workspace.proposedActions`, but it must not expose worker/profile/configuration
+internals as default operator work.
 
 ### Right Tab 2: AI助手
 
-This tab is the operator's AI assistant chat window. It is one conversational
-surface rather than a stack of business or runtime panels:
+This tab is a pure chat window:
 
-- header: assistant availability and current context;
-- message stream: user follow-up questions and assistant replies;
-- composer: operator follow-up Q&A or knowledge questions.
+- assistant message stream;
+- operator follow-up composer;
+- assistant answer messages.
 
-This tab is where the operator asks follow-up questions or knowledge questions.
-The center column remains the simulated passenger conversation and does not
-contain assistant tooling. Business progress, confirmation cards, metrics,
-worker controls, and audit/event evidence do not appear in this tab; they stay
-in `聚焦`, `办理`, `证据`, or `配置` according to their operator purpose.
+It must not contain an internal tab header, task ledger, recommendation panel,
+draft panel, risk panel, task controls, configuration panel, metrics panel, or
+evidence dashboard. Business closure remains in `聚焦`.
 
-### Right Tab 3: 办理
+### Right Tab 3: 证据
 
-This tab contains full business handling:
-
-- task ledger;
-- task controls;
-- recommendation detail;
-- proposed action editor and receipts;
-- customer reply draft;
-- risk warnings.
-
-Worker/model/prompt details remain out of this tab unless they are needed as
-business-facing evidence elsewhere.
-
-### Right Tab 4: 证据
-
-This tab contains deeper evidence and audit material:
+This tab is a research/debugging entry point. It contains deeper evidence and
+audit material for troubleshooting and confidence checks:
 
 - evaluation observability;
 - recognition evidence;
-- operator advisory evidence;
-- operator audit log.
+- advisory evidence;
+- audit log.
 
-The tab is intended for troubleshooting and confidence checks after the operator
-has the main business answer.
+It must be labeled with `研究调试入口` so operators understand it is secondary to
+normal handling.
 
-### Right Tab 5: 配置
+### Right Tab 4: 配置
 
-This tab contains worker profile configuration. It is separated because these
-settings are not normal operator work and should eventually move to an admin or
-workspace configuration surface.
+This tab is a research/debugging entry point for worker/profile configuration.
+It remains reachable during the migration but is not part of normal task
+handling. It must be labeled with `研究调试入口`.
 
-## Runtime And Bridge Contract
+## Removed IA
 
-Slice 1 keeps the existing customer-assistant runtime, proposed-action API, and
-AI assistant bridge contracts. The UI relies on the existing durable state:
+The right workbench must no longer include:
 
-- `workspace.proposedActions` drives confirmation cards in `聚焦` and `办理`;
-- `operatorKnowledgeQa` drives the AI assistant Q&A result;
-- runtime and worker events remain available in evidence/event panels;
-- worker profile configuration remains reachable in `配置`.
+- `办理` tab;
+- `business` active tab state;
+- `operator-workbench-business-pane`;
+- separate business-only panels outside `聚焦`.
 
-The backend task-control confirmation path now flushes deferred async worker
-submissions and task listing consumes completed worker results. This preserves
-the expected bridge behavior where a confirmed retry can recover a failed task
-and the UI/API readback sees the completed worker result.
+## Slice A Contract
+
+Slice A writes only SDD/PRD docs and the focused frontend contract test. The
+contract is expected to fail against the current Vue implementation until a
+later implementation slice updates the UI.
+
+RED evidence:
+
+`artifacts/slices/207-customer-assistant-ai-workbench-ia-convergence/slice-a-contract/red.txt`
 
 ## Acceptance Gates
 
-Evidence is saved under:
+Slice A:
 
-`artifacts/slices/customer-assistant-ai-workbench-redesign/`
+- SDD/PRD updated to the four-tab IA.
+- Focused frontend contract requires the new target.
+- Focused frontend unit test fails RED for the expected missing implementation.
 
-Completed gates:
+Later implementation slices:
 
-- RED: focused UI contract and Q&A fallback tests failed before implementation.
-- Frontend unit: customer-assistant focused tests and full frontend unit suite.
-- Frontend rem: `src/remScaleClosure.test.ts`.
-- Frontend build: `npm --prefix frontend run build`.
-- Backend unit: customer-assistant unit tests plus AI assistant tool registry.
-- Backend integration: customer-assistant integration suite.
-- Backend contract: customer-assistant contracts plus AI assistant bridge API.
-- Browser UAT: final mocked business flow and real-stack layout smoke.
-- In-app browser smoke: visible 5228 page shows `聚焦 / AI助手 / 办理 / 证据 / 配置`
-  with the default focus pane visible.
-
-## Remaining Follow-Ups
-
-Later slices can deepen the product without expanding this slice's scope:
-
-- productize a dedicated customer-assistant Copilot context/harness policy;
-- move worker profile configuration out to an admin surface;
-- add richer execution-tree projection for task attempts;
-- add source-cited knowledge retrieval as a stronger backend contract;
-- seed real local demo data for the in-app browser path when the local database
-  is empty.
+- Focused frontend contract green.
+- Frontend rem gate green for any visual-size changes.
+- Full frontend unit suite green.
+- Browser UAT verifies right workbench tabs, default focus contents, and pure
+  assistant chat behavior.
