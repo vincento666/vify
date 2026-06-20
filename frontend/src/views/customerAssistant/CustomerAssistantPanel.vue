@@ -393,6 +393,37 @@
             </div>
           </section>
 
+          <section class="workspace-panel compact-panel focus-card" data-testid="operator-focus-sop-progress-card">
+            <div class="panel-heading">
+              <span class="panel-heading-title">
+                <CheckOutlined />
+                SOP办理进度
+              </span>
+              <a-tag color="blue">{{ workspace.taskSummary.items.length }} 项</a-tag>
+            </div>
+            <div class="sop-progress-list">
+              <div v-if="workspace.taskSummary.items.length === 0" class="empty-compact">
+                暂无SOP办理进度
+              </div>
+              <div
+                v-for="task in workspace.taskSummary.items"
+                :key="`focus-sop-${task.id}`"
+                class="sop-progress-row"
+                data-testid="operator-focus-sop-progress-row"
+              >
+                <div>
+                  <strong>{{ task.displayName }}</strong>
+                  <span v-if="task.missingFields.length">待补充：{{ task.missingFields.join('、') }}</span>
+                  <span v-else>关键信息已齐备</span>
+                </div>
+                <a-tag :color="statusColor(task.statusTone)">{{ task.status }}</a-tag>
+                <a-tag v-if="task.proposedActions.length" color="warning">
+                  {{ task.proposedActions.length }} 个确认
+                </a-tag>
+              </div>
+            </div>
+          </section>
+
           <section class="workspace-panel compact-panel" data-testid="operator-confirmation-cards">
             <div class="panel-heading">
               <span class="panel-heading-title">
@@ -782,272 +813,124 @@
         </div>
 
         <div
-          class="workbench-pane-stack"
+          class="workbench-pane-stack assistant-workbench-pane"
           data-testid="operator-workbench-assistant-pane"
           v-show="activeWorkbenchTab === 'assistant'"
-        ><section class="workspace-panel compact-panel" data-testid="operator-progress-checklist">
-          <div class="panel-heading">
-            <span class="panel-heading-title">
-              <ThunderboltOutlined />
-              运行进度
-            </span>
-          </div>
-          <div class="progress-list">
-            <div
-              v-for="stage in workspace.progressStages"
-              :key="stage.key"
-              class="progress-row"
-              :class="stage.status"
-            >
-              <CheckOutlined v-if="stage.status === 'complete'" />
-              <ThunderboltOutlined v-else-if="stage.status === 'active'" />
-              <HistoryOutlined v-else />
-              <span>{{ stage.label }}</span>
-            </div>
-          </div>
-          <div class="sub-agent-control" data-testid="operator-sub-agent-control">
-            <div class="sub-agent-meta">
-              <span>后台子智能体</span>
-              <a-tag :color="subAgentStatusColor">{{ subAgentStatusLabel }}</a-tag>
-            </div>
-            <small v-if="runtimeState.subAgentRun">Run {{ runtimeState.subAgentRun.subAgentRunId }}</small>
-            <small v-else>并行核对当前会话任务和坐席建议</small>
-            <a-button
-              size="small"
-              :loading="subAgentLoading"
-              :disabled="!workspace.sessionId"
-              @click="spawnSubAgent"
-            >
-              <RobotOutlined />
-              启动子智能体
-            </a-button>
-          </div>
-        </section>
-<section class="workspace-panel compact-panel" data-testid="operator-metrics-panel">
-          <div class="panel-heading">
-            <span class="panel-heading-title">
-              <DashboardOutlined />
-              观测指标
-            </span>
-          </div>
-          <div v-if="metricsSummary.empty" class="empty-compact">暂无会话指标</div>
-          <div class="metrics-grid" aria-label="人工采纳率">
-            <div
-              v-for="tile in metricsSummary.tiles"
-              :key="tile.key"
-              class="metric-tile"
-              :class="tile.tone"
-            >
-              <span>{{ tile.label }}</span>
-              <strong>{{ tile.value }}</strong>
-            </div>
-          </div>
-          <div v-if="metricsSummary.failures.length" class="failure-list">
-            <div v-for="failure in metricsSummary.failures" :key="`${failure.taskId}:${failure.reason}`">
-              <a-tag color="error">{{ failure.taskType }}</a-tag>
-              <span>{{ failure.source }}</span>
-              <p>{{ failure.reason }}</p>
-            </div>
-          </div>
-        </section>
+        >
+          <div data-testid="operator-assistant-chat-window" class="assistant-chat-window">
+            <header class="assistant-chat-header" data-testid="operator-assistant-chat-header">
+              <div>
+                <span class="panel-heading-title">
+                  <RobotOutlined />
+                  AI助手
+                </span>
+                <p>面向坐席的独立助手对话窗口，可追问当前会话、SOP 或知识。</p>
+              </div>
+              <a-tag :color="runtimeState.operatorKnowledgeQaLoading ? 'processing' : 'blue'">
+                {{ runtimeState.operatorKnowledgeQaLoading ? '查询中' : '可追问' }}
+              </a-tag>
+            </header>
 
-          <section class="workspace-panel compact-panel" data-testid="operator-worker-async-refs-panel">
-            <div class="panel-heading">
-              <span class="panel-heading-title">
-                <RobotOutlined />
-                Worker 运行
-              </span>
-              <span class="panel-count">{{ workerAsyncTaskRows.length }}</span>
-            </div>
-            <div class="task-list">
-              <div
-                v-if="workerAsyncTaskRows.length === 0"
-                class="empty-compact"
-                data-testid="operator-worker-async-empty-state"
-              >
-                暂无 Worker 异步结果
-              </div>
-              <div
-                v-for="task in workerAsyncTaskRows"
-                :key="'worker-' + task.id"
-                class="worker-async-refs"
-                data-testid="operator-worker-async-refs"
-              >
-                <a-tag color="processing">Worker</a-tag>
-                <span v-if="task.workerAsyncRefs?.workerRunId">Run {{ task.workerAsyncRefs.workerRunId }}</span>
-                <span v-if="task.workerAsyncRefs?.workerResultRef">结果 {{ task.workerAsyncRefs.workerResultRef }}</span>
-                <a-tooltip title="刷新 Worker 结果">
-                  <a-button
-                    size="small"
-                    :loading="workerRefreshLoadingTaskId === task.id"
-                    @click="refreshWorkerResults(task.id)"
-                  >
-                    <HistoryOutlined />
-                    刷新结果
-                  </a-button>
-                </a-tooltip>
-                <a-tooltip v-if="task.workerAsyncRefs?.workerRunId" title="请求取消 Worker">
-                  <a-button
-                    size="small"
-                    danger
-                    :loading="workerCancelLoadingRunId === task.workerAsyncRefs.workerRunId"
-                    @click="cancelWorkerRun(task.workerAsyncRefs.workerRunId)"
-                  >
-                    <CloseOutlined />
-                    请求取消
-                  </a-button>
-                </a-tooltip>
-              </div>
-            </div>
-          </section>
-<section class="workspace-panel compact-panel" data-testid="operator-knowledge-qa-panel">
-          <div class="panel-heading">
-            <span class="panel-heading-title">
-              <BulbOutlined />
-              助手追问
-            </span>
-            <a-tag v-if="runtimeState.operatorKnowledgeQaLoading" color="processing">查询中</a-tag>
-            <a-tag v-else-if="operatorKnowledgeQa.empty" color="default">只读</a-tag>
-            <a-tag v-else color="success">已回答</a-tag>
-          </div>
-          <div class="knowledge-qa-composer">
-            <a-textarea
-              v-model:value="operatorKnowledgeQuestion"
-              data-testid="operator-knowledge-qa-question"
-              aria-label="坐席助手追问"
-              :auto-size="{ minRows: 2, maxRows: 4 }"
-              placeholder="向客服助手追问当前会话、SOP 或知识，例如：退票和行李额可以并行处理吗？"
-            />
-            <div class="knowledge-qa-actions">
-              <a-button
-                type="primary"
-                :loading="runtimeState.operatorKnowledgeQaLoading"
-                :disabled="!workspace.sessionId || !operatorKnowledgeQuestion.trim()"
-                @click="askOperatorKnowledgeQuestion"
-              >
-                <BulbOutlined />
-                追问助手
-              </a-button>
-            </div>
-          </div>
-          <p v-if="!workspace.sessionId" class="empty-compact">请先打开演示故事或发起一轮会话</p>
-          <a-alert
-            v-if="runtimeState.operatorKnowledgeQaError"
-            type="warning"
-            show-icon
-            :message="runtimeState.operatorKnowledgeQaError"
-          />
-          <div v-if="!operatorKnowledgeQa.empty" class="knowledge-qa-result">
-            <p class="panel-copy" data-testid="operator-knowledge-qa-answer">{{ operatorKnowledgeQa.answer }}</p>
-            <div v-if="operatorKnowledgeQa.sourceRows.length" class="knowledge-qa-list" aria-label="知识来源">
-              <div
-                v-for="source in operatorKnowledgeQa.sourceRows"
-                :key="source.key"
-                class="knowledge-qa-row"
-                data-testid="operator-knowledge-qa-source"
-              >
-                <strong>{{ source.title }}</strong>
-                <span>{{ source.meta }}<template v-if="source.score"> · score {{ source.score }}</template></span>
-                <p v-if="source.excerpt">{{ source.excerpt }}</p>
-              </div>
-            </div>
-            <div v-if="operatorKnowledgeQa.evidenceRows.length" class="knowledge-qa-list" aria-label="任务证据">
-              <div
-                v-for="evidence in operatorKnowledgeQa.evidenceRows"
-                :key="evidence.key"
-                class="knowledge-qa-row"
-                data-testid="operator-knowledge-qa-evidence"
-              >
-                <strong>{{ evidence.label }}</strong>
-                <span>{{ evidence.detail }}</span>
-              </div>
-            </div>
-            <div v-if="operatorKnowledgeQa.contextRows.length" class="knowledge-qa-context" aria-label="上下文摘要">
-              <span v-for="row in operatorKnowledgeQa.contextRows" :key="row.key">
-                {{ row.label }}：{{ row.value }}
-              </span>
-            </div>
-            <a-alert
-              v-for="warning in operatorKnowledgeQa.warnings"
-              :key="warning"
-              type="warning"
-              show-icon
-              :message="warning"
-            />
-          </div>
-        </section>
-<section class="workspace-panel compact-panel" data-testid="operator-event-timeline">
-          <div class="panel-heading">
-            <span class="panel-heading-title">
-              <HistoryOutlined />
-              助手事件回显
-            </span>
-            <span class="panel-count">{{ workspace.eventTimeline.length }}</span>
-          </div>
-          <a-collapse v-model:active-key="expandedEventKeys" ghost>
-            <a-collapse-panel v-if="workspace.eventTimeline.length === 0" key="empty-events" header="暂无运行事件" disabled />
-            <a-collapse-panel
-              v-for="event in workspace.eventTimeline"
-              :key="event.key"
-              :header="`${event.sequenceLabel} ${event.title}`"
+            <div
+              class="assistant-chat-messages"
+              data-testid="operator-assistant-chat-messages"
+              data-testid-secondary="operator-assistant-event-stream"
             >
-              <div class="event-detail">
-                <a-tag>{{ event.visibilityLabel }}</a-tag>
-                <a-tag>{{ event.sourceLabel }}</a-tag>
-                <code>{{ event.payloadPreview }}</code>
-              </div>
-            </a-collapse-panel>
-          </a-collapse>
-        </section>
-          <section class="workspace-panel compact-panel" data-testid="operator-confirmation-cards">
-            <div class="panel-heading">
-              <span class="panel-heading-title">
-                <SafetyCertificateOutlined />
-                助手待确认
-              </span>
-              <a-tag color="warning">与首页同步</a-tag>
-            </div>
-            <div class="action-list">
               <div
-                v-if="workspace.proposedActions.length === 0"
-                class="empty-compact"
-                data-testid="operator-action-empty-state"
+                v-if="operatorKnowledgeQa.empty && !runtimeState.operatorKnowledgeQaError"
+                class="assistant-empty"
+                data-testid="operator-assistant-event-stream"
               >
-                暂无待确认动作
+                <HistoryOutlined />
+                <span>{{ workspace.sessionId ? '空闲' : '请先打开演示故事或发起一轮会话' }}</span>
               </div>
-              <div v-for="action in workspace.proposedActions" :key="`assistant-${action.id}`" class="action-row">
-                <div>
-                  <strong>{{ action.title }}</strong>
-                  <span>{{ action.status }} · #{{ action.id }}</span>
-                </div>
-                <a-tag v-if="isProposedTaskCommand(action)" color="blue">任务变更</a-tag>
-                <a-tag :color="action.status === 'PENDING' ? 'warning' : 'default'">{{ action.status }}</a-tag>
-                <div class="panel-actions">
-                  <a-button
-                    size="small"
-                    aria-label="确认助手待确认动作"
-                    :disabled="action.status !== 'PENDING'"
-                    :loading="actionLoadingId === action.id"
-                    @click="confirmAction(action.id)"
-                  >
-                    <CheckOutlined />
-                    {{ actionConfirmLabel(action) }}
-                  </a-button>
-                  <a-button
-                    size="small"
-                    aria-label="拒绝助手待确认动作"
-                    :disabled="action.status !== 'PENDING'"
-                    :loading="actionLoadingId === action.id"
-                    danger
-                    @click="rejectAction(action.id)"
-                  >
-                    <CloseOutlined />
-                    拒绝
-                  </a-button>
-                </div>
-              </div>
+              <template v-else>
+                <section
+                  v-if="operatorKnowledgeQa.question"
+                  class="assistant-message assistant-message--user"
+                  data-testid="operator-assistant-user-message"
+                >
+                  <p>{{ operatorKnowledgeQa.question }}</p>
+                </section>
+                <section class="assistant-message assistant-message--assistant" data-testid="operator-knowledge-qa-panel">
+                  <div class="panel-heading">
+                    <span class="panel-heading-title">
+                      <BulbOutlined />
+                      助手回复
+                    </span>
+                    <a-tag v-if="runtimeState.operatorKnowledgeQaLoading" color="processing">查询中</a-tag>
+                    <a-tag v-else-if="operatorKnowledgeQa.empty" color="default">等待追问</a-tag>
+                    <a-tag v-else color="success">已回答</a-tag>
+                  </div>
+                  <a-alert
+                    v-if="runtimeState.operatorKnowledgeQaError"
+                    type="warning"
+                    show-icon
+                    :message="runtimeState.operatorKnowledgeQaError"
+                  />
+                  <div v-if="!operatorKnowledgeQa.empty" class="knowledge-qa-result">
+                    <p class="panel-copy" data-testid="operator-knowledge-qa-answer">{{ operatorKnowledgeQa.answer }}</p>
+                    <div v-if="operatorKnowledgeQa.sourceRows.length" class="knowledge-qa-list" aria-label="知识来源">
+                      <div
+                        v-for="source in operatorKnowledgeQa.sourceRows"
+                        :key="source.key"
+                        class="knowledge-qa-row"
+                        data-testid="operator-knowledge-qa-source"
+                      >
+                        <strong>{{ source.title }}</strong>
+                        <span>{{ source.meta }}<template v-if="source.score"> · score {{ source.score }}</template></span>
+                        <p v-if="source.excerpt">{{ source.excerpt }}</p>
+                      </div>
+                    </div>
+                    <div v-if="operatorKnowledgeQa.evidenceRows.length" class="knowledge-qa-list" aria-label="任务证据">
+                      <div
+                        v-for="evidence in operatorKnowledgeQa.evidenceRows"
+                        :key="evidence.key"
+                        class="knowledge-qa-row"
+                        data-testid="operator-knowledge-qa-evidence"
+                      >
+                        <strong>{{ evidence.label }}</strong>
+                        <span>{{ evidence.detail }}</span>
+                      </div>
+                    </div>
+                    <div v-if="operatorKnowledgeQa.contextRows.length" class="knowledge-qa-context" aria-label="上下文摘要">
+                      <span v-for="row in operatorKnowledgeQa.contextRows" :key="row.key">
+                        {{ row.label }}：{{ row.value }}
+                      </span>
+                    </div>
+                    <a-alert
+                      v-for="warning in operatorKnowledgeQa.warnings"
+                      :key="warning"
+                      type="warning"
+                      show-icon
+                      :message="warning"
+                    />
+                  </div>
+                </section>
+              </template>
             </div>
-          </section>
+
+            <form class="assistant-chat-composer" data-testid="operator-assistant-chat-composer" @submit.prevent="askOperatorKnowledgeQuestion">
+              <a-textarea
+                v-model:value="operatorKnowledgeQuestion"
+                data-testid="operator-knowledge-qa-question"
+                aria-label="坐席助手追问"
+                :auto-size="{ minRows: 2, maxRows: 4 }"
+                placeholder="向客服助手追问当前会话、SOP 或知识，例如：退票和行李额可以并行处理吗？"
+              />
+              <div class="knowledge-qa-actions">
+                <a-button
+                  html-type="submit"
+                  type="primary"
+                  :loading="runtimeState.operatorKnowledgeQaLoading"
+                  :disabled="!workspace.sessionId || !operatorKnowledgeQuestion.trim()"
+                >
+                  <BulbOutlined />
+                  追问助手
+                </a-button>
+              </div>
+            </form>
+          </div>
         </div>
 
         <div
@@ -1416,7 +1299,6 @@ import {
 import {
   askCustomerAssistantRuntimeOperatorKnowledgeQuestion,
   buildCustomerAssistantSessionInboxRows,
-  cancelCustomerAssistantRuntimeWorkerRun,
   confirmCustomerAssistantRuntimeAction,
   createCustomerAssistantRuntimeState,
   deliverCustomerAssistantRuntimeAction,
@@ -1424,9 +1306,7 @@ import {
   loadCustomerAssistantDemoStory,
   proposeCustomerAssistantRuntimeTaskControl,
   rejectCustomerAssistantRuntimeAction,
-  refreshCustomerAssistantRuntimeWorkerResults,
   sendCustomerAssistantRuntimeTurn,
-  spawnCustomerAssistantRuntimeSubAgent,
   updateCustomerAssistantRuntimeAction,
   type CustomerAssistantSessionInboxRow,
   type CustomerAssistantSessionInboxStatusKind,
@@ -1459,7 +1339,6 @@ const activeWorkbenchTab = ref<'focus' | 'assistant' | 'business' | 'evidence' |
 const sendingSource = ref<'customer' | 'operator' | null>(null)
 const actionLoadingId = ref<number | null>(null)
 const taskControlLoadingKey = ref<string | null>(null)
-const expandedEventKeys = ref<string[]>([])
 const runtimeState = ref(createCustomerAssistantRuntimeState())
 const demoStories = ref<CustomerAssistantDemoStory[]>([])
 const demoStoryMetrics = ref<CustomerAssistantDemoStoryMetrics | null>(null)
@@ -1478,9 +1357,6 @@ const editingWorkerProfileForm = ref<CustomerAssistantWorkerProfileUpdatePayload
 const editingWorkerProfileToolRefs = ref('')
 const editingWorkerProfileError = ref<string | null>(null)
 const workerProfileSavingId = ref<string | null>(null)
-const workerRefreshLoadingTaskId = ref<number | null>(null)
-const workerCancelLoadingRunId = ref<string | null>(null)
-const subAgentLoading = ref(false)
 const editingActionId = ref<number | null>(null)
 const editingActionTitle = ref('')
 const editingActionPayload = ref('')
@@ -1498,8 +1374,6 @@ const workspace = computed(() => ({
   ...runtimeState.value,
   taskSummary: summarizeCustomerAssistantTasks(runtimeState.value.tasks, workerProfiles.value),
 }))
-const workerAsyncTaskRows = computed(() => workspace.value.taskSummary.items.filter((task) => task.workerAsyncRefs?.supported))
-const metricsSummary = computed(() => formatCustomerAssistantMetrics(workspace.value.metrics))
 const evalSurface = computed(() =>
   formatCustomerAssistantEvalSurface({
     taskSummary: workspace.value.taskSummary,
@@ -1552,23 +1426,6 @@ const turnStatusColor = computed(() => {
   if (turnStatus.value.kind === 'replayed') return 'blue'
   return 'default'
 })
-const subAgentStatusLabel = computed(() => {
-  if (subAgentLoading.value || runtimeState.value.subAgentLoading) return '运行中'
-  if (runtimeState.value.subAgentError) return '失败'
-  const status = runtimeState.value.subAgentRun?.status
-  if (status === 'completed') return '已完成'
-  if (status === 'failed') return '失败'
-  if (status === 'running') return '运行中'
-  return '未启动'
-})
-const subAgentStatusColor = computed(() => {
-  if (subAgentLoading.value || runtimeState.value.subAgentLoading) return 'processing'
-  if (runtimeState.value.subAgentError || runtimeState.value.subAgentRun?.status === 'failed') return 'error'
-  if (runtimeState.value.subAgentRun?.status === 'completed') return 'success'
-  if (runtimeState.value.subAgentRun?.status === 'running') return 'processing'
-  return 'default'
-})
-
 onMounted(() => {
   void loadDemoStories()
   void loadDemoStoryMetrics()
@@ -1882,64 +1739,6 @@ async function proposeTaskControl(taskId: number, controlType: CustomerAssistant
     catchCustomerAssistantError(error, '生成任务控制失败')
   } finally {
     taskControlLoadingKey.value = null
-  }
-}
-
-async function refreshWorkerResults(taskId: number) {
-  workerRefreshLoadingTaskId.value = taskId
-  try {
-    runtimeState.value = await refreshCustomerAssistantRuntimeWorkerResults(runtimeState.value)
-    void loadDemoStoryMetrics()
-    message.success('已刷新 Worker 结果')
-  } catch (error) {
-    catchCustomerAssistantError(error, '刷新 Worker 结果失败')
-  } finally {
-    workerRefreshLoadingTaskId.value = null
-  }
-}
-
-async function cancelWorkerRun(workerRunId: string) {
-  workerCancelLoadingRunId.value = workerRunId
-  try {
-    runtimeState.value = await cancelCustomerAssistantRuntimeWorkerRun(runtimeState.value, workerRunId)
-    void loadDemoStoryMetrics()
-    message.warning('Worker 取消请求已记录，当前运行时不支持协作取消')
-  } catch (error) {
-    catchCustomerAssistantError(error, '请求取消 Worker 失败')
-  } finally {
-    workerCancelLoadingRunId.value = null
-  }
-}
-
-async function spawnSubAgent() {
-  if (!runtimeState.value.session?.id) {
-    message.warning('请先打开演示故事或发起会话')
-    return
-  }
-  subAgentLoading.value = true
-  runtimeState.value = {
-    ...runtimeState.value,
-    subAgentLoading: true,
-    subAgentError: null,
-  }
-  try {
-    runtimeState.value = await spawnCustomerAssistantRuntimeSubAgent(runtimeState.value)
-    void loadDemoStoryMetrics()
-    message.success('后台子智能体已完成核对')
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : '后台子智能体启动失败'
-    runtimeState.value = {
-      ...runtimeState.value,
-      subAgentLoading: false,
-      subAgentError: errorMessage,
-    }
-    catchCustomerAssistantError(error, errorMessage)
-  } finally {
-    subAgentLoading.value = false
-    runtimeState.value = {
-      ...runtimeState.value,
-      subAgentLoading: false,
-    }
   }
 }
 
@@ -2389,6 +2188,12 @@ function stringValue(value: unknown, fallback: string) {
   gap: 1rem;
 }
 
+.customer-assistant-ai-workbench-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
 .conversation-stack {
   flex: 1 1 auto;
   min-height: 0;
@@ -2446,6 +2251,113 @@ function stringValue(value: unknown, fallback: string) {
 .workbench-pane-stack {
   display: grid;
   gap: 0.75rem;
+}
+
+.assistant-workbench-pane {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.assistant-chat-window {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border: 0.0625rem solid #d9e2f0;
+  border-radius: 0.5rem;
+  background: #ffffff;
+}
+
+.assistant-chat-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.875rem;
+  border-bottom: 0.0625rem solid #edf0f6;
+  background: #f8fbff;
+}
+
+.assistant-chat-header p {
+  margin: 0.25rem 0 0;
+  color: #667085;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.assistant-chat-messages {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 0.75rem;
+  min-height: 0;
+  padding: 0.875rem;
+  overflow-y: auto;
+  background: #f5f7fb;
+}
+
+.assistant-message {
+  display: grid;
+  gap: 0.65rem;
+  align-self: start;
+  padding: 0.75rem;
+  border: 0.0625rem solid #e1e7f0;
+  border-radius: 0.5rem;
+  background: #ffffff;
+}
+
+.assistant-message--assistant {
+  border-color: #d8e5f7;
+}
+
+.assistant-message--user {
+  justify-self: end;
+  max-width: 90%;
+  border-color: #b7d2ff;
+  background: #eef5ff;
+}
+
+.assistant-message--user p {
+  margin: 0;
+  color: #184a8c;
+  line-height: 1.55;
+}
+
+.assistant-message--evidence {
+  background: #fdfefe;
+}
+
+.assistant-message--approval {
+  border-color: #f4d79f;
+}
+
+.assistant-message > .panel-heading,
+.assistant-evidence-block > .panel-heading {
+  min-height: auto;
+  padding: 0 0 0.65rem;
+}
+
+.assistant-evidence-block {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.assistant-chat-composer {
+  display: grid;
+  gap: 0.625rem;
+  padding: 0.875rem;
+  border-top: 0.0625rem solid #edf0f6;
+  background: #ffffff;
+}
+
+.assistant-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 8rem;
+  color: #7a8798;
+  font-size: 0.875rem;
 }
 
 .workspace-panel {
@@ -2576,6 +2488,7 @@ function stringValue(value: unknown, fallback: string) {
 .task-list,
 .action-list,
 .progress-list,
+.sop-progress-list,
 .worker-profile-catalog,
 .audit-list,
 .recognition-evidence-list,
@@ -2583,6 +2496,29 @@ function stringValue(value: unknown, fallback: string) {
 .knowledge-qa-list {
   display: grid;
   gap: 0.625rem;
+}
+
+.sop-progress-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.65rem;
+  border: 0.0625rem solid #e7edf6;
+  border-radius: 0.45rem;
+  background: #fbfcfe;
+}
+
+.sop-progress-row > div:first-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.sop-progress-row span {
+  color: #667085;
+  font-size: 0.75rem;
 }
 
 .progress-row {

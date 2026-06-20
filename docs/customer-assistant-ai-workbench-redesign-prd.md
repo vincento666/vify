@@ -36,6 +36,7 @@ Default tab. It contains only operator-critical cards:
 
 - `意图识别` / `情绪识别`
 - `业务办理指引` / `话术推荐`
+- `SOP办理进度`
 - `业务办理确认` / `高敏确认`
 
 The recommendation card exposes icon actions:
@@ -52,17 +53,18 @@ and profile configuration terms.
 
 ### Right Tab 2: AI助手
 
-This tab is the operator's AI workbench window. It contains:
+This tab is the operator's AI assistant chat window. It is one conversational
+surface rather than a stack of business or runtime panels:
 
-- assistant progress;
-- metrics;
-- worker async status references;
-- operator follow-up Q&A;
-- assistant event replay;
-- synchronized confirmation cards.
+- header: assistant availability and current context;
+- message stream: user follow-up questions and assistant replies;
+- composer: operator follow-up Q&A or knowledge questions.
 
 This tab is where the operator asks follow-up questions or knowledge questions.
-It is not the center-column passenger conversation.
+The center column remains the simulated passenger conversation and does not
+contain assistant tooling. Business progress, confirmation cards, metrics,
+worker controls, and audit/event evidence do not appear in this tab; they stay
+in `聚焦`, `办理`, `证据`, or `配置` according to their operator purpose.
 
 ### Right Tab 3: 办理
 
@@ -101,8 +103,7 @@ workspace configuration surface.
 Slice 1 keeps the existing customer-assistant runtime, proposed-action API, and
 AI assistant bridge contracts. The UI relies on the existing durable state:
 
-- `workspace.proposedActions` drives confirmation cards in `聚焦`, `AI助手`, and
-  `办理`;
+- `workspace.proposedActions` drives confirmation cards in `聚焦` and `办理`;
 - `operatorKnowledgeQa` drives the AI assistant Q&A result;
 - runtime and worker events remain available in evidence/event panels;
 - worker profile configuration remains reachable in `配置`.

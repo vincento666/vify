@@ -50,8 +50,14 @@ describe('CustomerAssistantPanel UI contract', () => {
       'customer-conversation-lane',
       'operator-conversation-lane',
       'operator-workbench-focus-pane',
+      'operator-focus-sop-progress-card',
       'operator-workbench-business-pane',
       'operator-workbench-assistant-pane',
+      'operator-assistant-chat-window',
+      'operator-assistant-chat-header',
+      'operator-assistant-chat-messages',
+      'operator-assistant-event-stream',
+      'operator-assistant-chat-composer',
       'operator-workbench-evidence-pane',
       'operator-workbench-config-pane',
       'operator-task-ledger',
@@ -59,12 +65,7 @@ describe('CustomerAssistantPanel UI contract', () => {
       'operator-proposed-actions-panel',
       'operator-draft-panel',
       'operator-warnings-panel',
-      'operator-progress-checklist',
-      'operator-sub-agent-control',
-      'operator-metrics-panel',
-      'operator-worker-async-refs-panel',
       'operator-knowledge-qa-panel',
-      'operator-event-timeline',
       'operator-eval-observability-panel',
       'operator-recognition-evidence-panel',
       'operator-advisory-evidence-panel',
@@ -114,11 +115,14 @@ describe('CustomerAssistantPanel UI contract', () => {
 
     expect(focusPane).toContain('data-testid="operator-focus-intent-card"')
     expect(focusPane).toContain('data-testid="operator-focus-script-card"')
+    expect(focusPane).toContain('data-testid="operator-focus-sop-progress-card"')
     expect(focusPane).toContain('data-testid="operator-confirmation-cards"')
     expect(focusPane).toContain('意图识别')
     expect(focusPane).toContain('情绪识别')
     expect(focusPane).toContain('业务办理指引')
     expect(focusPane).toContain('话术推荐')
+    expect(focusPane).toContain('SOP办理进度')
+    expect(focusPane).toContain('workspace.taskSummary.items')
     expect(focusPane).toContain('业务办理确认')
     expect(focusPane).not.toContain('data-testid="operator-task-ledger"')
     expect(focusPane).not.toContain('data-testid="operator-progress-checklist"')
@@ -132,19 +136,31 @@ describe('CustomerAssistantPanel UI contract', () => {
     expect(focusPane).not.toContain('Worker 配置')
   })
 
-  it('keeps the assistant tab for follow-up, progress, and synchronized confirmation cards', () => {
+  it('renders the assistant tab as one conversational AI workbench window', () => {
     const assistantPane = betweenTestIds(content, 'operator-workbench-assistant-pane', 'operator-workbench-evidence-pane')
+    const chatWindow = betweenTestIds(content, 'operator-assistant-chat-window', 'operator-workbench-evidence-pane')
 
-    expect(assistantPane).toContain('data-testid="operator-progress-checklist"')
-    expect(assistantPane).toContain('data-testid="operator-sub-agent-control"')
-    expect(assistantPane).toContain('data-testid="operator-metrics-panel"')
-    expect(assistantPane).toContain('data-testid="operator-worker-async-refs-panel"')
-    expect(assistantPane).toContain('data-testid="operator-knowledge-qa-panel"')
-    expect(assistantPane).toContain('data-testid="operator-event-timeline"')
-    expect(assistantPane).toContain('data-testid="operator-confirmation-cards"')
+    expect(assistantPane).toMatch(
+      /data-testid="operator-workbench-assistant-pane"[\s\S]*data-testid="operator-assistant-chat-window"[\s\S]*data-testid="operator-assistant-chat-composer"/,
+    )
+    expect(chatWindow).toContain('class="assistant-chat-window"')
+    expect(chatWindow).toContain('data-testid="operator-assistant-chat-header"')
+    expect(chatWindow).toContain('data-testid="operator-assistant-chat-messages"')
+    expect(chatWindow).toContain('data-testid="operator-assistant-event-stream"')
+    expect(chatWindow).toContain('data-testid="operator-assistant-chat-composer"')
+    expect(chatWindow).toContain('data-testid="operator-knowledge-qa-panel"')
+    expect(chatWindow).toContain('assistant-message assistant-message--assistant')
     expect(assistantPane).toContain('askOperatorKnowledgeQuestion')
-    expect(assistantPane).toContain('workerRefreshLoadingTaskId')
-    expect(assistantPane).toContain('cancelWorkerRun')
+    expect(assistantPane).not.toContain('data-testid="operator-progress-checklist"')
+    expect(assistantPane).not.toContain('data-testid="operator-sub-agent-control"')
+    expect(assistantPane).not.toContain('data-testid="operator-metrics-panel"')
+    expect(assistantPane).not.toContain('data-testid="operator-worker-async-refs-panel"')
+    expect(assistantPane).not.toContain('data-testid="operator-event-timeline"')
+    expect(assistantPane).not.toContain('data-testid="operator-confirmation-cards"')
+    expect(assistantPane).not.toContain('workspace.proposedActions')
+    expect(assistantPane).not.toContain('workspace.progressStages')
+    expect(assistantPane).not.toContain('workerRefreshLoadingTaskId')
+    expect(assistantPane).not.toContain('cancelWorkerRun')
     expect(assistantPane).not.toContain('data-testid="operator-eval-observability-panel"')
     expect(assistantPane).not.toContain('data-testid="operator-recognition-evidence-panel"')
     expect(assistantPane).not.toContain('data-testid="operator-task-ledger"')
@@ -166,7 +182,7 @@ describe('CustomerAssistantPanel UI contract', () => {
     expect(businessPane).not.toContain('modelPolicyRef')
     expect(businessPane).not.toContain('promptRef')
     expect(focusPane).toContain('workspace.proposedActions')
-    expect(assistantPane).toContain('workspace.proposedActions')
+    expect(assistantPane).not.toContain('workspace.proposedActions')
     expect(businessPane).toContain('workspace.proposedActions')
   })
 
@@ -260,13 +276,15 @@ describe('CustomerAssistantPanel UI contract', () => {
     expect(section(content, 'customer-conversation-lane')).not.toContain('外发草稿')
   })
 
-  it('renders observability metrics in the assistant panel without raw payload details', () => {
-    const metricsPanel = section(content, 'operator-metrics-panel')
+  it('keeps observability metrics out of the assistant chat tab', () => {
+    const assistantPane = betweenTestIds(content, 'operator-workbench-assistant-pane', 'operator-workbench-evidence-pane')
+    const evidencePane = betweenTestIds(content, 'operator-workbench-evidence-pane', 'operator-workbench-config-pane')
 
-    expect(metricsPanel).toContain('metricsSummary.tiles')
-    expect(metricsPanel).toContain('metricsSummary.failures')
-    expect(metricsPanel).toContain('人工采纳率')
-    expect(metricsPanel).not.toContain('compactPayload')
+    expect(assistantPane).not.toContain('metricsSummary.tiles')
+    expect(assistantPane).not.toContain('metricsSummary.failures')
+    expect(assistantPane).not.toContain('人工采纳率')
+    expect(evidencePane).toContain('evalSurface.tiles')
+    expect(evidencePane).not.toContain('compactPayload')
   })
 
   it('renders task controls in the business ledger and keeps worker refs out of the default pane', () => {
@@ -332,18 +350,18 @@ describe('CustomerAssistantPanel UI contract', () => {
     expect(section(content, 'customer-conversation-lane')).not.toContain('operator-worker-profile-config-panel')
   })
 
-  it('renders worker async refs and assistant evidence in the assistant panel', () => {
+  it('keeps worker async refs and evidence outside the assistant chat tab', () => {
     const assistantPane = betweenTestIds(content, 'operator-workbench-assistant-pane', 'operator-workbench-evidence-pane')
     const evidencePane = betweenTestIds(content, 'operator-workbench-evidence-pane', 'operator-workbench-config-pane')
 
-    expect(assistantPane).toContain('data-testid="operator-worker-async-refs"')
-    expect(assistantPane).toContain('workerRefreshLoadingTaskId')
-    expect(assistantPane).toContain('refreshWorkerResults')
-    expect(assistantPane).toContain('cancelWorkerRun')
+    expect(assistantPane).not.toContain('data-testid="operator-worker-async-refs"')
+    expect(assistantPane).not.toContain('workerRefreshLoadingTaskId')
+    expect(assistantPane).not.toContain('refreshWorkerResults')
+    expect(assistantPane).not.toContain('cancelWorkerRun')
     expect(assistantPane).toContain('askOperatorKnowledgeQuestion')
     expect(assistantPane).toContain('operatorKnowledgeQa.sourceRows')
     expect(assistantPane).toContain('operatorKnowledgeQa.evidenceRows')
-    expect(assistantPane).toContain('data-testid="operator-confirmation-cards"')
+    expect(assistantPane).not.toContain('data-testid="operator-confirmation-cards"')
     expect(evidencePane).toContain('evalSurface.workerExecution')
     expect(evidencePane).toContain('workspace.operatorAdvisoryEvidence')
     expect(evidencePane).toContain('workspace.operatorAuditRows')

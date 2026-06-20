@@ -412,18 +412,29 @@ async function main() {
       state: 'visible',
       timeout: 10000,
     })
+    await focusPane.getByTestId('operator-focus-sop-progress-card').getByText('SOP办理进度').waitFor({
+      state: 'visible',
+      timeout: 10000,
+    })
     const defaultFocusText = await focusPane.innerText()
     assert(defaultFocusText.includes('业务办理确认'), 'Expected default focus tab to show business confirmation')
+    assert(defaultFocusText.includes('SOP办理进度'), 'Expected default focus tab to show business SOP progress')
     assert(!defaultFocusText.includes('Worker 配置'), 'Default focus tab should hide worker configuration')
     assert(!defaultFocusText.includes('modelPolicyRef'), 'Default focus tab should hide model policy refs')
 
     await clickWorkbenchTab('AI助手')
     const assistantPane = page.getByTestId('operator-workbench-assistant-pane')
-    const qaPanel = assistantPane.getByTestId('operator-knowledge-qa-panel')
-    await qaPanel.waitFor({ state: 'visible', timeout: 10000 })
+    const assistantChatWindow = assistantPane.getByTestId('operator-assistant-chat-window')
+    const assistantComposer = assistantPane.getByTestId('operator-assistant-chat-composer')
+    await assistantChatWindow.waitFor({ state: 'visible', timeout: 10000 })
+    const initialAssistantText = await assistantChatWindow.innerText()
+    assert(!initialAssistantText.includes('业务办理确认'), 'AI assistant chat must not show business confirmation cards')
+    assert(!initialAssistantText.includes('人工采纳率'), 'AI assistant chat must not show observability metrics')
+    assert(!initialAssistantText.includes('当前办理进度'), 'AI assistant chat must not show skeleton progress')
     assert(!(await page.getByTestId('operator-worker-profile-config-panel').isVisible()), 'Worker config must be hidden before opening the config tab')
-    await qaPanel.getByTestId('operator-knowledge-qa-question').fill('退票和行李额可以并行处理吗？')
-    await qaPanel.getByRole('button', { name: '追问助手' }).click()
+    await assistantComposer.getByTestId('operator-knowledge-qa-question').fill('退票和行李额可以并行处理吗？')
+    await assistantComposer.getByRole('button', { name: '追问助手' }).click()
+    const qaPanel = assistantPane.getByTestId('operator-knowledge-qa-panel')
     await qaPanel.getByTestId('operator-knowledge-qa-answer').getByText('可以并行处理').waitFor({
       state: 'visible',
       timeout: 10000,
@@ -462,26 +473,6 @@ async function main() {
       { timeout: 10000 },
     )
 
-    await clickWorkbenchTab('AI助手')
-    const assistantActionPanel = assistantPane.getByTestId('operator-confirmation-cards')
-    const assistantActionRow = assistantActionPanel.locator('.action-row').filter({
-      hasText: '确认任务变更：refund_ticket:MU5137-8899',
-    }).first()
-    await page.waitForFunction(
-      () => {
-        const row = Array.from(document.querySelectorAll('[data-testid="operator-workbench-assistant-pane"] .action-row')).find((item) =>
-          item.textContent?.includes('确认任务变更：refund_ticket:MU5137-8899'),
-        )
-        return row?.textContent?.includes('CONFIRMED')
-      },
-      null,
-      { timeout: 10000 },
-    )
-    await assistantPane.getByTestId('operator-event-timeline').getByText('proposed_task_command_confirmed').waitFor({
-      state: 'visible',
-      timeout: 10000,
-    })
-
     await clickWorkbenchTab('办理')
     const taskRow = page.getByTestId('operator-task-ledger').locator('.task-row').filter({
       hasText: 'refund_ticket:MU5137-8899',
@@ -494,7 +485,7 @@ async function main() {
       timeout: 10000,
     })
 
-    const actionText = await assistantActionRow.innerText()
+    const actionText = await actionRow.innerText()
     assert(actionText.includes('CONFIRMED'), 'Expected confirmed card sync in proposed-actions panel')
     assert(actionText.includes('确认任务变更：refund_ticket:MU5137-8899'), 'Expected action title to remain stable')
     assert(qaAnswered, 'Expected the Q&A checkpoint to be exercised')

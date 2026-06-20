@@ -7,9 +7,11 @@ Scope: browser-only acceptance prep for `/customer-assistant` on the seeded
 
 1. Three columns fit in one screen at 1440x900, with internal column scrolling.
 2. Default workbench tab is `聚焦`: it shows intent/emotion, handling guidance,
-   recommended script actions, and business confirmation cards.
-3. The `AI助手` tab exposes `追问助手`, and a seeded follow-up question returns a
-   visible answer, source, event evidence, and synchronized confirmation card.
+   SOP progress, recommended script actions, and business confirmation cards.
+3. The `AI助手` tab is one chat window with a message stream and bottom composer;
+   it does not show business confirmation cards, skeleton progress, metrics, or
+   worker controls. A seeded follow-up question returns a visible answer and
+   source inside that window.
 4. The `办理`, `证据`, and `配置` tabs progressively disclose task handling,
    audit/evidence details, and worker configuration. The default `聚焦` tab does
    not expose worker/model/prompt terms.

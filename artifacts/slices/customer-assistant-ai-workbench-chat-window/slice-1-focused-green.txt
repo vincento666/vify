@@ -1,0 +1,9 @@
+> vitest run src/views/customerAssistant/customerAssistantPanel.test.ts src/views/customerAssistant/customerAssistantViewModel.test.ts
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts (23 tests) 6ms
+ ✓ src/views/customerAssistant/customerAssistantPanel.test.ts (21 tests) 6ms
+ Test Files  2 passed (2)
+      Tests  44 passed (44)
+   Start at  09:08:02
+   Duration  536ms (transform 86ms, setup 0ms, collect 101ms, tests 12ms, environment 0ms, prepare 153ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
