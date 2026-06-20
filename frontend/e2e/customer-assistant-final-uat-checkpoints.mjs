@@ -367,9 +367,10 @@ async function main() {
     )
     assert(tabLabels.includes('聚焦'), `Expected focus tab label, got ${tabLabels.join(' / ')}`)
     assert(tabLabels.includes('AI助手'), `Expected assistant tab label, got ${tabLabels.join(' / ')}`)
-    assert(tabLabels.includes('办理'), `Expected business handling tab label, got ${tabLabels.join(' / ')}`)
     assert(tabLabels.includes('证据'), `Expected evidence tab label, got ${tabLabels.join(' / ')}`)
     assert(tabLabels.includes('配置'), `Expected config tab label, got ${tabLabels.join(' / ')}`)
+    assert(!tabLabels.includes('办理'), `Expected no business handling tab, got ${tabLabels.join(' / ')}`)
+    assert(tabLabels.join('|') === '聚焦|AI助手|证据|配置', `Expected four workbench tabs, got ${tabLabels.join(' / ')}`)
     for (const term of ['overview', 'tasks', 'evidence', 'audit']) {
       assert(!tabLabels.some((label) => label.includes(term)), `Expected non-technical tab labels only, found ${term}`)
     }
@@ -399,11 +400,23 @@ async function main() {
     }
 
     const focusPane = page.getByTestId('operator-workbench-focus-pane')
-    await focusPane.getByTestId('operator-focus-intent-card').getByText('意图识别').waitFor({
+    await focusPane.getByTestId('operator-focus-status-bar').getByText('状态条').waitFor({
       state: 'visible',
       timeout: 10000,
     })
-    await focusPane.getByTestId('operator-focus-script-card').getByText('业务办理指引').waitFor({
+    await focusPane.getByTestId('operator-focus-intent-emotion-card').getByText('任务意图').waitFor({
+      state: 'visible',
+      timeout: 10000,
+    })
+    await focusPane.getByTestId('operator-focus-business-object-summary').getByText('业务对象摘要').waitFor({
+      state: 'visible',
+      timeout: 10000,
+    })
+    await focusPane.getByTestId('operator-focus-sop-handling-tree').getByText('SOP办理树').waitFor({
+      state: 'visible',
+      timeout: 10000,
+    })
+    await focusPane.getByTestId('operator-focus-recommended-reply-card').getByText('推荐回复').waitFor({
       state: 'visible',
       timeout: 10000,
     })
@@ -412,13 +425,11 @@ async function main() {
       state: 'visible',
       timeout: 10000,
     })
-    await focusPane.getByTestId('operator-focus-sop-progress-card').getByText('SOP办理进度').waitFor({
-      state: 'visible',
-      timeout: 10000,
-    })
     const defaultFocusText = await focusPane.innerText()
-    assert(defaultFocusText.includes('业务办理确认'), 'Expected default focus tab to show business confirmation')
-    assert(defaultFocusText.includes('SOP办理进度'), 'Expected default focus tab to show business SOP progress')
+    assert(defaultFocusText.includes('高敏确认'), 'Expected default focus tab to show sensitive confirmation')
+    assert(defaultFocusText.includes('SOP办理树'), 'Expected default focus tab to show business SOP tree')
+    assert(defaultFocusText.includes('任务台账'), 'Expected default focus tab to include task ledger')
+    assert(defaultFocusText.includes('客户回复草稿'), 'Expected default focus tab to include draft handling')
     assert(!defaultFocusText.includes('Worker 配置'), 'Default focus tab should hide worker configuration')
     assert(!defaultFocusText.includes('modelPolicyRef'), 'Default focus tab should hide model policy refs')
 
@@ -434,7 +445,7 @@ async function main() {
     assert(!(await page.getByTestId('operator-worker-profile-config-panel').isVisible()), 'Worker config must be hidden before opening the config tab')
     await assistantComposer.getByTestId('operator-knowledge-qa-question').fill('退票和行李额可以并行处理吗？')
     await assistantComposer.getByRole('button', { name: '追问助手' }).click()
-    const qaPanel = assistantPane.getByTestId('operator-knowledge-qa-panel')
+    const qaPanel = assistantPane.getByTestId('operator-assistant-answer-message')
     await qaPanel.getByTestId('operator-knowledge-qa-answer').getByText('可以并行处理').waitFor({
       state: 'visible',
       timeout: 10000,
@@ -473,8 +484,7 @@ async function main() {
       { timeout: 10000 },
     )
 
-    await clickWorkbenchTab('办理')
-    const taskRow = page.getByTestId('operator-task-ledger').locator('.task-row').filter({
+    const taskRow = focusPane.getByTestId('operator-task-ledger').locator('.task-row').filter({
       hasText: 'refund_ticket:MU5137-8899',
     }).first()
     await taskRow.getByText('CANCELLED').waitFor({ state: 'visible', timeout: 10000 })
