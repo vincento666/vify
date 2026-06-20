@@ -15,6 +15,7 @@ import {
   formatCustomerAssistantActionDecisionReceipt,
   formatCustomerAssistantEvents,
   formatCustomerAssistantEvalSurface,
+  formatCustomerAssistantFocusProjection,
   formatCustomerAssistantMetrics,
   formatCustomerAssistantOperatorAudit,
   formatCustomerAssistantOperatorKnowledgeQa,
@@ -761,5 +762,199 @@ describe('customer assistant view model', () => {
       { key: 'recommendation', label: 'Generating recommendation', status: 'active' },
       { key: 'ready', label: 'Ready for operator', status: 'pending' },
     ])
+  })
+
+  it('derives a product-readable focus session status from tasks, recommendation, and actions', () => {
+    const waiting = formatCustomerAssistantFocusProjection({
+      taskSummary: summarizeCustomerAssistantTasks([
+        { ...mockCustomerAssistantTasks.list[0], status: 'WAITING', proposedActions: [] },
+      ]),
+      recommendation: {
+        operatorRecommendation: '',
+        customerReplyDraft: '',
+        warnings: [],
+      },
+      proposedActions: [],
+    })
+    const analyzing = formatCustomerAssistantFocusProjection({
+      taskSummary: summarizeCustomerAssistantTasks([
+        { ...mockCustomerAssistantTasks.list[0], status: 'RUNNING', proposedActions: [] },
+      ]),
+      recommendation: {
+        operatorRecommendation: '',
+        customerReplyDraft: '',
+        warnings: [],
+      },
+      proposedActions: [],
+    })
+    const confirming = formatCustomerAssistantFocusProjection({
+      taskSummary: summarizeCustomerAssistantTasks(mockCustomerAssistantTasks.list),
+      recommendation: {
+        operatorRecommendation: '建议提交退票申请前由坐席确认。',
+        customerReplyDraft: '',
+        warnings: [],
+      },
+      proposedActions: mockCustomerAssistantTurnResult.proposedActions,
+    })
+    const replyReady = formatCustomerAssistantFocusProjection({
+      taskSummary: summarizeCustomerAssistantTasks([
+        { ...mockCustomerAssistantTasks.list[0], status: 'COMPLETED', proposedActions: [] },
+      ]),
+      recommendation: {
+        operatorRecommendation: '可告知旅客退票规则。',
+        customerReplyDraft: '已为您核验退票规则。',
+        warnings: [],
+      },
+      proposedActions: [],
+    })
+
+    expect(waiting.sessionStatus).toMatchObject({
+      kind: 'waiting_customer',
+      label: '等待旅客输入',
+      detail: '待补充：订单号',
+    })
+    expect(analyzing.sessionStatus).toMatchObject({
+      kind: 'analyzing',
+      label: '正在分析',
+      detail: '退票处理',
+    })
+    expect(confirming.sessionStatus).toMatchObject({
+      kind: 'waiting_operator',
+      label: '待坐席确认',
+      detail: '提交退票申请',
+    })
+    expect(replyReady.sessionStatus).toMatchObject({
+      kind: 'reply_ready',
+      label: '可发送回复',
+      detail: '已生成客户回复草稿',
+    })
+  })
+
+  it('builds SOP handling tree nodes from task checkpoints, last results, warnings, and proposed actions', () => {
+    const projection = formatCustomerAssistantFocusProjection({
+      taskSummary: summarizeCustomerAssistantTasks([
+        {
+          ...mockCustomerAssistantTasks.list[0],
+          checkpoint: {
+            currentStep: 'collect_order_no',
+            pendingPrompt: '请提供订单号',
+            collected: { passengerName: '赵女士' },
+          },
+          lastResult: {
+            missingFields: ['订单号'],
+            policySummary: '退票费 120 元，需按航司规则复核。',
+            timingRisk: '起飞前 2 小时内可能产生高额手续费。',
+          },
+        },
+      ]),
+      recommendation: {
+        operatorRecommendation: '继续收集退票订单号。',
+        customerReplyDraft: '请补充订单号。',
+        warnings: ['缺少订单号时不可提交退票动作。'],
+      },
+      proposedActions: mockCustomerAssistantTurnResult.proposedActions,
+    })
+
+    expect(projection.sopNodes.map((node) => node.label)).toEqual([
+      '意图识别',
+      '基础信息核验',
+      '航班/订单查询',
+      '规则与费用查询',
+      '时效与风险评估',
+      '办理结果判断',
+    ])
+    expect(projection.sopNodes[0]).toMatchObject({
+      status: 'complete',
+      summary: '已识别：退票处理',
+      evidenceLabel: '查看意图证据',
+    })
+    expect(projection.sopNodes[1]).toMatchObject({
+      status: 'blocked',
+      summary: '待补充：订单号',
+      missingInfo: ['订单号'],
+      nextAction: '请提供订单号',
+      evidenceLabel: '查看信息核验',
+    })
+    expect(projection.sopNodes[3]).toMatchObject({
+      status: 'complete',
+      summary: '退票费 120 元，需按航司规则复核。',
+      evidenceLabel: '查看规则证据',
+    })
+    expect(projection.sopNodes[4]).toMatchObject({
+      status: 'warning',
+      summary: '起飞前 2 小时内可能产生高额手续费。',
+      nextAction: '先处理风险提示：缺少订单号时不可提交退票动作。',
+    })
+    expect(projection.sopNodes[5]).toMatchObject({
+      status: 'active',
+      summary: '待坐席确认：提交退票申请',
+      nextAction: '确认或拒绝：提交退票申请',
+      evidenceLabel: '查看确认记录',
+    })
+  })
+
+  it('summarizes business objects and risk timing without exposing raw task payloads', () => {
+    const projection = formatCustomerAssistantFocusProjection({
+      taskSummary: summarizeCustomerAssistantTasks([
+        {
+          ...mockCustomerAssistantTasks.list[0],
+          checkpoint: {
+            currentStep: 'lookup_policy',
+            pendingPrompt: '',
+            collected: {
+              orderNo: 'TK-100',
+              flightNo: 'MU5137',
+              rawPayload: { debugToken: 'secret-token' },
+            },
+          },
+          lastResult: {
+            missingFields: [],
+            businessObject: { orderNo: 'TK-100', flightNo: 'MU5137', passengerName: '赵女士' },
+            timingRisk: '距起飞 90 分钟，需优先确认退票手续费。',
+            rawJson: { debugToken: 'secret-token' },
+          },
+        },
+      ]),
+      recommendation: {
+        operatorRecommendation: '',
+        customerReplyDraft: '已为您查到订单。',
+        warnings: ['距起飞时间较近，请先确认费用。'],
+      },
+      proposedActions: mockCustomerAssistantTurnResult.proposedActions,
+    })
+
+    expect(projection.businessObjects).toEqual([
+      { key: 'task', label: '办理事项', value: '退票处理', detail: 'WAITING · refund_ticket' },
+      { key: 'order', label: '订单号', value: 'TK-100', detail: '来自任务上下文' },
+      { key: 'flight', label: '航班号', value: 'MU5137', detail: '来自任务上下文' },
+      { key: 'action', label: '待确认动作', value: '提交退票申请', detail: 'PENDING · submit_refund' },
+    ])
+    expect(projection.riskTiming).toEqual({
+      tone: 'warning',
+      summary: '距起飞 90 分钟，需优先确认退票手续费。',
+      warnings: ['距起飞时间较近，请先确认费用。'],
+      nextAction: '确认或拒绝：提交退票申请',
+    })
+    expect(JSON.stringify(projection)).not.toContain('secret-token')
+    expect(JSON.stringify(projection)).not.toContain('rawJson')
+    expect(JSON.stringify(projection)).not.toContain('rawPayload')
+
+    const fallback = formatCustomerAssistantFocusProjection({
+      taskSummary: summarizeCustomerAssistantTasks([]),
+      recommendation: {
+        operatorRecommendation: '',
+        customerReplyDraft: '',
+        warnings: [],
+      },
+      proposedActions: [],
+    })
+
+    expect(fallback.businessObjects[0]).toEqual({
+      key: 'task',
+      label: '办理事项',
+      value: '等待旅客输入',
+      detail: '暂无已识别业务对象',
+    })
+    expect(fallback.riskTiming.summary).toBe('暂无风险提示，等待旅客输入后再评估时效。')
   })
 })

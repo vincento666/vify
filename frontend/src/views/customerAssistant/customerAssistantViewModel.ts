@@ -36,6 +36,7 @@ export interface CustomerAssistantTaskRow {
   proposedActions: CustomerAssistantProposedAction[]
   availableControls: CustomerAssistantTaskControlType[]
   checkpoint: Record<string, unknown>
+  lastResult: Record<string, unknown>
 }
 
 export interface CustomerAssistantTaskProfile {
@@ -205,6 +206,60 @@ export interface CustomerAssistantEvalSurface {
   failures: CustomerAssistantFailureRow[]
 }
 
+export type CustomerAssistantFocusSessionStatusKind =
+  | 'idle'
+  | 'analyzing'
+  | 'waiting_customer'
+  | 'waiting_operator'
+  | 'reply_ready'
+  | 'processing'
+  | 'completed'
+
+export interface CustomerAssistantFocusSessionStatus {
+  kind: CustomerAssistantFocusSessionStatusKind
+  label: string
+  detail: string
+}
+
+export type CustomerAssistantSopNodeStatus = 'pending' | 'active' | 'blocked' | 'complete' | 'warning'
+
+export interface CustomerAssistantSopNode {
+  key: 'intent' | 'basic_info' | 'lookup' | 'policy_fee' | 'risk_timing' | 'result'
+  label: string
+  status: CustomerAssistantSopNodeStatus
+  summary: string
+  missingInfo: string[]
+  nextAction: string
+  evidenceLabel: string
+}
+
+export interface CustomerAssistantBusinessObjectSummary {
+  key: 'task' | 'order' | 'flight' | 'action'
+  label: string
+  value: string
+  detail: string
+}
+
+export interface CustomerAssistantRiskTimingSummary {
+  tone: 'default' | 'success' | 'warning' | 'critical'
+  summary: string
+  warnings: string[]
+  nextAction: string
+}
+
+export interface CustomerAssistantFocusProjection {
+  sessionStatus: CustomerAssistantFocusSessionStatus
+  sopNodes: CustomerAssistantSopNode[]
+  businessObjects: CustomerAssistantBusinessObjectSummary[]
+  riskTiming: CustomerAssistantRiskTimingSummary
+}
+
+export interface CustomerAssistantFocusProjectionInput {
+  taskSummary: CustomerAssistantTaskSummaryModel
+  recommendation: CustomerAssistantRecommendationState
+  proposedActions: CustomerAssistantProposedAction[]
+}
+
 export interface CustomerAssistantActionReceiptRow {
   key: string
   label: string
@@ -341,6 +396,7 @@ export function summarizeCustomerAssistantTasks(
       proposedActions: [...task.proposedActions],
       availableControls: availableTaskControls(task.status),
       checkpoint: { ...task.checkpoint },
+      lastResult: { ...(task.lastResult ?? {}) },
     }
   })
   return { counts, items }
@@ -722,6 +778,233 @@ export function formatCustomerAssistantEvalSurface(
   }
 }
 
+export function formatCustomerAssistantFocusProjection(
+  input: CustomerAssistantFocusProjectionInput,
+): CustomerAssistantFocusProjection {
+  const tasks = input.taskSummary.items
+  const actions = focusActions(input)
+  const pendingActions = actions.filter((action) => action.status === 'PENDING')
+  const primaryTask = tasks[0] ?? null
+  const missingInfo = uniqueText(tasks.filter((task) => task.status !== 'COMPLETED').flatMap((task) => task.missingFields))
+  const warnings = input.recommendation.warnings.map(redactFocusText)
+
+  return {
+    sessionStatus: focusSessionStatus(input, actions, pendingActions, missingInfo),
+    sopNodes: focusSopNodes(primaryTask, tasks, pendingActions, warnings),
+    businessObjects: focusBusinessObjects(primaryTask, pendingActions),
+    riskTiming: focusRiskTiming(primaryTask, tasks, pendingActions, warnings, input.recommendation),
+  }
+}
+
+function focusSessionStatus(
+  input: CustomerAssistantFocusProjectionInput,
+  actions: CustomerAssistantProposedAction[],
+  pendingActions: CustomerAssistantProposedAction[],
+  missingInfo: string[],
+): CustomerAssistantFocusSessionStatus {
+  const tasks = input.taskSummary.items
+  const primaryTask = tasks[0]
+  const hasRecommendation = Boolean(input.recommendation.operatorRecommendation || input.recommendation.customerReplyDraft)
+
+  if (tasks.length === 0 && actions.length === 0 && !hasRecommendation) {
+    return { kind: 'idle', label: '等待旅客输入', detail: '暂无已识别诉求' }
+  }
+  if (pendingActions.length > 0) {
+    return {
+      kind: 'waiting_operator',
+      label: '待坐席确认',
+      detail: pendingActions.map((action) => action.title).join('、'),
+    }
+  }
+  if (tasks.some((task) => task.status === 'RUNNING' || task.status === 'PENDING')) {
+    return {
+      kind: 'analyzing',
+      label: '正在分析',
+      detail: primaryTask?.displayName ?? '正在识别旅客诉求',
+    }
+  }
+  if (input.recommendation.customerReplyDraft) {
+    return { kind: 'reply_ready', label: '可发送回复', detail: '已生成客户回复草稿' }
+  }
+  if (missingInfo.length > 0) {
+    return {
+      kind: 'waiting_customer',
+      label: '等待旅客输入',
+      detail: `待补充：${missingInfo.join('、')}`,
+    }
+  }
+  if (tasks.length > 0 && tasks.every((task) => task.status === 'COMPLETED')) {
+    return { kind: 'completed', label: '已完成', detail: '全部任务已完成' }
+  }
+  if (tasks.length > 0) {
+    return {
+      kind: 'processing',
+      label: '办理中',
+      detail: primaryTask?.displayName ?? '业务办理中',
+    }
+  }
+  return { kind: 'reply_ready', label: '可发送回复', detail: '已生成坐席建议' }
+}
+
+function focusSopNodes(
+  task: CustomerAssistantTaskRow | null,
+  tasks: CustomerAssistantTaskRow[],
+  pendingActions: CustomerAssistantProposedAction[],
+  warnings: string[],
+): CustomerAssistantSopNode[] {
+  const missingInfo = uniqueText(tasks.filter((item) => item.status !== 'COMPLETED').flatMap((item) => item.missingFields))
+  const currentStep = focusText(task?.checkpoint.currentStep, '')
+  const pendingPrompt = focusText(task?.checkpoint.pendingPrompt, '')
+  const policySummary = focusText(task?.lastResult.policySummary, '')
+  const timingRisk = focusText(task?.lastResult.timingRisk, '')
+  const orderNo = focusBusinessField(task, 'orderNo')
+  const flightNo = focusBusinessField(task, 'flightNo')
+  const firstPendingAction = pendingActions[0]
+  const completed = tasks.length > 0 && tasks.every((item) => item.status === 'COMPLETED')
+
+  return [
+    {
+      key: 'intent',
+      label: '意图识别',
+      status: task ? 'complete' : 'pending',
+      summary: task ? `已识别：${task.displayName}` : '等待旅客描述诉求',
+      missingInfo: [],
+      nextAction: task ? '进入基础信息核验' : '请旅客说明要办理的业务',
+      evidenceLabel: '查看意图证据',
+    },
+    {
+      key: 'basic_info',
+      label: '基础信息核验',
+      status: !task ? 'pending' : missingInfo.length > 0 ? 'blocked' : 'complete',
+      summary: !task
+        ? '等待旅客输入后核验'
+        : missingInfo.length > 0
+          ? `待补充：${missingInfo.join('、')}`
+          : '关键信息已齐备',
+      missingInfo,
+      nextAction: missingInfo.length > 0 ? pendingPrompt || `向旅客补齐${missingInfo.join('、')}` : '进入航班/订单查询',
+      evidenceLabel: '查看信息核验',
+    },
+    {
+      key: 'lookup',
+      label: '航班/订单查询',
+      status: !task ? 'pending' : orderNo || flightNo ? 'complete' : currentStep.includes('lookup') ? 'active' : 'pending',
+      summary: orderNo || flightNo ? ['订单', orderNo, '航班', flightNo].filter(Boolean).join(' ') : '等待订单/航班信息',
+      missingInfo: missingInfo.filter((item) => item.includes('订单') || item.includes('航班')),
+      nextAction: orderNo || flightNo ? '进入规则与费用查询' : pendingPrompt || '补齐订单号或航班号',
+      evidenceLabel: '查看查询证据',
+    },
+    {
+      key: 'policy_fee',
+      label: '规则与费用查询',
+      status: !task ? 'pending' : policySummary ? 'complete' : currentStep.includes('policy') ? 'active' : 'pending',
+      summary: policySummary || '待查询规则与费用',
+      missingInfo: [],
+      nextAction: policySummary ? '进入时效与风险评估' : '查询退改签规则和费用',
+      evidenceLabel: '查看规则证据',
+    },
+    {
+      key: 'risk_timing',
+      label: '时效与风险评估',
+      status: warnings.length > 0 ? 'warning' : timingRisk ? 'complete' : task ? 'active' : 'pending',
+      summary: timingRisk || warnings[0] || '待评估办理时效与风险',
+      missingInfo: [],
+      nextAction: warnings.length > 0 ? `先处理风险提示：${warnings[0]}` : timingRisk ? '进入办理结果判断' : '核验起飞时间和规则风险',
+      evidenceLabel: '查看风险证据',
+    },
+    {
+      key: 'result',
+      label: '办理结果判断',
+      status: firstPendingAction ? 'active' : completed ? 'complete' : task ? 'pending' : 'pending',
+      summary: firstPendingAction ? `待坐席确认：${firstPendingAction.title}` : completed ? '办理已完成' : '等待前置步骤完成',
+      missingInfo: [],
+      nextAction: firstPendingAction ? `确认或拒绝：${firstPendingAction.title}` : completed ? '归档会话' : '继续推进前置步骤',
+      evidenceLabel: '查看确认记录',
+    },
+  ]
+}
+
+function focusBusinessObjects(
+  task: CustomerAssistantTaskRow | null,
+  pendingActions: CustomerAssistantProposedAction[],
+): CustomerAssistantBusinessObjectSummary[] {
+  if (!task) {
+    return [
+      {
+        key: 'task',
+        label: '办理事项',
+        value: '等待旅客输入',
+        detail: '暂无已识别业务对象',
+      },
+    ]
+  }
+
+  const rows: CustomerAssistantBusinessObjectSummary[] = [
+    {
+      key: 'task',
+      label: '办理事项',
+      value: task.displayName,
+      detail: `${task.status} · ${task.taskKey}`,
+    },
+  ]
+  const orderNo = focusBusinessField(task, 'orderNo')
+  if (orderNo) {
+    rows.push({ key: 'order', label: '订单号', value: orderNo, detail: '来自任务上下文' })
+  }
+  const flightNo = focusBusinessField(task, 'flightNo')
+  if (flightNo) {
+    rows.push({ key: 'flight', label: '航班号', value: flightNo, detail: '来自任务上下文' })
+  }
+  const firstPendingAction = pendingActions[0]
+  if (firstPendingAction) {
+    rows.push({
+      key: 'action',
+      label: '待确认动作',
+      value: redactFocusText(firstPendingAction.title),
+      detail: `${firstPendingAction.status} · ${firstPendingAction.actionType}`,
+    })
+  }
+  return rows
+}
+
+function focusRiskTiming(
+  task: CustomerAssistantTaskRow | null,
+  tasks: CustomerAssistantTaskRow[],
+  pendingActions: CustomerAssistantProposedAction[],
+  warnings: string[],
+  recommendation: CustomerAssistantRecommendationState,
+): CustomerAssistantRiskTimingSummary {
+  const timingRisk = focusText(task?.lastResult.timingRisk, '')
+  const firstPendingAction = pendingActions[0]
+  const failed = tasks.some((item) => item.status === 'FAILED')
+  const completed = tasks.length > 0 && tasks.every((item) => item.status === 'COMPLETED')
+  const missingInfo = uniqueText(tasks.filter((item) => item.status !== 'COMPLETED').flatMap((item) => item.missingFields))
+
+  if (!task && warnings.length === 0) {
+    return {
+      tone: 'default',
+      summary: '暂无风险提示，等待旅客输入后再评估时效。',
+      warnings: [],
+      nextAction: '等待旅客输入',
+    }
+  }
+
+  return {
+    tone: failed ? 'critical' : warnings.length > 0 ? 'warning' : completed ? 'success' : 'default',
+    summary: timingRisk || warnings[0] || '暂无明确风险，按当前 SOP 继续推进。',
+    warnings,
+    nextAction: firstPendingAction
+      ? `确认或拒绝：${firstPendingAction.title}`
+      : missingInfo.length > 0
+        ? `补齐：${missingInfo.join('、')}`
+        : recommendation.customerReplyDraft
+          ? '发送客户回复草稿'
+          : completed
+            ? '归档会话'
+            : '继续推进当前办理步骤',
+  }
+}
+
 export function deriveCustomerAssistantProgressStages(events: CustomerAssistantEvent[]): CustomerAssistantProgressStage[] {
   const types = new Set(events.map((event) => event.type))
   const recognizingComplete = hasAny(types, [
@@ -848,6 +1131,41 @@ function taskMissingFields(task: CustomerAssistantTask): string[] {
   if (typeof pendingPrompt === 'string' && pendingPrompt) return [pendingPrompt]
 
   return []
+}
+
+function focusActions(input: CustomerAssistantFocusProjectionInput): CustomerAssistantProposedAction[] {
+  const byId = new Map<number, CustomerAssistantProposedAction>()
+  for (const action of input.taskSummary.items.flatMap((task) => task.proposedActions)) {
+    byId.set(action.id, action)
+  }
+  for (const action of input.proposedActions) {
+    byId.set(action.id, action)
+  }
+  return [...byId.values()]
+}
+
+function focusBusinessField(task: CustomerAssistantTaskRow | null, key: string): string {
+  if (!task) return ''
+  const businessObject = asRecord(task.lastResult.businessObject)
+  const collected = asRecord(task.checkpoint.collected)
+  const direct = focusText(task.lastResult[key], '') || focusText(task.checkpoint[key], '')
+  return direct || focusText(businessObject?.[key], '') || focusText(collected?.[key], '')
+}
+
+function focusText(value: unknown, fallback: string): string {
+  if (typeof value === 'string' && value.trim()) return redactFocusText(value)
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return fallback
+}
+
+function redactFocusText(value: string): string {
+  return redactEvalText(value)
+    .replace(/(token\s*[:=]\s*)[^\s,;]+/gi, '$1[REDACTED]')
+    .replace(/\bsecret-token\b/gi, '[REDACTED]')
+}
+
+function uniqueText(values: string[]): string[] {
+  return [...new Set(values.map((value) => redactFocusText(value)).filter(Boolean))]
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
