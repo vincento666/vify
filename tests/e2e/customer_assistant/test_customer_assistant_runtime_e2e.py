@@ -40,17 +40,21 @@ class CustomerAssistantRuntimeE2ETest(unittest.TestCase):
             events = client.get(f"/api/v1/customer-assistant/sessions/{session_id}/events").json()["data"]["list"]
 
         self.assertEqual([summary["taskKey"] for summary in first["taskSummaries"]], ["refund_ticket", "baggage_qa"])
-        self.assertEqual([summary["status"] for summary in first["taskSummaries"]], ["WAITING", "COMPLETED"])
+        self.assertEqual([summary["status"] for summary in first["taskSummaries"]], ["WAITING", "RUNNING"])
         self.assertIn("订单号", first["customerReplyDraft"])
-        self.assertIn("手提行李", first["customerReplyDraft"])
+        self.assertTrue(first["taskSummaries"][1]["workerAsyncRefs"]["supported"])
+        self.assertIn("required worker evidence is pending", " ".join(first["warnings"]))
         self.assertEqual(replay["runId"], first["runId"])
         self.assertTrue(replay["replayed"])
         self.assertEqual(continued["taskSummaries"][0]["checkpoint"]["currentStep"], "confirm")
+        self.assertEqual(continued["taskSummaries"][1]["status"], "COMPLETED")
         self.assertEqual(completed["proposedActions"][0]["status"], "PENDING")
         self.assertEqual(completed["proposedActions"][0]["actionType"], "submit_refund")
         self.assertEqual(replay_completed["proposedActions"], completed["proposedActions"])
         self.assertEqual([task["status"] for task in tasks], ["COMPLETED", "COMPLETED"])
         self.assertEqual(len(tasks[0]["proposedActions"]), 1)
+        baggage_task = next(task for task in tasks if task["taskKey"] == "baggage_qa")
+        self.assertIn("手提行李", baggage_task["lastResult"]["customerReplyDraft"])
         self.assertEqual([event["sequence"] for event in events], list(range(1, len(events) + 1)))
         event_types = [event["type"] for event in events]
         for required in (
@@ -59,17 +63,32 @@ class CustomerAssistantRuntimeE2ETest(unittest.TestCase):
             "task_waiting",
             "task_completed",
             "worker_started",
+            "worker_run_pending",
             "worker_result_received",
+            "worker_result_consumed",
             "worker_proposed_action",
             "recommendation_generated",
             "run_completed",
         ):
             self.assertIn(required, event_types)
-        worker_events = [event for event in events if event["type"] in {"worker_started", "worker_result_received"}]
-        self.assertTrue(worker_events)
-        self.assertTrue(all(event["spanId"] for event in worker_events))
+        worker_started_events = [event for event in events if event["type"] == "worker_started"]
+        self.assertTrue(worker_started_events)
+        self.assertTrue(all(event["spanId"] for event in worker_started_events))
         result_events = [event for event in events if event["type"] == "worker_result_received"]
-        self.assertTrue(all(event["parentSpanId"] for event in result_events))
+        traced_result_events = [
+            event
+            for event in result_events
+            if event["observability"].get("sourceKind") in {"chatflow", "worker"}
+            and event["payload"].get("workerRunId")
+        ]
+        compatibility_result_events = [
+            event
+            for event in result_events
+            if event["observability"].get("sourceKind") == "assistant"
+        ]
+        self.assertTrue(traced_result_events)
+        self.assertTrue(all(event["parentSpanId"] for event in traced_result_events))
+        self.assertTrue(compatibility_result_events)
 
     def _session_override(self) -> Generator[Session]:
         with self._factory() as session:
