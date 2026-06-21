@@ -76,8 +76,10 @@ describe('customer assistant interaction polish', () => {
     const content = readProjectFile('src/views/customerAssistant/CustomerAssistantPanel.vue')
 
     expect(content).toContain('<a-tooltip')
-    expect(content).toContain('aria-label="复制客户回复草稿"')
-    expect(content).toContain('aria-label="本地应用客户回复草稿"')
+    expect(content).toContain('aria-label="发送推荐旅客话术"')
+    expect(content).toContain('aria-label="复制推荐旅客话术"')
+    expect(content).toContain('aria-label="放入中栏编辑框"')
+    expect(content).toContain('aria-label="重新生成推荐旅客话术"')
     expect(content).toContain('aria-label="确认拟议动作"')
     expect(content).toContain('aria-label="拒绝拟议动作"')
     expect(content).toContain('aria-label="确认备注"')

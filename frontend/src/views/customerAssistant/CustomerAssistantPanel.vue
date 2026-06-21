@@ -468,25 +468,45 @@
             <p class="panel-copy">坐席处理提示：{{ workspace.recommendation.operatorRecommendation || '暂无坐席处理提示' }}</p>
             <div class="panel-actions">
               <a-tooltip title="发送给旅客">
-                <a-button size="small" :disabled="!hasDraft" @click="sendRecommendationToCustomer">
+                <a-button
+                  size="small"
+                  aria-label="发送推荐旅客话术"
+                  :disabled="!hasDraft"
+                  @click="sendRecommendationToCustomer"
+                >
                   <SendOutlined />
                   发送
                 </a-button>
               </a-tooltip>
               <a-tooltip title="复制推荐话术">
-                <a-button size="small" :disabled="!hasDraft" @click="copyRecommendation">
+                <a-button
+                  size="small"
+                  aria-label="复制推荐旅客话术"
+                  :disabled="!hasDraft"
+                  @click="copyRecommendation"
+                >
                   <CopyOutlined />
                   复制
                 </a-button>
               </a-tooltip>
               <a-tooltip title="发送到编辑框">
-                <a-button size="small" :disabled="!hasDraft" @click="applyRecommendationToEditor">
+                <a-button
+                  size="small"
+                  aria-label="放入中栏编辑框"
+                  :disabled="!hasDraft"
+                  @click="applyRecommendationToEditor"
+                >
                   <EditOutlined />
                   编辑
                 </a-button>
               </a-tooltip>
               <a-tooltip title="重新生成">
-                <a-button size="small" :disabled="!workspace.sessionId" @click="regenerateRecommendation">
+                <a-button
+                  size="small"
+                  aria-label="重新生成推荐旅客话术"
+                  :disabled="!workspace.sessionId"
+                  @click="regenerateRecommendation"
+                >
                   <HistoryOutlined />
                   重生成
                 </a-button>
@@ -1239,7 +1259,6 @@ import {
   selectCustomerAssistantDemoStoryToOpen,
 } from './customerAssistantStoryLinks'
 import {
-  applyCustomerAssistantDraftLocally,
   createCustomerAssistantDraftState,
   formatCustomerAssistantActionDecisionReceipt,
   formatCustomerAssistantActionReceipt,
@@ -1473,10 +1492,6 @@ function formatDraftDeliveryReceipt(action: CustomerAssistantProposedAction) {
 
 function actionConfirmLabel(action: CustomerAssistantProposedAction) {
   return isProposedTaskCommand(action) ? '确认任务变更' : '确认动作'
-}
-
-function actionConfirmTooltip(action: CustomerAssistantProposedAction) {
-  return isProposedTaskCommand(action) ? '确认任务变更' : '确认拟议动作'
 }
 
 function startEditAction(action: CustomerAssistantProposedAction) {
@@ -1745,20 +1760,6 @@ async function askOperatorKnowledgeQuestion() {
     }
     message.error(errorMessage)
   }
-}
-
-async function copyDraft() {
-  try {
-    await navigator.clipboard?.writeText(draftState.value.text)
-    message.success('客户回复草稿已复制到本地上下文')
-  } catch {
-    message.success('客户回复草稿已复制到本地上下文')
-  }
-}
-
-function applyDraftLocal() {
-  draftApplied.value = applyCustomerAssistantDraftLocally(draftState.value).applied
-  message.success('客户回复草稿已本地应用，未外发')
 }
 
 async function copyRecommendation() {
