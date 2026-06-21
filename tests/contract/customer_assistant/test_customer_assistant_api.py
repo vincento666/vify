@@ -48,6 +48,22 @@ HOST_B_OPERATE_HEADERS = {
     **HOST_B_BASE_HEADERS,
     "X-Hify-Permissions": "customer_assistant:read,customer_assistant:operate",
 }
+LEGACY_STUB_BAGGAGE_PROFILES_JSON = json.dumps(
+    {
+        "profiles": [
+            {
+                "profileId": "legacy_baggage_stub",
+                "taskKey": "baggage_qa",
+                "taskType": "QA",
+                "workerType": "stub_qa",
+                "workerRef": "baggage_allowance",
+                "modelPolicyRef": "legacy_stub_qa_model",
+                "promptRef": "baggage_allowance_prompt",
+                "riskPolicyRef": "read_only",
+            }
+        ]
+    }
+)
 
 
 class CustomerAssistantApiContractTest(unittest.TestCase):
@@ -542,11 +558,11 @@ class CustomerAssistantApiContractTest(unittest.TestCase):
         self.assertEqual(status.json()["data"]["status"], "COMPLETED")
         self.assertEqual(status.json()["data"]["parentRunId"], first.json()["data"]["runId"])
         self.assertEqual(status.json()["data"]["taskId"], task["id"])
-        self.assertEqual(status.json()["data"]["workerType"], "stub_qa")
+        self.assertEqual(status.json()["data"]["workerType"], "chatflow_sop")
 
         self.assertEqual(result.status_code, 200)
         self.assertEqual(result.json()["data"]["status"], "COMPLETED")
-        self.assertIn("手提行李", result.json()["data"]["result"]["customerReplyDraft"])
+        self.assertIn("行李服务", result.json()["data"]["result"]["customerReplyDraft"])
 
         event_rows = events.json()["data"]["list"]
         self.assertEqual(events.status_code, 200)
@@ -601,7 +617,7 @@ class CustomerAssistantApiContractTest(unittest.TestCase):
         self.assertEqual(delivery_action["title"], "发送客户回复草稿")
         self.assertEqual(delivery_action["payload"]["channel"], "mock_web")
         self.assertEqual(delivery_action["payload"]["conversationId"], "conversation-[REDACTED]")
-        self.assertIn("手提行李", delivery_action["payload"]["draft"])
+        self.assertIn("行李服务", delivery_action["payload"]["draft"])
         self.assertEqual(listed_actions.status_code, 200, listed_actions.text)
         listed_delivery_actions = [
             action
@@ -650,7 +666,7 @@ class CustomerAssistantApiContractTest(unittest.TestCase):
         self.assertEqual(cancelled.status_code, 200)
         self.assertEqual(cancelled.json()["data"]["status"], "cancel_unsupported")
         self.assertEqual(status.json()["data"]["status"], "COMPLETED")
-        self.assertIn("手提行李", result.json()["data"]["result"]["customerReplyDraft"])
+        self.assertIn("行李服务", result.json()["data"]["result"]["customerReplyDraft"])
         event_types = [row["type"] for row in events.json()["data"]["list"]]
         self.assertIn("worker_cancel_requested", event_types)
         self.assertIn("worker_cancel_unsupported", event_types)
@@ -658,6 +674,7 @@ class CustomerAssistantApiContractTest(unittest.TestCase):
     def test_pending_async_worker_can_be_refreshed_through_api(self) -> None:
         app.dependency_overrides[get_settings] = lambda: Settings(
             runtime_lab_sop_chatflow_ids=None,
+            customer_assistant_worker_profiles_json=LEGACY_STUB_BAGGAGE_PROFILES_JSON,
             customer_assistant_stub_qa_delay_seconds=0.5,
             customer_assistant_worker_wait_deadline_seconds=0.01,
             customer_assistant_worker_timeout_seconds=2.0,
