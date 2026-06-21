@@ -24,11 +24,11 @@ Status: reopened on 2026-06-21 for focus-workbench cleanup and P0 UAT blockers.
 
 ## Slice B: Seeded Pending Actions
 
-- [ ] RED: seeded demo built-in pending action confirmation fails against old
+- [x] RED: seeded demo built-in pending action confirmation fails against old
   payload shape.
-- [ ] GREEN: seeded task-command actions use the current payload contract and can
+- [x] GREEN: seeded task-command actions use the current payload contract and can
   be confirmed/rejected through the API.
-- [ ] Gate: focused customer-assistant demo seed/task-control tests.
+- [x] Gate: focused customer-assistant demo seed/task-control tests.
 
 ## Slice C: Live Multi-Task Worker Runtime
 

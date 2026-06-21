@@ -859,20 +859,42 @@ def _seed_customer_story(
             task_id=int(row["id"]),
         )
     if story.proposed_action:
+        action_payload = _seed_proposed_action_payload(story)
         repository.upsert_proposed_action(
             session_id,
             int(run["id"]),
             None,
             f"mvp-demo:{story.story_id}:operator-control",
-            str(story.proposed_action["actionType"]),
-            str(story.proposed_action["title"]),
-            {
-                "demoSeed": "073",
-                "storyId": story.story_id,
-                **story.proposed_action,
-            },
+            str(action_payload["actionType"]),
+            str(action_payload["title"]),
+            action_payload,
         )
     return session_id
+
+
+def _seed_proposed_action_payload(story: _DemoStory) -> dict[str, Any]:
+    proposed_action = dict(story.proposed_action or {})
+    command_type = str(proposed_action.pop("command", "") or "").strip()
+    task = story.tasks[0] if story.tasks else None
+    if command_type and task is not None and "taskCommand" not in proposed_action:
+        proposed_action["turnMode"] = "OPERATOR_APPLY_TASK_COMMAND"
+        proposed_action["requiresConfirmation"] = True
+        proposed_action["reason"] = f"mvp_demo:{story.story_id}:{command_type.lower()}"
+        proposed_action["taskCommand"] = {
+            "type": command_type,
+            "taskKey": task.task_key,
+            "taskType": task.task_type,
+            "businessKey": task.business_key,
+            "workerType": task.worker_type,
+            "workerRef": task.worker_ref,
+            "reason": f"mvp_demo:{story.story_id}:{command_type.lower()}",
+            "inputSnapshot": dict(task.input_snapshot),
+        }
+    return {
+        "demoSeed": "073",
+        "storyId": story.story_id,
+        **proposed_action,
+    }
 
 
 def _upsert_demo_session(
