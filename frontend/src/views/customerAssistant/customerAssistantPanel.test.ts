@@ -88,40 +88,33 @@ describe('CustomerAssistantPanel IA convergence contract', () => {
     for (const testId of [
       'operator-focus-status-bar',
       'operator-focus-sop-handling-tree',
-      'operator-focus-intent-emotion-card',
-      'operator-focus-business-object-summary',
-      'operator-focus-risk-sla-card',
       'operator-focus-recommended-reply-card',
       'operator-focus-sensitive-confirmation-card',
     ]) {
       expect(focusPane).toContain(`data-testid="${testId}"`)
     }
+    expect(regexMatches(focusPane, /data-testid="operator-focus-[^"]+"/g)).toHaveLength(4)
 
     expect(testIdIndex(focusPane, 'operator-focus-status-bar')).toBeLessThan(
       testIdIndex(focusPane, 'operator-focus-sop-handling-tree'),
     )
     expect(testIdIndex(focusPane, 'operator-focus-sop-handling-tree')).toBeLessThan(
-      testIdIndex(focusPane, 'operator-focus-intent-emotion-card'),
+      testIdIndex(focusPane, 'operator-focus-recommended-reply-card'),
     )
     expect(regexMatches(focusPane, /data-testid="operator-focus-recommended-reply-card"/g)).toHaveLength(1)
     expect(regexMatches(focusPane, /data-testid="operator-focus-sensitive-confirmation-card"/g)).toHaveLength(1)
     const recommendedReplyCard = elementByTestId(focusPane, 'operator-focus-recommended-reply-card')
     const sensitiveConfirmationCard = elementByTestId(focusPane, 'operator-focus-sensitive-confirmation-card')
+    const statusBar = elementByTestId(focusPane, 'operator-focus-status-bar')
 
-    expect(focusPane).toContain('状态条')
-    expect(focusPane).toContain('任务意图分析')
-    expect(focusPane).toContain('任务意图')
-    expect(focusPane).toContain('情绪')
-    expect(focusPane).toContain('业务对象摘要')
-    expect(focusPane).toContain('SOP办理树')
-    expect(focusPane).toContain('风险与时效')
+    expect(statusBar).toContain('aria-label="状态栏"')
+    expect(statusBar).toContain('class="focus-status-pill"')
+    expect(focusPane).toContain('任务意图识别')
     expect(focusPane).toContain('推荐回复')
     expect(focusPane).toContain('高敏确认')
     expect(focusPane).toContain('workspace.proposedActions')
     expect(focusPane).toContain('workspace.taskSummary.items')
-    expect(focusPane).toContain('data-testid="operator-focus-task-controls"')
     expect(recommendedReplyCard).toContain('workspace.recommendation.customerReplyDraft')
-    expect(recommendedReplyCard).toContain('坐席处理提示')
     expect(recommendedReplyCard).toContain(':disabled="!hasDraft"')
     expect(recommendedReplyCard).not.toContain(':disabled="!workspace.recommendation.operatorRecommendation"')
     expect(sensitiveConfirmationCard).toContain('pendingProposedActions.length')
@@ -133,9 +126,17 @@ describe('CustomerAssistantPanel IA convergence contract', () => {
     expect(focusPane).not.toContain('data-testid="operator-recommendation-panel"')
     expect(focusPane).not.toContain('data-testid="operator-draft-panel"')
     expect(focusPane).not.toContain('data-testid="operator-proposed-actions-panel"')
+    expect(focusPane).not.toContain('data-testid="operator-focus-intent-emotion-card"')
+    expect(focusPane).not.toContain('data-testid="operator-focus-business-object-summary"')
+    expect(focusPane).not.toContain('data-testid="operator-focus-risk-sla-card"')
     expect(focusPane).not.toContain('data-testid="operator-task-controls"')
+    expect(focusPane).not.toContain('data-testid="operator-focus-task-controls"')
     expect(focusPane).not.toContain('data-testid="operator-worker-profile-config-panel"')
     expect(focusPane).not.toContain('data-testid="operator-eval-observability-panel"')
+    expect(focusPane).not.toContain('业务对象摘要')
+    expect(focusPane).not.toContain('风险与时效')
+    expect(focusPane).not.toContain('情绪')
+    expect(focusPane).not.toContain('坐席处理提示')
     expect(focusPane).not.toContain('modelPolicyRef')
     expect(focusPane).not.toContain('promptRef')
     expect(focusPane).not.toContain('workerRunId')
@@ -206,13 +207,15 @@ describe('CustomerAssistantPanel IA convergence contract', () => {
   })
 
   it('constrains the shell to one viewport and scrolls overflowing columns internally', () => {
-    expect(content).toMatch(/\.customer-assistant-shell \{[\s\S]*height: calc\(100vh - 8rem\);[\s\S]*overflow: hidden;/)
-    expect(content).toMatch(/\.customer-assistant-left-column,[\s\S]*\.customer-assistant-center-column,[\s\S]*\.customer-assistant-ai-workbench-column \{[\s\S]*height: 100%;[\s\S]*max-height: 100%;[\s\S]*overflow-y: auto;/)
+    expect(content).toMatch(/\.customer-assistant \{[\s\S]*height: 100%;[\s\S]*min-height: 0;[\s\S]*overflow: hidden;/)
+    expect(content).toMatch(/\.customer-assistant-shell \{[\s\S]*flex: 1 1 auto;[\s\S]*height: auto;[\s\S]*overflow: hidden;/)
+    expect(content).toMatch(/\.customer-assistant-left-column,[\s\S]*\.customer-assistant-center-column,[\s\S]*\.customer-assistant-ai-workbench-column \{[\s\S]*height: 100%;[\s\S]*max-height: 100%;[\s\S]*overflow: hidden;/)
+    expect(content).toMatch(/\.customer-assistant-left-pane,[\s\S]*\.workbench-pane-stack \{[\s\S]*flex: 1 1 auto;[\s\S]*min-height: 0;[\s\S]*overflow-y: auto;/)
     expect(content).toMatch(/\.customer-assistant-left-column,[\s\S]*\.customer-assistant-center-column,[\s\S]*\.conversation-stack \{[\s\S]*display: flex;[\s\S]*flex-direction: column;/)
     expect(content).toMatch(/\.conversation-stack \{[\s\S]*flex: 1 1 auto;[\s\S]*min-height: 0;/)
     expect(content).toMatch(/\.conversation-stack > \.conversation-panel \{[\s\S]*flex: 1 1 auto;[\s\S]*min-height: 0;/)
     expect(content).toMatch(/\.message-stream \{[\s\S]*min-height: 0;[\s\S]*max-height: none;/)
-    expect(content).toMatch(/@media \(max-width: 58rem\)[\s\S]*\.customer-assistant-shell \{[\s\S]*height: calc\(100vh - 8rem\);/)
+    expect(content).not.toContain('height: calc(100vh - 8rem);')
   })
 
   it('keeps internal task controls out of the customer lane', () => {

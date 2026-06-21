@@ -53,7 +53,11 @@
             故事
           </button>
         </div>
-        <div data-testid="customer-assistant-left-session-pane" v-show="activeLeftRailTab === 'sessions'">
+        <div
+          class="customer-assistant-left-pane"
+          data-testid="customer-assistant-left-session-pane"
+          v-show="activeLeftRailTab === 'sessions'"
+        >
         <section class="session-inbox-dashboard" data-testid="operator-session-inbox-dashboard" aria-label="多客户会话">
           <div class="session-inbox-heading">
             <span class="panel-heading-title">
@@ -114,7 +118,11 @@
         </section>
         </div>
 
-        <div data-testid="customer-assistant-left-story-pane" v-show="activeLeftRailTab === 'stories'">
+        <div
+          class="customer-assistant-left-pane"
+          data-testid="customer-assistant-left-story-pane"
+          v-show="activeLeftRailTab === 'stories'"
+        >
         <section class="demo-story-strip" data-testid="customer-assistant-demo-stories" aria-label="演示故事线">
           <div class="demo-story-heading">
             <span class="panel-heading-title">
@@ -324,134 +332,35 @@
           data-testid="operator-workbench-focus-pane"
           v-show="activeWorkbenchTab === 'focus'"
         >
-          <section class="workspace-panel compact-panel focus-card focus-status-bar" data-testid="operator-focus-status-bar">
-            <div>
-              <span>状态条</span>
-              <strong>{{ focusProjection.sessionStatus.label }}</strong>
-              <small>下一步：{{ focusProjection.riskTiming.nextAction }}</small>
-            </div>
-            <a-tag :color="focusStatusColor(focusProjection.sessionStatus.kind)">
-              {{ focusProjection.sessionStatus.detail }}
-            </a-tag>
+          <section
+            class="workspace-panel compact-panel focus-card focus-status-bar"
+            data-testid="operator-focus-status-bar"
+            aria-label="状态栏"
+          >
+            <span class="focus-status-pill" :class="`focus-status-pill--${focusProjection.sessionStatus.kind}`">
+              <span class="focus-status-dot" aria-hidden="true"></span>
+              {{ focusProjection.sessionStatus.label }}
+            </span>
+            <small>{{ focusProjection.riskTiming.nextAction }}</small>
           </section>
 
           <section class="workspace-panel compact-panel focus-card" data-testid="operator-focus-sop-handling-tree">
             <div class="panel-heading">
               <span class="panel-heading-title">
                 <CheckOutlined />
-                任务意图分析
+                任务意图识别
               </span>
-              <a-tag color="blue">SOP办理树</a-tag>
+              <a-tag color="blue">{{ workspace.taskSummary.items.length }} 任务</a-tag>
             </div>
-            <div class="focus-summary-grid">
-              <div>
-                <span>任务数</span>
-                <strong>{{ workspace.taskSummary.items.length }}</strong>
-              </div>
-              <div>
-                <span>当前节点</span>
-                <strong>{{ focusProjection.sopNodes[0]?.label || '等待识别' }}</strong>
-              </div>
-            </div>
-            <div class="task-list">
-              <div
-                v-if="workspace.taskSummary.items.length === 0"
-                class="empty-compact"
-                data-testid="operator-focus-task-empty-state"
-              >
-                暂无任务
-              </div>
-              <div v-for="task in workspace.taskSummary.items" :key="`focus-task-${task.id}`" class="task-row">
-                <div>
-                  <strong>{{ task.displayName }}</strong>
-                  <span>{{ task.taskKey }} · {{ task.status }}</span>
-                </div>
-                <a-tag :color="statusColor(task.statusTone)">{{ task.status }}</a-tag>
-                <p v-if="task.missingFields.length">缺失：{{ task.missingFields.join('、') }}</p>
-                <div
-                  v-if="task.availableControls.length"
-                  class="task-controls"
-                  data-testid="operator-focus-task-controls"
-                >
-                  <a-tooltip
-                    v-for="control in task.availableControls"
-                    :key="control"
-                    :title="taskControlTooltip(control)"
-                  >
-                    <a-button
-                      size="small"
-                      :danger="control === 'cancel'"
-                      :loading="taskControlLoadingKey === `${task.id}:${control}`"
-                      @click="proposeTaskControl(task.id, control)"
-                    >
-                      <CloseOutlined v-if="control === 'cancel'" />
-                      <ThunderboltOutlined v-else />
-                      <span v-if="control === 'retry'">重试</span>
-                      <span v-else-if="control === 'cancel'">取消</span>
-                      <span v-else>恢复</span>
-                    </a-button>
-                  </a-tooltip>
-                </div>
-              </div>
-            </div>
-            <div class="sop-progress-list">
+            <div class="intent-tree-list">
               <div
                 v-for="node in focusProjection.sopNodes"
                 :key="node.key"
-                class="sop-progress-row"
-                data-testid="operator-focus-sop-progress-row"
+                class="intent-tree-node"
+                data-testid="operator-task-intent-node"
               >
-                <div>
-                  <strong>{{ node.label }}</strong>
-                  <span>{{ node.summary }}</span>
-                  <span v-if="node.missingInfo.length">缺失信息：{{ node.missingInfo.join('、') }}</span>
-                  <small>{{ node.nextAction }} · {{ node.evidenceLabel }}</small>
-                </div>
-                <a-tag :color="sopNodeStatusColor(node.status)">{{ sopNodeStatusLabel(node.status) }}</a-tag>
-              </div>
-            </div>
-          </section>
-
-          <section class="workspace-panel compact-panel focus-card" data-testid="operator-focus-intent-emotion-card">
-            <div class="panel-heading">
-              <span class="panel-heading-title">
-                <BulbOutlined />
-                任务意图
-              </span>
-              <a-tag color="blue">情绪</a-tag>
-            </div>
-            <div class="focus-summary-grid">
-              <div>
-                <span>当前诉求</span>
-                <strong>{{ workspace.taskSummary.items[0]?.displayName || '等待旅客输入' }}</strong>
-              </div>
-              <div>
-                <span>情绪状态</span>
-                <strong>{{ workspace.recommendation.warnings.length ? '需安抚' : '稳定' }}</strong>
-              </div>
-            </div>
-            <p class="panel-copy">
-              {{ workspace.recommendation.warnings[0] || '先确认旅客诉求和关键信息，再推进后续办理。' }}
-            </p>
-          </section>
-
-          <section class="workspace-panel compact-panel focus-card" data-testid="operator-focus-business-object-summary">
-            <div class="panel-heading">
-              <span class="panel-heading-title">
-                <OrderedListOutlined />
-                业务对象摘要
-              </span>
-              <a-tag color="blue">{{ focusProjection.businessObjects.length }} 项</a-tag>
-            </div>
-            <div class="focus-object-grid">
-              <div
-                v-for="item in focusProjection.businessObjects"
-                :key="item.key"
-                class="focus-object-row"
-              >
-                <span>{{ item.label }}</span>
-                <strong>{{ item.value }}</strong>
-                <small>{{ item.detail }}</small>
+                <span class="intent-node-dot" :class="`intent-node-dot--${node.status}`" aria-hidden="true"></span>
+                <strong>{{ node.label }}</strong>
               </div>
             </div>
           </section>
@@ -464,8 +373,7 @@
               </span>
               <a-tag color="green">可发送话术</a-tag>
             </div>
-            <p class="draft-copy">{{ workspace.recommendation.customerReplyDraft || '暂无可发送旅客话术' }}</p>
-            <p class="panel-copy">坐席处理提示：{{ workspace.recommendation.operatorRecommendation || '暂无坐席处理提示' }}</p>
+            <p class="draft-copy">{{ workspace.recommendation.customerReplyDraft || '暂无话术' }}</p>
             <div class="panel-actions">
               <a-tooltip title="发送给旅客">
                 <a-button
@@ -512,36 +420,6 @@
                 </a-button>
               </a-tooltip>
             </div>
-          </section>
-
-          <section class="workspace-panel compact-panel focus-card" data-testid="operator-focus-risk-sla-card">
-            <div class="panel-heading">
-              <span class="panel-heading-title">
-                <WarningOutlined />
-                风险与时效
-              </span>
-              <a-tag :color="riskTimingColor(focusProjection.riskTiming.tone)">
-                {{ focusProjection.riskTiming.tone === 'critical' ? '高风险' : '风险提示' }}
-              </a-tag>
-            </div>
-            <p class="panel-copy">{{ focusProjection.riskTiming.summary }}</p>
-            <div data-testid="operator-warnings-panel">
-              <div
-                v-if="focusProjection.riskTiming.warnings.length === 0"
-                class="empty-compact"
-                data-testid="operator-warning-empty-state"
-              >
-                暂无风险提示
-              </div>
-              <a-alert
-                v-for="warning in focusProjection.riskTiming.warnings"
-                :key="warning"
-                type="warning"
-                show-icon
-                :message="warning"
-              />
-            </div>
-            <small>{{ focusProjection.riskTiming.nextAction }}</small>
           </section>
 
           <section class="workspace-panel compact-panel" data-testid="operator-focus-sensitive-confirmation-card">
@@ -1216,7 +1094,6 @@ import {
   type CustomerAssistantDemoStory,
   type CustomerAssistantDemoStoryMetrics,
   type CustomerAssistantProposedAction,
-  type CustomerAssistantTaskControlType,
   type CustomerAssistantWorkerProfile,
   type CustomerAssistantWorkerProfileUpdatePayload,
 } from '@/api/customerAssistant'
@@ -1230,12 +1107,10 @@ import {
   EditOutlined,
   HistoryOutlined,
   MessageOutlined,
-  OrderedListOutlined,
   RobotOutlined,
   SafetyCertificateOutlined,
   SendOutlined,
   ThunderboltOutlined,
-  WarningOutlined,
 } from '@ant-design/icons-vue'
 
 import {
@@ -1246,7 +1121,6 @@ import {
   deliverCustomerAssistantRuntimeAction,
   executeCustomerAssistantRuntimeAction,
   loadCustomerAssistantDemoStory,
-  proposeCustomerAssistantRuntimeTaskControl,
   rejectCustomerAssistantRuntimeAction,
   sendCustomerAssistantRuntimeTurn,
   updateCustomerAssistantRuntimeAction,
@@ -1268,10 +1142,6 @@ import {
   formatCustomerAssistantOperatorKnowledgeQa,
   formatCustomerAssistantTurnStatus,
   summarizeCustomerAssistantTasks,
-  type CustomerAssistantFocusSessionStatus,
-  type CustomerAssistantRiskTimingSummary,
-  type CustomerAssistantSopNodeStatus,
-  type CustomerAssistantTaskRow,
 } from './customerAssistantViewModel'
 
 const customerInput = ref('我要退票')
@@ -1283,7 +1153,6 @@ const activeLeftRailTab = ref<'sessions' | 'stories'>('sessions')
 const activeWorkbenchTab = ref<'focus' | 'assistant' | 'evidence' | 'config'>('focus')
 const sendingSource = ref<'customer' | 'operator' | null>(null)
 const actionLoadingId = ref<number | null>(null)
-const taskControlLoadingKey = ref<string | null>(null)
 const runtimeState = ref(createCustomerAssistantRuntimeState())
 const demoStories = ref<CustomerAssistantDemoStory[]>([])
 const demoStoryMetrics = ref<CustomerAssistantDemoStoryMetrics | null>(null)
@@ -1394,17 +1263,6 @@ function messageLabel(role: string) {
   return '助手'
 }
 
-function statusColor(tone: CustomerAssistantTaskRow['statusTone']) {
-  const colors: Record<CustomerAssistantTaskRow['statusTone'], string> = {
-    default: 'default',
-    error: 'error',
-    processing: 'processing',
-    success: 'success',
-    warning: 'warning',
-  }
-  return colors[tone]
-}
-
 function sessionInboxStatusColor(statusKind: CustomerAssistantSessionInboxStatusKind) {
   const colors: Record<CustomerAssistantSessionInboxStatusKind, string> = {
     active: 'processing',
@@ -1413,51 +1271,6 @@ function sessionInboxStatusColor(statusKind: CustomerAssistantSessionInboxStatus
     completed: 'success',
   }
   return colors[statusKind]
-}
-
-function focusStatusColor(kind: CustomerAssistantFocusSessionStatus['kind']) {
-  const colors: Record<CustomerAssistantFocusSessionStatus['kind'], string> = {
-    idle: 'default',
-    waiting_customer: 'blue',
-    analyzing: 'processing',
-    waiting_operator: 'warning',
-    reply_ready: 'success',
-    processing: 'processing',
-    completed: 'success',
-  }
-  return colors[kind]
-}
-
-function sopNodeStatusColor(status: CustomerAssistantSopNodeStatus) {
-  const colors: Record<CustomerAssistantSopNodeStatus, string> = {
-    pending: 'default',
-    active: 'processing',
-    blocked: 'error',
-    complete: 'success',
-    warning: 'warning',
-  }
-  return colors[status]
-}
-
-function sopNodeStatusLabel(status: CustomerAssistantSopNodeStatus) {
-  const labels: Record<CustomerAssistantSopNodeStatus, string> = {
-    pending: '待处理',
-    active: '当前',
-    blocked: '待补充',
-    complete: '已完成',
-    warning: '风险',
-  }
-  return labels[status]
-}
-
-function riskTimingColor(tone: CustomerAssistantRiskTimingSummary['tone']) {
-  const colors: Record<CustomerAssistantRiskTimingSummary['tone'], string> = {
-    default: 'default',
-    success: 'success',
-    warning: 'warning',
-    critical: 'error',
-  }
-  return colors[tone]
 }
 
 function compactPayload(payload: Record<string, unknown>) {
@@ -1551,18 +1364,6 @@ async function saveEditedAction(actionId: number) {
   } finally {
     actionLoadingId.value = null
   }
-}
-
-function taskControlTooltip(control: CustomerAssistantTaskControlType) {
-  if (control === 'retry') return '生成重试任务的待确认动作'
-  if (control === 'cancel') return '生成取消任务的待确认动作'
-  return '生成恢复任务的待确认动作'
-}
-
-function taskControlReason(control: CustomerAssistantTaskControlType) {
-  if (control === 'retry') return 'operator retry requested from workbench'
-  if (control === 'cancel') return 'operator cancel requested from workbench'
-  return 'operator resume requested from workbench'
 }
 
 function startEditWorkerProfileCatalog(profile: CustomerAssistantWorkerProfile) {
@@ -1718,24 +1519,6 @@ function syncSelectedDemoStoryRoute(storyId: string) {
   void router
     .replace({ query: buildCustomerAssistantStoryQuery(route.query, storyId) })
     .catch(() => undefined)
-}
-
-async function proposeTaskControl(taskId: number, controlType: CustomerAssistantTaskControlType) {
-  taskControlLoadingKey.value = `${taskId}:${controlType}`
-  try {
-    runtimeState.value = await proposeCustomerAssistantRuntimeTaskControl(
-      runtimeState.value,
-      taskId,
-      controlType,
-      taskControlReason(controlType),
-    )
-    void loadDemoStoryMetrics()
-    message.success('已生成待确认任务控制')
-  } catch (error) {
-    catchCustomerAssistantError(error, '生成任务控制失败')
-  } finally {
-    taskControlLoadingKey.value = null
-  }
 }
 
 async function askOperatorKnowledgeQuestion() {
@@ -1919,7 +1702,9 @@ function stringValue(value: unknown, fallback: string) {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  min-height: 40rem;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .workspace-header {
@@ -2138,10 +1923,11 @@ function stringValue(value: unknown, fallback: string) {
 
 .customer-assistant-shell {
   display: grid;
+  flex: 1 1 auto;
   grid-template-columns: minmax(17rem, 20rem) minmax(0, 1fr) minmax(22rem, 28rem);
   gap: 1rem;
   align-items: stretch;
-  height: calc(100vh - 8rem);
+  height: auto;
   min-height: 0;
   overflow: hidden;
 }
@@ -2159,7 +1945,7 @@ function stringValue(value: unknown, fallback: string) {
   height: 100%;
   max-height: 100%;
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .customer-assistant-left-column,
@@ -2179,6 +1965,13 @@ function stringValue(value: unknown, fallback: string) {
 .conversation-stack {
   flex: 1 1 auto;
   min-height: 0;
+}
+
+.customer-assistant-left-pane,
+.workbench-pane-stack {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .conversation-stack > .conversation-panel {
@@ -2232,6 +2025,7 @@ function stringValue(value: unknown, fallback: string) {
 
 .workbench-pane-stack {
   display: grid;
+  align-content: start;
   gap: 0.75rem;
 }
 
@@ -2470,7 +2264,6 @@ function stringValue(value: unknown, fallback: string) {
 .task-list,
 .action-list,
 .progress-list,
-.sop-progress-list,
 .worker-profile-catalog,
 .audit-list,
 .recognition-evidence-list,
@@ -2478,29 +2271,6 @@ function stringValue(value: unknown, fallback: string) {
 .knowledge-qa-list {
   display: grid;
   gap: 0.625rem;
-}
-
-.sop-progress-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 0.5rem;
-  align-items: center;
-  padding: 0.65rem;
-  border: 0.0625rem solid #e7edf6;
-  border-radius: 0.45rem;
-  background: #fbfcfe;
-}
-
-.sop-progress-row > div:first-child {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
-.sop-progress-row span {
-  color: #667085;
-  font-size: 0.75rem;
 }
 
 .progress-row {
@@ -2778,6 +2548,104 @@ function stringValue(value: unknown, fallback: string) {
   background: #fff7f5;
 }
 
+.focus-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 3.25rem;
+  border-color: #cce8bf;
+  background: #fbfff8;
+}
+
+.focus-status-bar small {
+  color: #5c667a;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.focus-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  max-width: 100%;
+  padding: 0.45rem 1rem;
+  border-radius: 999rem;
+  background: #45c31f;
+  color: #ffffff;
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.focus-status-pill--waiting_operator,
+.focus-status-pill--reply_ready,
+.focus-status-pill--analyzing {
+  background: #2389e8;
+}
+
+.focus-status-pill--processing {
+  background: #d18a00;
+}
+
+.focus-status-pill--completed,
+.focus-status-pill--waiting_customer {
+  background: #16945b;
+}
+
+.focus-status-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  flex: 0 0 auto;
+  border-radius: 999rem;
+  background: currentcolor;
+  box-shadow: 0 0 0 0.1875rem rgb(255 255 255 / 24%);
+}
+
+.intent-tree-list {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.intent-tree-node {
+  display: grid;
+  grid-template-columns: 0.75rem minmax(0, 1fr);
+  gap: 0.45rem;
+  align-items: center;
+  min-height: 1.7rem;
+  color: #344054;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+
+.intent-tree-node strong {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.intent-node-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999rem;
+  background: #a8b1c0;
+}
+
+.intent-node-dot--complete {
+  background: #45c31f;
+}
+
+.intent-node-dot--active,
+.intent-node-dot--warning {
+  background: #2389e8;
+}
+
+.intent-node-dot--blocked {
+  background: #d92d20;
+}
+
 .eval-evidence-block {
   display: grid;
   gap: 0.45rem;
@@ -2972,7 +2840,6 @@ function stringValue(value: unknown, fallback: string) {
   .customer-assistant-shell {
     grid-template-columns: minmax(10.5rem, 11rem) minmax(0, 1fr) minmax(10.5rem, 11rem);
     gap: 0.5rem;
-    height: calc(100vh - 8rem);
   }
 
   .action-decision-form {
