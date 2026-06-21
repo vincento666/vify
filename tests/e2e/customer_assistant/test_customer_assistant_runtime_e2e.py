@@ -1,4 +1,6 @@
 import unittest
+import json
+import time
 from collections.abc import Generator
 
 from fastapi.testclient import TestClient
@@ -14,13 +16,32 @@ from app.modules.customer_assistant.infra.schema import (
 )
 
 
+LEGACY_STUB_BAGGAGE_PROFILES_JSON = json.dumps(
+    {
+        "profiles": [
+            {
+                "profileId": "legacy_baggage_stub",
+                "taskKey": "baggage_qa",
+                "taskType": "QA",
+                "workerType": "stub_qa",
+                "workerRef": "baggage_allowance",
+                "modelPolicyRef": "legacy_stub_qa_model",
+                "promptRef": "baggage_allowance_prompt",
+                "riskPolicyRef": "read_only",
+            }
+        ]
+    }
+)
+
+
 class CustomerAssistantRuntimeE2ETest(unittest.TestCase):
     def setUp(self) -> None:
         self._database = mysql8_unittest_database(self, "customer_assistant_runtime_e2e", tables=customer_assistant_tables(), register=register_customer_assistant_tables)
         self._engine = self._database.engine
         self._factory = self._database.session_factory
+        self._settings = Settings(runtime_lab_sop_chatflow_ids=None)
         app.dependency_overrides[get_session] = self._session_override
-        app.dependency_overrides[get_settings] = lambda: Settings(runtime_lab_sop_chatflow_ids=None)
+        app.dependency_overrides[get_settings] = lambda: self._settings
 
     def tearDown(self) -> None:
         app.dependency_overrides.pop(get_session, None)
@@ -28,11 +49,33 @@ class CustomerAssistantRuntimeE2ETest(unittest.TestCase):
         self._engine.dispose()
         self._tmp_dir.cleanup()
 
+    def test_default_multitask_baggage_chatflow_does_not_500(self) -> None:
+        with TestClient(app) as client:
+            session_id = client.post("/api/v1/customer-assistant/sessions", json={}).json()["data"]["id"]
+            first = _turn(client, session_id, "我要退票，也想问行李额", "multi-default-1")
+            tasks = client.get(f"/api/v1/customer-assistant/sessions/{session_id}/tasks").json()["data"]["list"]
+
+        self.assertEqual([summary["taskKey"] for summary in first["taskSummaries"]], ["refund_ticket", "baggage_qa"])
+        self.assertEqual([summary["status"] for summary in first["taskSummaries"]], ["WAITING", "WAITING"])
+        self.assertIn("订单号", first["customerReplyDraft"])
+        baggage_task = next(task for task in tasks if task["taskKey"] == "baggage_qa")
+        self.assertEqual(baggage_task["workerType"], "chatflow_sop")
+        self.assertIn("行李服务", baggage_task["lastResult"]["customerReplyDraft"])
+
     def test_refund_and_baggage_multitask_resume_proposed_action_and_events(self) -> None:
+        self._settings = Settings(
+            runtime_lab_sop_chatflow_ids=None,
+            customer_assistant_worker_profiles_json=LEGACY_STUB_BAGGAGE_PROFILES_JSON,
+            customer_assistant_stub_qa_delay_seconds=0.2,
+            customer_assistant_worker_wait_deadline_seconds=0.01,
+            customer_assistant_worker_timeout_seconds=2.0,
+        )
         with TestClient(app) as client:
             session_id = client.post("/api/v1/customer-assistant/sessions", json={}).json()["data"]["id"]
             first = _turn(client, session_id, "我要退票，也想问行李额", "multi-1")
             replay = _turn(client, session_id, "我要退票，也想问行李额", "multi-1")
+            worker_run_id = first["taskSummaries"][1]["workerAsyncRefs"]["workerRunId"]
+            _wait_for_worker_run_status(client, worker_run_id, {"COMPLETED"})
             continued = _turn(client, session_id, "订单号 TK-100", "multi-2")
             completed = _turn(client, session_id, "确认", "multi-3")
             replay_completed = _turn(client, session_id, "确认", "multi-3")
@@ -102,6 +145,18 @@ def _turn(client: TestClient, session_id: int, message: str, key: str) -> dict:
     )
     assert response.status_code == 200, response.text
     return response.json()["data"]
+
+
+def _wait_for_worker_run_status(client: TestClient, worker_run_id: str, expected_statuses: set[str]) -> dict:
+    last: dict | None = None
+    for _ in range(100):
+        response = client.get(f"/api/v1/customer-assistant/worker-runs/{worker_run_id}")
+        assert response.status_code == 200, response.text
+        last = response.json()["data"]
+        if last["status"] in expected_statuses:
+            return last
+        time.sleep(0.02)
+    raise AssertionError(f"worker run {worker_run_id} did not reach {expected_statuses}; last={last}")
 
 
 if __name__ == "__main__":
