@@ -48,9 +48,19 @@ Status: reopened on 2026-06-21 for focus-workbench cleanup and P0 UAT blockers.
 
 ## Main Verification
 
-- [ ] Backend unit/integration/contract/e2e for touched customer-assistant areas.
-- [ ] Frontend focused unit, full unit, and `src/remScaleClosure.test.ts`.
-- [ ] Browser UAT covering all right-side tabs, seeded action confirmation, and
+- [x] Backend unit/integration/contract/e2e for touched customer-assistant areas.
+  Evidence:
+  `artifacts/slices/207-customer-assistant-ai-workbench-ia-convergence/final-gates/backend-unit.txt`,
+  `backend-contract.txt`, `backend-integration.txt`, `backend-e2e.txt`.
+- [x] Frontend focused unit, full unit, and `src/remScaleClosure.test.ts`.
+  Evidence:
+  `artifacts/slices/207-customer-assistant-ai-workbench-ia-convergence/final-gates/frontend-focused.txt`,
+  `frontend-unit.txt`, `frontend-build.txt`.
+- [x] Browser UAT covering all right-side tabs, seeded action confirmation, and
   live multi-task recommendation path.
-- [ ] Diff review confirms no duplicate legacy focus panels or debug leakage.
-- [ ] Commit each accepted sub-feature without staging unrelated dirty files.
+  Evidence:
+  `artifacts/slices/207-customer-assistant-ai-workbench-ia-convergence/final-gates/browser-uat-ia.txt`,
+  `browser-final-checkpoints.txt`, and
+  `screenshots/in-app-browser-real-seeded-uat.png`.
+- [x] Diff review confirms no duplicate legacy focus panels or debug leakage.
+- [x] Commit each accepted sub-feature without staging unrelated dirty files.
