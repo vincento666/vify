@@ -1,90 +1,56 @@
 # Tasks: Customer Assistant AI Workbench IA Convergence
 
-## Slice A: SDD And RED Contract
+Status: reopened on 2026-06-21 for focus-workbench cleanup and P0 UAT blockers.
 
-- [x] SDD: create Spec 207 IA convergence spec, plan, and tasks.
-- [x] PRD: update customer assistant AI workbench redesign target to the latest
-  four-tab IA.
-- [x] RED contract: flip `customerAssistantPanel.test.ts` to require the new
-  right workbench target.
-- [x] RED evidence: run the focused frontend unit test and save output to
-  `artifacts/slices/207-customer-assistant-ai-workbench-ia-convergence/slice-a-contract/red.txt`.
-- [x] GREEN implementation: satisfied by main integration after Slice B/C.
+## Problem Inventory
 
-## Slice B: Focus Projection View Model
+- [x] Inventory current issues covering duplicated recommendation, duplicated
+  high-sensitive actions, wrong pending count, misplaced SOP tree, thin business
+  objects, noisy risk/debug boundaries, seeded action payloads, live multi-task
+  500, stale worker profile env, JSON env fragility, and refund recognition gap.
+- [x] Evidence:
+  `artifacts/slices/207-customer-assistant-ai-workbench-ia-convergence/00-problem-inventory/problem-inventory.md`
 
-- [x] RED view-model tests require operator-facing session status, business
-  summary, SOP nodes, and risk/time-limit summaries.
-- [x] Implement `formatCustomerAssistantFocusProjection`.
-- [x] Fix reply-ready priority so a generated customer draft wins over
-  missing-info waiting state.
-- [x] Gate: focused view-model and panel unit tests passed.
+## Slice A: Focus IA And Recommendation Consolidation
 
-## Slice C: Browser UAT Harness
+- [x] RED: panel contract requires a single production-style focus handling path
+  with no legacy peer panels.
+- [x] GREEN: task intent/SOP tree is directly below status/next action.
+- [x] GREEN: recommended reply card uses `customerReplyDraft` for send/copy/edit
+  and shows `operatorRecommendation` only as operator guidance.
+- [x] GREEN: high-sensitive confirmation counts only pending actions and shows
+  receipts/details through one primary card.
+- [x] Gate: focused panel test and remScaleClosure.
 
-- [x] Add `frontend/e2e/customer-assistant-ai-workbench-ia-uat.mjs`.
-- [x] RED evidence captured before Vue implementation.
-- [x] UAT verifies no `办理` tab, focus-first closure, pure AI chat, and
-  evidence/config debug labels.
-- [x] UAT screenshots saved under
-  `artifacts/slices/207-customer-assistant-ai-workbench-ia-convergence/screenshots/`.
+## Slice B: Seeded Pending Actions
 
-## Main Integration
+- [ ] RED: seeded demo built-in pending action confirmation fails against old
+  payload shape.
+- [ ] GREEN: seeded task-command actions use the current payload contract and can
+  be confirmed/rejected through the API.
+- [ ] Gate: focused customer-assistant demo seed/task-control tests.
 
-- [x] Remove the `办理` tab and all `activeWorkbenchTab === 'business'` branches.
-- [x] Move task ledger, recommendation, draft, warnings, confirmations, receipts,
-  and task controls into the `聚焦` pane.
-- [x] Add focus status, intent/emotion, business-object summary, SOP handling
-  tree, risk/time-limit card, recommended reply card, and sensitive confirmation
-  card.
-- [x] Replace the assistant internal header/panel structure with a pure chat
-  window.
-- [x] Label evidence/config panes with `研究调试入口`.
-- [x] Update final browser checkpoint script and UAT checklist.
-- [x] Align the existing backend customer-assistant e2e test to the current
-  async baggage-worker contract without changing backend runtime code.
+## Slice C: Live Multi-Task Worker Runtime
 
-## Evidence
+- [ ] RED: reproduce or narrowly guard the known PyMySQL packet sequence failure
+  on live multi-task worker persistence.
+- [ ] GREEN: async worker persistence uses isolated sessions/connections and a
+  live multi-task turn does not 500.
+- [ ] Gate: relevant customer-assistant worker/runtime integration/e2e tests.
 
-- RED:
-  `artifacts/slices/207-customer-assistant-ai-workbench-ia-convergence/slice-a-contract/red.txt`
-- View-model RED:
-  `artifacts/slices/207-customer-assistant-ai-workbench-ia-convergence/slice-b-viewmodel/red.txt`
-- UAT RED:
-  `artifacts/slices/207-customer-assistant-ai-workbench-ia-convergence/slice-c-uat/red.txt`
-- UAT notes:
-  `artifacts/slices/207-customer-assistant-ai-workbench-ia-convergence/slice-c-uat/uat.md`
-- UAT screenshots:
-  `artifacts/slices/207-customer-assistant-ai-workbench-ia-convergence/screenshots/`
+## Slice D: Profile Defaults And Refund Recognition
 
-## Final Gates
+- [ ] RED: default profile catalog must not use stale baggage stub, and
+  `退 MU5137 的票` must recognize refund intent.
+- [ ] GREEN: local/default profile path is productized and refund natural
+  phrasing is recognized.
+- [ ] Gate: worker profile and recognition tests.
 
-- [x] Frontend full unit:
-  `npm --prefix frontend run test:unit` passed 98 files / 413 tests.
-- [x] Frontend rem:
-  `npm --prefix frontend run test:unit -- src/remScaleClosure.test.ts` passed.
-- [x] Frontend build:
-  `npm --prefix frontend run build` passed.
-- [x] Backend unit:
-  `PYTHONPATH=. uv run pytest tests/unit/customer_assistant` passed 36 tests.
-- [x] Backend contract:
-  `PYTHONPATH=. uv run pytest tests/contract/customer_assistant tests/contract/test_ai_assistant_customer_bridge_api.py`
-  passed 25 tests.
-- [x] Backend integration:
-  `PYTHONPATH=. uv run pytest tests/integration/customer_assistant` passed 81
-  tests, 1 skipped.
-- [x] Backend e2e:
-  `PYTHONPATH=. uv run pytest tests/e2e/customer_assistant` passed 3 tests.
-- [x] Browser UAT:
-  `BASE_URL=http://127.0.0.1:5173/customer-assistant node frontend/e2e/customer-assistant-ai-workbench-ia-uat.mjs`
-  passed.
-- [x] Final browser checkpoints:
-  `HIFY_E2E_SCREENSHOT=artifacts/slices/207-customer-assistant-ai-workbench-ia-convergence/screenshots/final-uat-checkpoints.png node frontend/e2e/customer-assistant-final-uat-checkpoints.mjs`
-  passed.
+## Main Verification
 
-## Remaining Risk
-
-- Vite build still reports existing CJS API deprecation and chunk-size warnings.
-- Evidence/config remain first-level research/debug tabs for the demo; the
-  production shell should later sink them behind per-node and per-card
-  `查看依据` affordances.
+- [ ] Backend unit/integration/contract/e2e for touched customer-assistant areas.
+- [ ] Frontend focused unit, full unit, and `src/remScaleClosure.test.ts`.
+- [ ] Browser UAT covering all right-side tabs, seeded action confirmation, and
+  live multi-task recommendation path.
+- [ ] Diff review confirms no duplicate legacy focus panels or debug leakage.
+- [ ] Commit each accepted sub-feature without staging unrelated dirty files.

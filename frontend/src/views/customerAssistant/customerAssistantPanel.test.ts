@@ -48,6 +48,10 @@ function regexMatches(content: string, pattern: RegExp) {
   return Array.from(content.matchAll(pattern), (match) => match[0])
 }
 
+function testIdIndex(content: string, testId: string) {
+  return content.indexOf(`data-testid="${testId}"`)
+}
+
 describe('CustomerAssistantPanel IA convergence contract', () => {
   const content = readProjectFile('src/views/customerAssistant/CustomerAssistantPanel.vue')
 
@@ -78,31 +82,35 @@ describe('CustomerAssistantPanel IA convergence contract', () => {
     expect(content).not.toContain('data-testid="operator-workbench-business-pane"')
   })
 
-  it('makes focus the default business closure workspace', () => {
+  it('makes focus the default business closure workspace around one production task intent flow', () => {
     const focusPane = elementByTestId(content, 'operator-workbench-focus-pane')
 
     for (const testId of [
       'operator-focus-status-bar',
+      'operator-focus-sop-handling-tree',
       'operator-focus-intent-emotion-card',
       'operator-focus-business-object-summary',
-      'operator-focus-sop-handling-tree',
       'operator-focus-risk-sla-card',
       'operator-focus-recommended-reply-card',
       'operator-focus-sensitive-confirmation-card',
-      'operator-task-ledger',
-      'operator-recommendation-panel',
-      'operator-draft-panel',
-      'operator-warnings-panel',
-      'operator-action-receipt',
-      'operator-draft-delivery-receipt',
-      'operator-action-decision-receipt',
-      'operator-task-controls',
     ]) {
       expect(focusPane).toContain(`data-testid="${testId}"`)
     }
 
+    expect(testIdIndex(focusPane, 'operator-focus-status-bar')).toBeLessThan(
+      testIdIndex(focusPane, 'operator-focus-sop-handling-tree'),
+    )
+    expect(testIdIndex(focusPane, 'operator-focus-sop-handling-tree')).toBeLessThan(
+      testIdIndex(focusPane, 'operator-focus-intent-emotion-card'),
+    )
+    expect(regexMatches(focusPane, /data-testid="operator-focus-recommended-reply-card"/g)).toHaveLength(1)
+    expect(regexMatches(focusPane, /data-testid="operator-focus-sensitive-confirmation-card"/g)).toHaveLength(1)
+    const recommendedReplyCard = elementByTestId(focusPane, 'operator-focus-recommended-reply-card')
+    const sensitiveConfirmationCard = elementByTestId(focusPane, 'operator-focus-sensitive-confirmation-card')
+
     expect(focusPane).toContain('状态条')
-    expect(focusPane).toContain('任务意图')
+    expect(focusPane).toContain('任务意图分析')
+    expect(focusPane).toContain('思考摘要')
     expect(focusPane).toContain('情绪')
     expect(focusPane).toContain('业务对象摘要')
     expect(focusPane).toContain('SOP办理树')
@@ -110,6 +118,22 @@ describe('CustomerAssistantPanel IA convergence contract', () => {
     expect(focusPane).toContain('推荐回复')
     expect(focusPane).toContain('高敏确认')
     expect(focusPane).toContain('workspace.proposedActions')
+    expect(focusPane).toContain('workspace.taskSummary.items')
+    expect(focusPane).toContain('data-testid="operator-focus-task-controls"')
+    expect(recommendedReplyCard).toContain('workspace.recommendation.customerReplyDraft')
+    expect(recommendedReplyCard).toContain('坐席处理提示')
+    expect(recommendedReplyCard).toContain(':disabled="!hasDraft"')
+    expect(recommendedReplyCard).not.toContain(':disabled="!workspace.recommendation.operatorRecommendation"')
+    expect(sensitiveConfirmationCard).toContain('pendingProposedActions.length')
+    expect(sensitiveConfirmationCard).toContain('查看依据与回执')
+    expect(sensitiveConfirmationCard).toContain('data-testid="operator-action-receipt"')
+    expect(sensitiveConfirmationCard).toContain('data-testid="operator-draft-delivery-receipt"')
+    expect(sensitiveConfirmationCard).toContain('data-testid="operator-action-decision-receipt"')
+    expect(focusPane).not.toContain('data-testid="operator-task-ledger"')
+    expect(focusPane).not.toContain('data-testid="operator-recommendation-panel"')
+    expect(focusPane).not.toContain('data-testid="operator-draft-panel"')
+    expect(focusPane).not.toContain('data-testid="operator-proposed-actions-panel"')
+    expect(focusPane).not.toContain('data-testid="operator-task-controls"')
     expect(focusPane).not.toContain('data-testid="operator-worker-profile-config-panel"')
     expect(focusPane).not.toContain('data-testid="operator-eval-observability-panel"')
     expect(focusPane).not.toContain('modelPolicyRef')

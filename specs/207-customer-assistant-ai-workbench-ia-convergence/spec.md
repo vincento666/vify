@@ -1,16 +1,17 @@
 # Spec 207: Customer Assistant AI Workbench IA Convergence
 
-Status: Completed and verified.
-Date: 2026-06-20
+Status: Reopened for focus-workbench convergence fixes.
+Date: 2026-06-21
 Owner: Customer Assistant / Operator Workbench
 
 ## Goal
 
 Converge the customer assistant right-side workbench around the operator's
 default handling loop. The operator should no longer switch to a separate
-`办理` tab for normal closure work. The default `聚焦` tab owns the business
-object, task, recommendation, draft, risk, confirmation, receipt, and task
-control path.
+`办理` tab for normal closure work, and `聚焦` must not become a pile of copied
+business panels. The default `聚焦` tab should answer what the operator should
+do now, then expose task intent/SOP progress, passenger-facing reply, risk, and
+human confirmation as one traceable flow.
 
 ## User Need
 
@@ -25,42 +26,59 @@ evidence and configuration stay available as research/debugging entries.
 - Remove the right-side `办理` tab and remove `operator-workbench-business-pane`.
 - Move task handling closure into `聚焦`:
   - status bar;
-  - task intent and emotion;
-  - business object summary;
-  - SOP handling tree;
+  - next best action;
+  - top-positioned task intent/SOP handling tree;
+  - concise business object and missing-field summary;
+  - passenger-facing recommended reply card;
+  - sensitive confirmation card with pending-only count;
   - risk and SLA/time-limit card;
-  - recommended reply card;
-  - sensitive confirmation card;
-  - task ledger;
-  - recommendation detail;
-  - customer reply draft;
-  - risk warnings;
-  - confirmations;
-  - execution/delivery/decision receipts;
-  - task controls.
+  - receipts and detailed controls through progressive disclosure.
+- Remove duplicated default focus panels:
+  - legacy task ledger as a peer panel;
+  - legacy recommendation detail panel;
+  - legacy customer reply draft panel;
+  - legacy proposed-action detail panel.
+- Fix backend/demo blockers required for real UAT:
+  - seeded pending action payloads must confirm/reject successfully;
+  - live multi-task turns must not trigger the known PyMySQL packet sequence
+    500;
+  - default worker profiles must not be overridden to stale stub baggage
+    profile values;
+  - natural refund phrasing such as `退 MU5137 的票` must resolve to refund.
 - Keep `AI助手` as a pure chat window with message stream and composer only.
 - Mark `证据` and `配置` as research/debugging entry points.
 
 ## Out of Scope
 
-- Backend runtime changes.
 - Real RAG, real tool calling, or MCP enhancements.
 - Reworking the left session rail or center passenger/operator lanes.
-- Backend runtime behavior changes. One existing backend e2e assertion was
-  aligned to the current async baggage-worker contract; no runtime code changed.
+- Large backend architecture rewrites beyond the specific blockers above.
 
 ## Acceptance Criteria
 
 - The right-side tab list is exactly `聚焦`, `AI助手`, `证据`, and `配置`.
 - `办理`, `business`, and `operator-workbench-business-pane` are absent.
-- `聚焦` contains the operator handling loop: status, intent/emotion, business
-  objects, SOP tree, risk/time-limit card, recommended reply, sensitive
-  confirmation, ledger, receipts, and controls.
+- `聚焦` contains a compact operator handling loop: status/next action,
+  top-positioned task intent/SOP tree, business objects/missing fields,
+  passenger-facing recommended reply, one sensitive confirmation card,
+  risk/time-limit summary, and progressive receipts/details.
+- `聚焦` does not render legacy `任务台账`, `坐席建议`, `客户回复草稿`, or `待确认动作`
+  as separate default peer panels.
+- Recommended reply send/copy/edit actions use the passenger-facing
+  `customerReplyDraft`; `operatorRecommendation` is presented as operator
+  guidance only.
+- The high-sensitive confirmation card counts only `PENDING` actions as pending
+  and does not label confirmed/rejected actions as待处理.
 - `AI助手` omits the internal header, task/config/metric panels, and business
   state panels. It remains a chat stream plus composer.
 - `证据` and `配置` display `研究调试入口`.
 - Browser UAT verifies the four-tab IA, focus-first closure path, assistant chat,
-  and debug entries.
+  debug entries, seeded action confirmation, and live multi-task turn health.
+
+## Current Problem Inventory
+
+- Problem inventory:
+  `artifacts/slices/207-customer-assistant-ai-workbench-ia-convergence/00-problem-inventory/problem-inventory.md`
 
 ## Slice Evidence
 
@@ -76,24 +94,10 @@ evidence and configuration stay available as research/debugging entries.
 
 ## Final Verification
 
-- Frontend unit: `npm --prefix frontend run test:unit` passed 98 files / 413 tests.
-- Frontend rem: `npm --prefix frontend run test:unit -- src/remScaleClosure.test.ts`
-  passed.
-- Frontend build: `npm --prefix frontend run build` passed with existing Vite CJS
-  and chunk-size warnings.
-- Backend unit: `PYTHONPATH=. uv run pytest tests/unit/customer_assistant`
-  passed 36 tests.
-- Backend contract:
-  `PYTHONPATH=. uv run pytest tests/contract/customer_assistant tests/contract/test_ai_assistant_customer_bridge_api.py`
-  passed 25 tests.
-- Backend integration:
-  `PYTHONPATH=. uv run pytest tests/integration/customer_assistant`
-  passed 81 tests, 1 skipped.
-- Backend e2e: `PYTHONPATH=. uv run pytest tests/e2e/customer_assistant`
-  passed 3 tests.
-- Browser UAT:
-  `BASE_URL=http://127.0.0.1:5173/customer-assistant node frontend/e2e/customer-assistant-ai-workbench-ia-uat.mjs`
-  passed.
-- Final browser checkpoints:
-  `HIFY_E2E_SCREENSHOT=artifacts/slices/207-customer-assistant-ai-workbench-ia-convergence/screenshots/final-uat-checkpoints.png node frontend/e2e/customer-assistant-final-uat-checkpoints.mjs`
-  passed.
+Final verification is pending for this reopened convergence pass. Required gates:
+
+- Frontend focused unit and full unit.
+- `src/remScaleClosure.test.ts`.
+- Backend unit/integration/contract/e2e for customer assistant blockers.
+- Browser UAT covering all right-side tabs, seeded action confirmation, and live
+  multi-task recommendation path.

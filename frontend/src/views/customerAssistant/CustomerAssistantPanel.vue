@@ -328,17 +328,95 @@
             <div>
               <span>状态条</span>
               <strong>{{ focusProjection.sessionStatus.label }}</strong>
+              <small>下一步：{{ focusProjection.riskTiming.nextAction }}</small>
             </div>
             <a-tag :color="focusStatusColor(focusProjection.sessionStatus.kind)">
               {{ focusProjection.sessionStatus.detail }}
             </a-tag>
           </section>
 
+          <section class="workspace-panel compact-panel focus-card" data-testid="operator-focus-sop-handling-tree">
+            <div class="panel-heading">
+              <span class="panel-heading-title">
+                <CheckOutlined />
+                任务意图分析
+              </span>
+              <a-tag color="blue">SOP办理树</a-tag>
+            </div>
+            <div class="focus-summary-grid">
+              <div>
+                <span>任务数</span>
+                <strong>{{ workspace.taskSummary.items.length }}</strong>
+              </div>
+              <div>
+                <span>当前节点</span>
+                <strong>{{ focusProjection.sopNodes[0]?.label || '等待识别' }}</strong>
+              </div>
+            </div>
+            <div class="task-list">
+              <div
+                v-if="workspace.taskSummary.items.length === 0"
+                class="empty-compact"
+                data-testid="operator-focus-task-empty-state"
+              >
+                暂无任务
+              </div>
+              <div v-for="task in workspace.taskSummary.items" :key="`focus-task-${task.id}`" class="task-row">
+                <div>
+                  <strong>{{ task.displayName }}</strong>
+                  <span>{{ task.taskKey }} · {{ task.status }}</span>
+                </div>
+                <a-tag :color="statusColor(task.statusTone)">{{ task.status }}</a-tag>
+                <p v-if="task.missingFields.length">缺失：{{ task.missingFields.join('、') }}</p>
+                <div
+                  v-if="task.availableControls.length"
+                  class="task-controls"
+                  data-testid="operator-focus-task-controls"
+                >
+                  <a-tooltip
+                    v-for="control in task.availableControls"
+                    :key="control"
+                    :title="taskControlTooltip(control)"
+                  >
+                    <a-button
+                      size="small"
+                      :danger="control === 'cancel'"
+                      :loading="taskControlLoadingKey === `${task.id}:${control}`"
+                      @click="proposeTaskControl(task.id, control)"
+                    >
+                      <CloseOutlined v-if="control === 'cancel'" />
+                      <ThunderboltOutlined v-else />
+                      <span v-if="control === 'retry'">重试</span>
+                      <span v-else-if="control === 'cancel'">取消</span>
+                      <span v-else>恢复</span>
+                    </a-button>
+                  </a-tooltip>
+                </div>
+              </div>
+            </div>
+            <div class="sop-progress-list">
+              <div
+                v-for="node in focusProjection.sopNodes"
+                :key="node.key"
+                class="sop-progress-row"
+                data-testid="operator-focus-sop-progress-row"
+              >
+                <div>
+                  <strong>{{ node.label }}</strong>
+                  <span>{{ node.summary }}</span>
+                  <span v-if="node.missingInfo.length">缺失信息：{{ node.missingInfo.join('、') }}</span>
+                  <small>{{ node.nextAction }} · {{ node.evidenceLabel }}</small>
+                </div>
+                <a-tag :color="sopNodeStatusColor(node.status)">{{ sopNodeStatusLabel(node.status) }}</a-tag>
+              </div>
+            </div>
+          </section>
+
           <section class="workspace-panel compact-panel focus-card" data-testid="operator-focus-intent-emotion-card">
             <div class="panel-heading">
               <span class="panel-heading-title">
                 <BulbOutlined />
-                任务意图
+                思考摘要
               </span>
               <a-tag color="blue">情绪</a-tag>
             </div>
@@ -386,23 +464,23 @@
               </span>
               <a-tag color="green">可发送话术</a-tag>
             </div>
-            <p class="panel-copy">{{ workspace.recommendation.operatorRecommendation || '暂无坐席建议' }}</p>
-            <p class="draft-copy">{{ workspace.recommendation.customerReplyDraft || '暂无客户回复草稿' }}</p>
+            <p class="draft-copy">{{ workspace.recommendation.customerReplyDraft || '暂无可发送旅客话术' }}</p>
+            <p class="panel-copy">坐席处理提示：{{ workspace.recommendation.operatorRecommendation || '暂无坐席处理提示' }}</p>
             <div class="panel-actions">
               <a-tooltip title="发送给旅客">
-                <a-button size="small" :disabled="!workspace.recommendation.operatorRecommendation" @click="sendRecommendationToCustomer">
+                <a-button size="small" :disabled="!hasDraft" @click="sendRecommendationToCustomer">
                   <SendOutlined />
                   发送
                 </a-button>
               </a-tooltip>
               <a-tooltip title="复制推荐话术">
-                <a-button size="small" :disabled="!workspace.recommendation.operatorRecommendation" @click="copyRecommendation">
+                <a-button size="small" :disabled="!hasDraft" @click="copyRecommendation">
                   <CopyOutlined />
                   复制
                 </a-button>
               </a-tooltip>
               <a-tooltip title="发送到编辑框">
-                <a-button size="small" :disabled="!workspace.recommendation.operatorRecommendation" @click="applyRecommendationToEditor">
+                <a-button size="small" :disabled="!hasDraft" @click="applyRecommendationToEditor">
                   <EditOutlined />
                   编辑
                 </a-button>
@@ -446,39 +524,15 @@
             <small>{{ focusProjection.riskTiming.nextAction }}</small>
           </section>
 
-          <section class="workspace-panel compact-panel focus-card" data-testid="operator-focus-sop-handling-tree">
-            <div class="panel-heading">
-              <span class="panel-heading-title">
-                <CheckOutlined />
-                SOP办理树
-              </span>
-              <a-tag color="blue">{{ focusProjection.sopNodes.length }} 节点</a-tag>
-            </div>
-            <div class="sop-progress-list">
-              <div
-                v-for="node in focusProjection.sopNodes"
-                :key="node.key"
-                class="sop-progress-row"
-                data-testid="operator-focus-sop-progress-row"
-              >
-                <div>
-                  <strong>{{ node.label }}</strong>
-                  <span>{{ node.summary }}</span>
-                  <span v-if="node.missingInfo.length">缺失信息：{{ node.missingInfo.join('、') }}</span>
-                  <small>{{ node.nextAction }} · {{ node.evidenceLabel }}</small>
-                </div>
-                <a-tag :color="sopNodeStatusColor(node.status)">{{ sopNodeStatusLabel(node.status) }}</a-tag>
-              </div>
-            </div>
-          </section>
-
           <section class="workspace-panel compact-panel" data-testid="operator-focus-sensitive-confirmation-card">
             <div class="panel-heading">
               <span class="panel-heading-title">
                 <SafetyCertificateOutlined />
                 高敏确认
               </span>
-              <a-tag color="warning">{{ workspace.proposedActions.length }} 待处理</a-tag>
+              <a-tag :color="pendingProposedActions.length ? 'warning' : 'default'">
+                {{ pendingProposedActions.length }} 待处理
+              </a-tag>
             </div>
             <div class="action-list" data-testid="operator-confirmation-cards">
               <div
@@ -495,7 +549,134 @@
                 </div>
                 <a-tag v-if="isProposedTaskCommand(action)" color="blue">任务变更</a-tag>
                 <a-tag :color="action.status === 'PENDING' ? 'warning' : 'default'">{{ action.status }}</a-tag>
+                <details class="action-detail-disclosure">
+                  <summary>查看依据与回执</summary>
+                  <code>{{ compactPayload(action.payload) }}</code>
+                  <template
+                    v-for="receipt in [formatCustomerAssistantActionReceipt(action)]"
+                    :key="`focus-receipt-${action.id}`"
+                  >
+                    <div
+                      v-if="receipt.visible && !isCustomerReplyDraftAction(action)"
+                      class="action-receipt"
+                      data-testid="operator-action-receipt"
+                    >
+                      <div class="action-receipt-main">
+                        <a-tag color="success">执行回执</a-tag>
+                        <span>执行器 {{ receipt.executorRef }}</span>
+                        <span>结果 {{ receipt.semanticCode }}</span>
+                        <span v-if="receipt.executedAt">时间 {{ receipt.executedAt }}</span>
+                        <span v-if="receipt.error" class="receipt-error">错误 {{ receipt.error }}</span>
+                      </div>
+                      <div v-if="receipt.auditRows.length" class="action-receipt-audit">
+                        <span
+                          v-for="row in receipt.auditRows"
+                          :key="row.key"
+                        >
+                          {{ row.label }} <code>{{ row.value }}</code>
+                        </span>
+                      </div>
+                    </div>
+                  </template>
+                  <template
+                    v-for="receipt in [formatDraftDeliveryReceipt(action)]"
+                    :key="`focus-delivery-${action.id}`"
+                  >
+                    <div
+                      v-if="receipt.visible"
+                      class="action-receipt"
+                      data-testid="operator-draft-delivery-receipt"
+                    >
+                      <div class="action-receipt-main">
+                        <a-tag :color="receipt.status === 'FAILED' ? 'error' : 'success'">投递回执</a-tag>
+                        <span>渠道 {{ receipt.channel }}</span>
+                        <span v-if="receipt.messageId">消息 {{ receipt.messageId }}</span>
+                        <span v-if="receipt.deliveredAt">时间 {{ receipt.deliveredAt }}</span>
+                        <span v-if="receipt.error" class="receipt-error">错误 {{ receipt.error }}</span>
+                      </div>
+                    </div>
+                  </template>
+                  <template
+                    v-for="decisionReceipt in [formatCustomerAssistantActionDecisionReceipt(action)]"
+                    :key="`focus-decision-${action.id}`"
+                  >
+                    <div
+                      v-if="decisionReceipt.visible"
+                      class="action-receipt"
+                      data-testid="operator-action-decision-receipt"
+                    >
+                      <div class="action-receipt-main">
+                        <a-tag :color="decisionReceipt.tone">决策回执</a-tag>
+                        <span>状态 {{ decisionReceipt.statusLabel }}</span>
+                        <span v-if="decisionReceipt.note">备注 {{ decisionReceipt.note }}</span>
+                        <span v-if="decisionReceipt.reason">原因 {{ decisionReceipt.reason }}</span>
+                      </div>
+                    </div>
+                  </template>
+                </details>
+                <div
+                  v-if="editingActionId === action.id"
+                  class="action-edit-form"
+                  data-testid="operator-action-edit-form"
+                >
+                  <a-input
+                    v-model:value="editingActionTitle"
+                    aria-label="修改拟议动作标题"
+                    placeholder="拟议动作标题"
+                  />
+                  <a-textarea
+                    v-model:value="editingActionPayload"
+                    aria-label="修改拟议动作参数"
+                    :auto-size="{ minRows: 4, maxRows: 8 }"
+                    placeholder="拟议动作参数 JSON"
+                  />
+                  <p v-if="editingActionError" class="edit-error">{{ editingActionError }}</p>
+                  <div class="panel-actions action-edit-actions">
+                    <a-button
+                      size="small"
+                      type="primary"
+                      :loading="actionLoadingId === action.id"
+                      @click="saveEditedAction(action.id)"
+                    >
+                      <CheckOutlined />
+                      保存修改
+                    </a-button>
+                    <a-button size="small" @click="cancelEditAction">
+                      <CloseOutlined />
+                      取消修改
+                    </a-button>
+                  </div>
+                </div>
+                <div
+                  v-if="action.status === 'PENDING'"
+                  class="action-decision-form"
+                  data-testid="operator-action-decision-form"
+                >
+                  <a-textarea
+                    v-model:value="actionDecisionDraft(action.id).confirmNote"
+                    aria-label="确认备注"
+                    :auto-size="{ minRows: 2, maxRows: 4 }"
+                    placeholder="确认备注，将写入审计"
+                  />
+                  <a-textarea
+                    v-model:value="actionDecisionDraft(action.id).rejectReason"
+                    aria-label="拒绝原因"
+                    :auto-size="{ minRows: 2, maxRows: 4 }"
+                    placeholder="拒绝原因，将写入审计"
+                  />
+                </div>
                 <div class="panel-actions">
+                  <a-tooltip title="修改拟议动作">
+                    <a-button
+                      size="small"
+                      aria-label="修改拟议动作"
+                      :disabled="action.status !== 'PENDING'"
+                      @click="startEditAction(action)"
+                    >
+                      <EditOutlined />
+                      修改
+                    </a-button>
+                  </a-tooltip>
                   <a-button
                     size="small"
                     aria-label="确认拟议动作"
@@ -517,302 +698,33 @@
                     <CloseOutlined />
                     拒绝
                   </a-button>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section class="workspace-panel compact-panel" data-testid="operator-task-ledger">
-            <div class="panel-heading">
-              <span class="panel-heading-title">
-                <OrderedListOutlined />
-                任务台账
-              </span>
-              <span class="panel-count">{{ workspace.taskSummary.items.length }}</span>
-            </div>
-            <div class="task-list">
-              <div
-                v-if="workspace.taskSummary.items.length === 0"
-                class="empty-compact"
-                data-testid="operator-task-empty-state"
-              >
-                暂无任务
-              </div>
-              <div v-for="task in workspace.taskSummary.items" :key="task.id" class="task-row">
-                <div>
-                  <strong>{{ task.displayName }}</strong>
-                  <span>{{ task.taskKey }}</span>
-                </div>
-                <a-tag :color="statusColor(task.statusTone)">{{ task.status }}</a-tag>
-                <p v-if="task.missingFields.length">缺失：{{ task.missingFields.join('、') }}</p>
-                <div
-                  v-if="task.availableControls.length"
-                  class="task-controls"
-                  data-testid="operator-task-controls"
-                >
-                  <a-tooltip
-                    v-for="control in task.availableControls"
-                    :key="control"
-                    :title="taskControlTooltip(control)"
-                  >
+                  <a-tooltip title="外发已确认客户回复草稿">
                     <a-button
                       size="small"
-                      :danger="control === 'cancel'"
-                      :loading="taskControlLoadingKey === `${task.id}:${control}`"
-                      @click="proposeTaskControl(task.id, control)"
+                      aria-label="外发客户回复草稿"
+                      :disabled="!isDeliverableDraftAction(action)"
+                      :loading="actionLoadingId === action.id"
+                      @click="deliverAction(action.id)"
                     >
-                      <CloseOutlined v-if="control === 'cancel'" />
-                      <ThunderboltOutlined v-else />
-                      <span v-if="control === 'retry'">重试</span>
-                      <span v-else-if="control === 'cancel'">取消</span>
-                      <span v-else>恢复</span>
+                      <SendOutlined />
+                      外发草稿
+                    </a-button>
+                  </a-tooltip>
+                  <a-tooltip title="执行已确认动作">
+                    <a-button
+                      size="small"
+                      type="primary"
+                      aria-label="执行已确认动作"
+                      :disabled="action.status !== 'CONFIRMED' || isProposedTaskCommand(action) || isCustomerReplyDraftAction(action)"
+                      :loading="actionLoadingId === action.id"
+                      @click="executeAction(action.id)"
+                    >
+                      <ThunderboltOutlined />
+                      执行动作
                     </a-button>
                   </a-tooltip>
                 </div>
               </div>
-            </div>
-          </section>
-          <section class="workspace-panel compact-panel" data-testid="operator-recommendation-panel">
-            <div class="panel-heading">
-              <span class="panel-heading-title">
-                <BulbOutlined />
-                坐席建议
-              </span>
-            </div>
-            <p class="panel-copy">{{ workspace.recommendation.operatorRecommendation || '暂无坐席建议' }}</p>
-          </section>
-          <section class="workspace-panel compact-panel" data-testid="operator-proposed-actions-panel">
-            <div class="panel-heading">
-              <span class="panel-heading-title">
-                <SafetyCertificateOutlined />
-                待确认动作
-              </span>
-              <span class="panel-count">{{ workspace.proposedActions.length }}</span>
-            </div>
-            <div class="action-list">
-              <div
-                v-if="workspace.proposedActions.length === 0"
-                class="empty-compact"
-                data-testid="operator-action-empty-state"
-              >
-                暂无待确认动作
-              </div>
-              <div v-for="action in workspace.proposedActions" :key="action.id" class="action-row">
-              <div>
-                <strong>{{ action.title }}</strong>
-                <span>{{ action.actionType }} · #{{ action.id }}</span>
-              </div>
-              <a-tag v-if="isProposedTaskCommand(action)" color="blue">任务变更</a-tag>
-              <a-tag :color="action.status === 'PENDING' ? 'warning' : 'default'">{{ action.status }}</a-tag>
-              <code>{{ compactPayload(action.payload) }}</code>
-              <template
-                v-for="receipt in [formatCustomerAssistantActionReceipt(action)]"
-                :key="`receipt-${action.id}`"
-              >
-                <div
-                  v-if="receipt.visible && !isCustomerReplyDraftAction(action)"
-                  class="action-receipt"
-                  data-testid="operator-action-receipt"
-                >
-                  <div class="action-receipt-main">
-                    <a-tag color="success">执行回执</a-tag>
-                    <span>执行器 {{ receipt.executorRef }}</span>
-                    <span>结果 {{ receipt.semanticCode }}</span>
-                    <span v-if="receipt.executedAt">时间 {{ receipt.executedAt }}</span>
-                    <span v-if="receipt.error" class="receipt-error">错误 {{ receipt.error }}</span>
-                  </div>
-                  <div v-if="receipt.auditRows.length" class="action-receipt-audit">
-                    <span
-                      v-for="row in receipt.auditRows"
-                      :key="row.key"
-                    >
-                      {{ row.label }} <code>{{ row.value }}</code>
-                    </span>
-                  </div>
-                </div>
-              </template>
-              <template
-                v-for="receipt in [formatDraftDeliveryReceipt(action)]"
-                :key="`delivery-${action.id}`"
-              >
-                <div
-                  v-if="receipt.visible"
-                  class="action-receipt"
-                  data-testid="operator-draft-delivery-receipt"
-                >
-                  <div class="action-receipt-main">
-                    <a-tag :color="receipt.status === 'FAILED' ? 'error' : 'success'">投递回执</a-tag>
-                    <span>渠道 {{ receipt.channel }}</span>
-                    <span v-if="receipt.messageId">消息 {{ receipt.messageId }}</span>
-                    <span v-if="receipt.deliveredAt">时间 {{ receipt.deliveredAt }}</span>
-                    <span v-if="receipt.error" class="receipt-error">错误 {{ receipt.error }}</span>
-                  </div>
-                </div>
-              </template>
-              <template
-                v-for="decisionReceipt in [formatCustomerAssistantActionDecisionReceipt(action)]"
-                :key="`decision-${action.id}`"
-              >
-                <div
-                  v-if="decisionReceipt.visible"
-                  class="action-receipt"
-                  data-testid="operator-action-decision-receipt"
-                >
-                  <div class="action-receipt-main">
-                    <a-tag :color="decisionReceipt.tone">决策回执</a-tag>
-                    <span>状态 {{ decisionReceipt.statusLabel }}</span>
-                    <span v-if="decisionReceipt.note">备注 {{ decisionReceipt.note }}</span>
-                    <span v-if="decisionReceipt.reason">原因 {{ decisionReceipt.reason }}</span>
-                  </div>
-                </div>
-              </template>
-              <div
-                v-if="editingActionId === action.id"
-                class="action-edit-form"
-                data-testid="operator-action-edit-form"
-              >
-                <a-input
-                  v-model:value="editingActionTitle"
-                  aria-label="修改拟议动作标题"
-                  placeholder="拟议动作标题"
-                />
-                <a-textarea
-                  v-model:value="editingActionPayload"
-                  aria-label="修改拟议动作参数"
-                  :auto-size="{ minRows: 4, maxRows: 8 }"
-                  placeholder="拟议动作参数 JSON"
-                />
-                <p v-if="editingActionError" class="edit-error">{{ editingActionError }}</p>
-                <div class="panel-actions action-edit-actions">
-                  <a-button
-                    size="small"
-                    type="primary"
-                    :loading="actionLoadingId === action.id"
-                    @click="saveEditedAction(action.id)"
-                  >
-                    <CheckOutlined />
-                    保存修改
-                  </a-button>
-                  <a-button size="small" @click="cancelEditAction">
-                    <CloseOutlined />
-                    取消修改
-                  </a-button>
-                </div>
-              </div>
-              <div
-                v-if="action.status === 'PENDING'"
-                class="action-decision-form"
-                data-testid="operator-action-decision-form"
-              >
-                <a-textarea
-                  v-model:value="actionDecisionDraft(action.id).confirmNote"
-                  aria-label="确认备注"
-                  :auto-size="{ minRows: 2, maxRows: 4 }"
-                  placeholder="确认备注，将写入审计"
-                />
-                <a-textarea
-                  v-model:value="actionDecisionDraft(action.id).rejectReason"
-                  aria-label="拒绝原因"
-                  :auto-size="{ minRows: 2, maxRows: 4 }"
-                  placeholder="拒绝原因，将写入审计"
-                />
-              </div>
-              <div class="panel-actions">
-                <a-tooltip title="修改拟议动作">
-                  <a-button
-                    size="small"
-                    aria-label="修改拟议动作"
-                    :disabled="action.status !== 'PENDING'"
-                    @click="startEditAction(action)"
-                  >
-                    <EditOutlined />
-                    修改
-                  </a-button>
-                </a-tooltip>
-                <a-tooltip :title="actionConfirmTooltip(action)">
-                  <a-button
-                    size="small"
-                    aria-label="确认拟议动作"
-                    :disabled="action.status !== 'PENDING'"
-                    :loading="actionLoadingId === action.id"
-                    @click="confirmAction(action.id)"
-                  >
-                    <CheckOutlined />
-                    {{ actionConfirmLabel(action) }}
-                  </a-button>
-                </a-tooltip>
-                <a-tooltip title="拒绝拟议动作">
-                  <a-button
-                    size="small"
-                    aria-label="拒绝拟议动作"
-                    :disabled="action.status !== 'PENDING'"
-                    :loading="actionLoadingId === action.id"
-                    danger
-                    @click="rejectAction(action.id)"
-                  >
-                    <CloseOutlined />
-                    拒绝
-                  </a-button>
-                </a-tooltip>
-                <a-tooltip title="外发已确认客户回复草稿">
-                  <a-button
-                    size="small"
-                    aria-label="外发客户回复草稿"
-                    :disabled="!isDeliverableDraftAction(action)"
-                    :loading="actionLoadingId === action.id"
-                    @click="deliverAction(action.id)"
-                  >
-                    <SendOutlined />
-                    外发草稿
-                  </a-button>
-                </a-tooltip>
-                <a-tooltip title="执行已确认动作">
-                  <a-button
-                    size="small"
-                    type="primary"
-                    aria-label="执行已确认动作"
-                    :disabled="action.status !== 'CONFIRMED' || isProposedTaskCommand(action) || isCustomerReplyDraftAction(action)"
-                    :loading="actionLoadingId === action.id"
-                    @click="executeAction(action.id)"
-                  >
-                    <ThunderboltOutlined />
-                    执行动作
-                  </a-button>
-                </a-tooltip>
-              </div>
-            </div>
-          </div>
-          </section>
-          <section class="workspace-panel compact-panel" data-testid="operator-draft-panel">
-            <div class="panel-heading">
-              <span class="panel-heading-title">
-                <EditOutlined />
-                客户回复草稿
-              </span>
-              <a-tag :color="draftApplied ? 'success' : 'default'">
-                {{ draftApplied ? '已本地应用' : '待审核' }}
-              </a-tag>
-            </div>
-            <p class="draft-copy">{{ workspace.recommendation.customerReplyDraft || '暂无客户回复草稿' }}</p>
-            <div class="panel-actions">
-              <a-tooltip title="复制客户回复草稿">
-                <a-button size="small" aria-label="复制客户回复草稿" :disabled="!hasDraft" @click="copyDraft">
-                  <CopyOutlined />
-                  复制
-                </a-button>
-              </a-tooltip>
-              <a-tooltip title="本地应用客户回复草稿">
-                <a-button
-                  size="small"
-                  type="primary"
-                  aria-label="本地应用客户回复草稿"
-                  :disabled="!hasDraft"
-                  @click="applyDraftLocal"
-                >
-                  <CheckOutlined />
-                  本地应用
-                </a-button>
-              </a-tooltip>
             </div>
           </section>
         </div>
@@ -1434,6 +1346,9 @@ const draftState = computed(() =>
   createCustomerAssistantDraftState(workspace.value.recommendation.customerReplyDraft, draftApplied.value),
 )
 const hasDraft = computed(() => draftState.value.text.trim().length > 0)
+const pendingProposedActions = computed(() =>
+  workspace.value.proposedActions.filter((action) => action.status === 'PENDING'),
+)
 const turnStatus = computed(() =>
   formatCustomerAssistantTurnStatus({
     loading: runtimeState.value.loading,
@@ -1847,26 +1762,26 @@ function applyDraftLocal() {
 }
 
 async function copyRecommendation() {
-  const recommendation = workspace.value.recommendation.operatorRecommendation.trim()
+  const recommendation = draftState.value.text.trim()
   if (!recommendation) return
   try {
     await navigator.clipboard?.writeText(recommendation)
-    message.success('推荐话术已复制')
+    message.success('旅客回复话术已复制')
   } catch {
-    message.success('推荐话术已复制')
+    message.success('旅客回复话术已复制')
   }
 }
 
 function applyRecommendationToEditor() {
-  const recommendation = workspace.value.recommendation.operatorRecommendation.trim()
+  const recommendation = draftState.value.text.trim()
   if (!recommendation) return
   operatorInput.value = recommendation
   activeConversationLane.value = 'operator'
-  message.success('推荐话术已发送到编辑框')
+  message.success('旅客回复话术已发送到编辑框')
 }
 
 async function sendRecommendationToCustomer() {
-  const recommendation = workspace.value.recommendation.operatorRecommendation.trim()
+  const recommendation = draftState.value.text.trim()
   if (!recommendation) return
   operatorInput.value = recommendation
   activeConversationLane.value = 'operator'

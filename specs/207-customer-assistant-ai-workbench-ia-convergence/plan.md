@@ -1,52 +1,56 @@
 # Plan: Customer Assistant AI Workbench IA Convergence
 
-## Slice A: SDD And RED Contract
+## Reopened Scope
 
-1. Update SDD and PRD to reflect the latest target IA.
-2. Flip `frontend/src/views/customerAssistant/customerAssistantPanel.test.ts`
-   from the previous five-tab contract to the new four-tab convergence contract.
-3. Run the focused frontend unit test and preserve the expected RED output.
-4. Do not edit production Vue or backend implementation in this slice.
+The first 207 pass removed the `办理` tab, but it kept too many migrated
+business panels inside `聚焦`. This pass keeps the four-tab contract and fixes
+the remaining focus-workbench product issues plus the P0 backend blockers that
+prevent real UAT.
 
-## Slice B: Focus Projection View Model
+## Slice A: Focus IA And Recommendation Consolidation
 
-1. Add a typed focus projection that turns runtime state into operator-facing
-   session status, business-object summary, SOP nodes, and risk/time-limit
-   summaries.
-2. Drive RED with view-model unit tests before implementation.
-3. Keep the projection deterministic and frontend-only so the backend API
-   contract remains stable.
+1. Update the panel contract so `聚焦` no longer requires legacy peer panels.
+2. Move the task/SOP tree directly below the status/next-step block.
+3. Keep one recommended reply card and make send/copy/edit use
+   `customerReplyDraft`.
+4. Keep one high-sensitive confirmation card with progressive detail affordance.
+5. Preserve `AI助手` as chat-only and `证据`/`配置` as research/debug entries.
 
-## Slice C: Browser UAT Harness
+## Slice B: Seeded Pending Actions
 
-1. Add a Playwright UAT script for the final right-side IA.
-2. Verify no `办理` tab, focus-first handling closure, AI chat-only surface, and
-   research/debug labels for evidence/config.
-3. Save screenshots under the 207 artifact directory.
+1. Add a failing backend test for seeded story pending action confirmation.
+2. Update seeded pending action payloads to the current proposed task command
+   contract.
+3. Prove seeded actions can be confirmed/rejected without
+   `Invalid proposed task command`.
+
+## Slice C: Live Multi-Task Worker Runtime
+
+1. Reproduce the live multi-task 500 as closely as possible with existing
+   MySQL/integration harnesses.
+2. Isolate SQLAlchemy sessions/connections across async worker persistence so
+   PyMySQL packet sequence errors do not occur.
+3. Prove a real multi-task turn can proceed to task/action/recommendation data.
+
+## Slice D: Profile Defaults And Refund Recognition
+
+1. Add tests for default profile catalog values and stale override avoidance.
+2. Guard the local/default profile path against the old baggage stub profile.
+3. Add recognition coverage for natural refund phrasing with a flight object,
+   such as `退 MU5137 的票`.
 
 ## Main Integration
 
-1. Remove the production `办理` tab and `operator-workbench-business-pane`.
-2. Merge handling closure cards and migrated business controls into `聚焦`.
-3. Remove the internal `AI助手` header and keep assistant content as chat
-   messages plus composer.
-4. Update existing UAT/checklist docs and final browser checkpoint script.
-5. Align the existing customer-assistant runtime e2e test with the current async
-   baggage-worker contract while preserving final completion and traceability
-   assertions.
-
-## Contract Shape
-
 - Right-side tabs: `聚焦`, `AI助手`, `证据`, `配置`.
 - Forbidden: `办理`, `business`, and `operator-workbench-business-pane`.
-- `聚焦` owns business closure:
-  task ledger, recommendation, draft, risk, confirmation, receipts, and task
-  controls.
+- `聚焦` owns a compact business closure path, not copied legacy panels.
 - `AI助手` is chat-only:
   chat window, message stream, and composer; no internal header, task panels,
   config panels, or metrics panels.
 - `证据` and `配置` remain reachable but explicitly marked as
   `研究调试入口`.
+- Main agent merges all slices, resolves conflicts, runs the full gate set, and
+  commits each accepted sub-feature.
 
 ## Gates
 
@@ -75,9 +79,8 @@
 
 ## Risk Controls
 
-- Do not modify `CustomerAssistantPanel.vue` in Slice A.
 - Do not touch unrelated dirty files created by parallel agents.
-- Keep backend runtime code unchanged for this IA convergence.
+- Keep backend fixes limited to the specific P0 blockers.
 - Treat evidence/config as research/debug entry points, not the primary operator
   flow.
 - Keep all new visual sizing under the existing rem governance gate.
