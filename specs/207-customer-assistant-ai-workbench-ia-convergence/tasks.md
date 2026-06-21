@@ -32,11 +32,11 @@ Status: reopened on 2026-06-21 for focus-workbench cleanup and P0 UAT blockers.
 
 ## Slice C: Live Multi-Task Worker Runtime
 
-- [ ] RED: reproduce or narrowly guard the known PyMySQL packet sequence failure
+- [x] RED: reproduce or narrowly guard the known PyMySQL packet sequence failure
   on live multi-task worker persistence.
-- [ ] GREEN: async worker persistence uses isolated sessions/connections and a
+- [x] GREEN: async worker persistence uses isolated sessions/connections and a
   live multi-task turn does not 500.
-- [ ] Gate: relevant customer-assistant worker/runtime integration/e2e tests.
+- [x] Gate: relevant customer-assistant worker/runtime integration/e2e tests.
 
 ## Slice D: Profile Defaults And Refund Recognition
 

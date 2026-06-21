@@ -293,6 +293,34 @@ class CustomerAssistantWorkersTest(unittest.TestCase):
 
             time.sleep(0.2)
 
+    def test_async_runtime_builds_thread_local_workers_for_worker_calls(self) -> None:
+        with _session() as session:
+            factory = sessionmaker(bind=session.get_bind(), autoflush=False, autocommit=False, expire_on_commit=False)
+            seen_worker_sessions: list[int] = []
+            fallback_worker = _FailingWorker("shared request worker must not run in async thread")
+            service = CustomerAssistantService(
+                CustomerAssistantRepository(session),
+                scheduler=LocalWorkerScheduler({"chatflow_sop": fallback_worker}),
+                async_worker_runtime=CustomerAssistantWorkerRuntime(
+                    workers={"chatflow_sop": fallback_worker},
+                    session_factory=factory,
+                    worker_factory=lambda worker_session: {
+                        "chatflow_sop": _SessionBoundCompletingWorker(worker_session, seen_worker_sessions)
+                    },
+                    async_worker_types={"chatflow_sop"},
+                    wait_deadline_seconds=0.2,
+                    task_timeout_seconds=1.0,
+                    max_concurrency=1,
+                ),
+            )
+            assistant_session = service.create_session()
+
+            result = service.handle_turn(int(assistant_session["id"]), "我要退票", "thread-local-worker-1")
+
+            self.assertEqual(result["taskSummaries"][0]["status"], "COMPLETED")
+            self.assertEqual(len(seen_worker_sessions), 1)
+            self.assertNotEqual(seen_worker_sessions[0], id(session))
+
     def test_async_worker_waiting_prompt_becomes_customer_draft(self) -> None:
         with _session() as session:
             factory = sessionmaker(bind=session.get_bind(), autoflush=False, autocommit=False, expire_on_commit=False)
@@ -440,6 +468,31 @@ class _WaitingWorker:
             customer_reply_draft="请提供客票舱位和航司。",
             missing_fields=["客票舱位", "航司"],
         )
+
+
+class _SessionBoundCompletingWorker:
+    def __init__(self, session: Session, seen_worker_sessions: list[int]) -> None:
+        self._session = session
+        self._seen_worker_sessions = seen_worker_sessions
+
+    def run(self, task: TaskItem, message: str) -> WorkerResult:
+        self._seen_worker_sessions.append(id(self._session))
+        return WorkerResult(
+            task_id=int(task.id or 0),
+            worker_type=task.worker_type,
+            status=TaskStatus.COMPLETED,
+            operator_recommendation=f"thread-local worker handled {task.task_key}",
+            customer_reply_draft="已完成当前任务。",
+            events=[{"type": "worker_result_received", "source": "session_bound_worker"}],
+        )
+
+
+class _FailingWorker:
+    def __init__(self, message: str) -> None:
+        self._message = message
+
+    def run(self, task: TaskItem, message: str) -> WorkerResult:
+        raise AssertionError(self._message)
 
 
 if __name__ == "__main__":

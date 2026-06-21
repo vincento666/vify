@@ -146,6 +146,11 @@ def build_customer_assistant_service(
         async_worker_runtime=CustomerAssistantWorkerRuntime(
             workers=workers,
             session_factory=_customer_assistant_worker_session_factory(session),
+            worker_factory=lambda worker_session: _customer_assistant_workers(
+                worker_session,
+                settings,
+                worker_profiles=worker_profiles,
+            ),
             async_worker_types={"stub_qa", "chatflow_sop"},
             wait_deadline_seconds=settings.customer_assistant_worker_wait_deadline_seconds,
             task_timeout_seconds=settings.customer_assistant_worker_timeout_seconds,

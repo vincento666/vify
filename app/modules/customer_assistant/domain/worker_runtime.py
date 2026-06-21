@@ -36,6 +36,7 @@ class CustomerAssistantWorkerRuntime:
         *,
         workers: dict[str, TaskWorker],
         session_factory: Callable[[], Session],
+        worker_factory: Callable[[Session], dict[str, TaskWorker]] | None = None,
         async_worker_types: set[str] | None = None,
         wait_deadline_seconds: float | None = None,
         task_timeout_seconds: float = 5.0,
@@ -43,6 +44,7 @@ class CustomerAssistantWorkerRuntime:
     ) -> None:
         self._workers = workers
         self._session_factory = session_factory
+        self._worker_factory = worker_factory
         self._async_worker_types = async_worker_types or {"stub_qa"}
         self._wait_deadline_seconds = wait_deadline_seconds
         self._task_timeout_seconds = task_timeout_seconds
@@ -282,7 +284,18 @@ class CustomerAssistantWorkerRuntime:
         return self._wait_deadline_seconds is None and task.worker_type != "chatflow_sop"
 
     def _call_worker(self, task: TaskItem, message: str) -> WorkerResult:
-        worker = self._workers.get(task.worker_type)
+        if self._worker_factory is not None:
+            with self._session_factory() as session:
+                return self._call_worker_from_registry(self._worker_factory(session), task, message)
+        return self._call_worker_from_registry(self._workers, task, message)
+
+    def _call_worker_from_registry(
+        self,
+        workers: dict[str, TaskWorker],
+        task: TaskItem,
+        message: str,
+    ) -> WorkerResult:
+        worker = workers.get(task.worker_type)
         if worker is None:
             return WorkerResult(
                 task_id=int(task.id or 0),
