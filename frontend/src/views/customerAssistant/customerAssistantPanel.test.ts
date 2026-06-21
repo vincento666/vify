@@ -110,7 +110,7 @@ describe('CustomerAssistantPanel IA convergence contract', () => {
 
     expect(focusPane).toContain('状态条')
     expect(focusPane).toContain('任务意图分析')
-    expect(focusPane).toContain('思考摘要')
+    expect(focusPane).toContain('任务意图')
     expect(focusPane).toContain('情绪')
     expect(focusPane).toContain('业务对象摘要')
     expect(focusPane).toContain('SOP办理树')

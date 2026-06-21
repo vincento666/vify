@@ -428,8 +428,10 @@ async function main() {
     const defaultFocusText = await focusPane.innerText()
     assert(defaultFocusText.includes('高敏确认'), 'Expected default focus tab to show sensitive confirmation')
     assert(defaultFocusText.includes('SOP办理树'), 'Expected default focus tab to show business SOP tree')
-    assert(defaultFocusText.includes('任务台账'), 'Expected default focus tab to include task ledger')
-    assert(defaultFocusText.includes('客户回复草稿'), 'Expected default focus tab to include draft handling')
+    assert(defaultFocusText.includes('推荐回复'), 'Expected default focus tab to show recommended reply card')
+    assert(defaultFocusText.includes('坐席处理提示'), 'Expected default focus tab to separate operator advice')
+    assert(!defaultFocusText.includes('任务台账'), 'Default focus tab should not expose legacy task ledger wording')
+    assert(!defaultFocusText.includes('客户回复草稿'), 'Default focus tab should not expose legacy draft panel wording')
     assert(!defaultFocusText.includes('Worker 配置'), 'Default focus tab should hide worker configuration')
     assert(!defaultFocusText.includes('modelPolicyRef'), 'Default focus tab should hide model policy refs')
 
@@ -484,10 +486,10 @@ async function main() {
       { timeout: 10000 },
     )
 
-    const taskRow = focusPane.getByTestId('operator-task-ledger').locator('.task-row').filter({
+    const taskRow = focusPane.getByTestId('operator-focus-sop-handling-tree').locator('.task-row').filter({
       hasText: 'refund_ticket:MU5137-8899',
     }).first()
-    await taskRow.getByText('CANCELLED').waitFor({ state: 'visible', timeout: 10000 })
+    await taskRow.getByText('CANCELLED', { exact: true }).waitFor({ state: 'visible', timeout: 10000 })
 
     await clickWorkbenchTab('证据')
     await page.getByTestId('operator-workbench-evidence-pane').getByTestId('operator-audit-panel').getByText('任务变更已确认').waitFor({

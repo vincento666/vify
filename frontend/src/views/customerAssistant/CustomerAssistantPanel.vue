@@ -416,7 +416,7 @@
             <div class="panel-heading">
               <span class="panel-heading-title">
                 <BulbOutlined />
-                思考摘要
+                任务意图
               </span>
               <a-tag color="blue">情绪</a-tag>
             </div>

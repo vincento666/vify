@@ -246,6 +246,21 @@ async function expectVisibleTextInFirstScreen(page, pane, text, failures) {
   }
 }
 
+async function expectReachableText(pane, text, failures) {
+  const locator = pane.getByText(text, { exact: false }).first()
+  if (!(await isVisible(locator, 1500))) {
+    try {
+      await locator.scrollIntoViewIfNeeded({ timeout: 1500 })
+    } catch {
+      failures.push(`Focus section is not reachable: ${text}`)
+      return
+    }
+  }
+  if (!(await isVisible(locator, 1500))) {
+    failures.push(`Focus section is not reachable: ${text}`)
+  }
+}
+
 async function expectNoVisibleDescendant(root, testId, failures, label = testId) {
   const count = await root.getByTestId(testId).count()
   for (let index = 0; index < count; index += 1) {
@@ -371,8 +386,14 @@ async function main() {
     }
 
     const focusPane = page.getByTestId('operator-workbench-focus-pane')
-    for (const text of ['状态条', '业务对象摘要', 'SOP办理树', '风险与时效', '推荐回复', '高敏确认']) {
+    for (const text of ['状态条', 'SOP办理树']) {
       await expectVisibleTextInFirstScreen(page, focusPane, text, failures)
+    }
+    const focusText = await visibleText(focusPane)
+    if (focusText.includes('任务台账')) failures.push('Focus tab must not expose legacy task ledger wording')
+    if (focusText.includes('客户回复草稿')) failures.push('Focus tab must not expose legacy draft-panel wording')
+    for (const text of ['业务对象摘要', '任务意图', '推荐回复', '风险与时效', '高敏确认']) {
+      await expectReachableText(focusPane, text, failures)
     }
 
     if (await clickWorkbenchTab(page, 'AI助手', failures)) {
@@ -431,7 +452,8 @@ async function main() {
         '- Result: PASS',
         `- URL: ${targetUrl}`,
         `- Tabs: ${expectedTabs.join(' / ')}`,
-        '- Focus first screen: 状态条 / 业务对象摘要 / SOP办理树 / 风险与时效 / 推荐回复 / 高敏确认',
+        '- Focus first screen: 状态条 / SOP办理树',
+        '- Focus reachable cards: 业务对象摘要 / 任务意图 / 推荐回复 / 风险与时效 / 高敏确认',
         '- AI助手: pure chat window without internal header, task ledger, config, or metrics surfaces',
         '- Debug entries: 证据 and 配置 tabs open',
         '',
