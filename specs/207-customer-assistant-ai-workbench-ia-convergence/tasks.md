@@ -40,11 +40,11 @@ Status: reopened on 2026-06-21 for focus-workbench cleanup and P0 UAT blockers.
 
 ## Slice D: Profile Defaults And Refund Recognition
 
-- [ ] RED: default profile catalog must not use stale baggage stub, and
+- [x] RED: default profile catalog must not use stale baggage stub, and
   `退 MU5137 的票` must recognize refund intent.
-- [ ] GREEN: local/default profile path is productized and refund natural
+- [x] GREEN: local/default profile path is productized and refund natural
   phrasing is recognized.
-- [ ] Gate: worker profile and recognition tests.
+- [x] Gate: worker profile and recognition tests.
 
 ## Main Verification
 

@@ -61,7 +61,9 @@ class DeterministicTaskRecognitionController:
 
 
 def _has_refund_intent(text: str) -> bool:
-    return any(term in text for term in ("退票", "退款", "退机票", "取消行程", "refund"))
+    return any(term in text for term in ("退票", "退款", "退机票", "取消行程", "refund")) or bool(
+        re.search(r"退\s*[a-z]{1,4}\s*[-_]?\s*\d{2,6}\s*的?(?:票|机票)", text, re.IGNORECASE)
+    )
 
 
 def _has_baggage_intent(text: str) -> bool:

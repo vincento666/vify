@@ -1,5 +1,6 @@
 import json
 import unittest
+from pathlib import Path
 
 from app.modules.customer_assistant.domain.worker_profiles import (
     CustomerAssistantWorkerProfileCatalog,
@@ -95,5 +96,25 @@ class CustomerAssistantWorkerProfileCatalogTest(unittest.TestCase):
         self.assertEqual(baggage.worker_type, "chatflow_sop")
         self.assertEqual(baggage.worker_ref, "baggage_service")
         self.assertNotIn("stub_qa", raw)
+        self.assertNotIn("baggage_allowance_stub", raw)
+        self.assertNotIn("fake_stub_qa_model", raw)
+
+    def test_repo_env_does_not_override_baggage_profile_to_legacy_stub(self) -> None:
+        env_path = Path(__file__).resolve().parents[3] / ".env"
+        self.assertTrue(env_path.exists())
+        env_text = env_path.read_text(encoding="utf-8")
+        profile_line = next(
+            line
+            for line in env_text.splitlines()
+            if line.startswith("HIFY_CUSTOMER_ASSISTANT_WORKER_PROFILES_JSON=")
+        )
+        raw = profile_line.partition("=")[2]
+
+        catalog = CustomerAssistantWorkerProfileCatalog.from_json(raw)
+        baggage = catalog.resolve("baggage_qa")
+
+        self.assertIsNotNone(baggage)
+        self.assertEqual(baggage.worker_type, "chatflow_sop")
+        self.assertEqual(baggage.worker_ref, "baggage_service")
         self.assertNotIn("baggage_allowance_stub", raw)
         self.assertNotIn("fake_stub_qa_model", raw)

@@ -48,6 +48,14 @@ class CustomerAssistantReActCoreControllerTest(unittest.TestCase):
         with self.assertRaises(UnsupportedTaskCommand):
             policy.validate([object()])  # type: ignore[list-item]
 
+    def test_natural_refund_phrase_with_flight_number_starts_refund_task(self) -> None:
+        controller = DeterministicTaskRecognitionController()
+
+        commands = controller.recognize("退 MU5137 的票", TaskLedger(session_id=8))
+
+        self.assertEqual([command.type for command in commands], [TaskCommandType.ADD_TASK])
+        self.assertEqual([command.task_key for command in commands], ["refund_ticket"])
+
 
 if __name__ == "__main__":
     unittest.main()
