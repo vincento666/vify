@@ -51,6 +51,51 @@ class ChatflowSopWorkerV2AdapterTest(unittest.TestCase):
         self.assertEqual(started["payload"]["callerContext"]["route_id"], "route-a")
         self.assertEqual(started["payload"]["callerContext"]["task_id"], "501")
 
+    def test_worker_result_projects_runtime_v2_execution_state_for_task_panel(self) -> None:
+        with TestClient(app) as client:
+            chatflow = _create_message_chatflow(client, content="v2 task panel")
+            unsupported = _create_branching_message_chatflow(client)
+            with _session() as session:
+                worker = ChatflowSopWorker(_adapter(session, {"refund_ticket": chatflow["id"]}))
+                fallback_worker = ChatflowSopWorker(_adapter(session, {"refund_ticket": unsupported["id"]}))
+                result = worker.run(
+                    _task(task_id=521, session_id=91, task_key="refund_ticket", worker_ref="refund_ticket"),
+                    "我要退票",
+                )
+                fallback = fallback_worker.run(
+                    _task(task_id=522, session_id=92, task_key="refund_ticket", worker_ref="refund_ticket"),
+                    "我要退票",
+                )
+
+        self.assertEqual(result.evidence["runtimeVersion"], 2)
+        refs = result.evidence["runtimeRefs"]
+        run_id = refs["runId"]
+        self.assertEqual(result.evidence["chatflowRuntimeRefs"], refs)
+        self.assertEqual(refs["statusRef"], f"/api/v1/runtime-runs/{run_id}")
+        self.assertEqual(refs["eventsRef"], f"/api/v1/runtime-runs/{run_id}/events")
+        self.assertEqual(refs["eventStreamRef"], f"/api/v1/runtime-runs/{run_id}/events/stream?afterSequence=0")
+        self.assertEqual(refs["resultRef"], f"/api/v1/runtime-runs/{run_id}/result")
+        self.assertEqual(refs["nodesRef"], f"/api/v1/runtime-runs/{run_id}/nodes")
+        self.assertEqual(result.evidence["chatflowSession"]["nodesRef"], refs["nodesRef"])
+
+        live_node_event = next(event for event in result.events if event["type"] == "workflow_node_started")
+        self.assertEqual(live_node_event["source"], "chatflow_runtime_v2")
+        self.assertEqual(
+            live_node_event["payload"]["event"],
+            {
+                "id": live_node_event["payload"]["sourceEventId"],
+                "sequence": live_node_event["payload"]["sourceSequence"],
+                "type": "workflow_node_started",
+                "source": "chatflow_runtime_v2",
+            },
+        )
+        self.assertEqual(live_node_event["payload"]["node"]["key"], "middle_1")
+        self.assertEqual(live_node_event["payload"]["node"]["type"], "MESSAGE")
+        self.assertEqual(live_node_event["payload"]["node"]["status"], "RUNNING")
+        self.assertGreater(live_node_event["payload"]["node"]["runId"], 0)
+
+        self.assertIn("Unsupported runtime v2 graph", fallback.evidence["fallbackReason"])
+
     def test_chatflow_v2_node_events_are_first_class_worker_events_before_compatibility_summary(self) -> None:
         with TestClient(app) as client:
             chatflow = _create_message_chatflow(client, content="v2 sop node events")

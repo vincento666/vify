@@ -46,6 +46,7 @@ class ChatflowSopRuntimeAdapter:
         chatflow_id: int,
         *,
         fallback_events: list[dict[str, Any]],
+        fallback_reason: str = "",
     ) -> SopExecutionResult:
         try:
             run = self._workflow_service.execute(chatflow_id, WorkflowRunRequest(input=_runtime_input(request)))
@@ -53,7 +54,7 @@ class ChatflowSopRuntimeAdapter:
             return _failure(request, "CHATFLOW_START_FAILED", str(exc))
         except Exception as exc:
             return _failure(request, "CHATFLOW_START_FAILED", str(exc))
-        result = self._result_from_run(request, chatflow_id, run)
+        result = self._result_from_run(request, chatflow_id, run, fallback_reason=fallback_reason)
         if fallback_events:
             return _with_prefixed_events(result, fallback_events)
         return result
@@ -78,7 +79,12 @@ class ChatflowSopRuntimeAdapter:
             message = str(exc)
             if "Unsupported runtime v2 graph" in message:
                 fallback = {"type": "chatflow_v2_fallback", "chatflowId": chatflow_id, "reason": message}
-                return self._start_sop_v1(request, chatflow_id, fallback_events=[fallback])
+                return self._start_sop_v1(
+                    request,
+                    chatflow_id,
+                    fallback_events=[fallback],
+                    fallback_reason=message,
+                )
             return _failure(request, "CHATFLOW_START_FAILED", message, runtime_code="CHATFLOW_V2_START_FAILED")
         except Exception as exc:
             return _failure(request, "CHATFLOW_START_FAILED", str(exc), runtime_code="CHATFLOW_V2_START_FAILED")
@@ -165,6 +171,7 @@ class ChatflowSopRuntimeAdapter:
         chatflow_id: int,
         run: Mapping[str, Any],
         runtime_version: int = 1,
+        fallback_reason: str = "",
     ) -> SopExecutionResult:
         raw_status = str(run.get("status") or "")
         output = _as_mapping(run.get("output"))
@@ -199,6 +206,7 @@ class ChatflowSopRuntimeAdapter:
             resume_mode=_resume_mode(status, run),
             runtime_version=runtime_version,
             runtime_refs=dict(run.get("runtimeRefs") or {}),
+            fallback_reason=fallback_reason,
         )
         return SopExecutionResult(
             status=status,
@@ -737,17 +745,35 @@ def _project_events(run: Mapping[str, Any]) -> list[dict[str, Any]]:
         if not isinstance(event, Mapping):
             continue
         payload = _as_mapping(event.get("payload"))
+        event_type = str(event.get("type") or "")
+        source = str(event.get("source") or "chatflow_runtime_v2")
         event_context = dict(payload.get("callerContext") or {})
         if event_context:
             caller_context = event_context
+        observability = _as_mapping(event.get("observability"))
+        correlation_refs = _as_mapping(observability.get("correlationRefs"))
+        node_key = str(event.get("nodeId") or event.get("nodeKey") or correlation_refs.get("nodeKey") or "")
+        node_run_id = _optional_int(payload.get("nodeRunId") or correlation_refs.get("nodeRunId"))
         projected = {
-            "type": str(event.get("type") or ""),
-            "source": "chatflow_runtime_v2",
+            "type": event_type,
+            "source": source,
             "runtimeRunId": _int(event.get("runId")),
             "sourceEventId": _int(event.get("id")),
             "sourceSequence": _int(event.get("sequence")),
-            "nodeKey": str(event.get("nodeId") or event.get("nodeKey") or ""),
+            "nodeKey": node_key,
             "callerContext": dict(caller_context),
+            "event": {
+                "id": _int(event.get("id")),
+                "sequence": _int(event.get("sequence")),
+                "type": event_type,
+                "source": source,
+            },
+            "node": {
+                "key": node_key,
+                "type": str(payload.get("nodeType") or ""),
+                "status": str(observability.get("nodeState") or _projected_node_state(event_type, payload)),
+                "runId": node_run_id,
+            },
         }
         checkpoint_id = event.get("checkpointId")
         if checkpoint_id is not None:
@@ -757,14 +783,30 @@ def _project_events(run: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 def _runtime_refs(started: Mapping[str, Any]) -> dict[str, Any]:
+    run_id = started.get("runId")
     return {
-        "runId": started.get("runId"),
-        "statusRef": f"/api/v1/runtime-runs/{started.get('runId')}",
-        "eventsRef": started.get("eventsRef"),
-        "eventStreamRef": started.get("eventStreamRef"),
-        "nodesRef": started.get("nodesRef"),
-        "resultRef": started.get("resultRef"),
+        "runId": run_id,
+        "statusRef": started.get("statusRef") or f"/api/v1/runtime-runs/{run_id}",
+        "eventsRef": started.get("eventsRef") or f"/api/v1/runtime-runs/{run_id}/events",
+        "eventStreamRef": started.get("eventStreamRef")
+        or f"/api/v1/runtime-runs/{run_id}/events/stream?afterSequence=0",
+        "nodesRef": started.get("nodesRef") or f"/api/v1/runtime-runs/{run_id}/nodes",
+        "resultRef": started.get("resultRef") or f"/api/v1/runtime-runs/{run_id}/result",
     }
+
+
+def _projected_node_state(event_type: str, payload: Mapping[str, Any]) -> str:
+    status = str(payload.get("status") or "").upper()
+    if status:
+        return status
+    return {
+        "workflow_node_started": "RUNNING",
+        "workflow_node_completed": "COMPLETED",
+        "workflow_node_failed": "FAILED",
+        "workflow_node_waiting": "WAITING",
+        "workflow_node_skipped": "SKIPPED",
+        "handoff_requested": "WAITING",
+    }.get(event_type, "")
 
 
 def _checkpoint_id_from_result(run: Mapping[str, Any]) -> int | None:

@@ -2998,6 +2998,7 @@ def _task_chatflow_session(task: dict[str, Any]) -> dict[str, Any] | None:
         projection["eventsRef"] = runtime_refs.get("eventsRef") or f"/api/v1/runtime-runs/{run_id}/events"
         projection["eventStreamRef"] = runtime_refs.get("eventStreamRef") or f"/api/v1/runtime-runs/{run_id}/events/stream?afterSequence=0"
         projection["resultRef"] = runtime_refs.get("resultRef") or f"/api/v1/runtime-runs/{run_id}/result"
+        projection["nodesRef"] = runtime_refs.get("nodesRef") or f"/api/v1/runtime-runs/{run_id}/nodes"
     return sanitize_value(projection)
 
 

@@ -48,8 +48,10 @@ class ChatflowSopWorker:
         if chatflow_meta:
             if chatflow_meta.get("runtimeVersion"):
                 evidence["runtimeVersion"] = chatflow_meta.get("runtimeVersion")
-            if chatflow_meta.get("runtimeRefs"):
-                evidence["chatflowRuntimeRefs"] = dict(chatflow_meta["runtimeRefs"])
+            runtime_refs = dict(chatflow_meta.get("runtimeRefs") or {})
+            if runtime_refs:
+                evidence["runtimeRefs"] = runtime_refs
+                evidence["chatflowRuntimeRefs"] = dict(runtime_refs)
             if chatflow_meta.get("fallbackReason"):
                 evidence["fallbackReason"] = chatflow_meta.get("fallbackReason")
             evidence["chatflowSession"] = _chatflow_session_projection(task, chatflow_meta, status)
@@ -171,6 +173,7 @@ def _chatflow_session_projection(
         projection["eventsRef"] = runtime_refs.get("eventsRef") or f"/api/v1/runtime-runs/{run_id}/events"
         projection["eventStreamRef"] = runtime_refs.get("eventStreamRef") or f"/api/v1/runtime-runs/{run_id}/events/stream?afterSequence=0"
         projection["resultRef"] = runtime_refs.get("resultRef") or f"/api/v1/runtime-runs/{run_id}/result"
+        projection["nodesRef"] = runtime_refs.get("nodesRef") or f"/api/v1/runtime-runs/{run_id}/nodes"
     return projection
 
 
@@ -217,6 +220,8 @@ def _chatflow_worker_events(events: list[dict[str, Any]]) -> list[dict[str, Any]
 
 
 def _chatflow_live_event_payload(event: dict[str, Any]) -> dict[str, Any]:
+    event_projection = event.get("event") if isinstance(event.get("event"), dict) else {}
+    node_projection = event.get("node") if isinstance(event.get("node"), dict) else {}
     payload = {
         "type": str(event.get("type") or ""),
         "sourceKind": "chatflow",
@@ -226,6 +231,22 @@ def _chatflow_live_event_payload(event: dict[str, Any]) -> dict[str, Any]:
         "sourceSequence": event.get("sourceSequence"),
         "nodeKey": str(event.get("nodeKey") or ""),
         "callerContext": dict(event.get("callerContext") or {}),
+        "event": dict(event_projection)
+        if event_projection
+        else {
+            "id": event.get("sourceEventId"),
+            "sequence": event.get("sourceSequence"),
+            "type": str(event.get("type") or ""),
+            "source": str(event.get("source") or "chatflow_runtime_v2"),
+        },
+        "node": dict(node_projection)
+        if node_projection
+        else {
+            "key": str(event.get("nodeKey") or ""),
+            "type": "",
+            "status": "",
+            "runId": None,
+        },
     }
     if event.get("checkpointId") is not None:
         payload["checkpointId"] = event.get("checkpointId")
