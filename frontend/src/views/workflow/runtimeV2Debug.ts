@@ -1,3 +1,4 @@
+import { resolveApiUrl } from '@/host/request'
 import type { WorkflowRunDebugDetail, WorkflowRunNodeDetail } from './workflowRunDebug'
 
 export type RuntimeV2StartRef = {
@@ -33,6 +34,26 @@ export type RunLogAction = {
   runtimeQuery: Record<string, string>
 }
 
+export type RuntimeV2EventPage = {
+  list?: RuntimeV2Event[]
+  total?: number
+}
+
+export type RuntimeV2DebugEventObserverOptions = {
+  started: RuntimeV2StartRef
+  afterSequence?: number
+  eventSourceFactory?: (url: string) => EventSource
+  listRuntimeV2Events: (runId: number, params: { afterSequence: number }) => Promise<RuntimeV2EventPage>
+  onEvents: (events: RuntimeV2Event[]) => void
+  onError?: (error: Error) => void
+}
+
+export type RuntimeV2DebugEventObserver = {
+  close: () => void
+  lastSequence: () => number
+  markEventsApplied: (events: RuntimeV2Event[]) => RuntimeV2Event[]
+}
+
 export function resolveRunLogAction(runId: unknown, runtimeVersion: unknown): RunLogAction {
   const shouldOpenRunDetail = Number(runId || 0) > 0
   const isRuntimeV2 = String(runtimeVersion || '').trim().toLowerCase() === 'v2'
@@ -50,6 +71,86 @@ export function createRuntimeV2DebugDetail(start: RuntimeV2StartRef): WorkflowRu
     output: start.output || {},
     error: start.error || '',
     nodeDetails: [],
+  }
+}
+
+export function openRuntimeV2DebugEventObserver(
+  options: RuntimeV2DebugEventObserverOptions,
+): RuntimeV2DebugEventObserver {
+  const runId = Number(options.started.runId || 0)
+  let lastSequence = Number(options.afterSequence ?? runtimeV2AfterSequenceFromRef(options.started.eventStreamRef) ?? 0)
+  let source: EventSource | null = null
+  let closed = false
+  let recovering: Promise<void> | null = null
+  let streamUnavailable = false
+  const seen = new Set<string>()
+
+  const recordEvents = (events: RuntimeV2Event[], emit: boolean): RuntimeV2Event[] => {
+    const accepted = sortRuntimeV2Events(events).filter((event) => {
+      const sequence = Number(event.sequence || 0)
+      if (sequence > 0 && sequence <= lastSequence) return false
+      const key = runtimeV2EventDedupeKey(event)
+      if (seen.has(key)) return false
+      seen.add(key)
+      if (sequence > 0) lastSequence = Math.max(lastSequence, sequence)
+      return true
+    })
+    if (emit && accepted.length) options.onEvents(accepted)
+    return accepted
+  }
+
+  const openStream = () => {
+    if (closed || !runId || streamUnavailable) return
+    try {
+      source = (options.eventSourceFactory || createRuntimeV2EventSource)(
+        runtimeV2EventStreamUrl(options.started, lastSequence),
+      )
+      source.onmessage = (message) => {
+        const event = parseRuntimeV2StreamMessage(message)
+        if (event) recordEvents([event], true)
+      }
+      source.onerror = () => {
+        if (closed) return
+        source?.close()
+        source = null
+        void recoverDurableEvents()
+      }
+      source.addEventListener?.('runtime_v2_event', ((message: MessageEvent) => {
+        const event = parseRuntimeV2StreamMessage(message)
+        if (event) recordEvents([event], true)
+      }) as EventListener)
+    } catch (error) {
+      streamUnavailable = true
+      options.onError?.(toRuntimeV2StreamError(error))
+    }
+  }
+
+  const recoverDurableEvents = async () => {
+    if (closed || recovering || !runId) return recovering
+    recovering = (async () => {
+      try {
+        const page = await options.listRuntimeV2Events(runId, { afterSequence: lastSequence })
+        recordEvents(page.list || [], true)
+      } catch (error) {
+        options.onError?.(toRuntimeV2StreamError(error))
+      } finally {
+        recovering = null
+        if (!closed) openStream()
+      }
+    })()
+    return recovering
+  }
+
+  openStream()
+
+  return {
+    close: () => {
+      closed = true
+      source?.close()
+      source = null
+    },
+    lastSequence: () => lastSequence,
+    markEventsApplied: (events) => recordEvents(events, false),
   }
 }
 
@@ -208,4 +309,68 @@ function normalizeRuntimeNodeStatus(status: unknown): string {
   const normalized = String(status || '').trim().toUpperCase()
   if (normalized === 'SUCCEEDED') return 'COMPLETED'
   return normalized
+}
+
+function createRuntimeV2EventSource(url: string): EventSource {
+  if (typeof EventSource === 'undefined') throw new Error('EventSource is unavailable')
+  return new EventSource(url)
+}
+
+function runtimeV2EventStreamUrl(started: RuntimeV2StartRef, afterSequence: number): string {
+  const runId = Number(started.runId || 0)
+  const path = started.eventStreamRef || `/api/v1/runtime-runs/${runId}/events/stream`
+  return resolveApiUrl(withRuntimeV2AfterSequence(path, afterSequence))
+}
+
+function withRuntimeV2AfterSequence(path: string, afterSequence: number): string {
+  const base = 'http://hify.local'
+  const url = new URL(path || '/', base)
+  url.searchParams.set('afterSequence', String(Math.max(0, Number(afterSequence || 0))))
+  if (/^https?:\/\//i.test(path)) return url.toString()
+  return `${url.pathname}${url.search}${url.hash}`
+}
+
+function runtimeV2AfterSequenceFromRef(ref: string | undefined): number | undefined {
+  if (!ref) return undefined
+  try {
+    const value = new URL(ref, 'http://hify.local').searchParams.get('afterSequence')
+    if (value === null) return undefined
+    const sequence = Number(value)
+    return Number.isFinite(sequence) ? sequence : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function parseRuntimeV2StreamMessage(message: MessageEvent | { data?: unknown }): RuntimeV2Event | null {
+  const data = String(message.data || '').trim()
+  if (!data || data === '[DONE]') return null
+  return JSON.parse(data) as RuntimeV2Event
+}
+
+function sortRuntimeV2Events(events: RuntimeV2Event[]): RuntimeV2Event[] {
+  return events
+    .map((event, index) => ({ event, index, sequence: Number(event.sequence || 0) }))
+    .sort((left, right) => {
+      const leftSequence = left.sequence > 0 ? left.sequence : Number.MAX_SAFE_INTEGER
+      const rightSequence = right.sequence > 0 ? right.sequence : Number.MAX_SAFE_INTEGER
+      return leftSequence - rightSequence || left.index - right.index
+    })
+    .map(({ event }) => event)
+}
+
+function runtimeV2EventDedupeKey(event: RuntimeV2Event): string {
+  const sequence = Number(event.sequence || 0)
+  if (sequence > 0) return `sequence:${sequence}`
+  return [
+    'event',
+    String(event.id || ''),
+    String(event.type || ''),
+    String(event.nodeId || event.payload?.nodeKey || ''),
+  ].join(':')
+}
+
+function toRuntimeV2StreamError(error: unknown): Error {
+  if (error instanceof Error) return new Error(`Runtime v2 event stream failed: ${error.message}`)
+  return new Error('Runtime v2 event stream failed')
 }

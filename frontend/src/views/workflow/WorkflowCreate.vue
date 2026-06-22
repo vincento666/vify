@@ -4233,7 +4233,9 @@ import {
   createRuntimeV2DebugDetail,
   isRuntimeV2TerminalStatus,
   mergeRuntimeV2RunToDebugDetail,
+  openRuntimeV2DebugEventObserver,
   resolveRunLogAction,
+  type RuntimeV2DebugEventObserver,
   type RuntimeV2Event,
   type RuntimeV2Node,
   type RuntimeV2StartRef,
@@ -8883,36 +8885,51 @@ async function observeRuntimeV2Run(
   if (!runId) return runtimeV2ResultPayload(createRuntimeV2DebugDetail(started), started)
 
   let detail = currentRuntimeV2DebugDetail(ownerType) || createRuntimeV2DebugDetail(started)
-  let afterSequence = 0
   let latestRun: RuntimeV2StartRef = started
-
-  for (let attempt = 0; attempt < RUNTIME_V2_MAX_POLLS; attempt += 1) {
-    const [eventPage, nodePage, run] = await Promise.all([
-      listRuntimeV2Events(runId, { afterSequence }),
-      listRuntimeV2Nodes(runId),
-      getRuntimeV2Run(runId),
-    ])
-    const events = (eventPage.list || []) as RuntimeV2Event[]
-    const nodes = (nodePage.list || []) as RuntimeV2Node[]
-    afterSequence = Math.max(afterSequence, ...events.map((event) => Number(event.sequence || 0)))
+  let streamObserver: RuntimeV2DebugEventObserver | null = null
+  const applyRuntimeV2EventBatch = (events: RuntimeV2Event[]) => {
+    if (!events.length) return
     if (ownerType === 'CHATFLOW') {
       appendChatflowRuntimeV2Events(events)
     }
-    latestRun = run as RuntimeV2StartRef
-    detail = mergeRuntimeV2RunToDebugDetail(
-      applyRuntimeV2NodesToDebugDetail(
-        applyRuntimeV2EventsToDebugDetail(detail, events),
-        nodes,
-      ),
-      latestRun,
-    )
+    detail = applyRuntimeV2EventsToDebugDetail(detail, events)
     setRuntimeV2DebugDetail(ownerType, detail)
     updateRuntimeV2RunState(ownerType, detail, latestRun)
-    if (isRuntimeV2TerminalStatus(detail.status)) return runtimeV2ResultPayload(detail, latestRun)
-    await waitRuntimeV2PollDelay()
+    if (isRuntimeV2TerminalStatus(detail.status)) streamObserver?.close()
   }
 
-  return runtimeV2ResultPayload(detail, latestRun)
+  streamObserver = openRuntimeV2DebugEventObserver({
+    started,
+    listRuntimeV2Events: (targetRunId, params) => listRuntimeV2Events(targetRunId, params) as Promise<{ list: RuntimeV2Event[]; total: number }>,
+    onEvents: applyRuntimeV2EventBatch,
+  })
+  const observer = streamObserver
+
+  try {
+    for (let attempt = 0; attempt < RUNTIME_V2_MAX_POLLS; attempt += 1) {
+      const [eventPage, nodePage, run] = await Promise.all([
+        listRuntimeV2Events(runId, { afterSequence: observer.lastSequence() }),
+        listRuntimeV2Nodes(runId),
+        getRuntimeV2Run(runId),
+      ])
+      const events = observer.markEventsApplied((eventPage.list || []) as RuntimeV2Event[])
+      const nodes = (nodePage.list || []) as RuntimeV2Node[]
+      applyRuntimeV2EventBatch(events)
+      latestRun = run as RuntimeV2StartRef
+      detail = mergeRuntimeV2RunToDebugDetail(
+        applyRuntimeV2NodesToDebugDetail(detail, nodes),
+        latestRun,
+      )
+      setRuntimeV2DebugDetail(ownerType, detail)
+      updateRuntimeV2RunState(ownerType, detail, latestRun)
+      if (isRuntimeV2TerminalStatus(detail.status)) return runtimeV2ResultPayload(detail, latestRun)
+      await waitRuntimeV2PollDelay()
+    }
+
+    return runtimeV2ResultPayload(detail, latestRun)
+  } finally {
+    observer.close()
+  }
 }
 
 async function cancelCurrentRuntimeV2Run() {

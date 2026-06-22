@@ -1,0 +1,37 @@
+> vitest run src/views/workflow/runtimeV2Debug.test.ts
+ RUN  v3.2.4 /Users/vincento/work/develop/hify/frontend
+ ❯ src/views/workflow/runtimeV2Debug.test.ts (6 tests | 2 failed) 7ms
+   ✓ runtime v2 canvas debug projection > routes a completed runtime v2 trial log button to the v2 run detail query 2ms
+   ✓ runtime v2 canvas debug projection > keeps the log drawer local when no run has been created yet 0ms
+   ✓ runtime v2 canvas debug projection > updates node status from live events and polled nodes, then makes failure visible 1ms
+   ✓ runtime v2 canvas debug projection > projects workflow run cancellation events into a terminal cancelled state 0ms
+   × runtime v2 canvas debug projection > observes runtime v2 SSE by default and recovers durable events after disconnect without duplicates 3ms
+     → openRuntimeV2DebugEventObserver is not a function
+   × runtime v2 canvas debug projection > falls back to the canonical runtime v2 SSE URL when no stream ref is provided 0ms
+     → openRuntimeV2DebugEventObserver is not a function
+ Test Files  1 failed (1)
+      Tests  2 failed | 4 passed (6)
+   Start at  11:25:25
+   Duration  484ms (transform 41ms, setup 0ms, collect 40ms, tests 7ms, environment 0ms, prepare 87ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/views/workflow/runtimeV2Debug.test.ts > runtime v2 canvas debug projection > observes runtime v2 SSE by default and recovers durable events after disconnect without duplicates
+TypeError: openRuntimeV2DebugEventObserver is not a function
+ ❯ src/views/workflow/runtimeV2Debug.test.ts:191:22
+    189|     }))
+    190| 
+    191|     const observer = openRuntimeV2DebugEventObserver({
+       |                      ^
+    192|       started: {
+    193|         runId: 701,
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+ FAIL  src/views/workflow/runtimeV2Debug.test.ts > runtime v2 canvas debug projection > falls back to the canonical runtime v2 SSE URL when no stream ref is provided
+TypeError: openRuntimeV2DebugEventObserver is not a function
+ ❯ src/views/workflow/runtimeV2Debug.test.ts:248:22
+    246| 
+    247|   it('falls back to the canonical runtime v2 SSE URL when no stream re…
+    248|     const observer = openRuntimeV2DebugEventObserver({
+       |                      ^
+    249|       started: { runId: 702 },
+    250|       eventSourceFactory: (url) => new FakeRuntimeEventSource(url) as …
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
