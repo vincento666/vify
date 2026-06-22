@@ -1,0 +1,9 @@
+Command:
+rtk npm --prefix frontend run test:unit
+
+Result:
+Test Files 98 passed (98)
+Tests 416 passed (416)
+
+Notes:
+The full frontend unit gate includes src/remScaleClosure.test.ts and runtimeV2Debug.test.ts.

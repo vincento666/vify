@@ -1,0 +1,8 @@
+Command:
+rtk env PYTHONPATH=. uv run pytest tests/unit tests/contract tests/integration
+
+Result:
+891 passed, 10 skipped, 1 warning in 625.92s (0:10:25)
+
+Notes:
+Final full backend gate was run from commit 979e133b after the Chatflow message durable-job and runtime-lab/customer-assistant fallback policy fixes.

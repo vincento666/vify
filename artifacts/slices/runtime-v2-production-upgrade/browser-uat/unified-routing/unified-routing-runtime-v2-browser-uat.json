@@ -1,0 +1,64 @@
+{
+  "sessionId": 771,
+  "taskId": 765,
+  "runId": 5154,
+  "runStatus": "SUCCEEDED",
+  "resultStatus": "SUCCEEDED",
+  "nodeStatuses": [
+    {
+      "nodeKey": "collect",
+      "status": "WAITING"
+    },
+    {
+      "nodeKey": "collect",
+      "status": "COMPLETED"
+    },
+    {
+      "nodeKey": "confirm",
+      "status": "WAITING"
+    },
+    {
+      "nodeKey": "confirm",
+      "status": "COMPLETED"
+    },
+    {
+      "nodeKey": "end",
+      "status": "COMPLETED"
+    }
+  ],
+  "eventTypes": [
+    "workflow_run_started",
+    "user_message",
+    "workflow_node_started",
+    "node_status_changed",
+    "workflow_node_waiting",
+    "node_status_changed",
+    "workflow_run_interrupted",
+    "workflow_run_resumed",
+    "workflow_node_started",
+    "node_status_changed",
+    "workflow_node_completed",
+    "node_status_changed",
+    "workflow_node_started",
+    "node_status_changed",
+    "workflow_node_waiting",
+    "node_status_changed",
+    "workflow_run_interrupted",
+    "workflow_run_resumed",
+    "workflow_node_started",
+    "node_status_changed",
+    "workflow_node_completed",
+    "node_status_changed",
+    "workflow_node_started",
+    "node_status_changed",
+    "workflow_node_completed",
+    "node_status_changed",
+    "workflow_run_completed"
+  ],
+  "streamFrame": {
+    "sequence": 1,
+    "type": "workflow_run_started",
+    "source": "chatflow_runtime_v2"
+  },
+  "screenshot": "/Users/vincento/work/develop/hify/artifacts/slices/runtime-v2-production-upgrade/browser-uat/unified-routing/screenshots/unified-routing-runtime-v2-browser-uat.png"
+}

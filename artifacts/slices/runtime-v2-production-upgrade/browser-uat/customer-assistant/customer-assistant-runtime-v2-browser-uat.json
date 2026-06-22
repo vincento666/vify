@@ -1,0 +1,67 @@
+{
+  "sessionId": 63,
+  "taskId": 93,
+  "statuses": [
+    "WAITING",
+    "WAITING",
+    "COMPLETED"
+  ],
+  "runtimeVersion": 2,
+  "runId": 5156,
+  "gatewayMode": "messages:stream",
+  "refs": {
+    "statusRef": "/api/v1/runtime-runs/5156",
+    "eventsRef": "/api/v1/runtime-runs/5156/events",
+    "eventStreamRef": "/api/v1/runtime-runs/5156/events/stream?afterSequence=0",
+    "resultRef": "/api/v1/runtime-runs/5156/result"
+  },
+  "assistantEventStatuses": [
+    "RUNNING",
+    "RUNNING",
+    "WAITING",
+    "WAITING",
+    "RUNNING",
+    "RUNNING",
+    "WAITING",
+    "WAITING",
+    "RUNNING",
+    "RUNNING",
+    "COMPLETED",
+    "COMPLETED",
+    "RUNNING",
+    "RUNNING",
+    "WAITING",
+    "WAITING",
+    "RUNNING",
+    "RUNNING",
+    "WAITING",
+    "WAITING",
+    "RUNNING",
+    "RUNNING",
+    "COMPLETED",
+    "COMPLETED",
+    "RUNNING",
+    "RUNNING",
+    "WAITING",
+    "WAITING",
+    "RUNNING",
+    "RUNNING",
+    "COMPLETED",
+    "COMPLETED",
+    "RUNNING",
+    "RUNNING",
+    "COMPLETED",
+    "COMPLETED"
+  ],
+  "streamFrame": {
+    "sequence": 1,
+    "type": "workflow_run_started",
+    "source": "chatflow_runtime_v2"
+  },
+  "recoveryFrame": {
+    "sequence": 1,
+    "type": "workflow_run_started",
+    "source": "chatflow_runtime_v2"
+  },
+  "uiScreenshot": "/Users/vincento/work/develop/hify/artifacts/slices/runtime-v2-production-upgrade/browser-uat/customer-assistant/screenshots/customer-assistant-runtime-v2-ui-waiting.png"
+}

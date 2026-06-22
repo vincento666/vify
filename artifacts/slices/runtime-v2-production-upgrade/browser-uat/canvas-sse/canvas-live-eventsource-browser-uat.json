@@ -1,0 +1,17 @@
+{
+  "chatflowId": 6058,
+  "runId": 5159,
+  "eventSourceUrls": [
+    "/api/v1/runtime-runs/5159/events/stream?afterSequence=0"
+  ],
+  "eventTypes": [
+    "workflow_run_started",
+    "user_message",
+    "workflow_node_started",
+    "node_status_changed",
+    "workflow_node_waiting",
+    "node_status_changed",
+    "workflow_run_interrupted"
+  ],
+  "screenshot": "/Users/vincento/work/develop/hify/artifacts/slices/runtime-v2-production-upgrade/browser-uat/canvas-sse/screenshots/canvas-live-eventsource-browser-uat.png"
+}
