@@ -1,0 +1,8 @@
+Command:
+rtk env PYTHONPATH=. uv run pytest tests/contract/customer_assistant/test_customer_assistant_api.py::CustomerAssistantApiContractTest::test_bound_refund_sop_uses_chatflow_adapter_instead_of_fake_sop tests/integration/runtime_lab/test_chatflow_sop_runtime_adapter.py::ChatflowSopRuntimeAdapterIntegrationTest::test_missing_bound_chatflow_uses_configured_fallback_adapter tests/integration/runtime_lab/test_runtime_lab_reliability.py::RuntimeLabReliabilityTest::test_duplicate_idempotency_key_replays_without_duplicate_task_or_events -q
+
+Result:
+3 passed, 1 warning in 3.24s
+
+Summary:
+Missing bound Chatflow fallback is now opt-in. Runtime-lab enables stale-binding fallback so local/deployment config drift does not erase SOP task lifecycle; customer-assistant keeps bound Chatflow failures visible and does not silently use fake SOP.

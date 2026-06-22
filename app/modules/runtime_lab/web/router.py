@@ -123,6 +123,7 @@ def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeL
         workflow_service,
         sop_chatflow_ids=bindings,
         fallback_adapter=FakeSopRuntimeAdapter(),
+        fallback_on_missing_chatflow=True,
         runtime_v2_service=ChatflowRuntimeV2Service(
             workflow_repository,
             chatflow_state_repository,

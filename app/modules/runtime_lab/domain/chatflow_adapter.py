@@ -22,11 +22,13 @@ class ChatflowSopRuntimeAdapter:
         sop_chatflow_ids: dict[str, int],
         fallback_adapter: SopRuntimeAdapter | None = None,
         runtime_v2_service: ChatflowRuntimeV2Service | None = None,
+        fallback_on_missing_chatflow: bool = False,
     ) -> None:
         self._workflow_service = workflow_service
         self._sop_chatflow_ids = dict(sop_chatflow_ids)
         self._fallback_adapter = fallback_adapter
         self._runtime_v2_service = runtime_v2_service
+        self._fallback_on_missing_chatflow = fallback_on_missing_chatflow
 
     def start_sop(self, request: SopExecutionRequest) -> SopExecutionResult:
         chatflow_id = self._chatflow_id(request.sop_id)
@@ -51,7 +53,7 @@ class ChatflowSopRuntimeAdapter:
         try:
             run = self._workflow_service.execute(chatflow_id, WorkflowRunRequest(input=_runtime_input(request)))
         except BizError as exc:
-            if _is_missing_chatflow_error(exc) and self._fallback_adapter is not None:
+            if self._can_fallback_missing_chatflow(exc):
                 return self._start_configured_fallback(
                     request,
                     chatflow_id=chatflow_id,
@@ -93,7 +95,7 @@ class ChatflowSopRuntimeAdapter:
                     fallback_events=[fallback],
                     fallback_reason=message,
                 )
-            if _is_missing_chatflow_error(exc) and self._fallback_adapter is not None:
+            if self._can_fallback_missing_chatflow(exc):
                 return self._start_configured_fallback(
                     request,
                     chatflow_id=chatflow_id,
@@ -120,6 +122,13 @@ class ChatflowSopRuntimeAdapter:
         ]
         result = self._fallback_adapter.start_sop(request)
         return _with_prefixed_events(result, events)
+
+    def _can_fallback_missing_chatflow(self, exc: BizError) -> bool:
+        return (
+            self._fallback_on_missing_chatflow
+            and self._fallback_adapter is not None
+            and _is_missing_chatflow_error(exc)
+        )
 
     def continue_sop(self, request: SopExecutionRequest) -> SopExecutionResult:
         return self._resume_or_run(request, fallback_operation="continue")

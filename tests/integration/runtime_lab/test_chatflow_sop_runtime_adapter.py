@@ -99,6 +99,7 @@ class ChatflowSopRuntimeAdapterIntegrationTest(unittest.TestCase):
             sop_chatflow_ids={"refund_ticket": 1},
             fallback_adapter=FakeSopRuntimeAdapter(),
             runtime_v2_service=_MissingChatflowRuntimeV2Service(),
+            fallback_on_missing_chatflow=True,
         )
 
         result = adapter.start_sop(_request(message="我要退票"))
