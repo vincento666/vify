@@ -1,0 +1,8 @@
+Command:
+rtk env PYTHONPATH=. uv run pytest tests/contract/test_chatflow_session_gateway_api.py tests/contract/test_chatflow_runtime_job_worker_gateway.py tests/contract/test_chatflow_run_gateway_api.py -q
+
+Result:
+6 passed, 1 warning in 5.00s
+
+Summary:
+Chatflow `/messages` now enqueue durable `runtime_jobs` rows for non-replayed runtime v2 runs. Long-wait messages complete through `build_chatflow_runtime_job_worker`; no-wait messages pass the queued job id to the background completion thread.

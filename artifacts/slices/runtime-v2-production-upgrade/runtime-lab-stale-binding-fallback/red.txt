@@ -1,0 +1,11 @@
+Command:
+rtk env PYTHONPATH=. uv run pytest tests/integration/runtime_lab/test_chatflow_sop_runtime_adapter.py::ChatflowSopRuntimeAdapterIntegrationTest::test_missing_bound_chatflow_uses_configured_fallback_adapter -q
+
+Expected RED:
+FAILED tests/integration/runtime_lab/test_chatflow_sop_runtime_adapter.py::ChatflowSopRuntimeAdapterIntegrationTest::test_missing_bound_chatflow_uses_configured_fallback_adapter
+
+Failure:
+AssertionError: <SopExecutionStatus.FAILED: 'FAILED'> != <SopExecutionStatus.WAITING: 'WAITING'>
+
+Reason:
+A configured runtime-lab SOP Chatflow binding that points at a missing Chatflow record returns a hard adapter failure instead of falling back through the configured fallback adapter with visible fallback evidence.

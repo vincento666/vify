@@ -1,8 +1,11 @@
 import time
 import unittest
+from unittest.mock import patch
 
+import sqlalchemy as sa
 from fastapi.testclient import TestClient
 
+from app.core.database import Base, get_session_factory
 from app.main import app
 
 
@@ -25,6 +28,7 @@ class ChatflowSessionGatewayApiContractTest(unittest.TestCase):
             data = response.json()["data"]
             session_response = client.get(f"/api/v1/chatflows/{chatflow['id']}/sessions/{data['sessionId']}")
 
+        job = _runtime_job_for_run(int(data["runId"]))
         self.assertEqual(data["status"], "SUCCEEDED")
         self.assertEqual(data["answer"], "sent: Hello Ada")
         self.assertEqual(data["result"], {"final": "sent: Hello Ada"})
@@ -42,6 +46,9 @@ class ChatflowSessionGatewayApiContractTest(unittest.TestCase):
         self.assertGreater(data["runId"], 0)
         self.assertIn("/api/v1/runtime-runs/", data["eventsRef"])
         self.assertIn("/api/v1/runtime-runs/", data["resultRef"])
+        self.assertEqual(job["owner_type"], "CHATFLOW")
+        self.assertEqual(job["owner_id"], chatflow["id"])
+        self.assertEqual(job["status"], "COMPLETED")
         self.assertEqual(session_response.status_code, 200, session_response.text)
         self.assertEqual(session_response.json()["data"]["sessionId"], data["sessionId"])
 
@@ -75,7 +82,7 @@ class ChatflowSessionGatewayApiContractTest(unittest.TestCase):
         self.assertEqual([event["type"] for event in events].count("workflow_run_started"), 1)
 
     def test_message_without_wait_returns_runtime_refs_for_running_turn(self) -> None:
-        with TestClient(app) as client:
+        with TestClient(app) as client, patch("app.modules.workflow.web.router.threading.Thread"):
             chatflow = _create_message_chatflow(client, "contract-running")
             response = client.post(
                 f"/api/v1/chatflows/{chatflow['id']}/messages",
@@ -89,6 +96,27 @@ class ChatflowSessionGatewayApiContractTest(unittest.TestCase):
         self.assertIn(f"/api/v1/runtime-runs/{data['runId']}", data["statusRef"])
         self.assertIn(f"/api/v1/runtime-runs/{data['runId']}/events", data["eventsRef"])
         self.assertIn(f"/api/v1/runtime-runs/{data['runId']}/result", data["resultRef"])
+        job = _runtime_job_for_run(int(data["runId"]))
+        self.assertEqual(job["owner_type"], "CHATFLOW")
+        self.assertEqual(job["owner_id"], chatflow["id"])
+        self.assertEqual(job["status"], "QUEUED")
+
+
+def _runtime_job_for_run(run_id: int) -> dict[str, object]:
+    job_table = Base.metadata.tables["runtime_jobs"]
+    with get_session_factory()() as session:
+        row = (
+            session.execute(
+                sa.select(job_table)
+                .where(job_table.c.run_id == run_id, job_table.c.deleted.is_(False))
+                .order_by(job_table.c.id.desc())
+            )
+            .mappings()
+            .first()
+        )
+    if row is None:
+        raise AssertionError(f"No runtime job found for run {run_id}")
+    return dict(row)
 
 
 def _create_message_chatflow(client: TestClient, label: str) -> dict[str, object]:

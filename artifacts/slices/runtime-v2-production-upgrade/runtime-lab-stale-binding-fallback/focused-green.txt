@@ -1,0 +1,8 @@
+Command:
+rtk env PYTHONPATH=. uv run pytest tests/integration/runtime_lab/test_chatflow_sop_runtime_adapter.py::ChatflowSopRuntimeAdapterIntegrationTest::test_missing_bound_chatflow_uses_configured_fallback_adapter tests/integration/runtime_lab/test_runtime_lab_reliability.py::RuntimeLabReliabilityTest::test_duplicate_idempotency_key_replays_without_duplicate_task_or_events -q
+
+Result:
+2 passed, 1 warning in 1.32s
+
+Summary:
+Runtime-lab SOP routing now preserves task lifecycle when a configured Chatflow binding points at a missing record by using the configured fallback adapter and emitting an explicit fallback event.

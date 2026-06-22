@@ -4,6 +4,7 @@ from typing import Any, cast
 
 from fastapi.testclient import TestClient
 
+from app.core.errors import BizError, ErrorCode
 from app.core.database import get_session_factory
 from app.main import app
 from app.modules.runtime_lab.domain.chatflow_adapter import (
@@ -13,7 +14,12 @@ from app.modules.runtime_lab.domain.chatflow_adapter import (
     _resume_data,
     _runtime_input,
 )
-from app.modules.runtime_lab.domain.sop_adapter import SopCheckpoint, SopExecutionRequest, SopExecutionStatus
+from app.modules.runtime_lab.domain.sop_adapter import (
+    FakeSopRuntimeAdapter,
+    SopCheckpoint,
+    SopExecutionRequest,
+    SopExecutionStatus,
+)
 from app.modules.workflow.domain.service import WorkflowService
 from app.modules.workflow.infra.chatflow_state_repository import ChatflowStateRepository
 from app.modules.workflow.infra.repository import WorkflowRepository
@@ -86,6 +92,21 @@ class ChatflowSopRuntimeAdapterIntegrationTest(unittest.TestCase):
         self.assertEqual(result.error["code"], "CHATFLOW_START_FAILED")
         self.assertEqual(result.error["runtimeCode"], "CHATFLOW_V2_START_FAILED")
         self.assertIn("runtime v2 queue unavailable", result.error["message"])
+
+    def test_missing_bound_chatflow_uses_configured_fallback_adapter(self) -> None:
+        adapter = ChatflowSopRuntimeAdapter(
+            _FailingWorkflowService(),
+            sop_chatflow_ids={"refund_ticket": 1},
+            fallback_adapter=FakeSopRuntimeAdapter(),
+            runtime_v2_service=_MissingChatflowRuntimeV2Service(),
+        )
+
+        result = adapter.start_sop(_request(message="我要退票"))
+
+        self.assertEqual(result.status, SopExecutionStatus.WAITING)
+        self.assertEqual(result.current_step, "collect_order_no")
+        self.assertEqual(result.events[0]["type"], "chatflow_v2_fallback")
+        self.assertEqual(result.events[0]["reason"], "Chatflow not found")
 
     def test_start_sop_passes_inherited_collected_values_to_chatflow(self) -> None:
         stamp = time.time_ns()
@@ -253,6 +274,11 @@ class _FailingWorkflowService:
 class _FailingRuntimeV2Service:
     def start_run(self, *_args: object, **_kwargs: object) -> dict[str, object]:
         raise RuntimeError("runtime v2 queue unavailable")
+
+
+class _MissingChatflowRuntimeV2Service:
+    def start_run(self, *_args: object, **_kwargs: object) -> dict[str, object]:
+        raise BizError(ErrorCode.NOT_FOUND, "Chatflow not found")
 
 
 class _InterruptedConfirmWorkflowService:

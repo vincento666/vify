@@ -51,6 +51,14 @@ class ChatflowSopRuntimeAdapter:
         try:
             run = self._workflow_service.execute(chatflow_id, WorkflowRunRequest(input=_runtime_input(request)))
         except BizError as exc:
+            if _is_missing_chatflow_error(exc) and self._fallback_adapter is not None:
+                return self._start_configured_fallback(
+                    request,
+                    chatflow_id=chatflow_id,
+                    reason=str(exc),
+                    fallback_events=fallback_events,
+                    source="chatflow_legacy_fallback",
+                )
             return _failure(request, "CHATFLOW_START_FAILED", str(exc))
         except Exception as exc:
             return _failure(request, "CHATFLOW_START_FAILED", str(exc))
@@ -85,9 +93,33 @@ class ChatflowSopRuntimeAdapter:
                     fallback_events=[fallback],
                     fallback_reason=message,
                 )
+            if _is_missing_chatflow_error(exc) and self._fallback_adapter is not None:
+                return self._start_configured_fallback(
+                    request,
+                    chatflow_id=chatflow_id,
+                    reason=message,
+                    source="chatflow_v2_fallback",
+                )
             return _failure(request, "CHATFLOW_START_FAILED", message, runtime_code="CHATFLOW_V2_START_FAILED")
         except Exception as exc:
             return _failure(request, "CHATFLOW_START_FAILED", str(exc), runtime_code="CHATFLOW_V2_START_FAILED")
+
+    def _start_configured_fallback(
+        self,
+        request: SopExecutionRequest,
+        *,
+        chatflow_id: int,
+        reason: str,
+        source: str,
+        fallback_events: list[dict[str, Any]] | None = None,
+    ) -> SopExecutionResult:
+        assert self._fallback_adapter is not None
+        events = [
+            *(fallback_events or []),
+            {"type": source, "chatflowId": chatflow_id, "reason": reason},
+        ]
+        result = self._fallback_adapter.start_sop(request)
+        return _with_prefixed_events(result, events)
 
     def continue_sop(self, request: SopExecutionRequest) -> SopExecutionResult:
         return self._resume_or_run(request, fallback_operation="continue")
@@ -722,6 +754,10 @@ def _failure(
         events=[],
         error=error,
     )
+
+
+def _is_missing_chatflow_error(exc: BizError) -> bool:
+    return getattr(exc, "status_code", None) == 404 and "Chatflow not found" in str(exc)
 
 
 def _with_prefixed_events(result: SopExecutionResult, events: list[dict[str, Any]]) -> SopExecutionResult:

@@ -1,0 +1,11 @@
+Command:
+rtk env PYTHONPATH=. uv run pytest tests/contract/test_chatflow_session_gateway_api.py::ChatflowSessionGatewayApiContractTest::test_message_without_wait_returns_runtime_refs_for_running_turn -q
+
+Expected RED:
+FAILED tests/contract/test_chatflow_session_gateway_api.py::ChatflowSessionGatewayApiContractTest::test_message_without_wait_returns_runtime_refs_for_running_turn
+
+Failure:
+AssertionError: No runtime job found for run 4713
+
+Reason:
+The Chatflow `/messages` production entry returned runtime v2 refs but started completion without enqueueing a durable `runtime_jobs` row.

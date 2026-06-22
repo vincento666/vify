@@ -1,0 +1,8 @@
+Command:
+rtk env PYTHONPATH=. uv run pytest tests/integration/runtime_lab/test_runtime_lab_reliability.py tests/integration/runtime_lab/test_chatflow_sop_runtime_adapter.py tests/integration/workflow/test_chatflow_message_question_input.py tests/integration/workflow/test_chatflow_session_state.py tests/integration/workflow/test_chatflow_resume_api.py tests/contract/test_chatflow_session_gateway_api.py tests/contract/test_chatflow_runtime_job_worker_gateway.py tests/contract/test_chatflow_run_gateway_api.py -q
+
+Result:
+33 passed, 1 warning in 8.69s
+
+Summary:
+Affected Chatflow message/session/resume contracts and runtime-lab SOP fallback paths passed after routing Chatflow message completion through durable runtime jobs.

@@ -591,18 +591,33 @@ def send_chatflow_message(
     input_data = _chatflow_message_runtime_input(chatflow_id, request)
     data = service.start_run(chatflow_id, input_data, request.idempotency_key, request.version_id)
     _attach_runtime_v2_transport(data, event_stream_bus)
-    if (
-        not data.get("idempotentReplay")
-        and request.wait_timeout_ms >= _RUNTIME_V2_INLINE_COMPLETION_WAIT_MS
-    ):
-        service.complete_run(int(data["runId"]))
-    elif not data.get("idempotentReplay"):
-        _start_runtime_v2_completion_thread(
-            session,
-            int(data["runId"]),
+    if not data.get("idempotentReplay"):
+        job = RuntimeJobRepository(session).enqueue(
+            run_id=int(data["runId"]),
             owner_type="CHATFLOW",
-            event_stream_bus=event_stream_bus,
+            owner_id=chatflow_id,
+            job_type="runtime_v2_completion",
+            payload={
+                "chatflowId": chatflow_id,
+                "versionId": data.get("versionId"),
+                "entrypoint": "messages",
+            },
         )
+        job_id = int(job["id"])
+        if request.wait_timeout_ms >= _RUNTIME_V2_INLINE_COMPLETION_WAIT_MS:
+            build_chatflow_runtime_job_worker(
+                session,
+                worker_id=f"inline-chatflow-message-{data['runId']}-{time.time_ns()}",
+                event_stream_bus=event_stream_bus,
+            ).run_once(job_id=job_id)
+        else:
+            _start_runtime_v2_completion_thread(
+                session,
+                int(data["runId"]),
+                owner_type="CHATFLOW",
+                job_id=job_id,
+                event_stream_bus=event_stream_bus,
+            )
     result = _wait_for_runtime_v2_result(service, int(data["runId"]), request.wait_timeout_ms)
     return success(_chatflow_message_response(data, input_data, result, request.wait_timeout_ms))
 
