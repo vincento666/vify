@@ -77,7 +77,7 @@ class ChatflowVariableRoundtripTest(unittest.TestCase):
             )
             chatflow = response.json()["data"]
             run_response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={"input": {"userMessage": "查订单", "sys.query": "查订单"}},
             )
 

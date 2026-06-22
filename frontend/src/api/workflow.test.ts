@@ -51,4 +51,20 @@ describe('workflow API client', () => {
       versionId: 11,
     })
   })
+
+  it('keeps chatflow default and legacy run endpoints explicit', async () => {
+    requestMocks.post.mockResolvedValueOnce({ runId: 41 }).mockResolvedValueOnce({ runId: 42 })
+
+    const { runChatflow, runChatflowLegacy } = await import('./workflow')
+
+    await runChatflow(8, { query: 'default' })
+    await runChatflowLegacy(8, { query: 'legacy' })
+
+    expect(requestMocks.post).toHaveBeenNthCalledWith(1, '/v1/chatflows/8/runs', {
+      input: { query: 'default' },
+    })
+    expect(requestMocks.post).toHaveBeenNthCalledWith(2, '/v1/chatflows/8/runs-legacy', {
+      input: { query: 'legacy' },
+    })
+  })
 })

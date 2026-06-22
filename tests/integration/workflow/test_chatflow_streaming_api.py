@@ -45,7 +45,7 @@ def test_chatflow_run_accepts_sse_and_streams_node_events() -> None:
         )
         chatflow_id = create_response.json()["data"]["id"]
         run_response = client.post(
-            f"/api/v1/chatflows/{chatflow_id}/runs",
+            f"/api/v1/chatflows/{chatflow_id}/runs-legacy",
             headers={"Accept": "text/event-stream"},
             json={"input": {"sys.query": "stream"}},
         )

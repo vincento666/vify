@@ -69,7 +69,7 @@ class ChatflowResumeApiIntegrationTest(unittest.TestCase):
 
 def _start(client: TestClient, chatflow_id: int, stamp: int, query: str = "start") -> dict[str, object]:
     response = client.post(
-        f"/api/v1/chatflows/{chatflow_id}/runs",
+        f"/api/v1/chatflows/{chatflow_id}/runs-legacy",
         json={
             "input": {
                 "sys.query": query,

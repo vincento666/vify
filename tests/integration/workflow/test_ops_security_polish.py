@@ -22,7 +22,7 @@ class OpsSecurityPolishTest(unittest.TestCase):
             )
             conversation_id = f"handoff-sec-{time.time_ns()}"
             run_response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={
                     "input": {
                         "sys.query": "需要人工，apiKey=sk-secret password=hunter2",
@@ -48,7 +48,7 @@ class OpsSecurityPolishTest(unittest.TestCase):
             close_chatflow = self._create_handoff_chatflow(client, sla_minutes=1)
             close_conversation_id = f"handoff-close-{time.time_ns()}"
             client.post(
-                f"/api/v1/chatflows/{close_chatflow['id']}/runs",
+                f"/api/v1/chatflows/{close_chatflow['id']}/runs-legacy",
                 json={"input": {"sys.query": "close me", "sys.conversation_id": close_conversation_id}},
             )
             close_ticket = next(

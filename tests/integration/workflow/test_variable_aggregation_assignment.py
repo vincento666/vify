@@ -33,7 +33,7 @@ class WorkflowVariableAggregationAssignmentTest(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = _create_conversation_assignment_chatflow(client)
             response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={"input": {"sys.query": "refund topic"}},
             )
 

@@ -11,7 +11,7 @@ class ChatflowMessageQuestionHumanInputTest(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = _create_message_chatflow(client)
             response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={"input": {"sys.query": "Ada"}},
             )
 
@@ -36,11 +36,11 @@ class ChatflowMessageQuestionHumanInputTest(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = _create_question_chatflow(client)
             interrupted = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={"input": {"sys.query": "start"}},
             )
             resumed = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={"input": {"sys.query": "start", "resume": {"question_1": {"answer": "yes"}}}},
             )
 
@@ -54,7 +54,7 @@ class ChatflowMessageQuestionHumanInputTest(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = _create_human_input_chatflow(client)
             response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={"input": {"resume": {"human_input_1": {"payload": {"approved": True, "note": "ok"}}}}},
             )
 

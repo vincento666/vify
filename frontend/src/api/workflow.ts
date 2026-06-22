@@ -129,6 +129,10 @@ export function runChatflow(id: number, input: Record<string, any>) {
   return post<any>(`/v1/chatflows/${id}/runs`, { input })
 }
 
+export function runChatflowLegacy(id: number, input: Record<string, any>) {
+  return post<any>(`/v1/chatflows/${id}/runs-legacy`, { input })
+}
+
 export function runChatflowV2(
   id: number,
   input: Record<string, any>,

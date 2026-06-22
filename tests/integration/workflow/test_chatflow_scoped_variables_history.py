@@ -31,13 +31,13 @@ class ChatflowScopedVariablesHistoryIntegrationTest(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = _create_message_chatflow(client, stamp)
             first = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={"input": {"sys.query": "订单问题", "sys.conversation_id": conversation_id}},
             )
             self.assertEqual(first.status_code, 200, first.text)
             _replace_with_history_collection_chatflow(client, int(chatflow["id"]), stamp)
             second = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={"input": {"sys.query": "手机号 13800138000", "sys.conversation_id": conversation_id}},
             )
 
@@ -52,18 +52,18 @@ class ChatflowScopedVariablesHistoryIntegrationTest(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = _create_message_chatflow(client, stamp, content_template="{{start.sys.query}}")
             first = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={"input": {"sys.query": "姓名 Ada", "sys.conversation_id": conversation_id}},
             )
             second = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={"input": {"sys.query": "手机号 13800138000", "sys.conversation_id": conversation_id}},
             )
             self.assertEqual(first.status_code, 200, first.text)
             self.assertEqual(second.status_code, 200, second.text)
             _replace_with_history_collection_chatflow(client, int(chatflow["id"]), stamp, history_retention_rounds=1)
             retained = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={"input": {"sys.query": "继续", "sys.conversation_id": conversation_id}},
             )
 
@@ -78,7 +78,7 @@ class ChatflowScopedVariablesHistoryIntegrationTest(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = _create_scope_input_chatflow(client, stamp)
             run = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={
                     "input": {
                         "sys.query": "refund",
@@ -107,7 +107,7 @@ class ChatflowScopedVariablesHistoryIntegrationTest(unittest.TestCase):
 
 def _start(client: TestClient, chatflow_id: int, stamp: int) -> dict[str, object]:
     response = client.post(
-        f"/api/v1/chatflows/{chatflow_id}/runs",
+        f"/api/v1/chatflows/{chatflow_id}/runs-legacy",
         json={"input": {"sys.query": "start", "sys.conversation_id": f"conv-{stamp}"}},
     )
     assert response.status_code == 200, response.text

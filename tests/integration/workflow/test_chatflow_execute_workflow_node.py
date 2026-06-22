@@ -16,7 +16,7 @@ class ChatflowExecuteWorkflowNodeIntegrationTest(unittest.TestCase):
             child = _create_child_workflow(client, stamp, status="PUBLISHED")
             chatflow = _create_parent_chatflow(client, stamp, int(child["id"]))
             response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={
                     "input": {
                         "ticket": "A-451",
@@ -82,7 +82,7 @@ class ChatflowExecuteWorkflowNodeIntegrationTest(unittest.TestCase):
             )
             self.assertEqual(update.status_code, 200, update.text)
             response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={"input": {"ticket": "loop"}},
             )
 
@@ -95,7 +95,7 @@ class ChatflowExecuteWorkflowNodeIntegrationTest(unittest.TestCase):
             child = _create_child_workflow(client, stamp, status="PUBLISHED")
             chatflow = _create_parent_chatflow(client, stamp, int(child["id"]), max_depth=0)
             response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={"input": {"ticket": "depth"}},
             )
 
@@ -108,7 +108,7 @@ class ChatflowExecuteWorkflowNodeIntegrationTest(unittest.TestCase):
             child = _create_interrupting_child_workflow(client, stamp)
             chatflow = _create_parent_chatflow(client, stamp, int(child["id"]))
             response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={"input": {"ticket": "needs-question"}},
             )
 

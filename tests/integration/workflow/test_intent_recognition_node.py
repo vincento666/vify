@@ -11,7 +11,7 @@ class IntentRecognitionNodeIntegrationTest(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = _create_intent_chatflow(client)
             response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={"input": {"sys.query": "我要申请退款，订单有问题"}},
             )
 
@@ -22,7 +22,7 @@ class IntentRecognitionNodeIntegrationTest(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = _create_intent_chatflow(client)
             response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={"input": {"sys.query": "今天天气怎么样"}},
             )
 

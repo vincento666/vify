@@ -56,7 +56,7 @@ class ChatflowConversationRunTest(unittest.TestCase):
             )
             chatflow = create_response.json()["data"]
             run_response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={
                     "input": {
                         "userMessage": "查订单",
@@ -115,7 +115,7 @@ class ChatflowConversationRunTest(unittest.TestCase):
             )
             chatflow = create_response.json()["data"]
             run_response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={
                     "input": {
                         "sys.query": "查订单",
@@ -167,7 +167,7 @@ class ChatflowConversationRunTest(unittest.TestCase):
             )
             chatflow = create_response.json()["data"]
             run_response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={"input": {"sys.query": "refund"}},
             )
 

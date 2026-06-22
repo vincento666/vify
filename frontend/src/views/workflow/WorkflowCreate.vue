@@ -4094,7 +4094,7 @@ import {
   rollbackChatflowVersion,
   rollbackWorkflowVersion,
   resumeChatflowRun,
-  runChatflow,
+  runChatflowLegacy,
   runChatflowV2,
   runChatflowNode,
   runPublishedChatflow,
@@ -9083,7 +9083,7 @@ async function runCanvasTest() {
       }
     const runtimeV2Result = await runCanvasTestWithRuntimeV2(id, runInput)
     const result = runtimeV2Result || (await (isChatflowMode.value
-      ? runChatflow(id, runInput)
+      ? runChatflowLegacy(id, runInput)
       : runWorkflow(id, runInput)) as any)
     testResult.value = result
     lastTestRunStatus.value = String(result?.status || '')

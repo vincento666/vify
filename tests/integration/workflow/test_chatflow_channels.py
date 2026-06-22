@@ -82,7 +82,7 @@ class ChatflowChannelsTest(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = self._create_echo_chatflow(client)
             response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={
                     "input": {
                         "message": "hello direct api",

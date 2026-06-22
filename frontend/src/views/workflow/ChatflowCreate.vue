@@ -142,7 +142,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 
-import { createChatflow, getChatflow, runChatflow, updateChatflow, type WorkflowDetail } from '@/api/workflow'
+import { createChatflow, getChatflow, runChatflowLegacy, updateChatflow, type WorkflowDetail } from '@/api/workflow'
 import { buildChatflowVariableScopes, insertChatflowVariableReference } from './chatflowVariables'
 import { buildChatflowOpenShell, evaluateChatflowPublishGate } from './chatflowPublish'
 import { buildChatflowRunInput } from './chatflowRunProfile'
@@ -298,7 +298,7 @@ async function runConversationTest() {
   running.value = true
   conversationResult.value = ''
   try {
-    const result = await runChatflow(id, buildChatflowRunInput(testProfile.value)) as any
+    const result = await runChatflowLegacy(id, buildChatflowRunInput(testProfile.value)) as any
     const output = result?.output || {}
     conversationResult.value = String(output.output ?? JSON.stringify(output))
     lastRunStatus.value = String(result?.status || '')

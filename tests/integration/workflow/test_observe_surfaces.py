@@ -31,7 +31,7 @@ class ObserveSurfacesTest(unittest.TestCase):
                 },
             ).json()["data"]
             run = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={
                     "input": {
                         "sys.query": "need human",

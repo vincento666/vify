@@ -101,7 +101,7 @@ class WorkflowTransformNodesIntegrationTest(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = _create_chatflow_transform(client)
             response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={"input": {"sys.query": "alice@example.com"}},
             )
 

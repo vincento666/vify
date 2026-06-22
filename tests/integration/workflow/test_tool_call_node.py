@@ -48,7 +48,7 @@ class WorkflowToolCallNodeIntegrationTest(unittest.TestCase):
             server_id = _create_mcp_server(client)
             chatflow = _create_tool_call_chatflow(client, server_id)
             response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={"input": {"sys.query": "A-200"}},
             )
 

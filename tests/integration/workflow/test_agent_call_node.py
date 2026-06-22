@@ -39,7 +39,7 @@ class AgentCallNodeIntegrationTest(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = _create_agent_call_flow(client, int(agent_id), "CHATFLOW", history_mode="include")
             response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={
                     "input": {
                         "sys.query": "continue the refund case",
@@ -83,7 +83,7 @@ class AgentCallNodeIntegrationTest(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = _create_agent_call_flow(client, int(agent_id), "CHATFLOW", stream_output="enabled")
             response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={
                     "input": {
                         "sys.query": "stream agent response",

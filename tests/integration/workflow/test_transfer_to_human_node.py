@@ -12,7 +12,7 @@ class TransferToHumanNodeIntegrationTest(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = _create_transfer_chatflow(client, stamp)
             run = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={
                     "input": {
                         "sys.query": "我要人工",

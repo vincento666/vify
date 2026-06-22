@@ -11,7 +11,7 @@ class ChatflowInformationCollectionTest(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = _create_information_collection_chatflow(client)
             response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={"input": {"sys.query": "我叫 Ada"}},
             )
 
@@ -31,7 +31,7 @@ class ChatflowInformationCollectionTest(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = _create_airline_collection_chatflow(client)
             response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={"input": {"sys.query": "route:广州飞北京"}},
             )
 
@@ -51,7 +51,7 @@ class ChatflowInformationCollectionTest(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = _create_airline_collection_chatflow(client)
             response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={
                     "input": {
                         "sys.query": (
@@ -74,7 +74,7 @@ class ChatflowInformationCollectionTest(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = _create_information_collection_chatflow(client)
             response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={
                     "input": {
                         "sys.query": "手机号 13800138000",
@@ -97,7 +97,7 @@ class ChatflowInformationCollectionTest(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = _create_information_collection_chatflow(client, include_history=True)
             response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 json={
                     "input": {
                         "sys.query": "手机号 13800138000",

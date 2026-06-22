@@ -1,0 +1,35 @@
+Command:
+rtk env PYTHONPATH=. uv run pytest tests/integration/workflow/test_chatflow_message_question_input.py tests/integration/workflow/test_chatflow_session_state.py tests/integration/workflow/test_chatflow_streaming_api.py tests/integration/workflow/test_chatflow_runtime_v2_spike.py tests/integration/runtime_lab/test_chatflow_trace_api.py tests/integration/architecture/test_host_request_context.py -q
+
+Result:
+PASSED
+
+Summary:
+12 passed, 1 warning
+
+Command:
+rtk env PYTHONPATH=. uv run pytest tests/contract/test_chatflow_run_gateway_api.py tests/contract/test_chatflow_session_gateway_api.py tests/contract/test_chatflow_runtime_job_worker_gateway.py tests/contract/test_workflow_run_gateway_api.py tests/contract/test_workflow_runtime_job_gateway.py tests/contract/test_runtime_job_worker_gateway.py -q
+
+Result:
+PASSED
+
+Summary:
+11 passed, 1 warning
+
+Command:
+rtk npm --prefix frontend run test:unit -- src/api/workflow.test.ts src/views/workflow/workflowCreateAntMigration.test.ts src/views/workflow/workflowCanvasRemGovernance.test.ts src/remScaleClosure.test.ts
+
+Result:
+PASSED
+
+Summary:
+4 test files passed, 13 tests passed
+
+Command:
+rtk env PYTHONPATH=. uv run pytest tests/integration/workflow/test_agent_call_node.py tests/integration/workflow/test_chatflow_channels.py tests/integration/workflow/test_chatflow_conversation_run.py tests/integration/workflow/test_chatflow_execute_workflow_node.py tests/integration/workflow/test_chatflow_message_question_input.py tests/integration/workflow/test_chatflow_resume_api.py tests/integration/workflow/test_chatflow_resume_reliability.py tests/integration/workflow/test_chatflow_run_debug_detail.py tests/integration/workflow/test_chatflow_runtime_v2_spike.py tests/integration/workflow/test_chatflow_scoped_variables_history.py tests/integration/workflow/test_chatflow_session_state.py tests/integration/workflow/test_chatflow_streaming_api.py tests/integration/workflow/test_chatflow_variable_roundtrip.py tests/integration/workflow/test_information_collection_node.py tests/integration/workflow/test_intent_recognition_node.py tests/integration/workflow/test_knowledge_faq_runtime.py tests/integration/workflow/test_observe_surfaces.py tests/integration/workflow/test_ops_security_polish.py tests/integration/workflow/test_tool_call_node.py tests/integration/workflow/test_transfer_to_human_node.py tests/integration/workflow/test_transform_nodes.py tests/integration/workflow/test_variable_aggregation_assignment.py tests/integration/runtime_lab/test_chatflow_trace_api.py tests/integration/architecture/test_host_request_context.py tests/contract/test_chatflow_run_gateway_api.py -q
+
+Result:
+PASSED
+
+Summary:
+79 passed, 1 warning

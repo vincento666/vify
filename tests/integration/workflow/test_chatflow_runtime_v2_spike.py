@@ -66,7 +66,7 @@ class ChatflowRuntimeV2SpikeTest(unittest.TestCase):
             chatflow = _create_message_chatflow(client)
             with client.stream(
                 "POST",
-                f"/api/v1/chatflows/{chatflow['id']}/runs",
+                f"/api/v1/chatflows/{chatflow['id']}/runs-legacy",
                 headers={"Accept": "text/event-stream"},
                 json={"input": {"sys.query": "Ada"}},
             ) as stream:
