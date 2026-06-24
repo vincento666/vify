@@ -496,6 +496,43 @@ def run_chatflow(
     )
 
 
+@chatflow_router.post("/{chatflow_id}/runs:stream")
+def stream_chatflow_run(
+    chatflow_id: int,
+    request: WorkflowRunRequest,
+    after_sequence: int = Query(default=0, alias="afterSequence", ge=0),
+    heartbeat_ms: int = Query(default=1000, alias="heartbeatMs", ge=100, le=30000),
+    test_limit: int | None = Query(default=None, alias="_testLimit", ge=1, le=1000),
+    test_heartbeat_limit: int | None = Query(
+        default=None, alias="_testHeartbeatLimit", ge=1, le=1000
+    ),
+    session: Session = Depends(get_session),
+    service: ChatflowRuntimeV2Service = Depends(get_chatflow_runtime_v2_service),
+    event_stream_bus: RuntimeEventStreamBus | None = Depends(get_runtime_event_stream_bus),
+    request_context: RequestContext = Depends(get_request_context),
+) -> StreamingResponse:
+    data = _start_chatflow_runtime_v2_gateway(
+        chatflow_id,
+        request,
+        session=session,
+        service=service,
+        event_stream_bus=event_stream_bus,
+        request_context=request_context,
+    )
+    return StreamingResponse(
+        _iter_runtime_v2_sse(
+            service,
+            run_id=int(data["runId"]),
+            after_sequence=after_sequence,
+            heartbeat_ms=heartbeat_ms,
+            test_limit=test_limit,
+            test_heartbeat_limit=test_heartbeat_limit,
+            event_stream_bus=event_stream_bus,
+        ),
+        media_type="text/event-stream",
+    )
+
+
 @chatflow_router.post("/{chatflow_id}/runs-legacy")
 def run_chatflow_legacy(
     chatflow_id: int,
