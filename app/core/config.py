@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     persistence_mode: str = "local"
     runtime_lab_sop_chatflow_ids: str | None = None
+    runtime_lab_sop_runtime_invocation_mode: str = "sync"
     runtime_lab_intent_arbitrator_mode: str = "fake"
     runtime_lab_intent_arbitrator_base_url: str | None = None
     runtime_lab_intent_arbitrator_api_key: str | None = None

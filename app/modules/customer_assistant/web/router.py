@@ -172,7 +172,11 @@ def _customer_assistant_workers(
     worker_profiles: CustomerAssistantWorkerProfileCatalog | None = None,
 ) -> dict[str, TaskWorker]:
     bindings = _customer_assistant_chatflow_bindings(settings.runtime_lab_sop_chatflow_ids)
-    adapter = _customer_assistant_sop_adapter(session, bindings)
+    adapter = _customer_assistant_sop_adapter(
+        session,
+        bindings,
+        runtime_invocation_mode=settings.runtime_lab_sop_runtime_invocation_mode,
+    )
     profile_catalog = worker_profiles or CustomerAssistantWorkerProfileCatalog.from_json(settings.customer_assistant_worker_profiles_json)
     react_registry = react_worker_registry_from_profiles(profile_catalog.list_profiles())
     workers = {
@@ -219,7 +223,12 @@ def _customer_assistant_primary_client(
     return None
 
 
-def _customer_assistant_sop_adapter(session: Session, bindings: dict[str, int]):
+def _customer_assistant_sop_adapter(
+    session: Session,
+    bindings: dict[str, int],
+    *,
+    runtime_invocation_mode: str = "sync",
+):
     fallback_adapter = FakeSopRuntimeAdapter()
     if not bindings:
         return fallback_adapter
@@ -241,6 +250,7 @@ def _customer_assistant_sop_adapter(session: Session, bindings: dict[str, int]):
             knowledge_facade=KnowledgeFacade(session),
             llm_completer_resolver=workflow_service.runtime_v2_llm_completer,
         ),
+        runtime_invocation_mode=runtime_invocation_mode,
     )
 
 

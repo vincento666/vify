@@ -130,6 +130,7 @@ def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeL
             knowledge_facade=KnowledgeFacade(session),
             llm_completer_resolver=runtime_v2_llm_service.runtime_v2_llm_completer,
         ),
+        runtime_invocation_mode=settings.runtime_lab_sop_runtime_invocation_mode,
     )
     return RuntimeLabService(
         RuntimeLabRepository(session),

@@ -30,9 +30,18 @@ Evidence:
 
 ## 211.3 SOP Adapter Async Refs
 
-- [ ] RED: SOP v2 can return runtime refs before completion in async mode.
-- [ ] Use the shared runtime invocation gateway in SOP adapter paths.
-- [ ] Preserve old synchronous compatibility behavior.
+- [x] RED: SOP v2 can return runtime refs before completion in async mode.
+- [x] Use the shared runtime invocation gateway in SOP adapter paths.
+- [x] Preserve old synchronous compatibility behavior.
+
+Evidence:
+
+- RED gateway: `artifacts/slices/211-runtime-v2-chatflow-async-refs/211.3-sop-adapter-gateway/red.txt`
+- RED async: `artifacts/slices/211-runtime-v2-chatflow-async-refs/211.3-sop-adapter-gateway/async-red.txt`
+- RED config: `artifacts/slices/211-runtime-v2-chatflow-async-refs/211.3-sop-adapter-gateway/config-red.txt`
+- Unit/config: `artifacts/slices/211-runtime-v2-chatflow-async-refs/211.3-sop-adapter-gateway/unit-config.txt`
+- Integration/e2e/customer-assistant regression:
+  `artifacts/slices/211-runtime-v2-chatflow-async-refs/211.3-sop-adapter-gateway/gates.txt`
 
 ## 211.4 Customer Assistant Chatflow SOP Async Refs
 

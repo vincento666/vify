@@ -3,6 +3,7 @@ from collections.abc import Mapping
 from typing import Any, cast
 
 from app.core.errors import BizError
+from app.modules.workflow.domain.runtime_invocation_gateway import RuntimeInvocationGateway
 from app.modules.workflow.domain.runtime_v2 import ChatflowRuntimeV2Service
 from app.modules.runtime_lab.domain.sop_adapter import (
     SopRuntimeAdapter,
@@ -22,12 +23,18 @@ class ChatflowSopRuntimeAdapter:
         sop_chatflow_ids: dict[str, int],
         fallback_adapter: SopRuntimeAdapter | None = None,
         runtime_v2_service: ChatflowRuntimeV2Service | None = None,
+        runtime_invocation_gateway: RuntimeInvocationGateway | None = None,
+        runtime_invocation_mode: str = "sync",
         fallback_on_missing_chatflow: bool = False,
     ) -> None:
         self._workflow_service = workflow_service
         self._sop_chatflow_ids = dict(sop_chatflow_ids)
         self._fallback_adapter = fallback_adapter
         self._runtime_v2_service = runtime_v2_service
+        self._runtime_invocation_gateway = runtime_invocation_gateway
+        if self._runtime_invocation_gateway is None and runtime_v2_service is not None:
+            self._runtime_invocation_gateway = RuntimeInvocationGateway(runtime_v2_service)
+        self._runtime_invocation_mode = _runtime_invocation_mode(runtime_invocation_mode)
         self._fallback_on_missing_chatflow = fallback_on_missing_chatflow
 
     def start_sop(self, request: SopExecutionRequest) -> SopExecutionResult:
@@ -36,7 +43,7 @@ class ChatflowSopRuntimeAdapter:
             if self._fallback_adapter is not None:
                 return self._fallback_adapter.start_sop(request)
             return _failure(request, "SOP_CHATFLOW_NOT_BOUND", f"SOP is not bound to Chatflow: {request.sop_id}")
-        if self._runtime_v2_service is not None:
+        if self._runtime_invocation_gateway is not None:
             v2_result = self._start_sop_v2(request, chatflow_id)
             if v2_result is not None:
                 return v2_result
@@ -70,19 +77,22 @@ class ChatflowSopRuntimeAdapter:
         return result
 
     def _start_sop_v2(self, request: SopExecutionRequest, chatflow_id: int) -> SopExecutionResult | None:
-        assert self._runtime_v2_service is not None
+        assert self._runtime_invocation_gateway is not None
         try:
-            started = self._runtime_v2_service.start_run(
-                chatflow_id,
-                _runtime_input(request),
+            if self._runtime_invocation_mode == "async":
+                invocation = self._runtime_invocation_gateway.start_and_stream_ref(
+                    owner_id=chatflow_id,
+                    input_data=_runtime_input(request),
+                    idempotency_key=_v2_idempotency_key(request),
+                )
+                result = _async_pending_result(request, chatflow_id, invocation)
+                return _with_prefixed_events(result, [{"type": "chatflow_v2_selected", "chatflowId": chatflow_id}])
+            invocation = self._runtime_invocation_gateway.start_and_wait(
+                owner_id=chatflow_id,
+                input_data=_runtime_input(request),
                 idempotency_key=_v2_idempotency_key(request),
             )
-            self._runtime_v2_service.complete_run(int(started["runId"]))
-            run = self._runtime_v2_service.get_result(int(started["runId"]))
-            run["sessionId"] = str(started.get("sessionId") or "")
-            run["events"] = self._runtime_v2_service.list_events(int(started["runId"]))["list"]
-            run["checkpointId"] = _checkpoint_id_from_result(run)
-            run["runtimeRefs"] = _runtime_refs(started)
+            run = _run_from_v2_invocation(invocation)
             result = self._result_from_run(request, chatflow_id, run, runtime_version=2)
             return _with_prefixed_events(result, [{"type": "chatflow_v2_selected", "chatflowId": chatflow_id}])
         except BizError as exc:
@@ -174,16 +184,17 @@ class ChatflowSopRuntimeAdapter:
         event_id = _optional_int(meta.get("eventId"))
         resume_mode = str(meta.get("resumeMode") or "event")
         try:
-            if _int(meta.get("runtimeVersion")) == 2 and self._runtime_v2_service is not None and run_id > 0:
-                run = self._runtime_v2_service.resume_run(
-                    run_id,
-                    _resume_data(request),
-                    str(request.metadata.get("idempotencyKey") or _v2_idempotency_key(request)),
+            if _int(meta.get("runtimeVersion")) == 2 and self._runtime_invocation_gateway is not None and run_id > 0:
+                invocation = self._runtime_invocation_gateway.resume_and_wait(
+                    run_id=run_id,
+                    resume_data=_resume_data(request),
+                    idempotency_key=str(request.metadata.get("idempotencyKey") or _v2_idempotency_key(request)),
                 )
-                run["sessionId"] = str(meta.get("sessionId") or "")
-                run["events"] = self._runtime_v2_service.list_events(run_id)["list"]
-                run["checkpointId"] = _checkpoint_id_from_result(run)
-                run["runtimeRefs"] = dict(meta.get("runtimeRefs") or {})
+                run = _run_from_v2_invocation(
+                    invocation,
+                    session_id=str(meta.get("sessionId") or ""),
+                    runtime_refs=dict(meta.get("runtimeRefs") or {}),
+                )
                 return self._result_from_run(request, chatflow_id, run, runtime_version=2)
             if resume_mode == "event" and run_id > 0 and event_id is not None:
                 run = self._workflow_service.resume_run(
@@ -646,6 +657,7 @@ def _checkpoint(
     resume_mode: str,
     runtime_version: int = 1,
     runtime_refs: dict[str, Any] | None = None,
+    runtime_status: str = "",
     fallback_reason: str = "",
 ) -> SopCheckpoint:
     scoped_variables: dict[str, Any] = {f"conversation.{key}": value for key, value in collected.items()}
@@ -659,6 +671,7 @@ def _checkpoint(
         "collectedNodeIds": _next_collected_node_ids(request, current_step, collected),
         "runtimeVersion": runtime_version,
         "runtimeRefs": dict(runtime_refs or {}),
+        "runtimeStatus": runtime_status,
         "fallbackReason": fallback_reason,
     }
     return SopCheckpoint(
@@ -825,6 +838,84 @@ def _project_events(run: Mapping[str, Any]) -> list[dict[str, Any]]:
             projected["checkpointId"] = checkpoint_id
         events.append(projected)
     return events
+
+
+def _async_pending_result(
+    request: SopExecutionRequest,
+    chatflow_id: int,
+    invocation: Mapping[str, Any],
+) -> SopExecutionResult:
+    run_id = _int(invocation.get("runId"))
+    raw_refs = invocation.get("runtimeRefs")
+    runtime_refs = dict(raw_refs) if isinstance(raw_refs, Mapping) else _runtime_refs(invocation)
+    runtime_status = str(invocation.get("status") or "RUNNING").upper() or "RUNNING"
+    collected = _sanitize_collected(
+        request.sop_id,
+        {**request.collected, **_business_values_from_message(request.message)},
+    )
+    pending_prompt = "Chatflow SOP 正在后台执行，请稍候。"
+    checkpoint = _checkpoint(
+        request,
+        chatflow_id=chatflow_id,
+        run_id=run_id,
+        event_id=None,
+        checkpoint_id=None,
+        session_id=str(invocation.get("sessionId") or ""),
+        current_step="runtime_running",
+        pending_prompt=pending_prompt,
+        collected=collected,
+        resume_mode="runtime-ref",
+        runtime_version=2,
+        runtime_refs=runtime_refs,
+        runtime_status=runtime_status,
+    )
+    return SopExecutionResult(
+        status=SopExecutionStatus.WAITING,
+        current_step="runtime_running",
+        reply=pending_prompt,
+        pending_prompt=pending_prompt,
+        checkpoint=checkpoint,
+        collected=collected,
+        business_refs=collected,
+        events=[
+            {
+                "type": "chatflow_v2_async_started",
+                "source": "chatflow_runtime_v2",
+                "runtimeRunId": run_id,
+                "runtimeStatus": runtime_status,
+                "runtimeRefs": runtime_refs,
+            }
+        ],
+        error=None,
+    )
+
+
+def _run_from_v2_invocation(
+    invocation: Mapping[str, Any],
+    *,
+    session_id: str = "",
+    runtime_refs: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    result = invocation.get("result")
+    run = dict(result) if isinstance(result, Mapping) else dict(invocation)
+    run_id = _int(run.get("runId") or invocation.get("runId"))
+    run["runId"] = run_id
+    run["status"] = str(run.get("status") or invocation.get("status") or "")
+    run["sessionId"] = session_id or str(run.get("sessionId") or invocation.get("sessionId") or "")
+    event_page = invocation.get("events")
+    events = _as_mapping(event_page).get("list") if isinstance(event_page, Mapping) else []
+    run["events"] = events if isinstance(events, list) else []
+    run["checkpointId"] = _checkpoint_id_from_result(run)
+    refs = runtime_refs if runtime_refs is not None and runtime_refs else invocation.get("runtimeRefs")
+    run["runtimeRefs"] = dict(refs) if isinstance(refs, Mapping) else _runtime_refs({"runId": run_id})
+    return run
+
+
+def _runtime_invocation_mode(mode: str) -> str:
+    normalized = str(mode or "").strip().lower()
+    if normalized in {"async", "stream", "stream-ref", "startandstreamref", "start_and_stream_ref"}:
+        return "async"
+    return "sync"
 
 
 def _runtime_refs(started: Mapping[str, Any]) -> dict[str, Any]:
