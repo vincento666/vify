@@ -31,6 +31,7 @@ from app.modules.workflow.domain.runtime_v2 import (
     ChatflowRuntimeV2Service,
     WorkflowRuntimeV2Service,
 )
+from app.modules.workflow.domain.runtime_invocation_gateway import RuntimeInvocationGateway
 from app.modules.workflow.domain.resource_registry import WorkflowResourceRegistry
 from app.modules.workflow.domain.api_resource_service import ApiResourceService
 from app.modules.workflow.infra.api_resource_repository import ApiResourceRepository
@@ -243,8 +244,11 @@ def _start_workflow_runtime_v2_gateway(
     event_stream_bus: RuntimeEventStreamBus | None,
     request_context: RequestContext | None = None,
 ) -> dict[str, Any]:
-    data = service.start_run(
-        workflow_id, dict(request.input), request.idempotency_key, request.version_id
+    data = RuntimeInvocationGateway(service).start_only(
+        owner_id=workflow_id,
+        input_data=dict(request.input),
+        idempotency_key=request.idempotency_key,
+        version_id=request.version_id,
     )
     _attach_runtime_v2_transport(data, event_stream_bus)
     _attach_runtime_v2_response_refs(data)
@@ -576,8 +580,11 @@ def _start_chatflow_runtime_v2_gateway(
     event_stream_bus: RuntimeEventStreamBus | None,
     request_context: RequestContext | None = None,
 ) -> dict[str, Any]:
-    data = service.start_run(
-        chatflow_id, dict(request.input), request.idempotency_key, request.version_id
+    data = RuntimeInvocationGateway(service).start_only(
+        owner_id=chatflow_id,
+        input_data=dict(request.input),
+        idempotency_key=request.idempotency_key,
+        version_id=request.version_id,
     )
     _attach_runtime_v2_transport(data, event_stream_bus)
     _attach_runtime_v2_response_refs(data)
