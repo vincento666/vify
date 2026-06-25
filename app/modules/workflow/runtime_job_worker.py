@@ -43,6 +43,7 @@ def build_workflow_runtime_job_worker(
         ),
         worker_id=worker_id or default_runtime_job_worker_id(),
         lease_seconds=lease_seconds,
+        owner_types=("WORKFLOW",),
     )
 
 
@@ -62,7 +63,63 @@ def build_chatflow_runtime_job_worker(
         ),
         worker_id=worker_id or default_runtime_job_worker_id("chatflow-runtime-worker"),
         lease_seconds=lease_seconds,
+        owner_types=("CHATFLOW",),
     )
+
+
+def build_runtime_job_worker(
+    session: Session,
+    *,
+    owner: str = "workflow",
+    worker_id: str | None = None,
+    lease_seconds: int = 300,
+    event_stream_bus: RuntimeEventStreamBus | None = None,
+) -> RuntimeJobWorker:
+    normalized_owner = owner.lower()
+    if normalized_owner == "workflow":
+        return build_workflow_runtime_job_worker(
+            session,
+            worker_id=worker_id,
+            lease_seconds=lease_seconds,
+            event_stream_bus=event_stream_bus,
+        )
+    if normalized_owner == "chatflow":
+        return build_chatflow_runtime_job_worker(
+            session,
+            worker_id=worker_id,
+            lease_seconds=lease_seconds,
+            event_stream_bus=event_stream_bus,
+        )
+    if normalized_owner != "both":
+        raise ValueError(f"Unsupported runtime job owner: {owner}")
+    return RuntimeJobWorker(
+        job_repository=RuntimeJobRepository(session),
+        complete_run=lambda run_id: complete_runtime_job(
+            session,
+            run_id,
+            event_stream_bus=event_stream_bus,
+        ),
+        worker_id=worker_id or default_runtime_job_worker_id("runtime-worker-both"),
+        lease_seconds=lease_seconds,
+        owner_types=("CHATFLOW", "WORKFLOW"),
+    )
+
+
+def complete_runtime_job(
+    session: Session,
+    run_id: int,
+    *,
+    event_stream_bus: RuntimeEventStreamBus | None = None,
+) -> None:
+    job = RuntimeJobRepository(session).get_by_run(run_id)
+    owner_type = str((job or {}).get("owner_type") or "").upper()
+    if owner_type == "CHATFLOW":
+        complete_chatflow_runtime_job(session, run_id, event_stream_bus=event_stream_bus)
+        return
+    if owner_type == "WORKFLOW":
+        complete_workflow_runtime_job(session, run_id, event_stream_bus=event_stream_bus)
+        return
+    raise RuntimeError(f"Unsupported runtime job owner for run {run_id}: {owner_type or '<missing>'}")
 
 
 def complete_chatflow_runtime_job(

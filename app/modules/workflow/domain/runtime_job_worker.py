@@ -5,9 +5,22 @@ from typing import Any, Protocol
 
 
 class RuntimeJobRepositoryProtocol(Protocol):
-    def claim_next(self, *, worker_id: str, lease_seconds: int = 30) -> dict[str, Any] | None: ...
+    def claim_next(
+        self,
+        *,
+        worker_id: str,
+        lease_seconds: int = 30,
+        owner_types: tuple[str, ...] | None = None,
+    ) -> dict[str, Any] | None: ...
 
-    def claim(self, job_id: int, *, worker_id: str, lease_seconds: int = 30) -> dict[str, Any] | None: ...
+    def claim(
+        self,
+        job_id: int,
+        *,
+        worker_id: str,
+        lease_seconds: int = 30,
+        owner_types: tuple[str, ...] | None = None,
+    ) -> dict[str, Any] | None: ...
 
     def complete(self, job_id: int, *, worker_id: str, lease_token: str | None = None) -> dict[str, Any]: ...
 
@@ -29,17 +42,28 @@ class RuntimeJobWorker:
         complete_run: Callable[[int], None],
         worker_id: str,
         lease_seconds: int = 300,
+        owner_types: tuple[str, ...] | None = None,
     ) -> None:
         self._job_repository = job_repository
         self._complete_run = complete_run
         self._worker_id = worker_id
         self._lease_seconds = lease_seconds
+        self._owner_types = _normalize_owner_types(owner_types)
 
     def run_once(self, job_id: int | None = None) -> dict[str, Any]:
         job = (
-            self._job_repository.claim(job_id, worker_id=self._worker_id, lease_seconds=self._lease_seconds)
+            self._job_repository.claim(
+                job_id,
+                worker_id=self._worker_id,
+                lease_seconds=self._lease_seconds,
+                owner_types=self._owner_types,
+            )
             if job_id is not None
-            else self._job_repository.claim_next(worker_id=self._worker_id, lease_seconds=self._lease_seconds)
+            else self._job_repository.claim_next(
+                worker_id=self._worker_id,
+                lease_seconds=self._lease_seconds,
+                owner_types=self._owner_types,
+            )
         )
         if job is None:
             return {"claimed": False, "status": "IDLE"}
@@ -72,3 +96,10 @@ class RuntimeJobWorker:
             "runId": int(job["run_id"]),
             "status": completed["status"],
         }
+
+
+def _normalize_owner_types(owner_types: tuple[str, ...] | None) -> tuple[str, ...] | None:
+    if owner_types is None:
+        return None
+    normalized = tuple(sorted({str(owner_type).upper() for owner_type in owner_types if str(owner_type).strip()}))
+    return normalized or None

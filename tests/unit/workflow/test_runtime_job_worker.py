@@ -50,14 +50,38 @@ class RuntimeJobWorkerTest(unittest.TestCase):
         self.assertFalse(result["claimed"])
         self.assertEqual(result["status"], "IDLE")
 
+    def test_run_once_passes_owner_filter_to_repository_claims(self) -> None:
+        repository = _FakeJobRepository({"id": 9, "run_id": 13, "status": "QUEUED"})
+        worker = RuntimeJobWorker(
+            job_repository=repository,
+            complete_run=lambda _run_id: None,
+            worker_id="chatflow-worker",
+            owner_types=("CHATFLOW",),
+        )
+
+        worker.run_once()
+        worker.run_once(job_id=9)
+
+        self.assertEqual(repository.claim_next_owner_types, ("CHATFLOW",))
+        self.assertEqual(repository.claim_owner_types, ("CHATFLOW",))
+
 
 class _FakeJobRepository:
     def __init__(self, job: dict[str, object] | None) -> None:
         self._job = job
         self.completed_job_id: int | None = None
         self.failed_error: str | None = None
+        self.claim_next_owner_types: tuple[str, ...] | None = None
+        self.claim_owner_types: tuple[str, ...] | None = None
 
-    def claim_next(self, *, worker_id: str, lease_seconds: int = 30) -> dict[str, object] | None:
+    def claim_next(
+        self,
+        *,
+        worker_id: str,
+        lease_seconds: int = 30,
+        owner_types: tuple[str, ...] | None = None,
+    ) -> dict[str, object] | None:
+        self.claim_next_owner_types = owner_types
         if self._job is None:
             return None
         claimed = dict(self._job)
@@ -65,8 +89,16 @@ class _FakeJobRepository:
         claimed["lease_owner"] = worker_id
         return claimed
 
-    def claim(self, job_id: int, *, worker_id: str, lease_seconds: int = 30) -> dict[str, object] | None:
-        claimed = self.claim_next(worker_id=worker_id, lease_seconds=lease_seconds)
+    def claim(
+        self,
+        job_id: int,
+        *,
+        worker_id: str,
+        lease_seconds: int = 30,
+        owner_types: tuple[str, ...] | None = None,
+    ) -> dict[str, object] | None:
+        self.claim_owner_types = owner_types
+        claimed = self.claim_next(worker_id=worker_id, lease_seconds=lease_seconds, owner_types=owner_types)
         if claimed is None or int(claimed["id"]) != job_id:
             return None
         return claimed

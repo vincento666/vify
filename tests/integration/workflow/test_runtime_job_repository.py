@@ -71,6 +71,62 @@ class RuntimeJobRepositoryTest(unittest.TestCase):
             self.assertEqual(failed["last_error"], "boom")
             self.assertIsNotNone(failed["finished_at"])
 
+    def test_claim_next_filters_by_owner_type_and_preserves_lease_takeover(self) -> None:
+        with mysql8_session("runtime_jobs_owner_filter", register=register_baseline_tables) as session:
+            repository = RuntimeJobRepository(session)
+            chatflow = repository.enqueue(run_id=501, owner_type="CHATFLOW", owner_id=601)
+            workflow = repository.enqueue(run_id=502, owner_type="WORKFLOW", owner_id=602)
+
+            claimed_workflow = repository.claim_next(
+                worker_id="workflow-worker",
+                lease_seconds=30,
+                owner_types=("WORKFLOW",),
+            )
+
+            self.assertIsNotNone(claimed_workflow)
+            assert claimed_workflow is not None
+            self.assertEqual(claimed_workflow["id"], workflow["id"])
+            self.assertEqual(claimed_workflow["owner_type"], "WORKFLOW")
+            self.assertEqual(repository.get(int(chatflow["id"]))["status"], "QUEUED")
+
+            claimed_chatflow = repository.claim_next(
+                worker_id="chatflow-worker",
+                lease_seconds=30,
+                owner_types=("CHATFLOW",),
+            )
+
+            self.assertIsNotNone(claimed_chatflow)
+            assert claimed_chatflow is not None
+            self.assertEqual(claimed_chatflow["id"], chatflow["id"])
+            self.assertEqual(claimed_chatflow["owner_type"], "CHATFLOW")
+
+            job_table = sa.Table("runtime_jobs", sa.MetaData(), autoload_with=session.get_bind())
+            session.execute(
+                job_table.update()
+                .where(job_table.c.id == int(chatflow["id"]))
+                .values(lease_expires_at=datetime.now() - timedelta(seconds=1))
+            )
+            session.commit()
+
+            self.assertIsNone(
+                repository.claim(
+                    int(chatflow["id"]),
+                    worker_id="workflow-worker",
+                    lease_seconds=30,
+                    owner_types=("WORKFLOW",),
+                )
+            )
+            takeover = repository.claim(
+                int(chatflow["id"]),
+                worker_id="chatflow-worker-b",
+                lease_seconds=30,
+                owner_types=("CHATFLOW",),
+            )
+
+            self.assertIsNotNone(takeover)
+            assert takeover is not None
+            self.assertEqual(takeover["lease_owner"], "chatflow-worker-b")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -8,12 +8,18 @@ import time
 from app.core.config import get_settings
 from app.core.database import get_session_factory, initialise_database
 from app.modules.workflow.infra.realtime.redis_streams import RedisRuntimeEventStreamBus, RuntimeEventStreamBus
-from app.modules.workflow.runtime_job_worker import build_workflow_runtime_job_worker, default_runtime_job_worker_id
+from app.modules.workflow.runtime_job_worker import build_runtime_job_worker, default_runtime_job_worker_id
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run Workflow Runtime Core jobs.")
     parser.add_argument("--once", action="store_true", help="Claim and run at most one job.")
+    parser.add_argument(
+        "--owner",
+        choices=("workflow", "chatflow", "both"),
+        default="workflow",
+        help="Runtime job owner type to claim.",
+    )
     parser.add_argument("--worker-id", default=None, help="Stable worker id used for job leases.")
     parser.add_argument("--lease-seconds", type=int, default=300)
     parser.add_argument("--poll-interval", type=float, default=1.0)
@@ -26,8 +32,9 @@ def main() -> None:
 
     while True:
         with session_factory() as session:
-            worker = build_workflow_runtime_job_worker(
+            worker = build_runtime_job_worker(
                 session,
+                owner=args.owner,
                 worker_id=worker_id,
                 lease_seconds=args.lease_seconds,
                 event_stream_bus=event_stream_bus,

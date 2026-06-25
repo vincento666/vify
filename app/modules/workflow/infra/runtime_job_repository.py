@@ -85,24 +85,34 @@ class RuntimeJobRepository:
         ).mappings().first()
         return dict(row) if row else None
 
-    def claim_next(self, *, worker_id: str, lease_seconds: int = 30) -> dict[str, Any] | None:
+    def claim_next(
+        self,
+        *,
+        worker_id: str,
+        lease_seconds: int = 30,
+        owner_types: tuple[str, ...] | None = None,
+    ) -> dict[str, Any] | None:
         now = datetime.now()
+        owner_filter = _normalize_owner_types(owner_types)
+        conditions = [
+            self._job.c.deleted.is_(False),
+            sa.or_(
+                sa.and_(
+                    self._job.c.status == "QUEUED",
+                    sa.or_(self._job.c.available_at.is_(None), self._job.c.available_at <= now),
+                ),
+                sa.and_(
+                    self._job.c.status == "RUNNING",
+                    self._job.c.lease_expires_at.is_not(None),
+                    self._job.c.lease_expires_at < now,
+                ),
+            ),
+        ]
+        if owner_filter is not None:
+            conditions.append(self._job.c.owner_type.in_(owner_filter))
         row = self._session.execute(
             sa.select(self._job)
-            .where(
-                self._job.c.deleted.is_(False),
-                sa.or_(
-                    sa.and_(
-                        self._job.c.status == "QUEUED",
-                        sa.or_(self._job.c.available_at.is_(None), self._job.c.available_at <= now),
-                    ),
-                    sa.and_(
-                        self._job.c.status == "RUNNING",
-                        self._job.c.lease_expires_at.is_not(None),
-                        self._job.c.lease_expires_at < now,
-                    ),
-                ),
-            )
+            .where(*conditions)
             .order_by(self._job.c.priority.asc(), self._job.c.id.asc())
             .limit(1)
         ).mappings().first()
@@ -110,21 +120,32 @@ class RuntimeJobRepository:
             return None
         return self._claim_row(dict(row), worker_id=worker_id, lease_seconds=lease_seconds)
 
-    def claim(self, job_id: int, *, worker_id: str, lease_seconds: int = 30) -> dict[str, Any] | None:
+    def claim(
+        self,
+        job_id: int,
+        *,
+        worker_id: str,
+        lease_seconds: int = 30,
+        owner_types: tuple[str, ...] | None = None,
+    ) -> dict[str, Any] | None:
         now = datetime.now()
-        row = self._session.execute(
-            sa.select(self._job).where(
-                self._job.c.id == job_id,
-                self._job.c.deleted.is_(False),
-                sa.or_(
-                    self._job.c.status == "QUEUED",
-                    sa.and_(
-                        self._job.c.status == "RUNNING",
-                        self._job.c.lease_expires_at.is_not(None),
-                        self._job.c.lease_expires_at < now,
-                    ),
+        owner_filter = _normalize_owner_types(owner_types)
+        conditions = [
+            self._job.c.id == job_id,
+            self._job.c.deleted.is_(False),
+            sa.or_(
+                self._job.c.status == "QUEUED",
+                sa.and_(
+                    self._job.c.status == "RUNNING",
+                    self._job.c.lease_expires_at.is_not(None),
+                    self._job.c.lease_expires_at < now,
                 ),
-            )
+            ),
+        ]
+        if owner_filter is not None:
+            conditions.append(self._job.c.owner_type.in_(owner_filter))
+        row = self._session.execute(
+            sa.select(self._job).where(*conditions)
         ).mappings().one_or_none()
         if row is None:
             return None
@@ -242,3 +263,10 @@ class RuntimeJobRepository:
     def _lease_token_for(self, job_id: int) -> str:
         row = self.get(job_id)
         return str(row.get("lease_token") or "") if row is not None else ""
+
+
+def _normalize_owner_types(owner_types: tuple[str, ...] | None) -> tuple[str, ...] | None:
+    if owner_types is None:
+        return None
+    normalized = tuple(sorted({str(owner_type).upper() for owner_type in owner_types if str(owner_type).strip()}))
+    return normalized or None

@@ -44,9 +44,17 @@ Evidence:
 
 ## 211.5 Standalone Runtime Worker Owner Filtering
 
-- [ ] RED: workflow-only worker does not claim queued Chatflow jobs.
-- [ ] Add `--owner workflow|chatflow|both` to `scripts/runtime_job_worker.py`.
-- [ ] Verify lease takeover for Chatflow jobs.
+- [x] RED: workflow-only worker does not claim queued Chatflow jobs.
+- [x] Add `--owner workflow|chatflow|both` to `scripts/runtime_job_worker.py`.
+- [x] Verify lease takeover for Chatflow jobs.
+
+Evidence:
+
+- RED unit: `artifacts/slices/211-runtime-v2-chatflow-async-refs/211.5-runtime-worker-owner/red-unit.txt`
+- RED contract: `artifacts/slices/211-runtime-v2-chatflow-async-refs/211.5-runtime-worker-owner/red-contract.txt`
+- Unit: `artifacts/slices/211-runtime-v2-chatflow-async-refs/211.5-runtime-worker-owner/unit.txt`
+- Integration: `artifacts/slices/211-runtime-v2-chatflow-async-refs/211.5-runtime-worker-owner/integration.txt`
+- Contract: `artifacts/slices/211-runtime-v2-chatflow-async-refs/211.5-runtime-worker-owner/contract.txt`
 
 ## 211.6 Docs And UAT Matrix
 
