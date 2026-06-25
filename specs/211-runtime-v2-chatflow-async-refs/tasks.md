@@ -78,6 +78,18 @@ Evidence:
 
 ## 211.6 Docs And UAT Matrix
 
-- [ ] Update stream/ref endpoint matrix.
-- [ ] Run browser UAT for runtime-lab SOP, customer-assistant task panel, and
+- [x] Update stream/ref endpoint matrix.
+- [x] Run browser UAT for runtime-lab SOP, customer-assistant task panel, and
       canvas runtime state alignment.
+
+Evidence:
+
+- Matrix: `specs/211-runtime-v2-chatflow-async-refs/stream-refs-matrix.md`
+- Backend unit/integration/contract/e2e gates:
+  `artifacts/slices/211-runtime-v2-chatflow-async-refs/211.6-docs-uat/backend-gates.txt`
+- Frontend rem gate:
+  `artifacts/slices/211-runtime-v2-chatflow-async-refs/211.6-docs-uat/frontend-rem.txt`
+- Frontend unit gate:
+  `artifacts/slices/211-runtime-v2-chatflow-async-refs/211.6-docs-uat/frontend-unit.txt`
+- Browser UAT report:
+  `artifacts/slices/211-runtime-v2-chatflow-async-refs/211.6-docs-uat/uat.md`
