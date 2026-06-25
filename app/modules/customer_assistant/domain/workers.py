@@ -45,6 +45,10 @@ class ChatflowSopWorker:
         proposed_actions = _proposed_actions(task, result.to_dict()) if status == TaskStatus.COMPLETED else []
         chatflow_meta = _chatflow_meta(result.checkpoint.to_dict())
         evidence = {"sopId": task.worker_ref, "currentStep": result.current_step}
+        blocking_reason = _blocking_reason(result.to_dict())
+        if blocking_reason:
+            evidence["blockingReason"] = blocking_reason
+            evidence["operatorAdvice"] = _operator_advice(blocking_reason)
         if chatflow_meta:
             if chatflow_meta.get("runtimeVersion"):
                 evidence["runtimeVersion"] = chatflow_meta.get("runtimeVersion")
@@ -59,7 +63,7 @@ class ChatflowSopWorker:
             task_id=int(task.id or 0),
             worker_type=task.worker_type,
             status=status,
-            operator_recommendation=_operator_recommendation(task, result.to_dict()),
+            operator_recommendation=_operator_recommendation(task, result.to_dict(), evidence),
             customer_reply_draft=result.reply or result.pending_prompt,
             missing_fields=[result.pending_prompt] if status == TaskStatus.WAITING and result.pending_prompt else [],
             evidence=evidence,
@@ -261,10 +265,31 @@ def _task_status(status: SopExecutionStatus) -> TaskStatus:
     return TaskStatus.WAITING
 
 
-def _operator_recommendation(task: TaskItem, result: dict[str, Any]) -> str:
+def _operator_recommendation(task: TaskItem, result: dict[str, Any], evidence: dict[str, Any]) -> str:
     status = str(result.get("status") or "")
     step = str(result.get("currentStep") or "")
+    advice = str(evidence.get("operatorAdvice") or "")
+    if advice:
+        return f"{task.task_key} worker {status} at {step}. {advice}".strip()
     return f"{task.task_key} worker {status} at {step}".strip()
+
+
+def _blocking_reason(result: dict[str, Any]) -> str:
+    status = str(result.get("status") or "")
+    if status not in {TaskStatus.WAITING.value, "WAITING"}:
+        return ""
+    if str(result.get("currentStep") or "") == "runtime_running":
+        return "等待 Chatflow runtime 完成或产生下一步事件。"
+    prompt = str(result.get("pendingPrompt") or "").strip()
+    if prompt:
+        return prompt
+    return "等待补充信息或后台运行结果。"
+
+
+def _operator_advice(blocking_reason: str) -> str:
+    if "runtime" in blocking_reason:
+        return "查看 Chatflow runtime 事件流；完成后刷新任务结果。"
+    return f"请向客户确认：{blocking_reason}"
 
 
 def _proposed_actions(task: TaskItem, result: dict[str, Any]) -> list[dict[str, Any]]:

@@ -45,11 +45,22 @@ Evidence:
 
 ## 211.4 Customer Assistant Chatflow SOP Async Refs
 
-- [ ] RED: `chatflow_sop` worker returns pending refs without blocking for
+- [x] RED: `chatflow_sop` worker returns pending refs without blocking for
       completion when wait deadline requires async behavior.
-- [ ] Stream live worker/runtime events consistently into worker and session
+- [x] Stream live worker/runtime events consistently into worker and session
       surfaces.
-- [ ] Generate blocking reason and operator recommendation for waiting input.
+- [x] Generate blocking reason and operator recommendation for waiting input.
+
+Evidence:
+
+- RED gateway enqueue:
+  `artifacts/slices/211-runtime-v2-chatflow-async-refs/211.4-customer-assistant-async-refs/gateway-red.txt`
+- Gateway unit:
+  `artifacts/slices/211-runtime-v2-chatflow-async-refs/211.4-customer-assistant-async-refs/gateway-unit.txt`
+- Worker async product path:
+  `artifacts/slices/211-runtime-v2-chatflow-async-refs/211.4-customer-assistant-async-refs/worker-async.txt`
+- Unit/integration/contract gates:
+  `artifacts/slices/211-runtime-v2-chatflow-async-refs/211.4-customer-assistant-async-refs/gates.txt`
 
 ## 211.5 Standalone Runtime Worker Owner Filtering
 

@@ -45,6 +45,19 @@ class RuntimeInvocationGatewayTest(unittest.TestCase):
         self.assertEqual(result["streamRef"], "/api/v1/runtime-runs/101/events/stream?afterSequence=0")
         self.assertEqual(result["runtimeRefs"]["eventStreamRef"], result["streamRef"])
 
+    def test_start_and_stream_ref_can_enqueue_background_runtime_job(self) -> None:
+        service = _FakeRuntimeV2Service()
+        enqueued: list[tuple[int, int]] = []
+        gateway = RuntimeInvocationGateway(
+            service,
+            enqueue_background_run=lambda owner_id, run_id: enqueued.append((owner_id, run_id)) or {"jobId": 901},
+        )
+
+        result = gateway.start_and_stream_ref(owner_id=42, input_data={"sys.query": "stream"})
+
+        self.assertEqual(enqueued, [(42, 101)])
+        self.assertEqual(result["backgroundJob"], {"jobId": 901})
+
     def test_resume_and_wait_resumes_same_run_and_returns_unified_result(self) -> None:
         service = _FakeRuntimeV2Service()
         gateway = RuntimeInvocationGateway(service)

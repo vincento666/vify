@@ -16,13 +16,16 @@ from app.modules.customer_assistant.domain.worker_runtime import CustomerAssista
 from app.modules.customer_assistant.domain.models import TaskItem, TaskStatus
 from app.modules.customer_assistant.domain.workers import ChatflowSopWorker
 from app.modules.customer_assistant.domain.workers import StubQaWorker
+from app.modules.customer_assistant.web.router import _customer_assistant_sop_adapter
 from app.modules.customer_assistant.infra.repository import CustomerAssistantRepository
 from app.modules.runtime_lab.domain.chatflow_adapter import ChatflowSopRuntimeAdapter
 from app.modules.runtime_lab.domain.sop_adapter import FakeSopRuntimeAdapter
+from app.modules.workflow.runtime_job_worker import build_runtime_job_worker
 from app.modules.workflow.domain.runtime_v2 import ChatflowRuntimeV2Service
 from app.modules.workflow.domain.service import WorkflowService
 from app.modules.workflow.infra.chatflow_state_repository import ChatflowStateRepository
 from app.modules.workflow.infra.repository import WorkflowRepository
+from app.modules.workflow.infra.runtime_job_repository import RuntimeJobRepository
 
 
 class ChatflowSopWorkerV2AdapterTest(unittest.TestCase):
@@ -287,6 +290,49 @@ class ChatflowSopWorkerV2AdapterTest(unittest.TestCase):
             refund_task["lastResult"]["evidence"]["chatflowSession"]["sessionId"],
             waiting_gateway["sessionId"],
         )
+
+    def test_async_chatflow_sop_worker_returns_refs_and_queues_background_runtime_job(self) -> None:
+        with TestClient(app) as client:
+            chatflow = _create_message_chatflow(client, content="async v2 done")
+            with _session() as session:
+                worker = ChatflowSopWorker(
+                    _customer_assistant_sop_adapter(
+                        session,
+                        {"refund_ticket": int(chatflow["id"])},
+                        runtime_invocation_mode="async",
+                    )
+                )
+                result = worker.run(
+                    _task(task_id=531, session_id=93, task_key="refund_ticket", worker_ref="refund_ticket"),
+                    "我要退票",
+                )
+                refs = dict(result.evidence["runtimeRefs"])
+                job = RuntimeJobRepository(session).get_by_run(int(refs["runId"]))
+                assert job is not None
+                drained = build_runtime_job_worker(
+                    session,
+                    owner="chatflow",
+                    worker_id="chatflow-sop-worker-test",
+                ).run_once(job_id=int(job["id"]))
+
+            result_response = client.get(str(refs["resultRef"]))
+
+        self.assertEqual(result.status, TaskStatus.WAITING)
+        self.assertEqual(result.evidence["runtimeVersion"], 2)
+        self.assertEqual(result.evidence["chatflowRuntimeRefs"], refs)
+        self.assertEqual(result.evidence["chatflowSession"]["status"], "WAITING")
+        self.assertIn("等待 Chatflow runtime", result.evidence["blockingReason"])
+        self.assertIn("事件流", result.evidence["operatorAdvice"])
+        self.assertIn("eventStreamRef", result.evidence["chatflowSession"])
+        self.assertIn("runtime_running", result.operator_recommendation)
+        self.assertIn("事件流", result.operator_recommendation)
+        self.assertIn("正在后台执行", result.customer_reply_draft)
+        self.assertEqual(job["owner_type"], "CHATFLOW")
+        self.assertEqual(job["status"], "QUEUED")
+        self.assertEqual(drained["status"], "COMPLETED")
+        self.assertEqual(result_response.status_code, 200, result_response.text)
+        self.assertEqual(result_response.json()["data"]["status"], "SUCCEEDED")
+        self.assertEqual(result_response.json()["data"]["output"]["final"], "async v2 done")
 
 
 def _legacy_stub_baggage_profiles() -> CustomerAssistantWorkerProfileCatalog:

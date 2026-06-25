@@ -52,10 +52,12 @@ from app.modules.runtime_policy.domain.service import RuntimePolicyProfileServic
 from app.modules.runtime_policy.infra.repository import RuntimePolicyRepository
 from app.modules.runtime_policy.web.schemas import RuntimePolicyProfileRequest
 from app.modules.provider.api.facade import ProviderModelFacade
+from app.modules.workflow.domain.runtime_invocation_gateway import RuntimeInvocationGateway
 from app.modules.workflow.domain.runtime_v2 import ChatflowRuntimeV2Service
 from app.modules.workflow.domain.service import WorkflowService
 from app.modules.workflow.infra.chatflow_state_repository import ChatflowStateRepository
 from app.modules.workflow.infra.repository import WorkflowRepository
+from app.modules.workflow.infra.runtime_job_repository import RuntimeJobRepository
 
 router = APIRouter(prefix="/api/v1/runtime-lab", tags=["runtime-lab"])
 
@@ -119,16 +121,23 @@ def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeL
         knowledge_facade=KnowledgeFacade(session),
         preferred_llm_agent_name=RUNTIME_LAB_AIRLINE_LLM_AGENT_NAME,
     )
+    runtime_v2_service = ChatflowRuntimeV2Service(
+        workflow_repository,
+        chatflow_state_repository,
+        knowledge_facade=KnowledgeFacade(session),
+        llm_completer_resolver=runtime_v2_llm_service.runtime_v2_llm_completer,
+    )
     adapter = ChatflowSopRuntimeAdapter(
         workflow_service,
         sop_chatflow_ids=bindings,
         fallback_adapter=FakeSopRuntimeAdapter(),
         fallback_on_missing_chatflow=True,
-        runtime_v2_service=ChatflowRuntimeV2Service(
-            workflow_repository,
-            chatflow_state_repository,
-            knowledge_facade=KnowledgeFacade(session),
-            llm_completer_resolver=runtime_v2_llm_service.runtime_v2_llm_completer,
+        runtime_v2_service=runtime_v2_service,
+        runtime_invocation_gateway=RuntimeInvocationGateway(
+            runtime_v2_service,
+            enqueue_background_run=_runtime_lab_background_enqueue(session)
+            if _runtime_invocation_uses_background(settings.runtime_lab_sop_runtime_invocation_mode)
+            else None,
         ),
         runtime_invocation_mode=settings.runtime_lab_sop_runtime_invocation_mode,
     )
@@ -324,6 +333,29 @@ def _runtime_lab_chatflow_bindings(raw: str | None) -> dict[str, int]:
         if sop_id.strip() and chatflow_id.strip():
             bindings[sop_id.strip()] = int(chatflow_id.strip())
     return bindings
+
+
+def _runtime_invocation_uses_background(mode: str) -> bool:
+    return str(mode or "").strip().lower() in {
+        "async",
+        "stream",
+        "stream-ref",
+        "startandstreamref",
+        "start_and_stream_ref",
+    }
+
+
+def _runtime_lab_background_enqueue(session: Session):
+    def enqueue(owner_id: int, run_id: int) -> dict[str, Any]:
+        job = RuntimeJobRepository(session).enqueue(
+            run_id=run_id,
+            owner_type="CHATFLOW",
+            owner_id=owner_id,
+            payload={"source": "runtime_lab_sop_adapter"},
+        )
+        return {"jobId": int(job["id"]), "status": str(job["status"])}
+
+    return enqueue
 
 
 def _runtime_lab_config(

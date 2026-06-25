@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any, Protocol
 
 
@@ -32,8 +33,14 @@ class RuntimeV2InvocationService(Protocol):
 
 
 class RuntimeInvocationGateway:
-    def __init__(self, service: RuntimeV2InvocationService) -> None:
+    def __init__(
+        self,
+        service: RuntimeV2InvocationService,
+        *,
+        enqueue_background_run: Callable[[int, int], dict[str, Any] | None] | None = None,
+    ) -> None:
         self._service = service
+        self._enqueue_background_run = enqueue_background_run
 
     def start_only(
         self,
@@ -88,6 +95,10 @@ class RuntimeInvocationGateway:
             version_id=version_id,
         )
         started["streamRef"] = started["runtimeRefs"]["eventStreamRef"]
+        if self._enqueue_background_run is not None:
+            job = self._enqueue_background_run(owner_id, int(started["runId"]))
+            if job is not None:
+                started["backgroundJob"] = job
         return started
 
     def resume_and_wait(

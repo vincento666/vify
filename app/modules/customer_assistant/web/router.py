@@ -54,10 +54,12 @@ from app.modules.knowledge.api.facade import KnowledgeFacade
 from app.modules.provider.api.facade import ProviderModelFacade
 from app.modules.runtime_lab.domain.chatflow_adapter import ChatflowSopRuntimeAdapter
 from app.modules.runtime_lab.domain.sop_adapter import FakeSopRuntimeAdapter
+from app.modules.workflow.domain.runtime_invocation_gateway import RuntimeInvocationGateway
 from app.modules.workflow.domain.runtime_v2 import ChatflowRuntimeV2Service
 from app.modules.workflow.domain.service import WorkflowService
 from app.modules.workflow.infra.chatflow_state_repository import ChatflowStateRepository
 from app.modules.workflow.infra.repository import WorkflowRepository
+from app.modules.workflow.infra.runtime_job_repository import RuntimeJobRepository
 
 
 CUSTOMER_ASSISTANT_READ_PERMISSION = "customer_assistant:read"
@@ -240,18 +242,48 @@ def _customer_assistant_sop_adapter(
         chatflow_state_repository=ChatflowStateRepository(session),
         preferred_llm_agent_name=CUSTOMER_ASSISTANT_LLM_AGENT_NAME,
     )
+    runtime_v2_service = ChatflowRuntimeV2Service(
+        WorkflowRepository(session),
+        ChatflowStateRepository(session),
+        knowledge_facade=KnowledgeFacade(session),
+        llm_completer_resolver=workflow_service.runtime_v2_llm_completer,
+    )
     return ChatflowSopRuntimeAdapter(
         workflow_service,
         sop_chatflow_ids=bindings,
         fallback_adapter=fallback_adapter,
-        runtime_v2_service=ChatflowRuntimeV2Service(
-            WorkflowRepository(session),
-            ChatflowStateRepository(session),
-            knowledge_facade=KnowledgeFacade(session),
-            llm_completer_resolver=workflow_service.runtime_v2_llm_completer,
+        runtime_v2_service=runtime_v2_service,
+        runtime_invocation_gateway=RuntimeInvocationGateway(
+            runtime_v2_service,
+            enqueue_background_run=_customer_assistant_background_enqueue(session)
+            if _runtime_invocation_uses_background(runtime_invocation_mode)
+            else None,
         ),
         runtime_invocation_mode=runtime_invocation_mode,
     )
+
+
+def _runtime_invocation_uses_background(mode: str) -> bool:
+    return str(mode or "").strip().lower() in {
+        "async",
+        "stream",
+        "stream-ref",
+        "startandstreamref",
+        "start_and_stream_ref",
+    }
+
+
+def _customer_assistant_background_enqueue(session: Session):
+    def enqueue(owner_id: int, run_id: int) -> dict[str, Any]:
+        job = RuntimeJobRepository(session).enqueue(
+            run_id=run_id,
+            owner_type="CHATFLOW",
+            owner_id=owner_id,
+            payload={"source": "customer_assistant_chatflow_sop"},
+        )
+        return {"jobId": int(job["id"]), "status": str(job["status"])}
+
+    return enqueue
 
 
 def _customer_assistant_chatflow_bindings(raw: str | None) -> dict[str, int]:
