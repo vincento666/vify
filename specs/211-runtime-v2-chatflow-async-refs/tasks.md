@@ -93,3 +93,14 @@ Evidence:
   `artifacts/slices/211-runtime-v2-chatflow-async-refs/211.6-docs-uat/frontend-unit.txt`
 - Browser UAT report:
   `artifacts/slices/211-runtime-v2-chatflow-async-refs/211.6-docs-uat/uat.md`
+
+## 211.7 Internal And External Event Sequence
+
+- [x] Verify internal `RuntimeInvocationGateway.startAndWait` events, runtime
+      HTTP replay events, and runtime SSE replay events expose the same durable
+      sequence for Chatflow runs.
+
+Evidence:
+
+- Contract:
+  `artifacts/slices/211-runtime-v2-chatflow-async-refs/211.7-event-sequence-contract.txt`

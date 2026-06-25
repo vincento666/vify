@@ -8,6 +8,11 @@ from fastapi.testclient import TestClient
 
 from app.core.database import Base, get_session_factory
 from app.main import app
+from app.modules.workflow.domain.runtime_invocation_gateway import RuntimeInvocationGateway
+from app.modules.workflow.domain.runtime_v2 import ChatflowRuntimeV2Service
+from app.modules.workflow.infra.chatflow_state_repository import ChatflowStateRepository
+from app.modules.workflow.infra.publish_repository import WorkflowPublishRepository
+from app.modules.workflow.infra.repository import WorkflowRepository
 
 
 class ChatflowRunGatewayApiTest(unittest.TestCase):
@@ -155,6 +160,44 @@ class ChatflowRunGatewayApiTest(unittest.TestCase):
 
         self.assertTrue(content_type.startswith("text/event-stream"))
         self.assertEqual(first_line, ": heartbeat")
+
+    def test_internal_gateway_events_match_runtime_replay_and_sse_sequence(self) -> None:
+        with TestClient(app) as client:
+            chatflow = _create_chatflow(client)
+            with get_session_factory()() as session:
+                gateway = RuntimeInvocationGateway(
+                    ChatflowRuntimeV2Service(
+                        WorkflowRepository(session),
+                        ChatflowStateRepository(session),
+                        publish_repository=WorkflowPublishRepository(session),
+                        completion_delay_seconds=0.0,
+                    )
+                )
+                internal = gateway.start_and_wait(
+                    owner_id=int(chatflow["id"]),
+                    input_data={"sys.query": "internal-vs-external"},
+                    idempotency_key=f"chatflow-internal-events-{time.time_ns()}",
+                )
+
+            run_id = int(internal["runId"])
+            internal_events = internal["events"]["list"]
+            replay_events = client.get(f"/api/v1/runtime-runs/{run_id}/events").json()["data"]["list"]
+            sse_events = _parse_sse_events(
+                client.get(
+                    f"/api/v1/runtime-runs/{run_id}/events/stream"
+                    f"?afterSequence=0&_testLimit={len(internal_events)}"
+                ).text
+            )
+
+        self.assertGreaterEqual(len(internal_events), 2)
+        self.assertEqual(
+            [(event["sequence"], event["type"], event["runId"]) for event in replay_events],
+            [(event["sequence"], event["type"], event["runId"]) for event in internal_events],
+        )
+        self.assertEqual(
+            [(event["sequence"], event["type"], event["runId"]) for event in sse_events],
+            [(event["sequence"], event["type"], event["runId"]) for event in internal_events],
+        )
 
     def test_chatflow_runs_legacy_keeps_sync_compatibility(self) -> None:
         with TestClient(app) as client:
