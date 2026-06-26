@@ -56,7 +56,7 @@
 | SOP 完整 UAT 通过 | 212.5 | `rtk node frontend/e2e/unified-routing-sop-chatflow-runtime-uat.mjs` 等 SOP 套件 |
 | Workflow 核心 UAT 通过 | 212.5 | `rtk node frontend/e2e/workflow-six-node-matrix.mjs` 等 |
 | 明确 legacy 单路径行为基线 | 212.5 | 归档 `baseline.md` 并冻结 |
-| 后续每个阶段必须运行基础回归门禁 | 212.3, 212.5 | acceptance-gates.md 文档 |
+| 后续每个阶段必须运行基础回归门禁 | 212.3, 212.5 | `docs/testing/acceptance-gates.md`（含新增 § Chrome-MCP UAT Harness 章节，定义 Chrome-MCP 脚本调用约定、screenshot/日志归档路径、PASS / LOGIC-RED / ENV-BLOCKED-CHROME-MCP / ENV-BLOCKED-PGVECTOR 判定关键字） |
 
 ## Baseline 已知项
 

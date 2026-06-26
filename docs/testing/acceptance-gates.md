@@ -103,6 +103,83 @@ UAT 记录模板：
 - 更新 `tasks.md` 完成项。
 - 如发生架构决策变化，新增或更新 ADR。
 
+## Chrome-MCP UAT Harness
+
+部分 e2e 脚本使用 Chrome-MCP 注入的 `browser.tabs.selected()` /
+`tab.playwright` 入口而非 plain Playwright 启动方式。这类脚本要求测试侧
+已有一个登录态浏览器 Tab，通常通过 MCP / 协作执行环境提供，不可用
+`node frontend/e2e/<file>.mjs` 直接跑。
+
+### 识别 Chrome-MCP 依赖脚本
+
+grep 入口判定：
+
+```bash
+rtk grep -l "browser\.tabs\.selected\|tab\.playwright" frontend/e2e/*.mjs
+```
+
+当前已知 Chrome-MCP harness 脚本：
+
+- `frontend/e2e/chatflow-inapp-deep-tree-uat.mjs`
+- `frontend/e2e/chatflow-inapp-visible-output-uat.mjs`
+- `frontend/e2e/workflow-chatflow-node-form-controls-inapp-uat.mjs`
+- `frontend/e2e/workflow-inapp-visible-output-uat.mjs`
+
+新增脚本如果使用 `browser.tabs.selected()` 或 `tab.playwright`，必须在
+本节列表中登记。
+
+### 调用约定
+
+| 场景 | 入口约定 |
+|------|---------|
+| 本机 Chrome-MCP 已就绪 | Claude Code / Codex Desktop 通过 MCP 工具 `browser` 命名空间直接驱动 |
+| Headless / CI | 暂不支持；脚本应能优雅拒绝并返回 ENV-BLOCKED-CHROME-MCP |
+| 切换 base URL | 通过 `HIFY_E2E_BASE_URL` 环境变量传入；默认 `http://127.0.0.1:5173` |
+
+### Screenshot 与日志归档
+
+Chrome-MCP 脚本生成的 screenshot 必须写入：
+
+```
+artifacts/slices/<spec-id>/<slice-id>/screenshots/<scenario>/<step>.png
+```
+
+执行日志：
+
+```
+artifacts/slices/<spec-id>/<slice-id>/uat-runs/<script-name>.log
+```
+
+不要写入 `frontend/e2e/screenshots/` 仓内目录，避免被脚本反复覆盖污染历史证据。
+
+### 判定关键字
+
+UAT 报告 / addendum 必须使用以下大写关键字之一，便于 grep / orchestrator 解析：
+
+| 关键字 | 含义 |
+|--------|------|
+| `PASS` | 脚本完整执行且断言全绿 |
+| `LOGIC-RED` | 脚本执行至某行失败，根因在业务代码（不修脚本） |
+| `INFRA-RED` | 脚本执行时报路径/工具/导入错误（非业务） |
+| `ENV-BLOCKED-CHROME-MCP` | 缺 Chrome-MCP harness，无法启动 |
+| `ENV-BLOCKED-PGVECTOR` | 缺 pgvector / postgres，无法继续 |
+| `ENV-BLOCKED-LIVE-MODEL` | 缺真实 LLM key，跳过 live 评估 |
+
+### 不允许的实践
+
+- 不允许把 `tab.playwright` 调用改写为 `await chromium.launch()` 来"让脚本能在 plain node 跑"；
+  这等于把 Chrome-MCP 契约改成 plain Playwright，绕过了登录态 Tab 复用语义。
+- 不允许通过 `--ignore` / `-k` 在 CLI 上排除这些脚本来让 baseline gate 假装全绿。
+- 不允许在 acceptance-gates 之外的位置定义脚本入口约定。
+- 不允许把 Chrome-MCP 脚本拷贝出第二份用 plain Playwright 重写；如确有此需要，必须新建 spec slice 立项。
+
+### Slice 引用方式
+
+任何 slice 在其 `tasks.md` 列 Browser UAT 项时，若涉及 Chrome-MCP 脚本，
+必须显式注明 `Chrome-MCP harness（见 docs/testing/acceptance-gates.md
+§ Chrome-MCP UAT Harness）`，并把脚本入口和 ENV-BLOCKED 判定关键字
+写入 `uat.md`。
+
 ## Opt-in Live Gates
 
 默认 CI 不跑真实外部模型。live gate 必须显式 env 打开，并把 artifact 写到
