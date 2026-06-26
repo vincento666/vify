@@ -44,6 +44,7 @@
 | 212.6 | 修 `customer-assistant-chatflow-runtime-gateway-uat:148` 第二轮响应 `chatflowSession: null`（baseline 时被 L124 timeout 屏蔽，slice 212.1 修复后才暴露） | RED / Unit/Integration/Contract / E2E / Browser UAT / Docs |
 | 212.7 | 修 `chatflow-conversation-run.mjs` 在 Ant Design composer 迁移（commit `29aca2d4`）后丢失的 3 处 selector 契约：L27 testid `chatflow-run-fields-toggle`、L28 placeholder `发送消息`、L45 button name `重置会话`（slice 212.2 修复 L16 后暴露） | RED / Frontend Unit / rem / E2E / Browser UAT / Docs |
 | 212.8 | 修 `chatflow-conversation-run.mjs:36` chatflow trial run 发消息后 `chatflow-assistant-message` innerText 为空（sys variable `{{sys.query}}` / `{{global.brand}}` 等未注入回复气泡；属 runtime/SSE 渲染层，非 selector，由 212.7 修复后暴露） | RED / Unit/Integration / Frontend Unit / E2E / Browser UAT / Docs |
+| 212.9 | 修 `chatflow-conversation-run.mjs:58` `.chatflow-profile-grid .run-input-field` 控件 height 全为 0（Ant 迁移后控件 wrapper layout collapse 或 selector 失配，由 212.8 修复后暴露） | RED / Frontend Unit / rem / E2E / Browser UAT / Docs |
 
 ## 验收门禁映射（Acceptance Gate Map）
 
@@ -90,7 +91,8 @@
 - 212.5: 重跑全套基线 → ALL GREEN，作为后续 spec 213+ 的入口门禁
 - 212.6: 修 customer-assistant gateway 第二轮 `chatflowSession: null`（212.1 后暴露的预先存在问题）
 - 212.7: 修 chatflow-conversation-run.mjs Ant 迁移 selector 漂移（L27/L28/L45，212.2 后暴露的预先存在问题）
-- 212.8: 修 chatflow-conversation-run.mjs:36 assistant bubble 空内容（sys variable 未注入回复，212.7 后暴露的渲染层问题）
+- 212.8: 修 chatflow-conversation-run.mjs:36 assistant bubble 空内容（testid race condition：loading 占位符提前匹配，212.7 后暴露）
+- 212.9: 修 chatflow-conversation-run.mjs:58 run-input-field height 0（layout/CSS 或 selector 失配，212.8 后暴露）
 
 ## 文档关联
 

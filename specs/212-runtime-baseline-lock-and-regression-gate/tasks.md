@@ -105,3 +105,17 @@
 - [ ] Docs：baseline.md 追加 "chatflow-conversation-run L36 assistant bubble → GREEN @ slice 212.8"
 - [ ] Git commit：`fix(chatflow): render sys variables in conversation-run assistant bubble`
 - [ ] 范围保护：若 L36 修复后脚本暴露 L37+ 新失败 → STOP 升级到新 slice 212.9，不扩范围
+
+## Slice 212.9 — Fix chatflow-conversation-run run-input-field height 0 layout
+
+> 起源：slice 212.8 修复 L36 后，`frontend/e2e/chatflow-conversation-run.mjs:58` 暴露 `.chatflow-profile-grid .run-input-field` 内的 `.el-input__wrapper / .el-select__wrapper` 控件 height 全为 0,0,0,0。脚本期望"run parameter controls share the same height"。可能根因：Ant 迁移后该面板默认隐藏 / display:none ancestor / 控件选择子（`.el-input__wrapper`/`.el-select__wrapper`）在 Ant Design 下已失配。
+
+- [ ] RED：重放脚本，固化 L58 失败日志（含 actual heights、面板可见性、selector 命中数）；证据 `artifacts/212.9/red.txt`
+- [ ] Frontend Unit：在 `workflowCreateAntMigration.test.ts` 加测试断言 chatflow-profile-grid 下 run-input-field 控件渲染时具备非零高度（或断言面板默认可见 + 控件选择子正确）；先红后绿；证据 `artifacts/212.9/{unit-red,unit-green}.txt`
+- [ ] frontend rem：`rtk npm --prefix frontend run test:unit -- src/remScaleClosure.test.ts` 全绿；证据 `artifacts/212.9/rem.txt`
+- [ ] Frontend unit 全套不回归：证据 `artifacts/212.9/frontend-unit.txt`
+- [ ] E2E：`rtk env HIFY_E2E_BASE_URL=http://localhost:5173 /opt/homebrew/bin/node frontend/e2e/chatflow-conversation-run.mjs` 整脚本 PASS；证据 `artifacts/212.9/e2e.txt`
+- [ ] Browser UAT：留 run parameter controls 高度一致的截图；证据 `artifacts/212.9/uat.md` + `screenshots/`
+- [ ] Docs：baseline.md 追加 "chatflow-conversation-run L58 run-input-field height → GREEN @ slice 212.9"
+- [ ] Git commit：`fix(chatflow): restore run-input-field height in conversation-run profile grid`
+- [ ] 范围保护：若 L58 修复后脚本暴露 L59+ 新失败 → STOP 升级到新 slice 212.10，不扩范围
