@@ -80,8 +80,14 @@
 
 - PASS: `runtime-v2-production-node-uat`, `runtime-v2-cancel-lifecycle`, `unified-routing-sop-chatflow-runtime-uat`, `chatflow-channels`
 - LOGIC-RED: `customer-assistant-chatflow-runtime-gateway-uat`（operator-task-ledger refund_ticket 时序），`chatflow-conversation-run`（Chatflow 名称占位符）
-- ENV-BLOCKED-CHROME-MCP: `chatflow-inapp-deep-tree-uat`, `chatflow-inapp-visible-output-uat`
-- ENV-BLOCKED-PGVECTOR: 任何依赖 pgvector 的脚本（postgres 5432 DOWN）
+- ENV-BLOCKED-CHROME-MCP: `chatflow-inapp-deep-tree-uat`, `chatflow-inapp-visible-output-uat`, `workflow-chatflow-node-form-controls-inapp-uat`, `workflow-inapp-visible-output-uat`
+- ENV-BLOCKED-PGVECTOR: 任何依赖 pgvector 的脚本（postgres 5432 DOWN）→ 212.4 改用 Weaviate，212.10 解 dim lock 后改为 ENV-BLOCKED-CHROME-MCP（仅剩 4 个 Chrome-MCP）
+- LOGIC-RED locked at SHA `3d8297d2` (by 212.10 evidence)，由后续 spec 吃掉，**不在 spec 212 内修**：
+  - `customer-service-full-scenario`: publish chatflow HTTP 400 → spec 213/216 范围（Chatflow/SOP 兼容）
+  - `knowledge-faq-retrieval`: "Workflow v2 requires an active published version" → spec 213 范围（async runtime 默认化 + 发布版本契约）
+  - `workflow-knowledge-condition-run`: `data-testid="workflow-run-output"` 20s timeout → spec 213 范围
+  - `workflow-six-node-matrix`: "Workflow v2 requires an active published version" → spec 213 范围
+  - `agent-workbench-capabilities` / `agent-workbench-retrieval-settings`: UI selector 漂移 → spec 212.11 内吃
 
 ### Baseline-residual slices（212.0~212.5）
 
