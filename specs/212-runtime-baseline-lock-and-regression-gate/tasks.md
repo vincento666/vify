@@ -17,7 +17,7 @@
 - [ ] RED：重放 `rtk node frontend/e2e/customer-assistant-chatflow-runtime-gateway-uat.mjs`，固化 L124 上 `refund_ticket` 行不可见的 failure 截图与日志；证据 `artifacts/212.1/red.txt` + `artifacts/212.1/screenshots/red-*.png`
 - [ ] Unit：定位根因；若属后端事件 publisher，补 `rtk uv run pytest tests/unit/customer_assistant -q` 红测；若属前端轮询条件，补 `rtk npm --prefix frontend run test:unit -- operator-task-ledger` 红测；证据 `artifacts/212.1/unit.txt`
 - [ ] Integration/Contract：相关 customer-assistant gateway 套件全绿；证据 `artifacts/212.1/integration.txt`
-- [ ] E2E：`rtk node frontend/e2e/customer-assistant-chatflow-runtime-gateway-uat.mjs` 全绿；证据 `artifacts/212.1/e2e.txt`
+- [ ] E2E（scope: ledger row）：重放 `rtk node frontend/e2e/customer-assistant-chatflow-runtime-gateway-uat.mjs` 必须越过 L124（`refund_ticket` 行在 15s 内可见）；脚本若在 L124 之后的行（如 L148）出现新的、与 ledger 行可见性无关的失败，记入 slice 212.6 而不阻塞 212.1；证据 `artifacts/212.1/e2e.txt`
 - [ ] Browser UAT：人工 / Chrome-MCP 复跑同一脚本，留 `refund_ticket` 行可见的截图；证据 `artifacts/212.1/uat.md` + `screenshots/`
 - [ ] Docs：在 baseline.md 标注 LOGIC-RED → GREEN 的迁移
 - [ ] Git commit：`fix(customer-assistant): stabilize operator-task-ledger refund_ticket row`
@@ -57,3 +57,14 @@
 - [ ] Browser UAT：Chatflow 核心 7 项 + SOP 完整矩阵 + Workflow 核心 7 项 全绿；证据 `artifacts/212.5/uat.md` + `screenshots/`
 - [ ] Docs：把 `baseline.md` 顶部加 "ALL GREEN @ SHA <new-sha>" 标记，并冻结
 - [ ] Git commit：`test(baseline): seal 212.5 all-green entry gate for spec 213+`
+
+## Slice 212.6 — Fix customer-assistant gateway chatflowSession on second turn
+
+> 起源：slice 212.1 把 L124 ledger 可见性修复后，`frontend/e2e/customer-assistant-chatflow-runtime-gateway-uat.mjs:148` 暴露出第二轮 POST `/api/v1/customer-assistant/sessions/{sid}/messages` 响应中 `chatflowSession: null`，断言 `session second turn should expose chatflow gateway mode` 失败。Baseline 时被 L124 timeout 掩盖。属于 customer-assistant gateway 第二轮响应字段问题，与 ledger 视图无关。
+
+- [ ] RED：重放 `rtk env HIFY_E2E_BASE_URL=http://localhost:5173 /opt/homebrew/bin/node frontend/e2e/customer-assistant-chatflow-runtime-gateway-uat.mjs`，固化 L148 失败日志与第二轮响应 payload；证据 `artifacts/212.6/red.txt`
+- [ ] Unit/Integration/Contract：定位根因后写红测，常见是 `app/modules/customer_assistant/web/router.py` 或 `app/modules/customer_assistant/domain/service.py` 在二轮 message 路径上未填充 `chatflowSession`；证据 `artifacts/212.6/{unit,integration,contract}.txt`
+- [ ] E2E：`rtk env HIFY_E2E_BASE_URL=http://localhost:5173 /opt/homebrew/bin/node frontend/e2e/customer-assistant-chatflow-runtime-gateway-uat.mjs` 整脚本全绿；证据 `artifacts/212.6/e2e.txt`
+- [ ] Browser UAT：留二轮响应包含 `chatflowSession` 字段的截图或 JSON 摘录；证据 `artifacts/212.6/uat.md`
+- [ ] Docs：baseline.md 追加 "L148 chatflowSession second-turn → GREEN @ slice 212.6"
+- [ ] Git commit：`fix(customer-assistant): expose chatflowSession on gateway second-turn response`

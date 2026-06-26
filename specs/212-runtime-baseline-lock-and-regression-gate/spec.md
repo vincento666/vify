@@ -41,6 +41,7 @@
 | 212.3 | 在 `docs/testing/acceptance-gates.md` 增补 Chrome-MCP harness 调用约定与基线判定口径 | Docs review / 引用一致性检查 |
 | 212.4 | 起 pgvector 后跑 pgvector-dependent UAT 子集并归档证据 | Browser UAT / Docs |
 | 212.5 | 重跑全套基线门禁（unit/integration/contract/frontend/UAT/rem）→ ALL GREEN，作为后续 spec 213+ 入口门禁 | All gates / 证据归档 |
+| 212.6 | 修 `customer-assistant-chatflow-runtime-gateway-uat:148` 第二轮响应 `chatflowSession: null`（baseline 时被 L124 timeout 屏蔽，slice 212.1 修复后才暴露） | RED / Unit/Integration/Contract / E2E / Browser UAT / Docs |
 
 ## 验收门禁映射（Acceptance Gate Map）
 
@@ -85,6 +86,7 @@
 - 212.3: 定义 Chrome-MCP harness 调用约定（acceptance-gates.md 增补）
 - 212.4: 启动 pgvector 后跑 pgvector-dependent UAT 子集
 - 212.5: 重跑全套基线 → ALL GREEN，作为后续 spec 213+ 的入口门禁
+- 212.6: 修 customer-assistant gateway 第二轮 `chatflowSession: null`（212.1 后暴露的预先存在问题）
 
 ## 文档关联
 
