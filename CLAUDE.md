@@ -49,6 +49,22 @@ dev = [
 - PostgreSQL + pgvector 只用于向量存储，使用 `psycopg` 和 `pgvector` Python 包。
 - 依赖版本写入 lock file，生产环境严格按 lock file 构建。
 
+### 本地工具路径
+
+Codex Desktop 的执行 shell 有时会收窄 `PATH`，导致 `command -v rtk` 或
+`command -v node` 返回空。不要因此报告工具不存在；先检查并优先使用这些已知
+可执行路径：
+
+- `rtk`: `/opt/homebrew/bin/rtk`
+- system `node`: `/opt/homebrew/bin/node`
+- Codex bundled `node`:
+  `/Users/vincento/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node`
+
+当 `rtk` 不在 `PATH` 时，使用绝对路径保持同一约束，例如
+`/opt/homebrew/bin/rtk git status`、`/opt/homebrew/bin/rtk npm --prefix frontend run test:unit`。
+当系统 `node` 不在 `PATH` 时，优先使用 `/opt/homebrew/bin/node`；如需与
+Codex bundled 运行时保持一致，再使用 bundled `node` 路径。
+
 ### Spec Kit + TDD 迁移门禁
 
 迁移按 Spec Kit 规格推进，规格文件位于 `specs/`。每个 feature spec 拆成若干

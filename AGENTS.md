@@ -20,6 +20,22 @@
 7. **浏览器 UAT 必须执行**：凡影响前端或用户流程的 slice，必须用真实浏览器
    验证并保存截图/记录。
 
+## 本地工具路径
+
+Codex Desktop 的执行 shell 有时会收窄 `PATH`，导致 `command -v rtk` 或
+`command -v node` 返回空。不要因此报告工具不存在；先检查并优先使用这些已知
+可执行路径：
+
+- `rtk`: `/opt/homebrew/bin/rtk`
+- system `node`: `/opt/homebrew/bin/node`
+- Codex bundled `node`:
+  `/Users/vincento/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node`
+
+当 `rtk` 不在 `PATH` 时，使用绝对路径保持同一约束，例如
+`/opt/homebrew/bin/rtk git status`、`/opt/homebrew/bin/rtk npm --prefix frontend run test:unit`。
+当系统 `node` 不在 `PATH` 时，优先使用 `/opt/homebrew/bin/node`；如需与
+Codex bundled 运行时保持一致，再使用 bundled `node` 路径。
+
 ## Frontend rem 规范
 
 前端视觉尺寸必须以 `rem` 为默认单位，保持全局缩放、浏览器字号和不同视口下
