@@ -101,3 +101,21 @@ artifacts/slices/{spec-id}/{slice-id}/
 11. `010-real-tool-calling-and-mcp`
 
 任何阶段发现边界不清，先更新 `000-current-boundary-inventory` 和 ADR，再继续。
+
+## Loop Engineering Stop Rules
+
+本项目支持 Loop Engineering 工作流：`builder` 负责实现/修复，`checker` 只运行检查并报告失败，编排器最多循环 5 轮。循环仍必须服从本文件的 Spec Kit、TDD、slice 门禁、浏览器 UAT、Frontend rem 和 `rtk` 命令规范。
+
+循环在以下任一条件成立时停止：
+
+1. `ALL GREEN`：所有相关检查通过，并附上逐项通过证明。
+2. 达到 5 轮上限。
+3. 同一失败连续两轮出现。
+4. 修复导致之前通过的检查失败。
+5. 连续 2 轮失败项数量没有减少。
+6. 功能边界变化但缺少对应 `spec.md`、`plan.md`、`tasks.md` 或 RED 证据。
+7. 失败原因涉及当前仓库内无法解决的外部依赖、密钥、服务、浏览器 UAT 条件或数据库环境。
+
+红线：不得弱化、删除、跳过测试或检查；不得修改 checker 工具白名单；不得在没有 checker 输出时报告成功；不得覆盖用户已有的未相关改动。
+
+停止并升级时必须报告当前轮次、仍失败项、已尝试修复、已通过检查，以及为什么继续循环不会解决问题。
