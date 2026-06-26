@@ -65,7 +65,7 @@ try {
   assert(webResult.runtimeInput['sys.channel'] === 'web', 'Expected Web sys.channel')
   assert(webResult.run.output.final.includes('hello web via web/web-preview/web-user'), 'Expected Web output to include identity')
 
-  const directResult = await unwrap(await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs`, {
+  const directResult = await unwrap(await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs-legacy`, {
     data: {
       input: {
         message: 'hello direct api',

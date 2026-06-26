@@ -99,7 +99,7 @@ try {
   const child = await createPublishedChild(page, stamp)
   const chatflow = await createParentChatflow(page, stamp, child.id)
   const conversationId = `cf-exec-workflow-${stamp}`
-  const run = await unwrap(await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs`, {
+  const run = await unwrap(await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs-legacy`, {
     data: {
       input: {
         ticket: 'C-453',

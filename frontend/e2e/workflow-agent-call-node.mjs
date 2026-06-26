@@ -149,7 +149,7 @@ async function assertChatflowAgentCall(page, agent, marker) {
     'create chatflow',
   )
   const run = await unwrap(
-    await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs`, {
+    await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs-legacy`, {
       data: {
         input: {
           'sys.query': `Current ticket CF-${marker}`,

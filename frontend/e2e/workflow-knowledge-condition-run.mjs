@@ -137,14 +137,17 @@ async function runWorkflowPanel(page, input, expected) {
 }
 
 async function runChatflowPanel(page, input, expected) {
-  const textarea = page.getByPlaceholder('输入消息')
+  const textarea = page.getByTestId('chatflow-run-message-input')
   const assistantMessages = page.locator('[data-testid="chatflow-assistant-message"]')
   const previousAssistantCount = await assistantMessages.count()
   await textarea.fill(input)
   await page.getByRole('button', { name: '发送消息', exact: true }).click()
   await page.waitForFunction(
-    (count) => document.querySelectorAll('[data-testid="chatflow-assistant-message"]').length > count,
-    previousAssistantCount,
+    ({ count, expectedText }) => {
+      const messages = Array.from(document.querySelectorAll('[data-testid="chatflow-assistant-message"]'))
+      return messages.length > count && messages.some((item) => item.textContent?.includes(expectedText))
+    },
+    { count: previousAssistantCount, expectedText: expected },
     { timeout: 20000 },
   )
   const assistant = assistantMessages.nth(previousAssistantCount)

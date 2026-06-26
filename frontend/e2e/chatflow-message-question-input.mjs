@@ -63,7 +63,7 @@ try {
   assert(messageNode.output.events.map((event) => event.type).join(',') === 'message_delta,message_done', 'Expected message streaming events')
 
   const interrupted = await unwrap(
-    await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs`, {
+    await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs-legacy`, {
       data: { input: { 'sys.query': 'Ada' } },
     }),
     'interrupt run',
@@ -72,7 +72,7 @@ try {
   assert(interrupted.output.interrupt.nodeKey === 'question_1', 'Expected question interrupt')
 
   const resumed = await unwrap(
-    await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs`, {
+    await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs-legacy`, {
       data: {
         input: {
           'sys.query': 'Ada',

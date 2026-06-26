@@ -16,7 +16,28 @@ async function unwrap(response, label) {
   return payload.data
 }
 
-function llmGraph({ name, marker, startVariable, isChatflow }) {
+async function findEnabledModel(page) {
+  for (let pageNo = 1; pageNo <= 20; pageNo += 1) {
+    const providers = await unwrap(
+      await page.request.get(`${baseUrl}/api/v1/providers?page=${pageNo}&pageSize=100`),
+      'list providers',
+    )
+    for (const provider of providers.list ?? []) {
+      if (!provider.enabled) continue
+      for (const model of provider.models ?? []) {
+        if (!model.enabled) continue
+        if (
+          String(provider.baseUrl || '') === 'https://openrouter.ai/api/v1'
+          && String(model.modelId || '') === 'qwen/qwen3.5-9b'
+        ) return model.id
+      }
+    }
+    if ((providers.list ?? []).length === 0 || pageNo * 100 >= providers.total) break
+  }
+  throw new Error('No enabled OpenRouter qwen/qwen3.5-9b model found for workflow/chatflow LLM e2e')
+}
+
+function llmGraph({ name, marker, startVariable, isChatflow, modelConfigId }) {
   return {
     name,
     description: 'live LLM browser e2e',
@@ -37,6 +58,7 @@ function llmGraph({ name, marker, startVariable, isChatflow }) {
         type: 'LLM',
         name: '大模型',
         config: {
+          modelConfigId,
           prompt: `Return exactly this token and nothing else: ${marker}. User input: {{start.${startVariable}}}`,
           outputVariable: 'answer',
           ui: { position: { x: 640, y: 96 } },
@@ -86,21 +108,23 @@ async function assertProviderErrorPanel(panel, label) {
 
 async function runWorkflowUat(page) {
   const marker = `WORKFLOW_LIVE_${Date.now()}`
+  const modelConfigId = await findEnabledModel(page)
   const workflow = await createFlow(
     page,
     'workflows',
-    llmGraph({ name: `Workflow LLM UAT ${marker}`, marker, startVariable: 'USER_INPUT', isChatflow: false }),
+    llmGraph({ name: `Workflow LLM UAT ${marker}`, marker, startVariable: 'USER_INPUT', isChatflow: false, modelConfigId }),
   )
+  await unwrap(await page.request.post(`${baseUrl}/api/v1/workflows/${workflow.id}/publish`), 'publish workflow')
 
   await page.goto(`${baseUrl}/workflows/${workflow.id}/canvas`, { waitUntil: 'networkidle' })
-  await page.locator('.canvas-actions').getByRole('button', { name: '试运行', exact: true }).click()
+  await page.getByTestId('canvas-bottom-toolbar').getByRole('button', { name: '试运行', exact: true }).click()
   const panel = page.locator('[data-testid="test-run-panel"]')
   await panel.waitFor({ state: 'visible', timeout: 5000 })
   await panel.getByPlaceholder('输入 userMessage').fill(marker)
   await panel.getByRole('button', { name: '运行', exact: true }).click()
 
   const output = page.locator('[data-testid="workflow-run-output"]')
-  const outcome = await waitForPanelOutcome(page, panel, output)
+  const outcome = await waitForPanelOutcome(page, panel, output.filter({ hasText: marker }))
   if (outcome === 'provider-error') {
     await assertProviderErrorPanel(panel, 'workflow LLM')
     if (workflowScreenshotPath) {
@@ -121,21 +145,23 @@ async function runWorkflowUat(page) {
 
 async function runChatflowUat(page) {
   const marker = `CHATFLOW_LIVE_${Date.now()}`
+  const modelConfigId = await findEnabledModel(page)
   const chatflow = await createFlow(
     page,
     'chatflows',
-    llmGraph({ name: `Chatflow LLM UAT ${marker}`, marker, startVariable: 'sys.query', isChatflow: true }),
+    llmGraph({ name: `Chatflow LLM UAT ${marker}`, marker, startVariable: 'sys.query', isChatflow: true, modelConfigId }),
   )
 
   await page.goto(`${baseUrl}/chatflows/${chatflow.id}/canvas`, { waitUntil: 'networkidle' })
   await page.getByRole('button', { name: '对话试运行' }).click()
   const panel = page.locator('[data-testid="test-run-panel"]')
   await panel.waitFor({ state: 'visible', timeout: 5000 })
-  await panel.getByPlaceholder('输入消息').fill(marker)
+  await panel.getByTestId('chatflow-run-message-input').fill(marker)
   await panel.getByRole('button', { name: '发送消息', exact: true }).click()
 
   const assistant = page.locator('[data-testid="chatflow-assistant-message"]')
-  const outcome = await waitForPanelOutcome(page, panel, assistant)
+  const markerAssistant = assistant.filter({ hasText: marker })
+  const outcome = await waitForPanelOutcome(page, panel, markerAssistant)
   if (outcome === 'provider-error') {
     await assertProviderErrorPanel(panel, 'chatflow LLM')
     if (chatflowScreenshotPath) {

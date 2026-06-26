@@ -105,7 +105,7 @@ try {
   await routerNode.click()
   await page.getByTestId('node-config-panel').waitFor({ state: 'visible', timeout: 5000 })
   const panelText = await page.getByTestId('node-config-panel').textContent()
-  assert(panelText.includes('连接多个下游分支'), `Condition panel must explain selector branch priority, got ${panelText}`)
+  assert(panelText.includes('优先级 1'), `Condition panel must expose selector branch priority, got ${panelText}`)
   assert(panelText.includes('VIP 客户') && panelText.includes('普通客户'), `Condition panel must visibly render semantic branch names, got ${panelText}`)
   assert(!panelText.includes('点击编辑'), `Condition branch headers must be directly editable without visible helper copy, got ${panelText}`)
   assert(!panelText.includes('全部满足') && !panelText.includes('任一满足'), `Condition panel must not expose generic all/any logic selectors, got ${panelText}`)

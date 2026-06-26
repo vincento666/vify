@@ -39,7 +39,7 @@ try {
     },
   }), 'create chatflow')
 
-  const interrupted = await unwrap(await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs`, {
+  const interrupted = await unwrap(await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs-legacy`, {
     data: { input: { 'sys.query': 'start', 'sys.conversation_id': `resume-reliability-${stamp}` } },
   }), 'start chatflow')
   assert(interrupted.status === 'INTERRUPTED', 'Expected interrupted run')

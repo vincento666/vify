@@ -40,7 +40,7 @@ try {
     },
   }), 'create chatflow')
 
-  const run = await unwrap(await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs`, {
+  const run = await unwrap(await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs-legacy`, {
     data: {
       input: {
         'sys.query': 'start',

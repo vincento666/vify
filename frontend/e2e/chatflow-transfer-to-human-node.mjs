@@ -74,34 +74,42 @@ try {
 
   await page.getByRole('button', { name: '对话试运行', exact: true }).click()
   const panel = page.getByTestId('test-run-panel')
-  await panel.getByTestId('chatflow-run-fields-toggle').click()
-  await panel.getByPlaceholder('输入消息').fill('我要升级为人工客服')
+  await panel.waitFor({ state: 'visible', timeout: 5000 })
+  await panel.getByRole('button', { name: '对话设置', exact: true }).click()
   await panel.getByPlaceholder('conversation_id').fill(conversationId)
   await panel.getByPlaceholder('user_id').fill(`vip-user-${stamp}`)
+  await panel.getByTestId('chatflow-run-message-input').fill('我要升级为人工客服')
   await panel.getByRole('button', { name: '发送消息', exact: true }).click()
 
   await panel.getByText('INTERRUPTED', { exact: true }).waitFor({ state: 'visible', timeout: 10000 })
   await panel.getByText('已为你转接 VIP 人工客服，请稍候。', { exact: true }).waitFor({ state: 'visible', timeout: 10000 })
+  const runLabel = await panel.getByText(/Run #\d+/).first().textContent()
+  const runId = Number(runLabel?.match(/Run #(\d+)/)?.[1] || 0)
+  assert(runId > 0, `Expected runtime v2 run id in panel, got ${runLabel}`)
 
   await page.getByRole('button', { name: '调试工具', exact: true }).click()
   const dock = page.getByTestId('workflow-debug-dock')
   await dock.getByText('高级运行上下文').click()
   await dock.getByText('事件时间线').waitFor({ state: 'visible', timeout: 10000 })
-  await dock.getByText('转人工', { exact: true }).waitFor({ state: 'visible', timeout: 10000 })
-  await dock.getByText(/工单 #\d+ · vip-support/).waitFor({ state: 'visible', timeout: 10000 })
+  await dock.getByTestId('chatflow-run-call-tree').getByText('transfer_to_human_1', { exact: true }).waitFor({ state: 'visible', timeout: 10000 })
+  await dock.getByText(/工单 #runtime-v2-handoff-\d+-transfer_to_human_1 · vip-support · waiting/).waitFor({ state: 'visible', timeout: 10000 })
 
-  const handoffs = await unwrap(await page.request.get(`${baseUrl}/api/v1/handoffs?status=queued&pageSize=100`), 'list handoffs')
-  const ticket = handoffs.list.find((item) => item.conversationId === conversationId)
-  assert(ticket, `Expected queued handoff ticket for ${conversationId}`)
-  assert(ticket.queue === 'vip-support', `Expected vip-support queue, got ${ticket.queue}`)
-  assert(ticket.priority === 'high', `Expected high priority, got ${ticket.priority}`)
-  assert(ticket.status === 'queued', `Expected queued status, got ${ticket.status}`)
-  assert(ticket.transcriptSnapshot.some((entry) => entry.content === '我要升级为人工客服'), 'Expected transcript to include user request')
+  const runtimeRun = await unwrap(await page.request.get(`${baseUrl}/api/v1/runtime-runs/${runId}`), 'get runtime v2 run')
+  assert(runtimeRun.status === 'INTERRUPTED', `Expected interrupted runtime run, got ${runtimeRun.status}`)
+  assert(runtimeRun.output?.interrupt?.type === 'TRANSFER_TO_HUMAN', 'Expected transfer-to-human interrupt output')
+  assert(runtimeRun.output?.interrupt?.queue === 'vip-support', `Expected vip-support interrupt queue, got ${runtimeRun.output?.interrupt?.queue}`)
+
+  const runtimeEvents = await unwrap(await page.request.get(`${baseUrl}/api/v1/runtime-runs/${runId}/events`), 'list runtime v2 events')
+  const handoffEvent = runtimeEvents.list.find((event) => event.type === 'handoff_requested')
+  assert(handoffEvent, `Expected runtime v2 handoff_requested event for run ${runId}`)
+  assert(handoffEvent.nodeId === 'transfer_to_human_1', `Expected handoff node id, got ${handoffEvent.nodeId}`)
+  assert(handoffEvent.payload?.queue === 'vip-support', `Expected vip-support event queue, got ${handoffEvent.payload?.queue}`)
+  assert(handoffEvent.payload?.priority === 'high', `Expected high event priority, got ${handoffEvent.payload?.priority}`)
 
   if (screenshotPath) {
     await page.screenshot({ path: screenshotPath, fullPage: true })
   }
-  console.log(`PASS chatflow transfer to human e2e chatflow=${chatflow.id} ticket=${ticket.id}`)
+  console.log(`PASS chatflow transfer to human e2e chatflow=${chatflow.id} run=${runId} handoff=${handoffEvent.payload?.handoffId}`)
 } finally {
   await browser.close()
 }

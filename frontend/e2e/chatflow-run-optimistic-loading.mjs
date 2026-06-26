@@ -32,7 +32,7 @@ try {
   }), 'create chatflow')
 
   let runRequestSeen = false
-  await page.route(`**/api/v1/chatflows/${chatflow.id}/runs`, async (route) => {
+  await page.route(`**/api/v1/chatflows/${chatflow.id}/runs-legacy`, async (route) => {
     runRequestSeen = true
     await new Promise((resolve) => setTimeout(resolve, 1200))
     await route.fulfill({

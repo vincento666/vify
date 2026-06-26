@@ -120,7 +120,7 @@ try {
   const stamp = Date.now()
 
   const variableChatflow = await createVariableChatflow(page, stamp)
-  const interrupted = await unwrap(await page.request.post(`${baseUrl}/api/v1/chatflows/${variableChatflow.id}/runs`, {
+  const interrupted = await unwrap(await page.request.post(`${baseUrl}/api/v1/chatflows/${variableChatflow.id}/runs-legacy`, {
     data: { input: { 'sys.query': 'start', 'sys.conversation_id': `conv-variable-${stamp}` } },
   }), 'start variable chatflow')
   assert(interrupted.status === 'INTERRUPTED', 'Expected variable chatflow to interrupt')
@@ -137,7 +137,7 @@ try {
   assert(session.expiresAt, 'Expected session expiration metadata')
 
   const scopeChatflow = await createScopeInputChatflow(page, stamp)
-  const scopeRun = await unwrap(await page.request.post(`${baseUrl}/api/v1/chatflows/${scopeChatflow.id}/runs`, {
+  const scopeRun = await unwrap(await page.request.post(`${baseUrl}/api/v1/chatflows/${scopeChatflow.id}/runs-legacy`, {
     data: {
       input: {
         'sys.query': 'refund',
@@ -159,13 +159,13 @@ try {
 
   const conversationId = `conv-history-${stamp}`
   const historyChatflow = await createHistoryChatflow(page, stamp)
-  const first = await unwrap(await page.request.post(`${baseUrl}/api/v1/chatflows/${historyChatflow.id}/runs`, {
+  const first = await unwrap(await page.request.post(`${baseUrl}/api/v1/chatflows/${historyChatflow.id}/runs-legacy`, {
     data: { input: { 'sys.query': '订单问题', 'sys.conversation_id': conversationId } },
   }), 'first history chatflow run')
   assert(first.status === 'SUCCEEDED', 'Expected first history message run succeeded')
 
   await replaceWithHistoryCollection(page, historyChatflow.id, stamp)
-  const second = await unwrap(await page.request.post(`${baseUrl}/api/v1/chatflows/${historyChatflow.id}/runs`, {
+  const second = await unwrap(await page.request.post(`${baseUrl}/api/v1/chatflows/${historyChatflow.id}/runs-legacy`, {
     data: { input: { 'sys.query': '手机号 13800138000', 'sys.conversation_id': conversationId } },
   }), 'second history chatflow run')
   assert(second.status === 'SUCCEEDED', 'Expected history collection run succeeded')

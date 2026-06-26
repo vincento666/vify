@@ -68,7 +68,27 @@ async function createKnowledgeBase(page, marker) {
   throw new Error('knowledge document did not finish processing')
 }
 
-function graphPayload({ name, flowType, kbId, marker, startVariable, apiBaseUrl }) {
+async function findOpenRouterQwenModel(page) {
+  for (let pageNo = 1; pageNo <= 20; pageNo += 1) {
+    const providers = await unwrap(
+      await page.request.get(`${baseUrl}/api/v1/providers?page=${pageNo}&pageSize=100`),
+      'list providers',
+    )
+    for (const provider of providers.list ?? []) {
+      if (!provider.enabled) continue
+      if (String(provider.baseUrl || '') !== 'https://openrouter.ai/api/v1') continue
+      for (const model of provider.models ?? []) {
+        if (model.enabled && String(model.modelId || '') === 'qwen/qwen3.5-9b') {
+          return model.id
+        }
+      }
+    }
+    if ((providers.list ?? []).length === 0 || pageNo * 100 >= providers.total) break
+  }
+  return null
+}
+
+function graphPayload({ name, flowType, kbId, marker, startVariable, apiBaseUrl, modelConfigId }) {
   const matrixAnswer = `LLM_MATRIX_${marker}`
   return {
     name,
@@ -119,6 +139,7 @@ function graphPayload({ name, flowType, kbId, marker, startVariable, apiBaseUrl 
           prompt: `Return exactly this token and nothing else: ${matrixAnswer}\nKnowledge context: {{kb.answer}}`,
           temperature: 0,
           maxTokens: 64,
+          modelConfigId,
           topP: 1,
           frequencyPenalty: 0,
           presencePenalty: 0,
@@ -169,7 +190,10 @@ async function createFlow(page, payload, isChatflow) {
 }
 
 async function probeFullChainApi(page, flow, marker, isChatflow) {
-  const response = await page.request.post(`${baseUrl}/api/v1/${isChatflow ? 'chatflows' : 'workflows'}/${flow.id}/runs`, {
+  const runPath = isChatflow
+    ? `/api/v1/chatflows/${flow.id}/runs-legacy`
+    : `/api/v1/workflows/${flow.id}/runs`
+  const response = await page.request.post(`${baseUrl}${runPath}`, {
     data: { input: isChatflow ? { 'sys.query': 'kb' } : { USER_INPUT: 'kb' } },
     timeout: 60000,
   })
@@ -210,11 +234,15 @@ async function runChatflowFullChain(page, marker) {
   const panel = page.locator('[data-testid="test-run-panel"]')
   await panel.waitFor({ state: 'visible', timeout: 5000 })
   await panel.getByTestId('chatflow-run-chat-window').waitFor({ state: 'visible', timeout: 5000 })
-  await panel.getByPlaceholder('输入消息').fill('kb')
+  await panel.getByTestId('chatflow-run-message-input').fill('kb')
   await panel.getByRole('button', { name: '发送消息', exact: true }).click()
-  const assistant = page.locator('[data-testid="chatflow-assistant-message"]')
-  await assistant.waitFor({ state: 'visible', timeout: 60000 })
-  const text = await assistant.innerText()
+  const assistantMessages = page.locator('[data-testid="chatflow-assistant-message"]')
+  await page.waitForFunction(
+    (expected) => Array.from(document.querySelectorAll('[data-testid="chatflow-assistant-message"]')).some((item) => item.textContent?.includes(expected)),
+    `LLM_MATRIX_${marker}`,
+    { timeout: 60000 },
+  )
+  const text = await assistantMessages.last().innerText()
   assert(text.includes('API_REAL: POST /text/'), `Expected real API node output, got: ${text}`)
   assert(text.includes(`LLM_MATRIX_${marker}`), `Expected live LLM marker, got: ${text}`)
   assert(!text.includes('LLM mock:'), `Expected real LLM output, got: ${text}`)
@@ -251,7 +279,7 @@ async function runSelectedNode(page, selector, inputs, expected) {
   await panel.waitFor({ state: 'visible', timeout: 5000 })
   await panel.getByRole('button', { name: '试运行当前节点', exact: true }).click()
   const drawer = page.locator('[data-testid="node-test-drawer"]')
-  await drawer.waitFor({ state: 'visible', timeout: 5000 })
+  await drawer.waitFor({ state: 'visible', timeout: 15000 })
   const drawerText = await drawer.innerText()
   assert(drawerText.includes('试运行输入'), `Expected input section for ${selector}`)
   for (const [name, value] of Object.entries(inputs)) {
@@ -292,12 +320,17 @@ async function runWorkflowSelectedNodeMatrix(page, marker, liveLlmAvailable) {
   await assertNodeCannotRunStandalone(page, '.coze-node.node-end')
 }
 
-const browser = await chromium.launch()
+const browser = await chromium.launch({
+  headless: process.env.HIFY_E2E_HEADED !== '1',
+  slowMo: process.env.HIFY_E2E_HEADED === '1' ? 120 : 0,
+})
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 const localApi = await startLocalApiServer()
 
 try {
   const marker = `SN_${Date.now()}`
+  const modelConfigId = await findOpenRouterQwenModel(page)
+  assert(modelConfigId, 'OpenRouter qwen/qwen3.5-9b model config is required for six-node matrix UAT')
   const kb = await createKnowledgeBase(page, marker)
   const workflow = await createFlow(
     page,
@@ -308,6 +341,7 @@ try {
       marker,
       startVariable: 'USER_INPUT',
       apiBaseUrl: localApi.url,
+      modelConfigId,
     }),
     false,
   )
@@ -328,6 +362,7 @@ try {
       marker,
       startVariable: 'sys.query',
       apiBaseUrl: localApi.url,
+      modelConfigId,
     }),
     true,
   )

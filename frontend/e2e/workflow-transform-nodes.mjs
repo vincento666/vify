@@ -147,7 +147,7 @@ try {
     'create transform chatflow',
   )
   const chatflowRun = await unwrap(
-    await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs`, {
+    await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs-legacy`, {
       data: { input: { first: 'Grace', last: 'Hopper', score: 100, 'sys.query': 'transform' } },
     }),
     'run transform chatflow',

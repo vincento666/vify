@@ -57,7 +57,7 @@ try {
   )
 
   const refundRun = await unwrap(
-    await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs`, {
+    await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs-legacy`, {
       data: { input: { 'sys.query': '我要退款，订单有问题' } },
     }),
     'run refund intent',
@@ -74,7 +74,7 @@ try {
   assert(String(shippingNodeRun.output.reason).includes('matched'), 'Expected selected node run reason')
 
   const defaultRun = await unwrap(
-    await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs`, {
+    await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs-legacy`, {
       data: { input: { 'sys.query': '今天北京天气' } },
     }),
     'run default intent',
@@ -115,7 +115,9 @@ try {
   assert(await panel.locator('[data-testid="intent-row"]').count() >= 2, 'Expected structured intent rows')
   assert(!panelText.includes('默认意图'), 'Default intent should be rendered as an automatic branch, not a raw config field')
   assert(panelText.includes('分类模式'), 'Expected classifier mode field')
-  const intentHeaderText = await panel.locator('.intent-row-header').innerText()
+  const intentHeaderText = (await panel.locator('.intent-row-header span').evaluateAll((nodes) =>
+    nodes.map((node) => node.textContent?.trim() || '').filter(Boolean),
+  )).join(' ')
   assert(!intentHeaderText.includes('意图 Key'), `Intent editor must not expose raw intent keys, got ${intentHeaderText}`)
   assert(!intentHeaderText.includes('分支'), `Intent editor must not expose raw branch keys, got ${intentHeaderText}`)
   assert(intentHeaderText.includes('名称') && intentHeaderText.includes('描述') && intentHeaderText.includes('示例'), `Intent editor must keep business fields, got ${intentHeaderText}`)

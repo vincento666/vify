@@ -60,7 +60,7 @@ try {
 
   const startedAt = Date.now()
   const result = await unwrap(
-    await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs`, {
+    await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs-legacy`, {
       data: { input: { 'sys.query': '我想预订去上海的旅行，预算是5000元。' } },
       timeout: 60000,
     }),

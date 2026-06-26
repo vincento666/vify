@@ -63,7 +63,7 @@ try {
   )
 
   const interrupted = await unwrap(
-    await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs`, {
+    await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs-legacy`, {
       data: { input: { 'sys.query': '我叫 Ada' } },
     }),
     'run incomplete collection',
@@ -75,7 +75,7 @@ try {
   assert(interrupted.output.events.map((event) => event.type).join(',') === 'message_delta,message_done,interrupt', 'Expected streaming follow-up events')
 
   const resumed = await unwrap(
-    await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs`, {
+    await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs-legacy`, {
       data: {
         input: {
           'sys.query': '手机号 13800138000',

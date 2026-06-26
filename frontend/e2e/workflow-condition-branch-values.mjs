@@ -174,7 +174,7 @@ try {
 
   await rightValue.fill('literal-before-empty')
   await row.locator('.condition-operator-select').click()
-  const operatorDropdown = page.locator('.el-popper:visible').last()
+  const operatorDropdown = page.locator('.ant-select-dropdown:visible').last()
   const operatorText = await operatorDropdown.innerText()
   const operatorLines = operatorText.split(/\s+/).filter(Boolean)
   assert(

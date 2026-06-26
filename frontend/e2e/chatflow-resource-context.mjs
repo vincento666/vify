@@ -55,7 +55,7 @@ try {
   assert(await panel.getByLabel('会话历史').isChecked(), 'Expected include history toggle to be enabled')
   assert((await panel.locator('[data-testid="llm-resource-section"]').innerText()).includes('运行时会检索并注入模型上下文'), 'Expected Knowledge resource support state')
 
-  const runResponse = await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs`, {
+  const runResponse = await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs-legacy`, {
     data: { input: { 'sys.query': '退款批准答案是什么' } },
     timeout: 60000,
   })

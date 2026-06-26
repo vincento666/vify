@@ -69,7 +69,7 @@ try {
 
   const secure = await createHandoffChatflow(page, `019.5 Secure Handoff ${stamp}`)
   const conversationId = `ops-sec-${stamp}`
-  const run = await unwrap(await page.request.post(`${baseUrl}/api/v1/chatflows/${secure.id}/runs`, {
+  const run = await unwrap(await page.request.post(`${baseUrl}/api/v1/chatflows/${secure.id}/runs-legacy`, {
     data: {
       input: {
         'sys.query': '请转人工 apiKey=sk-secret password=hunter2',
