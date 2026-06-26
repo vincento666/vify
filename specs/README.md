@@ -30,6 +30,7 @@ defined in `docs/testing/acceptance-gates.md` before the next slice starts.
 | 17 | 062-066 | Shared Hify Workflow/Chatflow runtime v2 core, Chatflow facade, deterministic node pack, Workflow facade, and async Chatflow SOP worker adapter |
 | 18 | 067-069 | Cross-runtime observability gate, restricted ReAct worker standardization, and smooth Two-Stage ReAct customer-assistant runtime |
 | 19 | 070 | Realtime control or scale-out transport only after SSE/durable polling is proven insufficient |
+| 20 | 212-221 | Chatflow/Workflow production runtime upgrade per `docs/chatflow-workflow-production-upgrade.md` |
 
 ## Directory Index
 
@@ -107,6 +108,16 @@ defined in `docs/testing/acceptance-gates.md` before the next slice starts.
 | 069-customer-assistant-two-stage-react-runtime-mvp | Smooth opt-in Two-Stage ReAct runtime for customer assistant |
 | 070-realtime-control-and-scale-out-transport | Late-stage realtime control and scale-out transport decision/spike |
 | 194-workflow-chatflow-productionization-phase1 | Productionize current text Workflow/Chatflow core nodes through runtime v2, unified error routing, API/Tool governance, validation, version snapshots, and UAT evidence |
+| 212-runtime-baseline-lock-and-regression-gate | Lock baseline & regression gate per upgrade doc §4 |
+| 213-runtime-async-default-invocation-gateway | Async-first runtime invocation gateway §5 |
+| 214-runtime-dag-multipath-semantics | DAG edge/port/branch/skipped/terminal/final-output semantics §6 |
+| 215-runtime-dag-frontier-scheduler | Frontier-based DAG scheduler with concurrency and failure strategies §7 |
+| 216-chatflow-sop-compat-on-dag | Chatflow & SOP compatibility on DAG runtime, SOP ledger boundary §8 |
+| 217-runtime-v2-node-compatibility-matrix | Node compatibility matrix and side-effect node idempotency §9 |
+| 218-runtime-production-job-scheduler | Production-grade job claim, lease, retry, DLQ and standalone worker §10 |
+| 219-runtime-event-cancel-ratelimit-backpressure | Event stream reliability, cancel, multi-level rate limit and backpressure §11 |
+| 220-runtime-observability-ops-module | Runtime Ops main-menu module with run/job/DLQ panels and safe ops actions §12 |
+| 221-runtime-capacity-fault-acceptance | Capacity & fault acceptance with chaos drills and capacity report §13 |
 
 ## Required Files Per Spec
 
