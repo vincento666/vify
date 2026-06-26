@@ -68,3 +68,21 @@
 - [ ] Browser UAT：留二轮响应包含 `chatflowSession` 字段的截图或 JSON 摘录；证据 `artifacts/212.6/uat.md`
 - [ ] Docs：baseline.md 追加 "L148 chatflowSession second-turn → GREEN @ slice 212.6"
 - [ ] Git commit：`fix(customer-assistant): expose chatflowSession on gateway second-turn response`
+
+## Slice 212.7 — Restore Ant-migration selector contract for chatflow-conversation-run UAT
+
+> 起源：slice 212.2 修复 L16 placeholder=`Chatflow 名称` 后，`frontend/e2e/chatflow-conversation-run.mjs` 暴露同一个 Vue 文件 `WorkflowCreate.vue` 上 Ant Design composer 迁移（commit `29aca2d4`）遗留的 3 处 selector 漂移：
+> - L27 `getByTestId('chatflow-run-fields-toggle')` — "对话设置" popover 触发器丢失 testid
+> - L28 `getByPlaceholder('发送消息')` — composer 输入框 placeholder 被改为 `输入问题，可通过 shift + enter 换行`
+> - L45 `getByRole('button', { name: '重置会话' })` — 重置按钮文本被改为 `清空对话`（aria-label）
+> 三者同源、同文件、同 commit、同消费方 → 作为一个 root cause（"Ant 迁移未维护 e2e selector 契约"）bundle 在同一 slice。
+
+- [ ] RED：重放 `rtk env HIFY_E2E_BASE_URL=http://localhost:5173 /opt/homebrew/bin/node frontend/e2e/chatflow-conversation-run.mjs`，固化 L27 失败日志（L28/L45 在 L27 修后逐步暴露，作为 in-slice red 续档）；证据 `artifacts/212.7/red.txt`
+- [ ] Frontend Unit：在 `workflowCreateAntMigration.test.ts` 新增 3 个 test case 分别 pin L27 testid、L28 placeholder、L45 button name 契约，先红后绿；证据 `artifacts/212.7/{unit-red,unit-green}.txt`
+- [ ] frontend rem：`rtk npm --prefix frontend run test:unit -- src/remScaleClosure.test.ts` 全绿；证据 `artifacts/212.7/rem.txt`
+- [ ] Frontend unit 全套：`rtk npm --prefix frontend run test:unit -- --reporter verbose` 不回归；证据 `artifacts/212.7/frontend-unit.txt`
+- [ ] E2E：`rtk env HIFY_E2E_BASE_URL=http://localhost:5173 /opt/homebrew/bin/node frontend/e2e/chatflow-conversation-run.mjs` 整脚本 PASS；证据 `artifacts/212.7/e2e.txt`
+- [ ] Browser UAT：留 placeholder/testid/button 三处均可见的截图；证据 `artifacts/212.7/uat.md` + `screenshots/`
+- [ ] Docs：baseline.md 追加 "chatflow-conversation-run L27/L28/L45 → GREEN @ slice 212.7"
+- [ ] Git commit：`fix(chatflow): restore Ant-migration selector contract for conversation-run UAT`
+- [ ] 范围保护：若修复过程暴露第 4+ 个隐藏 fail（不在 L27/L28/L45 列表内）→ STOP 升级到新 slice 212.8，不在本 slice 内扩范围
