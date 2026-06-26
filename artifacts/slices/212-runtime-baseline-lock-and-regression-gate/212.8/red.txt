@@ -1,0 +1,9 @@
+file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-conversation-run.mjs:7
+  if (!condition) throw new Error(message)
+                        ^
+
+Error: Expected assistant-style output to render sys variables, got: 
+    at assert (file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-conversation-run.mjs:7:25)
+    at file:///Users/vincento/work/develop/hify/frontend/e2e/chatflow-conversation-run.mjs:36:3
+
+Node.js v23.11.0

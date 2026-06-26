@@ -1,0 +1,33 @@
+> vitest run --reporter verbose src/views/workflow/workflowCreateAntMigration.test.ts
+ RUN  v3.2.6 /Users/vincento/work/develop/hify/frontend
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > keeps workflow/chatflow canvas off Element Plus contracts 3ms
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > keeps the app entry free of the legacy route loader 0ms
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > exposes targeted test run controls for published versions 1ms
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > exposes realtime version test controls and result evidence beside published-run testing 1ms
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > renders the canvas title input on chatflow create entry so the placeholder is reachable 1ms
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > exposes data-testid="chatflow-run-fields-toggle" on the run fields settings toggle 1ms
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > exposes placeholder="发送消息" on the composer textarea 1ms
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > exposes a button accessible by role/name "重置会话" for resetting conversation 1ms
+ × src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > gates chatflow-assistant-message data-testid on completed (non-loading) bubbles only 3ms
+   → expected ':data-testid="message.role === \'user…' to match /!\s*message\.loading|message\.loading…/
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > exposes a runtime v2 cancel control in the debug dock 1ms
+ Test Files  1 failed (1)
+      Tests  1 failed | 9 passed (10)
+   Start at  16:04:20
+   Duration  204ms (transform 20ms, setup 0ms, collect 13ms, tests 12ms, environment 0ms, prepare 52ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > gates chatflow-assistant-message data-testid on completed (non-loading) bubbles only
+AssertionError: expected ':data-testid="message.role === \'user…' to match /!\s*message\.loading|message\.loading…/
+[32m- Expected:[39m 
+/!\s*message\.loading|message\.loading\s*\?\s*undefined/
+[31m+ Received:[39m 
+":data-testid=\"message.role === 'user' ? 'chatflow-user-message' : 'chatflow-assistant-message'\""
+ ❯ src/views/workflow/workflowCreateAntMigration.test.ts:148:33
+    146|     const dataTestidLine = bubbleBlock.match(/:data-testid=\"[^\"]*cha…
+    147|     expect(dataTestidLine, 'bubble data-testid should reference chatfl…
+    148|     expect(dataTestidLine?.[0]).toMatch(/!\s*message\.loading|message\…
+       |                                 ^
+    149|   })
+    150| 
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯

@@ -1,0 +1,429 @@
+> vitest run --reporter verbose
+ RUN  v3.2.6 /Users/vincento/work/develop/hify/frontend
+ ✓ src/views/evaluation/experimentRunViewModel.test.ts > experiment run view model > summarizes run score, pass rate, and status tone 4ms
+ ✓ src/views/evaluation/experimentRunViewModel.test.ts > experiment run view model > exposes selectable evaluation target types 0ms
+ ✓ src/views/evaluation/experimentRunViewModel.test.ts > experiment run view model > exposes compact report metrics for run record headers 0ms
+ ✓ src/views/evaluation/evalSetViewModel.test.ts > eval set view model > describes case count and visible tags for manual regression cases 4ms
+ ✓ src/views/evaluation/evalSetViewModel.test.ts > eval set view model > keeps system field keys stable while showing Chinese labels 0ms
+ ✓ src/views/evaluation/evalSetViewModel.test.ts > eval set view model > describes draft and submitted eval set version state 0ms
+ ✓ src/views/evaluation/evalSetViewModel.test.ts > eval set view model > normalizes editable eval set field drafts 0ms
+ ✓ src/utils/uiScale.test.ts > hify ui scale foundation > derives continuous desktop root font size from viewport width 2ms
+ ✓ src/utils/uiScale.test.ts > hify ui scale foundation > publishes stable hify css variables on a target element 3ms
+ ✓ src/utils/uiScale.test.ts > hify ui scale foundation > classifies visual dimensions separately from geometry dimensions 0ms
+ ✓ src/utils/uiScale.test.ts > hify ui scale foundation > binds root font size and base tokens to the rem scale contract 1ms
+ ✓ src/router/agent-workbench-routes.test.ts > agent workbench routes > exposes create and edit workbench routes while keeping the legacy list route 121ms
+ ✓ src/router/evaluation-routes.test.ts > evaluation route > exposes the Evaluation workbench route 122ms
+ ✓ src/router/evaluation-routes.test.ts > evaluation route > exposes Eval Set details as a separate object page 3ms
+ ✓ src/router/workflow-routes.test.ts > workflow module routes > exposes workflow and chatflow sibling entries for the module tab shell 198ms
+ ✓ src/router/workflow-routes.test.ts > workflow module routes > exposes a Chatflow detail canvas route under the Chatflow module 2ms
+ ✓ src/router/customer-assistant-routes.test.ts > customer assistant route and navigation contract > exposes the operator panel as a main-menu module 1ms
+ ✓ src/router/customer-assistant-routes.test.ts > customer assistant route and navigation contract > registers the customer assistant route with module metadata 27ms
+ ✓ src/router/ai-assistant-routes.test.ts > AI Assistant route > registers a product-shell route and navigation item 39ms
+ ✓ src/views/customerAssistant/customerAssistantEventStream.test.ts > customer-assistant SSE client > opens a resumable fetch stream with host headers, parses events, tracks sequence, and closes 73ms
+ ✓ src/views/customerAssistant/customerAssistantEventStream.test.ts > customer-assistant SSE client > reports fetch stream failures 52ms
+ ✓ src/router/unified-routing-chat-lab-routes.test.ts > unified routing chat lab route > exposes a top-level composer menu entry and dedicated route 572ms
+ ✓ src/views/evaluation/compareViewModel.test.ts > compare view model > formats deltas and case change summaries 2ms
+ ✓ src/views/evaluation/compareViewModel.test.ts > compare view model > keeps compare choices scoped to two runs from the same experiment 6ms
+ ✓ src/views/evaluation/runReportViewModel.test.ts > run report view model > filters failed cases and names the investigation state 1ms
+ ✓ src/views/evaluation/runReportViewModel.test.ts > run report view model > builds target debug evidence actions for failed-case drilldown 0ms
+ ✓ src/views/evaluation/evaluatorViewModel.test.ts > evaluator view model > normalizes evaluator labels and keyword config 1ms
+ ✓ src/views/evaluation/evaluationTabs.test.ts > evaluation tabs > orders Evaluation workbench tabs around the experiment task flow 1ms
+ ✓ src/views/evaluation/evaluationTabs.test.ts > evaluation tabs > maps query tab keys to a safe active tab 0ms
+ ✓ src/views/evaluation/csvToolsViewModel.test.ts > csv tools view model > accepts csv filenames and explains required columns 1ms
+ ✓ src/api/runtimeLab.test.ts > runtime-lab frontend API client > uses the runtime-lab session and message endpoints 25ms
+ ✓ src/api/runtimeLab.test.ts > runtime-lab frontend API client > lists runtime-lab task and event ledgers 0ms
+ ✓ src/api/runtimeLab.test.ts > runtime-lab frontend API client > loads runtime-lab routing configuration without secrets 1ms
+ ✓ src/api/runtimeLab.test.ts > runtime-lab frontend API client > updates the runtime-lab fallback Agent selection 0ms
+ ✓ src/api/runtimeLab.test.ts > runtime-lab frontend API client > loads Chatflow trace for the runtime-lab inspector 0ms
+ ✓ src/api/runtimeLab.test.ts > runtime-lab frontend API client > tests a temporary route LLM model through the backend probe endpoint 0ms
+ ✓ src/views/workflow/workflowCanvasRemGovernance.test.ts > workflow canvas rem governance > keeps workflow and chatflow canvas chrome on rem visual sizing 8ms
+ ✓ src/views/workflow/workflowCanvasRemGovernance.test.ts > workflow canvas rem governance > keeps graph geometry as explicit numeric coordinates 3ms
+ ✓ src/views/workflow/workflowCanvasRemGovernance.test.ts > workflow canvas rem governance > anchors endpoint affordances from the original dot size instead of compounding hover scale 2ms
+ ✓ src/views/customerAssistant/customerAssistantRuntime.test.ts > customer assistant runtime integration > creates a session before the first turn and refreshes task/event ledgers after the turn 56ms
+ ✓ src/views/customerAssistant/customerAssistantRuntime.test.ts > customer assistant runtime integration > builds operator session inbox rows from seeded stories and metrics 1ms
+ ✓ src/views/customerAssistant/customerAssistantRuntime.test.ts > customer assistant runtime integration > reuses an existing session for later turns 0ms
+ ✓ src/views/customerAssistant/customerAssistantRuntime.test.ts > customer assistant runtime integration > opens SSE before a turn and publishes live state while the turn request is pending 1ms
+ ✓ src/views/customerAssistant/customerAssistantRuntime.test.ts > customer assistant runtime integration > refreshes ledgers after confirming and rejecting proposed actions 1ms
+ ✓ src/views/customerAssistant/customerAssistantRuntime.test.ts > customer assistant runtime integration > refreshes ledgers after editing a pending proposed action 0ms
+ ✓ src/views/customerAssistant/customerAssistantRuntime.test.ts > customer assistant runtime integration > refreshes ledgers after executing a confirmed proposed action 0ms
+ ✓ src/views/customerAssistant/customerAssistantRuntime.test.ts > customer assistant runtime integration > delivers a confirmed customer reply draft and refreshes ledgers 0ms
+ ✓ src/views/customerAssistant/customerAssistantRuntime.test.ts > customer assistant runtime integration > refreshes ledgers after confirming a proposed task command 0ms
+ ✓ src/views/customerAssistant/customerAssistantRuntime.test.ts > customer assistant runtime integration > refreshes pending worker results and reloads runtime ledgers 0ms
+ ✓ src/views/customerAssistant/customerAssistantRuntime.test.ts > customer assistant runtime integration > requests worker cancellation and refreshes unsupported cancellation evidence 0ms
+ ✓ src/views/customerAssistant/customerAssistantRuntime.test.ts > customer assistant runtime integration > loads a seeded demo story into the workbench state 0ms
+ ✓ src/views/customerAssistant/customerAssistantRuntime.test.ts > customer assistant runtime integration > proposes a task control and refreshes ledgers 0ms
+ ✓ src/views/customerAssistant/customerAssistantRuntime.test.ts > customer assistant runtime integration > asks operator knowledge Q&A and refreshes audit ledgers without mutating the answer 0ms
+ ✓ src/views/customerAssistant/customerAssistantRuntime.test.ts > customer assistant runtime integration > spawns a sub-agent for the current session and refreshes workbench ledgers 0ms
+ ✓ src/api/provider.test.ts > provider frontend API client > tests one configured model through the provider model probe endpoint 15ms
+ ✓ src/views/aiAssistant/aiAssistantTimeline.test.ts > ai assistant execution timeline > maps durable run events into visible Codex-style execution cards 7ms
+ ✓ src/views/aiAssistant/aiAssistantTimeline.test.ts > ai assistant execution timeline > assembles consecutive model stream chunks into one visible model output message 1ms
+ ✓ src/views/aiAssistant/aiAssistantTimeline.test.ts > ai assistant execution timeline > carries stream phase and source metadata for final answer placement 1ms
+ ✓ src/views/aiAssistant/aiAssistantTimeline.test.ts > ai assistant execution timeline > deduplicates thought summaries that repeat the visible model output 0ms
+ ✓ src/views/aiAssistant/aiAssistantTimeline.test.ts > ai assistant execution timeline > deduplicates thought summaries that arrive immediately before the same stream output 0ms
+ ✓ src/views/aiAssistant/aiAssistantTimeline.test.ts > ai assistant execution timeline > normalizes duplicated model stream fragments before rendering model text 0ms
+ ✓ src/views/aiAssistant/aiAssistantTimeline.test.ts > ai assistant execution timeline > keeps only one foldable tool result with readable input and output details 1ms
+ ✓ src/views/aiAssistant/aiAssistantTimeline.test.ts > ai assistant execution timeline > summarizes multiple low-level tool calls into one foldable tool echo item 1ms
+ ✓ src/views/aiAssistant/aiAssistantTimeline.test.ts > ai assistant execution timeline > builds one product-grade summarized invocation instead of many raw tool blocks 1ms
+ ✓ src/views/aiAssistant/aiAssistantTimeline.test.ts > ai assistant execution timeline > keeps a single summarized tool echo item running while outputs are pending 0ms
+ ✓ src/views/aiAssistant/aiAssistantTimeline.test.ts > ai assistant execution timeline > merges completed events back into the active tool group when only completion has a tool call id 0ms
+ ✓ src/views/aiAssistant/aiAssistantTimeline.test.ts > ai assistant execution timeline > renders completed empty tool outputs from status instead of a pending placeholder 0ms
+ ✓ src/views/aiAssistant/aiAssistantTimeline.test.ts > ai assistant execution timeline > deduplicates repeated file detail rows when the same path is read more than once 0ms
+ ✓ src/views/aiAssistant/aiAssistantTimeline.test.ts > ai assistant execution timeline > renders only supported execution echo event categories in processed groups 1ms
+ ✓ src/views/aiAssistant/aiAssistantTimeline.test.ts > ai assistant execution timeline > renders shell commands as command-titled fold items with a single shell result block 0ms
+ ✓ src/api/workflow.test.ts > workflow API client > runs published workflow versions with an optional target version id 30ms
+ ✓ src/api/workflow.test.ts > workflow API client > runs active published workflow versions when no version id is provided 6ms
+ ✓ src/api/workflow.test.ts > workflow API client > runs published chatflow versions with an optional target version id 0ms
+ ✓ src/api/workflow.test.ts > workflow API client > keeps chatflow default and legacy run endpoints explicit 0ms
+ ✓ src/views/evaluation/evaluatorVersionSelection.test.ts > evaluatorVersionSelection > defaults selected evaluators to their latest published versions 3ms
+ ✓ src/views/evaluation/evaluatorVersionSelection.test.ts > evaluatorVersionSelection > describes selected immutable versions for the confirmation step 0ms
+ ✓ src/utils/feedbackAntMigration.test.ts > Ant Design Vue feedback migration > keeps cross-cutting feedback code off shared UI adapters and Element Plus 2ms
+ ✓ src/utils/feedbackAntMigration.test.ts > Ant Design Vue feedback migration > maps notify helpers to Ant Design Vue message with stable durations 1ms
+ ✓ src/utils/feedbackAntMigration.test.ts > Ant Design Vue feedback migration > runs confirmed actions and keeps cancellation as a rejected promise 1ms
+ ✓ src/api/customerAssistant.test.ts > customer-assistant frontend API client > uses the customer-assistant session and message endpoints 13ms
+ ✓ src/api/customerAssistant.test.ts > customer-assistant frontend API client > sends actor through the message endpoint 1ms
+ ✓ src/api/customerAssistant.test.ts > customer-assistant frontend API client > spawns and reads customer-assistant sub-agent harness runs 0ms
+ ✓ src/api/customerAssistant.test.ts > customer-assistant frontend API client > delivers confirmed customer reply draft actions 0ms
+ ✓ src/api/customerAssistant.test.ts > customer-assistant frontend API client > lists task and event ledgers 0ms
+ ✓ src/api/customerAssistant.test.ts > customer-assistant frontend API client > loads session observability metrics 0ms
+ ✓ src/api/customerAssistant.test.ts > customer-assistant frontend API client > lists session-scoped operator audit rows 1ms
+ ✓ src/api/customerAssistant.test.ts > customer-assistant frontend API client > requests cancellation for a worker run 0ms
+ ✓ src/api/customerAssistant.test.ts > customer-assistant frontend API client > asks a session-scoped operator knowledge question 0ms
+ ✓ src/api/customerAssistant.test.ts > customer-assistant frontend API client > lists seeded demo stories 0ms
+ ✓ src/api/customerAssistant.test.ts > customer-assistant frontend API client > loads seeded demo story observability metrics 1ms
+ ✓ src/api/customerAssistant.test.ts > customer-assistant frontend API client > lists worker profile catalog entries for the workbench 0ms
+ ✓ src/api/customerAssistant.test.ts > customer-assistant frontend API client > updates worker profile catalog entries through the patch endpoint 0ms
+ ✓ src/api/customerAssistant.test.ts > customer-assistant frontend API client > confirms, rejects, and executes proposed actions through explicit endpoints 0ms
+ ✓ src/api/customerAssistant.test.ts > customer-assistant frontend API client > updates pending proposed actions through the patch endpoint 0ms
+ ✓ src/api/customerAssistant.test.ts > customer-assistant frontend API client > proposes task controls through the session task endpoint 0ms
+ ✓ src/api/customerAssistant.test.ts > customer-assistant frontend API client > refreshes pending worker results through the session endpoint 0ms
+ ✓ src/views/agent/agentPreviewDebug.test.ts > agent preview debug view model > summarizes preview run identity for deep-linked debug detail 1ms
+ ✓ src/views/agent/agentPreviewDebug.test.ts > agent preview debug view model > maps backend preview run debug detail to the existing call-tree/flamegraph panel model 10ms
+ ✓ src/views/workflow/nodeTestFixtures.test.ts > chatflow node test fixtures > disables single-node test for fixed boundary nodes 1ms
+ ✓ src/views/workflow/nodeTestFixtures.test.ts > chatflow node test fixtures > only enables selected-node runs for executable nodes 1ms
+ ✓ src/views/workflow/nodeTestFixtures.test.ts > chatflow node test fixtures > includes the Chatflow runtime profile variables for selected LLM node runs 7ms
+ ✓ src/views/workflow/nodeTestFixtures.test.ts > chatflow node test fixtures > maps workflow userMessage to USER_INPUT without forcing Chatflow-only fields 0ms
+ ✓ src/views/workflow/nodeTestFixtures.test.ts > chatflow node test fixtures > uses START output variables as selected-node run inputs 0ms
+ ✓ src/views/workflow/nodeTestFixtures.test.ts > chatflow node test fixtures > extracts selected-node inputs from condition branches 0ms
+ ✓ src/views/workflow/nodeTestFixtures.test.ts > chatflow node test fixtures > extracts selected-node inputs from API headers and body templates 0ms
+ ✓ src/views/workflow/nodeTestFixtures.test.ts > chatflow node test fixtures > extracts selected-node inputs from tool-call input mappings 0ms
+ ✓ src/views/workflow/nodeTestFixtures.test.ts > chatflow node test fixtures > extracts selected-node inputs from execute-workflow input mappings 0ms
+ ✓ src/views/chat/unifiedRoutingChatLab.test.ts > unified routing chat lab model > offers the fifteen airline SOP scenarios used by the runtime business gate 1ms
+ ✓ src/views/chat/unifiedRoutingChatLab.test.ts > unified routing chat lab model > summarizes backend route turns without deciding routing in the frontend 0ms
+ ✓ src/views/chat/unifiedRoutingChatLab.test.ts > unified routing chat lab model > summarizes runtime config bindings and arbitrator state for display 0ms
+ ✓ src/views/chat/unifiedRoutingChatLab.test.ts > unified routing chat lab model > builds selectable SOPs from backend Chatflow bindings 0ms
+ ✓ src/views/chat/unifiedRoutingChatLab.test.ts > unified routing chat lab model > builds temporary route lab settings from backend config and defaults 1ms
+ ✓ src/views/chat/unifiedRoutingChatLab.test.ts > unified routing chat lab model > sends temporary arbitrator model config only when explicitly enabled 0ms
+ ✓ src/views/chat/unifiedRoutingChatLab.test.ts > unified routing chat lab model > summarizes Chatflow trace nodes and slot values for the inspector 0ms
+ ✓ src/views/chat/unifiedRoutingChatLab.test.ts > unified routing chat lab model > uses business-specific reply samples for flight status completion 0ms
+ ✓ src/views/chat/unifiedRoutingChatLab.test.ts > unified routing chat lab model > summarizes the funnel stage and LLM arbitration evidence from a route decision 0ms
+ ✓ src/views/chat/unifiedRoutingChatLab.test.ts > unified routing chat lab model > builds visible route outcomes for handoff faq clarify and fallback actions 0ms
+ ✓ src/views/chat/unifiedRoutingChatLab.test.ts > unified routing chat lab model > keeps the assistant pending indicator visible long enough to animate 0ms
+ ✓ src/views/chat/unifiedRoutingChatLab.test.ts > unified routing chat lab model > builds assistant debug details from route steps and LLM arbitration usage 0ms
+ ✓ src/views/chat/unifiedRoutingChatLab.test.ts > unified routing chat lab model > builds node debug details with inputs outputs timing and usage 0ms
+ ✓ src/api/aiAssistant.test.ts > ai assistant frontend API client > uses the ai-assistant session message event and approval endpoints 36ms
+ ✓ src/api/aiAssistant.test.ts > ai assistant frontend API client > defaults to smart approval but allows the composer to choose a stricter permission mode 1ms
+ ✓ src/views/evaluation/evaluationWorkbenchActions.test.ts > evaluation workbench primary actions > keeps experiment creation as the Experiments tab action instead of duplicating it in the page header 2ms
+ ✓ src/views/evaluation/evaluationWorkbenchActions.test.ts > evaluation workbench primary actions > keeps run-record filters as filters instead of a third navigation layer 0ms
+ ✓ src/views/evaluation/evaluationWorkbenchActions.test.ts > evaluation workbench primary actions > keeps Eval Set list as an object list instead of embedding the detail tabs below it 0ms
+ ✓ src/views/evaluation/evaluationWorkbenchActions.test.ts > evaluation workbench primary actions > keeps Eval Set detail readable with a path header and CSS-owned table sizing 1ms
+ ✓ src/views/evaluation/evaluationWorkbenchActions.test.ts > evaluation workbench primary actions > keeps Eval Set detail actions object-first instead of exposing implementation controls 0ms
+ ✓ src/views/evaluation/evaluationWorkbenchActions.test.ts > evaluation workbench primary actions > uses only the object breadcrumb on Eval Set detail pages 0ms
+ ✓ src/views/workflow/nodeConfig.test.ts > workflow node config schema > does not expose node-name editing fields on any node panel 2ms
+ ✓ src/views/workflow/nodeConfig.test.ts > workflow node config schema > uses switch controls for stream-output fields instead of select rows 2ms
+ ✓ src/views/workflow/nodeConfig.test.ts > workflow node config schema > uses registry-backed selector for TOOL_CALL resources 0ms
+ ✓ src/views/workflow/nodeConfig.test.ts > workflow node config schema > uses compact variable type labels in selectors and parameter rows 0ms
+ ✓ src/views/workflow/nodeConfig.test.ts > workflow node config schema > provides runtime-backed editable fields for each canvas node type 1ms
+ ✓ src/views/workflow/nodeConfig.test.ts > workflow node config schema > models END output variables as a normal output section and keeps return mode panel-level 0ms
+ ✓ src/views/workflow/nodeConfig.test.ts > workflow node config schema > puts LLM core sections in Coze-like order before advanced settings 0ms
+ ✓ src/views/workflow/nodeConfig.test.ts > workflow node config schema > uses structured Coze-like editors for secondary Chatflow panels 1ms
+ ✓ src/views/workflow/nodeConfig.test.ts > workflow node config schema > normalizes secondary Chatflow row editors without raw JSON strings 0ms
+ ✓ src/views/workflow/nodeConfig.test.ts > workflow node config schema > keeps resource-node raw ids and JSON mappings out of basic panels 0ms
+ ✓ src/views/workflow/nodeConfig.test.ts > workflow node config schema > does not expose advanced compatibility sections in node config panels 0ms
+ ✓ src/views/workflow/nodeConfig.test.ts > workflow node config schema > hides legacy resource technical fields from node panels 0ms
+ ✓ src/views/workflow/nodeConfig.test.ts > workflow node config schema > uses structured editors for data and structured nodes instead of raw JSON in basic panels 0ms
+ ✓ src/views/workflow/nodeConfig.test.ts > workflow node config schema > normalizes structured data node rows from legacy JSON-compatible config 0ms
+ ✓ src/views/workflow/nodeConfig.test.ts > workflow node config schema > normalizes START variables into Coze-like input rows while preserving legacy outputVariables 0ms
+ ✓ src/views/workflow/nodeConfig.test.ts > workflow node config schema > adds a shared input parameter editor field to runnable middle node schemas 0ms
+ ✓ src/views/workflow/nodeConfig.test.ts > workflow node config schema > updates node name and config without dropping ui position metadata 0ms
+ ✓ src/views/workflow/nodeConfig.test.ts > workflow node config schema > normalizes Coze-like output format and output parameter rows 0ms
+ ✓ src/views/workflow/nodeConfig.test.ts > workflow node config schema > keeps END-style output variable mappings for upstream references 0ms
+ ✓ src/views/workflow/nodeConfig.test.ts > workflow node config schema > keeps legacy outputVariable compatible while validating duplicate and illegal names 0ms
+ ✓ src/views/workflow/nodeConfig.test.ts > workflow node config schema > normalizes and validates typed input parameter rows 8ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts > customer assistant view model > normalizes customer and operator lanes without mixing internal controls into the conversation lanes 4ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts > customer assistant view model > summarizes task statuses, missing fields, and display names 0ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts > customer assistant view model > attaches configured worker profile metadata to task rows 0ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts > customer assistant view model > matches worker profiles for business-scoped task keys 0ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts > customer assistant view model > derives permitted operator task controls from task status 0ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts > customer assistant view model > projects durable worker async refs onto running task rows 0ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts > customer assistant view model > keeps recommendation and customer draft as separate operator panel state 1ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts > customer assistant view model > updates proposed action state immutably from confirm/reject API responses 0ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts > customer assistant view model > formats executed proposed action receipts with sanitized audit values 0ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts > customer assistant view model > formats confirmed and rejected proposed action decision receipts 0ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts > customer assistant view model > formats runtime events as compact operator timeline rows 0ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts > customer assistant view model > redacts sensitive values in runtime event timeline payload previews 0ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts > customer assistant view model > formats operator audit rows without raw payload details 0ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts > customer assistant view model > formats task recognition evidence without exposing raw customer text 0ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts > customer assistant view model > includes recognition evidence in the built operator state 0ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts > customer assistant view model > formats operator advisory evidence without exposing raw customer context 0ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts > customer assistant view model > includes operator advisory evidence in the built operator state 0ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts > customer assistant view model > formats operator knowledge Q&A without raw payload leaks 0ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts > customer assistant view model > shows the explicit no-source fallback message when copilot answers without knowledge hits 0ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts > customer assistant view model > formats session metrics as compact operator tiles and redacted failure rows 0ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts > customer assistant view model > formats empty metrics safely before a session exists 0ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts > customer assistant view model > builds a product-readable eval surface from existing session evidence 0ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts > customer assistant view model > derives live progress stages from L1 events 0ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts > customer assistant view model > derives a product-readable focus session status from tasks, recommendation, and actions 3ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts > customer assistant view model > builds SOP handling tree nodes from task checkpoints, last results, warnings, and proposed actions 0ms
+ ✓ src/views/customerAssistant/customerAssistantViewModel.test.ts > customer assistant view model > summarizes business objects and risk timing without exposing raw task payloads 0ms
+ ✓ src/views/workflow/chatflowPublish.test.ts > chatflow publish shell > builds channel and Open API fields for a Chatflow resource 1ms
+ ✓ src/views/workflow/chatflowPublish.test.ts > chatflow publish shell > blocks publish until a successful current conversation run exists 0ms
+ ✓ src/views/workflow/chatflowPublish.test.ts > chatflow publish shell > formats runnable and disabled channel shells for the Open API panel 1ms
+ ✓ src/views/workflow/chatflowPublish.test.ts > chatflow publish shell > formats published versions with active rollback state 0ms
+ ✓ src/api/workflowRuntimeV2.test.ts > workflow runtime v2 frontend API client > uses async runtime v2 start, status, event, and node endpoints 19ms
+ ✓ src/api/workflowRuntimeV2.test.ts > workflow runtime v2 frontend API client > passes explicit published version ids when starting runtime v2 runs 0ms
+ ✓ src/api/workflowRuntimeV2.test.ts > workflow runtime v2 frontend API client > passes silent error options only when requested 0ms
+ ✓ src/views/workflow/variableCatalog.test.ts > workflow variable catalog > offers only START and connected upstream node outputs for a selected node 7ms
+ ✓ src/views/workflow/variableCatalog.test.ts > workflow variable catalog > formats inserted references with the workflow template syntax 0ms
+ ✓ src/views/workflow/variableCatalog.test.ts > workflow variable catalog > uses declared output parameter rows as downstream variable options 0ms
+ ✓ src/views/workflow/variableCatalog.test.ts > workflow variable catalog > keeps sibling branch-local variables out of the current branch picker 0ms
+ ✓ src/views/workflow/variableCatalog.test.ts > workflow variable catalog > builds Coze-like source groups with typed variable rows 0ms
+ ✓ src/views/workflow/variableCatalog.test.ts > workflow variable catalog > uses Coze Chatflow preset start variables without hardcoded global scopes 1ms
+ ✓ src/views/workflow/variableCatalog.test.ts > workflow variable catalog > adds configured global memory variables without inventing system variables 0ms
+ ✓ src/views/workflow/variableCatalog.test.ts > workflow variable catalog > does not show unconfigured Chatflow scoped variables on workflow canvases 0ms
+ ✓ src/views/workflow/variableCatalog.test.ts > workflow variable catalog > limits inline text references to current node declared input variables 0ms
+ ✓ src/views/workflow/variableCatalog.test.ts > workflow variable catalog > uses local output variables for chatflow END inline references 0ms
+ ✓ src/views/workflow/variableCatalog.test.ts > workflow variable catalog > uses local output variables for workflow END inline references 0ms
+ ✓ src/views/aiAssistant/aiAssistantShell.test.ts > AI Assistant shell UI contract > renders conversation timeline composer and execution echo regions 27ms
+ ✓ src/views/aiAssistant/aiAssistantShell.test.ts > AI Assistant shell UI contract > exposes stable controls for browser UAT and avoids mock-looking session titles 0ms
+ ✓ src/views/aiAssistant/aiAssistantShell.test.ts > AI Assistant shell UI contract > separates pending approvals from approval history in the inspector 5ms
+ ✓ src/views/aiAssistant/aiAssistantShell.test.ts > AI Assistant shell UI contract > keeps the assistant workbench one screen tall with internal column scrolling 1ms
+ ✓ src/views/aiAssistant/aiAssistantShell.test.ts > AI Assistant shell UI contract > removes the extra shell padding and compresses the main AI Assistant content margins 0ms
+ ✓ src/views/aiAssistant/aiAssistantShell.test.ts > AI Assistant shell UI contract > uses only the outer shell border instead of inline module borders 1ms
+ ✓ src/views/aiAssistant/aiAssistantShell.test.ts > AI Assistant shell UI contract > submits live messages without frontend tool heuristics 0ms
+ ✓ src/views/aiAssistant/aiAssistantShell.test.ts > AI Assistant shell UI contract > defaults execution echo cards to collapsed details with header toggles 1ms
+ ✓ src/views/aiAssistant/aiAssistantShell.test.ts > AI Assistant shell UI contract > groups live execution echoes into a collapsible run task with a milestone line and nested details 4ms
+ ✓ src/views/aiAssistant/aiAssistantShell.test.ts > AI Assistant shell UI contract > keeps run card headers compact and renders final answers outside folded echo cards 7ms
+ ✓ src/views/aiAssistant/aiAssistantShell.test.ts > AI Assistant shell UI contract > renders processed groups and model text as peer-level Codex-like timeline items 1ms
+ ✓ src/views/aiAssistant/aiAssistantShell.test.ts > AI Assistant shell UI contract > renders nested formatted tool invocations inside one summarized tool event 0ms
+ ✓ src/views/aiAssistant/aiAssistantShell.test.ts > AI Assistant shell UI contract > renders command invocations as copyable Codex-like shell result blocks 0ms
+ ✓ src/views/aiAssistant/aiAssistantShell.test.ts > AI Assistant shell UI contract > left aligns expanded shell result blocks with their command fold header 0ms
+ ✓ src/views/aiAssistant/aiAssistantShell.test.ts > AI Assistant shell UI contract > renders user bubbles with subtle fill and completion summary cards with actions 0ms
+ ✓ src/views/aiAssistant/aiAssistantShell.test.ts > AI Assistant shell UI contract > uses compact right-side chevrons after title text for task and event folding 5ms
+ ✓ src/views/aiAssistant/aiAssistantShell.test.ts > AI Assistant shell UI contract > keeps processed run echo headers left aligned without stretched grid text 4ms
+ ✓ src/views/aiAssistant/aiAssistantShell.test.ts > AI Assistant shell UI contract > uses compact unified icon buttons and svg-only collapse arrows 0ms
+ ✓ src/views/aiAssistant/aiAssistantShell.test.ts > AI Assistant shell UI contract > groups inspector stream chunks and hides stale approval actions 1ms
+ ✓ src/views/aiAssistant/aiAssistantShell.test.ts > AI Assistant shell UI contract > keeps temporary model configuration across a browser reload without using long term storage 0ms
+ ✓ src/views/aiAssistant/aiAssistantShell.test.ts > AI Assistant shell UI contract > places clear context in the conversation header and delete on each session row 0ms
+ ✓ src/views/aiAssistant/aiAssistantShell.test.ts > AI Assistant shell UI contract > uses a Codex-like composer with permission mode and model settings controls 0ms
+ ✓ src/views/aiAssistant/aiAssistantShell.test.ts > AI Assistant shell UI contract > uses Chinese visible copy for the whole AI Assistant feature 2ms
+ ✓ src/views/workflow/flowGraph.test.ts > workflow canvas graph model > serializes and rehydrates a saved canvas graph with positions and edges 1ms
+ ✓ src/views/workflow/flowGraph.test.ts > workflow canvas graph model > deletes a canvas node and removes incident edges while preserving fixed nodes 1ms
+ ✓ src/views/workflow/flowGraph.test.ts > workflow canvas graph model > clears downstream variable references when deleting their upstream node 0ms
+ ✓ src/views/workflow/flowGraph.test.ts > workflow canvas graph model > deletes a selected edge without removing its nodes 0ms
+ ✓ src/views/workflow/flowGraph.test.ts > workflow canvas graph model > inserts a node on an existing edge and reconnects through the new node 0ms
+ ✓ src/views/workflow/flowGraph.test.ts > workflow canvas graph model > preserves a condition branch when inserting a node on a conditional edge 0ms
+ ✓ src/views/workflow/flowGraph.test.ts > workflow canvas graph model > creates Coze-like default Chatflow START variables for conversational context 0ms
+ ✓ src/views/workflow/flowGraph.test.ts > workflow canvas graph model > auto-layouts nodes into deterministic columns while preserving configs and conditional edges 0ms
+ ✓ src/views/workflow/flowGraph.test.ts > workflow canvas graph model > adds runtime-backed data transform nodes with Coze-aligned labels 0ms
+ ✓ src/views/workflow/flowGraph.test.ts > workflow canvas graph model > adds variable aggregation and assignment as separate runtime-backed nodes 0ms
+ ✓ src/views/workflow/flowGraph.test.ts > workflow canvas graph model > adds intent recognition as a separate semantic branch node 0ms
+ ✓ src/views/workflow/flowGraph.test.ts > workflow canvas graph model > adds Chatflow message/question/human input nodes with separate labels 0ms
+ ✓ src/views/workflow/flowGraph.test.ts > workflow canvas graph model > adds Chatflow information collection as a distinct slot filling node 0ms
+ ✓ src/views/workflow/flowGraph.test.ts > workflow canvas graph model > adds tool call as an explicit runtime-backed resource node 0ms
+ ✓ src/views/workflow/flowGraph.test.ts > workflow canvas graph model > uses official knowledge retrieval naming for the knowledge node 0ms
+ ✓ src/views/workflow/flowGraph.test.ts > workflow canvas graph model > adds execute workflow as an explicit published subworkflow node 0ms
+ ✓ src/views/workflow/flowGraph.test.ts > workflow canvas graph model > adds agent call as an explicit runtime-backed Agent resource node 0ms
+ ✓ src/views/workflow/flowGraph.test.ts > workflow canvas graph model > adds transfer to human as a Chatflow-only handoff node with ticket outputs 0ms
+ ✓ src/remScaleClosure.test.ts > frontend rem scale closure > keeps all Vue/CSS visual sizing rem-based or explicitly allowlisted 16ms
+ ✓ src/views/customerAssistant/customerAssistantPanel.test.ts > CustomerAssistantPanel IA convergence contract > keeps the product shell in left center and right workbench columns 1ms
+ ✓ src/views/customerAssistant/customerAssistantPanel.test.ts > CustomerAssistantPanel IA convergence contract > contracts the right workbench to focus, assistant, evidence, and config tabs only 1ms
+ ✓ src/views/customerAssistant/customerAssistantPanel.test.ts > CustomerAssistantPanel IA convergence contract > makes focus the default business closure workspace around one production task intent flow 1ms
+ ✓ src/views/customerAssistant/customerAssistantPanel.test.ts > CustomerAssistantPanel IA convergence contract > renders the assistant tab as a pure chat window without internal task or config panels 0ms
+ ✓ src/views/customerAssistant/customerAssistantPanel.test.ts > CustomerAssistantPanel IA convergence contract > marks evidence and config as research debugging entries instead of normal handling tabs 0ms
+ ✓ src/views/customerAssistant/customerAssistantPanel.test.ts > CustomerAssistantPanel IA convergence contract > keeps the center operator lane passenger-facing and free of assistant tooling 0ms
+ ✓ src/views/customerAssistant/customerAssistantPanel.test.ts > CustomerAssistantPanel IA convergence contract > keeps compact viewports as a three-column shell instead of collapsing into a vertical panel stack 0ms
+ ✓ src/views/customerAssistant/customerAssistantPanel.test.ts > CustomerAssistantPanel IA convergence contract > constrains the shell to one viewport and scrolls overflowing columns internally 2ms
+ ✓ src/views/customerAssistant/customerAssistantPanel.test.ts > CustomerAssistantPanel IA convergence contract > exposes a left-column operator task ledger that renders task rows by taskKey 0ms
+ ✓ src/views/customerAssistant/customerAssistantPanel.test.ts > CustomerAssistantPanel IA convergence contract > keeps internal task controls out of the customer lane 0ms
+ ✓ src/views/customerAssistant/customerAssistantPanel.test.ts > CustomerAssistantPanel IA convergence contract > uses Ant Design Vue primitives and avoids Element Plus and card nesting 1ms
+ ✓ src/views/workflow/workflowCanvasResponsiveProgressiveCollapse.test.ts > workflow canvas responsive progressive collapse contract > keeps the right-side config surfaces edge-anchored before the off-canvas phase 6ms
+ ✓ src/views/workflow/workflowCanvasResponsiveProgressiveCollapse.test.ts > workflow canvas responsive progressive collapse contract > shelves the right-side config surfaces before collapsing the left rail on narrow viewports 8ms
+ ✓ src/views/workflow/workflowCanvasResponsiveProgressiveCollapse.test.ts > workflow canvas responsive progressive collapse contract > switches the center stage into an overflow-clipped overlay layer instead of squeezing every panel 1ms
+ ✓ src/views/workflow/workflowCanvasResponsiveProgressiveCollapse.test.ts > workflow canvas responsive progressive collapse contract > anchors shelved right panels to the viewport once the center stage is clipped 2ms
+ ✓ src/views/workflow/workflowCanvasResponsiveProgressiveCollapse.test.ts > workflow canvas responsive progressive collapse contract > keeps the debug dock anchored as an overlay with non-zero minimum width and height 2ms
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > keeps workflow/chatflow canvas off Element Plus contracts 3ms
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > keeps the app entry free of the legacy route loader 1ms
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > exposes targeted test run controls for published versions 1ms
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > exposes realtime version test controls and result evidence beside published-run testing 1ms
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > renders the canvas title input on chatflow create entry so the placeholder is reachable 1ms
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > exposes data-testid="chatflow-run-fields-toggle" on the run fields settings toggle 2ms
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > exposes placeholder="发送消息" on the composer textarea 1ms
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > exposes a button accessible by role/name "重置会话" for resetting conversation 1ms
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > gates chatflow-assistant-message data-testid on completed (non-loading) bubbles only 1ms
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > exposes a runtime v2 cancel control in the debug dock 6ms
+ ✓ src/views/workflow/runtimeV2Debug.test.ts > runtime v2 canvas debug projection > routes a completed runtime v2 trial log button to the v2 run detail query 1ms
+ ✓ src/views/workflow/runtimeV2Debug.test.ts > runtime v2 canvas debug projection > keeps the log drawer local when no run has been created yet 0ms
+ ✓ src/views/workflow/runtimeV2Debug.test.ts > runtime v2 canvas debug projection > updates node status from live events and polled nodes, then makes failure visible 1ms
+ ✓ src/views/workflow/runtimeV2Debug.test.ts > runtime v2 canvas debug projection > projects workflow run cancellation events into a terminal cancelled state 0ms
+ ✓ src/views/workflow/runtimeV2Debug.test.ts > runtime v2 canvas debug projection > observes runtime v2 SSE by default and recovers durable events after disconnect without duplicates 2ms
+ ✓ src/views/workflow/runtimeV2Debug.test.ts > runtime v2 canvas debug projection > falls back to the canonical runtime v2 SSE URL when no stream ref is provided 0ms
+ ✓ src/views/workflow/chatflowRunDebug.test.ts > chatflow run debug view model > summarizes session identity for the chatflow debug dock 5ms
+ ✓ src/views/workflow/chatflowRunDebug.test.ts > chatflow run debug view model > keeps chatflow node call tree order 1ms
+ ✓ src/views/workflow/chatflowRunDebug.test.ts > chatflow run debug view model > builds chatflow flamegraph rows from cumulative elapsed time 4ms
+ ✓ src/views/workflow/chatflowRunDebug.test.ts > chatflow run debug view model > projects runtime v2 interrupted checkpoints as waiting chatflow session state 1ms
+ ✓ src/views/workflow/chatflowRunDebug.test.ts > chatflow run debug view model > keeps runtime v2 variable snapshots in chatflow session debug state 0ms
+ ✓ src/views/workflow/workflowNodeRunStatusBadge.test.ts > workflow node run status badge > renders clear running/success/failure state badges on canvas nodes 8ms
+ ✓ src/views/workflow/workflowNodeRunStatusBadge.test.ts > workflow node run status badge > hydrates workflow runtime v2 node statuses after a canvas run 3ms
+ ✓ src/views/evaluation/relatedExperimentsViewModel.test.ts > relatedExperimentsViewModel > shows immutable eval set version usage when an experiment binds a version 1ms
+ ✓ src/views/evaluation/relatedExperimentsViewModel.test.ts > relatedExperimentsViewModel > falls back to draft/current copy for legacy experiments without version binding 0ms
+ ✓ src/views/customerAssistant/customerAssistantFixtures.test.ts > customer-assistant fixture contract > matches 045 turn result fields used by the operator panel 1ms
+ ✓ src/views/customerAssistant/customerAssistantFixtures.test.ts > customer-assistant fixture contract > matches 045 task and event ledger envelopes 0ms
+ ✓ src/views/agent/agentWorkbench.test.ts > agent workbench form helpers > maps Agent detail to a stable editable form and preserves API payload compatibility 1ms
+ ✓ src/views/agent/agentWorkbench.test.ts > agent workbench form helpers > validates required core fields and detects dirty state 1ms
+ ✓ src/views/agent/agentWorkbench.test.ts > agent workbench form helpers > groups model options by provider for the workbench selector 1ms
+ ✓ src/views/agent/agentWorkbench.test.ts > agent workbench form helpers > summarizes capability bindings for cards and persistence 0ms
+ ✓ src/views/agent/agentWorkbench.test.ts > agent workbench form helpers > resolves runtime mode and precedence warnings like backend chat behavior 1ms
+ ✓ src/views/agent/agentWorkbench.test.ts > agent workbench form helpers > requires saved clean Agent state before preview can send 0ms
+ ✓ src/views/agent/agentWorkbench.test.ts > agent workbench form helpers > builds dependency empty states and backend error text for readiness polish 0ms
+ ✓ src/views/agent/agentWorkbench.test.ts > agent workbench form helpers > builds preview welcome state from opening message and suggested questions 0ms
+ ✓ src/views/agent/agentWorkbench.test.ts > agent workbench form helpers > builds draft latest and released preview target options from Agent versions 0ms
+ ✓ src/views/agent/agentWorkbench.test.ts > agent workbench form helpers > builds preview variable overrides from non-empty form values only 0ms
+ ✓ src/views/agent/agentWorkbench.test.ts > agent workbench form helpers > resolves workflow and chatflow canvas paths from flow type 0ms
+ ✓ src/views/workflow/observeRedirect.test.ts > observe compatibility redirect > routes workflow runs back to the owning workflow canvas debug panel 1ms
+ ✓ src/views/workflow/observeRedirect.test.ts > observe compatibility redirect > routes chatflow runs back to the owning chatflow canvas debug panel 0ms
+ ✓ src/views/workflow/observeRedirect.test.ts > observe compatibility redirect > falls back to the composer list when the run cannot be resolved 0ms
+ ✓ src/views/workflow/workflowPublish.test.ts > evaluateWorkflowPublishGate > blocks publish when canvas validation fails 1ms
+ ✓ src/views/workflow/workflowPublish.test.ts > evaluateWorkflowPublishGate > blocks publish before a successful test run 0ms
+ ✓ src/views/workflow/workflowPublish.test.ts > evaluateWorkflowPublishGate > blocks publish when the graph changed after the last test run 0ms
+ ✓ src/views/workflow/workflowPublish.test.ts > evaluateWorkflowPublishGate > allows publish only after valid canvas and successful current test run 0ms
+ ✓ src/views/workflow/inlineVariableText.test.ts > inline variable text editing > auto-completes a single left brace to a double-brace placeholder with centered caret 5ms
+ ✓ src/views/workflow/inlineVariableText.test.ts > inline variable text editing > does not reopen variable mode for ordinary literal edits 0ms
+ ✓ src/views/workflow/inlineVariableText.test.ts > inline variable text editing > does not auto-complete a remaining single brace while deleting a placeholder 0ms
+ ✓ src/views/workflow/inlineVariableText.test.ts > inline variable text editing > replaces the latest empty double-brace placeholder with the selected reference 0ms
+ ✓ src/views/workflow/inlineVariableText.test.ts > inline variable text editing > localizes current-node inline references when a field accepts only local inputs 0ms
+ ✓ src/views/workflow/workflowPhase9UxConvergence.test.ts > workflow Phase 9 UX convergence > keeps waiting summary business-facing before advanced debug detail 13ms
+ ✓ src/views/workflow/workflowPhase9UxConvergence.test.ts > workflow Phase 9 UX convergence > keeps version test result copy product-worded instead of runtime/debug refs 4ms
+ ✓ src/views/workflow/nodePalette.test.ts > nodePalette > uses a Coze-like compact category order without duplicate labels 2ms
+ ✓ src/views/workflow/nodePalette.test.ts > nodePalette > keeps task workflow palette free of conversation-only nodes 1ms
+ ✓ src/views/workflow/nodePalette.test.ts > nodePalette > searches by concise labels and aliases while preserving group order 0ms
+ ✓ src/views/provider/providerListAntMigration.test.ts > Provider page Ant Design Vue migration > keeps ProviderList off Element Plus tags, imports, and style internals 1ms
+ ✓ src/app/legacyElementPlusIsolation.test.ts > legacy Element Plus isolation > keeps Element Plus out of frontend startup 1ms
+ ✓ src/app/legacyElementPlusIsolation.test.ts > legacy Element Plus isolation > removes the legacy Element Plus route loader 0ms
+ ✓ src/app/legacyElementPlusIsolation.test.ts > legacy Element Plus isolation > keeps package manifests off Element Plus runtime dependencies 0ms
+ ✓ src/views/workflow/chatflowVariables.test.ts > chatflow variables > shows only configured runtime context variables by default 1ms
+ ✓ src/views/workflow/chatflowVariables.test.ts > chatflow variables > includes configured conversation and user variables after runtime defaults 0ms
+ ✓ src/views/workflow/chatflowVariables.test.ts > chatflow variables > inserts selected variables into a field without dropping existing text 0ms
+ ✓ src/views/workflow/runPathEdges.test.ts > workflow running path edge state > marks the incoming edge of a running node 1ms
+ ✓ src/views/workflow/runPathEdges.test.ts > workflow running path edge state > marks completed incoming edges as succeeded 1ms
+ ✓ src/views/workflow/runPathEdges.test.ts > workflow running path edge state > keeps the incoming edge animated while a chatflow node waits for user input 0ms
+ ✓ src/views/workflow/runPathEdges.test.ts > workflow running path edge state > highlights only the active condition branch and dims siblings 0ms
+ ✓ src/views/customerAssistant/customerAssistantInteractions.test.ts > customer assistant interaction polish > copies/applies customer draft locally without marking it outbound 1ms
+ ✓ src/views/customerAssistant/customerAssistantInteractions.test.ts > customer assistant interaction polish > formats loading, failed, replayed, and ready turn states 0ms
+ ✓ src/views/customerAssistant/customerAssistantInteractions.test.ts > customer assistant interaction polish > keeps debug event payloads collapsed by default 0ms
+ ✓ src/views/customerAssistant/customerAssistantInteractions.test.ts > customer assistant interaction polish > renders accessible labels, tooltips, and explicit empty/failed/replayed states 1ms
+ ✓ src/views/customerAssistant/customerAssistantInteractions.test.ts > customer assistant interaction polish > passes decision note payloads through confirm and reject actions 0ms
+ ✓ src/views/customerAssistant/customerAssistantInteractions.test.ts > customer assistant interaction polish > persists action failures in the workbench failed-state alert 0ms
+ ✓ src/views/workflow/workflowCanvasResponsiveLayout.test.ts > workflow canvas responsive layout policy > keeps right panels edge-anchored before shelving them, then clips the stage, then leaves the left rail primary 3ms
+ ✓ src/views/workflow/workflowCanvasResponsiveLayout.test.ts > workflow canvas responsive layout policy > wires the policy into workflow/chatflow canvas chrome and debug dock CSS 2ms
+ ✓ src/utils/remGovernance.test.ts > hify rem governance > keeps app shell and base components off raw visual px sizing 2ms
+ ✓ src/utils/remGovernance.test.ts > hify rem governance > bridges Ant Design Vue component sizing through hify theme tokens 0ms
+ ✓ src/views/workflow/workflowValidation.test.ts > workflow graph validation > requires a reachable path from START to END 1ms
+ ✓ src/views/workflow/workflowValidation.test.ts > workflow graph validation > rejects disconnected non-fixed nodes before test run or publish 0ms
+ ✓ src/views/workflow/workflowValidation.test.ts > workflow graph validation > requires LLM nodes to select a concrete model before running 0ms
+ ✓ src/views/workflow/workflowValidation.test.ts > workflow graph validation > requires API call governance before run or publish 0ms
+ ✓ src/views/workflow/workflowValidation.test.ts > workflow graph validation > requires tool call timeout, retry, error policy, and output schema governance 1ms
+ ✓ src/views/workflow/workflowValidation.test.ts > workflow graph validation > requires regular node default output endpoints to connect downstream 0ms
+ ✓ src/views/workflow/workflowValidation.test.ts > workflow graph validation > requires every condition branch and fallback to have downstream edges 0ms
+ ✓ src/views/workflow/workflowValidation.test.ts > workflow graph validation > requires every intent and fallback to have downstream edges 0ms
+ ✓ src/views/workflow/workflowValidation.test.ts > workflow graph validation > rejects missing fixed nodes 0ms
+ ✓ src/views/workflow/workflowValidation.test.ts > workflow graph validation > deduplicates validation errors shared by run and publish checks 0ms
+ ✓ src/views/workflow/chatflowDebugTimeline.test.ts > chatflow debug timeline view model > orders events and exposes checkpoint labels 2ms
+ ✓ src/views/workflow/chatflowDebugTimeline.test.ts > chatflow debug timeline view model > labels transfer-to-human handoff events with ticket context 1ms
+ ✓ src/views/workflow/chatflowDebugTimeline.test.ts > chatflow debug timeline view model > formats runtime v2 node ids and workflow event names for chatflow timelines 0ms
+ ✓ src/views/workflow/chatflowDebugTimeline.test.ts > chatflow debug timeline view model > formats runtime v2 failure evidence while redacting sensitive headers and resume data 1ms
+ ✓ src/views/workflow/chatflowDebugTimeline.test.ts > chatflow debug timeline view model > flattens scoped variables for the debug dock 0ms
+ ✓ src/views/workflow/chatflowDebugTimeline.test.ts > chatflow debug timeline view model > derives resume fields from waiting event schema 0ms
+ ✓ src/views/agent/agentListRemGovernance.test.ts > agent list rem governance > keeps agent list visual sizing on rem tokens 1ms
+ ✓ src/host/request.test.ts > host request adapter > builds host context headers from runtime config 2ms
+ ✓ src/host/request.test.ts > host request adapter > resolves base URL from runtime config and sends headers through fetch 3ms
+ ✓ src/views/knowledge/knowledgeListRemGovernance.test.ts > knowledge list rem governance > keeps knowledge list visual sizing on rem tokens 1ms
+ ✓ src/views/knowledge/knowledgeListRemGovernance.test.ts > knowledge list rem governance > keeps the knowledge list copy business-facing 0ms
+ ✓ src/views/workflow/workflowRunDebug.test.ts > workflow run debug view model > summarizes a selected workflow run for the canvas debug dock 2ms
+ ✓ src/views/workflow/workflowRunDebug.test.ts > workflow run debug view model > builds a call tree from node execution details 0ms
+ ✓ src/views/workflow/workflowRunDebug.test.ts > workflow run debug view model > builds cumulative flamegraph rows without overlapping durations 1ms
+ ✓ src/views/workflow/workflowRunDebug.test.ts > workflow run debug view model > keeps duplicate node executions addressable by execution detail id 0ms
+ ✓ src/views/workflow/workflowRunDebug.test.ts > workflow run debug view model > formats node token cost latency evidence for run detail 0ms
+ ✓ src/views/workflow/workflowRunDebug.test.ts > workflow run debug view model > formats workflow llm fallback evidence from structured node debug output 1ms
+ ✓ src/views/workflow/workflowRunDebug.test.ts > workflow run debug view model > formats runtime v2 node event evidence with redacted details 0ms
+ ✓ src/views/evaluation/evaluationAntMigration.test.ts > evaluation Ant Design migration guard > keeps evaluation Vue files free of Element Plus primitives 4ms
+ ✓ src/views/customerAssistant/customerAssistantStoryLinks.test.ts > customer assistant story deep links > reads a valid story id from string or array route query values 2ms
+ ✓ src/views/customerAssistant/customerAssistantStoryLinks.test.ts > customer assistant story deep links > falls back to the first seeded story when no valid query story exists 0ms
+ ✓ src/views/customerAssistant/customerAssistantStoryLinks.test.ts > customer assistant story deep links > uses a valid query story unless that story is already selected 1ms
+ ✓ src/views/customerAssistant/customerAssistantStoryLinks.test.ts > customer assistant story deep links > preserves unrelated route query values when writing the selected story 0ms
+ ✓ src/views/agent/agentList.test.ts > Agent list view model > formats ISO timestamps as compact minute precision text 1ms
+ ✓ src/views/agent/agentList.test.ts > Agent list view model > uses dash for missing timestamps instead of leaking invalid text 0ms
+ ✓ src/views/chat/runtimeLabAntMigration.test.ts > runtime lab Ant Design migration guard > keeps the unified routing lab free of Element Plus primitives 3ms
+ ✓ src/views/workflow/chatflowTrialRun.test.ts > chatflow trial run helpers > normalizes opening message and suggested questions like Agent preview 1ms
+ ✓ src/views/workflow/chatflowTrialRun.test.ts > chatflow trial run helpers > formats assistant output without leaking null JSON payloads 0ms
+ ✓ src/views/workflow/chatflowTrialRun.test.ts > chatflow trial run helpers > accumulates Chatflow stream events without duplicating final content 0ms
+ ✓ src/views/workflow/chatflowTrialRun.test.ts > chatflow trial run helpers > keeps partial stream content visible before done arrives 0ms
+ ✓ src/views/workflow/composerSurfaceState.test.ts > composer surface state > exposes only compose and open lifecycle tabs until statistics has a real product surface 1ms
+ ✓ src/views/workflow/composerSurfaceState.test.ts > composer surface state > opens the center Open surface without activating a right-side ops panel 0ms
+ ✓ src/views/workflow/composerSurfaceState.test.ts > composer surface state > opens publish as a modal and keeps run debugging out of publish state 0ms
+ ✓ src/views/workflow/composerSurfaceState.test.ts > composer surface state > opens run debug in the bottom dock without activating a statistics surface 0ms
+ ✓ src/views/workflow/llmModelOptions.test.ts > workflow llm model options > uses provider model config ids instead of saving model names alone 1ms
+ ✓ src/views/workflow/llmModelOptions.test.ts > workflow llm model options > keeps only qwen deepseek and mimo family models and deduplicates by model id 0ms
+ ✓ src/views/workflow/llmModelOptions.test.ts > workflow llm model options > uses integration protocol type for provider icons instead of model vendor names 0ms
+ ✓ src/components/base/hifyFormDialogAntMigration.test.ts > HifyFormDialog Ant Design Vue migration > renders with Ant Design Vue modal/form primitives and no Element Plus contract 1ms
+ ✓ src/app/antDesignDocs.test.ts > Ant Design Vue migration docs > documents direct Ant usage and the single app install seam 2ms
+ ✓ src/app/antDesignDocs.test.ts > Ant Design Vue migration docs > documents integration packaging dependencies and deferred workflow scope 0ms
+ ✓ src/views/knowledge/documentListRemGovernance.test.ts > document list rem governance > keeps document list visual sizing on rem tokens 2ms
+ ✓ src/views/knowledge/documentListRemGovernance.test.ts > document list rem governance > exposes business retrieval strategy controls without mock-only wording 1ms
+ ✓ src/views/knowledge/documentListRemGovernance.test.ts > document list rem governance > keeps knowledge detail table markup and action columns stable 1ms
+ ✓ src/views/managementRemGovernance.test.ts > management page rem governance > keeps remaining list and evaluation surfaces on rem visual sizing 3ms
+ ✓ src/views/agentChatRemGovernance.test.ts > agent workbench and chat rem governance > keeps workbench and chat visual sizing on rem units 2ms
+ ✓ src/views/workflow/chatflowRunProfile.test.ts > buildChatflowRunInput > maps a conversation test profile to sys variables and compatibility fields 2ms
+ ✓ src/views/workflow/chatflowRunProfile.test.ts > buildChatflowRunInput > passes chatflow history retention rounds as runtime metadata 0ms
+ ✓ src/views/agent/agentWorkbenchAntMigration.test.ts > Agent workbench Ant Design Vue migration > keeps AgentWorkbench off Element Plus contracts 1ms
+ ✓ src/views/workflow/canvasControls.test.ts > workflow canvas controls > uses the requested common zoom presets and labels them as percentages 1ms
+ ✓ src/views/workflow/canvasControls.test.ts > workflow canvas controls > steps zoom buttons through presets while clamping to supported bounds 0ms
+ ✓ src/views/workflow/canvasControls.test.ts > workflow canvas controls > normalizes persisted operation mode and exposes Chinese titles 0ms
+ ✓ src/views/workflow/canvasControls.test.ts > workflow canvas controls > keeps canvas gestures responsive without noisy accidental clicks 0ms
+ ✓ src/views/workflow/canvasControls.test.ts > workflow canvas controls > uses the magnetic connection radius for endpoint hover and preview affordances 0ms
+ ✓ src/views/evaluation/experimentStepperViewModel.test.ts > experimentStepperViewModel > defines the Coze-like experiment creation steps in order 2ms
+ ✓ src/views/evaluation/experimentStepperViewModel.test.ts > experimentStepperViewModel > moves forward and backward without leaving the step bounds 0ms
+ ✓ src/views/evaluation/experimentStepperViewModel.test.ts > experimentStepperViewModel > describes current step position for the UI 0ms
+ ✓ src/views/workflow/apiResourceAntMigration.test.ts > API Resource Ant migration > keeps API Resource workbench off Element Plus contracts 3ms
+ ✓ src/appNavigation.test.ts > composer navigation > keeps run debugging inside composer surfaces instead of exposing Observe as a top-level product module 1ms
+ ✓ src/appNavigation.test.ts > composer navigation > uses Ant Design Vue shell primitives instead of Element Plus shell contracts 0ms
+ ✓ src/views/workflow/workflowListAntMigration.test.ts > workflow list Ant migration > keeps workflow/chatflow list shell off Element Plus contracts 1ms
+ ✓ src/views/knowledge/knowledgeAntMigration.test.ts > Knowledge pages Ant Design Vue migration > keeps knowledge list/detail pages off Element Plus contracts 3ms
+ ✓ src/views/workflow/observeDashboard.test.ts > observe dashboard view model > formats run, handoff, and channel metrics into scan-friendly tiles 1ms
+ ✓ src/views/workflow/observeDashboard.test.ts > observe dashboard view model > normalizes observe run query into a concrete run id 0ms
+ ✓ src/views/chat/chatViewAntMigration.test.ts > ChatView Ant Design Vue migration > keeps ChatView off Element Plus tags, imports, and style internals 2ms
+ ✓ src/router/runDebugDeepLinks.test.ts > composer run debug deep links > builds workflow canvas links for concrete run and execute identifiers 1ms
+ ✓ src/router/runDebugDeepLinks.test.ts > composer run debug deep links > builds chatflow canvas links for concrete run and execute identifiers 0ms
+ ✓ src/router/runDebugDeepLinks.test.ts > composer run debug deep links > builds agent workbench links for preview runs 0ms
+ ✓ src/views/evaluation/llmEvaluatorWorkbench.test.ts > llmEvaluatorWorkbench > builds an LLM judge evaluator config from workbench form fields 1ms
+ ✓ src/views/evaluation/llmEvaluatorWorkbench.test.ts > llmEvaluatorWorkbench > summarizes debug results for the product preview 0ms
+ ✓ src/components/base/hifyTableSizing.test.ts > HifyTable sizing bridge > converts rem column widths to numeric pixel values for Element Plus tables 1ms
+ ✓ src/components/base/hifyTableSizing.test.ts > HifyTable sizing bridge > keeps numeric and non-rem sizes unchanged 0ms
+ ✓ src/views/mcp/mcpAntMigration.test.ts > MCP pages Ant Design Vue migration > keeps MCP list and debug pages off Element Plus contracts 1ms
+ ✓ src/views/provider/providerRemGovernance.test.ts > provider page rem governance > keeps provider management visual sizing on rem tokens 1ms
+ ✓ src/views/aiAssistant/aiAssistantUatScript.test.ts > AI Assistant code-save-test pressure UAT script > drives a code writing save readback and test execution attempt journey 1ms
+ ✓ src/views/workflow/resourceRegistry.test.ts > workflow resource registry contract > renders enabled, disabled, unhealthy, and missing credential states 1ms
+ ✓ src/views/agent/agentListAntMigration.test.ts > Agent list Ant Design Vue migration > keeps AgentList off Element Plus contracts 1ms
+ ✓ src/api/hostFetchIntegration.test.ts > API functions using raw fetch > sends host headers for knowledge CSV import/export fetch calls 2ms
+ ✓ src/api/hostFetchIntegration.test.ts > API functions using raw fetch > sends host headers for evaluation CSV import/export fetch calls 1ms
+ ✓ src/api/hostFetchIntegration.test.ts > API functions using raw fetch > sends host headers for chat streaming fetch calls 3ms
+ ✓ src/views/workflow/floatingPanelGeometry.test.ts > workflow floating panel geometry > keeps variable flyout separated from the source list panel 1ms
+ ✓ src/app/ant-design.test.ts > Ant Design Vue app seam > installs Ant Design Vue through the single app seam 1ms
+ ✓ src/app/ant-design.test.ts > Ant Design Vue app seam > bridges Hify design tokens into the Ant theme 0ms
+ ✓ src/utils/request.test.ts > unwrapEnvelope > returns data for a successful API envelope 1ms
+ ✓ src/utils/request.test.ts > unwrapEnvelope > throws ApiError for an error envelope 0ms
+ ✓ src/utils/request.test.ts > unwrapEnvelope > extracts an API envelope from a non-2xx axios response 0ms
+ Test Files  98 passed (98)
+      Tests  422 passed (422)
+   Start at  16:04:49
+   Duration  4.53s (transform 1.39s, setup 0ms, collect 7.06s, tests 1.97s, environment 5.22s, prepare 7.74s)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m

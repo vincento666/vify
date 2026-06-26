@@ -1,0 +1,17 @@
+> vitest run --reporter verbose src/views/workflow/workflowCreateAntMigration.test.ts
+ RUN  v3.2.6 /Users/vincento/work/develop/hify/frontend
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > keeps workflow/chatflow canvas off Element Plus contracts 2ms
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > keeps the app entry free of the legacy route loader 0ms
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > exposes targeted test run controls for published versions 1ms
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > exposes realtime version test controls and result evidence beside published-run testing 1ms
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > renders the canvas title input on chatflow create entry so the placeholder is reachable 1ms
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > exposes data-testid="chatflow-run-fields-toggle" on the run fields settings toggle 1ms
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > exposes placeholder="发送消息" on the composer textarea 1ms
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > exposes a button accessible by role/name "重置会话" for resetting conversation 1ms
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > gates chatflow-assistant-message data-testid on completed (non-loading) bubbles only 1ms
+ ✓ src/views/workflow/workflowCreateAntMigration.test.ts > workflow create Ant migration > exposes a runtime v2 cancel control in the debug dock 1ms
+ Test Files  1 passed (1)
+      Tests  10 passed (10)
+   Start at  16:04:38
+   Duration  205ms (transform 32ms, setup 0ms, collect 14ms, tests 9ms, environment 0ms, prepare 58ms)
+[33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m

@@ -3319,7 +3319,7 @@
                   v-for="message in chatflowTrialMessages"
                   :key="message.id"
                   :class="['message-bubble', message.role, { loading: message.loading, error: message.error }]"
-                  :data-testid="message.role === 'user' ? 'chatflow-user-message' : 'chatflow-assistant-message'"
+                  :data-testid="message.role === 'user' ? 'chatflow-user-message' : (!message.loading ? 'chatflow-assistant-message' : undefined)"
                 >
                   <span
                     v-if="message.loading"

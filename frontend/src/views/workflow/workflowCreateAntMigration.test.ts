@@ -123,6 +123,31 @@ describe('workflow create Ant migration', () => {
     expect(headerBlock).toMatch(/aria-label="重置会话"[\s\S]*?resetChatflowTrialSession/)
   })
 
+  it('gates chatflow-assistant-message data-testid on completed (non-loading) bubbles only', () => {
+    // The e2e contract (frontend/e2e/chatflow-conversation-run.mjs:33-36) waits for
+    // `chatflow-assistant-message` visibility, then reads innerText once. If the
+    // loading placeholder bubble carries the same testid, waitFor matches it
+    // immediately and innerText reads empty (loading dots only have aria-label,
+    // no text content). The testid must be applied only when the bubble is no
+    // longer in the loading state, so that the locator waits for the rendered
+    // assistant content (sys variable interpolation) to land.
+    const content = readSource('src/views/workflow/WorkflowCreate.vue')
+    const bubbleStart = content.indexOf("'message-bubble'")
+    expect(bubbleStart).toBeGreaterThan(-1)
+    const bubbleEnd = content.indexOf('</div>', bubbleStart)
+    const bubbleBlock = content.slice(bubbleStart, bubbleEnd)
+
+    // Loading-state span keeps its own testid so optimistic-loading e2e still
+    // observes the placeholder.
+    expect(bubbleBlock).toContain('data-testid="chatflow-assistant-loading"')
+
+    // The bubble-level testid for assistant must be gated on `!message.loading`
+    // so it only resolves once the runtime returns the rendered content.
+    const dataTestidLine = bubbleBlock.match(/:data-testid=\"[^\"]*chatflow-assistant-message[^\"]*\"/)
+    expect(dataTestidLine, 'bubble data-testid should reference chatflow-assistant-message').not.toBeNull()
+    expect(dataTestidLine?.[0]).toMatch(/!\s*message\.loading|message\.loading\s*\?\s*undefined/)
+  })
+
   it('exposes a runtime v2 cancel control in the debug dock', () => {
     const content = readSource('src/views/workflow/WorkflowCreate.vue')
     const dockStart = content.indexOf('data-testid="workflow-debug-dock"')
