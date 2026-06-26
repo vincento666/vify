@@ -8480,6 +8480,11 @@ async function loadWorkflow() {
     lastSavedAt.value = ''
     canvasDirty.value = false
     dirtySinceTestRun.value = true
+    // On the create entry the canvas has no name yet, so render the title input directly
+    // instead of hiding it behind the display button. This keeps the placeholder reachable
+    // for users (and E2E) without an extra click.
+    flowTitleDraft.value = ''
+    flowTitleEditing.value = true
     requestCanvasLayoutRefit()
     return
   }
