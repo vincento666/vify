@@ -86,3 +86,22 @@
 - [ ] Docs：baseline.md 追加 "chatflow-conversation-run L27/L28/L45 → GREEN @ slice 212.7"
 - [ ] Git commit：`fix(chatflow): restore Ant-migration selector contract for conversation-run UAT`
 - [ ] 范围保护：若修复过程暴露第 4+ 个隐藏 fail（不在 L27/L28/L45 列表内）→ STOP 升级到新 slice 212.8，不在本 slice 内扩范围
+
+## Slice 212.8 — Fix chatflow-conversation-run assistant bubble empty content (sys variable rendering)
+
+> 起源：slice 212.7 修复 L27/L28/L45 selector 契约后，`frontend/e2e/chatflow-conversation-run.mjs:36` 暴露 `chatflow-assistant-message` 元素 innerText 为空。脚本期望发送 `查订单` 后 assistant bubble 应渲染包含 sys variable（`{{sys.query}}`、`{{sys.channel}}`、`{{global.brand}}`、`{{global.locale}}`）插值后的文本，但 innerText 为空。属 chatflow trial run 的 runtime/SSE 渲染层问题，与 selector 契约无关。
+
+- [ ] RED：重放 `rtk env HIFY_E2E_BASE_URL=http://localhost:5173 /opt/homebrew/bin/node frontend/e2e/chatflow-conversation-run.mjs`，固化 L36 失败日志（含 assertion 行号、错误信息、actual innerText）；证据 `artifacts/212.8/red.txt`
+- [ ] 定位：判断断点在前端还是后端
+  - 前端：assistant bubble 组件接收 SSE token 但未渲染（v-html / v-text 绑定问题、typewriter 状态机问题）
+  - 后端：chatflow trial run 没有 publish token / final answer 到 SSE stream
+  - 网络：SSE channel 未 connect / 返回 500
+- [ ] Unit/Integration/Frontend Unit：根因层写红测，先红后绿；证据 `artifacts/212.8/{unit-red,unit-green}.txt`
+- [ ] frontend rem：若涉视觉尺寸调整，跑 remScaleClosure 全绿；证据 `artifacts/212.8/rem.txt`
+- [ ] Frontend unit 全套：不回归（421+ ≥ slice 前总数）；证据 `artifacts/212.8/frontend-unit.txt`
+- [ ] Backend gates：若改后端，跑 unit/integration/contract 全套不回归；证据 `artifacts/212.8/{unit,integration,contract}.txt`
+- [ ] E2E：`rtk env HIFY_E2E_BASE_URL=http://localhost:5173 /opt/homebrew/bin/node frontend/e2e/chatflow-conversation-run.mjs` 整脚本 PASS；证据 `artifacts/212.8/e2e.txt`
+- [ ] Browser UAT：留 assistant bubble 含 sys variable 插值文本的截图；证据 `artifacts/212.8/uat.md` + `screenshots/`
+- [ ] Docs：baseline.md 追加 "chatflow-conversation-run L36 assistant bubble → GREEN @ slice 212.8"
+- [ ] Git commit：`fix(chatflow): render sys variables in conversation-run assistant bubble`
+- [ ] 范围保护：若 L36 修复后脚本暴露 L37+ 新失败 → STOP 升级到新 slice 212.9，不扩范围
