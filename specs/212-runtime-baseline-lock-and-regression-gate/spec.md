@@ -40,6 +40,17 @@
 | 212.2 | 修 `chatflow-conversation-run` 入口 Chatflow 名称占位符消失（L16 断言失败） | RED 截图 / Frontend Unit / Browser UAT / Docs |
 | 212.3 | 在 `docs/testing/acceptance-gates.md` 增补 Chrome-MCP harness 调用约定与基线判定口径 | Docs review / 引用一致性检查 |
 | 212.4 | 起 pgvector 后跑 pgvector-dependent UAT 子集并归档证据 | Browser UAT / Docs |
+
+> 212.4 实际执行历史与最终关闭状态：
+> - 用户指示向量后端改用 Weaviate（生产架构决策），slice 212.4 改为跑 7 个 vector-store-dependent UAT，3 个 Chrome-MCP 脚本归 ENV-BLOCKED-CHROME-MCP（已被 spec 212.3 文档化）。
+> - 7 个 plain-node 脚本结果：1 PASS（agent-workbench-runtime-mode）/ 2 UI selector 漂移（capabilities, retrieval-settings）/ 4 Weaviate POST 500（4 个 knowledge-related）。
+> - 212.4 Cycle 2 诊断证据（`artifacts/212.4/diagnosis-weaviate-500.md`）定位 4 个 ENV-BLOCKED-WEAVIATE 的根因：Weaviate `HifyDocumentChunk` / `HifyKnowledgeFaq` HNSW 索引被历史 smoke fixtures 锁在 dim=3，runtime backend embed dim=1536。
+> - 把根因衍生工作分流到下游 slice：
+>   - **slice 212.10** ✅ 解 dim 锁（删两个 polluted classes，让 backend `_ensure_class` 以 dim=1536 重建），4 个 knowledge UAT 不再 ENV-BLOCKED-WEAVIATE。
+>   - **slice 212.11** ✅ 修两个 UI selector 漂移。
+>   - 212.10 后剩余的 4 个业务层 LOGIC-RED（`customer-service-full-scenario` publish chatflow 400、`knowledge-faq-retrieval` / `workflow-six-node-matrix` "Workflow v2 requires an active published version"、`workflow-knowledge-condition-run` `workflow-run-output` testid timeout）已正式归 **spec 213 / spec 216 范围**（见 commit `7138ae6b`），按 §15 推进顺序约束不在 spec 212 内修。
+> - **slice 212.4 闭环判定**：CLOSED — Definition of Done 为 "完成 vector store UAT 子集运行 + 完整归档证据 + 把后续根因分流到正确 slice"，三项均已满足。下游 slice 212.10 / 212.11 均 GREEN，业务层 4 项归 spec 213/216 范围已 commit 锁定。
+
 | 212.5 | 重跑全套基线门禁（unit/integration/contract/frontend/UAT/rem）→ ALL GREEN，作为后续 spec 213+ 入口门禁 | All gates / 证据归档 |
 | 212.6 | 修 `customer-assistant-chatflow-runtime-gateway-uat:148` 第二轮响应 `chatflowSession: null`（baseline 时被 L124 timeout 屏蔽，slice 212.1 修复后才暴露） | RED / Unit/Integration/Contract / E2E / Browser UAT / Docs |
 | 212.7 | 修 `chatflow-conversation-run.mjs` 在 Ant Design composer 迁移（commit `29aca2d4`）后丢失的 3 处 selector 契约：L27 testid `chatflow-run-fields-toggle`、L28 placeholder `发送消息`、L45 button name `重置会话`（slice 212.2 修复 L16 后暴露） | RED / Frontend Unit / rem / E2E / Browser UAT / Docs |
