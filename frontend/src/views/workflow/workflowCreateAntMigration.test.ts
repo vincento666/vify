@@ -148,6 +148,27 @@ describe('workflow create Ant migration', () => {
     expect(dataTestidLine?.[0]).toMatch(/!\s*message\.loading|message\.loading\s*\?\s*undefined/)
   })
 
+  it('keeps chatflow-profile-grid run-input-field controls queryable by the e2e height selector', () => {
+    // The e2e contract (frontend/e2e/chatflow-conversation-run.mjs:52-61) reads
+    // `.chatflow-profile-grid .run-input-field` and inside each field looks up
+    // `.el-input__wrapper, .el-select__wrapper` to measure rendered height. After
+    // the Ant migration the legacy Element Plus wrapper classes disappeared, so
+    // the selector matched nothing and produced `0,0,0,0`. The chatflow profile
+    // grid must keep a compat class on each control so the existing e2e selector
+    // still locates the rendered Ant input/select root.
+    const content = readSource('src/views/workflow/WorkflowCreate.vue')
+    const gridStart = content.indexOf('chatflow-profile-grid">')
+    expect(gridStart).toBeGreaterThan(-1)
+    const gridEnd = content.indexOf('</div>\n          </div>', gridStart)
+    expect(gridEnd).toBeGreaterThan(gridStart)
+    const gridBlock = content.slice(gridStart, gridEnd)
+
+    const inputCompatMatches = gridBlock.match(/<a-input[^>]*class="el-input__wrapper"/g) ?? []
+    const selectCompatMatches = gridBlock.match(/<a-select[^>]*class="el-select__wrapper"/g) ?? []
+    expect(inputCompatMatches.length).toBe(3)
+    expect(selectCompatMatches.length).toBe(1)
+  })
+
   it('exposes a runtime v2 cancel control in the debug dock', () => {
     const content = readSource('src/views/workflow/WorkflowCreate.vue')
     const dockStart = content.indexOf('data-testid="workflow-debug-dock"')

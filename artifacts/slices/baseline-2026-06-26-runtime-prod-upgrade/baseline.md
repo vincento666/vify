@@ -100,4 +100,11 @@ Slice 212.8 (`frontend/e2e/chatflow-conversation-run.mjs` L36) FIXED. The bubble
 - L36 assistant bubble → GREEN @ slice 212.8, SHA <pending-commit> on `codex/runtime-v2-production-upgrade`
 - frontend unit: 422 passed (+1 vs 421 post-212.7); rem closure: 1 passed.
 
+## Slice 212.9 addendum — chatflow profile-grid run-input-field height restored
+
+Slice 212.9 (`frontend/e2e/chatflow-conversation-run.mjs` L58) FIXED. After the Ant Design migration replaced the legacy Element Plus inputs in the chatflow run settings popover, the four `.run-input-field` rows inside `.chatflow-profile-grid` render `<input class="ant-input">` and `<div class="ant-select">` instead of `.el-input__wrapper` / `.el-select__wrapper`. The e2e at L52–56 still queries `.el-input__wrapper, .el-select__wrapper` to measure bounding-box height; the selector matched zero elements, so the fallback `0` was returned for every field and the assertion read `0,0,0,0`. The DOM probe confirmed the fields themselves render correctly (60.26px per row, 39.875px per control) — only the legacy wrapper class was missing. Fix: add a compat `class="el-input__wrapper"` to the three `<a-input>` controls (conversation_id, user_id, channel_id) and `class="el-select__wrapper"` to the `<a-select>` (channel) inside `.chatflow-profile-grid` in `WorkflowCreate.vue`. Vue 3 attribute fallthrough merges the class onto the rendered root, so the e2e selector now resolves and reads 40px per control. The compat strings do not import Element Plus and do not match the migration isolation regexes (`element-plus`, `<el-`, `\bEl[A-Z]`, `\.el-|--el-`). A new red-then-green source-pin test in `workflowCreateAntMigration.test.ts` locks the four compat classes inside the chatflow profile grid. Evidence: `artifacts/slices/212-runtime-baseline-lock-and-regression-gate/212.9/`. No L59+ regression was exposed; the full e2e script PASSes.
+
+- chatflow-conversation-run L58 run-input-field height → GREEN @ slice 212.9, SHA <pending-commit> on `codex/runtime-v2-production-upgrade`
+- frontend unit: 423 passed (+1 vs 422 post-212.8); rem closure: 1 passed.
+
 

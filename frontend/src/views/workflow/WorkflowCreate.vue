@@ -3248,15 +3248,15 @@
             <div class="chatflow-profile-grid">
               <div class="run-input-field compact">
                 <label>会话 ID（sys.conversation_id）</label>
-                <a-input v-model:value="testProfile.conversationId" placeholder="conversation_id" />
+                <a-input class="el-input__wrapper" v-model:value="testProfile.conversationId" placeholder="conversation_id" />
               </div>
               <div class="run-input-field compact">
                 <label>用户 ID（sys.user_id）</label>
-                <a-input v-model:value="testProfile.userId" placeholder="user_id" />
+                <a-input class="el-input__wrapper" v-model:value="testProfile.userId" placeholder="user_id" />
               </div>
               <div class="run-input-field compact">
                 <label>渠道（sys.channel）</label>
-                <a-select :virtual="false" v-model:value="testProfile.channel" placeholder="channel">
+                <a-select class="el-select__wrapper" :virtual="false" v-model:value="testProfile.channel" placeholder="channel">
                   <a-select-option value="web" >web</a-select-option>
                   <a-select-option value="api" >api</a-select-option>
                   <a-select-option value="feishu" >feishu</a-select-option>
@@ -3265,7 +3265,7 @@
               </div>
               <div class="run-input-field compact">
                 <label>渠道 ID（sys.channel_id）</label>
-                <a-input v-model:value="testProfile.channelId" placeholder="channel_id" />
+                <a-input class="el-input__wrapper" v-model:value="testProfile.channelId" placeholder="channel_id" />
               </div>
             </div>
           </div>
