@@ -264,6 +264,8 @@ class CustomerAssistantWorkerRuntime:
             worker_async_refs=refs,
             operator_recommendation=f"required worker evidence is pending for {task.task_key}",
             customer_reply_draft="我正在继续处理，请稍等。",
+            evidence=_carryover_pending_evidence(task),
+            checkpoint=_carryover_pending_checkpoint(task),
             events=[
                 {
                     "type": "worker_run_pending",
@@ -412,6 +414,41 @@ class CustomerAssistantWorkerRuntime:
             events=events,
             error={"code": "WORKER_TIMEOUT", "message": "worker timed out"},
         )
+
+
+_CARRYOVER_EVIDENCE_KEYS: tuple[str, ...] = (
+    "chatflowSession",
+    "runtimeRefs",
+    "chatflowRuntimeRefs",
+    "runtimeVersion",
+    "sopId",
+)
+
+
+def _carryover_pending_evidence(task: TaskItem) -> dict[str, Any]:
+    """When a chatflow worker is still pending we lose synchronous evidence.
+    Preserve the prior turn's chatflow session projection so the gateway envelope
+    keeps exposing chatflowSession (statusRef/eventsRef/etc.) across follow-up turns."""
+
+    prior_result = task.last_result if isinstance(task.last_result, dict) else {}
+    prior_evidence = prior_result.get("evidence") if isinstance(prior_result.get("evidence"), dict) else {}
+    carry: dict[str, Any] = {}
+    for key in _CARRYOVER_EVIDENCE_KEYS:
+        value = prior_evidence.get(key)
+        if isinstance(value, dict):
+            carry[key] = dict(value)
+        elif value is not None:
+            carry[key] = value
+    return carry
+
+
+def _carryover_pending_checkpoint(task: TaskItem) -> dict[str, Any]:
+    """Preserve the existing task checkpoint so the SOP runtime can still resume from
+    the prior step on the next turn instead of restarting from scratch."""
+
+    if isinstance(task.checkpoint, dict) and task.checkpoint:
+        return dict(task.checkpoint)
+    return {}
 
 
 def worker_async_refs(worker_run_id: int) -> dict[str, Any]:

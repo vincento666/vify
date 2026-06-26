@@ -321,6 +321,48 @@ class CustomerAssistantWorkersTest(unittest.TestCase):
             self.assertEqual(len(seen_worker_sessions), 1)
             self.assertNotEqual(seen_worker_sessions[0], id(session))
 
+    def test_pending_chatflow_sop_propagates_prior_session_evidence_on_followup_turn(self) -> None:
+        with _session() as session:
+            factory = sessionmaker(bind=session.get_bind(), autoflush=False, autocommit=False, expire_on_commit=False)
+            chatflow_worker = _FastThenSlowChatflowSopWorker(slow_seconds=0.5)
+            workers = {"chatflow_sop": chatflow_worker}
+            service = CustomerAssistantService(
+                CustomerAssistantRepository(session),
+                scheduler=LocalWorkerScheduler(workers),
+                async_worker_runtime=CustomerAssistantWorkerRuntime(
+                    workers=workers,
+                    session_factory=factory,
+                    async_worker_types={"chatflow_sop"},
+                    wait_deadline_seconds=0.05,
+                    task_timeout_seconds=5.0,
+                ),
+            )
+            assistant_session = service.create_session({})
+            session_id = int(assistant_session["id"])
+
+            first = service.handle_message(
+                session_id=session_id,
+                message="我要退票",
+                idempotency_key="chatflow-pending-first",
+            )
+            second = service.handle_message(
+                session_id=session_id,
+                message="订单号 TK-100",
+                idempotency_key="chatflow-pending-second",
+            )
+
+        self.assertIsNotNone(first["chatflowSession"], f"first turn must expose chatflowSession: {first}")
+        self.assertEqual(first["chatflowSession"]["gatewayMode"], "messages:stream")
+        self.assertEqual(first["chatflowSession"]["runId"], 555)
+        self.assertEqual(second["taskSummaries"][0]["status"], "RUNNING")
+        self.assertIsNotNone(
+            second["chatflowSession"],
+            f"second turn pending result must propagate chatflowSession: {second}",
+        )
+        self.assertEqual(second["chatflowSession"]["gatewayMode"], "messages:stream")
+        self.assertEqual(second["chatflowSession"]["runId"], 555)
+        self.assertEqual(second["chatflowSession"]["sessionId"], first["chatflowSession"]["sessionId"])
+
     def test_async_worker_waiting_prompt_becomes_customer_draft(self) -> None:
         with _session() as session:
             factory = sessionmaker(bind=session.get_bind(), autoflush=False, autocommit=False, expire_on_commit=False)
@@ -420,6 +462,64 @@ class _SlowWorker:
             worker_type=task.worker_type,
             status=TaskStatus.COMPLETED,
             customer_reply_draft="经济舱通常可免费携带一件手提行李，托运行李额以客票规则和航司政策为准。",
+        )
+
+
+class _FastThenSlowChatflowSopWorker:
+    """First call returns a WAITING chatflow_sop result with full chatflowSession evidence;
+    subsequent calls sleep long enough to trigger _pending_result on the worker runtime."""
+
+    def __init__(self, slow_seconds: float = 0.5) -> None:
+        self._slow_seconds = slow_seconds
+        self._calls = 0
+        self._lock = threading.Lock()
+
+    def run(self, task: TaskItem, message: str) -> WorkerResult:
+        with self._lock:
+            self._calls += 1
+            call_index = self._calls
+        if call_index > 1:
+            time.sleep(self._slow_seconds)
+        session_id_str = f"customer-assistant-{task.session_id}-{task.id or 'new'}-{task.worker_ref}"
+        chatflow_session = {
+            "gatewayMode": "messages:stream",
+            "sessionId": session_id_str,
+            "conversationId": session_id_str,
+            "assistantSessionId": task.session_id,
+            "currentSopId": task.worker_ref,
+            "taskId": task.id,
+            "taskKey": task.task_key,
+            "status": "WAITING",
+            "runId": 555,
+            "runtimeVersion": 2,
+            "statusRef": "/api/v1/runtime-runs/555",
+            "eventsRef": "/api/v1/runtime-runs/555/events",
+            "eventStreamRef": "/api/v1/runtime-runs/555/events/stream?afterSequence=0",
+            "resultRef": "/api/v1/runtime-runs/555/result",
+            "nodesRef": "/api/v1/runtime-runs/555/nodes",
+        }
+        return WorkerResult(
+            task_id=int(task.id or 0),
+            worker_type="chatflow_sop",
+            status=TaskStatus.WAITING,
+            operator_recommendation=f"{task.task_key} worker WAITING at order_no",
+            customer_reply_draft="请提供订单号",
+            evidence={
+                "sopId": task.worker_ref,
+                "currentStep": "order_no",
+                "runtimeVersion": 2,
+                "chatflowSession": chatflow_session,
+            },
+            checkpoint={
+                "currentStep": "order_no",
+                "scopedVariables": {
+                    "__chatflow": {
+                        "sessionId": session_id_str,
+                        "runId": 555,
+                        "runtimeVersion": 2,
+                    }
+                },
+            },
         )
 
 
