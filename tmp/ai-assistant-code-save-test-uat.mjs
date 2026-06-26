@@ -1,0 +1,1 @@
+AI Assistant Harness 写入校验
