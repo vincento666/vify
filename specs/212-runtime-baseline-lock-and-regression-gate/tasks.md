@@ -119,3 +119,39 @@
 - [ ] Docs：baseline.md 追加 "chatflow-conversation-run L58 run-input-field height → GREEN @ slice 212.9"
 - [ ] Git commit：`fix(chatflow): restore run-input-field height in conversation-run profile grid`
 - [ ] 范围保护：若 L58 修复后脚本暴露 L59+ 新失败 → STOP 升级到新 slice 212.10，不扩范围
+
+## Slice 212.10 — Reset Weaviate HifyDocumentChunk / HifyKnowledgeFaq dim lock
+
+> 起源：slice 212.4 启用 `HIFY_VECTOR_STORE=weaviate` 后，4 个 knowledge UAT (customer-service-full-scenario / knowledge-faq-retrieval / workflow-knowledge-condition-run / workflow-six-node-matrix) 全部因 Weaviate `POST /v1/objects` 返回 500 而 ENV-BLOCKED-WEAVIATE。
+> 诊断结果（212.4/diagnosis-weaviate-500.md）：Weaviate `HifyDocumentChunk` 和 `HifyKnowledgeFaq` 两个 HNSW 索引被历史 smoke fixtures (`codex-adapter-write-smoke`、`audit-weaviate-smoke`、`live-test-model`、`codex-live-smoke`) 锁定在 dim=3，runtime embed dim=1536，dim 不匹配导致 500。Schema vectorizer 配置正确（`"none"`，外部 vector），property 类型正确，多租户禁用。
+> 修复：删除 2 个 polluted classes，让 backend `WeaviateVectorStore._ensure_class` 在首次 runtime insert 时以 dim=1536 重建索引。不需要改代码。
+
+- [ ] RED：复用 `artifacts/212.4/diagnosis-weaviate-500.md` 作为 RED 证据（已有完整 trace）；并用 `rtk curl http://127.0.0.1:8080/v1/objects?class=HifyDocumentChunk&limit=5` 抓现状 dim-3 数据，记录到 `artifacts/212.10/red.txt`
+- [ ] Env op：在确认 uvicorn 已停（无 inflight 写）后，执行 `rtk curl -X DELETE http://127.0.0.1:8080/v1/schema/HifyDocumentChunk` 和 `rtk curl -X DELETE http://127.0.0.1:8080/v1/schema/HifyKnowledgeFaq`，记录返回到 `artifacts/212.10/schema-delete.log`
+- [ ] 重启 uvicorn（`HIFY_VECTOR_STORE=weaviate` + `HIFY_WEAVIATE_URL=http://127.0.0.1:8080`，`run_in_background: true`），等 /readyz UP
+- [ ] Browser UAT：重跑 4 个 knowledge UAT（customer-service-full-scenario, knowledge-faq-retrieval, workflow-knowledge-condition-run, workflow-six-node-matrix），证据 `artifacts/212.10/uat-runs/`
+- [ ] Verify：跑后 `rtk curl http://127.0.0.1:8080/v1/schema/HifyDocumentChunk` 显示 vectorIndexConfig 已锁在新 dim（1536 或 backend 实际 embed dim），记录到 `artifacts/212.10/verify.txt`
+- [ ] Docs：baseline.md 追加 "Weaviate dim lock reset → GREEN @ slice 212.10"
+- [ ] Backend gates 不回归（schema 变化可能影响测试）：`rtk uv run pytest tests/integration -q` 全绿；证据 `artifacts/212.10/integration.txt`
+- [ ] Git commit：仅 docs（spec.md / tasks.md 已 amend），无源码改动
+  - 如所有 UAT 都 PASS → `chore(ops): reset weaviate dim-3 lock for knowledge classes`（提交 spec/tasks）
+  - 如剩余 UAT LOGIC-RED → 关闭 212.10 + 立 212.12
+- [ ] 范围保护：若 dim reset 后 4 个 UAT 仍有 LOGIC-RED → STOP 升级新 slice，不在本 slice 内修业务
+
+## Slice 212.11 — Fix agent-workbench UI selector drifts (MCP dropdown + Top-K panel)
+
+> 起源：slice 212.4 启用 Weaviate 后端后，两个 agent-workbench e2e 暴露 UI selector 漂移：
+> - `agent-workbench-capabilities.mjs`: `locator.waitFor` 等 `.el-select-dropdown__item` 含 `'Workbench MCP 1782479941201'` 超时（MCP dropdown 渲染或选项格式变化）
+> - `agent-workbench-retrieval-settings.mjs`: `getByTestId('agent-retrieval-settings').getByText('Top K')` 5s 超时（设置面板渲染或文案变化）
+> 两者与 vector store 无关，属预先存在的 UI 漂移，被 212.4 启用 Weaviate 后才有机会跑到。
+
+- [ ] RED：重跑两个脚本，固化失败截图与日志；证据 `artifacts/212.11/red.txt` + `artifacts/212.11/screenshots/red-*.png`
+- [ ] 定位：grep 'Workbench MCP'、'agent-retrieval-settings'、'Top K' 在 frontend/src/，确认 selector 漂移点
+- [ ] Frontend Unit：根因层加红测，先红后绿；证据 `artifacts/212.11/{unit-red,unit-green}.txt`
+- [ ] frontend rem：必跑（如涉视觉尺寸）；证据 `artifacts/212.11/rem.txt`
+- [ ] Frontend unit 全套不回归；证据 `artifacts/212.11/frontend-unit.txt`
+- [ ] E2E：两个脚本均 PASS；证据 `artifacts/212.11/{capabilities,retrieval-settings}.e2e.txt`
+- [ ] Browser UAT：留 selector 命中 + 文案可见的截图；证据 `artifacts/212.11/uat.md` + `screenshots/`
+- [ ] Docs：baseline.md 追加 "agent-workbench MCP/Top-K → GREEN @ slice 212.11"
+- [ ] Git commit：`fix(agent-workbench): restore MCP dropdown and Top-K panel selectors`
+- [ ] 范围保护：仅修这两处 selector，不扩范围；暴露其它失败 → STOP 升级
