@@ -85,6 +85,44 @@ describe('workflow create Ant migration', () => {
     expect(createBranch).toContain('flowTitleEditing.value = true')
   })
 
+  it('exposes data-testid="chatflow-run-fields-toggle" on the run fields settings toggle', () => {
+    const content = readSource('src/views/workflow/WorkflowCreate.vue')
+    const panelStart = content.indexOf('data-testid="test-run-panel"')
+    expect(panelStart).toBeGreaterThan(-1)
+    // Search within the chatflow run header actions for the settings toggle button.
+    const headerStart = content.indexOf('chatflow-run-header-actions', panelStart)
+    expect(headerStart).toBeGreaterThan(-1)
+    const headerEnd = content.indexOf('chatflow-run-settings-popover', headerStart)
+    expect(headerEnd).toBeGreaterThan(-1)
+    const headerBlock = content.slice(headerStart, headerEnd)
+
+    expect(headerBlock).toContain('data-testid="chatflow-run-fields-toggle"')
+    expect(headerBlock).toContain('aria-label="对话设置"')
+  })
+
+  it('exposes placeholder="发送消息" on the composer textarea', () => {
+    const content = readSource('src/views/workflow/WorkflowCreate.vue')
+    const composerStart = content.indexOf('data-testid="chatflow-composer-shell"')
+    expect(composerStart).toBeGreaterThan(-1)
+    const composerEnd = content.indexOf('chatflow-composer-actions', composerStart)
+    expect(composerEnd).toBeGreaterThan(-1)
+    const composerBlock = content.slice(composerStart, composerEnd)
+
+    expect(composerBlock).toContain('placeholder="发送消息"')
+  })
+
+  it('exposes a button accessible by role/name "重置会话" for resetting conversation', () => {
+    const content = readSource('src/views/workflow/WorkflowCreate.vue')
+    const headerStart = content.indexOf('chatflow-run-header-actions')
+    expect(headerStart).toBeGreaterThan(-1)
+    const headerEnd = content.indexOf('chatflow-run-settings-popover', headerStart)
+    expect(headerEnd).toBeGreaterThan(-1)
+    const headerBlock = content.slice(headerStart, headerEnd)
+
+    // The reset session button must be accessible by the name "重置会话" for the e2e contract.
+    expect(headerBlock).toMatch(/aria-label="重置会话"[\s\S]*?resetChatflowTrialSession/)
+  })
+
   it('exposes a runtime v2 cancel control in the debug dock', () => {
     const content = readSource('src/views/workflow/WorkflowCreate.vue')
     const dockStart = content.indexOf('data-testid="workflow-debug-dock"')

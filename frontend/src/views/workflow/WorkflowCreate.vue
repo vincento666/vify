@@ -3218,6 +3218,7 @@
               type="button"
               class="chatflow-run-header-button"
               :class="{ active: chatflowRunSettingsOpen }"
+              data-testid="chatflow-run-fields-toggle"
               aria-label="对话设置"
               :aria-expanded="chatflowRunSettingsOpen"
               @click="chatflowRunSettingsOpen = !chatflowRunSettingsOpen"
@@ -3228,7 +3229,7 @@
             <button
               type="button"
               class="chatflow-run-header-icon"
-              aria-label="清空对话"
+              aria-label="重置会话"
               :disabled="running"
               @click="resetChatflowTrialSession"
             >
@@ -3383,7 +3384,7 @@
                     class="chatflow-composer-input"
                     data-testid="chatflow-run-message-input"
                     :auto-size="{ minRows: 2, maxRows: 6 }"
-                    placeholder="输入问题，可通过 shift + enter 换行"
+                    placeholder="发送消息"
                     :disabled="running"
                     @keydown.enter.exact.prevent="sendChatflowMessage"
                   />
