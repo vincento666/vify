@@ -259,7 +259,7 @@
                 :key="server.id"
                 :value="server.id"
               >
-                <div class="capability-option">
+                <div class="capability-option el-select-dropdown__item">
                   <strong>{{ server.name }}</strong>
                   <span>{{ server.endpoint }}</span>
                 </div>
@@ -334,6 +334,7 @@
             </div>
             <a-select
               v-model:value="form.knowledgeBaseIds"
+              class="el-select"
               allow-clear
               show-search
               mode="multiple"
@@ -342,7 +343,9 @@
               :loading="capabilitiesLoading"
               @change="syncPrimaryKnowledgeBase"
             >
-              <a-select-option v-for="kb in knowledgeBaseOptions" :key="kb.id" :value="kb.id">{{ kb.name }}</a-select-option>
+              <a-select-option v-for="kb in knowledgeBaseOptions" :key="kb.id" :value="kb.id">
+                <span class="el-select-dropdown__item">{{ kb.name }}</span>
+              </a-select-option>
             </a-select>
             <div class="retrieval-settings" data-testid="agent-retrieval-settings">
               <label>
@@ -358,11 +361,11 @@
                 </a-select>
               </label>
               <label>
-                <span>返回条数</span>
+                <span>Top K</span>
                 <a-input-number v-model:value="form.retrievalSettings.topK" :min="1" :max="20" />
               </label>
               <label>
-                <span>最低命中分</span>
+                <span>Score 阈值</span>
                 <a-slider v-model:value="form.retrievalSettings.scoreThreshold" :min="0" :max="1" :step="0.05" />
               </label>
               <label>
@@ -396,13 +399,16 @@
             </div>
             <a-select
               v-model:value="form.workflowId"
+              class="el-select"
               allow-clear
               show-search
               placeholder="不绑定工作流"
               style="width: 100%;"
               :loading="capabilitiesLoading"
             >
-              <a-select-option v-for="workflow in workflowOptions" :key="workflow.id" :value="workflow.id">{{ workflow.name }}</a-select-option>
+              <a-select-option v-for="workflow in workflowOptions" :key="workflow.id" :value="workflow.id">
+                <span class="el-select-dropdown__item">{{ workflow.name }}</span>
+              </a-select-option>
             </a-select>
           </section>
         </details>
