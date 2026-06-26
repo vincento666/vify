@@ -218,6 +218,23 @@ describe('CustomerAssistantPanel IA convergence contract', () => {
     expect(content).not.toContain('height: calc(100vh - 8rem);')
   })
 
+  it('exposes a left-column operator task ledger that renders task rows by taskKey', () => {
+    const leftColumn = elementByTestId(content, 'customer-assistant-left-column')
+    const ledger = elementByTestId(content, 'operator-task-ledger')
+
+    expect(leftColumn).toContain('data-testid="operator-task-ledger"')
+    expect(ledger).toContain('class="task-row"')
+    expect(ledger).toContain('workspace.taskSummary.items')
+    expect(ledger).toContain('task.taskKey')
+
+    // Ledger must remain outside both rail-tab v-show panes so it stays visible
+    // regardless of the active left rail tab (E2E gate relies on default visibility).
+    const sessionPane = elementByTestId(content, 'customer-assistant-left-session-pane')
+    const storyPane = elementByTestId(content, 'customer-assistant-left-story-pane')
+    expect(sessionPane).not.toContain('data-testid="operator-task-ledger"')
+    expect(storyPane).not.toContain('data-testid="operator-task-ledger"')
+  })
+
   it('keeps internal task controls out of the customer lane', () => {
     const customerLane = elementByTestId(content, 'customer-conversation-lane')
 

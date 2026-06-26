@@ -175,6 +175,33 @@
           </div>
         </section>
         </div>
+        <section
+          class="operator-task-ledger"
+          data-testid="operator-task-ledger"
+          aria-label="任务台账（研究调试入口）"
+        >
+          <div class="panel-heading">
+            <span class="panel-heading-title">
+              <HistoryOutlined />
+              任务台账
+            </span>
+            <a-tag color="blue">{{ workspace.taskSummary.items.length }} 任务</a-tag>
+          </div>
+          <div class="task-ledger-list">
+            <div
+              v-for="task in workspace.taskSummary.items"
+              :key="`ledger-${task.id}`"
+              class="task-row"
+              :data-task-key="task.taskKey"
+            >
+              <strong>{{ task.taskKey }}</strong>
+              <span>{{ task.displayName }} · {{ task.status }}</span>
+            </div>
+            <div v-if="workspace.taskSummary.items.length === 0" class="empty-compact">
+              暂无任务
+            </div>
+          </div>
+        </section>
       </aside>
 
       <section class="customer-assistant-center-column" data-testid="customer-assistant-center-column" aria-label="业务会话">
@@ -1972,6 +1999,25 @@ function stringValue(value: unknown, fallback: string) {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+}
+
+.operator-task-ledger {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.65rem;
+  border: 0.0625rem solid #d9e6f7;
+  border-radius: 0.5rem;
+  background: #f7fbff;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.operator-task-ledger .task-ledger-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
 }
 
 .conversation-stack > .conversation-panel {
