@@ -23,6 +23,23 @@
 - [ ] Docs：在 `docs/testing/acceptance-gates.md` 增加 "default-async runtime contract" 一行
 - [ ] Git commit：`feat(chatflow,workflow): default debug runs to durable async runtime`
 
+## Slice 213.2.1 — Refresh chatflow-run-optimistic-loading mock URL
+
+> 起源：slice 213.2 把"默认 async durable"用 contract 锁定后，e2e `chatflow-run-optimistic-loading.mjs` 整脚本验证暴露其 mock 锁在 `/api/v1/chatflows/{id}/runs-legacy`，但 production frontend 已经从 `/runs-legacy` 切到默认 async `/runs`。`git stash` 在 HEAD `4201a220` 复跑确认该 fail 与 213.2 改动**无关**——production 路径迁移在更早时间已发生，e2e 的 mock URL 没跟上。
+>
+> 范围：仅修 mock URL 配置（`page.route("**/api/v1/chatflows/*/runs-legacy", ...)` → 命中默认 async `/runs`）。**不动 e2e 的断言语义** — `runRequestSeen` 断言保留，optimistic-loading bubble 检测保留。
+
+- [ ] RED：重跑 `chatflow-run-optimistic-loading.mjs`，固化失败日志和"mock URL 永不命中"证据；证据 `artifacts/213.2.1/red.txt`
+- [ ] 静态定位：grep 脚本中 `runs-legacy` 出现处，确认是 mock 配置而非业务断言
+- [ ] Fix：把 mock URL 从 `/runs-legacy` 改为默认 async `/runs`；不动其它 mock / 断言 / step
+- [ ] E2E：`rtk env HIFY_E2E_BASE_URL=http://localhost:5173 /opt/homebrew/bin/node frontend/e2e/chatflow-run-optimistic-loading.mjs` PASS；证据 `artifacts/213.2.1/e2e.txt`
+- [ ] Browser UAT：留 optimistic-loading bubble 在 in-flight async request 期间可见的截图；证据 `artifacts/213.2.1/uat.md` + `screenshots/`
+- [ ] frontend rem：不涉视觉尺寸（仅 mock 配置）→ 跳过 rem，记录 N/A
+- [ ] Backend gates 不回归（不该有任何后端变化，但 spot check）：`rtk uv run pytest tests/integration -q` 全绿
+- [ ] Docs：baseline.md 追加 "chatflow-run-optimistic-loading mock URL refresh → GREEN @ slice 213.2.1"
+- [ ] Git commit：`fix(e2e): refresh chatflow-run-optimistic-loading mock to default async /runs`
+- [ ] 范围保护：仅改 mock URL；若发现 e2e 还需要修业务断言才能跑通 → STOP 升级
+
 ## Slice 213.3 — SOP Router returns runtime refs and stops mirroring Chatflow state
 
 - [ ] RED：写 `tests/integration/runtime_lab/test_sop_router_async_refs.py` 与 `tests/unit/runtime_lab/test_sop_router_ledger_schema.py`，断言 ledger 仅保存 conversation/active-child/suspended/route history/resume offer/intent summary 字段，并断言 SOP Router 默认调用返回 runtime refs；当前应红；证据 `artifacts/213.3/red.txt`
