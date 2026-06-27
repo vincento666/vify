@@ -42,3 +42,27 @@ All runtime-v2 starts expose the same ref family:
 SOP and customer-assistant async refs mode uses `startAndStreamRef` with a
 Chatflow runtime job enqueue callback. Sync compatibility mode still uses
 `startAndWait`.
+
+## 213.1 amendment — RuntimeInvocationRefs DTO
+
+Spec 213 slice 213.1 formalised the six-ref contract behind a frozen dataclass
+`RuntimeInvocationRefs` in `app/modules/workflow/domain/runtime_invocation_gateway.py`.
+
+Fields (camelCase to match envelope keys and frontend payload):
+
+| Field | Source path | Type |
+|-------|-------------|------|
+| runId | runtime-run id | int |
+| statusRef | GET /api/v1/runtime-runs/{runId} | str |
+| eventsRef | GET /api/v1/runtime-runs/{runId}/events | str |
+| eventStreamRef | SSE /api/v1/runtime-runs/{runId}/events/stream | str |
+| nodesRef | GET /api/v1/runtime-runs/{runId}/nodes | str |
+| resultRef | GET /api/v1/runtime-runs/{runId}/result | str |
+
+Helpers:
+- `RuntimeInvocationRefs.from_envelope(envelope_dict)`: parse from gateway dict
+- `RuntimeInvocationRefs.to_dict()`: round-trip to dict matching envelope keys
+
+Contract test: `tests/contract/runtime_gateway/test_six_ref_dto.py` locks this DTO shape;
+subsequent slices (213.2 / 213.3 / 213.4) MUST import this DTO rather than re-defining
+local ref shapes.

@@ -1,7 +1,47 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any, Protocol
+
+
+@dataclass(frozen=True)
+class RuntimeInvocationRefs:
+    """Six canonical refs returned by every runtime invocation.
+
+    Spec 213.1 contract: every gateway call must surface these six fields so
+    callers (chatflow, workflow, SOP router, customer-assistant worker) can
+    treat refs uniformly without dialect drift.
+    """
+
+    runId: int
+    statusRef: str
+    eventsRef: str
+    eventStreamRef: str
+    nodesRef: str
+    resultRef: str
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "runId": self.runId,
+            "statusRef": self.statusRef,
+            "eventsRef": self.eventsRef,
+            "eventStreamRef": self.eventStreamRef,
+            "nodesRef": self.nodesRef,
+            "resultRef": self.resultRef,
+        }
+
+    @classmethod
+    def from_envelope(cls, envelope: dict[str, object]) -> "RuntimeInvocationRefs":
+        """Parse from the gateway's envelope dict (lossless if six keys present)."""
+        return cls(
+            runId=int(envelope["runId"]),  # type: ignore[arg-type]
+            statusRef=str(envelope["statusRef"]),
+            eventsRef=str(envelope["eventsRef"]),
+            eventStreamRef=str(envelope["eventStreamRef"]),
+            nodesRef=str(envelope["nodesRef"]),
+            resultRef=str(envelope["resultRef"]),
+        )
 
 
 class RuntimeV2InvocationService(Protocol):
