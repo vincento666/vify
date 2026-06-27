@@ -95,6 +95,7 @@ class RuntimeInvocationGateway:
             started,
             result=None,
             events={"list": [], "total": 0},
+            mode="async-durable",
         )
 
     def start_and_wait(
@@ -118,6 +119,7 @@ class RuntimeInvocationGateway:
             started,
             result=self._service.get_result(run_id),
             events=self._service.list_events(run_id),
+            mode="sync",
         )
 
     def start_and_stream_ref(
@@ -153,6 +155,7 @@ class RuntimeInvocationGateway:
             {"runId": run_id, **_refs_from(result)},
             result=result,
             events=self._service.list_events(run_id),
+            mode="sync",
         )
 
     # Compatibility aliases for callers that mirror external API naming.
@@ -167,6 +170,7 @@ def _unified_invocation(
     *,
     result: dict[str, Any] | None,
     events: dict[str, Any],
+    mode: str = "async-durable",
 ) -> dict[str, Any]:
     refs = _refs_from(data)
     run_id = int(data["runId"])
@@ -176,6 +180,7 @@ def _unified_invocation(
     unified["runId"] = run_id
     unified["status"] = status
     unified["runtimeVersion"] = 2
+    unified["runtimeMode"] = mode
     unified["runtimeRefs"] = {"runId": run_id, **refs}
     unified["result"] = result
     unified["events"] = events

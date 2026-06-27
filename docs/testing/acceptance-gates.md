@@ -202,6 +202,20 @@ UAT 报告 / addendum 必须使用以下大写关键字之一，便于 grep / or
 - Default CI evidence:
   `artifacts/slices/072-customer-assistant-live-react-acceptance/acceptance-skip.txt`
 
+## Default-async runtime contract (spec 213.2)
+
+Chatflow / Workflow debug run endpoints must:
+
+- Return the six-ref envelope (`runId`, `statusRef`, `eventsRef`,
+  `eventStreamRef`, `nodesRef`, `resultRef`) within the initial response,
+  not block on completion.
+- Tag the envelope with `runtimeMode = "async-durable"` (default) or
+  `"sync"` (explicit fallback via `start_and_wait` or `/runs-legacy`).
+- Be uniformly accessible via `RuntimeInvocationRefs.from_envelope(...)`.
+
+Any new slice touching Chatflow / Workflow run paths must re-verify this
+contract via `tests/integration/runtime/test_debug_runs_default_async.py`.
+
 ## Slice Done 定义
 
 一个 slice 只有在以下条件都满足时才算完成：
