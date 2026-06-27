@@ -98,6 +98,7 @@
   - `knowledge-faq-retrieval`: "Workflow v2 requires an active published version" → spec 213 范围（async runtime 默认化 + 发布版本契约）
   - `workflow-knowledge-condition-run`: `data-testid="workflow-run-output"` 20s timeout → spec 213 范围
   - `workflow-six-node-matrix`: "Workflow v2 requires an active published version" → spec 213 范围
+  - `customer-assistant-chatflow-runtime-gateway-uat`: chatflow_sop bridge 与 chatflow runtime v2 异步进度之间**非确定性 race**（212.5 诊断发现，见 `artifacts/.../212.5/regression-diagnosis/diagnosis.md`）。两种失败模式：Mode A（第二轮 chatflowSession degenerate `runtimeVersion=1 / runId=null / status=FAILED`）、Mode B（confirm 轮 `replyType=DRAFT` 且 worker `WAITING at collect`）。Slice 212.6 修了 carryover empty 问题但未盖到 bridge synchronisation 盲区；212.6 当时 PASS 是 timing 偶然，spec 212 不再视该脚本为 baseline-claimable，归 **spec 213** 范围（async runtime 默认化 §5 "SOP 路由调用 Chatflow 默认返回 runtime refs"、"客服助手 worker 调用 Chatflow/SOP 默认返回 async refs"——bridge 同步契约属其核心目标）。
   - `agent-workbench-capabilities` / `agent-workbench-retrieval-settings`: UI selector 漂移 → spec 212.11 内吃
 
 ### Baseline-residual slices（212.0~212.5）

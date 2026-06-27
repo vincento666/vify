@@ -43,6 +43,7 @@
 | 213.4 | 客服助手 worker 调用 Chatflow / SOP 默认返回 async refs；旧同步路径仅在测试 `--sync` 标记开启 | RED / Unit / Integration / E2E |
 | 213.5 | 断线 recovery：所有 refs 在 runId 已知的情况下可重建 (status / events from N / nodes / result) | RED / Integration / Contract / Docs |
 | 213.6 | 回归：Chatflow 多轮、信息收集、转人工；SOP 路由、客服 worker；行为不退化 | UAT 全套 + spec 212 入口门禁重跑 |
+| 213.7 | 修 chatflow_sop bridge 与 chatflow runtime v2 异步进度之间的 race（spec 212.5 诊断转交）。Mode A：第二轮 chatflowSession degenerate `runtimeVersion=1 / runId=null / status=FAILED`。Mode B：confirm 轮 `replyType=DRAFT` 且 worker `WAITING at collect`。212.6 修了 carryover empty 但未盖 bridge synchronisation 盲区，必须 bound chatflow_sop bridge to poll runtime v2 nodes/result until terminal-or-collect-advance or short deadline；FAILED/missing v2 run 时返回 explicit retry envelope 而非 degenerate carryover | RED 多次复跑 / Unit / Integration / E2E `customer-assistant-chatflow-runtime-gateway-uat` 全 PASS（10 次重跑 0 fail） / UAT / Docs |
 
 ## 验收门禁映射（Acceptance Gate Map）
 
