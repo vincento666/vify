@@ -31,8 +31,22 @@ try {
     },
   }), 'create chatflow')
 
+  // Async-durable mock surface (slice 213.2.1): mirror production runChatflowV2 path.
+  // Six-ref envelope on the POST /runs-v2 endpoint plus polling stubs that the
+  // V2 runner hits while observing the run (status / events / nodes / result).
+  const MOCK_RUN_ID = 987001
+  const refs = {
+    runId: MOCK_RUN_ID,
+    statusRef: `/api/v1/runtime-runs/${MOCK_RUN_ID}`,
+    eventsRef: `/api/v1/runtime-runs/${MOCK_RUN_ID}/events`,
+    eventStreamRef: `/api/v1/runtime-runs/${MOCK_RUN_ID}/events/stream?afterSequence=0`,
+    nodesRef: `/api/v1/runtime-runs/${MOCK_RUN_ID}/nodes`,
+    resultRef: `/api/v1/runtime-runs/${MOCK_RUN_ID}/result`,
+  }
+  const FINAL_OUTPUT = { output: 'echo delayed hello' }
+
   let runRequestSeen = false
-  await page.route(`**/api/v1/chatflows/${chatflow.id}/runs-legacy`, async (route) => {
+  await page.route(`**/api/v1/chatflows/${chatflow.id}/runs-v2`, async (route) => {
     runRequestSeen = true
     await new Promise((resolve) => setTimeout(resolve, 1200))
     await route.fulfill({
@@ -42,13 +56,72 @@ try {
         code: 200,
         message: 'OK',
         data: {
-          runId: 987001,
-          status: 'SUCCEEDED',
-          output: { output: 'echo delayed hello' },
-          streamEvents: [],
+          ...refs,
+          ownerType: 'CHATFLOW',
+          ownerId: chatflow.id,
+          status: 'RUNNING',
+          runtimeMode: 'async-durable',
+          runtimeVersion: 'v2',
+          runtimeRefs: refs,
+          output: null,
+          result: null,
+          events: { list: [], total: 0 },
         },
       }),
     })
+  })
+
+  // Single regex-based handler dispatches every /api/v1/runtime-runs/{MOCK_RUN_ID}*
+  // request to the right async-durable stub (status / events / nodes / result /
+  // SSE stream). Glob patterns can be fragile with query strings, so we match the
+  // full URL via a regex and inspect the path inside the handler.
+  const runtimeRunsRegex = new RegExp(`/api/v1/runtime-runs/${MOCK_RUN_ID}(?:/(?:events/stream|events|nodes|result))?(?:\\?.*)?$`)
+  await page.route(runtimeRunsRegex, async (route) => {
+    const request = route.request()
+    if (request.method() !== 'GET') return route.fallback()
+    const url = new URL(request.url())
+    const pathname = url.pathname
+    const tail = pathname.split(`/runtime-runs/${MOCK_RUN_ID}`)[1] || ''
+
+    const json = (data) => ({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ code: 200, message: 'OK', data }),
+    })
+
+    if (tail === '/events/stream') {
+      // SSE stream endpoint: short-circuit so the runner falls back to REST polling.
+      // The V2 observer recovers via listRuntimeV2Events when the stream is unavailable.
+      await route.fulfill({
+        status: 404,
+        contentType: 'text/plain',
+        body: 'mocked: stream disabled in e2e',
+      })
+      return
+    }
+    if (tail === '/events') {
+      await route.fulfill(json({ list: [], total: 0 }))
+      return
+    }
+    if (tail === '/nodes') {
+      await route.fulfill(json({ list: [], total: 0 }))
+      return
+    }
+    if (tail === '/result') {
+      await route.fulfill(json({ runId: MOCK_RUN_ID, status: 'SUCCEEDED', output: FINAL_OUTPUT }))
+      return
+    }
+    // Status endpoint: GET /api/v1/runtime-runs/{runId}
+    await route.fulfill(json({
+      ...refs,
+      ownerType: 'CHATFLOW',
+      ownerId: chatflow.id,
+      status: 'SUCCEEDED',
+      runtimeMode: 'async-durable',
+      runtimeVersion: 'v2',
+      runtimeRefs: refs,
+      output: FINAL_OUTPUT,
+    }))
   })
 
   await page.goto(`${baseUrl}/chatflows/${chatflow.id}/canvas`, { waitUntil: 'networkidle' })
