@@ -85,6 +85,12 @@ class RuntimeLabRepository:
         parent_task_id: int | None = None,
         resume_summary: str = "",
         business_refs: dict[str, Any] | None = None,
+        chatflow_id: int | None = None,
+        chatflow_session_id: int | None = None,
+        chatflow_run_id: int | None = None,
+        chatflow_event_id: int | None = None,
+        chatflow_checkpoint_id: int | None = None,
+        runtime_version: str | None = None,
     ) -> dict[str, Any]:
         if status in ACTIVE_TASK_STATUSES:
             self._ensure_no_other_active_task(session_id)
@@ -101,6 +107,12 @@ class RuntimeLabRepository:
                 "parent_task_id": parent_task_id,
                 "resume_summary": resume_summary,
                 "business_refs": business_refs or {},
+                "chatflow_id": chatflow_id,
+                "chatflow_session_id": chatflow_session_id,
+                "chatflow_run_id": chatflow_run_id,
+                "chatflow_event_id": chatflow_event_id,
+                "chatflow_checkpoint_id": chatflow_checkpoint_id,
+                "runtime_version": runtime_version,
                 "suspended_at": None,
                 "completed_at": None,
                 "expires_at": None,
@@ -157,6 +169,12 @@ class RuntimeLabRepository:
         checkpoint_id: int | None = None,
         resume_summary: str | None = None,
         business_refs: dict[str, Any] | None = None,
+        chatflow_id: int | None = None,
+        chatflow_session_id: int | None = None,
+        chatflow_run_id: int | None = None,
+        chatflow_event_id: int | None = None,
+        chatflow_checkpoint_id: int | None = None,
+        runtime_version: str | None = None,
     ) -> dict[str, Any]:
         task = self.get_task(task_id)
         if task is None:
@@ -174,6 +192,18 @@ class RuntimeLabRepository:
             values["resume_summary"] = resume_summary
         if business_refs is not None:
             values["business_refs"] = business_refs
+        if chatflow_id is not None:
+            values["chatflow_id"] = chatflow_id
+        if chatflow_session_id is not None:
+            values["chatflow_session_id"] = chatflow_session_id
+        if chatflow_run_id is not None:
+            values["chatflow_run_id"] = chatflow_run_id
+        if chatflow_event_id is not None:
+            values["chatflow_event_id"] = chatflow_event_id
+        if chatflow_checkpoint_id is not None:
+            values["chatflow_checkpoint_id"] = chatflow_checkpoint_id
+        if runtime_version is not None:
+            values["runtime_version"] = runtime_version
         if status == "SUSPENDED":
             values["suspended_at"] = now
         if status == "COMPLETED":
@@ -323,6 +353,7 @@ class RuntimeLabRepository:
             return
         Base.metadata.create_all(bind=bind, tables=runtime_lab_tables())
         self._ensure_checkpoint_scoped_variables_column()
+        self._ensure_runtime_lab_task_ref_columns()
         if self._session.in_transaction():
             self._session.commit()
         self._session.expire_all()
@@ -342,6 +373,40 @@ class RuntimeLabRepository:
             sa.text(f"ALTER TABLE runtime_lab_checkpoint ADD COLUMN scoped_variables {column_type}")  # noqa: S608
         )
         self._session.commit()
+
+    def _ensure_runtime_lab_task_ref_columns(self) -> None:
+        """Lazy migration: ADD COLUMN for chatflow_id, chatflow_session_id, ...
+
+        Mirrors :meth:`_ensure_checkpoint_scoped_variables_column`. Tolerates
+        idempotent re-runs since the columns are nullable.
+        """
+        bind = self._session.get_bind()
+        if bind is None:
+            return
+        inspector = sa.inspect(bind)
+        if "runtime_lab_task" not in inspector.get_table_names():
+            return
+        existing = {column["name"] for column in inspector.get_columns("runtime_lab_task")}
+        ref_columns = (
+            "chatflow_id",
+            "chatflow_session_id",
+            "chatflow_run_id",
+            "chatflow_event_id",
+            "chatflow_checkpoint_id",
+            "runtime_version",
+        )
+        added = False
+        for column_name in ref_columns:
+            if column_name in existing:
+                continue
+            column = self._task_table.c[column_name]
+            column_type = column.type.compile(dialect=bind.dialect)
+            self._session.execute(
+                sa.text(f"ALTER TABLE runtime_lab_task ADD COLUMN {column_name} {column_type} NULL")  # noqa: S608
+            )
+            added = True
+        if added:
+            self._session.commit()
 
     def _next_event_sequence(self, session_id: int) -> int:
         value = self._session.execute(

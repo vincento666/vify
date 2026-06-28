@@ -894,11 +894,13 @@ class RuntimeLabService:
         *,
         task: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        refs = _chatflow_refs_from_checkpoint(result.checkpoint)
         task = task or self._repository.create_task(
             session_id,
             sop_id=sop_id,
             current_step=result.current_step,
             business_refs=result.collected,
+            **refs,
         )
         checkpoint = self._repository.create_checkpoint(
             session_id,
@@ -916,6 +918,7 @@ class RuntimeLabService:
             current_step=result.current_step,
             checkpoint_id=int(checkpoint["id"]),
             business_refs=result.collected,
+            **refs,
         )
 
     def _suspend_task(self, session_id: int, task: dict[str, Any]) -> dict[str, Any]:
@@ -2101,6 +2104,41 @@ def _chatflow_meta_from_checkpoint_row(checkpoint: dict[str, Any] | None) -> Map
         return {}
     meta = scoped_variables.get("__chatflow")
     return meta if isinstance(meta, Mapping) else {}
+
+
+def _chatflow_refs_from_checkpoint(checkpoint: SopCheckpoint | None) -> dict[str, Any]:
+    """Extract first-class chatflow ref columns from a SopCheckpoint.
+
+    Reads ``checkpoint.scoped_variables.__chatflow`` (the JSON projection that
+    :class:`ChatflowSopAdapter` writes) and returns a kwargs dict suitable for
+    ``RuntimeLabRepository.create_task`` / ``update_task_state``. Missing or
+    unparseable fields are dropped so downstream writes stay nullable.
+    """
+    if checkpoint is None:
+        return {}
+    scoped = checkpoint.scoped_variables or {}
+    if not isinstance(scoped, Mapping):
+        return {}
+    meta = scoped.get("__chatflow")
+    if not isinstance(meta, Mapping):
+        return {}
+    runtime_version_raw = meta.get("runtimeVersion")
+    runtime_version: str | None
+    if runtime_version_raw is None or runtime_version_raw == "":
+        runtime_version = None
+    elif isinstance(runtime_version_raw, str):
+        runtime_version = runtime_version_raw
+    else:
+        runtime_version = f"v{int(runtime_version_raw)}" if isinstance(runtime_version_raw, int) else str(runtime_version_raw)
+    refs: dict[str, Any] = {
+        "chatflow_id": _int_or_none(meta.get("chatflowId")),
+        "chatflow_session_id": _int_or_none(meta.get("sessionId")),
+        "chatflow_run_id": _int_or_none(meta.get("runId")),
+        "chatflow_event_id": _int_or_none(meta.get("eventId")),
+        "chatflow_checkpoint_id": _int_or_none(meta.get("checkpointId")),
+        "runtime_version": runtime_version,
+    }
+    return {key: value for key, value in refs.items() if value is not None}
 
 
 def _int_or_none(value: Any) -> int | None:
