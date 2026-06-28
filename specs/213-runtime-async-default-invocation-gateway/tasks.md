@@ -23,22 +23,41 @@
 - [ ] Docs：在 `docs/testing/acceptance-gates.md` 增加 "default-async runtime contract" 一行
 - [ ] Git commit：`feat(chatflow,workflow): default debug runs to durable async runtime`
 
-## Slice 213.2.1 — Refresh chatflow-run-optimistic-loading mock URL
+## Slice 213.2.1 — Migrate chatflow-run-optimistic-loading e2e to async runtime mock surface
 
-> 起源：slice 213.2 把"默认 async durable"用 contract 锁定后，e2e `chatflow-run-optimistic-loading.mjs` 整脚本验证暴露其 mock 锁在 `/api/v1/chatflows/{id}/runs-legacy`，但 production frontend `runChatflowV2` 实际调 `/api/v1/chatflows/{id}/runs-v2`。`git stash` 在 HEAD `4201a220` 复跑确认该 fail 与 213.2 改动**无关**——production 路径在更早时间已经是 `/runs-v2`，e2e 的 mock URL 没跟上。
+> 起源：slice 213.2 把"默认 async durable"用 contract 锁定后，e2e `chatflow-run-optimistic-loading.mjs` 整脚本验证暴露 mock 锁在 sync 时代。原计划仅刷新 mock URL，执行中发现 mock URL + mock response body + 缺失的 polling endpoint stub 是**一起**的问题：
 >
-> 范围：仅修 mock URL 配置（`page.route(...)` 路径），从 `/runs-legacy` 改为 `/runs-v2`。**不动 e2e 的断言语义** — `runRequestSeen` 断言保留，optimistic-loading bubble 检测保留。
+> - mock URL pinned at `/api/v1/chatflows/*/runs-legacy`，但 production frontend `runChatflowV2` 实际用 `/api/v1/chatflows/*/runs-v2`
+> - mock fulfill body 仍是 sync envelope（`status: 'SUCCEEDED', inline output, streamEvents`），但 production V2 runner 收到响应后会去 poll `/runtime-runs/{id}`（status / events / result），mock 假 runId 在真 backend 找不到，触发 `Runtime v2 run not found`
+> - 必须**整体迁移到 async runtime mock surface**：mock URL 改 `/runs-v2`，response body 改 six-ref envelope，加 polling endpoint stub
+>
+> 范围：仅 e2e mock 层迁移，**不动 production code**，**不动 e2e 业务断言**（`runRequestSeen`、optimistic-loading bubble 可见、最终输出替换 bubble 三条断言保留语义）。
 
-- [ ] RED：重跑 `chatflow-run-optimistic-loading.mjs`，固化失败日志和"mock URL 永不命中"证据；证据 `artifacts/213.2.1/red.txt`
-- [ ] 静态定位：grep 脚本中 `runs-legacy` 出现处，确认是 mock 配置而非业务断言
-- [ ] Fix：把 mock URL 从 `/runs-legacy` 改为 `/runs-v2`（frontend 实际调用路径）；不动其它 mock / 断言 / step
+- [ ] RED：重跑 `chatflow-run-optimistic-loading.mjs`，固化"mock URL 不命中 + V2 runner 找不到 mock runId"的双重失败；证据 `artifacts/213.2.1/red.txt`
+- [ ] 静态定位：grep 脚本中所有 `page.route(...)` 配置，列出当前 mock surface
+- [ ] Fix 第 1 部分 - mock URL：`page.route("**/api/v1/chatflows/*/runs-legacy", ...)` → `page.route("**/api/v1/chatflows/*/runs-v2", ...)`
+- [ ] Fix 第 2 部分 - mock fulfill body：从 sync envelope 改为 six-ref envelope，包含：
+  - `runId: <number>`
+  - `status: "RUNNING"`
+  - `statusRef: "/api/v1/runtime-runs/{runId}"`
+  - `eventsRef: "/api/v1/runtime-runs/{runId}/events"`
+  - `eventStreamRef: "/api/v1/runtime-runs/{runId}/events/stream?afterSequence=0"`
+  - `nodesRef: "/api/v1/runtime-runs/{runId}/nodes"`
+  - `resultRef: "/api/v1/runtime-runs/{runId}/result"`
+  - `runtimeMode: "async-durable"`
+  - `runtimeRefs: {runId, statusRef, eventsRef, eventStreamRef, nodesRef, resultRef}`
+- [ ] Fix 第 3 部分 - polling endpoint stub：加 `page.route` 拦截：
+  - `GET **/api/v1/runtime-runs/{runId}` → 返回 status / result（让脚本能进入 SUCCEEDED 状态）
+  - `GET **/api/v1/runtime-runs/{runId}/events` → 返回 events list
+  - `GET **/api/v1/runtime-runs/{runId}/result` → 返回 output
+  - 可选 `GET **/api/v1/runtime-runs/{runId}/events/stream` SSE mock（若 production runner 用 SSE 拿事件）
 - [ ] E2E：`rtk env HIFY_E2E_BASE_URL=http://localhost:5173 /opt/homebrew/bin/node frontend/e2e/chatflow-run-optimistic-loading.mjs` PASS；证据 `artifacts/213.2.1/e2e.txt`
-- [ ] Browser UAT：留 optimistic-loading bubble 在 in-flight async request 期间可见的截图；证据 `artifacts/213.2.1/uat.md` + `screenshots/`
-- [ ] frontend rem：不涉视觉尺寸（仅 mock 配置）→ 跳过 rem，记录 N/A
-- [ ] Backend gates 不回归（不该有任何后端变化，但 spot check）：`rtk uv run pytest tests/integration -q` 全绿
-- [ ] Docs：baseline.md 追加 "chatflow-run-optimistic-loading mock URL refresh → GREEN @ slice 213.2.1"
-- [ ] Git commit：`fix(e2e): refresh chatflow-run-optimistic-loading mock to /runs-v2`
-- [ ] 范围保护：仅改 mock URL；若发现 e2e 还需要修业务断言才能跑通 → STOP 升级
+- [ ] Browser UAT：留 optimistic-loading bubble 在 in-flight async request 期间可见的截图 + 最终输出替换 bubble 的截图；证据 `artifacts/213.2.1/uat.md` + `screenshots/`
+- [ ] frontend rem：不涉视觉尺寸（e2e mock 改动）→ 跳过，记录 N/A
+- [ ] Backend gates 不回归：`rtk uv run pytest tests/integration -q` 全绿（450 passed）；证据 `artifacts/213.2.1/integration.txt`
+- [ ] Docs：baseline.md 追加 "chatflow-run-optimistic-loading e2e migrated to async mock surface → GREEN @ slice 213.2.1"
+- [ ] Git commit：`fix(e2e): migrate chatflow-run-optimistic-loading to async runtime mock surface`
+- [ ] 范围保护：仅改 mock 层 (URL + response body + polling stub)；**不动业务断言、不动 production code、不动其它 e2e**。若发现 production code 也需改才能 PASS → STOP 升级
 
 ## Slice 213.2.2 — Extend default-async contract to /runs-v2
 
