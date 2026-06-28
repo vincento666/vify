@@ -39,7 +39,9 @@
 |-------|------|----------|
 | 213.1 | 定义 `RuntimeInvocationGateway` Protocol / DTO：runId、statusRef、eventsRef、eventStreamRef、nodesRef、resultRef 六元组 | RED / Unit / Contract / Docs |
 | 213.2 | Chatflow debug run 与 Workflow debug run 默认走 async path（旧 sync 路径降级为显式 `?sync=true`） | RED / Unit / Integration / E2E / UAT |
-| 213.2.1 | 修 `frontend/e2e/chatflow-run-optimistic-loading.mjs` mock URL 漂移（mock 锁在 `/runs-legacy`，production 已切到默认 async `/runs`；213.2 整脚本验证暴露） | RED / E2E / UAT / Docs |
+| 213.2.1 | 修 `frontend/e2e/chatflow-run-optimistic-loading.mjs` mock URL 漂移（mock 锁在 `/runs-legacy`，production frontend 实际用 `/runs-v2`；213.2 整脚本验证暴露） | RED / E2E / UAT / Docs |
+| 213.2.2 | **扩展 213.2 contract 同时覆盖 `/runs` 和 `/runs-v2`**：两 handler 当前代码完全相同（同一个 `_start_*_runtime_v2_gateway`），但 integration test 只测了 `/runs`，frontend `runChatflowV2` 用的 `/runs-v2` 无 contract enforce。补 integration test 双路径断言 `runtimeMode=async-durable` 等价。 | RED / Integration / Docs |
+| 213.X-unify-runs-v2 | **物理统一 `/runs` 与 `/runs-v2` 两个 V2 alias**（推迟立项时机：spec 213 收尾或独立 spec）：删除 `run_workflow_v2` / `run_chatflow_v2` handler，frontend `runChatflowV2` 改调 `/runs`，扫描所有 e2e mock 把 `/runs-v2` 改 `/runs`，更新 acceptance-gates.md。不在 spec 213.2 主线，避免拖累 213.3~213.7 推进 | RED / Frontend Unit / E2E / UAT / Docs |
 | 213.3 | SOP Router 调用 Chatflow 默认返回 runtime refs；SOP Router state 仅保存 conversation/active-child/suspended/route history/resume offer/intent summary | RED / Unit / Integration / E2E / UAT |
 | 213.4 | 客服助手 worker 调用 Chatflow / SOP 默认返回 async refs；旧同步路径仅在测试 `--sync` 标记开启 | RED / Unit / Integration / E2E |
 | 213.5 | 断线 recovery：所有 refs 在 runId 已知的情况下可重建 (status / events from N / nodes / result) | RED / Integration / Contract / Docs |
