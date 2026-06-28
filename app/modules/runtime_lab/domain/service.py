@@ -8,6 +8,7 @@ from typing import Any, Protocol
 
 from app.core.errors import BizError, ErrorCode
 from app.modules.runtime_lab.domain.agent_fallback import AgentOutputPolicy, FallbackAgentPort, FallbackAgentRequest
+from app.modules.runtime_lab.domain.aggregator import RuntimeLabBusinessContextAggregator
 from app.modules.runtime_lab.domain.candidates import RouteCandidate, ScoreBreakdown, select_top_candidates
 from app.modules.runtime_lab.domain.classifier import ClassifierInput, ClassifierResult, FakeConstrainedIntentClassifier
 from app.modules.runtime_lab.domain.explicit_signals import ExplicitSignalDetector
@@ -65,6 +66,8 @@ class RuntimeLabService:
         fallback_agent: FallbackAgentPort | None = None,
         agent_output_policy: AgentOutputPolicy | None = None,
         policy_thresholds: dict[str, Any] | None = None,
+        aggregator: RuntimeLabBusinessContextAggregator | None = None,
+        workflow_service: Any | None = None,
     ) -> None:
         self._repository = repository
         self._manifests = mock_sop_manifests()
@@ -84,6 +87,9 @@ class RuntimeLabService:
         self._rag_answer_gate = rag_answer_gate
         self._fallback_agent = fallback_agent
         self._agent_output_policy = agent_output_policy or AgentOutputPolicy()
+        self._aggregator = aggregator or RuntimeLabBusinessContextAggregator(
+            repository, workflow_service
+        )
 
     def create_session(self) -> dict[str, Any]:
         runtime_session = self._repository.create_session()
@@ -1073,18 +1079,15 @@ class RuntimeLabService:
         }
 
     def _session_business_context(self, session_id: int) -> dict[str, Any]:
-        context: dict[str, Any] = {}
-        for task in self._repository.list_tasks(session_id):
-            task_refs = task.get("business_refs")
-            if isinstance(task_refs, dict):
-                context.update(task_refs)
-            checkpoint = self._repository.get_latest_checkpoint(int(task["id"]))
-            if checkpoint is None:
-                continue
-            collected = checkpoint.get("collected")
-            if isinstance(collected, dict):
-                context.update(collected)
-        return context
+        """Deprecated delegate.
+
+        Slice 213.3.3 replaced the SOP-Router-local mirror with
+        :class:`RuntimeLabBusinessContextAggregator`. The five existing
+        call-sites continue to call this method during the migration; the
+        delegate (and the method itself) is scheduled for removal in slice
+        213.3.4.
+        """
+        return self._aggregator.collect(session_id)
 
     def _recent_events(self, session_id: int, *, limit: int) -> list[dict[str, Any]]:
         events = self._repository.list_events(session_id)
