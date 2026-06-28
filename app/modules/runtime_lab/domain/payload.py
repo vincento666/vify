@@ -36,7 +36,7 @@ def format_session(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def format_task(row: dict[str, Any]) -> dict[str, Any]:
-    return {
+    result: dict[str, Any] = {
         "id": row["id"],
         "sessionId": row["session_id"],
         "sopId": row["sop_id"],
@@ -50,6 +50,42 @@ def format_task(row: dict[str, Any]) -> dict[str, Any]:
         "completedAt": _format_datetime(row.get("completed_at")),
         "createdAt": _format_datetime(row.get("created_at")),
         "updatedAt": _format_datetime(row.get("updated_at")),
+    }
+    chatflow_session = chatflow_session_projection(row)
+    if chatflow_session is not None:
+        result["chatflowSession"] = chatflow_session
+    return result
+
+
+def chatflow_session_projection(row: dict[str, Any]) -> dict[str, Any] | None:
+    """Build the chatflowSession block from runtime ref columns on a task row.
+
+    Returns ``None`` when the task lacks chatflow refs (e.g. SOP without a
+    chatflow binding), so callers can omit the field rather than emit empty
+    placeholders.
+    """
+    chatflow_id = row.get("chatflow_id")
+    run_id = row.get("chatflow_run_id")
+    if not chatflow_id or not run_id:
+        return None
+    chatflow_id_int = int(chatflow_id)
+    run_id_int = int(run_id)
+    session_id_raw = row.get("chatflow_session_id")
+    event_id_raw = row.get("chatflow_event_id")
+    checkpoint_id_raw = row.get("chatflow_checkpoint_id")
+    runtime_version = row.get("runtime_version") or "v2"
+    return {
+        "chatflowId": chatflow_id_int,
+        "sessionId": int(session_id_raw) if session_id_raw is not None else None,
+        "runId": run_id_int,
+        "eventId": int(event_id_raw) if event_id_raw is not None else None,
+        "checkpointId": int(checkpoint_id_raw) if checkpoint_id_raw is not None else None,
+        "runtimeVersion": str(runtime_version),
+        "statusRef": f"/api/v1/runtime-runs/{run_id_int}",
+        "eventsRef": f"/api/v1/runtime-runs/{run_id_int}/events",
+        "eventStreamRef": f"/api/v1/runtime-runs/{run_id_int}/events/stream?afterSequence=0",
+        "nodesRef": f"/api/v1/runtime-runs/{run_id_int}/nodes",
+        "resultRef": f"/api/v1/runtime-runs/{run_id_int}/result",
     }
 
 
