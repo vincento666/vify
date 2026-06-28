@@ -216,6 +216,10 @@ Chatflow / Workflow debug run endpoints must:
 Any new slice touching Chatflow / Workflow run paths must re-verify this
 contract via `tests/integration/runtime/test_debug_runs_default_async.py`.
 
+Both `/runs` and `/runs-v2` aliases serve the same async-durable
+handler at present; integration tests pin both paths. Physical
+de-duplication tracked in slice 213.X-unify-runs-v2.
+
 ## Slice Done 定义
 
 一个 slice 只有在以下条件都满足时才算完成：

@@ -82,6 +82,60 @@ class DefaultAsyncDebugRunContractTest(unittest.TestCase):
         self.assertEqual(refs.runId, int(envelope["runId"]))
         self.assertGreater(refs.runId, 0)
 
+    def test_workflow_run_v2_alias_returns_same_six_ref_envelope_as_runs(self) -> None:
+        with TestClient(app) as client:
+            workflow = _create_echo_workflow(client, "workflows")
+            publish = client.post(f"/api/v1/workflows/{workflow['id']}/publish")
+            self.assertEqual(publish.status_code, 200, publish.text)
+            response = client.post(
+                f"/api/v1/workflows/{workflow['id']}/runs-v2",
+                json={"input": {"userMessage": f"async-default-v2-{time.time_ns()}"}},
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        envelope = response.json()["data"]
+
+        self.assertEqual(envelope.get("runtimeMode"), "async-durable")
+        self.assertEqual(envelope.get("runtimeVersion"), 2)
+        runtime_refs = envelope.get("runtimeRefs")
+        self.assertIsInstance(runtime_refs, dict)
+        self.assertGreater(int(runtime_refs["runId"]), 0)
+
+        refs = RuntimeInvocationRefs.from_envelope(runtime_refs)
+        self.assertEqual(refs.runId, int(envelope["runId"]))
+        self.assertTrue(refs.statusRef.endswith(f"/{refs.runId}"))
+        self.assertIn(f"/{refs.runId}/events", refs.eventsRef)
+        self.assertIn(f"/{refs.runId}/events/stream", refs.eventStreamRef)
+        self.assertIn(f"/{refs.runId}/nodes", refs.nodesRef)
+        self.assertIn(f"/{refs.runId}/result", refs.resultRef)
+
+    def test_chatflow_run_v2_alias_returns_same_six_ref_envelope_as_runs(self) -> None:
+        with TestClient(app) as client:
+            chatflow = _create_echo_workflow(client, "chatflows")
+            publish = client.post(f"/api/v1/chatflows/{chatflow['id']}/publish")
+            self.assertEqual(publish.status_code, 200, publish.text)
+            response = client.post(
+                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                json={
+                    "input": {
+                        "sys.query": "async-default-v2",
+                        "sys.conversation_id": f"async-default-v2-{time.time_ns()}",
+                    }
+                },
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        envelope = response.json()["data"]
+
+        self.assertEqual(envelope.get("runtimeMode"), "async-durable")
+        self.assertEqual(envelope.get("runtimeVersion"), 2)
+        runtime_refs = envelope.get("runtimeRefs")
+        self.assertIsInstance(runtime_refs, dict)
+
+        refs = RuntimeInvocationRefs.from_envelope(runtime_refs)
+        self.assertEqual(refs.runId, int(envelope["runId"]))
+        self.assertGreater(refs.runId, 0)
+
     def test_workflow_legacy_sync_run_tags_envelope_as_sync_mode(self) -> None:
         with TestClient(app) as client:
             workflow = _create_echo_workflow(client, "workflows")
