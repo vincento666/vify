@@ -225,6 +225,18 @@
 - [ ] Backend gates 不回归
 - [ ] Git commit：`refactor(runtime-lab): _suspend_task and _adapter_request use aggregator instead of task.business_refs`
 
+### Slice 213.3.5e-prep — Add current_step in-memory side-channel
+
+> 起源：213.3.5e 首次 RED→GREEN 尝试中，ban `runtime_lab_checkpoint.current_step` 写入导致两个 runtime_lab_service 回归：confirm/switch arbitration 依赖 current_step progression。虽然 213.3.5b 已把 router/policy 从 task.current_step 迁到 latest_checkpoint.current_step，但 213.3.5e 进一步 ban checkpoint.current_step 后缺少替代 source。
+>
+> 本 prep slice 在 ban writes 前添加 current_step in-memory side-channel，类似 213.3.5a 的 business context overlay。
+
+- [ ] RED：unit/integration test 断言 service 在 adapter result 后调用 current_step recorder，router/policy 能从 side-channel 读取 task 的 current step；当前应红；证据 `artifacts/213.3.5e-prep/red.txt`
+- [ ] GREEN：新增 `RuntimeLabTurnStateCache`（或扩 aggregator）记录 `task_id -> current_step`；service 在 `_start_task` / `_continue_active_task` / `_resume_task` / `_suspend_task` 后记录；router/policy 优先读 side-channel，fallback latest_checkpoint.current_step，最后 fallback task.current_step
+- [ ] Backend gates 不回归（unit / contract / integration）
+- [ ] Git commit：`feat(runtime-lab): add current_step side-channel before banning checkpoint writes`
+- [ ] 范围保护：不 ban writes；不删 schema；仅新增替代 source
+
 ### Slice 213.3.5e — Ban writes: current_step + collected + business_refs
 
 - [ ] **Critical R2 verification BEFORE this slice**: 重跑 `chatflow-session-state.mjs` 确认 chatflow runtime v2 persist `conversation` scope；不通过 → STOP 升级
