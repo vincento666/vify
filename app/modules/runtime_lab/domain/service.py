@@ -340,6 +340,7 @@ class RuntimeLabService:
         suspended_tasks: list[dict[str, Any]],
         enabled_sop_ids: frozenset[str] | None,
     ) -> RouteDecision:
+        latest_checkpoint = self._latest_checkpoint_with_overlay_step(active_task)
         route_started_at = perf_counter()
         route_steps: list[dict[str, Any]] = []
         step_started_at = perf_counter()
@@ -566,7 +567,13 @@ class RuntimeLabService:
             )
         )
         step_started_at = perf_counter()
-        decision = self._policy_gate.classifier_decision(classifier_result, candidates, active_task, len(suspended_tasks))
+        decision = self._policy_gate.classifier_decision(
+            classifier_result,
+            candidates,
+            active_task,
+            len(suspended_tasks),
+            latest_checkpoint=latest_checkpoint,
+        )
         route_steps.append(
             _route_step(
                 "post_classifier_policy",
@@ -883,6 +890,30 @@ class RuntimeLabService:
             return None
         return frozenset(sop_id for sop_id in enabled_sop_ids if sop_id in self._manifests)
 
+    def _latest_checkpoint_with_overlay_step(self, task: dict[str, Any] | None) -> dict[str, Any] | None:
+        if task is None:
+            return None
+        task_id = int(task["id"])
+        checkpoint = self._repository.get_latest_checkpoint(task_id)
+        overlay = self._task_current_step(task_id)
+        if not overlay:
+            return checkpoint
+        data = dict(checkpoint or {})
+        data["current_step"] = overlay
+        return data
+
+    def _record_task_step(self, task_id: int, current_step: str) -> None:
+        recorder = getattr(self._aggregator, "record_task_step", None)
+        if callable(recorder):
+            recorder(task_id, current_step)
+
+    def _task_current_step(self, task_id: int) -> str | None:
+        reader = getattr(self._aggregator, "task_current_step", None)
+        if not callable(reader):
+            return None
+        value = reader(task_id)
+        return str(value) if value else None
+
     def _create_pending_task(self, session_id: int, sop_id: str) -> dict[str, Any]:
         return self._repository.create_task(
             session_id,
@@ -927,6 +958,7 @@ class RuntimeLabService:
             **refs,
         )
         self._aggregator.record_turn_context(session_id, result.collected)
+        self._record_task_step(int(task["id"]), result.current_step)
         return updated
 
     def _suspend_task(self, session_id: int, task: dict[str, Any]) -> dict[str, Any]:
@@ -958,6 +990,7 @@ class RuntimeLabService:
             business_refs=adapter_checkpoint.collected,
         )
         self._aggregator.record_turn_context(session_id, adapter_checkpoint.collected)
+        self._record_task_step(int(task["id"]), adapter_checkpoint.current_step)
         return suspended
 
     def _continue_active_task(
@@ -999,6 +1032,7 @@ class RuntimeLabService:
                 business_refs=result.collected,
             )
             self._aggregator.record_turn_context(session_id, result.collected)
+            self._record_task_step(int(active_task["id"]), result.current_step)
             complete_decision = RouteDecision(
                 action="COMPLETE_TASK",
                 reason="Active SOP completed after confirmation",
@@ -1022,6 +1056,7 @@ class RuntimeLabService:
             business_refs=result.collected,
         )
         self._aggregator.record_turn_context(session_id, result.collected)
+        self._record_task_step(int(active_task["id"]), result.current_step)
         self._repository.append_event(
             session_id,
             "TASK_CONTINUED",
@@ -1066,6 +1101,7 @@ class RuntimeLabService:
             business_refs=result.collected,
         )
         self._aggregator.record_turn_context(session_id, result.collected)
+        self._record_task_step(int(task["id"]), result.current_step)
         self._repository.append_event(
             session_id,
             "TASK_RESUMED",

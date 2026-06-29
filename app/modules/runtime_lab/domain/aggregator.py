@@ -48,6 +48,14 @@ class RuntimeLabBusinessContextAggregator:
         self._repository = repository
         self._workflow_service = workflow_service
         self._in_memory_overlay: dict[int, dict[str, Any]] = {}
+        self._task_step_overlay: dict[int, str] = {}
+
+    def record_task_step(self, task_id: int, current_step: str) -> None:
+        if current_step:
+            self._task_step_overlay[int(task_id)] = str(current_step)
+
+    def task_current_step(self, task_id: int) -> str | None:
+        return self._task_step_overlay.get(int(task_id))
 
     def record_turn_context(
         self, session_id: int, context: Mapping[str, Any]
