@@ -2088,10 +2088,42 @@ def _sop_checkpoint_from_row(
     task: dict[str, Any] | None,
     checkpoint: dict[str, Any] | None,
 ) -> SopCheckpoint | None:
+    """Rebuild :class:`SopCheckpoint` from task + checkpoint rows.
+
+    Slice 213.3.5c (narrowed) only migrates the ``__chatflow`` meta data source:
+
+    - ``scoped_variables['__chatflow']`` is rebuilt from the task's first-class
+      ref columns (slice 213.3.1). The legacy
+      ``checkpoint.scoped_variables.__chatflow`` is only consulted when the
+      task carries no refs (e.g., pre-213.3.1 tasks).
+    - ``collected`` continues to come from ``checkpoint.collected`` (the
+      aggregator-based migration is deferred to slice 213.3.5d, which must
+      pair it with an ``_adapter_request`` rewrite that respects the
+      ``SOP_CONTEXT_KEYS[sop_id]`` filter to avoid cross-SOP field leakage).
+    - ``current_step`` still reads from the checkpoint row (banned in 213.3.5e).
+    - ``pending_prompt`` is dropped (banned in 213.3.4).
+    """
+
     if checkpoint is None:
         return None
+
     collected = dict(checkpoint.get("collected") or {})
-    scoped_variables = checkpoint.get("scoped_variables")
+
+    raw_scoped = checkpoint.get("scoped_variables")
+    scoped_variables: dict[str, Any] = (
+        dict(raw_scoped) if isinstance(raw_scoped, dict) else _scoped_variables(collected)
+    )
+
+    chatflow_meta = _chatflow_meta_from_task(task)
+    if not chatflow_meta:
+        legacy_meta = _chatflow_meta_from_checkpoint_row(checkpoint)
+        if legacy_meta:
+            chatflow_meta = dict(legacy_meta)
+    if chatflow_meta:
+        scoped_variables["__chatflow"] = chatflow_meta
+    else:
+        scoped_variables.pop("__chatflow", None)
+
     task_id = int(task["id"]) if task is not None else int(checkpoint["task_id"])
     checkpoint_id = int(checkpoint["id"])
     current_step = str(checkpoint["current_step"])
@@ -2099,11 +2131,53 @@ def _sop_checkpoint_from_row(
         sop_runtime_id=f"runtime-lab:{task_id}:{checkpoint_id}",
         current_node_id=current_step,
         current_step=current_step,
-        pending_prompt=str(checkpoint.get("pending_prompt") or ""),
+        pending_prompt="",
         collected=collected,
-        scoped_variables=dict(scoped_variables) if isinstance(scoped_variables, dict) else _scoped_variables(collected),
+        scoped_variables=scoped_variables,
         version=1,
     )
+
+
+def _chatflow_meta_from_task(task: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Build the ``__chatflow`` meta dict from task ref columns (slice 213.3.1).
+
+    Returns an empty dict when the task lacks the minimum refs (``chatflow_id``
+    + ``chatflow_run_id``). Mirrors the inverse of
+    :func:`_chatflow_refs_from_checkpoint`.
+    """
+
+    if task is None:
+        return {}
+    chatflow_id = _int_or_none(task.get("chatflow_id"))
+    run_id = _int_or_none(task.get("chatflow_run_id"))
+    if chatflow_id is None or run_id is None:
+        return {}
+    meta: dict[str, Any] = {
+        "chatflowId": chatflow_id,
+        "runId": run_id,
+    }
+    session_id = _int_or_none(task.get("chatflow_session_id"))
+    if session_id is not None:
+        meta["sessionId"] = session_id
+    event_id = _int_or_none(task.get("chatflow_event_id"))
+    if event_id is not None:
+        meta["eventId"] = event_id
+    checkpoint_id = _int_or_none(task.get("chatflow_checkpoint_id"))
+    if checkpoint_id is not None:
+        meta["checkpointId"] = checkpoint_id
+    runtime_version_raw = task.get("runtime_version")
+    meta["runtimeVersion"] = (
+        str(runtime_version_raw) if runtime_version_raw else "v2"
+    )
+    meta["runtimeRefs"] = {
+        "runId": run_id,
+        "statusRef": f"/api/v1/runtime-runs/{run_id}",
+        "eventsRef": f"/api/v1/runtime-runs/{run_id}/events",
+        "eventStreamRef": f"/api/v1/runtime-runs/{run_id}/events/stream?afterSequence=0",
+        "nodesRef": f"/api/v1/runtime-runs/{run_id}/nodes",
+        "resultRef": f"/api/v1/runtime-runs/{run_id}/result",
+    }
+    return meta
 
 
 def _chatflow_meta_from_checkpoint_row(checkpoint: dict[str, Any] | None) -> Mapping[str, Any]:
