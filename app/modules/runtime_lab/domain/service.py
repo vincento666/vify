@@ -130,7 +130,7 @@ class RuntimeLabService:
                     decision.target_sop_id,
                     message=message,
                     task=task,
-                    collected=self._session_business_context(session_id),
+                    collected=self._aggregator.collect(session_id),
                 )
             )
             if result.status == SopExecutionStatus.FAILED:
@@ -158,7 +158,7 @@ class RuntimeLabService:
                     decision.target_sop_id,
                     message=message,
                     task=task,
-                    collected=self._session_business_context(session_id),
+                    collected=self._aggregator.collect(session_id),
                 )
             )
             if result.status == SopExecutionStatus.FAILED:
@@ -913,7 +913,7 @@ class RuntimeLabService:
             int(task["id"]),
             sop_id=sop_id,
             current_step=result.current_step,
-            pending_prompt=result.pending_prompt,
+            pending_prompt="",
             collected=result.collected,
             scoped_variables=result.checkpoint.scoped_variables,
             status=_checkpoint_status(result),
@@ -943,7 +943,7 @@ class RuntimeLabService:
             int(task["id"]),
             sop_id=str(task["sop_id"]),
             current_step=adapter_checkpoint.current_step,
-            pending_prompt=adapter_checkpoint.pending_prompt,
+            pending_prompt="",
             collected=adapter_checkpoint.collected,
             scoped_variables=adapter_checkpoint.scoped_variables,
         )
@@ -971,7 +971,7 @@ class RuntimeLabService:
                 message=message,
                 task=active_task,
                 checkpoint_row=checkpoint,
-                collected=self._session_business_context(session_id),
+                collected=self._aggregator.collect(session_id),
             )
         )
         if result.status == SopExecutionStatus.FAILED:
@@ -981,7 +981,7 @@ class RuntimeLabService:
             int(active_task["id"]),
             sop_id=str(active_task["sop_id"]),
             current_step=result.current_step,
-            pending_prompt=result.pending_prompt,
+            pending_prompt="",
             collected=result.collected,
             scoped_variables=result.checkpoint.scoped_variables,
             status=_checkpoint_status(result),
@@ -1036,7 +1036,7 @@ class RuntimeLabService:
                 message=message,
                 task=task,
                 checkpoint_row=checkpoint,
-                collected=self._session_business_context(session_id),
+                collected=self._aggregator.collect(session_id),
             )
         )
         if result.status == SopExecutionStatus.FAILED:
@@ -1046,7 +1046,7 @@ class RuntimeLabService:
             int(task["id"]),
             sop_id=str(task["sop_id"]),
             current_step=result.current_step or (str(checkpoint["current_step"]) if checkpoint else str(task["current_step"])),
-            pending_prompt=result.pending_prompt,
+            pending_prompt="",
             collected=result.collected,
             scoped_variables=result.checkpoint.scoped_variables,
             status=_checkpoint_status(result),
@@ -1079,13 +1079,13 @@ class RuntimeLabService:
         }
 
     def _session_business_context(self, session_id: int) -> dict[str, Any]:
-        """Deprecated delegate.
+        """Deprecated 1-line delegate.
 
-        Slice 213.3.3 replaced the SOP-Router-local mirror with
-        :class:`RuntimeLabBusinessContextAggregator`. The five existing
-        call-sites continue to call this method during the migration; the
-        delegate (and the method itself) is scheduled for removal in slice
-        213.3.4.
+        Slice 213.3.3 introduced :class:`RuntimeLabBusinessContextAggregator`;
+        slice 213.3.4 migrated all internal callers to invoke
+        ``self._aggregator.collect()`` directly. This delegate is retained
+        only for parity tests that exercise the legacy symbol. Removal is
+        deferred to slice 213.3.5.
         """
         return self._aggregator.collect(session_id)
 
@@ -1274,7 +1274,7 @@ class RuntimeLabService:
             "suspendedTaskSummaries": [_task_summary(task) for task in suspended_tasks],
             "routeEvidence": _decision_payload(decision),
             "recentTranscript": self._session_user_history(session_id),
-            "businessRefs": self._session_business_context(session_id),
+            "businessRefs": self._aggregator.collect(session_id),
         }
 
     def _adapter_request(

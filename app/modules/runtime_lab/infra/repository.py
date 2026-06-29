@@ -1,3 +1,5 @@
+import logging
+from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
 
@@ -10,6 +12,8 @@ from app.core.db_write import insert_and_fetch
 from app.modules.runtime_lab.infra.schema import register_runtime_lab_tables, runtime_lab_tables
 
 ACTIVE_TASK_STATUSES = {"RUNNING", "WAITING"}
+
+_logger = logging.getLogger(__name__)
 
 
 class ActiveTaskConflict(RuntimeError):
@@ -234,6 +238,17 @@ class RuntimeLabRepository:
         scoped_variables: dict[str, Any] | None = None,
         status: str = "ACTIVE",
     ) -> dict[str, Any]:
+        if pending_prompt:
+            _logger.warning(
+                "Ignoring create_checkpoint(task_id=%s, pending_prompt=%r) — banned field per spec 213.3.4",
+                task_id,
+                pending_prompt,
+            )
+        scoped_filtered: dict[str, Any] = {}
+        if isinstance(scoped_variables, Mapping):
+            chatflow_meta = scoped_variables.get("__chatflow")
+            if chatflow_meta is not None:
+                scoped_filtered["__chatflow"] = chatflow_meta
         if status == "ACTIVE":
             self._session.execute(
                 self._checkpoint_table.update()
@@ -253,9 +268,10 @@ class RuntimeLabRepository:
                 "task_id": task_id,
                 "sop_id": sop_id,
                 "current_step": current_step,
-                "pending_prompt": pending_prompt,
+                # pending_prompt banned per 213.3.4; write NOT NULL placeholder.
+                "pending_prompt": "",
                 "collected": collected or {},
-                "scoped_variables": scoped_variables or {},
+                "scoped_variables": scoped_filtered,
                 "status": status,
                 "deleted": False,
                 "created_at": now,
