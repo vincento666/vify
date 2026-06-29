@@ -4,7 +4,7 @@ from typing import Any
 
 from app.modules.runtime_lab.domain.candidates import CandidateType, RouteCandidate, select_top_candidates
 from app.modules.runtime_lab.domain.classifier import ClassifierResult
-from app.modules.runtime_lab.domain.router import RouteDecision
+from app.modules.runtime_lab.domain.router import RouteDecision, _resolve_current_step
 
 
 class InterruptibilityPolicy(Protocol):
@@ -60,6 +60,7 @@ class PolicyGate:
         candidates: Sequence[RouteCandidate],
         active_task: Mapping[str, Any] | None,
         suspended_count: int,
+        latest_checkpoint: Mapping[str, Any] | None = None,
     ) -> RouteDecision:
         if result.selected_action == "CLARIFY":
             candidate = _optional_candidate_by_id(candidates, result.selected_candidate_id)
@@ -139,7 +140,7 @@ class PolicyGate:
                     matched_keyword=_matched_term(candidate),
                     reason=result.rationale,
                 )
-            return self._switch_decision(candidate.target_id, active_task, suspended_count)
+            return self._switch_decision(candidate.target_id, active_task, suspended_count, latest_checkpoint)
         if candidate_type == CandidateType.REJECT_SWITCH_CONTINUE_ACTIVE:
             return RouteDecision(
                 action="REJECT_SWITCH_CONTINUE_ACTIVE",
@@ -153,6 +154,7 @@ class PolicyGate:
         target_sop_id: str,
         active_task: Mapping[str, Any],
         suspended_count: int,
+        latest_checkpoint: Mapping[str, Any] | None = None,
     ) -> RouteDecision:
         active_sop_id = str(active_task.get("sop_id") or "")
         active_task_id = _active_task_id(active_task)
@@ -169,7 +171,8 @@ class PolicyGate:
                 active_task_id=active_task_id,
                 reason="030 policy preserves max one suspended task",
             )
-        if not self._adapter.is_interruptible(active_sop_id, str(active_task.get("current_step") or "")):
+        current_step = _resolve_current_step(active_task, latest_checkpoint)
+        if not self._adapter.is_interruptible(active_sop_id, current_step):
             return RouteDecision(
                 action="REJECT_SWITCH_CONTINUE_ACTIVE",
                 target_sop_id=target_sop_id,

@@ -48,6 +48,7 @@ class RuntimeLabRouter:
         message: str,
         active_task: Mapping[str, Any] | None = None,
         suspended_tasks: Sequence[Mapping[str, Any]] | None = None,
+        latest_checkpoint: Mapping[str, Any] | None = None,
     ) -> RouteDecision:
         suspended = suspended_tasks or ()
         suspended_count = len(suspended)
@@ -77,7 +78,7 @@ class RuntimeLabRouter:
                         matched_keyword=matched.keyword,
                         reason="029 policy allows at most one suspended task",
                     )
-                current_step = str(active_task.get("current_step") or "")
+                current_step = _resolve_current_step(active_task, latest_checkpoint)
                 if self._adapter.is_interruptible(active_sop_id, current_step):
                     return RouteDecision(
                         action="SUSPEND_AND_START",
@@ -136,3 +137,18 @@ def _task_id(active_task: Mapping[str, Any] | None) -> int | None:
 
 def _is_resume_phrase(message: str) -> bool:
     return message.strip().lower() in {"continue", "继续", "继续刚才", "继续第一个"}
+
+
+def _resolve_current_step(
+    active_task: Mapping[str, Any],
+    latest_checkpoint: Mapping[str, Any] | None,
+) -> str:
+    """Spec 213.3.5b — dispatch step is sourced from latest checkpoint when
+    available. Falls back to ``active_task['current_step']`` during the
+    213.3.5b—213.3.5d transition window when callers may not yet pass the
+    checkpoint (audit §1.A migration option (b))."""
+    if latest_checkpoint is not None:
+        candidate = latest_checkpoint.get("current_step")
+        if candidate is not None and str(candidate):
+            return str(candidate)
+    return str(active_task.get("current_step") or "")
