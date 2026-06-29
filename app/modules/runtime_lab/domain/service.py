@@ -937,7 +937,7 @@ class RuntimeLabService:
                 str(task["sop_id"]),
                 task=task,
                 checkpoint_row=checkpoint_row,
-                collected=dict(task.get("business_refs") or {}),
+                collected=self._aggregator.collect(session_id),
             )
         )
         checkpoint = self._repository.create_checkpoint(
@@ -1319,7 +1319,7 @@ class RuntimeLabService:
             message=message,
             checkpoint=checkpoint,
             collected=saved,
-            business_refs=dict(task.get("business_refs") or {}) if task is not None else {},
+            business_refs=dict(sop_context) if business_context_reference else {},
             metadata=metadata,
         )
 
