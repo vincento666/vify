@@ -132,50 +132,69 @@
 - [ ] Git commit：`refactor(runtime-lab): replace business_context mirror with child-Chatflow aggregator`
 - [ ] 范围保护：仅替换读路径；写路径暂不动（213.3.4 处理）
 
-### Slice 213.3.4 — Stop writing banned fields (carved scope: keep business_refs)
+### Slice 213.3.4 — Stop writing dispatch-irrelevant banned fields (re-carved scope)
 
-> **范围 carved per audit** (`artifacts/.../213.3.4/AUDIT.md`)：
-> - **In scope**: 禁写 `current_step` / `pending_prompt` / `collected` / `scoped_variables`（filter to keep only `__chatflow` JSON key）
-> - **Out of scope** (推至 213.3.5)：禁写 `business_refs`、删 `_session_business_context` delegate、schema 列物理删除
+> **范围再次 carved per builder discovery**（在 `artifacts/.../213.3.4/AUDIT.md` v2 / post-carve note 中记录）：
 >
-> 原因：aggregator 当前 fallback 用 `task.business_refs`（因为 recording adapter 不设 chatflow refs），若一并禁 `business_refs` 写入会破坏 ~14-24 个 test。Carved scope 保 `business_refs`，仅 7-8 个 test 受影响（chatflow_trace + delegate callers）。
+> Audit v1 漏算 3 个 production read 消费者：
+> - `router.py:80` 读 `active_task.get("current_step")` 做路由决策
+> - `policy.py:172` 读 `active_task["current_step"]` 判断 SOP 切换可中断性
+> - `sop_adapter.py:103` 读 `request.checkpoint.current_step` 做 SOP 步骤 dispatch（`MockSopAdapter.continue_task` 按 `"collect_order_no"` / `"confirm"` 分支）
+>
+> 直接禁 `current_step` 写入会让这些 read 拿到 server_default 或空串 → 14 个 test 破坏（runtime_lab_service / semantic_policy / rag_policy / sop_adapter_contract）。
+>
+> 本 slice 缩为：
+> - **In scope**: 禁写 `pending_prompt` / `collected` / `scoped_variables`（filter 到 `__chatflow` JSON key only）
+> - **Out of scope** (推至 213.3.5)：
+>   - 禁写 `current_step`（read consumers 需先迁移）
+>   - 禁写 `business_refs`（aggregator fallback dependency）
+>   - 删 `_session_business_context` delegate
+>   - 删 schema 列
+>   - Read migration: router.py / policy.py / sop_adapter.py 改读 adapter checkpoint in-memory 或 chatflow refs
 
-- [ ] RED：扩 repository test 断言 `create_task`/`update_task_state`/`create_checkpoint` 调用时即使传入 `current_step`/`pending_prompt`/`collected`/`scoped_variables` 也不写库（被 ignore 或 filter）；当前应红；证据 `artifacts/213.3.4/red.txt`
+- [ ] RED：新增 `tests/integration/runtime_lab/test_banned_writes_ignored.py` 断言 `create_checkpoint` 传入 `pending_prompt` / `collected` / `scoped_variables` 时被 ignore / filter；`update_task_state` 不写 `pending_prompt` 类字段；当前应红；证据 `artifacts/213.3.4/red.txt`
 - [ ] GREEN：
   - `infra/repository.py`：
-    - `create_task` / `update_task_state`：ignore `current_step` kwarg（log warning），不写入 DB（NOT NULL col 走 server_default `"collect_order_no"` for create_task；update 不带这列）
-    - `create_checkpoint`：仅持久化 `status` + filter `scoped_variables` 到 `{"__chatflow": ...}`；`current_step` / `pending_prompt` 写 `""` 占位（NOT NULL 无 server_default）；`collected` 写 `{}`
-    - **保留** `business_refs` 写入（aggregator fallback dependency）
+    - `create_checkpoint`：仅持久化 `status` + filter `scoped_variables` 到 `{"__chatflow": ...}`；`pending_prompt` 写 `""` 占位（NOT NULL 无 server_default）；`collected` 写 `{}`；**`current_step` 仍写 caller 传入值**（read consumers 还依赖）
+    - `create_task` / `update_task_state`：**保留** `current_step` / `business_refs` 写入（read consumers 依赖）
   - `domain/service.py`：
-    - 11 个 write call-sites drop `current_step` / `pending_prompt` / `collected` / `scoped_variables` kwargs
-    - **保留** `business_refs=` kwargs
+    - 11 个 write call-sites 中：drop `pending_prompt=...` / `collected=...` 的传入；`scoped_variables=result.checkpoint.scoped_variables` **保留**（让 repository filter to `__chatflow`）
+    - **保留** `current_step=` / `business_refs=` kwargs
     - 5 个 `_session_business_context` call-sites 改为直接调 `self._aggregator.collect(session_id)`
     - **保留** `_session_business_context` 1-line delegate（避免破坏 parity / delegate test）
   - `domain/chatflow_adapter.py` `_checkpoint` 仍返回完整 `SopCheckpoint` shape（dataclass 不动）
 - [ ] Tests：
-  - `test_chatflow_trace_api.py` rebase：router 暂仍读 banned cols 的 placeholder/None 值，断言改为 lenient（或暂跳过相关行为断言，留 213.3.5 router 迁移后恢复）
-  - `test_runtime_lab_repository.py` 验证 banned writes 被 ignore + `__chatflow` filter 后字段集
-- [ ] Backend gates：unit 374 / contract 101 / integration 463 + N (新增 banned-write ignore tests) 不回归
-- [ ] Docs：AUDIT.md 状态 213.3.4 ✅；spec.md 进度
-- [ ] Git commit：`refactor(runtime-lab): stop persisting non-business banned fields on task and checkpoint writes`
-- [ ] 范围保护：不禁 `business_refs` 写入；不删 `_session_business_context`；不删 schema 列。三者全在 213.3.5 处理
+  - `test_chatflow_trace_api.py`：跳过 `variables.collected.route` 等业务断言，标 `@unittest.skip("213.3.5 router migration restores")`
+- [ ] Backend gates：unit 374 / contract 101 / integration 463 + N (新增 banned-write tests) 不回归（特别注意 runtime_lab_service / semantic_policy / rag_policy / sop_adapter_contract 必须仍全绿，因为 `current_step` 还在写）
+- [ ] Docs：AUDIT.md 后记 v2（记录 re-carve 决策）；spec.md 进度
+- [ ] Git commit：`refactor(runtime-lab): stop persisting dispatch-irrelevant banned fields (pending_prompt/collected/scoped_variables)`
+- [ ] 范围保护：不禁 `current_step` / `business_refs` 写入；不删 `_session_business_context`；不删 schema 列；不动 router/policy/sop_adapter read path
 
-### Slice 213.3.5 — Drop runtime_lab_checkpoint table + banned columns + ban business_refs
+### Slice 213.3.5 — Drop checkpoint table + banned columns + migrate read consumers
 
-> **范围扩展**：213.3.4 carved 出的工作在此一并完成。
+> **范围**：完成 213.3.4 carved 出的所有工作：
+> 1. Read consumer migration（router / policy / sop_adapter）改读 adapter checkpoint in-memory 或 chatflow refs
+> 2. 禁写 `current_step` / `business_refs`
+> 3. 删 `_session_business_context` delegate
+> 4. 删 schema 列 + `runtime_lab_checkpoint` 表
 
 - [ ] RED：新增 schema-level test 断言 `runtime_lab_task` 不含 `current_step` / `business_refs` 列，且 `runtime_lab_checkpoint` 表不存在；当前应红；证据 `artifacts/213.3.5/red.txt`
-- [ ] GREEN：
-  - `infra/schema.py` 移除 `runtime_lab_checkpoint` 表 + `runtime_lab_task.current_step`/`business_refs` 列
-  - `infra/repository.py` 删 `create_checkpoint`/`get_checkpoint`/`get_latest_checkpoint`；`create_task` / `update_task_state` ban `business_refs`
-  - **重要前置**：aggregator 必须先不再依赖 `task.business_refs`。两种方案：
-    1. recording adapter 等 test fixtures 必须改为 dual-write chatflow refs（让 aggregator 走 chatflow conversation 分支）
-    2. aggregator 从 fallback 模式改为"无 chatflow refs → 报错或返回 {}"
-  - 推荐方案 1：扩 `_RecordingContextAdapter` 让它 set `chatflow_id` / `chatflow_session_id` 到 task，aggregator 拉 chatflow runtime conversation 即可
-  - `domain/service.py` 删 `_sop_checkpoint_from_row`/`_chatflow_meta_from_checkpoint_row`/`_visible_scoped_variables`；删 `_session_business_context` 1-line delegate
-  - `domain/payload.py` 删 `currentStep`/`businessRefs`/`collected`/`scoped` keys
+- [ ] GREEN — **Step A (read migration 先做)**:
+  - `domain/router.py` L80：`active_task.get("current_step")` 改读 adapter checkpoint in-memory，或从 chatflow refs 拿 chatflow runtime 当前 node
+  - `domain/policy.py` L172：`_adapter.is_interruptible(sop_id, active_task["current_step"])` 改成接受 in-memory checkpoint 参数或从 chatflow refs 解析
+  - `domain/sop_adapter.py` L103 / `MockSopAdapter.continue_task` 等：dispatch 改为从 adapter 入参 `request.checkpoint.current_step`（in-memory）读取，不读 DB
+  - 验证 runtime_lab_service / semantic_policy / rag_policy / sop_adapter_contract 仍全绿
+- [ ] GREEN — **Step B (ban writes)**:
+  - `infra/repository.py` `create_task` / `update_task_state` ban `current_step` + `business_refs` 写入
+  - `domain/service.py` write call-sites drop `current_step=` / `business_refs=` kwargs
+- [ ] GREEN — **Step C (schema drop)**:
+  - `infra/schema.py` 移除 `runtime_lab_checkpoint` 表 + `runtime_lab_task.current_step` / `business_refs` 列
+  - `infra/repository.py` 删 `create_checkpoint` / `get_checkpoint` / `get_latest_checkpoint`
+  - `domain/service.py` 删 `_sop_checkpoint_from_row` / `_chatflow_meta_from_checkpoint_row` / `_visible_scoped_variables` / `_session_business_context` delegate
+  - `domain/payload.py` 删 `currentStep` / `businessRefs` / `collected` / `scoped` keys
   - `web/router.py` `_runtime_task_chatflow_trace` 改读 task ref columns + aggregator
-- [ ] Frontend Unit：`chatflow-trace` panel 测试更新（如有），改读 `chatflowSession.*` 而非 `currentStep`/`collected`
+  - Migration SQL: `ALTER TABLE runtime_lab_task DROP COLUMN current_step, DROP COLUMN business_refs; DROP TABLE runtime_lab_checkpoint;` (mysql ok; sqlite 需 table recreate)
+- [ ] Frontend Unit：`chatflow-trace` panel 测试更新（如有），改读 `chatflowSession.*` 而非 `currentStep` / `collected`
 - [ ] Frontend rem：若涉视觉尺寸 → 跑 remScaleClosure
 - [ ] E2E：`rtk node frontend/e2e/unified-routing-sop-chatflow-runtime-uat.mjs`、`chatflow-session-state.mjs`、`chatflow-resume-api.mjs` 全绿
 - [ ] Browser UAT：客服侧 SOP 切换 / 暂停 / 恢复场景；chatflow-trace 面板仍正常显示；证据 `artifacts/213.3.5/uat.md`
