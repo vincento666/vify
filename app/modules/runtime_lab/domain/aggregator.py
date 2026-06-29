@@ -47,9 +47,35 @@ class RuntimeLabBusinessContextAggregator:
     ) -> None:
         self._repository = repository
         self._workflow_service = workflow_service
+        self._in_memory_overlay: dict[int, dict[str, Any]] = {}
+
+    def record_turn_context(
+        self, session_id: int, context: Mapping[str, Any]
+    ) -> None:
+        """Refresh the per-session in-memory overlay after each adapter turn.
+
+        Called by :class:`RuntimeLabService` after every SOP adapter turn
+        (start / continue / suspend / resume) so the aggregator has a
+        deterministic data source independent of DB ``business_refs`` writes
+        (banned in slice 213.3.5e). New keys merge in, existing keys are
+        overridden by the latest turn.
+        """
+        if not isinstance(context, Mapping):
+            return
+        existing = self._in_memory_overlay.get(session_id) or {}
+        merged = dict(existing)
+        merged.update(dict(context))
+        self._in_memory_overlay[session_id] = merged
 
     def collect(self, session_id: int) -> dict[str, Any]:
-        """Return merged business context. Active task wins on key collision."""
+        """Return merged business context.
+
+        Source priority:
+
+        1. chatflow ``conversation`` scope (active task wins on collision)
+        2. in-memory overlay populated by :meth:`record_turn_context`
+        3. legacy DB ``business_refs`` (removed in slice 213.3.5g)
+        """
         active_id = self._active_task_id(session_id)
         merged: dict[str, Any] = {}
         active_ctx: dict[str, Any] | None = None
@@ -61,6 +87,10 @@ class RuntimeLabBusinessContextAggregator:
             merged.update(ctx)
         if active_ctx is not None:
             merged.update(active_ctx)
+        overlay = self._in_memory_overlay.get(session_id)
+        if isinstance(overlay, Mapping):
+            for key, value in overlay.items():
+                merged.setdefault(key, value)
         return merged
 
     def _task_conversation_variables(self, task: Mapping[str, Any]) -> dict[str, Any]:

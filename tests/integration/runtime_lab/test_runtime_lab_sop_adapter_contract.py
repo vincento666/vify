@@ -108,14 +108,14 @@ class _RecordingSopRuntimeAdapter(FakeSopRuntimeAdapter):
 
 class _FailingStartAdapter(FakeSopRuntimeAdapter):
     def start_sop(self, request: SopExecutionRequest) -> SopExecutionResult:
-        checkpoint = SopCheckpoint(
-            sop_runtime_id=f"failing:{request.sop_id}",
-            current_node_id="",
+        # Slice 213.3.5a: even the failure path emits a well-formed
+        # __chatflow meta block so downstream consumers (which never run
+        # in this branch but may in other matrix tests) have consistent shape.
+        checkpoint = self._checkpoint(
+            request,
             current_step="",
             pending_prompt="",
             collected={},
-            scoped_variables={},
-            version=1,
         )
         return SopExecutionResult(
             status=SopExecutionStatus.FAILED,

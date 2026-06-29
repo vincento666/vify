@@ -385,12 +385,51 @@ def _adapter_checkpoint(
     prompt: str,
     collected: dict[str, object],
 ) -> SopCheckpoint:
+    scoped_variables: dict[str, object] = {
+        f"conversation.{key}": value for key, value in collected.items()
+    }
+    # Slice 213.3.5a: fake adapters must emit synthetic __chatflow meta so the
+    # service's chatflow ref column writes (213.3.1) and aggregator's chatflow
+    # source (213.3.5a) exercise the same code paths as the real adapter.
+    scoped_variables["__chatflow"] = _synthetic_chatflow_meta(
+        request.sop_id, request.runtime_session_id, request.runtime_task_id
+    )
     return SopCheckpoint(
         sop_runtime_id=f"test:{request.sop_id}:{current_step}",
         current_node_id=current_step,
         current_step=current_step,
         pending_prompt=prompt,
         collected=dict(collected),
-        scoped_variables={f"conversation.{key}": value for key, value in collected.items()},
+        scoped_variables=scoped_variables,
         version=1,
     )
+
+
+def _synthetic_chatflow_meta(
+    sop_id: str,
+    runtime_session_id: int | None,
+    runtime_task_id: int | None,
+) -> dict[str, object]:
+    chatflow_id = abs(hash(("chatflow_id", sop_id))) % 100000 or 1
+    session_seed = runtime_session_id if runtime_session_id is not None else 0
+    task_seed = runtime_task_id if runtime_task_id is not None else 0
+    session_id = abs(hash(("session_id", sop_id, session_seed))) % 100000 or 1
+    run_id = abs(hash(("run_id", sop_id, session_seed, task_seed))) % 100000 or 1
+    return {
+        "chatflowId": chatflow_id,
+        "sessionId": session_id,
+        "runId": run_id,
+        "eventId": 0,
+        "checkpointId": 0,
+        "runtimeVersion": "v2",
+        "runtimeRefs": {
+            "runId": run_id,
+            "statusRef": f"/api/v1/runtime-runs/{run_id}",
+            "eventsRef": f"/api/v1/runtime-runs/{run_id}/events",
+            "eventStreamRef": f"/api/v1/runtime-runs/{run_id}/events/stream?afterSequence=0",
+            "nodesRef": f"/api/v1/runtime-runs/{run_id}/nodes",
+            "resultRef": f"/api/v1/runtime-runs/{run_id}/result",
+        },
+        "runtimeStatus": "RUNNING",
+        "fallbackReason": None,
+    }

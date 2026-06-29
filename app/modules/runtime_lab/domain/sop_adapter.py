@@ -180,10 +180,13 @@ class FakeSopRuntimeAdapter:
         pending_prompt: str,
         collected: dict[str, Any],
     ) -> SopCheckpoint:
-        scoped_variables = {
+        scoped_variables: dict[str, Any] = {
             f"conversation.{key}": value
             for key, value in collected.items()
         }
+        scoped_variables["__chatflow"] = _synthetic_chatflow_meta(
+            request.sop_id, request.runtime_session_id, request.runtime_task_id
+        )
         runtime_id = request.runtime_task_id if request.runtime_task_id is not None else "new"
         return SopCheckpoint(
             sop_runtime_id=f"fake:{request.sop_id}:{runtime_id}",
@@ -208,3 +211,45 @@ class FakeSopRuntimeAdapter:
             events=[{"type": "SOP_FAILED", "sopId": request.sop_id}],
             error={"code": "SOP_NOT_FOUND", "message": f"Unknown SOP: {request.sop_id}"},
         )
+
+
+def _synthetic_chatflow_meta(
+    sop_id: str,
+    runtime_session_id: int | None,
+    runtime_task_id: int | None,
+) -> dict[str, Any]:
+    """Build a deterministic ``__chatflow`` meta block for fake adapters.
+
+    Slice 213.3.5a: aggregator now reads chatflow refs from
+    ``checkpoint.scoped_variables.__chatflow`` and the runtime-lab service
+    writes ``task.chatflow_*`` columns from the same source (via
+    :func:`_chatflow_refs_from_checkpoint`). Fake adapters used in tests
+    must emit synthetic but well-formed meta so this dual-write path
+    exercises the same branches as :class:`ChatflowSopRuntimeAdapter`.
+
+    The synthetic ids are derived from ``sop_id`` and the runtime session /
+    task ids so the same fake turn always produces the same refs.
+    """
+    chatflow_id = abs(hash(("chatflow_id", sop_id))) % 100000 or 1
+    session_seed = runtime_session_id if runtime_session_id is not None else 0
+    task_seed = runtime_task_id if runtime_task_id is not None else 0
+    session_id = abs(hash(("session_id", sop_id, session_seed))) % 100000 or 1
+    run_id = abs(hash(("run_id", sop_id, session_seed, task_seed))) % 100000 or 1
+    return {
+        "chatflowId": chatflow_id,
+        "sessionId": session_id,
+        "runId": run_id,
+        "eventId": 0,
+        "checkpointId": 0,
+        "runtimeVersion": "v2",
+        "runtimeRefs": {
+            "runId": run_id,
+            "statusRef": f"/api/v1/runtime-runs/{run_id}",
+            "eventsRef": f"/api/v1/runtime-runs/{run_id}/events",
+            "eventStreamRef": f"/api/v1/runtime-runs/{run_id}/events/stream?afterSequence=0",
+            "nodesRef": f"/api/v1/runtime-runs/{run_id}/nodes",
+            "resultRef": f"/api/v1/runtime-runs/{run_id}/result",
+        },
+        "runtimeStatus": "RUNNING",
+        "fallbackReason": None,
+    }

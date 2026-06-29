@@ -918,7 +918,7 @@ class RuntimeLabService:
             scoped_variables=result.checkpoint.scoped_variables,
             status=_checkpoint_status(result),
         )
-        return self._repository.update_task_state(
+        updated = self._repository.update_task_state(
             int(task["id"]),
             status="RUNNING",
             current_step=result.current_step,
@@ -926,6 +926,8 @@ class RuntimeLabService:
             business_refs=result.collected,
             **refs,
         )
+        self._aggregator.record_turn_context(session_id, result.collected)
+        return updated
 
     def _suspend_task(self, session_id: int, task: dict[str, Any]) -> dict[str, Any]:
         checkpoint_row = self._repository.get_latest_checkpoint(int(task["id"]))
@@ -948,13 +950,15 @@ class RuntimeLabService:
             scoped_variables=adapter_checkpoint.scoped_variables,
         )
         summary = f"{task['sop_id']} paused at {task['current_step']}"
-        return self._repository.update_task_state(
+        suspended = self._repository.update_task_state(
             int(task["id"]),
             status="SUSPENDED",
             checkpoint_id=int(checkpoint["id"]),
             resume_summary=summary,
             business_refs=adapter_checkpoint.collected,
         )
+        self._aggregator.record_turn_context(session_id, adapter_checkpoint.collected)
+        return suspended
 
     def _continue_active_task(
         self,
@@ -994,6 +998,7 @@ class RuntimeLabService:
                 checkpoint_id=int(saved_checkpoint["id"]),
                 business_refs=result.collected,
             )
+            self._aggregator.record_turn_context(session_id, result.collected)
             complete_decision = RouteDecision(
                 action="COMPLETE_TASK",
                 reason="Active SOP completed after confirmation",
@@ -1016,6 +1021,7 @@ class RuntimeLabService:
             checkpoint_id=int(saved_checkpoint["id"]),
             business_refs=result.collected,
         )
+        self._aggregator.record_turn_context(session_id, result.collected)
         self._repository.append_event(
             session_id,
             "TASK_CONTINUED",
@@ -1059,6 +1065,7 @@ class RuntimeLabService:
             checkpoint_id=int(saved_checkpoint["id"]),
             business_refs=result.collected,
         )
+        self._aggregator.record_turn_context(session_id, result.collected)
         self._repository.append_event(
             session_id,
             "TASK_RESUMED",
