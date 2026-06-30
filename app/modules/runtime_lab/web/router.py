@@ -151,6 +151,7 @@ def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeL
         fallback_agent=fallback_agent,
         agent_output_policy=agent_output_policy,
         policy_thresholds=policy_thresholds,
+        current_step_runtime=runtime_v2_service,
     )
 
 

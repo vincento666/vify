@@ -52,6 +52,11 @@ class HandoffRuntimeService(Protocol):
         ...
 
 
+class RuntimeLabCurrentStepRuntime(Protocol):
+    def get_result(self, run_id: int) -> dict[str, Any]:
+        ...
+
+
 class RuntimeLabService:
     def __init__(
         self,
@@ -68,6 +73,7 @@ class RuntimeLabService:
         policy_thresholds: dict[str, Any] | None = None,
         aggregator: RuntimeLabBusinessContextAggregator | None = None,
         workflow_service: Any | None = None,
+        current_step_runtime: RuntimeLabCurrentStepRuntime | None = None,
     ) -> None:
         self._repository = repository
         self._manifests = mock_sop_manifests()
@@ -90,6 +96,7 @@ class RuntimeLabService:
         self._aggregator = aggregator or RuntimeLabBusinessContextAggregator(
             repository, workflow_service
         )
+        self._current_step_runtime = current_step_runtime
 
     def create_session(self) -> dict[str, Any]:
         runtime_session = self._repository.create_session()
@@ -895,12 +902,46 @@ class RuntimeLabService:
             return None
         task_id = int(task["id"])
         checkpoint = self._repository.get_latest_checkpoint(task_id)
-        overlay = self._task_current_step(task_id)
-        if not overlay:
+        current_step = self._resolved_current_step(task, checkpoint)
+        if not current_step:
             return checkpoint
         data = dict(checkpoint or {})
-        data["current_step"] = overlay
+        data["current_step"] = current_step
         return data
+
+    def _resolved_current_step(
+        self,
+        task: dict[str, Any],
+        checkpoint: dict[str, Any] | None,
+    ) -> str:
+        runtime_step = self._runtime_current_step(task)
+        if runtime_step:
+            return runtime_step
+        task_id = int(task["id"])
+        overlay = self._task_current_step(task_id)
+        if overlay:
+            return overlay
+        if checkpoint is not None:
+            checkpoint_step = checkpoint.get("current_step")
+            if checkpoint_step:
+                return str(checkpoint_step)
+        return str(task.get("current_step") or "")
+
+    def _runtime_current_step(self, task: dict[str, Any]) -> str:
+        if self._current_step_runtime is None:
+            return ""
+        run_id = _int_or_none(task.get("chatflow_run_id"))
+        if run_id is None:
+            return ""
+        try:
+            result = self._current_step_runtime.get_result(run_id)
+        except Exception:
+            return ""
+        checkpoint = result.get("checkpoint") if isinstance(result, Mapping) else None
+        if not isinstance(checkpoint, Mapping):
+            return ""
+        pending_node = checkpoint.get("pendingNodeKey") or checkpoint.get("pending_node_key")
+        return str(pending_node) if pending_node else ""
 
     def _record_task_step(self, task_id: int, current_step: str) -> None:
         recorder = getattr(self._aggregator, "record_task_step", None)
