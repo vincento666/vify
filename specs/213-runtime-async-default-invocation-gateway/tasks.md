@@ -255,10 +255,23 @@
 - [ ] Git commit：`feat(runtime-lab): resolve current_step from child runtime before side-channel fallback`
 - [ ] 范围保护：不 ban writes；不删 schema；不改 frontend/e2e
 
+### Slice 213.3.5e-prep3 — Trace and close remaining decision-path current_step consumers
+
+> 起源：213.3.5e retry 在 durable resolver (prep2) 后仍失败两个 runtime_lab_service 测试：`COMPLETE_TASK` 变 `CLARIFY`、`REJECT_SWITCH_CONTINUE_ACTIVE` 变 `START_SOP`。说明仍有 decision path 未使用 durable current_step resolver。
+>
+> 本 prep slice 先做 tracing + read-path 补齐，不 ban writes。
+
+- [ ] RED：新增诊断/契约测试，覆盖两个失败路径，断言所有参与的 policy/router decision path 都收到 resolver 后的 current_step（runtime / side-channel / checkpoint / task priority）；当前应红；证据 `artifacts/213.3.5e-prep3/red.txt`
+- [ ] GREEN：修 `RuntimeLabService._semantic_decision` / `PolicyGate` / `RuntimeLabRouter` 调用链中漏传 `latest_checkpoint` 的路径；必要时为 `pre_classifier_decision` 加 current_step-aware 参数；确保 complete/confirm/switch arbitration 使用 resolver current_step
+- [ ] Targeted gates：`test_runtime_lab_service.py` 两个 previously failing tests PASS；semantic_policy / rag_policy / handoff_policy / sop_adapter_contract PASS
+- [ ] Backend gates 不回归
+- [ ] Git commit：`refactor(runtime-lab): route all decision paths through durable current_step resolver`
+- [ ] 范围保护：不 ban writes；不改 schema；只修 read path / tests
+
 ### Slice 213.3.5e — Ban writes: current_step + collected + business_refs
 
 - [ ] **Critical R2 verification BEFORE this slice**: 重跑 `chatflow-session-state.mjs` 确认 chatflow runtime v2 persist `conversation` scope；不通过 → STOP 升级
-- [ ] **Critical current_step resolver verification BEFORE this slice**: `RuntimeLabCurrentStepResolver` priority tests 全绿，且 router/policy 使用 durable runtime current_step 优先于 side-channel/checkpoint/task
+- [ ] **Critical current_step resolver verification BEFORE this slice**: `RuntimeLabCurrentStepResolver` priority tests + 213.3.5e-prep3 decision-path tests 全绿，且 router/policy 使用 durable runtime current_step 优先于 side-channel/checkpoint/task
 - [ ] RED：扩 `test_banned_writes_ignored.py` 断言三个字段写入被 ignore；当前应红
 - [ ] GREEN：
   - `repository.py` `create_task` / `update_task_state` / `create_checkpoint` 添加 ignore + warn 逻辑
