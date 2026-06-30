@@ -1,14 +1,14 @@
-"""Spec 213.3.4 contract — dispatch-irrelevant banned fields are not persisted on checkpoint writes.
+"""Spec 213.3.5e contract — banned runtime_lab writes are ignored.
 
-Repository.create_checkpoint MUST ignore explicit ``pending_prompt`` writes
-(logging a warning) so the SOP Router stops mirroring chatflow runtime state.
-``scoped_variables`` is filtered to retain only the ``__chatflow`` JSON key,
-keeping chatflow trace projections workable.
+Repository.create_task / update_task_state MUST ignore explicit
+``current_step`` and ``business_refs`` writes. ``business_refs`` is kept as an
+empty placeholder until schema drop, while ``current_step`` keeps its existing
+server default.
 
-``current_step`` / ``collected`` / ``business_refs`` writes are preserved
-(carved out of 213.3.4 because router / policy / SOP-adapter / aggregator
-read consumers still depend on them) and are scheduled for removal in slice
-213.3.5.
+Repository.create_checkpoint MUST ignore explicit ``current_step``,
+``pending_prompt``, and ``collected`` writes. It writes empty placeholders for
+NOT NULL columns and filters ``scoped_variables`` to retain only the
+``__chatflow`` JSON key.
 """
 
 from contextlib import contextmanager
@@ -70,7 +70,7 @@ class BannedWriteIgnoredTest(unittest.TestCase):
 
             self.assertEqual(checkpoint["scoped_variables"], {})
 
-    def test_create_checkpoint_writes_empty_placeholder_for_pending_prompt(self) -> None:
+    def test_create_checkpoint_writes_empty_placeholders_for_banned_fields(self) -> None:
         with _session() as session:
             repository = RuntimeLabRepository(session)
             runtime_session = repository.create_session()
@@ -85,16 +85,14 @@ class BannedWriteIgnoredTest(unittest.TestCase):
                 sop_id="refund_ticket",
                 current_step="collect_order_no",
                 pending_prompt="explicit prompt",
+                collected={"order_no": "T1"},
             )
 
-            # pending_prompt writes must be coerced to the empty placeholder.
+            self.assertEqual(checkpoint["current_step"], "")
             self.assertEqual(checkpoint["pending_prompt"], "")
-            # current_step writes are still permitted in 213.3.4 (carved out).
-            self.assertEqual(checkpoint["current_step"], "collect_order_no")
+            self.assertEqual(checkpoint["collected"], {})
 
-    def test_create_task_still_writes_business_refs(self) -> None:
-        # business_refs is the carved-out exception for 213.3.4 — verify it
-        # is still persisted as before (removal deferred to 213.3.5).
+    def test_create_task_ignores_current_step_and_business_refs(self) -> None:
         with _session() as session:
             repository = RuntimeLabRepository(session)
             runtime_session = repository.create_session()
@@ -102,10 +100,32 @@ class BannedWriteIgnoredTest(unittest.TestCase):
             task = repository.create_task(
                 int(runtime_session["id"]),
                 sop_id="refund_ticket",
+                current_step="explicit_step",
                 business_refs={"order_no": "T1"},
             )
 
-            self.assertEqual(task["business_refs"], {"order_no": "T1"})
+            self.assertEqual(task["current_step"], "collect_order_no")
+            self.assertEqual(task["business_refs"], {})
+
+    def test_update_task_state_ignores_current_step_and_business_refs(self) -> None:
+        with _session() as session:
+            repository = RuntimeLabRepository(session)
+            runtime_session = repository.create_session()
+            task = repository.create_task(
+                int(runtime_session["id"]),
+                sop_id="refund_ticket",
+                status="PENDING",
+            )
+
+            updated = repository.update_task_state(
+                int(task["id"]),
+                status="RUNNING",
+                current_step="explicit_step",
+                business_refs={"order_no": "T1"},
+            )
+
+            self.assertEqual(updated["current_step"], "collect_order_no")
+            self.assertEqual(updated["business_refs"], {})
 
 
 @contextmanager

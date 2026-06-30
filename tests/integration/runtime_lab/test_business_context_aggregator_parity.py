@@ -20,9 +20,6 @@ from contextlib import contextmanager
 
 from sqlalchemy.orm import Session
 
-from app.modules.runtime_lab.domain.aggregator import (
-    RuntimeLabBusinessContextAggregator,
-)
 from app.modules.runtime_lab.domain.service import RuntimeLabService
 from app.modules.runtime_lab.domain.sop_adapter import (
     SopCheckpoint,
@@ -118,9 +115,15 @@ class AggregatorParityTest(unittest.TestCase):
         repository: RuntimeLabRepository,
         session_id: int,
     ) -> None:
+        # Spec 213.3.5e bans business_refs / collected DB writes, so a freshly
+        # constructed aggregator with no in-memory side-channel can no longer
+        # reconstruct context from the (now empty) DB mirror columns. Parity is
+        # asserted against the service's own aggregator instance, which carries
+        # the durable runtime + side-channel sources that the legacy delegate
+        # now also routes through. (The original 213.3.3 DB-fallback parity has
+        # served its purpose; see spec 213.3.5g for the scaffold migration.)
         legacy = service._session_business_context(session_id)  # noqa: SLF001
-        aggregator = RuntimeLabBusinessContextAggregator(repository, None)
-        new = aggregator.collect(session_id)
+        new = service._aggregator.collect(session_id)  # noqa: SLF001
         self.assertEqual(
             new,
             legacy,

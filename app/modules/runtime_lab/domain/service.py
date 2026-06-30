@@ -960,8 +960,6 @@ class RuntimeLabService:
             session_id,
             sop_id=sop_id,
             status="PENDING",
-            current_step="pending",
-            business_refs={},
         )
 
     def _start_task(
@@ -976,26 +974,19 @@ class RuntimeLabService:
         task = task or self._repository.create_task(
             session_id,
             sop_id=sop_id,
-            current_step=result.current_step,
-            business_refs=result.collected,
             **refs,
         )
         checkpoint = self._repository.create_checkpoint(
             session_id,
             int(task["id"]),
             sop_id=sop_id,
-            current_step=result.current_step,
-            pending_prompt="",
-            collected=result.collected,
             scoped_variables=result.checkpoint.scoped_variables,
             status=_checkpoint_status(result),
         )
         updated = self._repository.update_task_state(
             int(task["id"]),
             status="RUNNING",
-            current_step=result.current_step,
             checkpoint_id=int(checkpoint["id"]),
-            business_refs=result.collected,
             **refs,
         )
         self._aggregator.record_turn_context(session_id, result.collected)
@@ -1017,9 +1008,6 @@ class RuntimeLabService:
             session_id,
             int(task["id"]),
             sop_id=str(task["sop_id"]),
-            current_step=adapter_checkpoint.current_step,
-            pending_prompt="",
-            collected=adapter_checkpoint.collected,
             scoped_variables=adapter_checkpoint.scoped_variables,
         )
         summary = f"{task['sop_id']} paused at {task['current_step']}"
@@ -1028,7 +1016,6 @@ class RuntimeLabService:
             status="SUSPENDED",
             checkpoint_id=int(checkpoint["id"]),
             resume_summary=summary,
-            business_refs=adapter_checkpoint.collected,
         )
         self._aggregator.record_turn_context(session_id, adapter_checkpoint.collected)
         self._record_task_step(int(task["id"]), adapter_checkpoint.current_step)
@@ -1058,9 +1045,6 @@ class RuntimeLabService:
             session_id,
             int(active_task["id"]),
             sop_id=str(active_task["sop_id"]),
-            current_step=result.current_step,
-            pending_prompt="",
-            collected=result.collected,
             scoped_variables=result.checkpoint.scoped_variables,
             status=_checkpoint_status(result),
         )
@@ -1068,9 +1052,7 @@ class RuntimeLabService:
             completed = self._repository.update_task_state(
                 int(active_task["id"]),
                 status="COMPLETED",
-                current_step=result.current_step,
                 checkpoint_id=int(saved_checkpoint["id"]),
-                business_refs=result.collected,
             )
             self._aggregator.record_turn_context(session_id, result.collected)
             self._record_task_step(int(active_task["id"]), result.current_step)
@@ -1092,9 +1074,7 @@ class RuntimeLabService:
         task = self._repository.update_task_state(
             int(active_task["id"]),
             status="RUNNING",
-            current_step=result.current_step,
             checkpoint_id=int(saved_checkpoint["id"]),
-            business_refs=result.collected,
         )
         self._aggregator.record_turn_context(session_id, result.collected)
         self._record_task_step(int(active_task["id"]), result.current_step)
@@ -1127,19 +1107,13 @@ class RuntimeLabService:
             session_id,
             int(task["id"]),
             sop_id=str(task["sop_id"]),
-            current_step=result.current_step or (str(checkpoint["current_step"]) if checkpoint else str(task["current_step"])),
-            pending_prompt="",
-            collected=result.collected,
             scoped_variables=result.checkpoint.scoped_variables,
             status=_checkpoint_status(result),
         )
-        current_step = str(saved_checkpoint["current_step"])
         resumed = self._repository.update_task_state(
             int(task["id"]),
             status="RUNNING",
-            current_step=current_step,
             checkpoint_id=int(saved_checkpoint["id"]),
-            business_refs=result.collected,
         )
         self._aggregator.record_turn_context(session_id, result.collected)
         self._record_task_step(int(task["id"]), result.current_step)
@@ -1226,8 +1200,13 @@ class RuntimeLabService:
         decision: RouteDecision,
         resume_offer: dict[str, Any] | None = None,
     ) -> RuntimeLabTurn:
-        active_task = self._repository.get_active_task(session_id)
-        suspended_tasks = self._repository.list_tasks(session_id, statuses={"SUSPENDED"})
+        active_task = self._project_task_with_resolved_current_step(
+            self._repository.get_active_task(session_id)
+        )
+        suspended_tasks = [
+            self._project_task_with_resolved_current_step(task)
+            for task in self._repository.list_tasks(session_id, statuses={"SUSPENDED"})
+        ]
         return RuntimeLabTurn(
             reply=reply,
             route_decision=decision,
@@ -1237,6 +1216,30 @@ class RuntimeLabService:
             events=self._repository.list_events(session_id),
             gateway=self._gateway_projection(session_id, reply, decision, active_task, resume_offer),
         )
+
+    def _project_task_with_resolved_current_step(
+        self,
+        task: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        """Transitional response projection; not a persistence source.
+
+        During the 213.3.5 migration, callers may still read
+        ``active_task["current_step"]`` from the response envelope while DB
+        writes to ``runtime_lab_task.current_step`` are banned. Resolve the
+        value from the durable runtime / side-channel / checkpoint fallback
+        and project it into a copy of the task row. Slice 213.3.5g removes
+        this compatibility field from the public payload.
+        """
+        if task is None:
+            return None
+        projected = dict(task)
+        current_step = self._resolved_current_step(
+            projected,
+            self._repository.get_latest_checkpoint(int(projected["id"])),
+        )
+        if current_step:
+            projected["current_step"] = current_step
+        return projected
 
     def _gateway_projection(
         self,
@@ -1248,7 +1251,9 @@ class RuntimeLabService:
     ) -> dict[str, Any]:
         task = active_task
         if task is None and decision.active_task_id is not None:
-            task = self._repository.get_task(int(decision.active_task_id))
+            task = self._project_task_with_resolved_current_step(
+                self._repository.get_task(int(decision.active_task_id))
+            )
         checkpoint = self._repository.get_latest_checkpoint(int(task["id"])) if task is not None else None
         meta = _chatflow_meta_from_checkpoint_row(checkpoint)
         current_sop_id = str(

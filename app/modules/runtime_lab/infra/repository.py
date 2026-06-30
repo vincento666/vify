@@ -99,6 +99,18 @@ class RuntimeLabRepository:
         if status in ACTIVE_TASK_STATUSES:
             self._ensure_no_other_active_task(session_id)
         now = datetime.now()
+        if current_step != "collect_order_no":
+            _logger.warning(
+                "Ignoring create_task(session_id=%s, current_step=%r) — banned field per spec 213.3.5e",
+                session_id,
+                current_step,
+            )
+        if business_refs:
+            _logger.warning(
+                "Ignoring create_task(session_id=%s, business_refs=%r) — banned field per spec 213.3.5e",
+                session_id,
+                business_refs,
+            )
         row = insert_and_fetch(
             self._session,
             self._task_table,
@@ -106,11 +118,10 @@ class RuntimeLabRepository:
                 "session_id": session_id,
                 "sop_id": sop_id,
                 "status": status,
-                "current_step": current_step,
                 "checkpoint_id": None,
                 "parent_task_id": parent_task_id,
                 "resume_summary": resume_summary,
-                "business_refs": business_refs or {},
+                "business_refs": {},
                 "chatflow_id": chatflow_id,
                 "chatflow_session_id": chatflow_session_id,
                 "chatflow_run_id": chatflow_run_id,
@@ -189,13 +200,21 @@ class RuntimeLabRepository:
         now = datetime.now()
         values: dict[str, Any] = {"status": status, "updated_at": now}
         if current_step is not None:
-            values["current_step"] = current_step
+            _logger.warning(
+                "Ignoring update_task_state(task_id=%s, current_step=%r) — banned field per spec 213.3.5e",
+                task_id,
+                current_step,
+            )
         if checkpoint_id is not None:
             values["checkpoint_id"] = checkpoint_id
         if resume_summary is not None:
             values["resume_summary"] = resume_summary
         if business_refs is not None:
-            values["business_refs"] = business_refs
+            _logger.warning(
+                "Ignoring update_task_state(task_id=%s, business_refs=%r) — banned field per spec 213.3.5e",
+                task_id,
+                business_refs,
+            )
         if chatflow_id is not None:
             values["chatflow_id"] = chatflow_id
         if chatflow_session_id is not None:
@@ -232,17 +251,29 @@ class RuntimeLabRepository:
         session_id: int,
         task_id: int,
         sop_id: str,
-        current_step: str,
-        pending_prompt: str,
+        current_step: str = "",
+        pending_prompt: str = "",
         collected: dict[str, Any] | None = None,
         scoped_variables: dict[str, Any] | None = None,
         status: str = "ACTIVE",
     ) -> dict[str, Any]:
+        if current_step:
+            _logger.warning(
+                "Ignoring create_checkpoint(task_id=%s, current_step=%r) — banned field per spec 213.3.5e",
+                task_id,
+                current_step,
+            )
         if pending_prompt:
             _logger.warning(
                 "Ignoring create_checkpoint(task_id=%s, pending_prompt=%r) — banned field per spec 213.3.4",
                 task_id,
                 pending_prompt,
+            )
+        if collected:
+            _logger.warning(
+                "Ignoring create_checkpoint(task_id=%s, collected=%r) — banned field per spec 213.3.5e",
+                task_id,
+                collected,
             )
         scoped_filtered: dict[str, Any] = {}
         if isinstance(scoped_variables, Mapping):
@@ -267,10 +298,10 @@ class RuntimeLabRepository:
                 "session_id": session_id,
                 "task_id": task_id,
                 "sop_id": sop_id,
-                "current_step": current_step,
+                "current_step": "",
                 # pending_prompt banned per 213.3.4; write NOT NULL placeholder.
                 "pending_prompt": "",
-                "collected": collected or {},
+                "collected": {},
                 "scoped_variables": scoped_filtered,
                 "status": status,
                 "deleted": False,

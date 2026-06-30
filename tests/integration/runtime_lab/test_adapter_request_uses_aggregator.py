@@ -102,7 +102,10 @@ class AdapterRequestUsesAggregatorTest(unittest.TestCase):
             request = adapter.suspend_requests[0]
             self.assertNotIn("TASK-POISON", request.collected.values())
             self.assertNotIn("from_task", request.collected.values())
-            self.assertNotEqual(request.business_refs, task["business_refs"])
+            # Spec 213.3.5e bans business_refs DB writes, so the poisoned task
+            # value is never persisted and can never reach the adapter request.
+            self.assertNotIn("TASK-POISON", request.business_refs.values())
+            self.assertNotIn("from_task", request.business_refs.values())
 
 
 @contextmanager

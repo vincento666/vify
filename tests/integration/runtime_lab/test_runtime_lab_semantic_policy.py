@@ -93,7 +93,10 @@ class RuntimeLabSemanticPolicyTest(unittest.TestCase):
 
             self.assertEqual(turn.route_decision.action, "REJECT_SWITCH_CONTINUE_ACTIVE")
             self.assertEqual([task["sop_id"] for task in tasks], ["refund_ticket"])
-            self.assertEqual(tasks[0]["current_step"], "confirm")
+            # Spec 213.3.5e bans runtime_lab_task.current_step writes; the durable
+            # current_step is resolved into the response projection instead of the
+            # DB mirror column.
+            self.assertEqual(turn.active_task["current_step"], "confirm")
 
     def test_suspended_task_semantic_candidate_can_resume(self) -> None:
         with _session() as session:
