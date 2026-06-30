@@ -237,9 +237,28 @@
 - [ ] Git commit：`feat(runtime-lab): add current_step side-channel before banning checkpoint writes`
 - [ ] 范围保护：不 ban writes；不删 schema；仅新增替代 source
 
+### Slice 213.3.5e-prep2 — Durable current_step resolver from child Chatflow runtime
+
+> 起源：213.3.5e-prep 引入了 current_step in-memory side-channel，但用户指出内存态不是最终事实源。正确目标是 durable-first：current_step / waiting node 必须优先来自 child Chatflow runtime run/checkpoint/event，而 side-channel 只能作为同进程 fast-path / fake adapter fallback。
+>
+> Resolver priority:
+> 1. Child Chatflow runtime durable source: `runtime_v2_service.get_result(chatflow_run_id).checkpoint.pendingNodeKey`
+> 2. In-memory side-channel from 213.3.5e-prep
+> 3. latest `runtime_lab_checkpoint.current_step` (transition fallback)
+> 4. `runtime_lab_task.current_step` (final fallback until schema drop)
+
+- [ ] RED：unit/integration test 断言 router/policy current_step resolver 优先使用 runtime_v2 durable `pendingNodeKey`，即使 side-channel/checkpoint/task 有不同值；当前应红；证据 `artifacts/213.3.5e-prep2/red.txt`
+- [ ] GREEN：新增 `RuntimeLabCurrentStepResolver`（或 service helper）读取 `task.chatflow_run_id` 后调用 `runtime_v2_service.get_result(run_id)`，从 `checkpoint.pendingNodeKey` 推导 step；无 runtime_v2_service / no runId / error 时 fallback side-channel / latest checkpoint / task
+- [ ] Web wiring：`runtime_lab/web/router.py` 构造 `RuntimeLabService` 时，把 `runtime_v2_service` 注入 service（已有创建变量）；无 bindings 分支保持 None
+- [ ] Tests：覆盖 priority order、BizError/error fallback、missing runId fallback
+- [ ] Backend gates 不回归
+- [ ] Git commit：`feat(runtime-lab): resolve current_step from child runtime before side-channel fallback`
+- [ ] 范围保护：不 ban writes；不删 schema；不改 frontend/e2e
+
 ### Slice 213.3.5e — Ban writes: current_step + collected + business_refs
 
 - [ ] **Critical R2 verification BEFORE this slice**: 重跑 `chatflow-session-state.mjs` 确认 chatflow runtime v2 persist `conversation` scope；不通过 → STOP 升级
+- [ ] **Critical current_step resolver verification BEFORE this slice**: `RuntimeLabCurrentStepResolver` priority tests 全绿，且 router/policy 使用 durable runtime current_step 优先于 side-channel/checkpoint/task
 - [ ] RED：扩 `test_banned_writes_ignored.py` 断言三个字段写入被 ignore；当前应红
 - [ ] GREEN：
   - `repository.py` `create_task` / `update_task_state` / `create_checkpoint` 添加 ignore + warn 逻辑
