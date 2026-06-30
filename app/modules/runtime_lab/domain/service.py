@@ -1377,6 +1377,13 @@ class RuntimeLabService:
         business_context_reference = context_reference and not _is_resume_only_reference(message)
         saved = sop_context if business_context_reference else {}
         if checkpoint is not None:
+            resolved_step = self._resolved_current_step(task, checkpoint_row) if task is not None else ""
+            if resolved_step and resolved_step != checkpoint.current_step:
+                checkpoint = replace(
+                    checkpoint,
+                    current_node_id=resolved_step,
+                    current_step=resolved_step,
+                )
             saved = dict(sop_context) if business_context_reference else {}
             saved.update(dict(checkpoint.collected))
             checkpoint = _checkpoint_with_collected(checkpoint, saved)
