@@ -293,7 +293,24 @@
 - [ ] Browser UAT：chatflow-trace 面板 + 客服侧 SOP 切换 / 暂停 / 恢复场景；证据 `artifacts/213.3.5f/uat.md` + `screenshots/`
 - [ ] Git commit：`refactor(runtime-lab): chatflow-trace router uses task ref columns and aggregator`
 
+### Slice 213.3.5h — Tag CHATFLOW-owned runtime v2 events as chatflow_runtime_v2
+
+> 起源：213.3.5f 的 chatflow-trace 迁移全部 GREEN，但 `unified-routing-sop-chatflow-runtime-uat.mjs:111-112` 断言 runtime event / stream frame `source === 'chatflow_runtime_v2'`。当前 workflow runtime v2 对 CHATFLOW-owned SOP run 发出的 source 是 `<owner>_runtime_v2` / fallback `runtime_v2`。该 tagging 在 `app/modules/workflow/domain/runtime_v2.py:~1084` 和 `app/modules/workflow/infra/realtime/redis_streams.py:~129`，属 workflow 模块，非 213.3.5f 的 trace/frontend 范围。
+>
+> 本 slice 独立处理 event source tagging，并解锁 213.3.5g 的 e2e 门禁（它也跑同一脚本）。
+
+- [ ] RED：unit/integration test 断言 CHATFLOW-owned runtime v2 run 的 events + stream frame source 为 `chatflow_runtime_v2`；当前应红；证据 `artifacts/213.3.5h/red.txt`
+- [ ] 定位：`app/modules/workflow/domain/runtime_v2.py` event source 生成（`f"{owner_type.lower()}_runtime_v2"`）与 `redis_streams.py` fallback `"runtime_v2"`；确认 CHATFLOW owner_type 应产生 `chatflow_runtime_v2`
+- [ ] GREEN：修正 source tagging，使 CHATFLOW owner 一致输出 `chatflow_runtime_v2`（DB event + Redis stream frame 两路一致）；WORKFLOW owner 行为不变
+- [ ] Backend gates 不回归（workflow / runtime / chatflow / customer_assistant 全套）
+- [ ] E2E：`rtk env HIFY_E2E_BASE_URL=http://localhost:5173 /opt/homebrew/bin/node frontend/e2e/unified-routing-sop-chatflow-runtime-uat.mjs` 整脚本 PASS
+- [ ] Docs：AUDIT.md / spec 状态
+- [ ] Git commit：`fix(runtime-v2): tag CHATFLOW-owned runtime events as chatflow_runtime_v2`
+- [ ] 范围保护：仅 event source tagging；不动 trace router / frontend / schema
+
 ### Slice 213.3.5g — Schema drop + delete delegate + final cleanup
+
+> **前置**：213.3.5h 必须先 GREEN（否则本 slice 的 e2e 门禁 `unified-routing-sop-chatflow-runtime-uat.mjs` 会撞同一 event-source 断言）。
 
 - [ ] RED：schema-level test 断言 `runtime_lab_task` 不含 `current_step` / `business_refs`；`runtime_lab_checkpoint` 表不存在
 - [ ] GREEN — Step C:
