@@ -33,7 +33,8 @@ from app.modules.runtime_lab.domain.faq_gate import (
 )
 from app.modules.runtime_lab.domain.payload import format_event, format_session, format_task
 from app.modules.runtime_lab.domain.rag_gate import RagAnswerGate
-from app.modules.runtime_lab.domain.service import RuntimeLabService
+from app.modules.runtime_lab.domain.aggregator import RuntimeLabBusinessContextAggregator
+from app.modules.runtime_lab.domain.service import RuntimeLabService, _chatflow_meta_from_task
 from app.modules.runtime_lab.domain.sop_adapter import FakeSopRuntimeAdapter
 from app.modules.runtime_lab.infra.repository import RuntimeLabRepository
 from app.modules.runtime_lab.web.schemas import (
@@ -919,8 +920,18 @@ def _runtime_lab_chatflow_trace(session_id: int, session: Session) -> dict[str, 
         raise BizError(ErrorCode.NOT_FOUND, "Runtime lab session not found")
     workflow_repository = WorkflowRepository(session)
     state_repository = ChatflowStateRepository(session)
+    # Business context comes from the aggregator projection (chatflow
+    # ``conversation`` scope + regex-derived refs), replacing the banned
+    # checkpoint.collected / task.business_refs reads (slice 213.3.5f).
+    workflow_service = WorkflowService(
+        workflow_repository,
+        flow_type="CHATFLOW",
+        chatflow_state_repository=state_repository,
+    )
+    aggregator = RuntimeLabBusinessContextAggregator(runtime_repository, workflow_service)
+    business_refs = aggregator.collect(session_id)
     traces = [
-        _runtime_task_chatflow_trace(task, runtime_repository, workflow_repository, state_repository)
+        _runtime_task_chatflow_trace(task, workflow_repository, state_repository, business_refs)
         for task in runtime_repository.list_tasks(session_id)
     ]
     return {"tasks": traces, "total": len(traces)}
@@ -928,22 +939,34 @@ def _runtime_lab_chatflow_trace(session_id: int, session: Session) -> dict[str, 
 
 def _runtime_task_chatflow_trace(
     task: dict[str, Any],
-    runtime_repository: RuntimeLabRepository,
     workflow_repository: WorkflowRepository,
     state_repository: ChatflowStateRepository,
+    business_refs: dict[str, Any],
 ) -> dict[str, Any]:
-    checkpoint = runtime_repository.get_latest_checkpoint(int(task["id"])) or {}
-    meta = _chatflow_meta_from_checkpoint(checkpoint)
+    # chatflow meta is sourced from the task's first-class ``chatflow_*`` ref
+    # columns (slice 213.3.1), not checkpoint.scoped_variables.__chatflow.
+    meta = _chatflow_meta_from_task(task)
     chatflow_id = _int_value(meta.get("chatflowId"))
     run_id = _int_value(meta.get("runId"))
-    chatflow_session_id = str(meta.get("sessionId") or "")
     workflow = workflow_repository.get(chatflow_id, flow_type="CHATFLOW") if chatflow_id > 0 else None
     node_rows = workflow_repository.list_nodes(chatflow_id) if workflow is not None else []
     edge_rows = workflow_repository.list_edges(chatflow_id) if workflow is not None else []
     node_runs = workflow_repository.list_node_runs(run_id) if run_id > 0 else []
     node_runs_by_key = _latest_node_runs_by_key(node_runs)
-    current_step = str(task.get("current_step") or checkpoint.get("current_step") or "")
-    events = _chatflow_events(state_repository, chatflow_id, run_id)
+    waiting_checkpoint = (
+        state_repository.get_waiting_checkpoint(chatflow_id, run_id) if chatflow_id > 0 and run_id > 0 else None
+    )
+    raw_events = (
+        state_repository.list_events(chatflow_id, run_id) if chatflow_id > 0 and run_id > 0 else []
+    )
+    # current_step comes from the durable runtime-v2 waiting checkpoint
+    # (``pending_node_key``), not the banned ``checkpoint.current_step``.
+    current_step = str(waiting_checkpoint.get("pending_node_key") or "") if waiting_checkpoint else ""
+    # The chatflow session id is a string; the BIGINT task ref column cannot
+    # carry it, so derive it from the durable runtime state (waiting checkpoint
+    # or run events) keyed by run_id, not checkpoint.scoped_variables.__chatflow.
+    chatflow_session_id = _trace_chatflow_session_id(waiting_checkpoint, raw_events)
+    events = [_format_runtime_chatflow_event(event) for event in raw_events]
     session_variables = _chatflow_session_variables(state_repository, chatflow_id, chatflow_session_id)
     runtime_refs = _chatflow_runtime_refs(meta, run_id)
 
@@ -980,24 +1003,36 @@ def _runtime_task_chatflow_trace(
         ],
         "events": events,
         "variables": {
-            "businessRefs": task.get("business_refs") or {},
-            "collected": checkpoint.get("collected") or {},
-            "scoped": _visible_scoped_variables(checkpoint.get("scoped_variables")),
+            "businessRefs": business_refs,
+            "collected": business_refs,
+            "scoped": {},
             "session": session_variables,
         },
     }
 
 
-def _chatflow_meta_from_checkpoint(checkpoint: Mapping[str, Any]) -> Mapping[str, Any]:
-    scoped = checkpoint.get("scoped_variables")
-    if not isinstance(scoped, Mapping):
-        return {}
-    meta = scoped.get("__chatflow")
-    return meta if isinstance(meta, Mapping) else {}
+def _trace_chatflow_session_id(
+    waiting_checkpoint: dict[str, Any] | None,
+    raw_events: list[dict[str, Any]],
+) -> str:
+    """Derive the chatflow session id (a string) from durable runtime state.
+
+    The task's ``chatflow_session_id`` ref column is a BIGINT and cannot carry
+    the string session id, so the chatflow-trace projection reads it from the
+    runtime-v2 waiting checkpoint or run events (keyed by run_id) instead of
+    ``checkpoint.scoped_variables.__chatflow`` (slice 213.3.5f).
+    """
+    if waiting_checkpoint and waiting_checkpoint.get("session_id"):
+        return str(waiting_checkpoint["session_id"])
+    for event in raw_events:
+        session_id = event.get("session_id")
+        if session_id:
+            return str(session_id)
+    return ""
 
 
 def _chatflow_runtime_refs(meta: Mapping[str, Any], run_id: int) -> dict[str, str]:
-    if _int_value(meta.get("runtimeVersion")) != 2 or run_id <= 0:
+    if run_id <= 0:
         return {}
     raw_refs = meta.get("runtimeRefs")
     refs = dict(raw_refs) if isinstance(raw_refs, Mapping) else {}
@@ -1073,16 +1108,6 @@ def _runtime_node_status(node_run: dict[str, Any] | None, *, current: bool, task
     return raw or "PENDING"
 
 
-def _chatflow_events(
-    state_repository: ChatflowStateRepository,
-    chatflow_id: int,
-    run_id: int,
-) -> list[dict[str, Any]]:
-    if chatflow_id <= 0 or run_id <= 0:
-        return []
-    return [_format_runtime_chatflow_event(event) for event in state_repository.list_events(chatflow_id, run_id)]
-
-
 def _chatflow_session_variables(
     state_repository: ChatflowStateRepository,
     chatflow_id: int,
@@ -1095,12 +1120,6 @@ def _chatflow_session_variables(
         return {}
     variables = state.get("variables")
     return dict(variables) if isinstance(variables, Mapping) else {}
-
-
-def _visible_scoped_variables(scoped: Any) -> dict[str, Any]:
-    if not isinstance(scoped, Mapping):
-        return {}
-    return {str(key): value for key, value in scoped.items() if key != "__chatflow"}
 
 
 def _format_runtime_chatflow_event(event: dict[str, Any]) -> dict[str, Any]:

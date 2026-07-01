@@ -210,7 +210,9 @@ export interface RuntimeLabChatflowTaskTrace {
   taskId: number
   sopId: string
   status: string
-  currentStep: string
+  // Optional since slice 213.3.5f: sourced from the durable runtime-v2 waiting
+  // checkpoint (pending_node_key) and absent when no run is waiting.
+  currentStep?: string
   chatflow: RuntimeLabTraceChatflow
   nodes: RuntimeLabTraceNode[]
   edges: RuntimeLabTraceEdge[]
@@ -261,6 +263,9 @@ export interface RuntimeLabTraceEvent {
 }
 
 export interface RuntimeLabTraceVariables {
+  // businessRefs / collected are both the aggregator projection (chatflow
+  // conversation scope + regex-derived refs) since slice 213.3.5f; the legacy
+  // checkpoint.collected / task.business_refs reads were banned in 213.3.5e.
   businessRefs: Record<string, unknown>
   collected: Record<string, unknown>
   scoped: Record<string, unknown>

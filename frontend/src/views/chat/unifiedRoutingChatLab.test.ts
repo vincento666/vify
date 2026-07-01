@@ -317,6 +317,55 @@ describe('unified routing chat lab model', () => {
     expect(cards[0].slotRows).toEqual([{ key: 'route', value: '广州飞北京' }])
   })
 
+  it('builds trace cards when currentStep is absent and slots come from aggregator collected', () => {
+    const cards = buildRuntimeLabTraceCards({
+      total: 1,
+      tasks: [
+        {
+          taskId: 9,
+          sopId: 'flight_booking',
+          status: 'RUNNING',
+          chatflow: {
+            chatflowId: 12,
+            chatflowName: '机票预订',
+            exists: true,
+            runId: 88,
+            eventId: null,
+            checkpointId: 100,
+            sessionId: '7777',
+            canvasPath: '/chatflows/12/canvas',
+            debugPath: '/chatflows/12/canvas?runId=88&debug=1',
+          },
+          nodes: [
+            {
+              nodeKey: 'collect',
+              nodeType: 'INFORMATION_COLLECTION',
+              name: '收集信息',
+              status: 'WAITING',
+              current: true,
+              elapsedMs: 0,
+              inputs: {},
+              outputs: {},
+              usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, estimated: false },
+              error: '',
+            },
+          ],
+          edges: [],
+          events: [],
+          variables: {
+            businessRefs: { route: '广州飞北京' },
+            collected: { route: '广州飞北京' },
+            scoped: {},
+            session: { node_outputs: {} },
+          },
+        },
+      ],
+    })
+
+    expect(cards[0].currentNodeLabel).toBe('collect · 收集信息')
+    expect(cards[0].slotRows).toEqual([{ key: 'route', value: '广州飞北京' }])
+  })
+
   it('uses business-specific reply samples for flight status completion', () => {
     const flightStatus = getAirlineSopScenario('flight_status')
 

@@ -1016,6 +1016,7 @@ class RuntimeLabService:
             status="SUSPENDED",
             checkpoint_id=int(checkpoint["id"]),
             resume_summary=summary,
+            **_chatflow_refs_from_checkpoint(adapter_checkpoint),
         )
         self._aggregator.record_turn_context(session_id, adapter_checkpoint.collected)
         self._record_task_step(int(task["id"]), adapter_checkpoint.current_step)
@@ -1053,6 +1054,7 @@ class RuntimeLabService:
                 int(active_task["id"]),
                 status="COMPLETED",
                 checkpoint_id=int(saved_checkpoint["id"]),
+                **_chatflow_refs_from_checkpoint(result.checkpoint),
             )
             self._aggregator.record_turn_context(session_id, result.collected)
             self._record_task_step(int(active_task["id"]), result.current_step)
@@ -1075,6 +1077,7 @@ class RuntimeLabService:
             int(active_task["id"]),
             status="RUNNING",
             checkpoint_id=int(saved_checkpoint["id"]),
+            **_chatflow_refs_from_checkpoint(result.checkpoint),
         )
         self._aggregator.record_turn_context(session_id, result.collected)
         self._record_task_step(int(active_task["id"]), result.current_step)
@@ -1114,6 +1117,7 @@ class RuntimeLabService:
             int(task["id"]),
             status="RUNNING",
             checkpoint_id=int(saved_checkpoint["id"]),
+            **_chatflow_refs_from_checkpoint(result.checkpoint),
         )
         self._aggregator.record_turn_context(session_id, result.collected)
         self._record_task_step(int(task["id"]), result.current_step)
