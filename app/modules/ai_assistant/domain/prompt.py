@@ -55,12 +55,11 @@ class PromptAssembler:
                 "\n".join(manifest.name for manifest in self._tool_registry.list_manifests()),
             )
         )
-        skill_content = "\n".join(
-            f"{manifest.name}: {manifest.description} Trigger: {manifest.trigger}"
-            for manifest in self._skill_registry.list_manifests()
-        )
+        skill_content = self._skill_registry.prompt_index()
         if skill_content:
             layers.append(PromptLayer("skills", skill_content))
+        for loaded_skill in self._skill_registry.load_for_prompt(user_message):
+            layers.append(PromptLayer(f"skill:{loaded_skill.manifest.name}", loaded_skill.content))
         if memory_items:
             layers.append(PromptLayer("memory", _format_memory_items(memory_items)))
         if compaction_summary:

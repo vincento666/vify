@@ -138,6 +138,26 @@ def register_ai_assistant_tables(metadata: sa.MetaData | None = None) -> None:
             sa.Index("idx_ai_assistant_proposed_action_status", "status"),
         )
 
+    if "ai_assistant_resource_lock" not in target.tables:
+        sa.Table(
+            "ai_assistant_resource_lock",
+            target,
+            id_column(),
+            sa.Column("resource_key", sa.String(500), nullable=False),
+            sa.Column("mode", sa.String(20), nullable=False),
+            sa.Column("owner_session_id", BIGINT, nullable=False),
+            sa.Column("owner_run_id", BIGINT, nullable=False),
+            sa.Column("owner_tool_call_id", BIGINT, nullable=True),
+            sa.Column("lease_expires_at", sa.DateTime(), nullable=False),
+            sa.Column("fencing_token", sa.Integer(), nullable=False),
+            sa.Column("status", sa.String(30), nullable=False, server_default="ACTIVE"),
+            deleted_column(),
+            *timestamps(),
+            sa.Index("idx_ai_assistant_resource_lock_key", "resource_key"),
+            sa.Index("idx_ai_assistant_resource_lock_status", "status"),
+            sa.Index("idx_ai_assistant_resource_lock_owner", "owner_session_id", "owner_run_id"),
+        )
+
 
 def ai_assistant_tables() -> list[sa.Table]:
     register_ai_assistant_tables()
@@ -149,5 +169,6 @@ def ai_assistant_tables() -> list[sa.Table]:
         "ai_assistant_tool_call",
         "ai_assistant_approval",
         "ai_assistant_proposed_action",
+        "ai_assistant_resource_lock",
     ]
     return [Base.metadata.tables[name] for name in names]

@@ -147,12 +147,26 @@ class AiAssistantSecurityApiContractTest(unittest.TestCase):
         self.assertEqual(run["status"], "COMPLETED")
         self.assertEqual(run["result"]["approvalRequired"], False)
         self.assertEqual(run["result"]["toolCalls"][0]["toolName"], "write_workspace_file")
+        self.assertEqual(run["result"]["plan"]["status"], "COMPLETED")
+        self.assertEqual(run["result"]["plan"]["currentStep"]["status"], "COMPLETED")
+        self.assertEqual(run["result"]["plan"]["steps"][0]["status"], "COMPLETED")
         self.assertEqual(inspector["approvalQueue"], [])
         self.assertEqual(inspector["approvalHistory"][0]["status"], "APPROVED")
         self.assertEqual(inspector["toolCalls"][0]["toolName"], "write_workspace_file")
-        self.assertIn("approval.granted", [event["type"] for event in events])
-        self.assertIn("tool.call_completed", [event["type"] for event in events])
-        self.assertIn("run.completed", [event["type"] for event in events])
+        self.assertEqual(inspector["plan"]["status"], "COMPLETED")
+        self.assertEqual(inspector["plan"]["currentStep"]["status"], "COMPLETED")
+        self.assertEqual(inspector["plan"]["steps"][0]["status"], "COMPLETED")
+        event_types = [event["type"] for event in events]
+        self.assertIn("approval.granted", event_types)
+        self.assertIn("plan.revised", event_types)
+        self.assertIn("plan.step_started", event_types)
+        self.assertIn("tool.call_completed", event_types)
+        self.assertIn("plan.step_completed", event_types)
+        self.assertIn("task.completed", event_types)
+        self.assertIn("run.completed", event_types)
+        task_updates = [event["payload"] for event in events if event["type"] == "task.updated"]
+        self.assertEqual(task_updates[-1]["planStatus"], "COMPLETED")
+        self.assertEqual(task_updates[-1]["currentStep"]["status"], "COMPLETED")
 
     def test_approved_write_continues_pending_readback_tool_call(self) -> None:
         with TestClient(app) as client:
@@ -162,7 +176,7 @@ class AiAssistantSecurityApiContractTest(unittest.TestCase):
                 json={
                     "message": "写入后读取确认",
                     "idempotencyKey": "security-approve-readback",
-                    "approvalMode": "ask_each_time",
+                    "approvalMode": "smart_approval",
                     "toolCalls": [
                         {
                             "toolName": "write_workspace_file",
@@ -193,7 +207,16 @@ class AiAssistantSecurityApiContractTest(unittest.TestCase):
             ["write_workspace_file", "read_workspace_file"],
         )
         self.assertIn("approved readback content", run["result"]["toolCalls"][1]["output"]["content"])
-        self.assertIn("run.completed", [event["type"] for event in events])
+        self.assertEqual(run["result"]["plan"]["status"], "COMPLETED")
+        self.assertEqual(inspector["plan"]["status"], "COMPLETED")
+        self.assertEqual(inspector["plan"]["currentStep"]["status"], "COMPLETED")
+        self.assertEqual(inspector["plan"]["steps"][0]["status"], "COMPLETED")
+        self.assertEqual(inspector["plan"]["steps"][1]["status"], "COMPLETED")
+        event_types = [event["type"] for event in events]
+        self.assertIn("plan.revised", event_types)
+        self.assertIn("plan.step_completed", event_types)
+        self.assertIn("task.completed", event_types)
+        self.assertIn("run.completed", event_types)
 
     def test_unsafe_shell_command_is_blocked_by_sandbox_policy(self) -> None:
         with TestClient(app) as client:
@@ -253,6 +276,202 @@ class AiAssistantSecurityApiContractTest(unittest.TestCase):
         self.assertEqual(inspector["toolCalls"][0]["toolName"], "run_shell")
         self.assertEqual(inspector["toolCalls"][0]["output"]["exitCode"], 0)
         self.assertIn("PASS controlled shell api", inspector["toolCalls"][0]["output"]["stdout"])
+
+    def test_always_approve_write_is_still_bounded_by_policy_sandbox_and_db_lock_events(self) -> None:
+        with TestClient(app) as client:
+            session_id = client.post("/api/v1/ai-assistant/sessions", json={"title": "Security"}).json()["data"]["id"]
+            message = client.post(
+                f"/api/v1/ai-assistant/sessions/{session_id}/messages",
+                json={
+                    "message": "write with safety gates",
+                    "idempotencyKey": "security-gated-write",
+                    "approvalMode": "always_approve",
+                    "toolName": "write_workspace_file",
+                    "toolInput": {"path": "gated.txt", "content": "safe content"},
+                },
+            )
+            run_id = message.json()["data"]["runId"]
+            events = client.get(f"/api/v1/ai-assistant/runs/{run_id}/events").json()["data"]["list"]
+            run = client.get(f"/api/v1/ai-assistant/runs/{run_id}").json()["data"]
+
+        self.assertEqual(message.json()["data"]["status"], "COMPLETED")
+        event_types = [event["type"] for event in events]
+        self.assertIn("permission.evaluated", event_types)
+        self.assertIn("sandbox.evaluated", event_types)
+        self.assertIn("resource_lock.acquire_requested", event_types)
+        self.assertIn("resource_lock.acquired", event_types)
+        self.assertIn("resource_lock.released", event_types)
+        permission = next(event["payload"] for event in events if event["type"] == "permission.evaluated")
+        sandbox = next(event["payload"] for event in events if event["type"] == "sandbox.evaluated")
+        acquired = next(event["payload"] for event in events if event["type"] == "resource_lock.acquired")
+        released = next(event["payload"] for event in events if event["type"] == "resource_lock.released")
+        self.assertEqual(permission["toolName"], "write_workspace_file")
+        self.assertEqual(permission["approvalMode"], "always_approve")
+        self.assertEqual(permission["decision"], "allow")
+        self.assertEqual(sandbox["toolName"], "write_workspace_file")
+        self.assertEqual(sandbox["verdict"], "allow")
+        self.assertEqual(acquired["resourceKey"], "file:gated.txt")
+        self.assertEqual(acquired["mode"], "WRITE")
+        self.assertEqual(released["fencingToken"], acquired["fencingToken"])
+        self.assertEqual(run["result"]["toolCalls"][0]["output"]["lock"]["scope"], "db")
+        self.assertEqual(run["result"]["toolCalls"][0]["output"]["lock"]["fencingToken"], acquired["fencingToken"])
+
+    def test_contended_db_resource_lock_returns_observation_without_executing_tool(self) -> None:
+        from app.modules.ai_assistant.domain.resource_lock import ResourceLockManager, ResourceLockMode
+        from app.modules.ai_assistant.infra.repository import AiAssistantRepository
+
+        with self._factory() as session:
+            held = ResourceLockManager(AiAssistantRepository(session)).acquire(
+                resource_key="file:locked.txt",
+                mode=ResourceLockMode.WRITE,
+                owner_session_id=900,
+                owner_run_id=901,
+                ttl_seconds=60,
+            )
+            self.assertEqual(held.status, "ACQUIRED")
+
+        with TestClient(app) as client:
+            session_id = client.post("/api/v1/ai-assistant/sessions", json={"title": "Security"}).json()["data"]["id"]
+            message = client.post(
+                f"/api/v1/ai-assistant/sessions/{session_id}/messages",
+                json={
+                    "message": "write contended file",
+                    "idempotencyKey": "security-contended-write",
+                    "approvalMode": "always_approve",
+                    "toolName": "write_workspace_file",
+                    "toolInput": {"path": "locked.txt", "content": "should not write"},
+                },
+            )
+            run_id = message.json()["data"]["runId"]
+            events = client.get(f"/api/v1/ai-assistant/runs/{run_id}/events").json()["data"]["list"]
+            run = client.get(f"/api/v1/ai-assistant/runs/{run_id}").json()["data"]
+
+        self.assertEqual(message.json()["data"]["status"], "FAILED")
+        self.assertFalse((Path(self._workspace_dir.name) / "locked.txt").exists())
+        event_types = [event["type"] for event in events]
+        self.assertIn("resource_lock.contended", event_types)
+        self.assertNotIn("tool.call_started", event_types)
+        tool_call = run["result"]["toolCalls"][0]
+        self.assertEqual(tool_call["status"], "FAILED")
+        self.assertEqual(tool_call["output"]["observation"]["error"]["code"], "RESOURCE_LOCK_CONTENDED")
+
+    def test_session_policy_path_rule_uses_canonical_workspace_path(self) -> None:
+        Path(self._workspace_dir.name, "AGENTS.md").write_text("rules", encoding="utf-8")
+        with TestClient(app) as client:
+            session_id = client.post(
+                "/api/v1/ai-assistant/sessions",
+                json={
+                    "title": "Canonical policy",
+                    "context": {
+                        "aiAssistantPolicy": {
+                            "rules": [
+                                {
+                                    "id": "deny-agents",
+                                    "match": {"tool": "read_workspace_file", "path": "AGENTS.md"},
+                                    "effect": "deny",
+                                    "reason": "AGENTS.md reads disabled",
+                                }
+                            ]
+                        }
+                    },
+                },
+            ).json()["data"]["id"]
+            message = client.post(
+                f"/api/v1/ai-assistant/sessions/{session_id}/messages",
+                json={
+                    "message": "read agents",
+                    "idempotencyKey": "security-canonical-policy",
+                    "approvalMode": "always_approve",
+                    "toolName": "read_workspace_file",
+                    "toolInput": {"path": "./AGENTS.md"},
+                },
+            )
+            run_id = message.json()["data"]["runId"]
+            events = client.get(f"/api/v1/ai-assistant/runs/{run_id}/events").json()["data"]["list"]
+
+        permission = next(event["payload"] for event in events if event["type"] == "permission.evaluated")
+        self.assertEqual(message.json()["data"]["status"], "DENIED")
+        self.assertEqual(permission["decision"], "deny")
+        self.assertEqual(permission["matchedRuleId"], "deny-agents")
+
+    def test_equivalent_workspace_paths_share_same_db_resource_lock(self) -> None:
+        from app.modules.ai_assistant.domain.resource_lock import ResourceLockManager, ResourceLockMode
+        from app.modules.ai_assistant.infra.repository import AiAssistantRepository
+
+        with self._factory() as session:
+            held = ResourceLockManager(AiAssistantRepository(session)).acquire(
+                resource_key="file:locked-equivalent.txt",
+                mode=ResourceLockMode.WRITE,
+                owner_session_id=900,
+                owner_run_id=902,
+                ttl_seconds=60,
+            )
+            self.assertEqual(held.status, "ACQUIRED")
+
+        with TestClient(app) as client:
+            session_id = client.post("/api/v1/ai-assistant/sessions", json={"title": "Canonical lock"}).json()[
+                "data"
+            ]["id"]
+            message = client.post(
+                f"/api/v1/ai-assistant/sessions/{session_id}/messages",
+                json={
+                    "message": "write equivalent path",
+                    "idempotencyKey": "security-canonical-lock",
+                    "approvalMode": "always_approve",
+                    "toolName": "write_workspace_file",
+                    "toolInput": {"path": "./locked-equivalent.txt", "content": "should not write"},
+                },
+            )
+            run_id = message.json()["data"]["runId"]
+            events = client.get(f"/api/v1/ai-assistant/runs/{run_id}/events").json()["data"]["list"]
+
+        self.assertEqual(message.json()["data"]["status"], "FAILED")
+        self.assertFalse((Path(self._workspace_dir.name) / "locked-equivalent.txt").exists())
+        self.assertIn("resource_lock.contended", [event["type"] for event in events])
+
+    def test_sandbox_does_not_leak_non_allowlisted_env_and_redacts_secret_output(self) -> None:
+        previous_secret = os.environ.get("LEAK_ME")
+        os.environ["LEAK_ME"] = "super-secret-env-value"
+        script = Path(self._workspace_dir.name) / "tmp" / "print-env.mjs"
+        script.parent.mkdir(parents=True, exist_ok=True)
+        script.write_text("console.log(process.env.LEAK_ME || 'MISSING')\n", encoding="utf-8")
+        try:
+            with TestClient(app) as client:
+                session_id = client.post(
+                    "/api/v1/ai-assistant/sessions",
+                    json={
+                        "title": "Sandbox env",
+                        "context": {
+                            "aiAssistantSandbox": {
+                                "envAllowlist": [],
+                                "secretValues": ["super-secret-env-value"],
+                                "allowedExecutables": ["node"],
+                            }
+                        },
+                    },
+                ).json()["data"]["id"]
+                message = client.post(
+                    f"/api/v1/ai-assistant/sessions/{session_id}/messages",
+                    json={
+                        "message": "run env check",
+                        "idempotencyKey": "security-sandbox-env",
+                        "approvalMode": "always_approve",
+                        "toolName": "run_shell",
+                        "toolInput": {"command": "node tmp/print-env.mjs"},
+                    },
+                )
+                run_id = message.json()["data"]["runId"]
+                run = client.get(f"/api/v1/ai-assistant/runs/{run_id}").json()["data"]
+        finally:
+            if previous_secret is None:
+                os.environ.pop("LEAK_ME", None)
+            else:
+                os.environ["LEAK_ME"] = previous_secret
+
+        output = run["result"]["toolCalls"][0]["output"]
+        self.assertEqual(message.json()["data"]["status"], "COMPLETED")
+        self.assertIn("MISSING", output["stdout"])
+        self.assertNotIn("super-secret-env-value", output["stdout"])
 
     def _session_override(self) -> Generator[Session, None, None]:
         with self._factory() as session:

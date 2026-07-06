@@ -62,16 +62,16 @@ class AiAssistantInspectorApiContractTest(unittest.TestCase):
         self.assertEqual(data["approvalQueue"][0]["riskLevel"], "BUSINESS_WRITE")
         self.assertEqual(data["toolCalls"], [])
         self.assertEqual(data["recentErrors"], [])
-        self.assertEqual(
-            [event["type"] for event in data["eventTimeline"]],
-            [
-                "run.started",
-                "orchestration.phase_started",
-                "model.call_completed",
-                "approval.required",
-                "proposed_action.created",
-            ],
-        )
+        self.assertEqual(data["plan"]["planningStrategy"], "auto_lightweight")
+        self.assertEqual(data["activeTasks"][0]["planningStrategy"], "auto_lightweight")
+        self.assertEqual(data["activeTasks"][0]["plannedTools"], ["update_customer_profile"])
+        event_types = [event["type"] for event in data["eventTimeline"]]
+        self.assertIn("plan.created", event_types)
+        self.assertIn("task.created", event_types)
+        self.assertIn("plan.blocked", event_types)
+        self.assertIn("task.blocked", event_types)
+        self.assertIn("approval.required", event_types)
+        self.assertIn("proposed_action.created", event_types)
         self.assertEqual(data["usage"]["inputTokens"], 0)
 
     def _session_override(self) -> Generator[Session, None, None]:

@@ -76,6 +76,8 @@ pytest tests/e2e
 - 打开真实浏览器页面。
 - 记录操作步骤、期望结果、实际结果。
 - 保存截图到 `artifacts/slices/{spec}/{slice}/screenshots/`。
+- 涉及 spec 核心价值的真实用户路径时，必须沉淀可重复脚本或可复放的内置浏览器
+  自动化步骤；纯人工观察不能作为最终完成证据。
 
 UAT 记录模板：
 
@@ -93,7 +95,53 @@ UAT 记录模板：
 - Verdict: PASS / FAIL
 ```
 
-## 6. Docs Gate
+## 6. Real-case Automated UAT Gate
+
+目的：用真实案例和真实边界证明 spec 的产品价值，而不是只证明 mock 或单元逻辑。
+
+适用场景：
+
+- 外部 LLM / embedding / reranker / tool-calling provider。
+- 真实业务 API、真实 adapter、真实 sandbox、staging 或 contract-backed live service。
+- 真实数据流、真实权限/审批、真实审计或成本预算。
+- 用户要求“真实案例 UAT”或 spec 的验收价值依赖真实外部系统。
+- 当前 spec 明确要求 live LLM，即使业务 adapter 是 mock/seam，也必须用真实外部
+  provider 走通模型路径。
+
+要求：
+
+- spec 立项时必须写清真实案例、真实服务边界、凭据注入方式、预算、数据集、断言和
+  artifact 路径。
+- 用自动化脚本或内置浏览器控制走通真实案例；人工 UAT 只可辅助发现问题。
+- 外部副作用必须使用 sandbox、dry-run、quote、可逆操作或 compensation path，并保存
+  审批、幂等键、补偿和审计证据。
+- artifact 必须保存 redacted request/response metadata、截图、日志、trace/audit export、
+  token/cost/context budget 和最终结果。
+- 缺少 key、quota、网络、sandbox、测试数据或预算时，结果为 `BLOCKED` /
+  `waiting-human`，不能标记 PASS，不能静默 skip。
+- Domain adapter 是否连接真实业务系统服从当前 spec 边界；不要把“真实案例”自动
+  扩写成“必须接真实业务系统”。
+
+最小记录模板：
+
+```md
+# Real-case UAT
+
+- Spec:
+- Slice:
+- External service:
+- Credential env/key ref:
+- Scenario:
+- Test data:
+- Side-effect boundary:
+- Command / browser automation:
+- Objective assertions:
+- Audit export:
+- Screenshots:
+- Verdict: PASS / FAIL / BLOCKED
+```
+
+## 7. Docs Gate
 
 目的：让规格文档和真实实现同步。
 
@@ -163,7 +211,7 @@ UAT 报告 / addendum 必须使用以下大写关键字之一，便于 grep / or
 | `INFRA-RED` | 脚本执行时报路径/工具/导入错误（非业务） |
 | `ENV-BLOCKED-CHROME-MCP` | 缺 Chrome-MCP harness，无法启动 |
 | `ENV-BLOCKED-PGVECTOR` | 缺 pgvector / postgres，无法继续 |
-| `ENV-BLOCKED-LIVE-MODEL` | 缺真实 LLM key，跳过 live 评估 |
+| `ENV-BLOCKED-LIVE-MODEL` | 缺真实 LLM key / quota / provider access，live gate 阻塞，不可记 PASS |
 
 ### 不允许的实践
 
@@ -182,8 +230,9 @@ UAT 报告 / addendum 必须使用以下大写关键字之一，便于 grep / or
 
 ## Opt-in Live Gates
 
-默认 CI 不跑真实外部模型。live gate 必须显式 env 打开，并把 artifact 写到
-对应 slice 目录。
+默认 CI 可以不跑真实外部模型，但当 active spec 把外部 LLM 或真实业务系统列为
+必过项时，最终 slice / release gate 必须显式 env 打开并保存 artifact。缺少 live
+前置条件只能记录 `ENV-BLOCKED-LIVE-MODEL` 或对应 BLOCKED artifact，不能作为完成证据。
 
 ### Customer Assistant Live ReAct Acceptance
 

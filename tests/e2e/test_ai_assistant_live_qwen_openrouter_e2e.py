@@ -11,7 +11,7 @@ class AiAssistantLiveQwenOpenRouterE2ETest(unittest.TestCase):
         planner = QwenLivePlanner(
             LivePlannerConfig(
                 base_url="https://openrouter.ai/api/v1",
-                model="qwen/qwen3.5-27b",
+                model="qwen/qwen3.6-27b",
                 api_key_ref="env:OPENROUTER_API_KEY",
             )
         )
@@ -26,7 +26,7 @@ class AiAssistantLiveQwenOpenRouterE2ETest(unittest.TestCase):
         )
 
         tool_names = [call["toolName"] for call in decision.tool_calls]
-        self.assertEqual(decision.model, "qwen/qwen3.5-27b")
+        self.assertEqual(decision.model, "qwen/qwen3.6-27b")
         self.assertIn("read_workspace_file", tool_names)
         self.assertIn("invoke_skill", tool_names)
         self.assertIn("write_workspace_file", tool_names)

@@ -50,10 +50,14 @@ class AiAssistantObservabilityApiContractTest(unittest.TestCase):
         observability = inspector["observability"]
         self.assertEqual(observability["runId"], turn["runId"])
         self.assertEqual(observability["status"], "COMPLETED")
-        self.assertEqual(observability["eventCount"], 7)
+        self.assertGreaterEqual(observability["eventCount"], 7)
         self.assertEqual(observability["toolCallCount"], 1)
         self.assertEqual(observability["benchmark"]["name"], "ai_assistant_deterministic_mvp")
         self.assertTrue(observability["benchmark"]["passed"])
+        event_types = [event["type"] for event in inspector["eventTimeline"]]
+        self.assertIn("permission.evaluated", event_types)
+        self.assertIn("sandbox.evaluated", event_types)
+        self.assertIn("resource_lock.acquired", event_types)
 
     def _session_override(self) -> Generator[Session, None, None]:
         with self._factory() as session:

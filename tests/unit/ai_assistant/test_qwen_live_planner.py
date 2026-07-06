@@ -9,7 +9,7 @@ class AiAssistantQwenLivePlannerTest(unittest.TestCase):
         settings = Settings(_env_file=None)
 
         self.assertEqual(settings.ai_assistant_openrouter_base_url, "https://openrouter.ai/api/v1")
-        self.assertEqual(settings.ai_assistant_openrouter_model, "qwen/qwen3.5-27b")
+        self.assertEqual(settings.ai_assistant_openrouter_model, "qwen/qwen3.6-27b")
         self.assertEqual(settings.ai_assistant_openrouter_api_key, "")
 
     def test_fake_live_planner_maps_qwen_tool_calls_to_harness_plan(self) -> None:
@@ -59,7 +59,7 @@ class AiAssistantQwenLivePlannerTest(unittest.TestCase):
         planner = QwenLivePlanner(
             LivePlannerConfig(
                 base_url="https://openrouter.ai/api/v1",
-                model="qwen/qwen3.5-27b",
+                model="qwen/qwen3.6-27b",
                 api_key_ref="env:OPENROUTER_API_KEY",
             ),
             client=fake_client,
@@ -67,7 +67,7 @@ class AiAssistantQwenLivePlannerTest(unittest.TestCase):
 
         decision = planner.plan("请读取 README，调用 tdd skill，并准备写入摘要", ToolRegistry.with_builtin_tools())
 
-        self.assertEqual(fake_client.captured_payload["model"], "qwen/qwen3.5-27b")
+        self.assertEqual(fake_client.captured_payload["model"], "qwen/qwen3.6-27b")
         self.assertEqual([call["toolName"] for call in decision.tool_calls], [
             "read_workspace_file",
             "invoke_skill",
@@ -106,7 +106,7 @@ class AiAssistantQwenLivePlannerTest(unittest.TestCase):
         planner = QwenLivePlanner(
             LivePlannerConfig(
                 base_url="https://openrouter.ai/api/v1",
-                model="qwen/qwen3.5-27b",
+                model="qwen/qwen3.6-27b",
                 api_key_ref="env:OPENROUTER_API_KEY",
             ),
             client=fake_client,
@@ -151,7 +151,7 @@ class AiAssistantQwenLivePlannerTest(unittest.TestCase):
         planner = QwenLivePlanner(
             LivePlannerConfig(
                 base_url="https://openrouter.ai/api/v1",
-                model="qwen/qwen3.5-27b",
+                model="qwen/qwen3.6-27b",
                 api_key_ref="env:OPENROUTER_API_KEY",
             ),
             client=fake_client,
@@ -189,7 +189,7 @@ class AiAssistantQwenLivePlannerTest(unittest.TestCase):
         planner = QwenLivePlanner(
             LivePlannerConfig(
                 base_url="https://openrouter.ai/api/v1",
-                model="qwen/qwen3.5-27b",
+                model="qwen/qwen3.6-27b",
                 api_key_ref="env:OPENROUTER_API_KEY",
             ),
             client=fake_client,

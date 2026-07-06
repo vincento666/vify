@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     customer_assistant_worker_profiles_json: str | None = None
     ai_assistant_llm_mode: str = "deterministic"
     ai_assistant_openrouter_base_url: str = "https://openrouter.ai/api/v1"
-    ai_assistant_openrouter_model: str = "qwen/qwen3.5-27b"
+    ai_assistant_openrouter_model: str = "qwen/qwen3.6-27b"
     ai_assistant_openrouter_api_key: str = ""
     ai_assistant_openrouter_api_key_env: str = "OPENROUTER_API_KEY"
 

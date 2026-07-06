@@ -428,6 +428,15 @@
               >
                 <div class="ai-runtime" data-testid="ai-assistant-runtime-config">
                   <label class="ai-runtime__field">
+                    <span>运行模式</span>
+                    <a-select
+                      v-model:value="runtimeConfig.modelMode"
+                      class="ai-runtime__select"
+                      :options="runtimeModeOptions"
+                      data-testid="ai-assistant-runtime-mode"
+                    />
+                  </label>
+                  <label class="ai-runtime__field">
                     <span>模型</span>
                     <a-select
                       v-model:value="runtimeConfig.modelName"
@@ -479,7 +488,7 @@
                     />
                   </label>
                   <div class="ai-runtime__meta">
-                    <span>{{ runtimeConfig.baseUrl }}</span>
+                    <span>{{ runtimeConfig.modelMode === 'live' ? runtimeConfig.baseUrl : '本地确定性规划器' }}</span>
                     <span>实时事件流：已启用</span>
                   </div>
                 </div>
@@ -542,6 +551,48 @@
           <div>
             <strong>{{ task.title }}</strong>
             <small>{{ taskMetaLabel(task) }}</small>
+          </div>
+        </article>
+      </section>
+
+      <section class="ai-inspector__section" data-testid="ai-assistant-plan-panel">
+        <header>计划</header>
+        <article class="ai-plan">
+          <div class="ai-plan__row">
+            <span>策略</span>
+            <strong data-testid="ai-assistant-planning-strategy">
+              {{ planningStrategyLabel(inspector?.plan?.planningStrategy || inspector?.activeTasks?.[0]?.planningStrategy) }}
+            </strong>
+          </div>
+          <div class="ai-plan__block" data-testid="ai-assistant-recognized-needs">
+            <span>已识别需求</span>
+            <p>{{ recognizedNeeds.join('；') || '等待识别' }}</p>
+          </div>
+          <ol class="ai-plan__steps">
+            <li
+              v-for="step in inspector?.plan?.steps || []"
+              :key="step.id"
+              class="ai-plan__step"
+              data-testid="ai-assistant-planned-step"
+            >
+              <span class="ai-plan__step-status" :class="statusClass(step.status)" />
+              <div>
+                <strong>{{ step.title }}</strong>
+                <small>{{ statusLabel(step.status) }}</small>
+              </div>
+            </li>
+          </ol>
+          <div class="ai-plan__block" data-testid="ai-assistant-active-step">
+            <span>当前步骤</span>
+            <p>{{ currentStep?.title || '暂无活动步骤' }}</p>
+          </div>
+          <div class="ai-plan__block" data-testid="ai-assistant-current-tool">
+            <span>当前工具</span>
+            <p>{{ currentStep?.toolName ? toolLabel(currentStep.toolName) : plannedToolsLabel }}</p>
+          </div>
+          <div class="ai-plan__block" data-testid="ai-assistant-final-result">
+            <span>最终结果</span>
+            <p>{{ inspector?.plan?.finalResult || inspector?.activeTasks?.[0]?.finalResult || '等待完成' }}</p>
           </div>
         </article>
       </section>
@@ -636,6 +687,49 @@
         </div>
       </section>
 
+      <section
+        v-if="inspector?.contextBudget || inspector?.memory"
+        class="ai-inspector__section"
+        data-testid="ai-assistant-context-budget"
+      >
+        <header>上下文</header>
+        <div class="ai-usage-grid">
+          <span>上下文使用</span>
+          <strong>{{ contextUsageLabel }}</strong>
+          <span>本轮压缩</span>
+          <strong>{{ compactionRatioLabel }}</strong>
+          <span>告警</span>
+          <strong>{{ contextWarningLabel }}</strong>
+          <span>压缩前压力</span>
+          <strong>{{ rawContextUsageLabel }}</strong>
+        </div>
+        <div class="ai-plan__block">
+          <span>Layer 占比</span>
+          <ol class="ai-context-layers">
+            <li v-for="layer in contextLayerRows" :key="layer.name">
+              <strong>{{ layer.name }}</strong>
+              <small>{{ layer.tokens }} tokens / {{ layer.sharePercent }}%</small>
+            </li>
+          </ol>
+        </div>
+        <div class="ai-plan__block">
+          <span>已选上下文</span>
+          <p>{{ selectedContextLayerLabel }}</p>
+        </div>
+        <div class="ai-plan__block">
+          <span>已丢弃上下文</span>
+          <p>{{ droppedContextLayerLabel }}</p>
+        </div>
+        <div class="ai-plan__block">
+          <span>工作记忆</span>
+          <p>{{ workingMemoryLabel }}</p>
+        </div>
+        <div class="ai-plan__block">
+          <span>审计引用</span>
+          <p>{{ contextAuditReferenceLabel }}</p>
+        </div>
+      </section>
+
       <section class="ai-inspector__section" data-testid="ai-assistant-inspector-timeline">
         <header>执行步骤</header>
         <ol class="ai-execution-steps">
@@ -695,10 +789,11 @@ import {
   deleteAiAssistantSession,
   denyAiAssistantApproval,
   getAiAssistantRunInspector,
-  listAiAssistantRunEvents,
+  getAiAssistantRunSnapshot,
   listAiAssistantSessionRuns,
   listAiAssistantSessions,
   buildAiAssistantMessagePayload,
+  processAiAssistantRunWorker,
   startAiAssistantMessage,
   type AiAssistantEvent,
   type AiAssistantApproval,
@@ -721,6 +816,7 @@ interface AiAssistantRunThread {
   run: AiAssistantRun
   events: AiAssistantEvent[]
   inspector: AiAssistantRunInspector | null
+  streamCursorLastSequence?: number
 }
 
 interface AiAssistantInspectorExecutionStep {
@@ -747,7 +843,8 @@ type AiAssistantRunPresentationItem =
 
 const AI_ASSISTANT_RUNTIME_CONFIG_STORAGE_KEY = 'hify.ai-assistant.runtime-config'
 const DEFAULT_RUNTIME_CONFIG: AiAssistantRuntimeConfig = {
-  modelName: 'qwen/qwen3.5-27b',
+  modelMode: 'deterministic',
+  modelName: 'qwen/qwen3.6-27b',
   baseUrl: 'https://openrouter.ai/api/v1',
   apiKey: '',
   temperature: 0.2,
@@ -765,8 +862,12 @@ const runStatus = ref('IDLE')
 const runtimeConfigExpanded = ref(false)
 const runtimeConfig = ref<AiAssistantRuntimeConfig>(loadRuntimeConfig())
 const permissionMode = ref<AiAssistantApprovalMode>('smart_approval')
+const runtimeModeOptions = [
+  { label: '本地确定性', value: 'deterministic' },
+  { label: 'Live Qwen', value: 'live' },
+]
 const modelOptions = [
-  { label: 'Qwen / qwen3.5-27B', value: 'qwen/qwen3.5-27b' },
+  { label: 'Qwen / qwen3.6-27B', value: 'qwen/qwen3.6-27b' },
   { label: 'Qwen / qwen3.5-14B', value: 'qwen/qwen3.5-14b' },
   { label: 'Qwen / qwen2.5-72B-Instruct', value: 'qwen/qwen2.5-72b-instruct' },
 ]
@@ -784,7 +885,68 @@ let inspectorRefreshTimer: number | null = null
 const pendingApprovals = computed(() => inspector.value?.approvalQueue ?? [])
 const approvalRecords = computed(() => inspector.value?.approvalHistory ?? [])
 const decidedApprovalRecords = computed(() => approvalRecords.value.filter((approval) => approval.status !== 'PENDING'))
+const recognizedNeeds = computed(() => inspector.value?.plan?.recognizedNeeds ?? inspector.value?.activeTasks?.[0]?.recognizedNeeds ?? [])
+const currentStep = computed(() => inspector.value?.plan?.currentStep ?? inspector.value?.activeTasks?.[0]?.currentStep ?? null)
+const plannedTools = computed(() => inspector.value?.plan?.plannedTools ?? inspector.value?.activeTasks?.[0]?.plannedTools ?? [])
+const plannedToolsLabel = computed(() =>
+  plannedTools.value.length ? plannedTools.value.map((toolName) => toolLabel(toolName)).join(' / ') : '暂无工具',
+)
 const elapsedLabel = computed(() => `${Math.max(0, Math.round((inspector.value?.usage.elapsedMs ?? 0) / 100) / 10)}s`)
+const contextBudget = computed(() => inspector.value?.contextBudget ?? null)
+const contextUsageLabel = computed(() => {
+  const usage = contextBudget.value?.usage
+  if (!usage) return '0 / 0 · 0%'
+  return `${formatTokenCount(usage.usedTokens)} / ${formatTokenCount(usage.maxTokens)} · ${usage.usagePercent}%`
+})
+const rawContextUsageLabel = computed(() => {
+  const usage = contextBudget.value?.usage
+  if (!usage?.rawTokens) return '无'
+  return `${formatTokenCount(usage.rawTokens)} / ${formatTokenCount(usage.maxTokens)} · ${usage.rawUsagePercent ?? 0}%`
+})
+const compactionRatioLabel = computed(() => {
+  const snapshot = contextBudget.value?.compactionSnapshot
+  if (!snapshot) return '未压缩'
+  return `${formatTokenCount(snapshot.rawTokens)} -> ${formatTokenCount(snapshot.summaryTokens)} · 节省 ${snapshot.savedPercent}%`
+})
+const contextWarningLabel = computed(() => {
+  const level = contextBudget.value?.usage.warningLevel ?? 'ok'
+  if (level === 'critical') return '必须压缩'
+  if (level === 'warning') return '接近上限'
+  return '正常'
+})
+const contextLayerRows = computed(() => contextBudget.value?.layers ?? [])
+const selectedContextLayerLabel = computed(() =>
+  contextBudget.value?.selectedLayers?.length
+    ? contextBudget.value.selectedLayers.map((layer) => layer.name).join(' / ')
+    : '暂无',
+)
+const droppedContextLayerLabel = computed(() =>
+  contextBudget.value?.droppedLayers?.length
+    ? contextBudget.value.droppedLayers.map((layer) => layer.name).join(' / ')
+    : '无',
+)
+const workingMemoryLabel = computed(() => {
+  const items = inspector.value?.memory?.workingMemory ?? []
+  const activeItems = items.filter((item) => (item.status ?? 'active') === 'active')
+  return activeItems.length ? activeItems.map((item) => `${item.key}: ${item.value}`).join('；') : '暂无'
+})
+const contextAuditReferenceLabel = computed(() => {
+  const parts: string[] = []
+  const summary = inspector.value?.memory?.sessionSummary
+  if (summary?.hash) parts.push(`summary:${summary.hash.slice(0, 12)}`)
+  const snapshot = contextBudget.value?.compactionSnapshot
+  if (snapshot?.sourceMessageIds?.length) parts.push(`messages:${snapshot.sourceMessageIds.join(',')}`)
+  if (snapshot?.sourceEventIds?.length) parts.push(`events:${snapshot.sourceEventIds.join(',')}`)
+  const dropReasons = contextBudget.value?.dropReasons ?? []
+  if (dropReasons.length) {
+    parts.push(`drop:${dropReasons.map((item) => `${item.name}/${item.reason}`).join('|')}`)
+  }
+  const instructionSources = inspector.value?.memory?.instructionMemory ?? []
+  if (instructionSources.length) {
+    parts.push(`agents:${instructionSources.map((item) => shortPathLabel(item.path)).join('|')}`)
+  }
+  return parts.length ? parts.join('；') : '暂无'
+})
 const runThreadsForView = computed(() => runThreads.value.slice().sort((left, right) => left.run.id - right.run.id))
 const currentRunEventsForView = computed(() => {
   const currentRunId = inspector.value?.run.id ?? runId.value
@@ -862,15 +1024,8 @@ async function loadRunInspector(nextRunId: number) {
 async function loadRunThreadRecords(sessionRuns: AiAssistantRun[]) {
   const records = await Promise.all(
     sessionRuns.map(async (run) => {
-      const [eventList, runInspector] = await Promise.all([
-        listAiAssistantRunEvents(run.id),
-        getAiAssistantRunInspector(run.id),
-      ])
-      return {
-        run: runInspector.run,
-        events: eventList.list,
-        inspector: runInspector,
-      }
+      const snapshot = await getAiAssistantRunSnapshot(run.id)
+      return snapshotToRunThread(snapshot)
     }),
   )
   return records
@@ -878,17 +1033,10 @@ async function loadRunThreadRecords(sessionRuns: AiAssistantRun[]) {
 
 async function refreshRunThread(nextRunId: number) {
   closeActiveEventStream()
-  const [eventList, runInspector] = await Promise.all([
-    listAiAssistantRunEvents(nextRunId),
-    getAiAssistantRunInspector(nextRunId),
-  ])
-  upsertRunThread({
-    run: runInspector.run,
-    events: eventList.list,
-    inspector: runInspector,
-  })
+  const snapshot = await getAiAssistantRunSnapshot(nextRunId)
+  upsertRunThread(snapshotToRunThread(snapshot))
   setActiveRunThread(nextRunId)
-  sending.value = runInspector.run.status === 'RUNNING'
+  sending.value = snapshot.run.status === 'RUNNING'
 }
 
 function setActiveRunThread(nextRunId: number) {
@@ -965,6 +1113,9 @@ async function submit() {
     await loadSessions()
     await refreshRuns(result.sessionId, result.runId)
     openRunEventStream(result.runId)
+    void processAiAssistantRunWorker(result.runId, runtimeConfig.value).catch(() => {
+      scheduleInspectorRefresh(result.runId)
+    })
   } finally {
     if (!runId.value || runStatus.value !== 'RUNNING') sending.value = false
   }
@@ -972,25 +1123,21 @@ async function submit() {
 
 async function refreshRuns(nextSessionId: number, preferredRunId: number) {
   runs.value = (await listAiAssistantSessionRuns(nextSessionId)).list
-  const [eventList, runInspector] = await Promise.all([
-    listAiAssistantRunEvents(preferredRunId),
-    getAiAssistantRunInspector(preferredRunId),
-  ])
-  upsertRunThread({
-    run: runInspector.run,
-    events: eventList.list,
-    inspector: runInspector,
-  })
+  const snapshot = await getAiAssistantRunSnapshot(preferredRunId)
+  upsertRunThread(snapshotToRunThread(snapshot))
   setActiveRunThread(preferredRunId)
-  sending.value = runInspector.run.status === 'RUNNING'
+  sending.value = snapshot.run.status === 'RUNNING'
 }
 
-function openRunEventStream(nextRunId: number) {
+function openRunEventStream(nextRunId: number, afterSequence = lastSequenceForRun(nextRunId)) {
   closeActiveEventStream()
   activeEventStream = openAiAssistantEventStream(nextRunId, {
+    afterSequence,
     onEvent: (event) => {
       mergeEvent(event)
-      runStatus.value = event.status === 'FAILED' ? 'FAILED' : runStatus.value
+      const nextStatus = runStatusFromEvent(event, runStatus.value)
+      runStatus.value = nextStatus
+      if (nextStatus === 'RUNNING') sending.value = true
       scheduleInspectorRefresh(nextRunId)
       if (isTerminalEvent(event)) {
         sending.value = false
@@ -998,6 +1145,26 @@ function openRunEventStream(nextRunId: number) {
       }
     },
   })
+}
+
+function snapshotToRunThread(snapshot: Awaited<ReturnType<typeof getAiAssistantRunSnapshot>>): AiAssistantRunThread {
+  return {
+    run: snapshot.inspector?.run ?? snapshot.run,
+    events: snapshot.events,
+    inspector: snapshot.inspector,
+    streamCursorLastSequence: snapshot.streamCursor?.lastSequence ?? lastSequence(snapshot.events),
+  }
+}
+
+function lastSequenceForRun(nextRunId: number) {
+  const thread = runThreads.value.find((item) => item.run.id === nextRunId)
+  if (typeof thread?.streamCursorLastSequence === 'number') return thread.streamCursorLastSequence
+  const events = thread?.events ?? []
+  return lastSequence(events)
+}
+
+function lastSequence(nextEvents: AiAssistantEvent[]) {
+  return Math.max(0, ...nextEvents.map((event) => Number(event.sequence || 0)))
 }
 
 function mergeEvent(event: AiAssistantEvent) {
@@ -1052,14 +1219,16 @@ function mergeEventIntoRunThread(event: AiAssistantEvent) {
     run: { ...nextRun, status: runStatusFromEvent(event, nextRun.status) },
     events: nextEvents.sort((left, right) => left.sequence - right.sequence),
     inspector: currentThread?.inspector ?? null,
+    streamCursorLastSequence: Math.max(currentThread?.streamCursorLastSequence ?? 0, Number(event.sequence || 0)),
   })
 }
 
 function runStatusFromEvent(event: AiAssistantEvent, fallback: string) {
   if (event.type === 'run.completed') return 'COMPLETED'
   if (event.type === 'run.failed') return 'FAILED'
+  if (event.type === 'run.cancelled') return 'CANCELLED'
   if (event.type === 'approval.required') return 'WAITING_APPROVAL'
-  if (event.type === 'run.started') return 'RUNNING'
+  if (event.type === 'run.started' || event.type === 'run.worker_started') return 'RUNNING'
   return fallback
 }
 
@@ -1069,7 +1238,7 @@ function closeActiveEventStream() {
 }
 
 function isTerminalEvent(event: AiAssistantEvent) {
-  return ['run.completed', 'run.failed', 'approval.required', 'sandbox.denied'].includes(event.type)
+  return ['run.completed', 'run.failed', 'run.cancelled', 'approval.required', 'sandbox.denied'].includes(event.type)
 }
 
 async function approve(approvalId: number) {
@@ -1258,10 +1427,32 @@ function formatMessageTime(value: string | null | undefined) {
   }).format(date)
 }
 
+function formatTokenCount(value: number | null | undefined) {
+  const count = Math.max(0, Math.round(Number(value || 0)))
+  if (count >= 1000) return `${Math.round(count / 100) / 10}k`
+  return String(count)
+}
+
+function shortPathLabel(value: string | null | undefined) {
+  const path = String(value || '').trim()
+  if (!path) return 'unknown'
+  const parts = path.split('/').filter(Boolean)
+  return parts.slice(-2).join('/')
+}
+
 function taskMetaLabel(task: { phase: string; currentTool?: string | null }) {
   const currentTool = task.currentTool ? ` / ${toolLabel(task.currentTool)}` : ''
   const stepCount = inspectorExecutionStepsForView.value.length
   return `${task.phase}${currentTool} / ${stepCount} 个执行步骤`
+}
+
+function planningStrategyLabel(strategy: string | null | undefined) {
+  const labels: Record<string, string> = {
+    auto_lightweight: '自动轻量规划',
+    deliberate: '深度规划',
+    plan_only: '只规划',
+  }
+  return labels[String(strategy || 'auto_lightweight')] || String(strategy || 'auto_lightweight')
 }
 
 function isCurrentInspectorStep(step: AiAssistantInspectorExecutionStep) {
@@ -2479,6 +2670,87 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
   color: var(--color-success-500, #10b981);
 }
 
+.ai-plan {
+  display: grid;
+  gap: 0.625rem;
+}
+
+.ai-plan__row,
+.ai-plan__block,
+.ai-plan__step {
+  min-width: 0;
+  padding: 0.625rem;
+  background: var(--color-bg-surface, #ffffff);
+  border-radius: var(--radius-md, 0.375rem);
+}
+
+.ai-plan__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.625rem;
+}
+
+.ai-plan__block {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.ai-plan__row span,
+.ai-plan__block span,
+.ai-plan__step small {
+  color: var(--color-text-tertiary, #8b92a8);
+  font-size: 0.75rem;
+}
+
+.ai-plan__row strong,
+.ai-plan__block p,
+.ai-plan__step strong {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.ai-plan__steps {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ai-plan__step {
+  display: grid;
+  grid-template-columns: 0.625rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.ai-plan__step > div {
+  min-width: 0;
+  display: grid;
+  gap: 0.125rem;
+}
+
+.ai-plan__step-status {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 999rem;
+  background: var(--color-text-tertiary, #8b92a8);
+}
+
+.ai-plan__step-status.status-running {
+  background: var(--color-primary-600, #4f46e5);
+}
+
+.ai-plan__step-status.status-done {
+  background: var(--color-success-500, #10b981);
+}
+
+.ai-plan__step-status.status-danger {
+  background: var(--color-danger-500, #ef4444);
+}
+
 .ai-approval {
   align-items: flex-start;
   flex-direction: column;
@@ -2495,6 +2767,33 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
 }
 
 .ai-usage-grid span {
+  color: var(--color-text-tertiary, #8b92a8);
+}
+
+.ai-context-layers {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.375rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ai-context-layers li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.ai-context-layers strong,
+.ai-context-layers small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-context-layers small {
   color: var(--color-text-tertiary, #8b92a8);
 }
 

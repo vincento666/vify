@@ -71,6 +71,61 @@ class AiAssistantHarnessRepositoryTest(unittest.TestCase):
         self.assertEqual(tool_call["duration_ms"], 12)
         self.assertEqual(listed[0]["output_payload"]["echo"], "Echo this")
 
+    def test_run_status_claim_is_compare_and_set(self) -> None:
+        from app.modules.ai_assistant.infra.repository import AiAssistantRepository
+
+        with _session() as session:
+            repository = AiAssistantRepository(session)
+            assistant_session = repository.create_session(title="Worker claim test")
+            run = repository.create_run(
+                session_id=assistant_session["id"],
+                user_message="Claim this",
+                idempotency_key="repo-run-claim",
+            )
+            repository.update_run_status(run["id"], "QUEUED")
+
+            claimed = repository.claim_run_status(
+                run["id"],
+                expected_status="QUEUED",
+                next_status="RUNNING",
+                input_payload={"sessionRuntime": {"worker": {"leaseToken": "lease-a"}}},
+            )
+            stale = repository.claim_run_status(
+                run["id"],
+                expected_status="QUEUED",
+                next_status="RUNNING",
+                input_payload={"sessionRuntime": {"worker": {"leaseToken": "lease-b"}}},
+            )
+
+        self.assertIsNotNone(claimed)
+        assert claimed is not None
+        self.assertEqual(claimed["status"], "RUNNING")
+        self.assertEqual(claimed["input_payload"]["sessionRuntime"]["worker"]["leaseToken"], "lease-a")
+        self.assertIsNone(stale)
+
+    def test_complete_run_does_not_overwrite_cancelled_status(self) -> None:
+        from app.modules.ai_assistant.infra.repository import AiAssistantRepository
+
+        with _session() as session:
+            repository = AiAssistantRepository(session)
+            assistant_session = repository.create_session(title="Completion guard test")
+            run = repository.create_run(
+                session_id=assistant_session["id"],
+                user_message="Do not overwrite cancellation",
+                idempotency_key="repo-run-complete-guard",
+            )
+            repository.update_run_status(
+                run["id"],
+                "CANCELLED",
+                response_payload={"finalAnswer": "运行已取消。"},
+                completed=True,
+            )
+
+            completed = repository.complete_run(run["id"], {"finalAnswer": "late completion"})
+
+        self.assertEqual(completed["status"], "CANCELLED")
+        self.assertEqual(completed["response_payload"]["finalAnswer"], "运行已取消。")
+
 
 @contextmanager
 def _session() -> Iterator[Session]:

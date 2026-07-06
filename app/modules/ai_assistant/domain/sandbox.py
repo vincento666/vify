@@ -22,9 +22,18 @@ class SandboxPolicy:
     def evaluate(self, tool_name: str, tool_input: dict[str, Any]) -> SandboxDecision:
         if tool_name == "run_shell":
             return _evaluate_shell_command(tool_name, tool_input)
-        if tool_name in {"read_workspace_file", "write_workspace_file"}:
+        if tool_name in {
+            "read_workspace_file",
+            "list_workspace_files",
+            "search_workspace_files",
+            "edit_workspace_file",
+            "write_workspace_file",
+            "apply_workspace_patch",
+        }:
             root = Path(os.getenv("HIFY_WORKSPACE_ROOT") or Path.cwd()).resolve()
             raw_path = str(tool_input.get("path") or "").strip()
+            if not raw_path and tool_name in {"list_workspace_files", "search_workspace_files"}:
+                raw_path = "."
             candidate = (root / raw_path).resolve()
             if not raw_path or (candidate != root and root not in candidate.parents):
                 return SandboxDecision(
@@ -83,10 +92,17 @@ def _contains_shell_operator(argv: list[str]) -> bool:
 
 
 def _evaluate_node_command(argv: list[str], evidence: dict[str, Any]) -> SandboxDecision:
-    blocked_flags = {"-e", "--eval", "-p", "--print"}
+    blocked_flags = {"-e", "--eval", "-p", "--print", "-r", "--require", "--import", "--loader"}
     for token in argv[1:]:
-        if token in blocked_flags or token.startswith("--eval=") or token.startswith("--print="):
-            return SandboxDecision(SandboxVerdict.DENY, "node eval/print flags are not allowed", evidence)
+        if (
+            token in blocked_flags
+            or token.startswith("--eval=")
+            or token.startswith("--print=")
+            or token.startswith("--require=")
+            or token.startswith("--import=")
+            or token.startswith("--loader=")
+        ):
+            return SandboxDecision(SandboxVerdict.DENY, "node eval/print/preload flags are not allowed", evidence)
     script = _first_node_script_arg(argv)
     if script is None:
         return SandboxDecision(SandboxVerdict.DENY, "node command must target a workspace script", evidence)

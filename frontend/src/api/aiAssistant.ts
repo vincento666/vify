@@ -46,11 +46,32 @@ export interface AiAssistantRun {
   completedAt?: string | null
 }
 
+export interface AiAssistantPlanStep {
+  id: string
+  title: string
+  status: string
+  toolName?: string | null
+  sequence: number
+}
+
+export interface AiAssistantPlan {
+  id: string
+  planningStrategy: 'auto_lightweight' | 'deliberate' | 'plan_only' | string
+  status: string
+  recognizedNeeds: string[]
+  steps: AiAssistantPlanStep[]
+  currentStep?: AiAssistantPlanStep | null
+  plannedTools: string[]
+  finalResult?: string
+}
+
 export interface AiAssistantTurnResult {
   runId: number
   sessionId: number
   status: string
   replayed: boolean
+  planningStrategy?: string
+  plan?: AiAssistantPlan
   finalAnswer: string
   toolCalls: AiAssistantToolCall[]
   approvalRequired?: boolean
@@ -71,6 +92,7 @@ export interface AiAssistantToolCall {
 export interface SendAiAssistantMessagePayload {
   message: string
   idempotencyKey?: string
+  planningStrategy?: string
   approvalMode?: string
   modelMode?: string
   toolName?: string
@@ -90,6 +112,7 @@ export interface AiAssistantModelConfigPayload {
 }
 
 export interface AiAssistantRuntimeConfig {
+  modelMode?: 'deterministic' | 'live'
   modelName: string
   baseUrl: string
   apiKey: string
@@ -106,11 +129,35 @@ export function buildAiAssistantMessagePayload(
   idempotencyKey: string,
   approvalMode: AiAssistantApprovalMode = 'smart_approval',
 ): SendAiAssistantMessagePayload {
-  return {
+  const basePayload = {
     message,
     idempotencyKey,
+    planningStrategy: 'auto_lightweight',
     approvalMode,
+  }
+  if (runtimeConfig.modelMode === 'deterministic') {
+    return {
+      ...basePayload,
+      modelMode: 'deterministic',
+    }
+  }
+  return {
+    ...basePayload,
     modelMode: 'live',
+    modelConfig: {
+      provider: 'openrouter',
+      baseUrl: runtimeConfig.baseUrl,
+      model: runtimeConfig.modelName,
+      apiKey: runtimeConfig.apiKey,
+      temperature: runtimeConfig.temperature,
+      maxTokens: runtimeConfig.maxTokens,
+    },
+  }
+}
+
+export function buildAiAssistantWorkerPayload(runtimeConfig: AiAssistantRuntimeConfig): { modelConfig?: AiAssistantModelConfigPayload } {
+  if (runtimeConfig.modelMode === 'deterministic') return {}
+  return {
     modelConfig: {
       provider: 'openrouter',
       baseUrl: runtimeConfig.baseUrl,
@@ -154,10 +201,16 @@ export interface AiAssistantToolManifest {
 export interface AiAssistantInspectorTask {
   id: string
   runId: number
+  planId?: string | null
+  planningStrategy?: string
   title: string
   status: string
   phase: string
   currentTool?: string | null
+  recognizedNeeds?: string[]
+  plannedTools?: string[]
+  currentStep?: AiAssistantPlanStep | null
+  finalResult?: string
   updatedAt?: string | null
 }
 
@@ -172,8 +225,62 @@ export interface AiAssistantInspectorEvent {
   createdAt: string
 }
 
+export interface AiAssistantContextBudgetLayer {
+  name: string
+  tokens: number
+  sharePercent: number
+  selected?: boolean
+  source?: string | null
+  hash?: string | null
+}
+
+export interface AiAssistantContextBudget {
+  usage: {
+    usedTokens: number
+    maxTokens: number
+    usagePercent: number
+    warningLevel: string
+    rawTokens?: number
+    rawUsagePercent?: number
+  }
+  layers: AiAssistantContextBudgetLayer[]
+  selectedLayers: AiAssistantContextBudgetLayer[]
+  droppedLayers: AiAssistantContextBudgetLayer[]
+  dropReasons: Array<{ name: string; reason: string; tokens: number }>
+  compactionSnapshot?: {
+    rawTokens: number
+    summaryTokens: number
+    savedPercent: number
+    summaryHash?: string
+    sourceMessageIds?: number[]
+    sourceEventIds?: number[]
+    algorithm?: string
+  } | null
+}
+
+export interface AiAssistantMemoryState {
+  sessionSummary?: {
+    content: string
+    hash?: string
+    tokenEstimate?: number
+  } | null
+  workingMemory: Array<{
+    key: string
+    value: string
+    source?: string
+    status?: string
+  }>
+  instructionMemory?: Array<{
+    name: string
+    path: string
+    hash: string
+    tokenEstimate?: number
+  }>
+}
+
 export interface AiAssistantRunInspector {
   run: AiAssistantRun
+  plan?: AiAssistantPlan
   activeTasks: AiAssistantInspectorTask[]
   toolCalls: AiAssistantToolCall[]
   approvalQueue: AiAssistantApproval[]
@@ -187,6 +294,17 @@ export interface AiAssistantRunInspector {
     elapsedMs: number
     estimated?: boolean
   }
+  memory?: AiAssistantMemoryState
+  contextBudget?: AiAssistantContextBudget
+}
+
+export interface AiAssistantRunSnapshot {
+  run: AiAssistantRun
+  events: AiAssistantEvent[]
+  streamCursor: {
+    lastSequence: number
+  }
+  inspector: AiAssistantRunInspector
 }
 
 export function createAiAssistantSession(payload: { title?: string; context?: Record<string, unknown> } = {}) {
@@ -213,6 +331,13 @@ export function startAiAssistantMessage(sessionId: number, payload: SendAiAssist
   return post<AiAssistantTurnResult>(`/v1/ai-assistant/sessions/${sessionId}/messages/async`, payload)
 }
 
+export function processAiAssistantRunWorker(runId: number, runtimeConfig?: AiAssistantRuntimeConfig) {
+  return post<AiAssistantRun & { checkpoint?: Record<string, unknown> }>(
+    `/v1/ai-assistant/runs/${runId}/worker/process`,
+    runtimeConfig ? buildAiAssistantWorkerPayload(runtimeConfig) : {},
+  )
+}
+
 export function listAiAssistantRunEvents(runId: number, afterSequence?: number) {
   return get<AiAssistantRunEventList>(
     `/v1/ai-assistant/runs/${runId}/events`,
@@ -226,6 +351,13 @@ export function listAiAssistantSessionRuns(sessionId: number) {
 
 export function getAiAssistantRunInspector(runId: number) {
   return get<AiAssistantRunInspector>(`/v1/ai-assistant/runs/${runId}/inspector`)
+}
+
+export function getAiAssistantRunSnapshot(runId: number, afterSequence?: number) {
+  return get<AiAssistantRunSnapshot>(
+    `/v1/ai-assistant/runs/${runId}/snapshot`,
+    afterSequence ? { afterSequence } : undefined,
+  )
 }
 
 export function listAiAssistantApprovals() {

@@ -40,6 +40,13 @@ describe('AI Assistant shell UI contract', () => {
       'ai-assistant-delete-session',
       'ai-assistant-run-inspector',
       'ai-assistant-task-row',
+      'ai-assistant-plan-panel',
+      'ai-assistant-planning-strategy',
+      'ai-assistant-recognized-needs',
+      'ai-assistant-planned-step',
+      'ai-assistant-active-step',
+      'ai-assistant-current-tool',
+      'ai-assistant-final-result',
       'ai-assistant-tool-call-row',
       'ai-assistant-approval-row',
       'ai-assistant-recent-error-row',
@@ -66,7 +73,7 @@ describe('AI Assistant shell UI contract', () => {
     expect(content).toContain('runThreads')
     expect(content).toContain('isEventRunning')
     expect(content).toContain('实时事件流')
-    expect(content).toContain('qwen/qwen3.5-27b')
+    expect(content).toContain('qwen/qwen3.6-27b')
     expect(content).toContain('https://openrouter.ai/api/v1')
     expect(content).toContain('临时密钥')
     expect(content).not.toContain('chain-of-thought')
@@ -74,12 +81,44 @@ describe('AI Assistant shell UI contract', () => {
     expect(content).not.toContain('data-testid="ai-assistant-stream-toggle"')
   })
 
+  it('renders first-class plan and task state in the inspector', () => {
+    expect(content).toContain('inspector?.plan')
+    expect(content).toContain('planningStrategyLabel')
+    expect(content).toContain('recognizedNeeds')
+    expect(content).toContain('currentStep')
+    expect(content).toContain('plannedTools')
+    expect(content).toContain('plannedToolsLabel')
+    expect(content).toContain('event.payload?.toolNames')
+    expect(content).toContain('auto_lightweight')
+    expect(content).toContain('自动轻量规划')
+  })
+
+  it('renders context budget and memory state in the inspector', () => {
+    expect(content).toContain('data-testid="ai-assistant-context-budget"')
+    expect(content).toContain('inspector?.contextBudget')
+    expect(content).toContain('inspector?.memory')
+    expect(content).toContain('contextUsageLabel')
+    expect(content).toContain('rawContextUsageLabel')
+    expect(content).toContain('compactionRatioLabel')
+    expect(content).toContain('contextLayerRows')
+    expect(content).toContain('contextAuditReferenceLabel')
+    expect(content).toContain('上下文')
+    expect(content).toContain('上下文使用')
+    expect(content).toContain('压缩前压力')
+    expect(content).toContain('本轮压缩')
+    expect(content).toContain('Layer 占比')
+    expect(content).toContain('已选上下文')
+    expect(content).toContain('已丢弃上下文')
+    expect(content).toContain('工作记忆')
+    expect(content).toContain('审计引用')
+  })
+
   it('exposes stable controls for browser UAT and avoids mock-looking session titles', () => {
     expect(content).toContain('aria-label="新建 AI 助手会话"')
     expect(content).toContain('createAiAssistantSession()')
     expect(content).toContain('会话 #')
     expect(content).toContain('sessionDisplayTitle(session)')
-    expect(content).toContain('Qwen / qwen3.5-27B')
+    expect(content).toContain('Qwen / qwen3.6-27B')
     expect(content).not.toContain("createAiAssistantSession({ title: 'Hify AI 助手' })")
     expect(content).not.toContain('sessionDisplayTitle(session.title)')
   })
@@ -135,9 +174,13 @@ describe('AI Assistant shell UI contract', () => {
   it('submits live messages without frontend tool heuristics', () => {
     expect(content).toContain('startAiAssistantMessage')
     expect(content).toContain('openAiAssistantEventStream')
+    expect(content).toContain('getAiAssistantRunSnapshot')
+    expect(content).toContain('snapshotToRunThread')
+    expect(content).toContain('lastSequenceForRun')
+    expect(content).toContain('afterSequence')
     expect(content).toContain('buildAiAssistantMessagePayload(message, runtimeConfig.value')
     expect(content).toContain('runtimeConfig.value')
-    expect(content).toContain('qwen/qwen3.5-27b')
+    expect(content).toContain('qwen/qwen3.6-27b')
     expect(content).toContain('https://openrouter.ai/api/v1')
     expect(content).not.toContain('asksForUpdate')
     expect(content).not.toContain("toolName: asksForUpdate ? 'update_customer_profile' : 'echo_context'")
@@ -426,7 +469,7 @@ describe('AI Assistant shell UI contract', () => {
       '拒绝',
       '清空历史上下文',
       '删除会话',
-      'Qwen / qwen3.5-27B',
+      'Qwen / qwen3.6-27B',
       '临时密钥',
       '读取工作区文件',
       '写入工作区文件',

@@ -84,7 +84,7 @@ class AiAssistantLiveQwenApiContractTest(unittest.TestCase):
 
         self.assertEqual(message.status_code, 200, message.text)
         self.assertTrue(message.json()["data"]["approvalRequired"])
-        self.assertEqual(self._fake_client.captured_payload["model"], "qwen/qwen3.5-27b")
+        self.assertEqual(self._fake_client.captured_payload["model"], "qwen/qwen3.6-27b")
 
         event_list = events.json()["data"]["list"]
         titles = [event["visibleTitle"] for event in event_list]
@@ -440,7 +440,7 @@ class AiAssistantLiveQwenApiContractTest(unittest.TestCase):
             live_planner=QwenLivePlanner(
                 LivePlannerConfig(
                     base_url="https://openrouter.ai/api/v1",
-                    model="qwen/qwen3.5-27b",
+                    model="qwen/qwen3.6-27b",
                     api_key_ref="env:OPENROUTER_API_KEY",
                     provider="openrouter",
                 ),

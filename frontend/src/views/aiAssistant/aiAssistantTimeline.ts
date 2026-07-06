@@ -84,7 +84,7 @@ export function buildAiAssistantTimeline(events: AiAssistantEvent[]): AiAssistan
 
   for (let index = 0; index < sortedEvents.length; index += 1) {
     const event = sortedEvents[index]
-    if (event.type === 'model.stream_chunk') {
+    if (isModelStreamEvent(event)) {
       modelStreamGroup.push(event)
       continue
     }
@@ -134,19 +134,22 @@ function flushModelStreamGroup(
   previousModelOutput: string,
 ) {
   if (events.length === 0) return previousModelOutput
-  const first = events[0]
-  const last = events[events.length - 1]
-  const summary = normalizeRepeatedText(events.map(modelStreamChunkText).join(''))
+  const visibleEvents = events.some((event) => event.type === 'text.delta')
+    ? events.filter((event) => event.type === 'text.delta')
+    : events
+  const first = visibleEvents[0]
+  const last = visibleEvents[visibleEvents.length - 1]
+  const summary = normalizeRepeatedText(visibleEvents.map(modelStreamChunkText).join(''))
   timeline.push({
-    id: `${first.runId}-${first.sequence}-${last.sequence}-model.stream_chunk`,
+    id: `${first.runId}-${first.sequence}-${last.sequence}-${first.type}`,
     eventId: last.id,
     sequence: first.sequence,
     kind: 'model-output',
-    tone: modelStreamTone(events),
+    tone: modelStreamTone(visibleEvents),
     title: '模型输出',
     summary,
     payloadPreview: compactPayload({
-      chunkCount: events.length,
+      chunkCount: visibleEvents.length,
       fromSequence: first.sequence,
       toSequence: last.sequence,
       phase: first.payload?.phase,
@@ -167,6 +170,8 @@ function flushModelStreamGroup(
 }
 
 function modelStreamChunkText(event: AiAssistantEvent) {
+  const delta = event.payload?.delta
+  if (typeof delta === 'string') return delta
   const chunk = event.payload?.chunk
   return typeof chunk === 'string' ? chunk : event.visibleSummary || ''
 }
@@ -179,9 +184,10 @@ function modelStreamTone(events: AiAssistantEvent[]): AiAssistantTimelineItem['t
 
 function eventKind(type: string): AiAssistantTimelineKind {
   if (type.startsWith('orchestration.') || type === 'run.started') return 'phase'
-  if (type === 'model.stream_chunk') return 'model-output'
+  if (type === 'model.stream_chunk' || type === 'text.delta') return 'model-output'
   if (type === 'model.thought_summary') return 'model-thought'
   if (type.startsWith('model.')) return 'model'
+  if (type.startsWith('stream.')) return 'model'
   if (type === 'tool.call_output') return 'tool-output'
   if (type.startsWith('tool.')) return 'tool'
   if (type.startsWith('approval.')) return 'approval'
@@ -193,7 +199,7 @@ function eventKind(type: string): AiAssistantTimelineKind {
 }
 
 function eventTone(event: AiAssistantEvent): AiAssistantTimelineItem['tone'] {
-  if (event.type === 'model.stream_chunk') return 'running'
+  if (isModelStreamEvent(event)) return 'running'
   if (event.type === 'run.started' || event.type.endsWith('_started')) return 'running'
   if (event.status === 'WAITING' || event.type === 'approval.required') return 'waiting'
   if (event.status === 'DENIED' || event.type === 'sandbox.denied' || event.type === 'run.failed') return 'danger'
@@ -501,6 +507,7 @@ function rowsToBlock(rows: AiAssistantToolInvocationRow[]) {
 
 function shouldRenderEvent(event: AiAssistantEvent) {
   if (event.type === 'model.thought_summary') return true
+  if (event.type === 'stream.fallback') return true
   if (event.type === 'approval.approved') return true
   return false
 }
@@ -823,10 +830,14 @@ function nextModelStreamSummary(events: AiAssistantEvent[], currentIndex: number
   const chunks: string[] = []
   for (let index = currentIndex + 1; index < events.length; index += 1) {
     const event = events[index]
-    if (event.type !== 'model.stream_chunk') break
+    if (!isModelStreamEvent(event)) break
     chunks.push(modelStreamChunkText(event))
   }
   return chunks.join('')
+}
+
+function isModelStreamEvent(event: AiAssistantEvent) {
+  return event.type === 'model.stream_chunk' || event.type === 'text.delta'
 }
 
 function normalizeText(value: string) {

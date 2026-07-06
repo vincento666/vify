@@ -31,6 +31,7 @@ defined in `docs/testing/acceptance-gates.md` before the next slice starts.
 | 18 | 067-069 | Cross-runtime observability gate, restricted ReAct worker standardization, and smooth Two-Stage ReAct customer-assistant runtime |
 | 19 | 070 | Realtime control or scale-out transport only after SSE/durable polling is proven insufficient |
 | 20 | 212-221 | Chatflow/Workflow production runtime upgrade per `docs/chatflow-workflow-production-upgrade.md` |
+| 21 | 222 | Generic AI Assistant harness MVP, live LLM real-case UAT, and corrective runtime hardening |
 
 ## Directory Index
 
@@ -118,6 +119,7 @@ defined in `docs/testing/acceptance-gates.md` before the next slice starts.
 | 219-runtime-event-cancel-ratelimit-backpressure | Event stream reliability, cancel, multi-level rate limit and backpressure §11 |
 | 220-runtime-observability-ops-module | Runtime Ops main-menu module with run/job/DLQ panels and safe ops actions §12 |
 | 221-runtime-capacity-fault-acceptance | Capacity & fault acceptance with chaos drills and capacity report §13 |
+| 222-ai-assistant-general-harness-mvp | Generic AI Assistant harness MVP with first-class planning, streaming, tools, workspace, session recovery, policy, memory, skills, audit, live LLM real-case UAT, and corrective runtime hardening |
 
 ## Required Files Per Spec
 

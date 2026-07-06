@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
+from hashlib import sha256
 from typing import Any
 
 import sqlalchemy as sa
@@ -15,6 +16,15 @@ class IdempotencyConflict(RuntimeError):
     pass
 
 
+def _resource_lock_mutex_name(resource_key: str) -> str:
+    digest = sha256(resource_key.encode("utf-8")).hexdigest()[:32]
+    return f"ai_assistant_resource_lock:{digest}"
+
+
+def _rowcount(result: Any) -> int:
+    return int(getattr(result, "rowcount", 0) or 0)
+
+
 class AiAssistantRepository:
     def __init__(self, session: Session) -> None:
         register_ai_assistant_tables()
@@ -26,6 +36,7 @@ class AiAssistantRepository:
         self._tool_call_table = Base.metadata.tables["ai_assistant_tool_call"]
         self._approval_table = Base.metadata.tables["ai_assistant_approval"]
         self._proposed_action_table = Base.metadata.tables["ai_assistant_proposed_action"]
+        self._resource_lock_table = Base.metadata.tables["ai_assistant_resource_lock"]
 
     def create_session(self, title: str = "", context: dict[str, Any] | None = None) -> dict[str, Any]:
         now = datetime.now()
@@ -60,6 +71,19 @@ class AiAssistantRepository:
             )
         ).mappings().one_or_none()
         return dict(row) if row else None
+
+    def update_session_context(self, session_id: int, context: dict[str, Any]) -> dict[str, Any]:
+        now = datetime.now()
+        self._session.execute(
+            self._session_table.update()
+            .where(self._session_table.c.id == session_id, self._session_table.c.deleted.is_(False))
+            .values(context_json=context, updated_at=now)
+        )
+        self._session.commit()
+        updated = self.get_session(session_id)
+        if updated is None:
+            raise KeyError(f"AI Assistant session disappeared: {session_id}")
+        return updated
 
     def clear_session_history(self, session_id: int) -> bool:
         if self.get_session(session_id) is None:
@@ -170,6 +194,75 @@ class AiAssistantRepository:
         ).mappings().one_or_none()
         return dict(row) if row else None
 
+    def update_run_input_payload(self, run_id: int, input_payload: dict[str, Any]) -> dict[str, Any]:
+        existing = self.get_run(run_id)
+        if existing is None:
+            raise KeyError(f"AI Assistant run disappeared: {run_id}")
+        values: dict[str, Any] = {"input_payload": input_payload, "updated_at": datetime.now()}
+        response_payload = existing.get("response_payload")
+        if isinstance(response_payload, dict) and "plan" in input_payload:
+            values["response_payload"] = {**response_payload, "plan": input_payload["plan"]}
+        self._session.execute(
+            self._run_table.update()
+            .where(self._run_table.c.id == run_id, self._run_table.c.deleted.is_(False))
+            .values(**values)
+        )
+        self._session.commit()
+        updated = self.get_run(run_id)
+        if updated is None:
+            raise KeyError(f"AI Assistant run disappeared: {run_id}")
+        return updated
+
+    def update_run_status(
+        self,
+        run_id: int,
+        status: str,
+        *,
+        response_payload: dict[str, Any] | None = None,
+        completed: bool = False,
+    ) -> dict[str, Any]:
+        values: dict[str, Any] = {"status": status, "updated_at": datetime.now()}
+        if response_payload is not None:
+            values["response_payload"] = response_payload
+        if completed:
+            values["completed_at"] = datetime.now()
+        self._session.execute(
+            self._run_table.update()
+            .where(self._run_table.c.id == run_id, self._run_table.c.deleted.is_(False))
+            .values(**values)
+        )
+        self._session.commit()
+        updated = self.get_run(run_id)
+        if updated is None:
+            raise KeyError(f"AI Assistant run disappeared: {run_id}")
+        return updated
+
+    def claim_run_status(
+        self,
+        run_id: int,
+        *,
+        expected_status: str,
+        next_status: str,
+        input_payload: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        now = datetime.now()
+        result = self._session.execute(
+            self._run_table.update()
+            .where(
+                self._run_table.c.id == run_id,
+                self._run_table.c.status == expected_status,
+                self._run_table.c.deleted.is_(False),
+            )
+            .values(status=next_status, input_payload=input_payload, updated_at=now)
+        )
+        self._session.commit()
+        if not _rowcount(result):
+            return None
+        updated = self.get_run(run_id)
+        if updated is None:
+            raise KeyError(f"AI Assistant run disappeared: {run_id}")
+        return updated
+
     def list_session_runs(self, session_id: int) -> list[dict[str, Any]]:
         rows = self._session.execute(
             sa.select(self._run_table)
@@ -183,9 +276,14 @@ class AiAssistantRepository:
 
     def complete_run(self, run_id: int, response_payload: dict[str, Any], status: str = "COMPLETED") -> dict[str, Any]:
         now = datetime.now()
+        protected_terminal_statuses = tuple({"CANCELLED", "COMPLETED", "FAILED", "DENIED"} - {status})
         self._session.execute(
             self._run_table.update()
-            .where(self._run_table.c.id == run_id, self._run_table.c.deleted.is_(False))
+            .where(
+                self._run_table.c.id == run_id,
+                self._run_table.c.deleted.is_(False),
+                self._run_table.c.status.not_in(protected_terminal_statuses),
+            )
             .values(
                 status=status,
                 response_payload=response_payload,
@@ -216,6 +314,17 @@ class AiAssistantRepository:
         )
         self._session.commit()
         return row
+
+    def list_run_messages(self, run_id: int) -> list[dict[str, Any]]:
+        rows = self._session.execute(
+            sa.select(self._message_table)
+            .where(
+                self._message_table.c.run_id == run_id,
+                self._message_table.c.deleted.is_(False),
+            )
+            .order_by(self._message_table.c.id.asc())
+        ).mappings().all()
+        return [dict(row) for row in rows]
 
     def append_event(
         self,
@@ -398,6 +507,40 @@ class AiAssistantRepository:
             raise KeyError(f"AI Assistant approval disappeared: {approval_id}")
         return updated
 
+    def cancel_pending_approvals_for_run(self, run_id: int, actor_id: str, reason: str = "") -> int:
+        now = datetime.now()
+        result = self._session.execute(
+            self._approval_table.update()
+            .where(
+                self._approval_table.c.run_id == run_id,
+                self._approval_table.c.status == "PENDING",
+                self._approval_table.c.deleted.is_(False),
+            )
+            .values(
+                status="CANCELLED",
+                decided_by=actor_id,
+                decision_reason=reason,
+                decided_at=now,
+                updated_at=now,
+            )
+        )
+        self._session.commit()
+        return _rowcount(result)
+
+    def cancel_pending_proposed_actions_for_run(self, run_id: int) -> int:
+        now = datetime.now()
+        result = self._session.execute(
+            self._proposed_action_table.update()
+            .where(
+                self._proposed_action_table.c.run_id == run_id,
+                self._proposed_action_table.c.status == "PENDING",
+                self._proposed_action_table.c.deleted.is_(False),
+            )
+            .values(status="CANCELLED", updated_at=now)
+        )
+        self._session.commit()
+        return _rowcount(result)
+
     def create_proposed_action(
         self,
         *,
@@ -427,6 +570,157 @@ class AiAssistantRepository:
         )
         self._session.commit()
         return row
+
+    def acquire_resource_lock(
+        self,
+        *,
+        resource_key: str,
+        mode: str,
+        owner_session_id: int,
+        owner_run_id: int,
+        owner_tool_call_id: int | None,
+        ttl_seconds: int,
+    ) -> dict[str, Any]:
+        now = datetime.now()
+        requested_mode = mode.upper()
+        mutex_name = _resource_lock_mutex_name(resource_key)
+        if not self._try_get_mysql_lock(mutex_name):
+            return {
+                "status": "CONTENDED",
+                "resource_key": resource_key,
+                "mode": requested_mode,
+                "fencing_token": 0,
+                "reason": f"resource {resource_key} lock acquisition is already in progress",
+            }
+        try:
+            self._expire_resource_locks(now)
+            active_rows = self._session.execute(
+                sa.select(self._resource_lock_table)
+                .where(
+                    self._resource_lock_table.c.resource_key == resource_key,
+                    self._resource_lock_table.c.status == "ACTIVE",
+                    self._resource_lock_table.c.deleted.is_(False),
+                    self._resource_lock_table.c.lease_expires_at > now,
+                )
+                .order_by(self._resource_lock_table.c.id.asc())
+            ).mappings().all()
+            conflict = None
+            for row in active_rows:
+                active_mode = str(row["mode"]).upper()
+                if requested_mode == "WRITE" or active_mode == "WRITE":
+                    conflict = row
+                    break
+            if conflict is not None:
+                self._session.commit()
+                return {
+                    "status": "CONTENDED",
+                    "resource_key": resource_key,
+                    "mode": requested_mode,
+                    "fencing_token": 0,
+                    "reason": f"resource {resource_key} is locked by run {conflict['owner_run_id']}",
+                }
+            max_token = self._session.execute(
+                sa.select(sa.func.max(self._resource_lock_table.c.fencing_token)).where(
+                    self._resource_lock_table.c.resource_key == resource_key,
+                    self._resource_lock_table.c.deleted.is_(False),
+                )
+            ).scalar_one_or_none()
+            inserted_row = insert_and_fetch(
+                self._session,
+                self._resource_lock_table,
+                {
+                    "resource_key": resource_key,
+                    "mode": requested_mode,
+                    "owner_session_id": owner_session_id,
+                    "owner_run_id": owner_run_id,
+                    "owner_tool_call_id": owner_tool_call_id,
+                    "lease_expires_at": now + timedelta(seconds=ttl_seconds),
+                    "fencing_token": int(max_token or 0) + 1,
+                    "status": "ACTIVE",
+                    "deleted": False,
+                    "created_at": now,
+                    "updated_at": now,
+                },
+            )
+            self._session.commit()
+            return {**inserted_row, "status": "ACQUIRED"}
+        except Exception:
+            self._session.rollback()
+            raise
+        finally:
+            self._release_mysql_lock(mutex_name)
+
+    def release_resource_lock(
+        self,
+        *,
+        resource_key: str,
+        owner_session_id: int,
+        owner_run_id: int,
+        fencing_token: int,
+    ) -> bool:
+        now = datetime.now()
+        result = self._session.execute(
+            self._resource_lock_table.update()
+            .where(
+                self._resource_lock_table.c.resource_key == resource_key,
+                self._resource_lock_table.c.owner_session_id == owner_session_id,
+                self._resource_lock_table.c.owner_run_id == owner_run_id,
+                self._resource_lock_table.c.fencing_token == fencing_token,
+                self._resource_lock_table.c.status == "ACTIVE",
+                self._resource_lock_table.c.deleted.is_(False),
+            )
+            .values(status="RELEASED", updated_at=now)
+        )
+        self._session.commit()
+        return bool(_rowcount(result))
+
+    def renew_resource_lock(
+        self,
+        *,
+        resource_key: str,
+        owner_session_id: int,
+        owner_run_id: int,
+        fencing_token: int,
+        ttl_seconds: int,
+    ) -> bool:
+        now = datetime.now()
+        result = self._session.execute(
+            self._resource_lock_table.update()
+            .where(
+                self._resource_lock_table.c.resource_key == resource_key,
+                self._resource_lock_table.c.owner_session_id == owner_session_id,
+                self._resource_lock_table.c.owner_run_id == owner_run_id,
+                self._resource_lock_table.c.fencing_token == fencing_token,
+                self._resource_lock_table.c.status == "ACTIVE",
+                self._resource_lock_table.c.deleted.is_(False),
+                self._resource_lock_table.c.lease_expires_at > now,
+            )
+            .values(lease_expires_at=now + timedelta(seconds=ttl_seconds), updated_at=now)
+        )
+        self._session.commit()
+        return bool(_rowcount(result))
+
+    def _expire_resource_locks(self, now: datetime) -> None:
+        self._session.execute(
+            self._resource_lock_table.update()
+            .where(
+                self._resource_lock_table.c.status == "ACTIVE",
+                self._resource_lock_table.c.deleted.is_(False),
+                self._resource_lock_table.c.lease_expires_at <= now,
+            )
+            .values(status="EXPIRED", updated_at=now)
+        )
+
+    def _try_get_mysql_lock(self, name: str) -> bool:
+        value = self._session.execute(sa.text("SELECT GET_LOCK(:name, 0)"), {"name": name}).scalar_one_or_none()
+        return int(value or 0) == 1
+
+    def _release_mysql_lock(self, name: str) -> None:
+        try:
+            self._session.execute(sa.text("SELECT RELEASE_LOCK(:name)"), {"name": name})
+            self._session.commit()
+        except Exception:
+            self._session.rollback()
 
     def _next_event_sequence(self, run_id: int) -> int:
         current = self._session.execute(

@@ -50,11 +50,21 @@ class AiAssistantKernelE2ETest(unittest.TestCase):
         self.assertEqual(first.json()["data"]["replayed"], False)
         self.assertEqual(replay.json()["data"]["runId"], run_id)
         self.assertEqual(replay.json()["data"]["replayed"], True)
+        self.assertEqual(first.json()["data"]["planningStrategy"], "auto_lightweight")
+        self.assertEqual(first.json()["data"]["plan"]["id"], f"plan-{run_id}")
         self.assertEqual(first.json()["data"]["toolCalls"][0]["status"], "COMPLETED")
         self.assertEqual(first.json()["data"]["toolCalls"][0]["output"]["echo"], "Please echo the visible execution.")
-        self.assertEqual(events.json()["data"]["total"], 7)
-        self.assertEqual(events.json()["data"]["list"][3]["type"], "tool.call_started")
-        self.assertEqual(events.json()["data"]["list"][5]["type"], "tool.call_completed")
+        event_types = [event["type"] for event in events.json()["data"]["list"]]
+        self.assertIn("plan.created", event_types)
+        self.assertIn("task.created", event_types)
+        self.assertIn("plan.step_started", event_types)
+        self.assertIn("task.updated", event_types)
+        self.assertIn("tool.call_started", event_types)
+        self.assertIn("tool.call_completed", event_types)
+        self.assertIn("plan.step_completed", event_types)
+        self.assertIn("task.completed", event_types)
+        self.assertLess(event_types.index("plan.created"), event_types.index("tool.call_started"))
+        self.assertLess(event_types.index("tool.call_completed"), event_types.index("task.completed"))
 
     def _session_override(self) -> Generator[Session, None, None]:
         with self._factory() as session:

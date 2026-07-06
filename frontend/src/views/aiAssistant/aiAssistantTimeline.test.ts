@@ -109,6 +109,34 @@ describe('ai assistant execution timeline', () => {
     expect(timeline.some((item) => item.approvalId === 9)).toBe(false)
   })
 
+  it('assembles canonical text delta events into one visible model output message', () => {
+    const events: AiAssistantEvent[] = [
+      event(1, 'run.started', '运行开始', 'started', {}),
+      event(2, 'text.delta', '实时输出', '你', {
+        delta: '你',
+        streaming: true,
+        source: 'openrouter_delta',
+      }),
+      event(3, 'text.delta', '实时输出', '好', {
+        delta: '好',
+        streaming: true,
+        source: 'openrouter_delta',
+      }),
+      event(4, 'stream.fallback', '流式降级', 'non-streaming fallback', {
+        reason: 'provider_non_streaming',
+        source: 'post_completion_split',
+      }),
+    ]
+
+    const timeline = buildAiAssistantTimeline(events)
+
+    expect(timeline.map((item) => item.kind)).toEqual(['model-output', 'model'])
+    expect(timeline[0].summary).toBe('你好')
+    expect(timeline[0].payloadPreview).toContain('"chunkCount":2')
+    expect(timeline[0].source).toBe('openrouter_delta')
+    expect(timeline[1].title).toBe('流式降级')
+  })
+
   it('carries stream phase and source metadata for final answer placement', () => {
     const events: AiAssistantEvent[] = [
       event(1, 'model.stream_chunk', '模型输出', '最终', {
