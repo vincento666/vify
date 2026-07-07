@@ -2,17 +2,18 @@
 
 ## Current
 
-- active specs: `213` through `221`
-- frozen scope: runtime v2 production target gap closure on replay branch
-- current checklist item: merge gate preflight
-- current status: `runtime 213-221 target gap audit PASS; merge gate waiting-human`
-- human decision: use path-filtered replay branch and protect spec 222+ changes
-- worktree: `/Users/vincento/work/develop/hify-runtime-v2-closure-replay`
-- branch: `codex/runtime-v2-closure-replay`
-- base: `d6fc969c`
+- active spec: `222-ai-assistant-general-harness-mvp`
+- current slice: `222.13 Tool Observation Self-Correction Correction`
+- frozen scope: recoverable tool observations feed repair/replan; unrecoverable gates remain terminal
+- current checklist item: commit slice
+- current status: `222.13 complete, Checker PASS, Reviewer PASS, commit pending`
+- human decision: option `A`, use `codex/runtime-v2-production-upgrade` as Spec 222 continuation base
+- worktree: `/Users/vincento/work/develop/hify`
+- branch: `codex/spec-222-13-tool-self-correction`
+- base: `a57cb783`
 - merge target: `codex/runtime-v2-production-upgrade`
-- latest committed replay: `5bd83e57 docs(runtime): record 213-221 gap audit`
-- waiting human: target branch worktree has unrelated dirty changes
+- evidence root: `artifacts/slices/222-ai-assistant-general-harness-mvp/222.13/`
+- waiting human: none
 
 ## Evidence So Far
 
@@ -29,6 +30,35 @@ rem gate: 1 passed
 protected-path diff: empty
 diff check: clean
 ```
+
+222.13 evidence produced in this loop:
+
+```text
+RED: red-unit.txt, red-contract.txt, red-e2e.txt, red-budget.txt
+Green: unit.txt, contract.txt, e2e.txt, frontend.txt, frontend-rem.txt
+Static: ruff.txt, py_compile.txt, diff-check.txt
+Audit/UAT: audit-export.json, uat-api-evidence.json, browser-uat.md,
+browser-uat-dom.json, screenshots/browser-uat-self-correction.png
+Review: checker-round1.md PASS, reviewer-round1.md PASS
+```
+
+## Spec 222 Closed-Loop Preflight Stop
+
+- date: `2026-07-07`
+- requested target: unfinished Spec 222 slices, starting with `222.13`
+- requested base: current latest `main` HEAD
+- status: `waiting-human`
+- stop reason: no local or remote `main` / `master` branch exists in this repo.
+- remote default branch: `origin/codex/spec-010-openrouter-acceptance` at `6a22a30a`
+- current Spec 222 context branch: `codex/runtime-v2-production-upgrade` at `a57cb783`
+- evidence: `origin/codex/spec-010-openrouter-acceptance` does not contain
+  `specs/222-ai-assistant-general-harness-mvp` or `loop/CURRENT.md` for Spec 222.
+- gate: branch/base/merge target is ambiguous, so implementation did not start.
+
+Recommended options:
+
+1. Use `codex/runtime-v2-production-upgrade` as the base for Spec 222 continuation.
+2. Provide the exact branch/ref that should be treated as "main latest HEAD".
 
 ## Attempts
 
@@ -78,12 +108,10 @@ diff check: clean
 
 ## Next Action
 
-Human decision required before merge:
-
-1. Commit or otherwise park the dirty target-branch changes separately, then
-   rerun merge gate.
-2. Create a separate merge-candidate branch/worktree from target HEAD for final
-   conflict and verifier proof without touching the dirty target worktree.
+Finish 222.13 Checker and Reviewer, then commit the slice on
+`codex/spec-222-13-tool-self-correction`. After that, `222.14 Production
+Hardening Backlog` remains `proposed-confirmation` and should not start without
+human confirmation.
 
 ## Reviewer Findings
 

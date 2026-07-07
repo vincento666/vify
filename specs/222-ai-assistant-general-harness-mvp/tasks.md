@@ -610,7 +610,7 @@ artifacts/slices/222-ai-assistant-general-harness-mvp/222.12/reviewer-round4.md
 
 ## 222.13 Tool Observation Self-Correction Correction
 
-Status: `proposed-confirmation`.
+Status: `complete`.
 
 Purpose:
 
@@ -621,22 +621,22 @@ immediately instead of feeding a repair/replan loop.
 
 Implementation tasks after confirmation:
 
-- [ ] RED: unit tests fail for recoverable timeout, 5xx, and rate-limit
+- [x] RED: unit tests fail for recoverable timeout, 5xx, and rate-limit
       observations that currently terminate the run too early.
-- [ ] RED: contract tests fail until structured tool observations are visible
+- [x] RED: contract tests fail until structured tool observations are visible
       to the model/orchestrator as repair input.
-- [ ] RED: E2E test fails until one bad tool call is repaired by retry,
+- [x] RED: E2E test fails until one bad tool call is repaired by retry,
       argument change, fallback adapter, or plan revision and then completes.
-- [ ] RED: budget test fails until the self-correction loop stops at configured
+- [x] RED: budget test fails until the self-correction loop stops at configured
       retry, token, cost, or tool-budget limits.
-- [ ] Feed recoverable tool observations back into the orchestrator/executor
+- [x] Feed recoverable tool observations back into the orchestrator/executor
       loop.
-- [ ] Emit `plan.revised` or `task.updated` for repair attempts.
-- [ ] Preserve structured terminal failure for permission, sandbox, approval,
+- [x] Emit `plan.revised` or `task.updated` for repair attempts.
+- [x] Preserve structured terminal failure for permission, sandbox, approval,
       and exhausted-budget cases.
-- [ ] Record trace spans, audit events, retry/fallback metadata, and budget
+- [x] Record trace spans, audit events, retry/fallback metadata, and budget
       usage for every repair attempt.
-- [ ] Run focused backend, contract, E2E, Browser UAT, Checker, Reviewer, and
+- [x] Run focused backend, contract, E2E, Browser UAT, Checker, Reviewer, and
       docs gates.
 
 Required evidence:
@@ -649,7 +649,14 @@ artifacts/slices/222-ai-assistant-general-harness-mvp/222.13/red-budget.txt
 artifacts/slices/222-ai-assistant-general-harness-mvp/222.13/unit.txt
 artifacts/slices/222-ai-assistant-general-harness-mvp/222.13/contract.txt
 artifacts/slices/222-ai-assistant-general-harness-mvp/222.13/e2e.txt
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.13/frontend.txt
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.13/frontend-rem.txt
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.13/ruff.txt
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.13/py_compile.txt
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.13/diff-check.txt
 artifacts/slices/222-ai-assistant-general-harness-mvp/222.13/browser-uat.md
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.13/browser-uat-dom.json
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.13/screenshots/browser-uat-self-correction.png
 artifacts/slices/222-ai-assistant-general-harness-mvp/222.13/audit-export.json
 artifacts/slices/222-ai-assistant-general-harness-mvp/222.13/checker-round1.md
 artifacts/slices/222-ai-assistant-general-harness-mvp/222.13/reviewer-round1.md

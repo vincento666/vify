@@ -41,7 +41,7 @@ class AiAssistantToolRuntimeApiContractTest(unittest.TestCase):
         self._engine.dispose()
         self._tmp_dir.cleanup()
 
-    def test_tool_failure_is_returned_as_structured_observation_for_replan_not_api_failure(self) -> None:
+    def test_tool_failure_is_returned_as_structured_observation_then_degraded_completion(self) -> None:
         with TestClient(app) as client:
             created = client.post("/api/v1/ai-assistant/sessions", json={"title": "Tool runtime contract"})
             session_id = created.json()["data"]["id"]
@@ -60,7 +60,7 @@ class AiAssistantToolRuntimeApiContractTest(unittest.TestCase):
 
         self.assertEqual(turn.status_code, 200, turn.text)
         data = turn.json()["data"]
-        self.assertEqual(data["status"], "FAILED")
+        self.assertEqual(data["status"], "COMPLETED")
         self.assertEqual(data["toolCalls"][0]["status"], "FAILED")
         observation = data["toolCalls"][0]["output"]["observation"]
         self.assertEqual(observation["kind"], "tool_error")
@@ -72,14 +72,13 @@ class AiAssistantToolRuntimeApiContractTest(unittest.TestCase):
         self.assertIn("tool.error_observation", event_types)
         self.assertIn("plan.revised", event_types)
         self.assertIn("tool.call_failed", event_types)
-        self.assertIn("plan.blocked", event_types)
-        self.assertIn("task.blocked", event_types)
-        self.assertIn("run.failed", event_types)
+        self.assertIn("tool.self_correction_degraded", event_types)
+        self.assertIn("plan.step_completed", event_types)
+        self.assertIn("task.completed", event_types)
+        self.assertIn("run.completed", event_types)
+        self.assertNotIn("run.failed", event_types)
         after_tool_start = event_types[event_types.index("tool.call_started") :]
         self.assertNotIn("tool.call_completed", after_tool_start)
-        self.assertNotIn("plan.step_completed", after_tool_start)
-        self.assertNotIn("task.completed", after_tool_start)
-        self.assertNotIn("run.completed", after_tool_start)
 
     def test_scheduled_tool_failure_short_circuits_followup_tools(self) -> None:
         with TestClient(app) as client:
@@ -132,7 +131,7 @@ class AiAssistantToolRuntimeApiContractTest(unittest.TestCase):
 
         self.assertEqual(turn.status_code, 200, turn.text)
         data = turn.json()["data"]
-        self.assertEqual(data["status"], "FAILED")
+        self.assertEqual(data["status"], "COMPLETED")
         self.assertEqual(
             [tool["toolName"] for tool in data["toolCalls"]],
             ["parallel_failing_tool", "parallel_after_tool"],
@@ -151,7 +150,11 @@ class AiAssistantToolRuntimeApiContractTest(unittest.TestCase):
         ]
         self.assertIn(("tool.call_failed", "parallel_failing_tool"), terminal_events)
         self.assertIn(("tool.call_completed", "parallel_after_tool"), terminal_events)
-        run_failed_index = [event["type"] for event in event_list].index("run.failed")
+        event_types = [event["type"] for event in event_list]
+        self.assertIn("tool.self_correction_degraded", event_types)
+        self.assertIn("run.completed", event_types)
+        self.assertNotIn("run.failed", event_types)
+        run_completed_index = event_types.index("run.completed")
         terminal_indexes = [
             index
             for index, event in enumerate(event_list)
@@ -162,7 +165,7 @@ class AiAssistantToolRuntimeApiContractTest(unittest.TestCase):
             }
         ]
         self.assertTrue(terminal_indexes)
-        self.assertLess(max(terminal_indexes), run_failed_index)
+        self.assertLess(max(terminal_indexes), run_completed_index)
 
     def test_mock_business_adapter_tool_runs_through_harness_approval_and_audit_path(self) -> None:
         with TestClient(app) as client:

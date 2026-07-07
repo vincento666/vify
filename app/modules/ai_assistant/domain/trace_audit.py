@@ -104,8 +104,30 @@ def build_audit_record(
         },
         "plan": _plan_payload(run),
         "toolCalls": [_audit_tool_call(row) for row in tool_calls],
-        "retries": _events_of_type(events, {"tool.retry_scheduled"}),
-        "fallbacks": _events_of_type(events, {"tool.fallback_used", "stream.fallback"}),
+        "retries": _events_of_type(
+            events,
+            {
+                "tool.retry_scheduled",
+                "tool.self_correction_started",
+                "tool.self_correction_completed",
+                "tool.self_correction_exhausted",
+            },
+        ),
+        "fallbacks": _events_of_type(
+            events,
+            {"tool.fallback_used", "stream.fallback", "tool.self_correction_fallback_selected", "tool.self_correction_degraded"},
+        ),
+        "selfCorrections": _events_of_type(
+            events,
+            {
+                "tool.self_correction_started",
+                "tool.self_correction_fallback_selected",
+                "tool.self_correction_completed",
+                "tool.self_correction_degraded",
+                "tool.self_correction_exhausted",
+                "tool.self_correction_terminal",
+            },
+        ),
         "approvals": [_audit_approval(row) for row in approvals],
         "tokenCost": {"token": budget["token"], "cost": budget["cost"]},
         "fileDiffs": _file_diffs(tool_calls),
@@ -311,7 +333,11 @@ def _event_kinds(event_type: str) -> list[str]:
         kinds.append("stream")
     if event_type == "tool.retry_scheduled":
         kinds.append("retry")
+    if event_type.startswith("tool.self_correction"):
+        kinds.append("retry")
     if event_type in {"tool.fallback_used", "stream.fallback"}:
+        kinds.append("fallback")
+    if event_type in {"tool.self_correction_fallback_selected", "tool.self_correction_degraded"}:
         kinds.append("fallback")
     if event_type.startswith("skill."):
         kinds.append("skill")

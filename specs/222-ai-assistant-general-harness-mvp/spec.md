@@ -59,7 +59,7 @@ conversation
 222.10 Aggregate Production Evaluation: complete
 222.11 Live LLM Real-Case UAT: complete
 222.12 Real-Time Streaming And Durable Worker Correction: complete
-222.13 Tool Observation Self-Correction Correction: proposed-confirmation
+222.13 Tool Observation Self-Correction Correction: complete
 222.14 Production Hardening Backlog: proposed-confirmation
 ```
 

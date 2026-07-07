@@ -1,72 +1,76 @@
-# Current Loop Scope: Runtime V2 Production Closure
+# Current Loop Scope: Spec 222 AI Assistant Harness
 
 ## Status
 
-Active implementation sprint:
+Latest completed slice:
 
 ```text
-213+ Runtime V2 Target Gap Closure (in-progress)
+222.13 Tool Observation Self-Correction Correction (complete)
 ```
 
-## Active Specs
-
-Spec range:
+Pending after this slice:
 
 ```text
-213-runtime-async-default-invocation-gateway
-214-runtime-dag-multipath-semantics
-215-runtime-dag-frontier-scheduler
-216-chatflow-sop-compat-on-dag
-217-runtime-v2-node-compatibility-matrix
-218-runtime-production-job-scheduler
-219-runtime-event-cancel-ratelimit-backpressure
-220-runtime-observability-ops-module
-221-runtime-capacity-fault-acceptance
+222.14 Production Hardening Backlog (proposed-confirmation)
 ```
 
-Canonical target:
+This file is the spec-facing loop pointer. Other loop engineering files such as
+`loop/STATE.md` and `loop/VERIFIERS.md` are operational sprint artifacts; they
+must not become alternate spec sources of truth.
+
+## Active Spec
+
+Spec id:
 
 ```text
-docs/chatflow-workflow-production-upgrade.md
+222-ai-assistant-general-harness-mvp
 ```
 
-Replay contract:
+Spec files:
 
 ```text
-artifacts/slices/runtime-v2-closure-replay/replay-contract.md
+specs/222-ai-assistant-general-harness-mvp/spec.md
+specs/222-ai-assistant-general-harness-mvp/plan.md
+specs/222-ai-assistant-general-harness-mvp/tasks.md
 ```
 
 ## Worktree
 
 ```text
-branch: codex/runtime-v2-closure-replay
-path: /Users/vincento/work/develop/hify-runtime-v2-closure-replay
-base: d6fc969c feat(ai-assistant): complete harness MVP gates
+branch: codex/spec-222-13-tool-self-correction
+path: /Users/vincento/work/develop/hify
+base: a57cb783 codex/runtime-v2-production-upgrade
 merge target: codex/runtime-v2-production-upgrade
-source replay branch: codex/runtime-v2-specs-213-plus
 ```
 
-This worktree is isolated to protect completed spec 222+ changes while closing
-runtime 213-221 target gaps.
+Current worktree is used because this is one active Builder stream and no
+unrelated dirty changes were present before the branch was created.
 
 ## Frozen Scope
 
 Allowed:
 
 ```text
-runtime 213-221 code, tests, docs, evidence, loop state
-runtime-lab SOP async default and runtime state boundary fixes
-Runtime Ops, runtime job, DAG scheduler, event/cancel/backpressure, capacity evidence
-222 regression smoke and protected-path guards
-```
-
-Protected:
-
-```text
 app/modules/ai_assistant/
 frontend/src/views/aiAssistant/
+frontend/src/api/aiAssistant*
+tests/unit/ai_assistant/
+tests/contract/test_ai_assistant_*.py
+tests/e2e/test_ai_assistant_*.py
 specs/222-ai-assistant-general-harness-mvp/
-tests/*ai_assistant*
+loop/CURRENT.md
+loop/STATE.md
+loop/VERIFIERS.md
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.13/
+```
+
+Behavior target:
+
+```text
+Recoverable tool timeout, 5xx, and rate-limit observations must feed a
+repair/replan loop. The run may retry with repaired arguments, select a fallback
+adapter/tool, or degrade within budget. Permission, sandbox, approval, and
+exhausted-budget failures remain structured terminal failures.
 ```
 
 ## Stop Conditions
@@ -74,11 +78,12 @@ tests/*ai_assistant*
 Stop and enter `waiting-human` if:
 
 ```text
-222 protected-path diff is non-empty
-222 smoke fails due runtime replay/fix
-scope needs new dependency, production secret, release, push, or irreversible action
-target requires real external service not available locally
+scope needs new dependency, schema/API migration, production secret, push,
+release, real external service, or irreversible action
+222.13 acceptance requires changing 222.14 backlog boundary
 same verifier failure repeats twice without narrower hypothesis
+Checker finds missing evidence or gate bypass
 Reviewer finds scope expansion, weakened tests, or missing evidence
 merge target becomes ambiguous or dirty
+slice completes but cannot be committed safely
 ```

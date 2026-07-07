@@ -57,7 +57,7 @@ from app.modules.ai_assistant.domain.skills import SkillRuntime
 from app.modules.ai_assistant.domain.streaming_runtime import stream_fallback_payload, text_delta_payload
 from app.modules.ai_assistant.domain.tool_runtime import ToolRunner, ToolRunResult
 from app.modules.ai_assistant.domain.trace_audit import build_trace_audit_export
-from app.modules.ai_assistant.domain.tools import ToolManifest, ToolRegistry, ToolResult
+from app.modules.ai_assistant.domain.tools import RiskLevel, ToolManifest, ToolRegistry, ToolResult
 from app.modules.ai_assistant.infra.repository import AiAssistantRepository, IdempotencyConflict
 from app.modules.chat.domain.llm_request import ChatRequestMessage
 
@@ -795,11 +795,13 @@ class AiAssistantHarnessService:
                 tool_call_payload=tool_call_payload,
                 tool_call_id=int(tool_call["id"]),
             )
-            return self._finalize_failed_tool_observation(
+            return self._recover_or_finalize_failed_tool_observation(
                 run_id=run_id,
                 session_id=session_id,
                 tool_name=tool_name,
                 tool_call=tool_call_payload,
+                original_payload=payload,
+                approval_mode=approval_mode,
             )
         self._repository.append_event(
             run_id=run_id,
@@ -1113,6 +1115,7 @@ class AiAssistantHarnessService:
                 message=message,
                 approval_mode=approval_mode,
                 tool_calls=new_tool_calls,
+                failed_observation_mode="replan",
             )
             recorded_tool_calls.extend(execution.recorded_tool_calls)
             if execution.terminal_result is not None:
@@ -1385,6 +1388,7 @@ class AiAssistantHarnessService:
         message: str,
         approval_mode: str,
         tool_calls: list[dict[str, Any]],
+        failed_observation_mode: str = "recover",
     ) -> ScheduledToolExecutionResult:
         invocations = [
             ScheduledToolInvocation(str(call["toolName"]), dict(call.get("toolInput") or {}))
@@ -1417,6 +1421,7 @@ class AiAssistantHarnessService:
                     message=message,
                     approval_mode=approval_mode,
                     batch=batch,
+                    failed_observation_mode=failed_observation_mode,
                 )
                 if isinstance(parallel_result, HarnessTurnResult):
                     return ScheduledToolExecutionResult(
@@ -1437,6 +1442,7 @@ class AiAssistantHarnessService:
                         payload=item.tool_input,
                         scheduler_metadata=batch.item_metadata[index],
                         pending_tool_calls_after_approval=pending_tool_calls,
+                        failed_observation_mode=failed_observation_mode,
                     )
                     if isinstance(result, HarnessTurnResult):
                         return ScheduledToolExecutionResult(
@@ -1544,6 +1550,7 @@ class AiAssistantHarnessService:
         message: str,
         approval_mode: str,
         batch: Any,
+        failed_observation_mode: str = "recover",
     ) -> list[dict[str, Any]] | HarnessTurnResult:
         acquired_locks_by_index: list[list[ResourceLockAcquireResult]] = []
         sandbox_runtimes_by_index: list[SessionSandboxRuntime] = []
@@ -1698,11 +1705,22 @@ class AiAssistantHarnessService:
             recorded.append(tool_call_payload)
         if first_failed_tool is not None:
             failed_tool_name, failed_tool_call = first_failed_tool
-            return self._finalize_failed_tool_observation(
+            if failed_observation_mode == "replan":
+                self._append_failed_observation_forwarded_for_replan(
+                    run_id=run_id,
+                    session_id=session_id,
+                    tool_name=failed_tool_name,
+                    tool_call=failed_tool_call,
+                    phase="read_parallel_failed_observation_replan",
+                )
+                return recorded
+            return self._recover_or_finalize_failed_tool_observation(
                 run_id=run_id,
                 session_id=session_id,
                 tool_name=failed_tool_name,
                 tool_call=failed_tool_call,
+                original_payload=dict(failed_tool_call.get("input") or {}),
+                approval_mode=approval_mode,
                 task_phase="read_parallel_failed_observation",
             )
         return recorded
@@ -1718,6 +1736,7 @@ class AiAssistantHarnessService:
         payload: dict[str, Any],
         scheduler_metadata: dict[str, Any],
         pending_tool_calls_after_approval: list[dict[str, Any]] | None = None,
+        failed_observation_mode: str = "recover",
     ) -> dict[str, Any] | HarnessTurnResult:
         manifest, gate_result, sandbox_runtime = self._evaluate_tool_security(
             run_id=run_id,
@@ -1818,11 +1837,22 @@ class AiAssistantHarnessService:
                 tool_call_id=int(tool_call["id"]),
                 scheduler_metadata=scheduler_metadata,
             )
-            return self._finalize_failed_tool_observation(
+            if failed_observation_mode == "replan":
+                self._append_failed_observation_forwarded_for_replan(
+                    run_id=run_id,
+                    session_id=session_id,
+                    tool_name=tool_name,
+                    tool_call=tool_call_payload,
+                    phase="tool_failed_observation_replan",
+                )
+                return tool_call_payload
+            return self._recover_or_finalize_failed_tool_observation(
                 run_id=run_id,
                 session_id=session_id,
                 tool_name=tool_name,
                 tool_call=tool_call_payload,
+                original_payload=payload,
+                approval_mode=approval_mode,
             )
         self._repository.append_event(
             run_id=run_id,
@@ -2874,6 +2904,507 @@ class AiAssistantHarnessService:
             run_failed_summary="审批通过后的工具失败已保留为结构化 observation。",
         )
 
+    def _append_failed_observation_forwarded_for_replan(
+        self,
+        *,
+        run_id: int,
+        session_id: int,
+        tool_name: str,
+        tool_call: dict[str, Any],
+        phase: str,
+    ) -> None:
+        observation = _observation_from_tool_call(tool_call)
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="tool.observation_forwarded",
+            visible_title="工具 observation 已转交",
+            visible_summary="工具失败 observation 已转交给编排器继续规划。",
+            payload={"toolName": tool_name, "observation": observation},
+            level="warning",
+        )
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="plan.revised",
+            visible_title="计划已修订",
+            visible_summary="工具 observation 已进入下一轮模型/编排输入。",
+            payload={
+                "planId": _plan_payload_from_run(self._repository.get_run(run_id) or {}).get("id"),
+                "reason": "tool_observation_replan",
+                "toolName": tool_name,
+                "observation": observation,
+            },
+            level="warning",
+        )
+        self._append_task_updated(
+            run_id=run_id,
+            session_id=session_id,
+            phase=phase,
+            current_tool=tool_name,
+        )
+
+    def _recover_or_finalize_failed_tool_observation(
+        self,
+        *,
+        run_id: int,
+        session_id: int,
+        tool_name: str,
+        tool_call: dict[str, Any],
+        original_payload: dict[str, Any],
+        approval_mode: str,
+        approval_id: int | None = None,
+        final_answer_prefix: str = "工具执行失败",
+        task_phase: str = "tool_failed_observation",
+        run_failed_summary: str = "工具失败已保留为结构化 observation。",
+    ) -> HarnessTurnResult:
+        run = self._repository.get_run(run_id) or {}
+        try:
+            manifest = self._tools.get_manifest(tool_name)
+            risk_level = manifest.risk_level.value
+        except Exception:
+            risk_level = RiskLevel.READ.value
+        observation = _observation_from_tool_call(tool_call)
+        decision = plan_tool_self_correction(
+            tool_name=tool_name,
+            tool_input=original_payload,
+            observation=observation,
+            ai_assistant_budget=dict((run.get("input_payload") or {}).get("aiAssistantBudget") or {}),
+            previous_repair_attempts=_self_correction_attempt_count(self._repository.list_run_events(run_id)),
+            risk_level=risk_level,
+        )
+        action = str(decision.get("action") or "terminal")
+        if action in {"retry_tool", "fallback_tool"}:
+            return self._execute_self_correction_tool_call(
+                run_id=run_id,
+                session_id=session_id,
+                failed_tool_name=tool_name,
+                failed_tool_call=tool_call,
+                decision=decision,
+                approval_mode=approval_mode,
+            )
+        if action == "degrade":
+            return self._complete_degraded_tool_observation(
+                run_id=run_id,
+                session_id=session_id,
+                tool_name=tool_name,
+                tool_call=tool_call,
+                decision=decision,
+            )
+        if action == "budget_exhausted":
+            self._append_self_correction_event(
+                run_id=run_id,
+                session_id=session_id,
+                event_type="tool.self_correction_exhausted",
+                tool_name=tool_name,
+                decision=decision,
+                observation=observation,
+                level="warning",
+            )
+        else:
+            self._append_self_correction_event(
+                run_id=run_id,
+                session_id=session_id,
+                event_type="tool.self_correction_terminal",
+                tool_name=tool_name,
+                decision=decision,
+                observation=observation,
+                level="warning",
+            )
+        return self._finalize_failed_tool_observation(
+            run_id=run_id,
+            session_id=session_id,
+            tool_name=tool_name,
+            tool_call=tool_call,
+            approval_id=approval_id,
+            final_answer_prefix=final_answer_prefix,
+            task_phase=task_phase,
+            run_failed_summary=run_failed_summary,
+        )
+
+    def _execute_self_correction_tool_call(
+        self,
+        *,
+        run_id: int,
+        session_id: int,
+        failed_tool_name: str,
+        failed_tool_call: dict[str, Any],
+        decision: dict[str, Any],
+        approval_mode: str,
+    ) -> HarnessTurnResult:
+        tool_name = str(decision.get("toolName") or failed_tool_name)
+        payload = dict(decision.get("toolInput") or {})
+        observation = _observation_from_tool_call(failed_tool_call)
+        self._append_self_correction_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="tool.self_correction_started",
+            tool_name=failed_tool_name,
+            decision=decision,
+            observation=observation,
+        )
+        if decision.get("action") == "fallback_tool":
+            self._append_self_correction_event(
+                run_id=run_id,
+                session_id=session_id,
+                event_type="tool.self_correction_fallback_selected",
+                tool_name=tool_name,
+                decision=decision,
+                observation=observation,
+            )
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="plan.revised",
+            visible_title="计划已修订",
+            visible_summary="工具失败 observation 已触发自动修复计划。",
+            payload={
+                "planId": _plan_payload_from_run(self._repository.get_run(run_id) or {}).get("id"),
+                "reason": "tool_observation_self_correction",
+                "toolName": failed_tool_name,
+                "repairToolName": tool_name,
+                "decision": decision,
+                "observation": observation,
+            },
+            level="warning",
+        )
+        self._append_task_updated(
+            run_id=run_id,
+            session_id=session_id,
+            phase="tool_self_correction",
+            current_tool=tool_name,
+        )
+        manifest, gate_result, sandbox_runtime = self._evaluate_tool_security(
+            run_id=run_id,
+            session_id=session_id,
+            approval_mode=approval_mode,
+            tool_name=tool_name,
+            payload=payload,
+        )
+        if gate_result is not None:
+            self._append_self_correction_event(
+                run_id=run_id,
+                session_id=session_id,
+                event_type="tool.self_correction_terminal",
+                tool_name=tool_name,
+                decision=decision | {"reason": "repair_tool_security_gate"},
+                observation=observation,
+                level="warning",
+            )
+            return self._finalize_failed_tool_observation(
+                run_id=run_id,
+                session_id=session_id,
+                tool_name=failed_tool_name,
+                tool_call=failed_tool_call,
+            )
+        acquired_locks, lock_result = self._acquire_tool_resource_locks(
+            run_id=run_id,
+            session_id=session_id,
+            manifest=manifest,
+            payload=payload,
+            tool_name=tool_name,
+        )
+        if lock_result is not None:
+            self._append_self_correction_event(
+                run_id=run_id,
+                session_id=session_id,
+                event_type="tool.self_correction_terminal",
+                tool_name=tool_name,
+                decision=decision | {"reason": "repair_tool_resource_lock"},
+                observation=observation,
+                level="warning",
+            )
+            return self._finalize_failed_tool_observation(
+                run_id=run_id,
+                session_id=session_id,
+                tool_name=failed_tool_name,
+                tool_call=failed_tool_call,
+            )
+        started_step = self._mark_plan_step_started(run_id, tool_name)
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="plan.step_started",
+            visible_title="计划步骤开始",
+            visible_summary=f"{_tool_label(tool_name)} 修复步骤已开始。",
+            payload={"toolName": tool_name, "step": started_step, "selfCorrection": True},
+        )
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="tool.call_started",
+            visible_title="工具开始",
+            visible_summary=f"{_tool_label(tool_name)} 自纠错调用已开始执行。",
+            payload={"toolName": tool_name, "input": payload, "selfCorrection": True},
+        )
+        dispatch_result = self._dispatch_tool(
+            run_id=run_id,
+            session_id=session_id,
+            message="",
+            tool_name=tool_name,
+            payload=payload,
+            sandbox_runtime=sandbox_runtime,
+        )
+        self._annotate_tool_result_with_locks(dispatch_result, acquired_locks)
+        tool_result = dispatch_result["tool_result"]
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="tool.call_output",
+            visible_title="工具输出",
+            visible_summary=_tool_result_visible_summary(tool_result.output),
+            payload={"toolName": tool_name, "output": tool_result.output, "selfCorrection": True},
+        )
+        tool_call = self._repository.record_tool_call(
+            run_id=run_id,
+            session_id=session_id,
+            tool_name=tool_name,
+            input_payload=_tool_record_input(payload, dispatch_result=dispatch_result, extra={"_selfCorrection": decision}),
+            output_payload=tool_result.output,
+            status=tool_result.status,
+            duration_ms=int(dispatch_result["duration_ms"]),
+        )
+        self._append_tool_runtime_events(
+            run_id=run_id,
+            session_id=session_id,
+            tool_name=tool_name,
+            dispatch_result=dispatch_result,
+            tool_call_id=int(tool_call["id"]),
+        )
+        self._release_tool_resource_locks(run_id=run_id, session_id=session_id, acquired_locks=acquired_locks)
+        repaired_tool_call = _tool_call_payload(tool_call)
+        if _tool_call_failed_with_observation(repaired_tool_call):
+            self._append_tool_call_failed_event(
+                run_id=run_id,
+                session_id=session_id,
+                tool_name=tool_name,
+                tool_call_payload=repaired_tool_call,
+                tool_call_id=int(tool_call["id"]),
+            )
+            self._append_self_correction_event(
+                run_id=run_id,
+                session_id=session_id,
+                event_type="tool.self_correction_exhausted",
+                tool_name=tool_name,
+                decision=decision | {"reason": "repair_attempt_failed"},
+                observation=_observation_from_tool_call(repaired_tool_call),
+                level="warning",
+            )
+            return self._finalize_failed_tool_observation(
+                run_id=run_id,
+                session_id=session_id,
+                tool_name=tool_name,
+                tool_call=repaired_tool_call,
+            )
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="tool.call_completed",
+            visible_title="工具完成",
+            visible_summary=f"{_tool_label(tool_name)} 自纠错调用已完成。",
+            payload={"toolName": tool_name, "status": tool_result.status, "selfCorrection": True},
+            tool_call_id=int(tool_call["id"]),
+        )
+        completed_step = self._mark_plan_step_completed(run_id, tool_name)
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="plan.step_completed",
+            visible_title="计划步骤完成",
+            visible_summary=f"{_tool_label(tool_name)} 修复步骤已完成。",
+            payload={"toolName": tool_name, "step": completed_step, "selfCorrection": True},
+        )
+        return self._complete_self_corrected_tool_run(
+            run_id=run_id,
+            session_id=session_id,
+            tool_name=tool_name,
+            decision=decision,
+        )
+
+    def _complete_self_corrected_tool_run(
+        self,
+        *,
+        run_id: int,
+        session_id: int,
+        tool_name: str,
+        decision: dict[str, Any],
+    ) -> HarnessTurnResult:
+        tool_calls = [_tool_call_payload(row) for row in self._repository.list_run_tool_calls(run_id)]
+        final_answer = _tool_execution_answer(tool_calls)
+        self._append_self_correction_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="tool.self_correction_completed",
+            tool_name=tool_name,
+            decision=decision,
+            observation=_observation_from_tool_call(tool_calls[0]) if tool_calls else {},
+        )
+        self._append_model_output_stream(
+            run_id=run_id,
+            session_id=session_id,
+            model="deterministic",
+            text=final_answer,
+            phase="final_answer",
+            source="harness_self_correction",
+        )
+        self._repository.append_message(session_id, "assistant", final_answer, run_id=run_id)
+        plan = set_plan_final_result(_plan_payload_from_run(self._repository.get_run(run_id) or {}), final_answer)
+        self._persist_plan_state(run_id, plan)
+        completed = self._repository.complete_run(
+            run_id,
+            {
+                "finalAnswer": final_answer,
+                "toolCalls": tool_calls,
+                "approvalRequired": False,
+                "sandboxDenied": False,
+                "plan": plan,
+            },
+        )
+        self._append_task_updated(
+            run_id=run_id,
+            session_id=session_id,
+            phase="tool_self_correction_completed",
+            plan=plan,
+            current_tool=tool_name,
+        )
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="task.completed",
+            visible_title="任务完成",
+            visible_summary="工具失败已自纠错，结构化计划已执行完成。",
+            payload={"planId": plan.get("id"), "finalResult": final_answer},
+        )
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="run.completed",
+            visible_title="运行完成",
+            visible_summary="AI 助手已通过工具 observation 自纠错完成运行。",
+            payload={"finalAnswer": final_answer},
+        )
+        self._update_session_summary_after_run(
+            session_id=session_id,
+            run_id=run_id,
+            user_message=str(((completed or {}).get("input_payload") or {}).get("message") or ""),
+            final_answer=final_answer,
+        )
+        return HarnessTurnResult(
+            run=completed,
+            replayed=False,
+            final_answer=final_answer,
+            tool_calls=tool_calls,
+        )
+
+    def _complete_degraded_tool_observation(
+        self,
+        *,
+        run_id: int,
+        session_id: int,
+        tool_name: str,
+        tool_call: dict[str, Any],
+        decision: dict[str, Any],
+    ) -> HarnessTurnResult:
+        tool_calls = [_tool_call_payload(row) for row in self._repository.list_run_tool_calls(run_id)]
+        reason = _tool_failure_reason(tool_call)
+        final_answer = str(
+            decision.get("finalAnswer")
+            or f"工具 {_tool_label(tool_name)} 暂时不可用，已根据 observation 降级完成：{reason}"
+        )
+        self._append_self_correction_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="tool.self_correction_degraded",
+            tool_name=tool_name,
+            decision=decision,
+            observation=_observation_from_tool_call(tool_call),
+        )
+        completed_step = self._mark_plan_step_completed(run_id, tool_name, final_answer)
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="plan.step_completed",
+            visible_title="计划步骤完成",
+            visible_summary=f"{_tool_label(tool_name)} 已通过降级策略完成。",
+            payload={"toolName": tool_name, "step": completed_step, "selfCorrection": True, "degraded": True},
+        )
+        self._append_model_output_stream(
+            run_id=run_id,
+            session_id=session_id,
+            model="deterministic",
+            text=final_answer,
+            phase="final_answer",
+            source="harness_self_correction_degrade",
+        )
+        self._repository.append_message(session_id, "assistant", final_answer, run_id=run_id)
+        plan = set_plan_final_result(_plan_payload_from_run(self._repository.get_run(run_id) or {}), final_answer)
+        self._persist_plan_state(run_id, plan)
+        completed = self._repository.complete_run(
+            run_id,
+            {
+                "finalAnswer": final_answer,
+                "toolCalls": tool_calls,
+                "approvalRequired": False,
+                "sandboxDenied": False,
+                "plan": plan,
+            },
+        )
+        self._append_task_updated(
+            run_id=run_id,
+            session_id=session_id,
+            phase="tool_self_correction_degraded",
+            plan=plan,
+            current_tool=tool_name,
+        )
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="task.completed",
+            visible_title="任务完成",
+            visible_summary="工具失败已通过降级策略完成。",
+            payload={"planId": plan.get("id"), "finalResult": final_answer},
+        )
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="run.completed",
+            visible_title="运行完成",
+            visible_summary="AI 助手已通过工具 observation 降级完成运行。",
+            payload={"finalAnswer": final_answer},
+        )
+        return HarnessTurnResult(
+            run=completed,
+            replayed=False,
+            final_answer=final_answer,
+            tool_calls=tool_calls,
+        )
+
+    def _append_self_correction_event(
+        self,
+        *,
+        run_id: int,
+        session_id: int,
+        event_type: str,
+        tool_name: str,
+        decision: dict[str, Any],
+        observation: dict[str, Any],
+        level: str = "info",
+    ) -> None:
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type=event_type,
+            visible_title=_self_correction_event_title(event_type),
+            visible_summary=_self_correction_event_summary(event_type, tool_name),
+            payload={
+                "toolName": tool_name,
+                "decision": decision,
+                "observation": observation,
+                "budget": {"maxToolRepairAttempts": decision.get("maxToolRepairAttempts")},
+            },
+            level=level,
+        )
+
     def _finalize_failed_tool_observation(
         self,
         *,
@@ -3214,6 +3745,136 @@ class AiAssistantHarnessService:
 def _request_hash(payload: Any) -> str:
     encoded = json.dumps(payload, sort_keys=True, ensure_ascii=True)
     return sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def plan_tool_self_correction(
+    *,
+    tool_name: str,
+    tool_input: dict[str, Any],
+    observation: dict[str, Any],
+    ai_assistant_budget: dict[str, Any],
+    previous_repair_attempts: int,
+    risk_level: str,
+) -> dict[str, Any]:
+    max_attempts = _max_tool_repair_attempts(ai_assistant_budget)
+    if not _observation_is_recoverable(observation):
+        return {
+            "action": "terminal",
+            "reason": "unrecoverable_tool_observation",
+            "toolName": tool_name,
+            "toolInput": _public_self_correction_input(tool_input),
+            "maxToolRepairAttempts": max_attempts,
+        }
+    if str(risk_level).upper() != RiskLevel.READ.value:
+        return {
+            "action": "terminal",
+            "reason": "side_effect_repair_requires_human_approval",
+            "toolName": tool_name,
+            "toolInput": _public_self_correction_input(tool_input),
+            "maxToolRepairAttempts": max_attempts,
+        }
+    if previous_repair_attempts >= max_attempts:
+        return {
+            "action": "budget_exhausted",
+            "reason": "tool_repair_budget_exhausted",
+            "toolName": tool_name,
+            "toolInput": _public_self_correction_input(tool_input),
+            "previousRepairAttempts": previous_repair_attempts,
+            "maxToolRepairAttempts": max_attempts,
+        }
+    hints = tool_input.get("_selfCorrection")
+    hints = dict(hints) if isinstance(hints, dict) else {}
+    retry_input = hints.get("retryToolInput")
+    if isinstance(retry_input, dict):
+        return {
+            "action": "retry_tool",
+            "reason": "recoverable_tool_observation",
+            "toolName": str(hints.get("retryToolName") or tool_name),
+            "toolInput": _public_self_correction_input(retry_input),
+            "previousRepairAttempts": previous_repair_attempts,
+            "maxToolRepairAttempts": max_attempts,
+        }
+    fallback_tool_name = str(hints.get("fallbackToolName") or "")
+    fallback_input = hints.get("fallbackToolInput")
+    if fallback_tool_name and isinstance(fallback_input, dict):
+        return {
+            "action": "fallback_tool",
+            "reason": "recoverable_tool_observation",
+            "toolName": fallback_tool_name,
+            "toolInput": _public_self_correction_input(fallback_input),
+            "previousRepairAttempts": previous_repair_attempts,
+            "maxToolRepairAttempts": max_attempts,
+        }
+    return {
+        "action": "degrade",
+        "reason": "recoverable_tool_observation",
+        "toolName": tool_name,
+        "toolInput": _public_self_correction_input(tool_input),
+        "previousRepairAttempts": previous_repair_attempts,
+        "maxToolRepairAttempts": max_attempts,
+        "finalAnswer": hints.get("degradeAnswer") if isinstance(hints.get("degradeAnswer"), str) else "",
+    }
+
+
+def _max_tool_repair_attempts(ai_assistant_budget: dict[str, Any]) -> int:
+    for key in ("maxToolRepairAttempts", "max_tool_repair_attempts", "maxRepairAttempts"):
+        value = ai_assistant_budget.get(key)
+        if value not in (None, ""):
+            return max(0, int(str(value)))
+    return 1
+
+
+def _observation_is_recoverable(observation: dict[str, Any]) -> bool:
+    if not observation:
+        return False
+    if observation.get("retriable") is False:
+        return False
+    error = observation.get("error")
+    if isinstance(error, dict) and error.get("retriable") is False:
+        return False
+    return bool(observation.get("modelVisible", True))
+
+
+def _public_self_correction_input(payload: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in payload.items() if not str(key).startswith("_")}
+
+
+def _observation_from_tool_call(tool_call: dict[str, Any]) -> dict[str, Any]:
+    output = tool_call.get("output")
+    if isinstance(output, dict) and isinstance(output.get("observation"), dict):
+        return dict(output["observation"])
+    return {}
+
+
+def _self_correction_attempt_count(events: list[dict[str, Any]]) -> int:
+    return sum(1 for event in events if event.get("type") == "tool.self_correction_started")
+
+
+def _self_correction_event_title(event_type: str) -> str:
+    return {
+        "tool.self_correction_started": "工具自纠错开始",
+        "tool.self_correction_fallback_selected": "工具降级工具已选择",
+        "tool.self_correction_completed": "工具自纠错完成",
+        "tool.self_correction_degraded": "工具自纠错降级",
+        "tool.self_correction_exhausted": "工具自纠错预算耗尽",
+        "tool.self_correction_terminal": "工具自纠错终止",
+    }.get(event_type, "工具自纠错")
+
+
+def _self_correction_event_summary(event_type: str, tool_name: str) -> str:
+    if event_type == "tool.self_correction_started":
+        return f"{_tool_label(tool_name)} 的失败 observation 已触发修复尝试。"
+    if event_type == "tool.self_correction_fallback_selected":
+        return f"{_tool_label(tool_name)} 已作为 fallback 工具被选择。"
+    if event_type == "tool.self_correction_completed":
+        return f"{_tool_label(tool_name)} 的自纠错调用已完成。"
+    if event_type == "tool.self_correction_degraded":
+        return f"{_tool_label(tool_name)} 不可用，已降级完成。"
+    if event_type == "tool.self_correction_exhausted":
+        return f"{_tool_label(tool_name)} 自纠错预算已耗尽。"
+    if event_type == "tool.self_correction_terminal":
+        return f"{_tool_label(tool_name)} 不满足自动自纠错条件。"
+    return "工具自纠错事件已记录。"
 
 
 def _redacted_tool_run_result(
