@@ -4,15 +4,15 @@
 
 - active specs: `213` through `221`
 - frozen scope: runtime v2 production target gap closure on replay branch
-- current checklist item: commit target gap audit evidence
-- current status: `runtime 213-221 target gap audit PASS; commit pending`
+- current checklist item: merge gate preflight
+- current status: `runtime 213-221 target gap audit PASS; merge gate waiting-human`
 - human decision: use path-filtered replay branch and protect spec 222+ changes
 - worktree: `/Users/vincento/work/develop/hify-runtime-v2-closure-replay`
 - branch: `codex/runtime-v2-closure-replay`
 - base: `d6fc969c`
 - merge target: `codex/runtime-v2-production-upgrade`
-- latest committed replay: `01919a64 feat(runtime): replay 213-221 closure`
-- waiting human: none
+- latest committed replay: `5bd83e57 docs(runtime): record 213-221 gap audit`
+- waiting human: target branch worktree has unrelated dirty changes
 
 ## Evidence So Far
 
@@ -67,12 +67,25 @@ diff check: clean
   - audit recorded in
     `artifacts/slices/runtime-v2-closure-replay/target-gap-audit.md`.
 
+- 2026-07-07 merge gate preflight:
+  - replay branch clean: `codex/runtime-v2-closure-replay`;
+  - target branch: `codex/runtime-v2-production-upgrade`;
+  - replay head `5bd83e57` is not contained in target branch yet;
+  - spec 222 protected-path diff from `d6fc969c..HEAD`: empty;
+  - target branch worktree is dirty:
+    `AGENTS.md`, `loop/README.md`, `.ai-assistant/`;
+  - merge stopped before write because target branch is not clean.
+
 ## Next Action
 
-Commit target gap audit evidence, then enter merge-gate preflight if human
-asks to merge.
+Human decision required before merge:
+
+1. Commit or otherwise park the dirty target-branch changes separately, then
+   rerun merge gate.
+2. Create a separate merge-candidate branch/worktree from target HEAD for final
+   conflict and verifier proof without touching the dirty target worktree.
 
 ## Reviewer Findings
 
-No open blocker found in focused target gap audit. Merge gate still requires
-target-branch clean check and final verifier rerun before merge.
+No open blocker found in focused target gap audit. Merge gate is blocked only by
+dirty target-branch state.
