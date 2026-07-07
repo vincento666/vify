@@ -138,7 +138,10 @@ def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeL
         runtime_v2_service=runtime_v2_service,
         runtime_invocation_gateway=RuntimeInvocationGateway(
             runtime_v2_service,
-            enqueue_background_run=_runtime_lab_background_enqueue(session)
+            enqueue_background_run=_runtime_lab_background_enqueue(
+                session,
+                sop_llm_mode=settings.runtime_lab_sop_llm_mode,
+            )
             if _runtime_invocation_uses_background(settings.runtime_lab_sop_runtime_invocation_mode)
             else None,
         ),
@@ -354,7 +357,7 @@ def _runtime_lab_sop_uses_live_llm(settings: Settings) -> bool:
     return mode not in {"mock", "fake", "deterministic", "off", "none"}
 
 
-def _runtime_lab_background_enqueue(session: Session):
+def _runtime_lab_background_enqueue(session: Session, *, sop_llm_mode: str):
     def enqueue(owner_id: int, run_id: int) -> dict[str, Any]:
         job = RuntimeJobRepository(session).enqueue(
             run_id=run_id,
@@ -367,6 +370,7 @@ def _runtime_lab_background_enqueue(session: Session):
                 "idempotencyKey": "",
                 "idempotencyLayer": "run",
                 "source": "runtime_lab_sop_adapter",
+                "sopLlmMode": sop_llm_mode,
             },
         )
         return {"jobId": int(job["id"]), "status": str(job["status"])}

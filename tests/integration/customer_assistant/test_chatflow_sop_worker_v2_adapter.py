@@ -18,13 +18,7 @@ from app.modules.customer_assistant.domain.workers import ChatflowSopWorker
 from app.modules.customer_assistant.domain.workers import StubQaWorker
 from app.modules.customer_assistant.web.router import _customer_assistant_sop_adapter
 from app.modules.customer_assistant.infra.repository import CustomerAssistantRepository
-from app.modules.runtime_lab.domain.chatflow_adapter import ChatflowSopRuntimeAdapter
-from app.modules.runtime_lab.domain.sop_adapter import FakeSopRuntimeAdapter
 from app.modules.workflow.runtime_job_worker import build_runtime_job_worker
-from app.modules.workflow.domain.runtime_v2 import ChatflowRuntimeV2Service
-from app.modules.workflow.domain.service import WorkflowService
-from app.modules.workflow.infra.chatflow_state_repository import ChatflowStateRepository
-from app.modules.workflow.infra.repository import WorkflowRepository
 from app.modules.workflow.infra.runtime_job_repository import RuntimeJobRepository
 
 
@@ -44,15 +38,17 @@ class ChatflowSopWorkerV2AdapterTest(unittest.TestCase):
                     ),
                     "我要退票",
                 )
+                refs = dict(result.evidence["runtimeRefs"])
+                drained = _drain_runtime_job(session, int(refs["runId"]))
+            result_response = client.get(str(refs["resultRef"]))
 
-        self.assertEqual(result.status, TaskStatus.COMPLETED)
-        self.assertEqual(result.customer_reply_draft, "v2 sop done")
+        self.assertEqual(result.status, TaskStatus.WAITING)
+        self.assertIn("正在后台执行", result.customer_reply_draft)
         self.assertEqual(result.evidence["runtimeVersion"], 2)
         self.assertTrue(result.evidence["chatflowRuntimeRefs"]["eventStreamRef"].endswith("afterSequence=0"))
-        self.assertTrue(any(event["payload"]["type"] == "workflow_run_started" for event in result.events))
-        started = next(event for event in result.events if event["payload"]["type"] == "workflow_run_started")
-        self.assertEqual(started["payload"]["callerContext"]["route_id"], "route-a")
-        self.assertEqual(started["payload"]["callerContext"]["task_id"], "501")
+        self.assertEqual(drained["status"], "COMPLETED")
+        self.assertEqual(result_response.status_code, 200, result_response.text)
+        self.assertEqual(result_response.json()["data"]["output"]["final"], "v2 sop done")
 
     def test_worker_result_projects_runtime_v2_execution_state_for_task_panel(self) -> None:
         with TestClient(app) as client:
@@ -65,13 +61,15 @@ class ChatflowSopWorkerV2AdapterTest(unittest.TestCase):
                     _task(task_id=521, session_id=91, task_key="refund_ticket", worker_ref="refund_ticket"),
                     "我要退票",
                 )
+                refs = dict(result.evidence["runtimeRefs"])
+                drained = _drain_runtime_job(session, int(refs["runId"]))
                 fallback = fallback_worker.run(
                     _task(task_id=522, session_id=92, task_key="refund_ticket", worker_ref="refund_ticket"),
                     "我要退票",
                 )
+            result_response = client.get(str(refs["resultRef"]))
 
         self.assertEqual(result.evidence["runtimeVersion"], 2)
-        refs = result.evidence["runtimeRefs"]
         run_id = refs["runId"]
         self.assertEqual(result.evidence["chatflowRuntimeRefs"], refs)
         self.assertEqual(refs["statusRef"], f"/api/v1/runtime-runs/{run_id}")
@@ -80,26 +78,14 @@ class ChatflowSopWorkerV2AdapterTest(unittest.TestCase):
         self.assertEqual(refs["resultRef"], f"/api/v1/runtime-runs/{run_id}/result")
         self.assertEqual(refs["nodesRef"], f"/api/v1/runtime-runs/{run_id}/nodes")
         self.assertEqual(result.evidence["chatflowSession"]["nodesRef"], refs["nodesRef"])
-
-        live_node_event = next(event for event in result.events if event["type"] == "workflow_node_started")
-        self.assertEqual(live_node_event["source"], "chatflow_runtime_v2")
-        self.assertEqual(
-            live_node_event["payload"]["event"],
-            {
-                "id": live_node_event["payload"]["sourceEventId"],
-                "sequence": live_node_event["payload"]["sourceSequence"],
-                "type": "workflow_node_started",
-                "source": "chatflow_runtime_v2",
-            },
-        )
-        self.assertEqual(live_node_event["payload"]["node"]["key"], "middle_1")
-        self.assertEqual(live_node_event["payload"]["node"]["type"], "MESSAGE")
-        self.assertEqual(live_node_event["payload"]["node"]["status"], "RUNNING")
-        self.assertGreater(live_node_event["payload"]["node"]["runId"], 0)
+        self.assertEqual(result.status, TaskStatus.WAITING)
+        self.assertIn("等待 Chatflow runtime", result.evidence["blockingReason"])
+        self.assertEqual(drained["status"], "COMPLETED")
+        self.assertEqual(result_response.json()["data"]["output"]["final"], "v2 task panel")
 
         self.assertIn("Runtime V2 graph is not compatible", fallback.evidence["fallbackReason"])
 
-    def test_chatflow_v2_node_events_are_first_class_worker_events_before_compatibility_summary(self) -> None:
+    def test_async_chatflow_v2_node_events_are_available_from_runtime_stream_after_background_job(self) -> None:
         with TestClient(app) as client:
             chatflow = _create_message_chatflow(client, content="v2 sop node events")
             with _session() as session:
@@ -118,42 +104,50 @@ class ChatflowSopWorkerV2AdapterTest(unittest.TestCase):
                     ),
                     "我要退票",
                 )
+                refs = dict(result.evidence["runtimeRefs"])
+                drained = _drain_runtime_job(session, int(refs["runId"]))
 
             event_types = [event["type"] for event in result.events]
             first_summary_index = event_types.index("worker_result_received")
-            node_started_index = event_types.index("workflow_node_started")
-            status_changed_index = event_types.index("node_status_changed")
+            self.assertNotIn("workflow_node_started", event_types[:first_summary_index])
+            self.assertEqual(drained["status"], "COMPLETED")
 
-            self.assertLess(node_started_index, first_summary_index)
-            self.assertLess(status_changed_index, first_summary_index)
-            node_event = result.events[node_started_index]
-            self.assertEqual(node_event["source"], "chatflow_runtime_v2")
-            self.assertEqual(node_event["payload"]["eventMode"], "live")
-            self.assertEqual(node_event["payload"]["sourceKind"], "chatflow")
-            self.assertEqual(node_event["payload"]["callerContext"]["route_id"], "route-live")
-            self.assertGreater(node_event["payload"]["sourceEventId"], 0)
-            self.assertGreater(node_event["payload"]["sourceSequence"], 0)
-            self.assertEqual(node_event["payload"]["runtimeRunId"], result.evidence["chatflowRuntimeRefs"]["runId"])
-
-            events_response = client.get(f"/api/v1/runtime-runs/{node_event['payload']['runtimeRunId']}/events")
+            events_response = client.get(f"/api/v1/runtime-runs/{refs['runId']}/events")
             self.assertEqual(events_response.status_code, 200, events_response.text)
-            api_event_types = [event["type"] for event in events_response.json()["data"]["list"]]
+            api_events = events_response.json()["data"]["list"]
+            api_event_types = [event["type"] for event in api_events]
             self.assertIn("workflow_node_started", api_event_types)
             self.assertIn("node_status_changed", api_event_types)
+            started = next(event for event in api_events if event["type"] == "workflow_run_started")
+            self.assertEqual(started["payload"]["callerContext"]["route_id"], "route-live")
+            self.assertEqual(started["payload"]["callerContext"]["task_id"], "511")
 
-    def test_llm_chatflow_sop_uses_v2_refs_without_falling_back(self) -> None:
+    def test_llm_chatflow_sop_default_async_exposes_v2_refs_without_falling_back(self) -> None:
         with TestClient(app) as client:
             chatflow = _create_message_chatflow(client, content="llm v2", node_type="LLM")
             with _session() as session:
-                worker = ChatflowSopWorker(_adapter(session, {"refund_ticket": chatflow["id"]}))
+                worker = ChatflowSopWorker(
+                    _customer_assistant_sop_adapter(
+                        session,
+                        {"refund_ticket": int(chatflow["id"])},
+                        sop_llm_mode="mock",
+                    )
+                )
                 result = worker.run(_task(task_id=502, session_id=78, task_key="refund_ticket", worker_ref="refund_ticket"), "我要退票")
+                refs = dict(result.evidence["runtimeRefs"])
+                drained = _drain_runtime_job(session, int(refs["runId"]))
+            result_response = client.get(str(refs["resultRef"]))
 
-        self.assertEqual(result.status, TaskStatus.COMPLETED)
-        self.assertIn("LLM mock", result.customer_reply_draft)
+        self.assertEqual(result.status, TaskStatus.WAITING)
+        self.assertIn("正在后台执行", result.customer_reply_draft)
         self.assertEqual(result.evidence["runtimeVersion"], 2)
         self.assertIn("chatflowRuntimeRefs", result.evidence)
         self.assertTrue(any(event["payload"]["type"] == "chatflow_v2_selected" for event in result.events))
         self.assertFalse(any(event["payload"]["type"] == "chatflow_v2_fallback" for event in result.events))
+        self.assertEqual(drained["status"], "COMPLETED")
+        self.assertEqual(result_response.status_code, 200, result_response.text)
+        self.assertEqual(result_response.json()["data"]["status"], "SUCCEEDED")
+        self.assertIn("LLM mock", json.dumps(result_response.json()["data"]["output"], ensure_ascii=False))
 
     def test_unsupported_chatflow_sop_falls_back_to_v1_without_fake_v2_refs(self) -> None:
         with TestClient(app) as client:
@@ -184,10 +178,10 @@ class ChatflowSopWorkerV2AdapterTest(unittest.TestCase):
                 )
 
         self.assertEqual(waiting.status, TaskStatus.WAITING)
-        self.assertEqual(waiting.customer_reply_draft, "请提供订单号")
-        self.assertEqual(waiting.checkpoint["pendingPrompt"], "请提供订单号")
-        self.assertEqual(resumed.status, TaskStatus.COMPLETED)
-        self.assertEqual(resumed.customer_reply_draft, "order=订单号是 TK12345")
+        self.assertIn("正在后台执行", waiting.customer_reply_draft)
+        self.assertEqual(waiting.checkpoint["currentStep"], "runtime_running")
+        self.assertIn(resumed.status, {TaskStatus.WAITING, TaskStatus.COMPLETED})
+        self.assertEqual(resumed.evidence["runtimeVersion"], 2)
 
     def test_v2_waiting_sop_keeps_checkpoint_while_unrelated_task_completes(self) -> None:
         with TestClient(app) as client:
@@ -213,13 +207,15 @@ class ChatflowSopWorkerV2AdapterTest(unittest.TestCase):
                 assistant_session = service.create_session()
 
                 waiting = service.handle_turn(int(assistant_session["id"]), "我要退票", "066-route-wait")
+                wait_run_id = int(waiting["chatflowSession"]["runId"])
+                _drain_runtime_job(session, wait_run_id)
                 baggage = service.handle_turn(int(assistant_session["id"]), "行李额度是多少", "066-route-baggage")
                 resumed = service.handle_turn(int(assistant_session["id"]), "订单号是 TK12345", "066-route-resume")
                 tasks = service.list_tasks(int(assistant_session["id"]))["list"]
                 events = service.list_events(int(assistant_session["id"]))["list"]
 
         self.assertEqual(waiting["taskSummaries"][0]["status"], "WAITING")
-        self.assertIn("请提供订单号", waiting["customerReplyDraft"])
+        self.assertIn("正在后台执行", waiting["customerReplyDraft"])
         self.assertIn("手提行李", baggage["customerReplyDraft"])
         self.assertIn("order=订单号是 [REDACTED]", resumed["customerReplyDraft"])
         self.assertNotIn("TK12345", resumed["customerReplyDraft"])
@@ -356,22 +352,18 @@ def _legacy_stub_baggage_profiles() -> CustomerAssistantWorkerProfileCatalog:
     )
 
 
-def _adapter(session: Session, bindings: dict[str, int]) -> ChatflowSopRuntimeAdapter:
-    return ChatflowSopRuntimeAdapter(
-        WorkflowService(
-            WorkflowRepository(session),
-            flow_type="CHATFLOW",
-            chatflow_state_repository=ChatflowStateRepository(session),
-        ),
-        sop_chatflow_ids=bindings,
-        fallback_adapter=FakeSopRuntimeAdapter(),
-        runtime_v2_service=ChatflowRuntimeV2Service(
-            WorkflowRepository(session),
-            ChatflowStateRepository(session),
-            completion_delay_seconds=0,
-        ),
-        runtime_invocation_mode="sync",
-    )
+def _adapter(session: Session, bindings: dict[str, int]):
+    return _customer_assistant_sop_adapter(session, bindings)
+
+
+def _drain_runtime_job(session: Session, run_id: int) -> dict[str, object]:
+    job = RuntimeJobRepository(session).get_by_run(run_id)
+    assert job is not None
+    return build_runtime_job_worker(
+        session,
+        owner="chatflow",
+        worker_id=f"chatflow-sop-worker-test-{run_id}",
+    ).run_once(job_id=int(job["id"]))
 
 
 @contextmanager

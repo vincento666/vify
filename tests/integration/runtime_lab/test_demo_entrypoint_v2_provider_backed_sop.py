@@ -1,3 +1,4 @@
+import json
 import time
 import unittest
 from datetime import datetime
@@ -15,6 +16,8 @@ from app.modules.customer_assistant.domain.models import TaskItem, TaskStatus
 from app.modules.customer_assistant.domain.workers import ChatflowSopWorker
 from app.modules.customer_assistant.web import router as customer_assistant_router
 from app.modules.runtime_lab.web import router as runtime_lab_router
+from app.modules.workflow.infra.runtime_job_repository import RuntimeJobRepository
+from app.modules.workflow.runtime_job_worker import build_runtime_job_worker
 
 
 TEST_AGENT_NAME_PREFIX = "Runtime V2 Entry Agent"
@@ -50,7 +53,6 @@ class DemoEntrypointRuntimeV2ProviderBackedSopTest(unittest.TestCase):
                 runtime_lab_sop_chatflow_ids=f"refund_ticket:{chatflow['id']}",
                 runtime_lab_intent_arbitrator_mode="fake",
                 runtime_lab_sop_llm_mode="live",
-                runtime_lab_sop_runtime_invocation_mode="sync",
             )
             with patch.object(runtime_lab_router, "get_settings", return_value=settings):
                 with get_session_factory()() as session:
@@ -61,9 +63,23 @@ class DemoEntrypointRuntimeV2ProviderBackedSopTest(unittest.TestCase):
                         "我要退票",
                         enabled_sop_ids=["refund_ticket"],
                     ).payload
+                    chatflow_session = result["activeTask"]["chatflowSession"]
+                    run_id = int(chatflow_session["runId"])
+                    job = RuntimeJobRepository(session).get_by_run(run_id)
+                    assert job is not None
+                    drained = build_runtime_job_worker(
+                        session,
+                        owner="chatflow",
+                        worker_id="runtime-lab-provider-backed-test",
+                    ).run_once(job_id=int(job["id"]))
+                result_response = client.get(str(chatflow_session["resultRef"]))
 
         self.assertEqual(result["routeDecision"]["action"], "START_SOP")
-        self.assertEqual(result["reply"], "RUNTIME_LAB_V2_PROVIDER_OK")
+        self.assertEqual(result["reply"], "Chatflow SOP 正在后台执行，请稍候。")
+        self.assertEqual(result["activeTask"]["status"], "RUNNING")
+        self.assertEqual(drained["status"], "COMPLETED")
+        self.assertEqual(result_response.status_code, 200, result_response.text)
+        self.assertEqual(result_response.json()["data"]["output"]["final"], "RUNTIME_LAB_V2_PROVIDER_OK")
         self.assertNotIn("LLM mock:", result["reply"])
         self.assertEqual(fake_client.captured_payload["model"], "runtime-v2-entry-model")
 
@@ -100,11 +116,17 @@ class DemoEntrypointRuntimeV2ProviderBackedSopTest(unittest.TestCase):
                     ),
                     "我要退票",
                 )
+                refs = dict(result.evidence["runtimeRefs"])
+                drained = _drain_runtime_job(session, int(refs["runId"]))
+            result_response = client.get(str(refs["resultRef"]))
 
-        self.assertEqual(result.status, TaskStatus.COMPLETED)
-        self.assertEqual(result.customer_reply_draft, "CUSTOMER_ASSISTANT_V2_PROVIDER_OK")
+        self.assertEqual(result.status, TaskStatus.WAITING)
+        self.assertIn("正在后台执行", result.customer_reply_draft)
         self.assertEqual(result.evidence["runtimeVersion"], 2)
         self.assertIn("chatflowRuntimeRefs", result.evidence)
+        self.assertEqual(drained["status"], "COMPLETED")
+        self.assertEqual(result_response.status_code, 200, result_response.text)
+        self.assertEqual(result_response.json()["data"]["output"]["final"], "CUSTOMER_ASSISTANT_V2_PROVIDER_OK")
         self.assertNotIn("LLM mock:", result.customer_reply_draft)
         self.assertEqual(fake_client.captured_payload["model"], "runtime-v2-entry-model")
 
@@ -142,11 +164,28 @@ class DemoEntrypointRuntimeV2ProviderBackedSopTest(unittest.TestCase):
                     ),
                     "我要退票",
                 )
+                refs = dict(result.evidence["runtimeRefs"])
+                drained = _drain_runtime_job(session, int(refs["runId"]))
+            result_response = client.get(str(refs["resultRef"]))
 
-        self.assertEqual(result.status, TaskStatus.COMPLETED)
-        self.assertIn("LLM mock:", result.customer_reply_draft)
+        self.assertEqual(result.status, TaskStatus.WAITING)
+        self.assertIn("正在后台执行", result.customer_reply_draft)
         self.assertEqual(result.evidence["runtimeVersion"], 2)
+        self.assertEqual(drained["status"], "COMPLETED")
+        self.assertEqual(result_response.status_code, 200, result_response.text)
+        self.assertEqual(result_response.json()["data"]["status"], "SUCCEEDED")
+        self.assertIn("LLM mock", json.dumps(result_response.json()["data"]["output"], ensure_ascii=False))
         self.assertEqual(fake_client.captured_payloads, [])
+
+
+def _drain_runtime_job(session: Any, run_id: int) -> dict[str, object]:
+    job = RuntimeJobRepository(session).get_by_run(run_id)
+    assert job is not None
+    return build_runtime_job_worker(
+        session,
+        owner="chatflow",
+        worker_id=f"provider-backed-entrypoint-test-{run_id}",
+    ).run_once(job_id=int(job["id"]))
 
 
 def _seed_live_agent(agent_name: str) -> int:

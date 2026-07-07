@@ -230,7 +230,7 @@ def _customer_assistant_sop_adapter(
     session: Session,
     bindings: dict[str, int],
     *,
-    runtime_invocation_mode: str = "sync",
+    runtime_invocation_mode: str = "async",
     sop_llm_mode: str = "live",
 ):
     fallback_adapter = FakeSopRuntimeAdapter()
@@ -261,7 +261,7 @@ def _customer_assistant_sop_adapter(
         runtime_v2_service=runtime_v2_service,
         runtime_invocation_gateway=RuntimeInvocationGateway(
             runtime_v2_service,
-            enqueue_background_run=_customer_assistant_background_enqueue(session)
+            enqueue_background_run=_customer_assistant_background_enqueue(session, sop_llm_mode=sop_llm_mode)
             if _runtime_invocation_uses_background(runtime_invocation_mode)
             else None,
         ),
@@ -291,13 +291,13 @@ def _customer_assistant_sop_uses_live_llm(mode: str) -> bool:
     return str(mode or "").strip().lower() not in {"mock", "fake", "deterministic", "off", "none"}
 
 
-def _customer_assistant_background_enqueue(session: Session):
+def _customer_assistant_background_enqueue(session: Session, *, sop_llm_mode: str):
     def enqueue(owner_id: int, run_id: int) -> dict[str, Any]:
         job = RuntimeJobRepository(session).enqueue(
             run_id=run_id,
             owner_type="CHATFLOW",
             owner_id=owner_id,
-            payload={"source": "customer_assistant_chatflow_sop"},
+            payload={"source": "customer_assistant_chatflow_sop", "sopLlmMode": sop_llm_mode},
         )
         return {"jobId": int(job["id"]), "status": str(job["status"])}
 

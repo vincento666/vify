@@ -7,24 +7,25 @@ from app.modules.runtime_lab.domain.sop_adapter import SopExecutionRequest, SopE
 
 
 class ChatflowSopRuntimeAdapterGatewayTest(unittest.TestCase):
-    def test_start_sop_v2_uses_runtime_invocation_gateway_start_and_wait(self) -> None:
+    def test_start_sop_v2_defaults_to_runtime_invocation_gateway_stream_ref(self) -> None:
         gateway = _FakeRuntimeInvocationGateway()
         adapter = ChatflowSopRuntimeAdapter(
             _FakeWorkflowService(),
             sop_chatflow_ids={"refund_ticket": 42},
             runtime_invocation_gateway=gateway,
-            runtime_invocation_mode="sync",
         )
 
         result = adapter.start_sop(_request(message="我要退票"))
 
-        self.assertEqual(gateway.calls[0][0], "start_and_wait")
+        self.assertEqual(gateway.calls[0][0], "start_and_stream_ref")
         self.assertEqual(gateway.calls[0][1], 42)
-        self.assertEqual(gateway.calls[0][2]["sys.query"], "我要退票")
+        self.assertEqual(gateway.calls[0][2], "我要退票")
         self.assertEqual(result.status, SopExecutionStatus.WAITING)
-        self.assertEqual(result.current_step, "info_order")
+        self.assertEqual(result.current_step, "runtime_running")
         meta = result.checkpoint.scoped_variables["__chatflow"]
         self.assertEqual(meta["runtimeVersion"], 2)
+        self.assertEqual(meta["resumeMode"], "runtime-ref")
+        self.assertEqual(meta["runtimeStatus"], "RUNNING")
         self.assertEqual(meta["runtimeRefs"]["eventStreamRef"], "/api/v1/runtime-runs/501/events/stream?afterSequence=0")
 
     def test_continue_sop_v2_uses_runtime_invocation_gateway_resume_and_wait(self) -> None:
@@ -33,7 +34,6 @@ class ChatflowSopRuntimeAdapterGatewayTest(unittest.TestCase):
             _FakeWorkflowService(),
             sop_chatflow_ids={"refund_ticket": 42},
             runtime_invocation_gateway=gateway,
-            runtime_invocation_mode="sync",
         )
 
         started = adapter.start_sop(_request(message="我要退票"))
@@ -52,7 +52,6 @@ class ChatflowSopRuntimeAdapterGatewayTest(unittest.TestCase):
             _FakeWorkflowService(),
             sop_chatflow_ids={"refund_ticket": 42},
             runtime_invocation_gateway=gateway,
-            runtime_invocation_mode="sync",
         )
 
         started = adapter.start_sop(_request(message="我要退票"))
@@ -105,7 +104,7 @@ class ChatflowSopRuntimeAdapterGatewayTest(unittest.TestCase):
         self.assertEqual(meta["runtimeRefs"]["resultRef"], "/api/v1/runtime-runs/501/result")
         self.assertIn("chatflow_v2_retryable", [event["type"] for event in continued.events])
 
-    def test_continue_sop_v2_waits_for_runtime_result_after_resume(self) -> None:
+    def test_continue_sop_v2_default_async_returns_waiting_result_after_resume(self) -> None:
         gateway = _FakeRuntimeInvocationGateway()
         gateway.resume_invocation = _invocation(
             status="INTERRUPTED",
@@ -161,18 +160,20 @@ class ChatflowSopRuntimeAdapterGatewayTest(unittest.TestCase):
             sop_chatflow_ids={"refund_ticket": 42},
             runtime_v2_service=runtime_v2_service,
             runtime_invocation_gateway=gateway,
-            runtime_invocation_mode="sync",
         )
 
         started = adapter.start_sop(_request(message="我要退票"))
         continued = adapter.continue_sop(_request(message="订单号 CA123456，手机号 13800138000", checkpoint=started.checkpoint))
 
-        self.assertEqual(continued.status, SopExecutionStatus.COMPLETED)
-        self.assertEqual(continued.current_step, "completed")
+        self.assertEqual(continued.status, SopExecutionStatus.WAITING)
+        self.assertEqual(continued.current_step, "collect")
         self.assertEqual(continued.collected["phone"], "13800138000")
         self.assertEqual(continued.collected["order_no"], "CA123456")
+        meta = continued.checkpoint.scoped_variables["__chatflow"]
+        self.assertEqual(meta["runtimeVersion"], 2)
+        self.assertEqual(meta["runtimeRefs"]["resultRef"], "/api/v1/runtime-runs/501/result")
 
-    def test_continue_sop_v2_wait_budget_covers_scale_terminal_result(self) -> None:
+    def test_continue_sop_v2_default_async_preserves_waiting_checkpoint_for_scale_result(self) -> None:
         gateway = _FakeRuntimeInvocationGateway()
         gateway.resume_invocation = _invocation(
             status="INTERRUPTED",
@@ -225,7 +226,6 @@ class ChatflowSopRuntimeAdapterGatewayTest(unittest.TestCase):
             sop_chatflow_ids={"group_booking": 42},
             runtime_v2_service=runtime_v2_service,
             runtime_invocation_gateway=gateway,
-            runtime_invocation_mode="sync",
         )
 
         started = adapter.start_sop(_request(message="我们公司十六个人出差", sop_id="group_booking"))
@@ -233,8 +233,12 @@ class ChatflowSopRuntimeAdapterGatewayTest(unittest.TestCase):
             _request(message="确认团队询价", checkpoint=started.checkpoint, sop_id="group_booking")
         )
 
-        self.assertEqual(continued.status, SopExecutionStatus.COMPLETED)
-        self.assertEqual(continued.current_step, "completed")
+        self.assertEqual(continued.status, SopExecutionStatus.WAITING)
+        self.assertEqual(continued.current_step, "confirm")
+        self.assertEqual(continued.collected["passenger_count"], "十六")
+        meta = continued.checkpoint.scoped_variables["__chatflow"]
+        self.assertEqual(meta["runtimeVersion"], 2)
+        self.assertEqual(meta["runtimeRefs"]["resultRef"], "/api/v1/runtime-runs/501/result")
 
 
 class _FakeRuntimeInvocationGateway:

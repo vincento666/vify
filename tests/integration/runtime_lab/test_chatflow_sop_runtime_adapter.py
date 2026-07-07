@@ -77,7 +77,11 @@ class ChatflowSopRuntimeAdapterIntegrationTest(unittest.TestCase):
             )
 
         self.assertEqual(started.status, SopExecutionStatus.WAITING)
-        self.assertEqual(started.current_step, "info_order")
+        self.assertEqual(started.current_step, "runtime_running")
+        started_meta = started.checkpoint.scoped_variables["__chatflow"]
+        self.assertEqual(started_meta["runtimeVersion"], 2)
+        self.assertEqual(started_meta["resumeMode"], "runtime-ref")
+        self.assertIn("/api/v1/runtime-runs/", started_meta["runtimeRefs"]["eventStreamRef"])
         self.assertEqual(collected.status, SopExecutionStatus.WAITING)
         self.assertEqual(collected.current_step, "confirm_1")
         self.assertNotIn("正在同步 runtime 状态", collected.reply)
@@ -318,7 +322,6 @@ def _adapter_v2(chatflow_id: int) -> ChatflowSopRuntimeAdapter:
         sop_chatflow_ids={"refund_ticket": chatflow_id},
         runtime_v2_service=runtime_v2_service,
         runtime_invocation_gateway=RuntimeInvocationGateway(runtime_v2_service),
-        runtime_invocation_mode="sync",
     )
 
 

@@ -128,13 +128,15 @@ def complete_chatflow_runtime_job(
     *,
     event_stream_bus: RuntimeEventStreamBus | None = None,
 ) -> None:
+    job = RuntimeJobRepository(session).get_by_run(run_id)
+    uses_live_llm = _chatflow_job_uses_live_llm(job)
     llm_service = _runtime_v2_llm_service(session, flow_type="CHATFLOW")
     ChatflowRuntimeV2Service(
         WorkflowRepository(session),
         ChatflowStateRepository(session, event_stream_bus=event_stream_bus),
         publish_repository=WorkflowPublishRepository(session),
         knowledge_facade=KnowledgeFacade(session),
-        llm_completer_resolver=llm_service.runtime_v2_llm_completer,
+        llm_completer_resolver=llm_service.runtime_v2_llm_completer if uses_live_llm else None,
         agent_invoker_resolver=llm_service.runtime_v2_agent_invoker,
         mcp_tool_executor=llm_service.runtime_v2_mcp_tool_executor(),
         api_tool_executor=llm_service.runtime_v2_api_tool_executor(),
@@ -170,3 +172,10 @@ def _runtime_v2_llm_service(session: Session, *, flow_type: str) -> WorkflowServ
         mcp_tool_executor=McpFacade(session),
         api_tool_executor=ApiResourceService(ApiResourceRepository(session)),
     )
+
+
+def _chatflow_job_uses_live_llm(job: dict[str, object] | None) -> bool:
+    payload = job.get("payload") if isinstance(job, dict) else {}
+    payload = payload if isinstance(payload, dict) else {}
+    mode = str(payload.get("sopLlmMode") or payload.get("sop_llm_mode") or "live").strip().lower()
+    return mode not in {"mock", "fake", "deterministic", "off", "none"}
