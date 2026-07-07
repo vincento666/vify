@@ -14,6 +14,19 @@ async function unwrap(response, label) {
   return payload.data
 }
 
+async function waitForRun(page, started, label) {
+  if (started.output) return started
+  assert(started.resultRef, `${label} missing resultRef`)
+  const deadline = Date.now() + 10000
+  let latest = started
+  while (Date.now() < deadline) {
+    latest = await unwrap(await page.request.get(`${baseUrl}${started.resultRef}`), `${label} result`)
+    if (['SUCCEEDED', 'FAILED', 'INTERRUPTED'].includes(latest.status)) return latest
+    await page.waitForTimeout(100)
+  }
+  throw new Error(`${label} timed out waiting for terminal result ${JSON.stringify(latest)}`)
+}
+
 const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
 
@@ -63,12 +76,13 @@ try {
     }),
     'create variable workflow',
   )
-  const run = await unwrap(
+  const startedRun = await unwrap(
     await page.request.post(`${baseUrl}/api/v1/workflows/${workflow.id}/runs`, {
       data: { input: { primary: '', fallback: 'vip refund' } },
     }),
     'run variable workflow',
   )
+  const run = await waitForRun(page, startedRun, 'run variable workflow')
   assert(run.output.final === 'route=vip refund', `Unexpected workflow output ${JSON.stringify(run.output)}`)
 
   const chatflow = await unwrap(

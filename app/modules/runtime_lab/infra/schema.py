@@ -26,11 +26,8 @@ def register_runtime_lab_tables(metadata: sa.MetaData | None = None) -> None:
             sa.Column("session_id", BIGINT, nullable=False),
             sa.Column("sop_id", sa.String(80), nullable=False),
             sa.Column("status", sa.String(30), nullable=False, server_default="RUNNING"),
-            sa.Column("current_step", sa.String(80), nullable=False, server_default="collect_order_no"),
-            sa.Column("checkpoint_id", BIGINT, nullable=True),
             sa.Column("parent_task_id", BIGINT, nullable=True),
             sa.Column("resume_summary", sa.Text(), nullable=False),
-            sa.Column("business_refs", sa.JSON(), nullable=True),
             sa.Column("chatflow_id", BIGINT, nullable=True),
             sa.Column("chatflow_session_id", BIGINT, nullable=True),
             sa.Column("chatflow_run_id", BIGINT, nullable=True),
@@ -44,25 +41,6 @@ def register_runtime_lab_tables(metadata: sa.MetaData | None = None) -> None:
             *timestamps(),
             sa.Index("idx_runtime_lab_task_session", "session_id"),
             sa.Index("idx_runtime_lab_task_status", "session_id", "status"),
-        )
-
-    if "runtime_lab_checkpoint" not in target.tables:
-        sa.Table(
-            "runtime_lab_checkpoint",
-            target,
-            id_column(),
-            sa.Column("session_id", BIGINT, nullable=False),
-            sa.Column("task_id", BIGINT, nullable=False),
-            sa.Column("sop_id", sa.String(80), nullable=False),
-            sa.Column("current_step", sa.String(80), nullable=False),
-            sa.Column("pending_prompt", sa.Text(), nullable=False),
-            sa.Column("collected", sa.JSON(), nullable=True),
-            sa.Column("scoped_variables", sa.JSON(), nullable=True),
-            sa.Column("status", sa.String(30), nullable=False, server_default="ACTIVE"),
-            deleted_column(),
-            *timestamps(),
-            sa.Index("idx_runtime_lab_checkpoint_task", "task_id"),
-            sa.Index("idx_runtime_lab_checkpoint_session", "session_id"),
         )
 
     if "runtime_lab_event" not in target.tables:
@@ -104,7 +82,6 @@ def runtime_lab_tables() -> list[sa.Table]:
     names = [
         "runtime_lab_session",
         "runtime_lab_task",
-        "runtime_lab_checkpoint",
         "runtime_lab_event",
         "runtime_lab_command",
     ]

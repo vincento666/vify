@@ -123,6 +123,18 @@ describe('workflow create Ant migration', () => {
     expect(headerBlock).toMatch(/aria-label="重置会话"[\s\S]*?resetChatflowTrialSession/)
   })
 
+  it('renders runtime v2 failed run error text inside the test-run panel', () => {
+    const content = readSource('src/views/workflow/WorkflowCreate.vue')
+    const panelStart = content.indexOf('data-testid="test-run-panel"')
+    expect(panelStart).toBeGreaterThan(-1)
+    const panelEnd = content.indexOf('</aside>', panelStart)
+    expect(panelEnd).toBeGreaterThan(panelStart)
+    const panelBlock = content.slice(panelStart, panelEnd)
+
+    expect(panelBlock).toContain('testRunErrorMessage')
+    expect(panelBlock).toContain('{{ testRunErrorMessage }}')
+  })
+
   it('gates chatflow-assistant-message data-testid on completed (non-loading) bubbles only', () => {
     // The e2e contract (frontend/e2e/chatflow-conversation-run.mjs:33-36) waits for
     // `chatflow-assistant-message` visibility, then reads innerText once. If the

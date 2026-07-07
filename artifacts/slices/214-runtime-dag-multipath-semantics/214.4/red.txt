@@ -1,0 +1,170 @@
+F.FFF                                                                    [100%]
+=================================== FAILURES ===================================
+_ ChatflowFinalOutputRulesTest.test_answer_mapping_is_used_when_end_has_no_visible_output _
+
+self = <test_final_output_rules.ChatflowFinalOutputRulesTest testMethod=test_answer_mapping_is_used_when_end_has_no_visible_output>
+
+    def test_answer_mapping_is_used_when_end_has_no_visible_output(self) -> None:
+        with TestClient(app) as client:
+            chatflow = _create_chatflow(
+                client,
+                nodes=[
+                    _node("start", "START"),
+                    _node(
+                        "message_1",
+                        "MESSAGE",
+                        {"content": "mapped answer", "outputVariable": "answer"},
+                    ),
+                    _node("end", "END", {"outputVariable": "unused"}),
+                ],
+                edges=[_edge("start", "message_1"), _edge("message_1", "end")],
+            )
+            started = _start_chatflow(client, chatflow["id"])
+            terminal = _wait_for_result(client, started["resultRef"])
+            events = client.get(started["eventsRef"]).json()["data"]["list"]
+
+        self.assertEqual(terminal["status"], "SUCCEEDED")
+>       self.assertEqual(terminal["output"], {"answer": "mapped answer"})
+E       AssertionError: {'unused': None} != {'answer': 'mapped answer'}
+E       - {'unused': None}
+E       + {'answer': 'mapped answer'}
+
+tests/integration/chatflow/test_final_output_rules.py:56: AssertionError
+_ ChatflowFinalOutputRulesTest.test_priority_reply_node_wins_over_lower_priority_candidates _
+
+self = <test_final_output_rules.ChatflowFinalOutputRulesTest testMethod=test_priority_reply_node_wins_over_lower_priority_candidates>
+
+    def test_priority_reply_node_wins_over_lower_priority_candidates(self) -> None:
+        with TestClient(app) as client:
+            chatflow = _create_chatflow(
+                client,
+                nodes=[
+                    _node("start", "START"),
+                    _node(
+                        "low_reply",
+                        "CODE",
+                        {
+                            "code": 'result = {"answer": "low priority reply", "replyPriority": 10}',
+                        },
+                    ),
+                    _node(
+                        "high_reply",
+                        "CODE",
+                        {
+                            "code": 'result = {"answer": "high priority reply", "replyPriority": 90}',
+                        },
+                    ),
+                    _node("end", "END", {"outputVariable": "unused"}),
+                ],
+                edges=[
+                    _edge("start", "low_reply"),
+                    _edge("low_reply", "high_reply"),
+                    _edge("high_reply", "end"),
+                ],
+            )
+            started = _start_chatflow(client, chatflow["id"])
+            terminal = _wait_for_result(client, started["resultRef"])
+            events = client.get(started["eventsRef"]).json()["data"]["list"]
+
+        self.assertEqual(terminal["status"], "SUCCEEDED")
+>       self.assertEqual(terminal["output"]["answer"], "high priority reply")
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'answer'
+
+tests/integration/chatflow/test_final_output_rules.py:92: KeyError
+_ ChatflowFinalOutputRulesTest.test_side_effect_only_chatflow_returns_no_reply_summary_without_assistant_message _
+
+self = <test_final_output_rules.ChatflowFinalOutputRulesTest testMethod=test_side_effect_only_chatflow_returns_no_reply_summary_without_assistant_message>
+
+    def test_side_effect_only_chatflow_returns_no_reply_summary_without_assistant_message(self) -> None:
+        with TestClient(app) as client:
+            chatflow = _create_chatflow(
+                client,
+                nodes=[
+                    _node("start", "START"),
+                    _node(
+                        "notify",
+                        "CODE",
+                        {
+                            "sideEffectTerminal": True,
+                            "code": (
+                                "result = {"
+                                '"sideEffectOnly": True, '
+                                '"deliveryStatus": "sent", '
+                                '"sideEffectEvidence": {"channel": "email", "idempotencyKey": "notify-2144"}'
+                                "}"
+                            ),
+                        },
+                    ),
+                    _node("end", "END"),
+                ],
+                edges=[_edge("start", "notify")],
+            )
+            started = _start_chatflow(client, chatflow["id"])
+            terminal = _wait_for_result(client, started["resultRef"])
+            events = client.get(started["eventsRef"]).json()["data"]["list"]
+
+        self.assertEqual(terminal["status"], "SUCCEEDED")
+>       self.assertTrue(terminal["output"]["noReply"])
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'noReply'
+
+tests/integration/chatflow/test_final_output_rules.py:125: KeyError
+_ WorkflowNoFinalOutputContractTest.test_side_effect_only_workflow_returns_status_events_and_side_effect_evidence _
+
+self = <test_workflow_no_final_output.WorkflowNoFinalOutputContractTest testMethod=test_side_effect_only_workflow_returns_status_events_and_side_effect_evidence>
+
+    def test_side_effect_only_workflow_returns_status_events_and_side_effect_evidence(self) -> None:
+        with TestClient(app) as client:
+            workflow = _create_workflow(
+                client,
+                nodes=[
+                    _node("start", "START"),
+                    _node(
+                        "notify",
+                        "CODE",
+                        {
+                            "sideEffectTerminal": True,
+                            "code": (
+                                "result = {"
+                                '"sideEffectOnly": True, '
+                                '"deliveryStatus": "sent", '
+                                '"sideEffectEvidence": {"channel": "ops", "idempotencyKey": "workflow-2144"}'
+                                "}"
+                            ),
+                        },
+                    ),
+                    _node("end", "END"),
+                ],
+                edges=[_edge("start", "notify")],
+            )
+            published = client.post(f"/api/v1/workflows/{workflow['id']}/publish")
+            self.assertEqual(published.status_code, 200, published.text)
+            started = client.post(
+                f"/api/v1/workflows/{workflow['id']}/runs",
+                json={"input": {"sys.query": "workflow side effect only"}},
+            ).json()["data"]
+            terminal = _wait_for_result(client, started["resultRef"])
+            events = client.get(started["eventsRef"]).json()["data"]["list"]
+            nodes = client.get(started["nodesRef"]).json()["data"]["list"]
+
+        self.assertEqual(terminal["status"], "SUCCEEDED")
+        self.assertEqual(terminal["ownerType"], "WORKFLOW")
+        self.assertTrue(terminal["output"]["sideEffectOnly"])
+>       self.assertEqual(terminal["output"]["summary"], "side_effect_only_completed")
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'summary'
+
+tests/contract/workflow/test_workflow_no_final_output.py:48: KeyError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /private/tmp/hify-213-verify3.uX7Jpk/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/integration/chatflow/test_final_output_rules.py::ChatflowFinalOutputRulesTest::test_answer_mapping_is_used_when_end_has_no_visible_output
+FAILED tests/integration/chatflow/test_final_output_rules.py::ChatflowFinalOutputRulesTest::test_priority_reply_node_wins_over_lower_priority_candidates
+FAILED tests/integration/chatflow/test_final_output_rules.py::ChatflowFinalOutputRulesTest::test_side_effect_only_chatflow_returns_no_reply_summary_without_assistant_message
+FAILED tests/contract/workflow/test_workflow_no_final_output.py::WorkflowNoFinalOutputContractTest::test_side_effect_only_workflow_returns_status_events_and_side_effect_evidence
+4 failed, 1 passed, 1 warning in 4.59s

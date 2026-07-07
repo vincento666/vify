@@ -3,11 +3,17 @@ from __future__ import annotations
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from app.core.errors import BizError, ErrorCode
 from app.modules.knowledge.api.facade import KnowledgeFacade
+from app.modules.runtime.domain.external_call_governance import (
+    ExternalCallGovernance,
+    ExternalCallGovernanceError,
+    external_call_policy_from_config,
+)
+from app.modules.runtime.domain.scheduler import compute_frontier
 from app.modules.workflow.domain.context import ExecutionContext
 from app.modules.workflow.domain.engine import (
     AgentCallNodeExecutor,
@@ -41,6 +47,7 @@ from app.modules.workflow.domain.graph_validation import (
 from app.modules.workflow.infra.chatflow_state_repository import ChatflowStateRepository
 from app.modules.workflow.infra.publish_repository import WorkflowPublishRepository
 from app.modules.workflow.infra.repository import WorkflowRepository
+from app.modules.workflow.infra.runtime_job_repository import RuntimeJobRepository
 from app.modules.workflow.web.schemas import format_datetime
 
 
@@ -70,8 +77,26 @@ _SUPPORTED_CORE_NODE_TYPES = {
 _RUNTIME_V2_CANCELLABLE_STATUSES = {"RUNNING", "INTERRUPTED"}
 _RUNTIME_V2_TERMINAL_STATUSES = {"SUCCEEDED", "FAILED", "CANCELLED"}
 _RUNTIME_V2_ERROR_POLICY_NODE_TYPES = {"LLM", "API_CALL", "TOOL_CALL", "CODE", "EXECUTE_WORKFLOW", "AGENT_CALL"}
+_RUNTIME_V2_EXTERNAL_CALL_NODE_TYPES = {"LLM", "API_CALL", "TOOL_CALL", "KNOWLEDGE"}
+_RUNTIME_V2_PRESTART_WAVE_NODE_TYPES = {
+    "LLM",
+    "KNOWLEDGE",
+    "AGENT_CALL",
+    "API_CALL",
+    "TOOL_CALL",
+    "EXECUTE_WORKFLOW",
+}
+_RUNTIME_V2_SIDE_EFFECT_PROTECTION: dict[str, tuple[str, str]] = {
+    "MESSAGE": ("message_send", "idempotency_key"),
+    "VARIABLE_ASSIGN": ("runtime_variable_write", "execution_record"),
+    "API_CALL": ("external_api_call", "idempotency_key"),
+    "TOOL_CALL": ("tool_call", "idempotency_key"),
+    "EXECUTE_WORKFLOW": ("nested_workflow_run", "idempotency_key"),
+    "TRANSFER_TO_HUMAN": ("handoff_request", "proposed_action"),
+}
 RuntimeV2LlmCompleterResolver = Callable[[int], WorkflowLlmCompleter | None]
 RuntimeV2AgentInvokerResolver = Callable[[int], AgentInvocationFacade | None]
+_RUNTIME_EXTERNAL_CALL_GOVERNANCE = ExternalCallGovernance()
 
 
 class RuntimeV2RefBuilder:
@@ -140,6 +165,7 @@ class RuntimeV2CompatibilityChecker:
                 count > 1
                 and source_type not in {"CONDITION", "INTENT_RECOGNITION"}
                 and not _runtime_v2_allows_error_branching(str(source_type or ""), source_config)
+                and not _runtime_v2_allows_default_fanout(source_config)
             ):
                 if "branching_edges" not in unsupported_patterns:
                     unsupported_patterns.append("branching_edges")
@@ -148,6 +174,20 @@ class RuntimeV2CompatibilityChecker:
         reference_issues = validate_variable_references(nodes)
         validation_issues = [*endpoint_issues, *contract_issues, *reference_issues]
         branch_validation_errors = [issue["code"] for issue in validation_issues]
+        errors: list[dict[str, str]] = []
+        for item in unsupported_nodes:
+            _append_runtime_v2_error(errors, _runtime_v2_unsupported_node_error(item))
+        for issue in endpoint_issues:
+            category = (
+                "branch_edges_incomplete"
+                if issue["nodeType"] in {"CONDITION", "INTENT_RECOGNITION"}
+                else "node_endpoints_incomplete"
+            )
+            _append_runtime_v2_error(errors, _runtime_v2_validation_error(issue, category))
+        for issue in contract_issues:
+            _append_runtime_v2_error(errors, _runtime_v2_validation_error(issue, "node_contract_invalid"))
+        for issue in reference_issues:
+            _append_runtime_v2_error(errors, _runtime_v2_validation_error(issue, "variable_references_invalid"))
         has_branch_endpoint_issue = any(issue["nodeType"] in {"CONDITION", "INTENT_RECOGNITION"} for issue in endpoint_issues)
         has_regular_endpoint_issue = any(issue["nodeType"] not in {"CONDITION", "INTENT_RECOGNITION"} for issue in endpoint_issues)
         if has_branch_endpoint_issue and "branch_edges_incomplete" not in unsupported_patterns:
@@ -165,8 +205,78 @@ class RuntimeV2CompatibilityChecker:
             "unsupportedNodes": unsupported_nodes,
             "unsupportedPatterns": unsupported_patterns,
             "branchValidationErrors": branch_validation_errors,
+            "errors": errors,
             "supportedNodeTypes": sorted(_SUPPORTED_CORE_NODE_TYPES),
         }
+
+
+def _append_runtime_v2_error(errors: list[dict[str, str]], error: dict[str, str]) -> None:
+    if not any(item.get("code") == error.get("code") for item in errors):
+        errors.append(error)
+
+
+def _runtime_v2_validation_error(issue: Mapping[str, str], category: str) -> dict[str, str]:
+    return {
+        "nodeKey": str(issue.get("nodeKey") or ""),
+        "nodeType": str(issue.get("nodeType") or ""),
+        "code": str(issue.get("code") or ""),
+        "message": str(issue.get("message") or ""),
+        "category": category,
+        "reason": str(issue.get("reason") or category),
+    }
+
+
+def _runtime_v2_unsupported_node_error(item: Mapping[str, str]) -> dict[str, str]:
+    node_key = str(item.get("nodeKey") or "")
+    node_type = str(item.get("nodeType") or "")
+    reason = str(item.get("reason") or "unsupported_node_type")
+    if reason == "api_call_requires_api_resource":
+        return {
+            "nodeKey": node_key,
+            "nodeType": node_type,
+            "code": f"{node_key}.resourceId",
+            "message": (
+                f"{node_key} must use an API Resource reference like api-resource:<id>; "
+                "raw URL mode is not supported by Runtime V2"
+            ),
+            "category": "node_contract_invalid",
+            "reason": reason,
+        }
+    if reason == "tool_call_requires_resource":
+        return {
+            "nodeKey": node_key,
+            "nodeType": node_type,
+            "code": f"{node_key}.resourceId",
+            "message": f"{node_key} must declare resourceId, toolName, and serverIds or API resource binding",
+            "category": "node_contract_invalid",
+            "reason": reason,
+        }
+    if reason == "llm_dependent_information_collection":
+        return {
+            "nodeKey": node_key,
+            "nodeType": node_type,
+            "code": f"{node_key}.fields",
+            "message": f"{node_key} uses LLM-dependent information collection, which is not available in Runtime V2",
+            "category": "node_contract_invalid",
+            "reason": reason,
+        }
+    return {
+        "nodeKey": node_key,
+        "nodeType": node_type,
+        "code": f"{node_key}.type",
+        "message": f"{node_key} uses node type {node_type}, which is not available in Runtime V2",
+        "category": "unsupported_node_type",
+        "reason": reason,
+    }
+
+
+def _runtime_v2_compatibility_error_message(compatibility: Mapping[str, Any]) -> str:
+    errors = compatibility.get("errors")
+    if isinstance(errors, list) and errors:
+        first = errors[0]
+        if isinstance(first, Mapping):
+            return f"Runtime V2 graph is not compatible: {first.get('message') or first.get('code')}"
+    return "Runtime V2 graph is not compatible; run compatibility check for details"
 
 
 @dataclass(frozen=True)
@@ -201,6 +311,7 @@ class ChatflowRuntimeV2Service:
         agent_invoker_resolver: RuntimeV2AgentInvokerResolver | None = None,
         mcp_tool_executor: McpToolExecutor | None = None,
         api_tool_executor: ApiToolExecutor | None = None,
+        runtime_job_repository: RuntimeJobRepository | None = None,
     ) -> None:
         self._repository = repository
         self._state_repository = state_repository
@@ -215,6 +326,7 @@ class ChatflowRuntimeV2Service:
         self._agent_invoker_resolver = agent_invoker_resolver
         self._mcp_tool_executor = mcp_tool_executor
         self._api_tool_executor = api_tool_executor
+        self._runtime_job_repository = runtime_job_repository
         self._llm_completer_cache: dict[int, WorkflowLlmCompleter | None] = {}
         self._agent_invoker_cache: dict[int, AgentInvocationFacade | None] = {}
 
@@ -252,7 +364,7 @@ class ChatflowRuntimeV2Service:
         definition = self._definition_for_start(chatflow_id, version_id)
         compatibility = RuntimeV2CompatibilityChecker.check(definition["nodes"], definition["edges"])
         if not compatibility["supported"]:
-            raise BizError(ErrorCode.BAD_REQUEST, f"Unsupported runtime v2 graph: {compatibility}")
+            raise BizError(ErrorCode.BAD_REQUEST, _runtime_v2_compatibility_error_message(compatibility))
         persisted_input = _with_runtime_metadata(input_data, self._owner_type, definition)
         run_id = self._repository.create_run(chatflow_id, persisted_input)
         session_id = str(input_data.get("sys.session_id") or f"{self._owner_type.lower()}-v2-{run_id}")
@@ -335,12 +447,13 @@ class ChatflowRuntimeV2Service:
         edges = definition.get("edges") if definition else self._repository.list_edges(chatflow_id)
         nodes = definition.get("nodes") if definition else self._repository.list_nodes(chatflow_id)
         context = _context_from_input(input_data)
+        existing_node_runs = self._repository.list_node_runs(run_id)
         node_key = _resume_node_key_from_completed_runs(
-            self._repository.list_node_runs(run_id),
+            existing_node_runs,
             edges,
             nodes,
             context,
-            _next_node_key(edges, "start"),
+            _next_node_key(edges, "start") if existing_node_runs else None,
         )
         try:
             output = self._run_from_node(
@@ -353,6 +466,8 @@ class ChatflowRuntimeV2Service:
                 nodes=nodes,
                 edges=edges,
             )
+        except _RuntimeV2Cancelled:
+            return
         except _RuntimeV2Interrupt as interrupted:
             if not self._run_has_status(run_id, "RUNNING"):
                 return
@@ -388,6 +503,8 @@ class ChatflowRuntimeV2Service:
             return
         if not self._run_has_status(run_id, "RUNNING"):
             return
+        node_runs = self._repository.list_node_runs(run_id)
+        output = _resolve_final_output(self._owner_type, output, node_runs)
         self._repository.finish_run(run_id, "SUCCEEDED", output=output)
         if self._use_chatflow_session:
             self._state_repository.update_session_status(
@@ -447,6 +564,7 @@ class ChatflowRuntimeV2Service:
             for node_key, output in node_outputs.items():
                 if isinstance(output, dict):
                     context.set_output(str(node_key), output)
+        _load_completed_node_run_outputs(context, self._repository.list_node_runs(run_id))
         runtime_definition = _runtime_definition(dict(run.get("input") or {}))
         input_data = dict((checkpoint.get("execution_context") or {}).get("input") or {})
         input_data["resume"] = {pending_node_key: resume_data}
@@ -491,6 +609,8 @@ class ChatflowRuntimeV2Service:
             )
             return self.get_result(run_id)
         self._state_repository.mark_checkpoint_completed(int(checkpoint["id"]))
+        node_runs = self._repository.list_node_runs(run_id)
+        output = _resolve_final_output(self._owner_type, output, node_runs)
         self._repository.finish_run(run_id, "SUCCEEDED", output=output)
         self._state_repository.update_session_status(
             chatflow_id=chatflow_id,
@@ -508,12 +628,20 @@ class ChatflowRuntimeV2Service:
         )
         return self.get_result(run_id)
 
-    def cancel_run(self, run_id: int) -> dict[str, Any]:
+    def cancel_run(
+        self,
+        run_id: int,
+        *,
+        reason: str = "cancelled by operator",
+        deadline_ms: int = 1000,
+    ) -> dict[str, Any]:
         run = self._run_or_404(run_id)
         chatflow_id = int(run["workflow_id"])
         session_id = self._session_id_for_run(chatflow_id, run_id)
         owner_type = self._owner_type_for_run(run)
         run_status = str(run["status"]).upper()
+        deadline_ms = max(0, int(deadline_ms))
+        deadline_at = datetime.now() + timedelta(milliseconds=deadline_ms)
         if run_status == "CANCELLED":
             result = self.get_result(run_id)
             result["cancellation"] = {
@@ -521,6 +649,8 @@ class ChatflowRuntimeV2Service:
                 "idempotent": True,
                 "previousStatus": "CANCELLED",
                 "reason": "Runtime v2 run was already cancelled.",
+                "deadlineMs": deadline_ms,
+                "deadlineAt": format_datetime(deadline_at),
             }
             return result
         if run_status in _RUNTIME_V2_TERMINAL_STATUSES:
@@ -530,6 +660,8 @@ class ChatflowRuntimeV2Service:
                 "idempotent": False,
                 "previousStatus": run_status,
                 "reason": "Runtime v2 run is already terminal.",
+                "deadlineMs": deadline_ms,
+                "deadlineAt": format_datetime(deadline_at),
             }
             return result
         if run_status not in _RUNTIME_V2_CANCELLABLE_STATUSES:
@@ -538,7 +670,24 @@ class ChatflowRuntimeV2Service:
         checkpoint_id = int(checkpoint["id"]) if checkpoint is not None else None
         if checkpoint_id is not None:
             self._state_repository.mark_checkpoint_completed(checkpoint_id)
-        self._repository.finish_run(run_id, "CANCELLED", output={}, error="cancelled by operator")
+        runtime_job = (
+            self._runtime_job_repository.cancel_by_run(run_id, reason=reason)
+            if self._runtime_job_repository is not None
+            else None
+        )
+        cancelled_node_keys = self._cancel_active_node_runs(
+            chatflow_id=chatflow_id,
+            run_id=run_id,
+            session_id=session_id,
+            reason=reason,
+        )
+        phase = _runtime_cancel_phase(
+            run_status=run_status,
+            had_checkpoint=checkpoint_id is not None,
+            cancelled_node_keys=cancelled_node_keys,
+            runtime_job=runtime_job,
+        )
+        self._repository.finish_run(run_id, "CANCELLED", output={}, error=reason)
         if self._use_chatflow_session and owner_type == "CHATFLOW":
             self._state_repository.update_session_status(
                 chatflow_id=chatflow_id,
@@ -557,7 +706,11 @@ class ChatflowRuntimeV2Service:
                 "previousStatus": run_status,
                 "status": "CANCELLED",
                 "checkpointId": checkpoint_id,
-                "cancellation": {"applied": True, "idempotent": False},
+                "deadlineMs": deadline_ms,
+                "deadlineAt": format_datetime(deadline_at),
+                "cancelledNodeKeys": cancelled_node_keys,
+                "runtimeJobStatus": runtime_job.get("status") if runtime_job else None,
+                "cancellation": {"applied": True, "idempotent": False, "phase": phase},
             },
             checkpoint_id=checkpoint_id,
         )
@@ -566,23 +719,123 @@ class ChatflowRuntimeV2Service:
             "applied": True,
             "idempotent": False,
             "previousStatus": run_status,
-            "reason": "Runtime v2 run cancelled before further scheduling.",
+            "phase": phase,
+            "reason": reason,
+            "deadlineMs": deadline_ms,
+            "deadlineAt": format_datetime(deadline_at),
+            "cancelledNodeKeys": cancelled_node_keys,
+            "runtimeJobStatus": runtime_job.get("status") if runtime_job else None,
         }
         return result
+
+    def _cancel_active_node_runs(
+        self,
+        *,
+        chatflow_id: int,
+        run_id: int,
+        session_id: str,
+        reason: str,
+    ) -> list[str]:
+        cancelled: list[str] = []
+        for row in self._repository.list_node_runs(run_id):
+            status = str(row.get("status") or "").upper()
+            if status not in {"RUNNING", "WAITING"}:
+                continue
+            if self._cancel_node_run_if_active(
+                chatflow_id=chatflow_id,
+                run_id=run_id,
+                session_id=session_id,
+                node_run=row,
+                reason=reason,
+            ):
+                cancelled.append(str(row.get("node_key") or ""))
+        return [node_key for node_key in cancelled if node_key]
+
+    def _cancel_node_run_if_active(
+        self,
+        *,
+        chatflow_id: int,
+        run_id: int,
+        session_id: str,
+        node_run: Mapping[str, Any],
+        reason: str,
+    ) -> bool:
+        status = str(node_run.get("status") or "").upper()
+        if status == "CANCELLED":
+            return False
+        if status not in {"RUNNING", "WAITING"}:
+            return False
+        node_run_id = int(node_run["id"])
+        node_key = str(node_run.get("node_key") or "")
+        node_type = str(node_run.get("node_type") or "")
+        self._repository.finish_node_run(node_run_id, "CANCELLED", {}, error=reason)
+        self._append_event(
+            session_id=session_id,
+            chatflow_id=chatflow_id,
+            run_id=run_id,
+            event_type="workflow_node_cancelled",
+            node_key=node_key,
+            payload={"nodeType": node_type, "nodeRunId": node_run_id, "reason": reason},
+        )
+        self._append_event(
+            session_id=session_id,
+            chatflow_id=chatflow_id,
+            run_id=run_id,
+            event_type="node_status_changed",
+            node_key=node_key,
+            payload={"nodeType": node_type, "nodeRunId": node_run_id, "status": "CANCELLED"},
+        )
+        return True
+
+    def _raise_if_run_cancelled(
+        self,
+        *,
+        run_id: int,
+        chatflow_id: int,
+        session_id: str,
+        node_run_id: int | None = None,
+        reason: str = "cancelled by operator",
+    ) -> None:
+        if not self._run_has_status(run_id, "CANCELLED"):
+            return
+        if node_run_id is not None:
+            node_run = next(
+                (row for row in self._repository.list_node_runs(run_id) if int(row["id"]) == int(node_run_id)),
+                None,
+            )
+            if node_run is not None:
+                self._cancel_node_run_if_active(
+                    chatflow_id=chatflow_id,
+                    run_id=run_id,
+                    session_id=session_id,
+                    node_run=node_run,
+                    reason=reason,
+                )
+        raise _RuntimeV2Cancelled()
 
     def get_result(self, run_id: int) -> dict[str, Any]:
         run = self._run_or_404(run_id)
         chatflow_id = int(run["workflow_id"])
         owner_type = self._owner_type_for_run(run)
         runtime_metadata = _runtime_metadata(dict(run.get("input") or {}))
+        session_id = self._session_id_for_run(chatflow_id, run_id)
         checkpoint = self._state_repository.get_waiting_checkpoint(chatflow_id, run_id)
         node_runs = self._repository.list_node_runs(run_id)
         events = self._state_repository.list_events(chatflow_id, run_id)
         output = dict(run.get("output") or {})
+        waiting_nodes = _runtime_waiting_nodes(run, node_runs, checkpoint)
+        refs = {
+            "statusRef": f"/api/v1/runtime-runs/{run_id}",
+            "eventsRef": f"/api/v1/runtime-runs/{run_id}/events",
+            "eventStreamRef": f"/api/v1/runtime-runs/{run_id}/events/stream?afterSequence=0",
+            "nodesRef": f"/api/v1/runtime-runs/{run_id}/nodes",
+            "resultRef": f"/api/v1/runtime-runs/{run_id}/result",
+        }
         result = {
             "runId": run_id,
             "ownerType": owner_type,
             "ownerId": chatflow_id,
+            "sessionId": session_id,
             "status": str(run["status"]),
             "result": output,
             "output": output,
@@ -592,11 +845,18 @@ class ChatflowRuntimeV2Service:
             "retryable": _runtime_result_retryable(run),
             "events": [_format_runtime_event_summary(event) for event in events],
             "checkpoint": _format_runtime_checkpoint(checkpoint),
-            "statusRef": f"/api/v1/runtime-runs/{run_id}",
-            "eventsRef": f"/api/v1/runtime-runs/{run_id}/events",
-            "eventStreamRef": f"/api/v1/runtime-runs/{run_id}/events/stream?afterSequence=0",
-            "resultRef": f"/api/v1/runtime-runs/{run_id}/result",
+            "waitingNodes": waiting_nodes,
+            "waitingNodeKeys": [node["nodeKey"] for node in waiting_nodes],
+            **refs,
+            "runtimeRefs": {"runId": run_id, **refs},
         }
+        if self._use_chatflow_session and owner_type == "CHATFLOW":
+            session = self._state_repository.get_session(chatflow_id, session_id)
+            if session is not None:
+                result["conversationId"] = str(session.get("conversation_id") or "")
+                result["userId"] = str(session.get("user_id") or "")
+                result["channel"] = str(session.get("channel") or "")
+                result["variables"] = dict(session.get("variables") or {})
         result[_owner_id_payload_key(owner_type)] = chatflow_id
         if runtime_metadata.get("versionId") is not None:
             result["versionId"] = runtime_metadata.get("versionId")
@@ -632,31 +892,103 @@ class ChatflowRuntimeV2Service:
         node_rows = nodes if nodes is not None else self._repository.list_nodes(chatflow_id)
         edge_rows = edges if edges is not None else self._repository.list_edges(chatflow_id)
         nodes_by_key = {str(node["node_key"]): node for node in node_rows}
-        current = node_key
+        previous_node_runs = self._repository.list_node_runs(run_id)
+        completed = _completed_node_keys(previous_node_runs)
+        completed.add("start")
+        selected_ports = _selected_ports_from_completed_node_runs(edge_rows, node_rows, previous_node_runs)
+        forced_next = [node_key] if node_key else []
         output: dict[str, Any] = {}
-        while current:
-            node = nodes_by_key.get(current)
-            if node is None:
-                raise ValueError(f"Unsupported runtime v2 node: {current}")
-            node_output = self._execute_node(chatflow_id, run_id, session_id, node, context, input_data)
-            context.set_output(current, node_output)
-            output = node_output
-            current = _next_node_key(edge_rows, current, node_output, str(node["type"]).upper())
+        while True:
+            self._raise_if_run_cancelled(run_id=run_id, chatflow_id=chatflow_id, session_id=session_id)
+            frontier = _runtime_frontier(
+                nodes=node_rows,
+                edges=edge_rows,
+                selected_ports=selected_ports,
+                completed_node_keys=completed,
+            )
+            current_wave = forced_next or _frontier_node_keys(frontier, completed_node_keys=completed)
+            forced_next = []
+            if not current_wave:
+                break
+            state_by_node_key = frontier.get("stateByNodeKey") if isinstance(frontier, Mapping) else {}
+            wave_results: list[tuple[str, dict[str, Any], dict[str, Any], str]] = []
+            wave_items: list[tuple[str, dict[str, Any], dict[str, Any] | None]] = []
+            for current in current_wave:
+                node = nodes_by_key.get(current)
+                if node is None:
+                    raise ValueError(f"Runtime v2 node is not in definition: {current}")
+                selection_state = None
+                if isinstance(state_by_node_key, Mapping) and isinstance(state_by_node_key.get(current), Mapping):
+                    selection_state = dict(state_by_node_key[current])
+                wave_items.append((current, node, selection_state))
+            prestarted: dict[str, tuple[int, float]] = {}
+            wave_node_types = {str(node["type"]).upper() for _, node, _ in wave_items}
+            prestart_wave = len(wave_items) > 1 and wave_node_types.issubset(_RUNTIME_V2_PRESTART_WAVE_NODE_TYPES)
+            if prestart_wave:
+                for current, node, selection_state in wave_items:
+                    self._raise_if_run_cancelled(run_id=run_id, chatflow_id=chatflow_id, session_id=session_id)
+                    prestarted[current] = self._start_runtime_node_execution(
+                        chatflow_id=chatflow_id,
+                        run_id=run_id,
+                        session_id=session_id,
+                        node=node,
+                        input_data=input_data,
+                        selection_state=selection_state,
+                    )
+            wave_errors: list[Exception] = []
+            for current, node, selection_state in wave_items:
+                self._raise_if_run_cancelled(run_id=run_id, chatflow_id=chatflow_id, session_id=session_id)
+                node_context = _clone_context_for_frontier_node(context) if len(current_wave) > 1 else context
+                node_run_id, node_started_at = prestarted.get(current, (None, None))
+                try:
+                    node_output = self._execute_node(
+                        chatflow_id,
+                        run_id,
+                        session_id,
+                        node,
+                        node_context,
+                        input_data,
+                        selection_state=selection_state,
+                        node_run_id=node_run_id,
+                        started_at=node_started_at,
+                    )
+                except Exception as exc:
+                    if not prestart_wave:
+                        raise
+                    wave_errors.append(exc)
+                    continue
+                wave_results.append((current, node_output, node, str(node["type"]).upper()))
+            for current, node_output, node, node_type in wave_results:
+                context.set_output(current, node_output)
+                output = node_output
+                completed.add(current)
+                selected = _selected_port_keys_for_node(edge_rows, current, node_output, node_type)
+                if selected is not None:
+                    selected_ports[current] = selected
+            if wave_errors:
+                raise wave_errors[0]
         return output
 
-    def _execute_node(
+    def _start_runtime_node_execution(
         self,
+        *,
         chatflow_id: int,
         run_id: int,
         session_id: str,
         node: dict[str, Any],
-        context: ExecutionContext,
         input_data: dict[str, Any],
-    ) -> dict[str, Any]:
+        selection_state: dict[str, Any] | None = None,
+    ) -> tuple[int, float]:
         node_key = str(node["node_key"])
         node_type = str(node["type"]).upper()
         started_at = time.perf_counter()
-        node_run_id = self._repository.create_node_run(run_id, node_key, node_type, inputs=input_data)
+        node_run_id = self._repository.create_node_run(
+            run_id,
+            node_key,
+            node_type,
+            inputs=input_data,
+            selection_state=selection_state,
+        )
         self._append_event(
             session_id=session_id,
             chatflow_id=chatflow_id,
@@ -672,6 +1004,39 @@ class ChatflowRuntimeV2Service:
             event_type="node_status_changed",
             node_key=node_key,
             payload={"nodeType": node_type, "nodeRunId": node_run_id, "status": "RUNNING"},
+        )
+        return node_run_id, started_at
+
+    def _execute_node(
+        self,
+        chatflow_id: int,
+        run_id: int,
+        session_id: str,
+        node: dict[str, Any],
+        context: ExecutionContext,
+        input_data: dict[str, Any],
+        selection_state: dict[str, Any] | None = None,
+        node_run_id: int | None = None,
+        started_at: float | None = None,
+    ) -> dict[str, Any]:
+        node_key = str(node["node_key"])
+        node_type = str(node["type"]).upper()
+        if node_run_id is None:
+            node_run_id, started_at = self._start_runtime_node_execution(
+                chatflow_id=chatflow_id,
+                run_id=run_id,
+                session_id=session_id,
+                node=node,
+                input_data=input_data,
+                selection_state=selection_state,
+            )
+        if started_at is None:
+            started_at = time.perf_counter()
+        self._raise_if_run_cancelled(
+            run_id=run_id,
+            chatflow_id=chatflow_id,
+            session_id=session_id,
+            node_run_id=node_run_id,
         )
         try:
             if node_type == "MESSAGE":
@@ -701,39 +1066,71 @@ class ChatflowRuntimeV2Service:
             elif node_type == "INFORMATION_COLLECTION":
                 output = InformationCollectionNodeExecutor().execute(node, context)
             elif node_type == "LLM":
-                output = LlmNodeExecutor(
-                    self._llm_completer_for(chatflow_id),
-                    self._knowledge_facade,
-                    self._mcp_tool_executor,
-                ).execute(node, context)
+                output = self._execute_governed_external_node(
+                    node=node,
+                    node_run_id=node_run_id,
+                    operation=lambda: LlmNodeExecutor(
+                        self._llm_completer_for(chatflow_id),
+                        self._knowledge_facade,
+                        self._mcp_tool_executor,
+                    ).execute(node, context),
+                )
             elif node_type == "KNOWLEDGE":
                 if self._knowledge_facade is None:
                     raise ValueError("Runtime v2 KNOWLEDGE node requires KnowledgeFacade")
-                output = KnowledgeNodeExecutor(self._knowledge_facade).execute(node, context)
+                output = self._execute_governed_external_node(
+                    node=node,
+                    node_run_id=node_run_id,
+                    operation=lambda: KnowledgeNodeExecutor(self._knowledge_facade).execute(node, context),
+                )
             elif node_type == "API_CALL":
                 reason = _runtime_v2_api_call_unsupported_reason(dict(node.get("config") or {}))
                 if reason:
-                    raise ValueError(f"Runtime v2 API_CALL is not compatible: {reason}")
-                output = ApiCallNodeExecutor(self._api_tool_executor).execute(node, context)
+                    error = _runtime_v2_unsupported_node_error(
+                        {"nodeKey": node_key, "nodeType": node_type, "reason": reason}
+                    )
+                    raise ValueError(error["message"])
+                output = self._execute_governed_external_node(
+                    node=node,
+                    node_run_id=node_run_id,
+                    operation=lambda: ApiCallNodeExecutor(self._api_tool_executor).execute(node, context),
+                )
                 output = _with_runtime_v2_execution_evidence_defaults(output)
             elif node_type == "TOOL_CALL":
                 reason = _runtime_v2_tool_call_unsupported_reason(dict(node.get("config") or {}))
                 if reason:
-                    raise ValueError(f"Runtime v2 TOOL_CALL is not compatible: {reason}")
-                output = ToolCallNodeExecutor(self._mcp_tool_executor, self._api_tool_executor).execute(node, context)
+                    error = _runtime_v2_unsupported_node_error(
+                        {"nodeKey": node_key, "nodeType": node_type, "reason": reason}
+                    )
+                    raise ValueError(error["message"])
+                output = self._execute_governed_external_node(
+                    node=node,
+                    node_run_id=node_run_id,
+                    operation=lambda: ToolCallNodeExecutor(self._mcp_tool_executor, self._api_tool_executor).execute(
+                        node, context
+                    ),
+                )
                 output = _with_runtime_v2_execution_evidence_defaults(output)
             elif node_type == "EXECUTE_WORKFLOW":
                 output = self._execute_workflow_output(chatflow_id, node, context)
             elif node_type == "TRANSFER_TO_HUMAN":
-                output = self._transfer_to_human_output(chatflow_id, run_id, session_id, node, context, input_data)
+                output = self._transfer_to_human_output(
+                    chatflow_id,
+                    run_id,
+                    session_id,
+                    node,
+                    context,
+                    input_data,
+                    node_run_id,
+                )
             elif node_type == "AGENT_CALL":
                 output = AgentCallNodeExecutor(self._agent_invoker_for(chatflow_id)).execute(node, context)
             elif node_type == "END":
                 output = EndNodeExecutor().execute(node, context)
             else:
-                raise ValueError(f"Runtime v2 core coverage does not support node type: {node_type}")
-        except _RuntimeV2Interrupt:
-            self._repository.finish_node_run(node_run_id, "WAITING", {})
+                raise ValueError(f"Runtime v2 core coverage is missing node type: {node_type}")
+        except _RuntimeV2Interrupt as interrupted:
+            self._repository.finish_node_run(node_run_id, "WAITING", interrupted.output)
             self._append_event(
                 session_id=session_id,
                 chatflow_id=chatflow_id,
@@ -768,8 +1165,25 @@ class ChatflowRuntimeV2Service:
                 variable_scopes=context.scopes_snapshot(),
             ) from interrupted
         except Exception as exc:
+            if isinstance(exc, ExternalCallGovernanceError):
+                payload = {**exc.event_payload, "nodeType": node_type, "nodeRunId": node_run_id}
+                self._append_event(
+                    session_id=session_id,
+                    chatflow_id=chatflow_id,
+                    run_id=run_id,
+                    event_type=exc.event_type,
+                    node_key=node_key,
+                    payload=payload,
+                )
             handled_output = _runtime_v2_handled_error_output(node_type, node, exc, started_at)
             if handled_output is not None:
+                handled_output = _with_runtime_v2_side_effect_protection(
+                    handled_output,
+                    run_id=run_id,
+                    node_run_id=node_run_id,
+                    node_key=node_key,
+                    node_type=node_type,
+                )
                 self._repository.finish_node_run(node_run_id, "SUCCEEDED", handled_output)
                 self._append_event(
                     session_id=session_id,
@@ -821,6 +1235,19 @@ class ChatflowRuntimeV2Service:
                 payload={"nodeType": node_type, "nodeRunId": node_run_id, "status": "FAILED"},
             )
             raise
+        output = _with_runtime_v2_side_effect_protection(
+            output,
+            run_id=run_id,
+            node_run_id=node_run_id,
+            node_key=node_key,
+            node_type=node_type,
+        )
+        self._raise_if_run_cancelled(
+            run_id=run_id,
+            chatflow_id=chatflow_id,
+            session_id=session_id,
+            node_run_id=node_run_id,
+        )
         self._repository.finish_node_run(node_run_id, "SUCCEEDED", output)
         self._append_event(
             session_id=session_id,
@@ -839,6 +1266,25 @@ class ChatflowRuntimeV2Service:
             payload={"nodeType": node_type, "nodeRunId": node_run_id, "status": "COMPLETED"},
         )
         return output
+
+    def _execute_governed_external_node(
+        self,
+        *,
+        node: dict[str, Any],
+        node_run_id: int | None,
+        operation: Callable[[], dict[str, Any]],
+    ) -> dict[str, Any]:
+        config = dict(node.get("config") or {})
+        node_type = str(node.get("type") or "")
+        node_key = str(node.get("node_key") or node.get("nodeKey") or "")
+        return _RUNTIME_EXTERNAL_CALL_GOVERNANCE.run(
+            call_type=_runtime_external_call_type(node_type),
+            provider_key=_runtime_external_provider_key(node_type, config),
+            node_key=node_key,
+            node_run_id=node_run_id,
+            policy=external_call_policy_from_config(config),
+            operation=operation,
+        )
 
     def _question_output(
         self,
@@ -920,6 +1366,7 @@ class ChatflowRuntimeV2Service:
         node: dict[str, Any],
         context: ExecutionContext,
         input_data: dict[str, Any],
+        node_run_id: int,
     ) -> dict[str, Any]:
         if self._flow_type != "CHATFLOW":
             raise ValueError("TRANSFER_TO_HUMAN is Chatflow-only")
@@ -946,6 +1393,21 @@ class ChatflowRuntimeV2Service:
 
         message = context.render(str(config.get("message") or "已为你转接人工客服，请稍候。"))
         handoff_id = f"runtime-v2-handoff-{run_id}-{node_key}"
+        protection = _runtime_v2_side_effect_protection(
+            run_id=run_id,
+            node_run_id=node_run_id,
+            node_key=node_key,
+            node_type="TRANSFER_TO_HUMAN",
+        )
+        proposed_action = {
+            "actionType": "transfer_to_human",
+            "status": "PENDING",
+            "idempotencyKey": protection["idempotencyKey"],
+            "handoffId": handoff_id,
+            "queue": queue,
+            "priority": priority,
+            "reason": reason,
+        }
         interrupt_payload = {
             "type": "TRANSFER_TO_HUMAN",
             "nodeKey": node_key,
@@ -956,6 +1418,8 @@ class ChatflowRuntimeV2Service:
             "reason": reason,
             "priority": priority,
             "mocked": True,
+            "sideEffectProtection": protection,
+            "proposedAction": proposed_action,
         }
         checkpoint = self._state_repository.create_checkpoint(
             session_id=session_id,
@@ -992,6 +1456,9 @@ class ChatflowRuntimeV2Service:
                 "status": "waiting",
                 "message": message,
                 "mocked": True,
+                "idempotencyKey": protection["idempotencyKey"],
+                "sideEffectProtection": protection,
+                "proposedAction": proposed_action,
             },
             checkpoint_id=checkpoint_id,
         )
@@ -1017,6 +1484,8 @@ class ChatflowRuntimeV2Service:
                     },
                 ],
                 "interrupt": interrupt_payload,
+                "sideEffectProtection": protection,
+                "proposedAction": proposed_action,
                 "mocked": True,
             },
             variable_scopes=context.scopes_snapshot(),
@@ -1037,12 +1506,13 @@ class ChatflowRuntimeV2Service:
         if not interrupt_payload:
             interrupt_payload = {"nodeKey": node_key, "type": "INTERRUPT"}
         interrupt_payload.setdefault("nodeKey", node_key)
+        checkpoint_input = _checkpoint_execution_input(input_data, output)
         checkpoint = self._state_repository.create_checkpoint(
             session_id=session_id,
             chatflow_id=chatflow_id,
             run_id=run_id,
             pending_node_key=node_key,
-            execution_context={"input": input_data},
+            execution_context={"input": checkpoint_input},
             node_outputs=context.outputs_snapshot(),
             variable_scopes=context.scopes_snapshot(),
             resume_schema=interrupt_payload,
@@ -1073,6 +1543,7 @@ class ChatflowRuntimeV2Service:
             **_runtime_event_debug_metadata(dict(self._run_or_404(run_id).get("input") or {})),
             **(payload or {}),
         }
+        event_payload.setdefault("ownerType", self._owner_type)
         return self._state_repository.append_event(
             session_id=session_id,
             chatflow_id=chatflow_id,
@@ -1111,6 +1582,8 @@ class ChatflowRuntimeV2Service:
         return self._agent_invoker_cache[chatflow_id]
 
     def _run_has_status(self, run_id: int, status: str) -> bool:
+        self._repository.session.rollback()
+        self._repository.session.expire_all()
         run = self._run_or_404(run_id)
         return str(run["status"]).upper() == status.upper()
 
@@ -1123,10 +1596,6 @@ class ChatflowRuntimeV2Service:
         published = self._published_version_for_start(chatflow_id, version_id)
         if published is not None:
             return _definition_from_published_version(published)
-        if self._owner_type == "WORKFLOW":
-            if self._publish_repository is None:
-                raise BizError(ErrorCode.BAD_REQUEST, "Workflow v2 requires publish repository")
-            raise BizError(ErrorCode.BAD_REQUEST, "Workflow v2 requires an active published version")
         if version_id is not None:
             raise BizError(ErrorCode.NOT_FOUND, "Published version not found")
         return {
@@ -1175,6 +1644,7 @@ class WorkflowRuntimeV2Service(ChatflowRuntimeV2Service):
         agent_invoker_resolver: RuntimeV2AgentInvokerResolver | None = None,
         mcp_tool_executor: McpToolExecutor | None = None,
         api_tool_executor: ApiToolExecutor | None = None,
+        runtime_job_repository: RuntimeJobRepository | None = None,
     ) -> None:
         super().__init__(
             repository,
@@ -1190,6 +1660,7 @@ class WorkflowRuntimeV2Service(ChatflowRuntimeV2Service):
             agent_invoker_resolver=agent_invoker_resolver,
             mcp_tool_executor=mcp_tool_executor,
             api_tool_executor=api_tool_executor,
+            runtime_job_repository=runtime_job_repository,
         )
 
 
@@ -1243,8 +1714,15 @@ class _PublishedSnapshotWorkflowRepository:
         node_key: str,
         node_type: str,
         inputs: dict[str, Any] | None = None,
+        selection_state: dict[str, Any] | None = None,
     ) -> int:
-        return self._base.create_node_run(workflow_run_id, node_key, node_type, inputs=inputs)
+        return self._base.create_node_run(
+            workflow_run_id,
+            node_key,
+            node_type,
+            inputs=inputs,
+            selection_state=selection_state,
+        )
 
     def finish_node_run(
         self,
@@ -1273,6 +1751,10 @@ class _RuntimeV2Interrupt(Exception):
         self.node_key = node_key
         self.output = output
         self.variable_scopes = variable_scopes
+
+
+class _RuntimeV2Cancelled(Exception):
+    pass
 
 
 def _start_payload(start: RuntimeV2Start) -> dict[str, Any]:
@@ -1422,14 +1904,167 @@ def _chatflow_user_message_from_input(input_data: dict[str, Any]) -> str:
 
 
 def _chatflow_answer_from_output(output: dict[str, Any]) -> str:
-    for key in ("answer", "final", "output", "content", "message", "text"):
+    if _is_explicit_no_reply_output(output):
+        return ""
+    return _visible_text_from_output(output, allow_any_string=True)
+
+
+_CHATFLOW_REPLY_KEYS = ("answer", "final", "output", "content", "message", "text")
+_PRIORITY_REPLY_KEYS = ("replyPriority", "reply_priority", "priorityReply", "priority_reply")
+
+
+def _resolve_final_output(
+    owner_type: str,
+    output: dict[str, Any],
+    node_runs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    normalized_owner = owner_type.upper()
+    if normalized_owner == "CHATFLOW":
+        return _resolve_chatflow_final_output(output, node_runs)
+    if _is_side_effect_only_output(output):
+        summary = _side_effect_only_summary(normalized_owner, node_runs)
+        if summary:
+            return summary
+    return output
+
+
+def _resolve_chatflow_final_output(
+    output: dict[str, Any],
+    node_runs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    end_output = _latest_node_output(node_runs, "END")
+    if end_output is not None and _visible_text_from_output(end_output, allow_any_string=True):
+        return end_output
+    answer_output = _answer_mapping_output(node_runs)
+    if answer_output is not None:
+        return answer_output
+    priority_output = _priority_reply_output(node_runs)
+    if priority_output is not None:
+        return priority_output
+    if _is_side_effect_only_output(output):
+        summary = _side_effect_only_summary("CHATFLOW", node_runs)
+        if summary:
+            return summary
+    return output
+
+
+def _latest_node_output(node_runs: list[dict[str, Any]], node_type: str) -> dict[str, Any] | None:
+    for row in reversed(node_runs):
+        if str(row.get("node_type") or "").upper() == node_type.upper():
+            return _node_run_outputs(row)
+    return None
+
+
+def _answer_mapping_output(node_runs: list[dict[str, Any]]) -> dict[str, Any] | None:
+    for row in reversed(node_runs):
+        if str(row.get("node_type") or "").upper() == "END":
+            continue
+        output = _node_run_outputs(row)
+        if _is_side_effect_only_output(output):
+            continue
+        if _reply_priority(output) is not None:
+            continue
+        value = output.get("answer")
+        if _non_empty_text(value):
+            return {"answer": str(value)}
+    return None
+
+
+def _priority_reply_output(node_runs: list[dict[str, Any]]) -> dict[str, Any] | None:
+    candidates: list[tuple[float, int, dict[str, Any]]] = []
+    for index, row in enumerate(node_runs):
+        if str(row.get("node_type") or "").upper() == "END":
+            continue
+        output = _node_run_outputs(row)
+        if _is_side_effect_only_output(output):
+            continue
+        priority = _reply_priority(output)
+        if priority is None:
+            continue
+        if not _visible_text_from_output(output, allow_any_string=False):
+            continue
+        candidates.append((priority, index, output))
+    if not candidates:
+        return None
+    _, _, output = max(candidates, key=lambda item: (item[0], item[1]))
+    return dict(output)
+
+
+def _side_effect_only_summary(owner_type: str, node_runs: list[dict[str, Any]]) -> dict[str, Any]:
+    evidence: list[dict[str, Any]] = []
+    for row in node_runs:
+        output = _node_run_outputs(row)
+        if not _is_side_effect_only_output(output):
+            continue
+        item = {
+            "nodeKey": str(row.get("node_key") or ""),
+            "nodeType": str(row.get("node_type") or ""),
+            "status": str(row.get("status") or ""),
+            "output": output,
+        }
+        if "sideEffectEvidence" in output:
+            item["sideEffectEvidence"] = output["sideEffectEvidence"]
+        evidence.append(item)
+    if not evidence:
+        return {}
+    summary: dict[str, Any] = {
+        "sideEffectOnly": True,
+        "summary": "side_effect_only_completed",
+        "sideEffectEvidence": evidence,
+    }
+    if owner_type.upper() == "CHATFLOW":
+        summary["noReply"] = True
+    return summary
+
+
+def _node_run_outputs(row: Mapping[str, Any]) -> dict[str, Any]:
+    output = row.get("outputs")
+    return dict(output) if isinstance(output, dict) else {}
+
+
+def _visible_text_from_output(output: Mapping[str, Any], *, allow_any_string: bool) -> str:
+    for key in _CHATFLOW_REPLY_KEYS:
         value = output.get(key)
-        if value is not None and str(value).strip():
+        if _non_empty_text(value):
             return str(value)
-    for value in output.values():
-        if isinstance(value, str) and value.strip():
-            return value
+    if allow_any_string:
+        for value in output.values():
+            if isinstance(value, str) and value.strip():
+                return value
     return ""
+
+
+def _reply_priority(output: Mapping[str, Any]) -> float | None:
+    for key in _PRIORITY_REPLY_KEYS:
+        if key not in output:
+            continue
+        try:
+            return float(output[key])
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _is_explicit_no_reply_output(output: Mapping[str, Any]) -> bool:
+    if _truthy_output_flag(output.get("noReply") or output.get("no_reply")):
+        return True
+    return _is_side_effect_only_output(output) and str(output.get("summary") or "") == "side_effect_only_completed"
+
+
+def _is_side_effect_only_output(output: Mapping[str, Any]) -> bool:
+    return _truthy_output_flag(output.get("sideEffectOnly") or output.get("side_effect_only"))
+
+
+def _truthy_output_flag(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _non_empty_text(value: Any) -> bool:
+    return value is not None and str(value).strip() != ""
 
 
 def _definition_payload(definition: dict[str, Any]) -> dict[str, Any]:
@@ -1485,6 +2120,120 @@ def _next_node_key(
     return None
 
 
+def _runtime_frontier(
+    *,
+    nodes: list[dict[str, Any]],
+    edges: list[dict[str, Any]],
+    selected_ports: dict[str, list[str]],
+    completed_node_keys: set[str],
+) -> dict[str, Any]:
+    return compute_frontier(
+        {"nodes": nodes, "edges": edges},
+        {"selectedPorts": selected_ports, "completedNodeKeys": completed_node_keys},
+    )
+
+
+def _next_frontier_node_keys(
+    *,
+    nodes: list[dict[str, Any]],
+    edges: list[dict[str, Any]],
+    selected_ports: dict[str, list[str]],
+    completed_node_keys: set[str],
+) -> list[str]:
+    frontier = _runtime_frontier(
+        nodes=nodes,
+        edges=edges,
+        selected_ports=selected_ports,
+        completed_node_keys=completed_node_keys,
+    )
+    return _frontier_node_keys(frontier, completed_node_keys=completed_node_keys)
+
+
+def _frontier_node_keys(frontier: Mapping[str, Any], *, completed_node_keys: set[str]) -> list[str]:
+    node_keys: list[str] = []
+    for node_key in frontier.get("runnableNodeKeys") or []:
+        text = str(node_key)
+        if text != "start" and text not in completed_node_keys:
+            node_keys.append(text)
+    return node_keys
+
+
+def _clone_context_for_frontier_node(context: ExecutionContext) -> ExecutionContext:
+    cloned = ExecutionContext()
+    cloned.load_scopes(context.scopes_snapshot())
+    for node_key, output in context.outputs_snapshot().items():
+        cloned.set_output(node_key, output)
+    return cloned
+
+
+def _completed_node_keys(node_runs: list[dict[str, Any]]) -> set[str]:
+    return {
+        str(row.get("node_key") or "")
+        for row in node_runs
+        if _node_run_status_is_completed(row.get("status")) and str(row.get("node_key") or "")
+    }
+
+
+def _selected_ports_from_completed_node_runs(
+    edges: list[dict[str, Any]],
+    nodes: list[dict[str, Any]],
+    node_runs: list[dict[str, Any]],
+) -> dict[str, list[str]]:
+    node_types = {str(node.get("node_key") or node.get("nodeKey") or ""): str(node.get("type") or "").upper() for node in nodes}
+    selected_ports: dict[str, list[str]] = {}
+    for node in nodes:
+        node_key = str(node.get("node_key") or node.get("nodeKey") or "")
+        node_type = str(node.get("type") or "").upper()
+        if node_key == "start" or node_type == "START":
+            if _runtime_v2_allows_default_fanout(dict(node.get("config") or {})):
+                selected_ports.setdefault(node_key, ["default"])
+    for row in node_runs:
+        if not _node_run_status_is_completed(row.get("status")):
+            continue
+        node_key = str(row.get("node_key") or "")
+        outputs = row.get("outputs")
+        if not node_key or not isinstance(outputs, dict):
+            continue
+        selected = _selected_port_keys_for_node(edges, node_key, outputs, node_types.get(node_key, ""))
+        if selected is not None:
+            selected_ports[node_key] = selected
+    return selected_ports
+
+
+def _selected_port_keys_for_node(
+    edges: list[dict[str, Any]],
+    source: str,
+    output: dict[str, Any],
+    node_type: str,
+) -> list[str] | None:
+    if node_type not in {"CONDITION", "INTENT_RECOGNITION"} and "route" not in output and "branch" not in output:
+        return None
+    target = _next_node_key(edges, source, output, node_type)
+    if target is None:
+        return []
+    for edge in edges:
+        if str(edge.get("source_node_key") or edge.get("sourceNodeKey") or "") != source:
+            continue
+        if str(edge.get("target_node_key") or edge.get("targetNodeKey") or "") != target:
+            continue
+        return [_edge_source_port_key(edge)]
+    return []
+
+
+def _edge_source_port_key(edge: Mapping[str, Any]) -> str:
+    value = edge.get("source_port_key")
+    if value is None:
+        value = edge.get("sourcePortKey")
+    text = str(value or "").strip()
+    if text:
+        return text
+    condition = edge.get("condition_expr")
+    if condition is None:
+        condition = edge.get("condition")
+    condition_text = str(condition or "").strip()
+    return condition_text or "default"
+
+
 def _resume_node_key_from_completed_runs(
     node_runs: list[dict[str, Any]],
     edges: list[dict[str, Any]],
@@ -1495,7 +2244,7 @@ def _resume_node_key_from_completed_runs(
     nodes_by_key = {str(node["node_key"]): node for node in nodes}
     completed_outputs: dict[str, dict[str, Any]] = {}
     for row in node_runs:
-        if str(row.get("status") or "").upper() != "COMPLETED":
+        if not _node_run_status_is_completed(row.get("status")):
             continue
         node_key = str(row.get("node_key") or "")
         outputs = row.get("outputs")
@@ -1509,6 +2258,20 @@ def _resume_node_key_from_completed_runs(
         node = nodes_by_key.get(current)
         current = _next_node_key(edges, current, output, str((node or {}).get("type") or "").upper())
     return current
+
+
+def _load_completed_node_run_outputs(context: ExecutionContext, node_runs: list[dict[str, Any]]) -> None:
+    for row in node_runs:
+        if not _node_run_status_is_completed(row.get("status")):
+            continue
+        node_key = str(row.get("node_key") or "")
+        outputs = row.get("outputs")
+        if node_key and isinstance(outputs, dict):
+            context.set_output(node_key, dict(outputs))
+
+
+def _node_run_status_is_completed(status: Any) -> bool:
+    return str(status or "").upper() in {"COMPLETED", "SUCCEEDED"}
 
 
 def _requires_llm_information_collection(config: dict[str, Any]) -> bool:
@@ -1546,6 +2309,19 @@ def _runtime_v2_allows_error_branching(node_type: str, config: dict[str, Any]) -
     return node_type in _RUNTIME_V2_ERROR_POLICY_NODE_TYPES and _runtime_v2_error_behavior(config) == "branch"
 
 
+def _runtime_v2_allows_default_fanout(config: dict[str, Any]) -> bool:
+    ports = config.get("ports")
+    if not isinstance(ports, list):
+        return False
+    for port in ports:
+        if not isinstance(port, Mapping):
+            continue
+        key = str(port.get("key") or port.get("portKey") or port.get("port_key") or "default")
+        if key == "default" and bool(port.get("allowFanOut") or port.get("allow_fan_out")):
+            return True
+    return False
+
+
 def _runtime_v2_has_server_ids(config: dict[str, Any]) -> bool:
     server_ids = config.get("serverIds") if "serverIds" in config else config.get("server_ids")
     if isinstance(server_ids, list):
@@ -1568,7 +2344,7 @@ def _runtime_v2_handled_error_output(
         return None
     config = dict(node.get("config") or {})
     error_behavior = _runtime_v2_error_behavior(config)
-    if error_behavior not in {"continue", "branch"}:
+    if error_behavior not in {"continue", "branch", "partial"}:
         return None
     error_message = str(exc)
     latency_ms = max(0, int((time.perf_counter() - started_at) * 1000))
@@ -1590,6 +2366,10 @@ def _runtime_v2_handled_error_output(
     if error_behavior == "branch":
         output["route"] = "error"
         evidence["route"] = "error"
+    if error_behavior == "partial":
+        output["partialSuccess"] = True
+        evidence["partialSuccess"] = True
+        evidence["failureStrategy"] = "partial_success"
     output_variable = str(config.get("outputVariable") or config.get("output_variable") or "").strip()
     if output_variable and output_variable not in output:
         output[output_variable] = ""
@@ -1609,6 +2389,81 @@ def _with_runtime_v2_execution_evidence_defaults(output: dict[str, Any]) -> dict
     return {**output, "evidence": enriched}
 
 
+def _with_runtime_v2_side_effect_protection(
+    output: dict[str, Any],
+    *,
+    run_id: int,
+    node_run_id: int,
+    node_key: str,
+    node_type: str,
+) -> dict[str, Any]:
+    normalized_type = node_type.upper()
+    if normalized_type not in _RUNTIME_V2_SIDE_EFFECT_PROTECTION:
+        return output
+    protection = _runtime_v2_side_effect_protection(
+        run_id=run_id,
+        node_run_id=node_run_id,
+        node_key=node_key,
+        node_type=normalized_type,
+    )
+    enriched = {**output, "sideEffectProtection": protection}
+    evidence = output.get("evidence")
+    if isinstance(evidence, Mapping):
+        enriched["evidence"] = {
+            **dict(evidence),
+            "idempotencyKey": protection["idempotencyKey"],
+            "sideEffectProtection": protection,
+        }
+    return enriched
+
+
+def _runtime_v2_side_effect_protection(
+    *,
+    run_id: int,
+    node_run_id: int,
+    node_key: str,
+    node_type: str,
+) -> dict[str, Any]:
+    effect_type, strategy = _RUNTIME_V2_SIDE_EFFECT_PROTECTION[node_type.upper()]
+    return {
+        "effectType": effect_type,
+        "strategy": strategy,
+        "idempotencyKey": f"runtime-v2:{run_id}:{node_key}:{node_type.upper()}",
+        "executionRecord": {
+            "runId": int(run_id),
+            "nodeRunId": int(node_run_id),
+            "nodeKey": node_key,
+            "nodeType": node_type.upper(),
+        },
+    }
+
+
+def _checkpoint_execution_input(input_data: dict[str, Any], output: dict[str, Any]) -> dict[str, Any]:
+    checkpoint_input = dict(input_data)
+    interrupt = output.get("interrupt")
+    if not isinstance(interrupt, Mapping):
+        return checkpoint_input
+    if str(interrupt.get("type") or "").upper() != "INFORMATION_COLLECTION":
+        return checkpoint_input
+    collected = interrupt.get("collected")
+    if not isinstance(collected, Mapping):
+        collected = output.get("collected")
+    if not isinstance(collected, Mapping):
+        return checkpoint_input
+    merged = _merge_checkpoint_collected(checkpoint_input.get("collected"), collected)
+    checkpoint_input["collected"] = merged
+    collection_key = str(interrupt.get("collectionKey") or "").strip()
+    if collection_key and collection_key != "collected":
+        checkpoint_input[collection_key] = _merge_checkpoint_collected(checkpoint_input.get(collection_key), merged)
+    return checkpoint_input
+
+
+def _merge_checkpoint_collected(previous: Any, current: Mapping[str, Any]) -> dict[str, Any]:
+    merged = dict(previous) if isinstance(previous, Mapping) else {}
+    merged.update(dict(current))
+    return merged
+
+
 def _format_runtime_event(event: dict[str, Any]) -> dict[str, Any]:
     payload = dict(event.get("payload") or {})
     formatted = {
@@ -1617,7 +2472,7 @@ def _format_runtime_event(event: dict[str, Any]) -> dict[str, Any]:
         "sequence": int(event["sequence"]),
         "type": str(event["event_type"]),
         "level": str(payload.get("level") or "L1"),
-        "source": str(payload.get("source") or "runtime_v2"),
+        "source": str(payload.get("source") or _source_from_owner_type(payload.get("ownerType"))),
         "actor": str(payload.get("actor") or "system"),
         "nodeId": str(event.get("node_key") or ""),
         "checkpointId": int(event["checkpoint_id"]) if event.get("checkpoint_id") else None,
@@ -1739,6 +2594,75 @@ def _runtime_result_retryable(run: Mapping[str, Any]) -> bool:
     return str(run.get("status") or "").upper() == "FAILED"
 
 
+def _runtime_cancel_phase(
+    *,
+    run_status: str,
+    had_checkpoint: bool,
+    cancelled_node_keys: list[str],
+    runtime_job: Mapping[str, Any] | None,
+) -> str:
+    if cancelled_node_keys:
+        return "running"
+    if had_checkpoint or run_status == "INTERRUPTED":
+        return "waiting"
+    if runtime_job is not None:
+        return "queued"
+    return "scheduled"
+
+
+def _runtime_external_call_type(node_type: str) -> str:
+    normalized = str(node_type or "").upper()
+    if normalized == "API_CALL":
+        return "API"
+    if normalized == "TOOL_CALL":
+        return "TOOL"
+    if normalized in _RUNTIME_V2_EXTERNAL_CALL_NODE_TYPES:
+        return normalized
+    return "EXTERNAL"
+
+
+def _runtime_external_provider_key(node_type: str, config: Mapping[str, Any]) -> str:
+    normalized = str(node_type or "").upper()
+    if normalized == "LLM":
+        return "llm:" + str(config.get("modelConfigId") or config.get("model_config_id") or config.get("model") or "default")
+    if normalized == "API_CALL":
+        return "api:" + str(config.get("resourceId") or config.get("resource_id") or config.get("url") or config.get("endpoint") or "direct")
+    if normalized == "TOOL_CALL":
+        return "tool:" + str(config.get("resourceId") or config.get("resource_id") or config.get("toolName") or config.get("name") or "default")
+    if normalized == "KNOWLEDGE":
+        return "knowledge:" + str(config.get("knowledgeBaseId") or config.get("knowledge_base_id") or "default")
+    return "external:" + normalized.lower()
+
+
+def _runtime_waiting_nodes(
+    run: Mapping[str, Any],
+    node_runs: list[dict[str, Any]],
+    checkpoint: Mapping[str, Any] | None,
+) -> list[dict[str, Any]]:
+    if str(run.get("status") or "").upper() not in {"RUNNING", "INTERRUPTED"}:
+        return []
+    latest_by_node_key: dict[str, dict[str, Any]] = {}
+    for row in node_runs:
+        node_key = str(row.get("node_key") or "")
+        if node_key:
+            latest_by_node_key[node_key] = row
+    checkpoint_node_key = str((checkpoint or {}).get("pending_node_key") or "")
+    waiting_nodes: list[dict[str, Any]] = []
+    for node_key, row in latest_by_node_key.items():
+        if _node_status(str(row.get("status") or "")) != "WAITING":
+            continue
+        payload: dict[str, Any] = {
+            "nodeKey": node_key,
+            "nodeType": str(row.get("node_type") or ""),
+            "status": "WAITING",
+            "nodeRunId": int(row["id"]),
+        }
+        if checkpoint_node_key == node_key and checkpoint is not None:
+            payload["checkpointId"] = int(checkpoint["id"])
+        waiting_nodes.append(payload)
+    return waiting_nodes
+
+
 def _positive_int(value: Any) -> int | None:
     try:
         parsed = int(value)
@@ -1754,9 +2678,11 @@ def _format_runtime_node_run(row: dict[str, Any], run_id: int) -> dict[str, Any]
         "nodeKey": str(row["node_key"]),
         "nodeType": str(row["node_type"]),
         "status": _node_status(str(row["status"])),
+        "selectionState": _runtime_node_selection_state(row),
         "inputs": dict(row.get("inputs") or {}),
         "outputs": dict(row.get("outputs") or {}),
         "error": str(row.get("error") or ""),
+        "elapsedMs": int(row.get("elapsed_ms") or 0),
         "eventsRef": f"/api/v1/runtime-runs/{run_id}/events",
         "createdAt": format_datetime(row["created_at"]),
         "finishedAt": format_datetime(row["finished_at"]) if row.get("finished_at") else None,
@@ -1774,6 +2700,41 @@ def _format_runtime_node_run(row: dict[str, Any], run_id: int) -> dict[str, Any]
     return formatted
 
 
+def _runtime_node_selection_state(row: Mapping[str, Any]) -> dict[str, Any]:
+    raw = row.get("selection_state")
+    if isinstance(raw, Mapping):
+        node_key = str(raw.get("nodeKey") or raw.get("node_key") or row.get("node_key") or "")
+        state = str(raw.get("state") or "").strip().lower()
+        selected = raw.get("selectedUpstreamNodeKeys") or raw.get("selected_upstream_node_keys") or []
+        skipped = raw.get("skippedUpstreamNodeKeys") or raw.get("skipped_upstream_node_keys") or []
+        return {
+            "nodeKey": node_key,
+            "state": state or _node_selection_state_from_status(str(row.get("status") or "")),
+            "selectedUpstreamNodeKeys": list(selected) if isinstance(selected, list) else [],
+            "skippedUpstreamNodeKeys": list(skipped) if isinstance(skipped, list) else [],
+            "reason": str(raw.get("reason") or ""),
+        }
+    return {
+        "nodeKey": str(row.get("node_key") or ""),
+        "state": _node_selection_state_from_status(str(row.get("status") or "")),
+        "selectedUpstreamNodeKeys": [],
+        "skippedUpstreamNodeKeys": [],
+        "reason": "",
+    }
+
+
+def _node_selection_state_from_status(status: str) -> str:
+    return {
+        "SUCCEEDED": "completed",
+        "COMPLETED": "completed",
+        "RUNNING": "running",
+        "FAILED": "failed",
+        "SKIPPED": "skipped",
+        "WAITING": "waiting",
+        "CANCELLED": "cancelled",
+    }.get(status.upper(), "pending")
+
+
 def _node_status(status: str) -> str:
     return {
         "SUCCEEDED": "COMPLETED",
@@ -1782,6 +2743,21 @@ def _node_status(status: str) -> str:
         "SKIPPED": "SKIPPED",
         "WAITING": "WAITING",
     }.get(status.upper(), status.upper())
+
+
+def _source_from_owner_type(owner_type: Any) -> str:
+    """Derive runtime event source from owner_type for fallback paths.
+
+    Spec 213.3.5h: CHATFLOW-owned runs emit 'chatflow_runtime_v2',
+    WORKFLOW-owned runs emit 'workflow_runtime_v2'. Returns 'runtime_v2'
+    when owner_type is absent (legacy compat).
+    """
+    if not owner_type:
+        return "runtime_v2"
+    normalized = str(owner_type).strip().upper()
+    if normalized in {"CHATFLOW", "WORKFLOW"}:
+        return f"{normalized.lower()}_runtime_v2"
+    return "runtime_v2"
 
 
 def _runtime_event_payload(**payload: Any) -> dict[str, Any]:

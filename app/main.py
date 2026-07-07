@@ -32,6 +32,7 @@ from app.modules.workflow.web.router import (
     chatflow_router,
     resource_router as workflow_resource_router,
     router as workflow_router,
+    runtime_jobs_router,
     runtime_v2_router,
 )
 
@@ -73,6 +74,7 @@ app.include_router(faq_router)
 app.include_router(workflow_router)
 app.include_router(chatflow_router)
 app.include_router(runtime_v2_router)
+app.include_router(runtime_jobs_router)
 app.include_router(workflow_resource_router)
 app.include_router(api_resource_router)
 app.include_router(tool_router)

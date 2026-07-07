@@ -1,4 +1,6 @@
 from collections.abc import Generator
+from dataclasses import dataclass
+from typing import Any
 
 import sqlalchemy as sa
 from sqlalchemy import MetaData, create_engine
@@ -23,9 +25,44 @@ class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
 
-def make_engine(database_url: str, echo: bool = False) -> Engine:
+@dataclass(frozen=True)
+class DatabasePoolConfig:
+    pool_size: int = 5
+    max_overflow: int = 10
+    pool_timeout: float = 30.0
+    pool_recycle: int = 1800
+    pool_pre_ping: bool = True
+
+    @classmethod
+    def from_settings(cls, settings: Any) -> "DatabasePoolConfig":
+        return cls(
+            pool_size=int(getattr(settings, "database_pool_size", cls.pool_size)),
+            max_overflow=int(getattr(settings, "database_max_overflow", cls.max_overflow)),
+            pool_timeout=float(getattr(settings, "database_pool_timeout_seconds", cls.pool_timeout)),
+            pool_recycle=int(getattr(settings, "database_pool_recycle_seconds", cls.pool_recycle)),
+            pool_pre_ping=bool(getattr(settings, "database_pool_pre_ping", cls.pool_pre_ping)),
+        )
+
+    def sqlalchemy_kwargs(self) -> dict[str, Any]:
+        return {
+            "pool_size": self.pool_size,
+            "max_overflow": self.max_overflow,
+            "pool_timeout": self.pool_timeout,
+            "pool_recycle": self.pool_recycle,
+            "pool_pre_ping": self.pool_pre_ping,
+        }
+
+
+_ENGINE: Engine | None = None
+_ENGINE_CACHE_KEY: tuple[Any, ...] | None = None
+_SESSION_FACTORY: sessionmaker[Session] | None = None
+_SESSION_FACTORY_ENGINE: Engine | None = None
+
+
+def make_engine(database_url: str, echo: bool = False, pool_config: DatabasePoolConfig | None = None) -> Engine:
     assert_mysql8_database_url(database_url)
-    engine = create_engine(database_url, echo=echo, future=True)
+    pool_kwargs = pool_config.sqlalchemy_kwargs() if pool_config is not None else {}
+    engine = create_engine(database_url, echo=echo, future=True, **pool_kwargs)
     assert_mysql8_connection(engine)
     return engine
 
@@ -35,11 +72,36 @@ def make_session_factory(engine: Engine) -> sessionmaker[Session]:
 
 
 def get_engine() -> Engine:
-    return make_engine(get_settings().database_url)
+    global _ENGINE, _ENGINE_CACHE_KEY
+    settings = get_settings()
+    pool_config = DatabasePoolConfig.from_settings(settings)
+    cache_key = (settings.database_url, pool_config)
+    if _ENGINE is not None and _ENGINE_CACHE_KEY == cache_key:
+        return _ENGINE
+    reset_engine_cache()
+    _ENGINE = make_engine(settings.database_url, pool_config=pool_config)
+    _ENGINE_CACHE_KEY = cache_key
+    return _ENGINE
 
 
 def get_session_factory() -> sessionmaker[Session]:
-    return make_session_factory(get_engine())
+    global _SESSION_FACTORY, _SESSION_FACTORY_ENGINE
+    engine = get_engine()
+    if _SESSION_FACTORY is not None and _SESSION_FACTORY_ENGINE is engine:
+        return _SESSION_FACTORY
+    _SESSION_FACTORY = make_session_factory(engine)
+    _SESSION_FACTORY_ENGINE = engine
+    return _SESSION_FACTORY
+
+
+def reset_engine_cache(*, dispose: bool = True) -> None:
+    global _ENGINE, _ENGINE_CACHE_KEY, _SESSION_FACTORY, _SESSION_FACTORY_ENGINE
+    if dispose and _ENGINE is not None and hasattr(_ENGINE, "dispose"):
+        _ENGINE.dispose()
+    _ENGINE = None
+    _ENGINE_CACHE_KEY = None
+    _SESSION_FACTORY = None
+    _SESSION_FACTORY_ENGINE = None
 
 
 def initialise_database() -> None:
@@ -122,6 +184,11 @@ def _ensure_compatible_schema(engine: Engine) -> None:
         if "runtime_jobs" in table_names
         else set()
     )
+    workflow_node_run_columns = (
+        {column["name"] for column in inspector.get_columns("workflow_node_run")}
+        if "workflow_node_run" in table_names
+        else set()
+    )
 
     with engine.begin() as connection:
         if "flow_type" not in workflow_columns:
@@ -202,6 +269,30 @@ def _ensure_compatible_schema(engine: Engine) -> None:
             )
         if "runtime_jobs" in table_names and "last_heartbeat_at" not in runtime_job_columns:
             connection.execute(sa.text("ALTER TABLE runtime_jobs ADD COLUMN last_heartbeat_at DATETIME"))
+        if "workflow_node_run" in table_names and "selection_state" not in workflow_node_run_columns:
+            connection.execute(sa.text("ALTER TABLE workflow_node_run ADD COLUMN selection_state JSON"))
+            connection.execute(
+                sa.text(
+                    """
+                    UPDATE workflow_node_run
+                    SET selection_state = JSON_OBJECT(
+                        'nodeKey', node_key,
+                        'state',
+                        CASE UPPER(status)
+                            WHEN 'SUCCEEDED' THEN 'completed'
+                            WHEN 'COMPLETED' THEN 'completed'
+                            WHEN 'WAITING' THEN 'waiting'
+                            WHEN 'RUNNING' THEN 'running'
+                            WHEN 'FAILED' THEN 'failed'
+                            WHEN 'CANCELLED' THEN 'cancelled'
+                            WHEN 'SKIPPED' THEN 'skipped'
+                            ELSE 'pending'
+                        END
+                    )
+                    WHERE selection_state IS NULL
+                    """
+                )
+            )
 
 
 def _create_index_if_missing(

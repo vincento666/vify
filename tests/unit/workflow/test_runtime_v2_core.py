@@ -1,9 +1,11 @@
 import unittest
 import time
+from datetime import datetime
 
 from app.modules.workflow.domain.runtime_v2 import (
     RuntimeV2CompatibilityChecker,
     RuntimeV2RefBuilder,
+    _format_runtime_node_run,
     _runtime_v2_handled_error_output,
 )
 
@@ -36,6 +38,24 @@ class RuntimeV2CoreTest(unittest.TestCase):
         self.assertEqual(result["fallbackScope"], "whole_graph")
         self.assertIn({"nodeKey": "custom_1", "nodeType": "CUSTOM_PLUGIN"}, result["unsupportedNodes"])
         self.assertIn("branching_edges", result["unsupportedPatterns"])
+
+    def test_compatibility_checker_accepts_explicit_default_fanout(self) -> None:
+        result = RuntimeV2CompatibilityChecker.check(
+            nodes=[
+                {"nodeKey": "start", "type": "START", "config": {"ports": [{"key": "default", "allowFanOut": True}]}},
+                {"nodeKey": "message_a", "type": "MESSAGE", "config": {"content": "a"}},
+                {"nodeKey": "message_b", "type": "MESSAGE", "config": {"content": "b"}},
+                {"nodeKey": "end", "type": "END", "config": {"outputVariable": "final"}},
+            ],
+            edges=[
+                {"sourceNodeKey": "start", "targetNodeKey": "message_a"},
+                {"sourceNodeKey": "start", "targetNodeKey": "message_b"},
+                {"sourceNodeKey": "message_a", "targetNodeKey": "end"},
+                {"sourceNodeKey": "message_b", "targetNodeKey": "end"},
+            ],
+        )
+
+        self.assertTrue(result["supported"], result)
 
     def test_compatibility_checker_accepts_runtime_v2_resource_nodes_and_rejects_unsafe_api_call(self) -> None:
         supported = RuntimeV2CompatibilityChecker.check(
@@ -147,6 +167,35 @@ class RuntimeV2CoreTest(unittest.TestCase):
         self.assertFalse(result["supported"])
         self.assertIn("node_endpoints_incomplete", result["unsupportedPatterns"])
         self.assertIn("message_1.default", result["branchValidationErrors"])
+
+    def test_runtime_node_run_projection_exposes_selection_state_without_changing_observability_state(self) -> None:
+        projected = _format_runtime_node_run(
+            {
+                "id": 41,
+                "node_key": "collect_1",
+                "node_type": "HUMAN_INPUT",
+                "status": "WAITING",
+                "selection_state": {
+                    "nodeKey": "collect_1",
+                    "state": "waiting",
+                    "selectedUpstreamNodeKeys": ["answer"],
+                    "skippedUpstreamNodeKeys": ["fallback"],
+                    "reason": "implicit join waits only for selected upstreams",
+                },
+                "inputs": {},
+                "outputs": {},
+                "error": "",
+                "created_at": datetime(2026, 7, 4, 1, 0, 0),
+                "finished_at": None,
+            },
+            99,
+        )
+
+        self.assertEqual(projected["status"], "WAITING")
+        self.assertEqual(projected["selectionState"]["state"], "waiting")
+        self.assertEqual(projected["selectionState"]["selectedUpstreamNodeKeys"], ["answer"])
+        self.assertEqual(projected["selectionState"]["skippedUpstreamNodeKeys"], ["fallback"])
+        self.assertEqual(projected["observability"]["nodeState"], "WAITING")
 
     def test_error_policy_output_is_standardized_for_all_failure_node_types(self) -> None:
         failure_node_types = ["LLM", "API_CALL", "TOOL_CALL", "CODE", "EXECUTE_WORKFLOW", "AGENT_CALL"]

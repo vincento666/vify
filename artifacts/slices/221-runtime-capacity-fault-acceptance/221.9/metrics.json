@@ -1,0 +1,73 @@
+{
+  "generatedAt": "2026-07-04",
+  "source": "artifacts/slices/221-runtime-capacity-fault-acceptance/221.9/load-metrics.txt",
+  "resourceUsage": "not_separately_captured",
+  "rows": [
+    {
+      "slice": "221.1",
+      "scenario": "local_concurrent_runs",
+      "concurrency": 20,
+      "p50Ms": 1363.56,
+      "p95Ms": 1399.01,
+      "p99Ms": 1401.16,
+      "events": 200,
+      "queueState": "request_thread_completion",
+      "errorRate": 0
+    },
+    {
+      "slice": "221.1",
+      "scenario": "local_concurrent_runs",
+      "concurrency": 35,
+      "p50Ms": 2176.87,
+      "p95Ms": 2215.29,
+      "p99Ms": 2216.09,
+      "events": 350,
+      "queueState": "request_thread_completion",
+      "errorRate": 0
+    },
+    {
+      "slice": "221.1",
+      "scenario": "local_concurrent_runs",
+      "concurrency": 50,
+      "p50Ms": 2993.84,
+      "p95Ms": 3060.66,
+      "p99Ms": 3067.31,
+      "events": 500,
+      "queueState": "request_thread_completion",
+      "errorRate": 0
+    },
+    {
+      "slice": "221.2",
+      "scenario": "local_mid_pressure",
+      "concurrency": 100,
+      "p50Ms": 6902.64,
+      "p95Ms": 7395.29,
+      "p99Ms": 7428.01,
+      "events": 1000,
+      "queueState": "queued",
+      "errorRate": 0
+    },
+    {
+      "slice": "221.2",
+      "scenario": "local_mid_pressure",
+      "concurrency": 150,
+      "p50Ms": 10151.38,
+      "p95Ms": 10832.26,
+      "p99Ms": 10899.18,
+      "events": 1500,
+      "queueState": "queued",
+      "errorRate": 0
+    },
+    {
+      "slice": "221.2",
+      "scenario": "local_mid_pressure",
+      "concurrency": 200,
+      "p50Ms": 13521.22,
+      "p95Ms": 14468.03,
+      "p99Ms": 14592.46,
+      "events": 2000,
+      "queueState": "queued",
+      "errorRate": 0
+    }
+  ]
+}

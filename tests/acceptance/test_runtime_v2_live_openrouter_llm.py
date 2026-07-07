@@ -48,7 +48,7 @@ class RuntimeV2LiveOpenRouterLlmAcceptanceTest(unittest.TestCase):
             published = client.post(f"/api/v1/workflows/{workflow['id']}/publish")
             self.assertEqual(published.status_code, 200, published.text)
             started = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs-v2",
+                f"/api/v1/workflows/{workflow['id']}/runs",
                 json={"input": {"userMessage": "runtime v2 live acceptance"}},
             ).json()["data"]
             terminal = _wait_for_result(client, started["resultRef"], "SUCCEEDED", timeout=60.0)
@@ -204,7 +204,7 @@ def _write_artifact(
                 "# Runtime V2 OpenRouter Live LLM Acceptance",
                 "",
                 "- Slice: 136.1 runtime v2 live provider gate",
-                "- Entry: `/api/v1/workflows/{id}/runs-v2`",
+                "- Entry: `/api/v1/workflows/{id}/runs`",
                 f"- Base URL: `{base_url}`",
                 f"- Model: `{model}`",
                 "- API key: runtime environment only, not recorded",

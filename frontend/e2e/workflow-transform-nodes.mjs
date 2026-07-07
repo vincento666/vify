@@ -1,4 +1,5 @@
 import { chromium } from 'playwright'
+import { waitForRuntimeResult } from './runtime-run-helpers.mjs'
 
 const baseUrl = process.env.HIFY_E2E_BASE_URL || 'http://127.0.0.1:5173'
 const screenshotPath = process.env.HIFY_E2E_SCREENSHOT
@@ -99,12 +100,13 @@ try {
     }),
     'create transform workflow',
   )
-  const workflowRun = await unwrap(
+  const workflowStarted = await unwrap(
     await page.request.post(`${baseUrl}/api/v1/workflows/${workflow.id}/runs`, {
       data: { input: { first: 'Ada', last: 'Lovelace', score: 97 } },
     }),
     'run transform workflow',
   )
+  const workflowRun = await waitForRuntimeResult(page, baseUrl, workflowStarted, 'transform workflow')
   assert(workflowRun.output.final === 'Ada Lovelace/97/A', `Unexpected workflow output ${JSON.stringify(workflowRun.output)}`)
 
   await page.goto(`${baseUrl}/workflows/${workflow.id}/canvas`, { waitUntil: 'networkidle' })

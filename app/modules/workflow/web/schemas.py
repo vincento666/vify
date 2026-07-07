@@ -91,6 +91,17 @@ class WorkflowResumeRequest(BaseModel):
     idempotency_key: str | None = Field(default=None, alias="idempotencyKey")
 
 
+class WorkflowCancelRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    reason: str = "cancelled by operator"
+    deadline_ms: int = Field(default=1000, alias="deadlineMs", ge=0, le=300000)
+
+
+class RuntimeJobActionRequest(BaseModel):
+    reason: str = ""
+
+
 class WorkflowRunResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 

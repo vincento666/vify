@@ -1,0 +1,17 @@
+221.3 RED diagnostic
+
+Command:
+/opt/homebrew/bin/rtk uv run pytest tests/contract/runtime_jobs/test_multi_worker_no_duplicate.py -q
+
+Initial implementation:
+- 10 workers claimed and completed 200 runtime jobs.
+- RuntimeJobRepository.claim_next already retried deadlock contention.
+- RuntimeJobRepository.complete did not retry MySQL deadlock / serialization failures.
+
+Failure:
+- RuntimeJobRepository.complete raised:
+  sqlalchemy.exc.OperationalError: (pymysql.err.OperationalError) (1213, 'Deadlock found when trying to get lock; try restarting transaction')
+
+Resolution:
+- Added bounded retry around complete() for MySQL errno 1213 / SQLSTATE 40001 / deadlock messages.
+- Each retry rolls back the failed transaction and uses a short bounded backoff.

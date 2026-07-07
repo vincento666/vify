@@ -1,7 +1,8 @@
 import json
 import threading
 import time
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
+from datetime import datetime
 from functools import lru_cache
 from typing import Any
 
@@ -26,6 +27,7 @@ from app.modules.mcp.infra.repository import McpServerRepository
 from app.modules.observe.domain.composer_run_debug import build_composer_run_debug
 from app.modules.observe.web.router import ObserveService
 from app.modules.provider.api.facade import ProviderModelFacade
+from app.modules.runtime.domain.concurrency_limits import RuntimeConcurrencyGate, RuntimeConcurrencyLimits
 from app.modules.workflow.domain.service import WorkflowService
 from app.modules.workflow.domain.runtime_v2 import (
     ChatflowRuntimeV2Service,
@@ -43,7 +45,7 @@ from app.modules.workflow.infra.realtime.redis_streams import (
     RuntimeEventStreamBus,
 )
 from app.modules.workflow.infra.repository import WorkflowRepository
-from app.modules.workflow.infra.runtime_job_repository import RuntimeJobRepository
+from app.modules.workflow.infra.runtime_job_repository import RuntimeJobRepository, format_runtime_ops_job
 from app.modules.workflow.runtime_job_worker import (
     build_chatflow_runtime_job_worker,
     build_workflow_runtime_job_worker,
@@ -53,6 +55,8 @@ from app.modules.workflow.web.schemas import (
     ChatflowChannelUpdateRequest,
     ChatflowMessageRequest,
     WorkflowCreateRequest,
+    WorkflowCancelRequest,
+    RuntimeJobActionRequest,
     WorkflowNodeRunRequest,
     WorkflowResumeRequest,
     WorkflowRunRequest,
@@ -63,6 +67,7 @@ router = APIRouter(prefix="/api/v1/workflows", tags=["workflows"])
 chatflow_router = APIRouter(prefix="/api/v1/chatflows", tags=["chatflows"])
 resource_router = APIRouter(prefix="/api/v1/workflow-resources", tags=["workflow-resources"])
 runtime_v2_router = APIRouter(prefix="/api/v1/runtime-runs", tags=["runtime-runs"])
+runtime_jobs_router = APIRouter(prefix="/api/v1/runtime-jobs", tags=["runtime-jobs"])
 _RUNTIME_V2_INLINE_COMPLETION_WAIT_MS = 450
 
 
@@ -162,6 +167,7 @@ def get_chatflow_runtime_v2_service(
     return ChatflowRuntimeV2Service(
         WorkflowRepository(session),
         ChatflowStateRepository(session, event_stream_bus=event_stream_bus),
+        runtime_job_repository=RuntimeJobRepository(session),
         publish_repository=WorkflowPublishRepository(session),
         knowledge_facade=KnowledgeFacade(session),
         llm_completer_resolver=llm_service.runtime_v2_llm_completer,
@@ -183,6 +189,7 @@ def get_workflow_runtime_v2_service(
         WorkflowRepository(session),
         ChatflowStateRepository(session, event_stream_bus=event_stream_bus),
         WorkflowPublishRepository(session),
+        runtime_job_repository=RuntimeJobRepository(session),
         knowledge_facade=KnowledgeFacade(session),
         llm_completer_resolver=llm_service.runtime_v2_llm_completer,
         agent_invoker_resolver=llm_service.runtime_v2_agent_invoker,
@@ -243,6 +250,8 @@ def _start_workflow_runtime_v2_gateway(
     service: WorkflowRuntimeV2Service,
     event_stream_bus: RuntimeEventStreamBus | None,
     request_context: RequestContext | None = None,
+    request_thread_completion_enabled: bool = True,
+    concurrency_limits: RuntimeConcurrencyLimits | None = None,
 ) -> dict[str, Any]:
     data = RuntimeInvocationGateway(service).start_only(
         owner_id=workflow_id,
@@ -269,20 +278,45 @@ def _start_workflow_runtime_v2_gateway(
             },
             request_context=request_context,
         )
-        job = RuntimeJobRepository(session).enqueue(
+        runtime_job_repository = RuntimeJobRepository(session)
+        queue_context = _runtime_v2_queue_context(session, data, request_context)
+        queue_decision = RuntimeConcurrencyGate(concurrency_limits or RuntimeConcurrencyLimits()).decide(
+            runtime_job_repository.list_active_for_queue_gate(),
+            owner_type="WORKFLOW",
+            owner_id=workflow_id,
+            tenant_id=queue_context["tenantId"],
+            provider_keys=queue_context["providerKeys"],
+        )
+        data["queueState"] = queue_decision.to_payload()
+        if not queue_decision.admitted:
+            cancelled = service.cancel_run(
+                int(data["runId"]),
+                reason=f"runtime queue {queue_decision.status}: {queue_decision.reason}",
+            )
+            data["status"] = cancelled["status"]
+            return data
+        job = runtime_job_repository.enqueue(
             run_id=int(data["runId"]),
             owner_type="WORKFLOW",
             owner_id=workflow_id,
             job_type="runtime_v2_completion",
-            payload={"workflowId": workflow_id, "versionId": data.get("versionId")},
+            payload=_runtime_v2_job_payload(
+                data,
+                owner_type="WORKFLOW",
+                owner_id=workflow_id,
+                idempotency_key=request.idempotency_key,
+                workflowId=workflow_id,
+                **queue_context,
+            ),
         )
-        _start_runtime_v2_completion_thread(
-            session,
-            int(data["runId"]),
-            owner_type="WORKFLOW",
-            job_id=int(job["id"]),
-            event_stream_bus=event_stream_bus,
-        )
+        if request_thread_completion_enabled and queue_decision.level == "none":
+            _start_runtime_v2_completion_thread(
+                session,
+                int(data["runId"]),
+                owner_type="WORKFLOW",
+                job_id=int(job["id"]),
+                event_stream_bus=event_stream_bus,
+            )
     return data
 
 
@@ -294,6 +328,7 @@ def run_workflow(
     service: WorkflowRuntimeV2Service = Depends(get_workflow_runtime_v2_service),
     event_stream_bus: RuntimeEventStreamBus | None = Depends(get_runtime_event_stream_bus),
     request_context: RequestContext = Depends(get_request_context),
+    settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     return success(
         _start_workflow_runtime_v2_gateway(
@@ -303,6 +338,8 @@ def run_workflow(
             service=service,
             event_stream_bus=event_stream_bus,
             request_context=request_context,
+            request_thread_completion_enabled=settings.runtime_v2_request_thread_completion_enabled,
+            concurrency_limits=_runtime_v2_concurrency_limits(settings),
         )
     )
 
@@ -321,6 +358,7 @@ def stream_workflow_run(
     service: WorkflowRuntimeV2Service = Depends(get_workflow_runtime_v2_service),
     event_stream_bus: RuntimeEventStreamBus | None = Depends(get_runtime_event_stream_bus),
     request_context: RequestContext = Depends(get_request_context),
+    settings: Settings = Depends(get_settings),
 ) -> StreamingResponse:
     data = _start_workflow_runtime_v2_gateway(
         workflow_id,
@@ -329,6 +367,8 @@ def stream_workflow_run(
         service=service,
         event_stream_bus=event_stream_bus,
         request_context=request_context,
+        request_thread_completion_enabled=settings.runtime_v2_request_thread_completion_enabled,
+        concurrency_limits=_runtime_v2_concurrency_limits(settings),
     )
     return StreamingResponse(
         _iter_runtime_v2_sse(
@@ -351,27 +391,6 @@ def run_workflow_legacy(
     service: WorkflowService = Depends(get_workflow_service),
 ) -> dict[str, Any]:
     return success(service.execute(workflow_id, request))
-
-
-@router.post("/{workflow_id}/runs-v2")
-def run_workflow_v2(
-    workflow_id: int,
-    request: WorkflowRunRequest,
-    session: Session = Depends(get_session),
-    service: WorkflowRuntimeV2Service = Depends(get_workflow_runtime_v2_service),
-    event_stream_bus: RuntimeEventStreamBus | None = Depends(get_runtime_event_stream_bus),
-    request_context: RequestContext = Depends(get_request_context),
-) -> dict[str, Any]:
-    return success(
-        _start_workflow_runtime_v2_gateway(
-            workflow_id,
-            request,
-            session=session,
-            service=service,
-            event_stream_bus=event_stream_bus,
-            request_context=request_context,
-        )
-    )
 
 
 @router.get("/{workflow_id}/runs/{run_id}/debug")
@@ -487,6 +506,7 @@ def run_chatflow(
     service: ChatflowRuntimeV2Service = Depends(get_chatflow_runtime_v2_service),
     event_stream_bus: RuntimeEventStreamBus | None = Depends(get_runtime_event_stream_bus),
     request_context: RequestContext = Depends(get_request_context),
+    settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     return success(
         _start_chatflow_runtime_v2_gateway(
@@ -496,6 +516,8 @@ def run_chatflow(
             service=service,
             event_stream_bus=event_stream_bus,
             request_context=request_context,
+            request_thread_completion_enabled=settings.runtime_v2_request_thread_completion_enabled,
+            concurrency_limits=_runtime_v2_concurrency_limits(settings),
         )
     )
 
@@ -514,6 +536,7 @@ def stream_chatflow_run(
     service: ChatflowRuntimeV2Service = Depends(get_chatflow_runtime_v2_service),
     event_stream_bus: RuntimeEventStreamBus | None = Depends(get_runtime_event_stream_bus),
     request_context: RequestContext = Depends(get_request_context),
+    settings: Settings = Depends(get_settings),
 ) -> StreamingResponse:
     data = _start_chatflow_runtime_v2_gateway(
         chatflow_id,
@@ -522,6 +545,8 @@ def stream_chatflow_run(
         service=service,
         event_stream_bus=event_stream_bus,
         request_context=request_context,
+        request_thread_completion_enabled=settings.runtime_v2_request_thread_completion_enabled,
+        concurrency_limits=_runtime_v2_concurrency_limits(settings),
     )
     return StreamingResponse(
         _iter_runtime_v2_sse(
@@ -550,27 +575,6 @@ def run_chatflow_legacy(
     return success(data)
 
 
-@chatflow_router.post("/{chatflow_id}/runs-v2")
-def run_chatflow_v2(
-    chatflow_id: int,
-    request: WorkflowRunRequest,
-    session: Session = Depends(get_session),
-    service: ChatflowRuntimeV2Service = Depends(get_chatflow_runtime_v2_service),
-    event_stream_bus: RuntimeEventStreamBus | None = Depends(get_runtime_event_stream_bus),
-    request_context: RequestContext = Depends(get_request_context),
-) -> dict[str, Any]:
-    return success(
-        _start_chatflow_runtime_v2_gateway(
-            chatflow_id,
-            request,
-            session=session,
-            service=service,
-            event_stream_bus=event_stream_bus,
-            request_context=request_context,
-        )
-    )
-
-
 def _start_chatflow_runtime_v2_gateway(
     chatflow_id: int,
     request: WorkflowRunRequest,
@@ -579,6 +583,8 @@ def _start_chatflow_runtime_v2_gateway(
     service: ChatflowRuntimeV2Service,
     event_stream_bus: RuntimeEventStreamBus | None,
     request_context: RequestContext | None = None,
+    request_thread_completion_enabled: bool = True,
+    concurrency_limits: RuntimeConcurrencyLimits | None = None,
 ) -> dict[str, Any]:
     data = RuntimeInvocationGateway(service).start_only(
         owner_id=chatflow_id,
@@ -607,20 +613,45 @@ def _start_chatflow_runtime_v2_gateway(
             },
             request_context=request_context,
         )
-        job = RuntimeJobRepository(session).enqueue(
+        runtime_job_repository = RuntimeJobRepository(session)
+        queue_context = _runtime_v2_queue_context(session, data, request_context)
+        queue_decision = RuntimeConcurrencyGate(concurrency_limits or RuntimeConcurrencyLimits()).decide(
+            runtime_job_repository.list_active_for_queue_gate(),
+            owner_type="CHATFLOW",
+            owner_id=chatflow_id,
+            tenant_id=queue_context["tenantId"],
+            provider_keys=queue_context["providerKeys"],
+        )
+        data["queueState"] = queue_decision.to_payload()
+        if not queue_decision.admitted:
+            cancelled = service.cancel_run(
+                int(data["runId"]),
+                reason=f"runtime queue {queue_decision.status}: {queue_decision.reason}",
+            )
+            data["status"] = cancelled["status"]
+            return data
+        job = runtime_job_repository.enqueue(
             run_id=int(data["runId"]),
             owner_type="CHATFLOW",
             owner_id=chatflow_id,
             job_type="runtime_v2_completion",
-            payload={"chatflowId": chatflow_id, "versionId": data.get("versionId")},
+            payload=_runtime_v2_job_payload(
+                data,
+                owner_type="CHATFLOW",
+                owner_id=chatflow_id,
+                idempotency_key=request.idempotency_key,
+                chatflowId=chatflow_id,
+                **queue_context,
+            ),
         )
-        _start_runtime_v2_completion_thread(
-            session,
-            int(data["runId"]),
-            owner_type="CHATFLOW",
-            job_id=int(job["id"]),
-            event_stream_bus=event_stream_bus,
-        )
+        if request_thread_completion_enabled and queue_decision.level == "none":
+            _start_runtime_v2_completion_thread(
+                session,
+                int(data["runId"]),
+                owner_type="CHATFLOW",
+                job_id=int(job["id"]),
+                event_stream_bus=event_stream_bus,
+            )
     return data
 
 
@@ -631,6 +662,7 @@ def send_chatflow_message(
     session: Session = Depends(get_session),
     service: ChatflowRuntimeV2Service = Depends(get_chatflow_runtime_v2_service),
     event_stream_bus: RuntimeEventStreamBus | None = Depends(get_runtime_event_stream_bus),
+    settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     input_data = _chatflow_message_runtime_input(chatflow_id, request)
     data = service.start_run(chatflow_id, input_data, request.idempotency_key, request.version_id)
@@ -641,20 +673,26 @@ def send_chatflow_message(
             owner_type="CHATFLOW",
             owner_id=chatflow_id,
             job_type="runtime_v2_completion",
-            payload={
-                "chatflowId": chatflow_id,
-                "versionId": data.get("versionId"),
-                "entrypoint": "messages",
-            },
+            payload=_runtime_v2_job_payload(
+                data,
+                owner_type="CHATFLOW",
+                owner_id=chatflow_id,
+                idempotency_key=request.idempotency_key,
+                chatflowId=chatflow_id,
+                entrypoint="messages",
+            ),
         )
         job_id = int(job["id"])
-        if request.wait_timeout_ms >= _RUNTIME_V2_INLINE_COMPLETION_WAIT_MS:
+        if (
+            settings.runtime_v2_request_thread_completion_enabled
+            and request.wait_timeout_ms >= _RUNTIME_V2_INLINE_COMPLETION_WAIT_MS
+        ):
             build_chatflow_runtime_job_worker(
                 session,
                 worker_id=f"inline-chatflow-message-{data['runId']}-{time.time_ns()}",
                 event_stream_bus=event_stream_bus,
             ).run_once(job_id=job_id)
-        else:
+        elif settings.runtime_v2_request_thread_completion_enabled:
             _start_runtime_v2_completion_thread(
                 session,
                 int(data["runId"]),
@@ -813,6 +851,167 @@ def resume_chatflow_run(
     return success(service.resume_run(chatflow_id, run_id, request))
 
 
+@runtime_v2_router.get("")
+def list_runtime_v2_runs(
+    owner_type: str | None = Query(default=None, alias="ownerType"),
+    state: str | None = Query(default=None),
+    tenant_id: str | None = Query(default=None, alias="tenantId"),
+    created_from: datetime | None = Query(default=None, alias="createdFrom"),
+    created_to: datetime | None = Query(default=None, alias="createdTo"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, alias="pageSize", ge=1, le=100),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    runs, total = WorkflowRepository(session).list_runtime_runs(
+        page=page,
+        page_size=page_size,
+        owner_type=owner_type,
+        state=state,
+        tenant_id=tenant_id,
+        created_from=created_from,
+        created_to=created_to,
+    )
+    return success({"list": runs, "total": total, "page": page, "pageSize": page_size})
+
+
+@runtime_jobs_router.get("")
+def list_runtime_jobs(
+    owner_type: str | None = Query(default=None, alias="ownerType"),
+    status: str | None = Query(default=None),
+    tenant_id: str | None = Query(default=None, alias="tenantId"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, alias="pageSize", ge=1, le=100),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    jobs, total = RuntimeJobRepository(session).list_jobs(
+        page=page,
+        page_size=page_size,
+        owner_type=owner_type,
+        status=status,
+        tenant_id=tenant_id,
+    )
+    return success({"list": jobs, "total": total, "page": page, "pageSize": page_size})
+
+
+@runtime_jobs_router.get("/dlq")
+def list_runtime_jobs_dlq(
+    owner_type: str | None = Query(default=None, alias="ownerType"),
+    tenant_id: str | None = Query(default=None, alias="tenantId"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, alias="pageSize", ge=1, le=100),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    jobs, total = RuntimeJobRepository(session).list_jobs(
+        page=page,
+        page_size=page_size,
+        owner_type=owner_type,
+        status="FAILED",
+        tenant_id=tenant_id,
+    )
+    return success({"list": jobs, "total": total, "page": page, "pageSize": page_size})
+
+
+@runtime_jobs_router.post("/{job_id}/retry")
+def retry_runtime_job_dlq(
+    job_id: int,
+    session: Session = Depends(get_session),
+    request_context: RequestContext = Depends(get_request_context),
+) -> dict[str, Any]:
+    result = _run_runtime_job_action(session, job_id, "retry")
+    _record_runtime_ops_audit(
+        session,
+        action="RUNTIME_OPS_RETRY_JOB",
+        resource_type="runtime_job",
+        resource_id=job_id,
+        metadata={"jobId": job_id, "resultStatus": result.get("status")},
+        request_context=request_context,
+    )
+    return success(result)
+
+
+@runtime_jobs_router.post("/{job_id}/ignore")
+def ignore_runtime_job_dlq(
+    job_id: int,
+    request: RuntimeJobActionRequest | None = None,
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    reason = request.reason if request is not None and request.reason else "operator ignored"
+    return success(_run_runtime_job_action(session, job_id, "ignore", reason=reason))
+
+
+@runtime_jobs_router.post("/{job_id}/mark-resolved")
+def mark_runtime_job_dlq_resolved(
+    job_id: int,
+    request: RuntimeJobActionRequest | None = None,
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    reason = request.reason if request is not None and request.reason else "operator marked resolved"
+    return success(_run_runtime_job_action(session, job_id, "mark-resolved", reason=reason))
+
+
+@runtime_jobs_router.post("/{job_id}/reopen")
+def reopen_runtime_job_dlq(
+    job_id: int,
+    request: RuntimeJobActionRequest | None = None,
+    session: Session = Depends(get_session),
+    request_context: RequestContext = Depends(get_request_context),
+) -> dict[str, Any]:
+    reason = request.reason if request is not None and request.reason else "operator reopened"
+    result = _run_runtime_job_action(session, job_id, "reopen", reason=reason)
+    _record_runtime_ops_audit(
+        session,
+        action="RUNTIME_OPS_REOPEN_DLQ",
+        resource_type="runtime_job",
+        resource_id=job_id,
+        metadata={"jobId": job_id, "reason": reason, "resultStatus": result.get("status")},
+        request_context=request_context,
+    )
+    return success(result)
+
+
+def _run_runtime_job_action(
+    session: Session,
+    job_id: int,
+    action: str,
+    *,
+    reason: str = "",
+) -> dict[str, Any]:
+    repository = RuntimeJobRepository(session)
+    try:
+        if action == "retry":
+            return format_runtime_ops_job(repository.retry_dlq(job_id))
+        if action == "ignore":
+            return format_runtime_ops_job(repository.ignore_dlq(job_id, reason=reason or "operator ignored"))
+        if action == "mark-resolved":
+            return format_runtime_ops_job(
+                repository.mark_dlq_resolved(job_id, reason=reason or "operator marked resolved")
+            )
+        if action == "reopen":
+            return format_runtime_ops_job(repository.reopen_dlq(job_id, reason=reason or "operator reopened"))
+    except RuntimeError as exc:
+        raise BizError(ErrorCode.BAD_REQUEST, str(exc)) from exc
+    raise BizError(ErrorCode.BAD_REQUEST, f"Unsupported runtime job action: {action}")
+
+
+def _record_runtime_ops_audit(
+    session: Session,
+    *,
+    action: str,
+    resource_type: str,
+    resource_id: int,
+    metadata: dict[str, Any],
+    request_context: RequestContext,
+) -> None:
+    AuditRepository(session).record(
+        action=action,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        status="succeeded",
+        metadata=metadata,
+        request_context=request_context,
+    )
+
+
 @runtime_v2_router.get("/{run_id}")
 def get_runtime_v2_run(
     run_id: int,
@@ -877,16 +1076,45 @@ def resume_runtime_v2_run(
     run_id: int,
     request: WorkflowResumeRequest,
     service: ChatflowRuntimeV2Service = Depends(get_chatflow_runtime_v2_service),
+    session: Session = Depends(get_session),
+    request_context: RequestContext = Depends(get_request_context),
 ) -> dict[str, Any]:
-    return success(service.resume_run(run_id, dict(request.resume_data), request.idempotency_key))
+    result = service.resume_run(run_id, dict(request.resume_data), request.idempotency_key)
+    _record_runtime_ops_audit(
+        session,
+        action="RUNTIME_OPS_RESUME_RUN",
+        resource_type="runtime_run",
+        resource_id=run_id,
+        metadata={
+            "runId": run_id,
+            "idempotencyKey": request.idempotency_key or "",
+            "resultStatus": result.get("status"),
+        },
+        request_context=request_context,
+    )
+    return success(result)
 
 
 @runtime_v2_router.post("/{run_id}/cancel")
 def cancel_runtime_v2_run(
     run_id: int,
+    request: WorkflowCancelRequest | None = None,
     service: ChatflowRuntimeV2Service = Depends(get_chatflow_runtime_v2_service),
+    session: Session = Depends(get_session),
+    request_context: RequestContext = Depends(get_request_context),
 ) -> dict[str, Any]:
-    return success(service.cancel_run(run_id))
+    reason = request.reason if request is not None else "cancelled by operator"
+    deadline_ms = request.deadline_ms if request is not None else 1000
+    result = service.cancel_run(run_id, reason=reason, deadline_ms=deadline_ms)
+    _record_runtime_ops_audit(
+        session,
+        action="RUNTIME_OPS_CANCEL_RUN",
+        resource_type="runtime_run",
+        resource_id=run_id,
+        metadata={"runId": run_id, "reason": reason, "deadlineMs": deadline_ms, "resultStatus": result.get("status")},
+        request_context=request_context,
+    )
+    return success(result)
 
 
 def _accepts_event_stream(request: Request) -> bool:
@@ -936,6 +1164,70 @@ def _start_runtime_v2_completion_thread(
             ).complete_run(run_id)
 
     threading.Thread(target=complete, daemon=True).start()
+
+
+def _runtime_v2_job_payload(
+    data: dict[str, Any],
+    *,
+    owner_type: str,
+    owner_id: int,
+    idempotency_key: str | None,
+    **extra: Any,
+) -> dict[str, Any]:
+    payload = {
+        "runId": int(data["runId"]),
+        "ownerType": owner_type.upper(),
+        "ownerId": owner_id,
+        "versionId": data.get("versionId"),
+        "idempotencyKey": idempotency_key or "",
+        "idempotencyLayer": "run",
+    }
+    payload.update(extra)
+    return payload
+
+
+def _runtime_v2_concurrency_limits(settings: Settings) -> RuntimeConcurrencyLimits:
+    return RuntimeConcurrencyLimits(
+        tenant_active_limit=settings.runtime_v2_tenant_active_limit,
+        workflow_active_limit=settings.runtime_v2_workflow_active_limit,
+        chatflow_active_limit=settings.runtime_v2_chatflow_active_limit,
+        worker_running_limit=settings.runtime_v2_worker_running_limit,
+        provider_active_limit=settings.runtime_v2_provider_active_limit,
+        queue_capacity_limit=settings.runtime_v2_queue_capacity_limit,
+    )
+
+
+def _runtime_v2_queue_context(
+    session: Session,
+    data: dict[str, Any],
+    request_context: RequestContext | None,
+) -> dict[str, Any]:
+    tenant_id = request_context.tenant_id if request_context is not None else "local"
+    run = WorkflowRepository(session).get_run(int(data["runId"]))
+    input_data = dict(run.get("input") or {}) if run else {}
+    runtime = input_data.get("_runtimeV2") if isinstance(input_data.get("_runtimeV2"), Mapping) else {}
+    definition = runtime.get("definition") if isinstance(runtime, Mapping) else {}
+    nodes = definition.get("nodes") if isinstance(definition, Mapping) and isinstance(definition.get("nodes"), list) else []
+    return {
+        "tenantId": tenant_id,
+        "providerKeys": _runtime_v2_provider_keys(nodes),
+    }
+
+
+def _runtime_v2_provider_keys(nodes: Iterable[Mapping[str, Any]]) -> list[str]:
+    keys: list[str] = []
+    for node in nodes:
+        node_type = str(node.get("type") or "").upper()
+        config = node.get("config") if isinstance(node.get("config"), Mapping) else {}
+        if node_type == "LLM":
+            keys.append("llm:" + str(config.get("modelConfigId") or config.get("model_config_id") or config.get("model") or "default"))
+        elif node_type == "API_CALL":
+            keys.append("api:" + str(config.get("resourceId") or config.get("resource_id") or config.get("url") or config.get("endpoint") or "direct"))
+        elif node_type == "TOOL_CALL":
+            keys.append("tool:" + str(config.get("resourceId") or config.get("resource_id") or config.get("toolName") or config.get("name") or "default"))
+        elif node_type == "KNOWLEDGE":
+            keys.append("knowledge:" + str(config.get("knowledgeBaseId") or config.get("knowledge_base_id") or "default"))
+    return sorted(set(keys))
 
 
 def _chatflow_message_runtime_input(
@@ -1080,6 +1372,8 @@ def _chatflow_response_events(result: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _chatflow_gateway_answer(output: dict[str, Any]) -> str:
+    if _chatflow_gateway_no_reply(output):
+        return ""
     for key in ("answer", "final", "output", "content", "message", "text"):
         value = output.get(key)
         if value is not None and str(value).strip():
@@ -1088,6 +1382,22 @@ def _chatflow_gateway_answer(output: dict[str, Any]) -> str:
         if isinstance(value, str) and value.strip():
             return value
     return ""
+
+
+def _chatflow_gateway_no_reply(output: dict[str, Any]) -> bool:
+    no_reply = output.get("noReply") or output.get("no_reply")
+    if isinstance(no_reply, bool):
+        return no_reply
+    if no_reply is not None and str(no_reply).strip().lower() in {"1", "true", "yes", "on"}:
+        return True
+    side_effect_only = output.get("sideEffectOnly") or output.get("side_effect_only")
+    if isinstance(side_effect_only, bool):
+        return side_effect_only and str(output.get("summary") or "") == "side_effect_only_completed"
+    return (
+        side_effect_only is not None
+        and str(side_effect_only).strip().lower() in {"1", "true", "yes", "on"}
+        and str(output.get("summary") or "") == "side_effect_only_completed"
+    )
 
 
 def _iter_runtime_v2_sse(
@@ -1136,6 +1446,21 @@ def _runtime_v2_stream_events(
     heartbeat_ms: int,
     count: int,
 ) -> list[dict[str, Any]]:
+    if event_stream_bus is not None:
+        try:
+            rows = event_stream_bus.read_after(
+                run_id=run_id,
+                after_sequence=after_sequence,
+                count=count,
+                block_ms=0,
+            )
+            if rows:
+                return rows
+        except Exception:
+            pass
+    rows = list(service.list_events(run_id, after_sequence=after_sequence)["list"])
+    if rows:
+        return rows
     if event_stream_bus is not None:
         try:
             rows = event_stream_bus.read_after(

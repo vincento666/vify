@@ -1,4 +1,5 @@
 import { chromium } from 'playwright'
+import { waitForRuntimeResult } from './runtime-run-helpers.mjs'
 
 const baseUrl = process.env.HIFY_E2E_BASE_URL || 'http://127.0.0.1:5173'
 const screenshotPath = process.env.HIFY_E2E_SCREENSHOT
@@ -63,9 +64,10 @@ try {
     },
   }), 'create workflow')
 
-  const run = await unwrap(await page.request.post(`${baseUrl}/api/v1/workflows/${workflow.id}/runs`, {
+  const started = await unwrap(await page.request.post(`${baseUrl}/api/v1/workflows/${workflow.id}/runs`, {
     data: { input: { orderId: 'A-300' } },
   }), 'run workflow')
+  const run = await waitForRuntimeResult(page, baseUrl, started, 'tool call workflow')
   assert(run.status === 'SUCCEEDED', 'Expected full workflow success')
   assert(run.output.final === 'Order A-300 status: SHIPPED', 'Expected TOOL_CALL output to feed END node')
 

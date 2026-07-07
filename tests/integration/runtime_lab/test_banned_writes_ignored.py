@@ -1,14 +1,8 @@
-"""Spec 213.3.5e contract — banned runtime_lab writes are ignored.
+"""Spec 213.3.5g contract — banned runtime_lab write targets are gone.
 
 Repository.create_task / update_task_state MUST ignore explicit
-``current_step`` and ``business_refs`` writes. ``business_refs`` is kept as an
-empty placeholder until schema drop, while ``current_step`` keeps its existing
-server default.
-
-Repository.create_checkpoint MUST ignore explicit ``current_step``,
-``pending_prompt``, and ``collected`` writes. It writes empty placeholders for
-NOT NULL columns and filters ``scoped_variables`` to retain only the
-``__chatflow`` JSON key.
+``current_step`` and ``business_refs`` kwargs for call-site compatibility, but
+the row shape must not expose those mirror columns after schema drop.
 """
 
 from contextlib import contextmanager
@@ -23,74 +17,10 @@ from tests.support.mysql import mysql8_session
 
 
 class BannedWriteIgnoredTest(unittest.TestCase):
-    def test_create_checkpoint_filters_scoped_variables_to_chatflow_key(self) -> None:
-        with _session() as session:
-            repository = RuntimeLabRepository(session)
-            runtime_session = repository.create_session()
-            task = repository.create_task(
-                int(runtime_session["id"]),
-                sop_id="refund_ticket",
-            )
-
-            checkpoint = repository.create_checkpoint(
-                int(runtime_session["id"]),
-                int(task["id"]),
-                sop_id="refund_ticket",
-                current_step="collect_order_no",
-                pending_prompt="",
-                scoped_variables={
-                    "conversation.foo": "bar",
-                    "__chatflow": {"runId": 5, "sessionId": "abc"},
-                },
-            )
-
-            # Only the __chatflow key survives.
-            self.assertEqual(
-                checkpoint["scoped_variables"],
-                {"__chatflow": {"runId": 5, "sessionId": "abc"}},
-            )
-
-    def test_create_checkpoint_drops_scoped_variables_when_no_chatflow_key(self) -> None:
-        with _session() as session:
-            repository = RuntimeLabRepository(session)
-            runtime_session = repository.create_session()
-            task = repository.create_task(
-                int(runtime_session["id"]),
-                sop_id="refund_ticket",
-            )
-
-            checkpoint = repository.create_checkpoint(
-                int(runtime_session["id"]),
-                int(task["id"]),
-                sop_id="refund_ticket",
-                current_step="collect_order_no",
-                pending_prompt="",
-                scoped_variables={"conversation.foo": "bar"},
-            )
-
-            self.assertEqual(checkpoint["scoped_variables"], {})
-
-    def test_create_checkpoint_writes_empty_placeholders_for_banned_fields(self) -> None:
-        with _session() as session:
-            repository = RuntimeLabRepository(session)
-            runtime_session = repository.create_session()
-            task = repository.create_task(
-                int(runtime_session["id"]),
-                sop_id="refund_ticket",
-            )
-
-            checkpoint = repository.create_checkpoint(
-                int(runtime_session["id"]),
-                int(task["id"]),
-                sop_id="refund_ticket",
-                current_step="collect_order_no",
-                pending_prompt="explicit prompt",
-                collected={"order_no": "T1"},
-            )
-
-            self.assertEqual(checkpoint["current_step"], "")
-            self.assertEqual(checkpoint["pending_prompt"], "")
-            self.assertEqual(checkpoint["collected"], {})
+    def test_checkpoint_repository_accessors_are_removed(self) -> None:
+        self.assertFalse(hasattr(RuntimeLabRepository, "create_checkpoint"))
+        self.assertFalse(hasattr(RuntimeLabRepository, "get_checkpoint"))
+        self.assertFalse(hasattr(RuntimeLabRepository, "get_latest_checkpoint"))
 
     def test_create_task_ignores_current_step_and_business_refs(self) -> None:
         with _session() as session:
@@ -104,8 +34,8 @@ class BannedWriteIgnoredTest(unittest.TestCase):
                 business_refs={"order_no": "T1"},
             )
 
-            self.assertEqual(task["current_step"], "collect_order_no")
-            self.assertEqual(task["business_refs"], {})
+            self.assertNotIn("current_step", task)
+            self.assertNotIn("business_refs", task)
 
     def test_update_task_state_ignores_current_step_and_business_refs(self) -> None:
         with _session() as session:
@@ -124,8 +54,8 @@ class BannedWriteIgnoredTest(unittest.TestCase):
                 business_refs={"order_no": "T1"},
             )
 
-            self.assertEqual(updated["current_step"], "collect_order_no")
-            self.assertEqual(updated["business_refs"], {})
+            self.assertNotIn("current_step", updated)
+            self.assertNotIn("business_refs", updated)
 
 
 @contextmanager

@@ -206,7 +206,7 @@ class RuntimeLabAgentFallbackPolicyTest(unittest.TestCase):
             self.assertEqual(third.route_decision.handoff["reasonCode"], "CLARIFICATION_FAILED")
             self.assertEqual(third.active_task["id"], started.active_task["id"])
             self.assertEqual(third.active_task["current_step"], started.active_task["current_step"])
-            self.assertEqual(third.active_task["checkpoint_id"], started.active_task["checkpoint_id"])
+            self.assertNotIn("checkpoint_id", third.active_task)
             self.assertEqual(
                 [event["event_type"] for event in third.events].count("AGENT_CLARIFICATION_ASKED"),
                 2,

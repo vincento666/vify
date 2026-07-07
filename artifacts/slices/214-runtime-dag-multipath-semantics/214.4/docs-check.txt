@@ -1,0 +1,4 @@
+85:## Final Output Rules
+94:3. Priority reply node. Reply candidates with `replyPriority`,
+112:  "summary": "side_effect_only_completed",
+124:Chatflow adds `"noReply": true` to the same shape. Runtime response helpers must

@@ -1,6 +1,7 @@
 import unittest
 from typing import Any
 
+from app.core.errors import BizError, ErrorCode
 from app.modules.runtime_lab.domain.chatflow_adapter import ChatflowSopRuntimeAdapter
 from app.modules.runtime_lab.domain.sop_adapter import SopExecutionRequest, SopExecutionStatus
 
@@ -43,6 +44,22 @@ class ChatflowSopRuntimeAdapterGatewayTest(unittest.TestCase):
         self.assertEqual(continued.current_step, "completed")
         self.assertEqual(continued.collected["phone"], "13800138000")
 
+    def test_continue_sop_accepts_string_v2_runtime_version_from_task_refs(self) -> None:
+        gateway = _FakeRuntimeInvocationGateway()
+        adapter = ChatflowSopRuntimeAdapter(
+            _FakeWorkflowService(),
+            sop_chatflow_ids={"refund_ticket": 42},
+            runtime_invocation_gateway=gateway,
+        )
+
+        started = adapter.start_sop(_request(message="我要退票"))
+        started.checkpoint.scoped_variables["__chatflow"]["runtimeVersion"] = "v2"
+        continued = adapter.continue_sop(_request(message="手机号 13800138000", checkpoint=started.checkpoint))
+
+        self.assertEqual(gateway.calls[-1][0], "resume_and_wait")
+        self.assertEqual(gateway.calls[-1][1], 501)
+        self.assertEqual(continued.status, SopExecutionStatus.COMPLETED)
+
     def test_start_sop_async_mode_returns_runtime_refs_without_waiting_for_completion(self) -> None:
         gateway = _FakeRuntimeInvocationGateway()
         adapter = ChatflowSopRuntimeAdapter(
@@ -64,10 +81,162 @@ class ChatflowSopRuntimeAdapterGatewayTest(unittest.TestCase):
         self.assertEqual(meta["runtimeRefs"]["eventStreamRef"], "/api/v1/runtime-runs/501/events/stream?afterSequence=0")
         self.assertIn("chatflow_v2_async_started", [event["type"] for event in result.events])
 
+    def test_continue_sop_v2_resume_error_returns_retry_envelope_with_existing_refs(self) -> None:
+        gateway = _FakeRuntimeInvocationGateway()
+        gateway.resume_error = BizError(ErrorCode.BAD_REQUEST, "LLM provider request failed")
+        adapter = ChatflowSopRuntimeAdapter(
+            _FakeWorkflowService(),
+            sop_chatflow_ids={"refund_ticket": 42},
+            runtime_invocation_gateway=gateway,
+            runtime_invocation_mode="async",
+        )
+
+        started = adapter.start_sop(_request(message="我要退票"))
+        continued = adapter.continue_sop(_request(message="订单号 CA123456，手机号 13800138000", checkpoint=started.checkpoint))
+
+        self.assertNotEqual(continued.status, SopExecutionStatus.FAILED)
+        self.assertEqual(continued.status, SopExecutionStatus.WAITING)
+        meta = continued.checkpoint.scoped_variables["__chatflow"]
+        self.assertEqual(meta["runtimeVersion"], 2)
+        self.assertEqual(meta["runId"], 501)
+        self.assertEqual(meta["runtimeRefs"]["resultRef"], "/api/v1/runtime-runs/501/result")
+        self.assertIn("chatflow_v2_retryable", [event["type"] for event in continued.events])
+
+    def test_continue_sop_v2_waits_for_runtime_result_after_resume(self) -> None:
+        gateway = _FakeRuntimeInvocationGateway()
+        gateway.resume_invocation = _invocation(
+            status="INTERRUPTED",
+            output={
+                "interrupt": {"nodeKey": "collect", "question": "还差订单号、手机号、乘机人姓名。"},
+                "collected": {},
+            },
+            events=[
+                {
+                    "id": 3,
+                    "sequence": 3,
+                    "type": "workflow_run_interrupted",
+                    "runId": 501,
+                    "checkpointId": 9001,
+                    "payload": {},
+                    "observability": {"correlationRefs": {"nodeKey": "collect"}},
+                }
+            ],
+        )
+        runtime_v2_service = _FakeRuntimeV2Service(
+            [
+                _runtime_result(
+                    status="INTERRUPTED",
+                    output={
+                        "interrupt": {"nodeKey": "collect", "question": "请提供订单号和手机号。"},
+                        "collected": {},
+                    },
+                    checkpoint_id=9001,
+                    events=[],
+                ),
+                _runtime_result(
+                    status="SUCCEEDED",
+                    output={
+                        "final": "refund complete phone=13800138000 order=CA123456",
+                        "collected": {"phone": "13800138000", "order_no": "CA123456"},
+                    },
+                    checkpoint_id=9002,
+                    events=[
+                        {
+                            "id": 4,
+                            "sequence": 4,
+                            "type": "workflow_run_completed",
+                            "runId": 501,
+                            "payload": {"status": "SUCCEEDED"},
+                            "observability": {},
+                        }
+                    ],
+                ),
+            ]
+        )
+        adapter = ChatflowSopRuntimeAdapter(
+            _FakeWorkflowService(),
+            sop_chatflow_ids={"refund_ticket": 42},
+            runtime_v2_service=runtime_v2_service,
+            runtime_invocation_gateway=gateway,
+        )
+
+        started = adapter.start_sop(_request(message="我要退票"))
+        continued = adapter.continue_sop(_request(message="订单号 CA123456，手机号 13800138000", checkpoint=started.checkpoint))
+
+        self.assertEqual(continued.status, SopExecutionStatus.COMPLETED)
+        self.assertEqual(continued.current_step, "completed")
+        self.assertEqual(continued.collected["phone"], "13800138000")
+        self.assertEqual(continued.collected["order_no"], "CA123456")
+
+    def test_continue_sop_v2_wait_budget_covers_scale_terminal_result(self) -> None:
+        gateway = _FakeRuntimeInvocationGateway()
+        gateway.resume_invocation = _invocation(
+            status="INTERRUPTED",
+            output={
+                "interrupt": {"nodeKey": "confirm", "question": "请确认团队询价。"},
+                "collected": {"route": "上海到广州", "travel_time": "下周三上午", "passenger_count": "十六"},
+            },
+            events=[
+                {
+                    "id": 3,
+                    "sequence": 3,
+                    "type": "workflow_run_interrupted",
+                    "runId": 501,
+                    "checkpointId": 9001,
+                    "payload": {},
+                    "observability": {"correlationRefs": {"nodeKey": "confirm"}},
+                }
+            ],
+        )
+        pending = _runtime_result(
+            status="INTERRUPTED",
+            output={
+                "interrupt": {"nodeKey": "confirm", "question": "请确认团队询价。"},
+                "collected": {"route": "上海到广州", "travel_time": "下周三上午", "passenger_count": "十六"},
+            },
+            checkpoint_id=9001,
+            events=[],
+        )
+        terminal = _runtime_result(
+            status="SUCCEEDED",
+            output={
+                "final": "group booking complete",
+                "collected": {"route": "上海到广州", "travel_time": "下周三上午", "passenger_count": "十六"},
+            },
+            checkpoint_id=9001,
+            events=[
+                {
+                    "id": 4,
+                    "sequence": 4,
+                    "type": "workflow_run_completed",
+                    "runId": 501,
+                    "payload": {"status": "SUCCEEDED"},
+                    "observability": {},
+                }
+            ],
+        )
+        runtime_v2_service = _FakeRuntimeV2Service([*(dict(pending) for _ in range(44)), terminal])
+        adapter = ChatflowSopRuntimeAdapter(
+            _FakeWorkflowService(),
+            sop_chatflow_ids={"group_booking": 42},
+            runtime_v2_service=runtime_v2_service,
+            runtime_invocation_gateway=gateway,
+        )
+
+        started = adapter.start_sop(_request(message="我们公司十六个人出差", sop_id="group_booking"))
+        continued = adapter.continue_sop(
+            _request(message="确认团队询价", checkpoint=started.checkpoint, sop_id="group_booking")
+        )
+
+        self.assertEqual(continued.status, SopExecutionStatus.COMPLETED)
+        self.assertEqual(continued.current_step, "completed")
+
 
 class _FakeRuntimeInvocationGateway:
     def __init__(self) -> None:
         self.calls: list[tuple[Any, ...]] = []
+        self.resume_error: BizError | None = None
+        self.resume_invocation: dict[str, Any] | None = None
 
     def start_and_wait(
         self,
@@ -134,6 +303,10 @@ class _FakeRuntimeInvocationGateway:
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         self.calls.append(("resume_and_wait", run_id, resume_data, idempotency_key))
+        if self.resume_error is not None:
+            raise self.resume_error
+        if self.resume_invocation is not None:
+            return dict(self.resume_invocation)
         return _invocation(
             status="SUCCEEDED",
             output={"final": "phone=13800138000", "collected": {"phone": "13800138000"}},
@@ -148,6 +321,18 @@ class _FakeRuntimeInvocationGateway:
                 }
             ],
         )
+
+
+class _FakeRuntimeV2Service:
+    def __init__(self, results: list[dict[str, Any]]) -> None:
+        self._results = list(results)
+        self.calls: list[int] = []
+
+    def get_result(self, run_id: int) -> dict[str, Any]:
+        self.calls.append(run_id)
+        if len(self._results) > 1:
+            return self._results.pop(0)
+        return dict(self._results[0])
 
 
 class _FakeWorkflowService:
@@ -165,11 +350,12 @@ def _request(
     *,
     message: str,
     checkpoint: Any | None = None,
+    sop_id: str = "refund_ticket",
 ) -> SopExecutionRequest:
     return SopExecutionRequest(
         runtime_session_id=1001,
         runtime_task_id=2002,
-        sop_id="refund_ticket",
+        sop_id=sop_id,
         message=message,
         checkpoint=checkpoint,
         collected={},
@@ -202,6 +388,24 @@ def _invocation(
             "checkpoint": {"id": 9001},
         },
         "events": {"list": events, "total": len(events)},
+    }
+
+
+def _runtime_result(
+    *,
+    status: str,
+    output: dict[str, Any],
+    checkpoint_id: int,
+    events: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "runId": 501,
+        "sessionId": "session-501",
+        "status": status,
+        "output": output,
+        "checkpoint": {"id": checkpoint_id},
+        "events": events,
+        "runtimeRefs": _runtime_refs(),
     }
 
 

@@ -10,13 +10,15 @@ describe('chatflow debug timeline view model', () => {
   it('orders events and exposes checkpoint labels', () => {
     const events = formatChatflowTimeline([
       { id: 3, sequence: 3, type: 'resume', nodeKey: 'question_1', checkpointId: 9 },
+      { id: 4, sequence: 4, type: 'workflow_run_resumed', nodeId: 'question_1', checkpointId: 9 },
       { id: 1, sequence: 1, type: 'message', nodeKey: 'question_1', payload: { content: '继续吗？' } },
       { id: 2, sequence: 2, type: 'interrupt', nodeKey: 'question_1', checkpointId: 9 },
     ])
 
-    expect(events.map((event) => event.type)).toEqual(['message', 'interrupt', 'resume'])
+    expect(events.map((event) => event.type)).toEqual(['message', 'interrupt', 'resume', 'workflow_run_resumed'])
     expect(events[1].label).toBe('等待输入')
     expect(events[1].meta).toContain('Checkpoint #9')
+    expect(events[3].label).toBe('继续执行')
   })
 
   it('labels transfer-to-human handoff events with ticket context', () => {

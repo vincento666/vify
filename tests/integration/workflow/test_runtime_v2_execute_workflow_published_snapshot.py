@@ -19,7 +19,7 @@ class RuntimeV2ExecuteWorkflowPublishedSnapshotTest(unittest.TestCase):
             parent_version = client.post(f"/api/v1/workflows/{parent['id']}/publish").json()["data"]
 
             started = client.post(
-                f"/api/v1/workflows/{parent['id']}/runs-v2",
+                f"/api/v1/workflows/{parent['id']}/runs",
                 json={"input": {"ticket": "SNAP-194"}, "versionId": parent_version["id"]},
             ).json()["data"]
             result = _wait_for_result(client, started["resultRef"])

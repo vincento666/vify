@@ -1,0 +1,4 @@
+11:| `p50` / `p95` / `p99` | run or drill latency percentiles | load test samples |
+20:| Scenario | Concurrency / Scale | p50 ms | p95 ms | p99 ms | Queue latency / state | Node latency | Event delay | Error rate | Resource usage |
+39:- `artifacts/slices/221-runtime-capacity-fault-acceptance/221.9/metrics.json`
+81:Observed behavior: 100, 150, and 200 concurrent workflow invocations were admitted as queued jobs, all jobs were drained by workers, all runs reached `SUCCEEDED`, outputs remained unique, event sequences stayed monotonic, and p99 start-to-terminal latency stayed below the local smoke threshold of `120000` ms.

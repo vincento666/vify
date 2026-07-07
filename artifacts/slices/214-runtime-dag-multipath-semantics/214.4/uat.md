@@ -1,0 +1,22 @@
+# UAT
+
+- Spec: 214-runtime-dag-multipath-semantics
+- Slice: 214.4
+- URL: http://127.0.0.1:15176
+- Browser: Playwright Chromium
+- Steps:
+  - Ran Chatflow execute-workflow-node flow through real browser page and debug dock.
+  - Ran Workflow/Chatflow six-node matrix through real browser pages with API Resource based API_CALL fixture and async `/runs` result polling.
+- Expected:
+  - Chatflow visible output remains user-facing through End output.
+  - Workflow/Chatflow matrix reaches PASS without breaking runtime-v2 async refs.
+  - Browser screenshots are captured for the final pages.
+- Actual:
+  - `chatflow-execute-workflow-node.mjs` PASS.
+  - `workflow-six-node-matrix.mjs` PASS.
+  - Screenshots saved beside this file.
+- Screenshots:
+  - `chatflow-execute-workflow-node.png`
+  - `workflow-six-node-matrix.png`
+  - `chatflow-six-node-matrix.png`
+- Verdict: PASS

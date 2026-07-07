@@ -1,0 +1,7 @@
+slice,scenario,concurrency,p50_ms,p95_ms,p99_ms,events,queue_states,error_rate,resource_usage
+221.1,local_concurrent_runs,20,1363.56,1399.01,1401.16,200,request_thread_completion,0,not_separately_captured
+221.1,local_concurrent_runs,35,2176.87,2215.29,2216.09,350,request_thread_completion,0,not_separately_captured
+221.1,local_concurrent_runs,50,2993.84,3060.66,3067.31,500,request_thread_completion,0,not_separately_captured
+221.2,local_mid_pressure,100,6902.64,7395.29,7428.01,1000,queued,0,not_separately_captured
+221.2,local_mid_pressure,150,10151.38,10832.26,10899.18,1500,queued,0,not_separately_captured
+221.2,local_mid_pressure,200,13521.22,14468.03,14592.46,2000,queued,0,not_separately_captured

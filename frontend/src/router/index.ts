@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
+import { canAccessRequiredPermission } from '@/appNavigation'
 import { WORKFLOW_MODULE_TABS } from '@/views/workflow/workflowModuleTabs'
 
 const router = createRouter({
@@ -41,6 +42,12 @@ const router = createRouter({
       name: 'HifyRuntimeLabChat',
       meta: { runtimeLabChat: true },
       component: () => import('@/views/chat/UnifiedRoutingChatLab.vue'),
+    },
+    {
+      path: '/runtime-ops',
+      name: 'HifyRuntimeOps',
+      meta: { runtimeOps: true, requiredPermission: 'runtime_ops:read' },
+      component: () => import('@/views/runtimeOps/RuntimeOpsShell.vue'),
     },
     {
       path: '/customer-assistant',
@@ -134,6 +141,13 @@ const router = createRouter({
       component: () => import('@/views/mcp/McpServerDebug.vue'),
     },
   ],
+})
+
+router.beforeEach((to) => {
+  const requiredPermission = to.meta.requiredPermission
+  if (typeof requiredPermission !== 'string') return true
+  if (canAccessRequiredPermission(requiredPermission)) return true
+  return { name: 'HifyProvider', query: { denied: String(to.name || to.path) } }
 })
 
 export default router

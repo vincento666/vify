@@ -6,19 +6,25 @@ first-class chatflow ref columns added in slice 213.3.1.
 """
 
 import unittest
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+from app.core.config import Settings
 from app.core.database import get_session_factory
 from app.main import app
 from app.modules.runtime_lab.infra.repository import RuntimeLabRepository
+from app.modules.runtime_lab.web import router as runtime_lab_router
 
 
 class RuntimeLabMessagesChatflowSessionRefsTest(unittest.TestCase):
     def test_sessions_messages_envelope_includes_chatflow_session_refs(self) -> None:
         runtime_session_id, task_id = _seed_session_with_chatflow_task()
 
-        with TestClient(app) as client:
+        with (
+            patch.object(runtime_lab_router, "get_settings", return_value=Settings(runtime_lab_sop_chatflow_ids="")),
+            TestClient(app) as client,
+        ):
             response = client.post(
                 f"/api/v1/runtime-lab/sessions/{runtime_session_id}/messages",
                 json={"message": "继续走下一步", "idempotencyKey": f"chatflow-refs-{task_id}"},
@@ -47,9 +53,8 @@ class RuntimeLabMessagesChatflowSessionRefsTest(unittest.TestCase):
         )
         self.assertEqual(chatflow_session["nodesRef"], "/api/v1/runtime-runs/9001/nodes")
         self.assertEqual(chatflow_session["resultRef"], "/api/v1/runtime-runs/9001/result")
-        # Back-compat: legacy fields still present alongside the new block.
-        self.assertIn("currentStep", active_task)
-        self.assertIn("businessRefs", active_task)
+        self.assertNotIn("currentStep", active_task)
+        self.assertNotIn("businessRefs", active_task)
 
     def test_messages_envelope_includes_chatflow_session_refs(self) -> None:
         # POST /messages (no session_id) bootstraps a fresh session; the SOP
@@ -83,9 +88,8 @@ class RuntimeLabMessagesChatflowSessionRefsTest(unittest.TestCase):
         self.assertEqual(chatflow_session["nodesRef"], f"/api/v1/runtime-runs/{run_id}/nodes")
         self.assertEqual(chatflow_session["resultRef"], f"/api/v1/runtime-runs/{run_id}/result")
         self.assertEqual(chatflow_session["runtimeVersion"], "v2")
-        # Back-compat: legacy fields still present alongside the new block.
-        self.assertIn("currentStep", active_task)
-        self.assertIn("businessRefs", active_task)
+        self.assertNotIn("currentStep", active_task)
+        self.assertNotIn("businessRefs", active_task)
 
 
 def _seed_session_with_chatflow_task() -> tuple[int, int]:
@@ -105,29 +109,15 @@ def _seed_session_with_chatflow_task() -> tuple[int, int]:
             chatflow_checkpoint_id=9999,
             runtime_version="v2",
         )
-        checkpoint = repository.create_checkpoint(
+        repository.append_event(
             runtime_session_id,
-            int(task["id"]),
-            sop_id="refund_ticket",
-            current_step="collect_order_no",
-            pending_prompt="请提供订单号",
-            collected={"route": "BJ-SH"},
-            scoped_variables={
-                "__chatflow": {
-                    "chatflowId": 4242,
-                    "sessionId": "7777",
-                    "runId": 9001,
-                    "eventId": 12345,
-                    "checkpointId": 9999,
-                    "runtimeVersion": 2,
-                },
-            },
+            "TASK_STARTED",
+            {"taskId": task["id"], "sopId": "refund_ticket", "currentStep": "collect_order_no"},
         )
         repository.update_task_state(
             int(task["id"]),
             status="RUNNING",
             current_step="collect_order_no",
-            checkpoint_id=int(checkpoint["id"]),
             business_refs={"route": "BJ-SH"},
         )
         return runtime_session_id, int(task["id"])

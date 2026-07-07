@@ -61,6 +61,37 @@ DAG frontier scheduler 上线后，Chatflow / SOP 这两条对话场景必须保
 | 216.5 | 客服 worker 状态消费：running / waiting / completed / failed / cancelled 全状态机覆盖 | RED / Integration / E2E |
 | 216.6 | 出口回归：spec 212 + 213 + 214 + 215 入口门禁全套 | All gates |
 
+## 实施状态
+
+- 216.1 已完成：runtime result/status 投影新增 `waitingNodes` 与
+  `waitingNodeKeys`，按每个 node 的最新 node-run 聚合 WAITING 集合，并在终态
+  run 中清空旧 waiting node-run，避免 resume 后展示脏等待状态。新增 Chatflow
+  fan-out side-effect + question regression，确认 resume 只恢复 waiting 节点，
+  不重跑已完成 side-effect 节点。
+- 216.2 已完成：多路径 Chatflow final reply selection 覆盖 End 优先、answer
+  mapping、priority reply、全路径 side-effect-only summary；runtime 会把
+  `sideEffectOnly` 节点输出排除在 answer mapping / priority reply 候选之外，
+  防止内部通知内容变成用户可见 assistant reply。
+- 216.3 已完成：RuntimeLab ledger schema 移除 `checkpoint_id` 与执行态镜像，
+  RuntimeLab 事件不再写 `currentStep`，`chatflow-trace` 聚合 `currentStep /
+  pendingPrompt / collected / scopedVariables / checkpoint / nodeEvents /
+  runStatus` 均来自 child Chatflow run/checkpoint/event/session；历史 ledger
+  payload 在 trace 中会过滤执行态镜像键。
+- 216.4 已完成：新增 SOP runtime v2 12-case matrix manifest 与浏览器矩阵脚本，
+  覆盖强意图启动、活动 SOP 继续、中断切换、恢复 offer、原 child run 恢复、
+  非可中断拒绝切换、显式恢复、澄清不建 run、FAQ/RAG 不污染状态、Agent
+  fallback 不替换状态、人工转接保持 refs、多 child run 仅聚合；每条 case
+  记录 API response、event stream、task panel、refresh recovery 与截图。
+- 216.5 已完成：新增 customer-assistant worker state machine integration
+  matrix，覆盖 RUNNING / WAITING / COMPLETED / FAILED / CANCELLED；修复
+  `CANCELLED` 被票号 PII sanitizer 误 redaction 的状态投影问题，并让 worker
+  CANCELLED result 产出 `task_cancelled` 事件。Browser UAT 通过真实任务控制 API
+  触发取消态，并加载失败态任务面板截图。
+- 216.6 已完成：重跑 spec 212-215 出口回归门禁，backend unit / integration /
+  contract、frontend unit / rem 全绿；Browser UAT 15 条脚本全绿，包含 14 条
+  Chatflow/Workflow 脚本与 RuntimeLab scale `15 scenarios, 5 switches`。
+  baseline evidence 已追记 spec 216 exit。
+
 ## 验收门禁映射（Acceptance Gate Map）
 
 | 文档验收标准 | 对应 slice | 检测命令 |

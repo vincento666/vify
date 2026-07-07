@@ -1,0 +1,7 @@
+== chatflow-scoped-variables-history.mjs ==
+PASS chatflow scoped variables history e2e variable=15423 history=15425
+PASS chatflow-scoped-variables-history.mjs
+
+== workflow-variable-aggregation-assignment.mjs ==
+PASS workflow/chatflow variable aggregation assignment e2e
+PASS workflow-variable-aggregation-assignment.mjs

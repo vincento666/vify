@@ -96,7 +96,9 @@ class RuntimeLabService:
         self._aggregator = aggregator or RuntimeLabBusinessContextAggregator(
             repository, workflow_service
         )
-        self._current_step_runtime = current_step_runtime
+        adapter_runtime = self._adapter if hasattr(self._adapter, "get_result") else None
+        self._current_step_runtime = current_step_runtime or adapter_runtime
+        self._adapter_checkpoint_cache: dict[int, SopCheckpoint] = {}
 
     def create_session(self) -> dict[str, Any]:
         runtime_session = self._repository.create_session()
@@ -900,32 +902,24 @@ class RuntimeLabService:
     def _latest_checkpoint_with_overlay_step(self, task: dict[str, Any] | None) -> dict[str, Any] | None:
         if task is None:
             return None
-        task_id = int(task["id"])
-        checkpoint = self._repository.get_latest_checkpoint(task_id)
-        current_step = self._resolved_current_step(task, checkpoint)
+        current_step = self._resolved_current_step(task)
         if not current_step:
-            return checkpoint
-        data = dict(checkpoint or {})
-        data["current_step"] = current_step
-        return data
+            return None
+        return {"current_step": current_step}
 
     def _resolved_current_step(
         self,
         task: dict[str, Any],
-        checkpoint: dict[str, Any] | None,
+        checkpoint: dict[str, Any] | None = None,
     ) -> str:
+        _ = checkpoint
         runtime_step = self._runtime_current_step(task)
         if runtime_step:
             return runtime_step
-        task_id = int(task["id"])
-        overlay = self._task_current_step(task_id)
-        if overlay:
-            return overlay
-        if checkpoint is not None:
-            checkpoint_step = checkpoint.get("current_step")
-            if checkpoint_step:
-                return str(checkpoint_step)
-        return str(task.get("current_step") or "")
+        cached_step = self._cached_adapter_current_step(task)
+        if cached_step:
+            return cached_step
+        return ""
 
     def _runtime_current_step(self, task: dict[str, Any]) -> str:
         if self._current_step_runtime is None:
@@ -943,17 +937,18 @@ class RuntimeLabService:
         pending_node = checkpoint.get("pendingNodeKey") or checkpoint.get("pending_node_key")
         return str(pending_node) if pending_node else ""
 
-    def _record_task_step(self, task_id: int, current_step: str) -> None:
-        recorder = getattr(self._aggregator, "record_task_step", None)
-        if callable(recorder):
-            recorder(task_id, current_step)
+    def _cached_adapter_current_step(self, task: dict[str, Any]) -> str:
+        task_id = _int_or_none(task.get("id"))
+        if task_id is None:
+            return ""
+        checkpoint = self._adapter_checkpoint_cache.get(task_id)
+        if checkpoint is None:
+            return ""
+        return checkpoint.current_step
 
-    def _task_current_step(self, task_id: int) -> str | None:
-        reader = getattr(self._aggregator, "task_current_step", None)
-        if not callable(reader):
-            return None
-        value = reader(task_id)
-        return str(value) if value else None
+    def _record_adapter_checkpoint(self, task_id: int, checkpoint: SopCheckpoint | None) -> None:
+        if checkpoint is not None:
+            self._adapter_checkpoint_cache[int(task_id)] = checkpoint
 
     def _create_pending_task(self, session_id: int, sop_id: str) -> dict[str, Any]:
         return self._repository.create_task(
@@ -976,50 +971,34 @@ class RuntimeLabService:
             sop_id=sop_id,
             **refs,
         )
-        checkpoint = self._repository.create_checkpoint(
-            session_id,
-            int(task["id"]),
-            sop_id=sop_id,
-            scoped_variables=result.checkpoint.scoped_variables,
-            status=_checkpoint_status(result),
-        )
         updated = self._repository.update_task_state(
             int(task["id"]),
             status="RUNNING",
-            checkpoint_id=int(checkpoint["id"]),
             **refs,
         )
         self._aggregator.record_turn_context(session_id, result.collected)
-        self._record_task_step(int(task["id"]), result.current_step)
+        self._record_adapter_checkpoint(int(updated["id"]), result.checkpoint)
         return updated
 
     def _suspend_task(self, session_id: int, task: dict[str, Any]) -> dict[str, Any]:
-        checkpoint_row = self._repository.get_latest_checkpoint(int(task["id"]))
         adapter_checkpoint = self._adapter.suspend_sop(
             self._adapter_request(
                 session_id,
                 str(task["sop_id"]),
                 task=task,
-                checkpoint_row=checkpoint_row,
                 collected=self._aggregator.collect(session_id),
             )
         )
-        checkpoint = self._repository.create_checkpoint(
-            session_id,
-            int(task["id"]),
-            sop_id=str(task["sop_id"]),
-            scoped_variables=adapter_checkpoint.scoped_variables,
-        )
-        summary = f"{task['sop_id']} paused at {task['current_step']}"
+        current_step = adapter_checkpoint.current_step or self._resolved_current_step(task)
+        summary = f"{task['sop_id']} paused at {current_step}"
         suspended = self._repository.update_task_state(
             int(task["id"]),
             status="SUSPENDED",
-            checkpoint_id=int(checkpoint["id"]),
             resume_summary=summary,
             **_chatflow_refs_from_checkpoint(adapter_checkpoint),
         )
         self._aggregator.record_turn_context(session_id, adapter_checkpoint.collected)
-        self._record_task_step(int(task["id"]), adapter_checkpoint.current_step)
+        self._record_adapter_checkpoint(int(suspended["id"]), adapter_checkpoint)
         return suspended
 
     def _continue_active_task(
@@ -1029,35 +1008,25 @@ class RuntimeLabService:
         message: str,
         decision: RouteDecision,
     ) -> RuntimeLabTurn:
-        checkpoint = self._repository.get_latest_checkpoint(int(active_task["id"]))
         result = self._adapter.continue_sop(
             self._adapter_request(
                 session_id,
                 str(active_task["sop_id"]),
                 message=message,
                 task=active_task,
-                checkpoint_row=checkpoint,
                 collected=self._aggregator.collect(session_id),
             )
         )
         if result.status == SopExecutionStatus.FAILED:
             return self._adapter_failure_turn(session_id, result, decision)
-        saved_checkpoint = self._repository.create_checkpoint(
-            session_id,
-            int(active_task["id"]),
-            sop_id=str(active_task["sop_id"]),
-            scoped_variables=result.checkpoint.scoped_variables,
-            status=_checkpoint_status(result),
-        )
         if result.status == SopExecutionStatus.COMPLETED:
             completed = self._repository.update_task_state(
                 int(active_task["id"]),
                 status="COMPLETED",
-                checkpoint_id=int(saved_checkpoint["id"]),
                 **_chatflow_refs_from_checkpoint(result.checkpoint),
             )
             self._aggregator.record_turn_context(session_id, result.collected)
-            self._record_task_step(int(active_task["id"]), result.current_step)
+            self._record_adapter_checkpoint(int(completed["id"]), result.checkpoint)
             complete_decision = RouteDecision(
                 action="COMPLETE_TASK",
                 reason="Active SOP completed after confirmation",
@@ -1076,15 +1045,14 @@ class RuntimeLabService:
         task = self._repository.update_task_state(
             int(active_task["id"]),
             status="RUNNING",
-            checkpoint_id=int(saved_checkpoint["id"]),
             **_chatflow_refs_from_checkpoint(result.checkpoint),
         )
         self._aggregator.record_turn_context(session_id, result.collected)
-        self._record_task_step(int(active_task["id"]), result.current_step)
+        self._record_adapter_checkpoint(int(task["id"]), result.checkpoint)
         self._repository.append_event(
             session_id,
             "TASK_CONTINUED",
-            {"taskId": task["id"], "sopId": task["sop_id"], "currentStep": task["current_step"]},
+            {"taskId": task["id"], "sopId": task["sop_id"]},
         )
         return self._turn(session_id, result.reply, decision)
 
@@ -1093,38 +1061,28 @@ class RuntimeLabService:
         if not suspended_tasks:
             return self._turn(session_id, "没有可恢复的暂停流程。", RouteDecision(action="NO_MATCH", reason="No suspended task"))
         task = suspended_tasks[0]
-        checkpoint = self._repository.get_latest_checkpoint(int(task["id"]))
         result = self._adapter.resume_sop(
             self._adapter_request(
                 session_id,
                 str(task["sop_id"]),
                 message=message,
                 task=task,
-                checkpoint_row=checkpoint,
                 collected=self._aggregator.collect(session_id),
             )
         )
         if result.status == SopExecutionStatus.FAILED:
             return self._adapter_failure_turn(session_id, result, decision)
-        saved_checkpoint = self._repository.create_checkpoint(
-            session_id,
-            int(task["id"]),
-            sop_id=str(task["sop_id"]),
-            scoped_variables=result.checkpoint.scoped_variables,
-            status=_checkpoint_status(result),
-        )
         resumed = self._repository.update_task_state(
             int(task["id"]),
             status="RUNNING",
-            checkpoint_id=int(saved_checkpoint["id"]),
             **_chatflow_refs_from_checkpoint(result.checkpoint),
         )
         self._aggregator.record_turn_context(session_id, result.collected)
-        self._record_task_step(int(task["id"]), result.current_step)
+        self._record_adapter_checkpoint(int(resumed["id"]), result.checkpoint)
         self._repository.append_event(
             session_id,
             "TASK_RESUMED",
-            {"taskId": resumed["id"], "sopId": resumed["sop_id"], "currentStep": resumed["current_step"]},
+            {"taskId": resumed["id"], "sopId": resumed["sop_id"]},
         )
         return self._turn(session_id, result.reply or "已恢复刚才的流程。请继续提供信息。", decision)
 
@@ -1139,17 +1097,6 @@ class RuntimeLabService:
             "resumeSummary": task["resume_summary"],
             "prompt": "是否继续刚才中断的流程？",
         }
-
-    def _session_business_context(self, session_id: int) -> dict[str, Any]:
-        """Deprecated 1-line delegate.
-
-        Slice 213.3.3 introduced :class:`RuntimeLabBusinessContextAggregator`;
-        slice 213.3.4 migrated all internal callers to invoke
-        ``self._aggregator.collect()`` directly. This delegate is retained
-        only for parity tests that exercise the legacy symbol. Removal is
-        deferred to slice 213.3.5.
-        """
-        return self._aggregator.collect(session_id)
 
     def _recent_events(self, session_id: int, *, limit: int) -> list[dict[str, Any]]:
         events = self._repository.list_events(session_id)
@@ -1239,7 +1186,6 @@ class RuntimeLabService:
         projected = dict(task)
         current_step = self._resolved_current_step(
             projected,
-            self._repository.get_latest_checkpoint(int(projected["id"])),
         )
         if current_step:
             projected["current_step"] = current_step
@@ -1258,8 +1204,7 @@ class RuntimeLabService:
             task = self._project_task_with_resolved_current_step(
                 self._repository.get_task(int(decision.active_task_id))
             )
-        checkpoint = self._repository.get_latest_checkpoint(int(task["id"])) if task is not None else None
-        meta = _chatflow_meta_from_checkpoint_row(checkpoint)
+        meta = _chatflow_meta_from_task(task)
         current_sop_id = str(
             (task or {}).get("sop_id")
             or decision.target_sop_id
@@ -1376,24 +1321,27 @@ class RuntimeLabService:
         sop_id: str,
         message: str = "",
         task: dict[str, Any] | None = None,
-        checkpoint_row: dict[str, Any] | None = None,
         collected: dict[str, Any] | None = None,
     ) -> SopExecutionRequest:
-        checkpoint = _sop_checkpoint_from_row(task, checkpoint_row)
         inherited_context = dict(collected or {})
+        checkpoint = self._adapter_checkpoint_from_task(
+            task,
+        )
         sop_context = _context_for_sop(sop_id, inherited_context)
         context_reference = _references_session_context(message)
         business_context_reference = context_reference and not _is_resume_only_reference(message)
-        saved = sop_context if business_context_reference else {}
+        task_status = str((task or {}).get("status") or "").upper()
+        preserve_active_task_context = task_status == "RUNNING"
+        saved = sop_context if business_context_reference or preserve_active_task_context else {}
         if checkpoint is not None:
-            resolved_step = self._resolved_current_step(task, checkpoint_row) if task is not None else ""
+            resolved_step = self._resolved_current_step(task) if task is not None else ""
             if resolved_step and resolved_step != checkpoint.current_step:
                 checkpoint = replace(
                     checkpoint,
                     current_node_id=resolved_step,
                     current_step=resolved_step,
                 )
-            saved = dict(sop_context) if business_context_reference else {}
+            saved = dict(sop_context) if business_context_reference or preserve_active_task_context else {}
             saved.update(dict(checkpoint.collected))
             checkpoint = _checkpoint_with_collected(checkpoint, saved)
         metadata: dict[str, Any] = {
@@ -1414,6 +1362,29 @@ class RuntimeLabService:
             collected=saved,
             business_refs=dict(sop_context) if business_context_reference else {},
             metadata=metadata,
+        )
+
+    def _adapter_checkpoint_from_task(
+        self,
+        task: dict[str, Any] | None,
+    ) -> SopCheckpoint | None:
+        if task is None:
+            return None
+        current_step = self._resolved_current_step(task)
+        if not current_step:
+            return None
+        scoped_variables: dict[str, Any] = {}
+        chatflow_meta = _chatflow_meta_from_task(task)
+        if chatflow_meta:
+            scoped_variables["__chatflow"] = chatflow_meta
+        return SopCheckpoint(
+            sop_runtime_id=f"runtime-lab:{int(task['id'])}:task-ref",
+            current_node_id=current_step,
+            current_step=current_step,
+            pending_prompt="",
+            collected={},
+            scoped_variables=scoped_variables,
+            version=1,
         )
 
     def _session_user_history(
@@ -1572,9 +1543,7 @@ def _task_summary(task: dict[str, Any] | None) -> dict[str, Any] | None:
         "taskId": task["id"],
         "sopId": task["sop_id"],
         "status": task["status"],
-        "currentStep": task["current_step"],
         "resumeSummary": task["resume_summary"],
-        "businessRefs": task.get("business_refs") or {},
     }
 
 
@@ -2173,64 +2142,6 @@ def _json_stable(value: Mapping[str, Any]) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
-def _checkpoint_status(result: SopExecutionResult) -> str:
-    return "COMPLETED" if result.status == SopExecutionStatus.COMPLETED else "ACTIVE"
-
-
-def _sop_checkpoint_from_row(
-    task: dict[str, Any] | None,
-    checkpoint: dict[str, Any] | None,
-) -> SopCheckpoint | None:
-    """Rebuild :class:`SopCheckpoint` from task + checkpoint rows.
-
-    Slice 213.3.5c (narrowed) only migrates the ``__chatflow`` meta data source:
-
-    - ``scoped_variables['__chatflow']`` is rebuilt from the task's first-class
-      ref columns (slice 213.3.1). The legacy
-      ``checkpoint.scoped_variables.__chatflow`` is only consulted when the
-      task carries no refs (e.g., pre-213.3.1 tasks).
-    - ``collected`` continues to come from ``checkpoint.collected`` (the
-      aggregator-based migration is deferred to slice 213.3.5d, which must
-      pair it with an ``_adapter_request`` rewrite that respects the
-      ``SOP_CONTEXT_KEYS[sop_id]`` filter to avoid cross-SOP field leakage).
-    - ``current_step`` still reads from the checkpoint row (banned in 213.3.5e).
-    - ``pending_prompt`` is dropped (banned in 213.3.4).
-    """
-
-    if checkpoint is None:
-        return None
-
-    collected = dict(checkpoint.get("collected") or {})
-
-    raw_scoped = checkpoint.get("scoped_variables")
-    scoped_variables: dict[str, Any] = (
-        dict(raw_scoped) if isinstance(raw_scoped, dict) else _scoped_variables(collected)
-    )
-
-    chatflow_meta = _chatflow_meta_from_task(task)
-    if not chatflow_meta:
-        legacy_meta = _chatflow_meta_from_checkpoint_row(checkpoint)
-        if legacy_meta:
-            chatflow_meta = dict(legacy_meta)
-    if chatflow_meta:
-        scoped_variables["__chatflow"] = chatflow_meta
-    else:
-        scoped_variables.pop("__chatflow", None)
-
-    task_id = int(task["id"]) if task is not None else int(checkpoint["task_id"])
-    checkpoint_id = int(checkpoint["id"])
-    current_step = str(checkpoint["current_step"])
-    return SopCheckpoint(
-        sop_runtime_id=f"runtime-lab:{task_id}:{checkpoint_id}",
-        current_node_id=current_step,
-        current_step=current_step,
-        pending_prompt="",
-        collected=collected,
-        scoped_variables=scoped_variables,
-        version=1,
-    )
-
-
 def _chatflow_meta_from_task(task: Mapping[str, Any] | None) -> dict[str, Any]:
     """Build the ``__chatflow`` meta dict from task ref columns (slice 213.3.1).
 
@@ -2271,16 +2182,6 @@ def _chatflow_meta_from_task(task: Mapping[str, Any] | None) -> dict[str, Any]:
         "resultRef": f"/api/v1/runtime-runs/{run_id}/result",
     }
     return meta
-
-
-def _chatflow_meta_from_checkpoint_row(checkpoint: dict[str, Any] | None) -> Mapping[str, Any]:
-    if checkpoint is None:
-        return {}
-    scoped_variables = checkpoint.get("scoped_variables")
-    if not isinstance(scoped_variables, Mapping):
-        return {}
-    meta = scoped_variables.get("__chatflow")
-    return meta if isinstance(meta, Mapping) else {}
 
 
 def _chatflow_refs_from_checkpoint(checkpoint: SopCheckpoint | None) -> dict[str, Any]:

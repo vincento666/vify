@@ -1,0 +1,11 @@
+added 198 packages, and audited 199 packages in 3s
+37 packages are looking for funding
+  run `npm fund` for details
+10 vulnerabilities (4 moderate, 5 high, 1 critical)
+To address issues that do not require attention, run:
+  npm audit fix
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+Run `npm audit` for details.
+npm warn deprecated whatwg-encoding@3.1.1: Use @exodus/bytes instead for a more spec-conformant and faster implementation
+npm warn deprecated lucide-vue-next@1.0.0: Package deprecated. Please use @lucide/vue instead.

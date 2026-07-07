@@ -28,7 +28,7 @@ class RuntimeLabKernelTest(unittest.TestCase):
             self.assertTrue(second.replayed)
             self.assertEqual(second.payload, first.payload)
             self.assertEqual([task["status"] for task in tasks], ["RUNNING"])
-            self.assertEqual([task["current_step"] for task in tasks], ["collect_order_no"])
+            self.assertTrue(all("current_step" not in task for task in tasks))
             self.assertEqual([event["sequence"] for event in events], list(range(1, len(events) + 1)))
             self.assertEqual(
                 [event["event_type"] for event in events],

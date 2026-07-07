@@ -177,7 +177,8 @@ def _customer_assistant_workers(
     adapter = _customer_assistant_sop_adapter(
         session,
         bindings,
-        runtime_invocation_mode=settings.runtime_lab_sop_runtime_invocation_mode,
+        runtime_invocation_mode=_customer_assistant_sop_runtime_invocation_mode(settings),
+        sop_llm_mode=_customer_assistant_sop_llm_mode(settings),
     )
     profile_catalog = worker_profiles or CustomerAssistantWorkerProfileCatalog.from_json(settings.customer_assistant_worker_profiles_json)
     react_registry = react_worker_registry_from_profiles(profile_catalog.list_profiles())
@@ -230,6 +231,7 @@ def _customer_assistant_sop_adapter(
     bindings: dict[str, int],
     *,
     runtime_invocation_mode: str = "sync",
+    sop_llm_mode: str = "live",
 ):
     fallback_adapter = FakeSopRuntimeAdapter()
     if not bindings:
@@ -246,7 +248,11 @@ def _customer_assistant_sop_adapter(
         WorkflowRepository(session),
         ChatflowStateRepository(session),
         knowledge_facade=KnowledgeFacade(session),
-        llm_completer_resolver=workflow_service.runtime_v2_llm_completer,
+        llm_completer_resolver=(
+            workflow_service.runtime_v2_llm_completer
+            if _customer_assistant_sop_uses_live_llm(sop_llm_mode)
+            else None
+        ),
     )
     return ChatflowSopRuntimeAdapter(
         workflow_service,
@@ -271,6 +277,18 @@ def _runtime_invocation_uses_background(mode: str) -> bool:
         "startandstreamref",
         "start_and_stream_ref",
     }
+
+
+def _customer_assistant_sop_runtime_invocation_mode(settings: Settings) -> str:
+    return str(settings.customer_assistant_sop_runtime_invocation_mode or "async").strip() or "async"
+
+
+def _customer_assistant_sop_llm_mode(settings: Settings) -> str:
+    return str(settings.customer_assistant_sop_llm_mode or "live").strip().lower() or "live"
+
+
+def _customer_assistant_sop_uses_live_llm(mode: str) -> bool:
+    return str(mode or "").strip().lower() not in {"mock", "fake", "deterministic", "off", "none"}
 
 
 def _customer_assistant_background_enqueue(session: Session):

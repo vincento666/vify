@@ -57,7 +57,7 @@ class AggregatorSideChannelTest(unittest.TestCase):
             {"order_no": "SECOND", "phone": "111"},
         )
 
-    def test_collect_prefers_chatflow_over_overlay_over_business_refs(self) -> None:
+    def test_collect_prefers_chatflow_over_overlay_without_business_refs_fallback(self) -> None:
         repository = MagicMock()
         repository.list_tasks.return_value = [
             {
@@ -85,8 +85,8 @@ class AggregatorSideChannelTest(unittest.TestCase):
 
         # chatflow wins for order_no
         self.assertEqual(result["order_no"], "CHATFLOW")
-        # business_refs phone survives (no collision with chatflow or overlay)
-        self.assertEqual(result["phone"], "PHONE_DB")
+        # business_refs is no longer a fallback after schema drop.
+        self.assertNotIn("phone", result)
         # overlay-only key survives
         self.assertEqual(result["extra"], "OVERLAY_ONLY")
 

@@ -2080,8 +2080,15 @@ class _SnapshotWorkflowRepository:
         node_key: str,
         node_type: str,
         inputs: dict[str, Any] | None = None,
+        selection_state: dict[str, Any] | None = None,
     ) -> int:
-        return self._base.create_node_run(workflow_run_id, node_key, node_type, inputs=inputs)
+        return self._base.create_node_run(
+            workflow_run_id,
+            node_key,
+            node_type,
+            inputs=inputs,
+            selection_state=selection_state,
+        )
 
     def finish_node_run(
         self,

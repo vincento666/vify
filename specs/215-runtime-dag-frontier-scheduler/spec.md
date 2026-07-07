@@ -46,6 +46,32 @@ spec 214 已固化 DAG 语义，但 runtime v2 仍是单 current-node while-loop
 | 215.6 | 事件 sequence 单调递增保证（并发下） | RED / Contract / Integration |
 | 215.7 | 出口回归：spec 212 + 213 + 214 入口门禁全套 | All gates |
 
+## 实施状态
+
+- 215.1 已完成纯 frontier computation。
+- 215.2 已把 runtime v2 顺序链路切到 frontier scheduler：每轮从
+  `compute_frontier()` 取第一个 runnable node 执行，保持现有顺序链路输出、
+  node run 顺序和事件顺序不变。
+- 215.3 已启用 frontier wave：同一轮 runnable nodes 会使用隔离的 branch
+  context 逐个执行，完成整轮后再合并 node outputs 并释放 join；DB/event 写入仍
+  保持串行，worker/lease 级并行留给 spec 218+。
+- 215.4 已把 frontier `stateByNodeKey` 贯穿到 runtime node run：
+  `selectionState` 在节点完成后保留 selected/skipped upstream 与 implicit join
+  reason；side-effect terminal leaf 可在 active path 完成时正常返回 no-reply /
+  side-effect summary；Chatflow runtime v2 debug 会保留 resume 输入、展示
+  resumed/completed timeline，并从 runtime result 投影 session variables。
+- 215.5 已固化失败策略矩阵：`fail` 保持 fail-fast；`continue` 继续默认出口；
+  `branch` 路由到 `error` outlet；新增 `partial` 作为 partial success 策略，
+  保留失败证据并通过默认出口完成 active path。
+- 215.6 已固化事件 sequence 单调递增：同一 backend process 内按 `run_id`
+  使用 per-run lock 串行分配 event sequence，并保留数据库唯一索引与重试作为
+  一致性兜底；跨 worker lease/heartbeat/重试语义仍留给 spec 218+。
+- 215.7 已完成 spec 212 + 213 + 214 出口回归：旧显式 fan-out 契约更新为
+  `allowFanOut` 后应执行默认并发出口；runtime v2 resume frontier 同时接受
+  raw node-run `SUCCEEDED` 与 projected `COMPLETED` 作为 completed 状态，避免
+  Runtime Lab SOP 在问题节点恢复后重启旧 waiting/info 节点；后端、前端、rem、
+  Chatflow/Workflow/Runtime Lab Browser UAT 均全绿。
+
 ## 验收门禁映射（Acceptance Gate Map）
 
 | 文档验收标准 | 对应 slice | 检测命令 |

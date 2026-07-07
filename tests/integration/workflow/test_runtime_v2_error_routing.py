@@ -13,7 +13,7 @@ class RuntimeV2ErrorRoutingIntegrationTest(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = _create_error_routing_chatflow(client, error_behavior="continue")
             started = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                f"/api/v1/chatflows/{chatflow['id']}/runs",
                 json={"input": {"sys.query": "continue"}},
             )
             self.assertEqual(started.status_code, 200, started.text)
@@ -40,7 +40,7 @@ class RuntimeV2ErrorRoutingIntegrationTest(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = _create_error_routing_chatflow(client, error_behavior="branch")
             started = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                f"/api/v1/chatflows/{chatflow['id']}/runs",
                 json={"input": {"sys.query": "branch"}},
             )
             self.assertEqual(started.status_code, 200, started.text)
@@ -64,7 +64,7 @@ class RuntimeV2ErrorRoutingIntegrationTest(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = _create_agent_call_error_chatflow(client)
             started = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                f"/api/v1/chatflows/{chatflow['id']}/runs",
                 json={"input": {"sys.query": "agent"}},
             )
             self.assertEqual(started.status_code, 200, started.text)

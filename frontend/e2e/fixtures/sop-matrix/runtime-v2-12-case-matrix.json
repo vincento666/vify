@@ -1,0 +1,78 @@
+{
+  "schema": "hify.runtime_lab.sop_matrix/216.4",
+  "evidenceDimensions": ["apiResponse", "eventStream", "taskPanel", "refreshRecovery"],
+  "cases": [
+    {
+      "id": "strong-intent-start",
+      "title": "Strong intent starts target SOP and child Chatflow run",
+      "acceptance": "A fresh conversation routes to START_SOP, creates an active task, and exposes child runtime refs.",
+      "evidenceDimensions": ["apiResponse", "eventStream", "taskPanel", "refreshRecovery"]
+    },
+    {
+      "id": "active-sop-continue",
+      "title": "Supplemental slot input continues active SOP",
+      "acceptance": "A follow-up slot message continues the active SOP and advances to the next waiting point or completion.",
+      "evidenceDimensions": ["apiResponse", "eventStream", "taskPanel", "refreshRecovery"]
+    },
+    {
+      "id": "interruptible-switch",
+      "title": "Interruptible step suspends current SOP and starts new SOP",
+      "acceptance": "A new intent at an interruptible waiting node marks the first task SUSPENDED and starts a second child run.",
+      "evidenceDimensions": ["apiResponse", "eventStream", "taskPanel", "refreshRecovery"]
+    },
+    {
+      "id": "resume-offer-after-new-sop-complete",
+      "title": "Completing the new SOP offers resume for the suspended SOP",
+      "acceptance": "After the secondary SOP completes, the turn includes a resume offer for the suspended primary task.",
+      "evidenceDimensions": ["apiResponse", "eventStream", "taskPanel", "refreshRecovery"]
+    },
+    {
+      "id": "resume-original-child-run",
+      "title": "Resume restores original child run instead of duplicating state",
+      "acceptance": "A resume signal returns to the original task and keeps the same child run id.",
+      "evidenceDimensions": ["apiResponse", "eventStream", "taskPanel", "refreshRecovery"]
+    },
+    {
+      "id": "non-interruptible-switch-rejected",
+      "title": "Non-interruptible confirm step rejects switching",
+      "acceptance": "A new intent at a confirm node returns REJECT_SWITCH_CONTINUE_ACTIVE and keeps the current task active.",
+      "evidenceDimensions": ["apiResponse", "eventStream", "taskPanel", "refreshRecovery"]
+    },
+    {
+      "id": "explicit-resume-signal",
+      "title": "Explicit resume wording restores the correct suspended child Chatflow",
+      "acceptance": "Phrases such as continue previous resume the intended suspended task.",
+      "evidenceDimensions": ["apiResponse", "eventStream", "taskPanel", "refreshRecovery"]
+    },
+    {
+      "id": "clarify-does-not-create-run",
+      "title": "Ambiguous input clarifies without creating a child run",
+      "acceptance": "An unclear message returns CLARIFY and leaves task count unchanged.",
+      "evidenceDimensions": ["apiResponse", "eventStream", "taskPanel", "refreshRecovery"]
+    },
+    {
+      "id": "faq-rag-no-state-pollution",
+      "title": "FAQ/RAG answers do not pollute active or suspended child state",
+      "acceptance": "Knowledge answers preserve the current active task and child runtime refs.",
+      "evidenceDimensions": ["apiResponse", "eventStream", "taskPanel", "refreshRecovery"]
+    },
+    {
+      "id": "agent-fallback-no-state-replacement",
+      "title": "Agent fallback answer does not replace SOP execution state",
+      "acceptance": "Fallback answers preserve active SOP identity and child runtime refs.",
+      "evidenceDimensions": ["apiResponse", "eventStream", "taskPanel", "refreshRecovery"]
+    },
+    {
+      "id": "handoff-preserves-runtime-refs",
+      "title": "Human handoff preserves conversation and runtime refs",
+      "acceptance": "HANDOFF_TO_HUMAN keeps conversation id and active/suspended child Chatflow refs.",
+      "evidenceDimensions": ["apiResponse", "eventStream", "taskPanel", "refreshRecovery"]
+    },
+    {
+      "id": "multiple-child-runs-aggregate-only",
+      "title": "Multiple child Chatflows coexist through aggregate views only",
+      "acceptance": "Trace shows multiple child runs while RuntimeLab task/event ledgers omit execution-state mirrors.",
+      "evidenceDimensions": ["apiResponse", "eventStream", "taskPanel", "refreshRecovery"]
+    }
+  ]
+}

@@ -28,7 +28,7 @@ class ChatflowRuntimeJobWorkerGatewayTest(unittest.TestCase):
             for case_name, create_chatflow, expected_status, expected_output, expected_event_type in cases:
                 chatflow = create_chatflow(client)
                 started_response = client.post(
-                    f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                    f"/api/v1/chatflows/{chatflow['id']}/runs",
                     json={
                         "input": {
                             "sys.query": "Ada",

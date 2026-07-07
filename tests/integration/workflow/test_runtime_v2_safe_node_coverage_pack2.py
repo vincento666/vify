@@ -15,7 +15,7 @@ class RuntimeV2SafeNodeCoveragePack2Test(unittest.TestCase):
             child = _create_child_workflow(client, stamp)
             chatflow = _create_execute_workflow_chatflow(client, int(child["id"]))
             started_response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                f"/api/v1/chatflows/{chatflow['id']}/runs",
                 json={"input": {"ticket": "A-122", "sys.query": "please route ticket"}},
             )
             self.assertEqual(started_response.status_code, 200, started_response.text)
@@ -46,7 +46,7 @@ class RuntimeV2SafeNodeCoveragePack2Test(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = _create_transfer_to_human_chatflow(client, stamp)
             resume_started = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                f"/api/v1/chatflows/{chatflow['id']}/runs",
                 json={
                     "input": {
                         "sys.query": "我要人工",
@@ -68,7 +68,7 @@ class RuntimeV2SafeNodeCoveragePack2Test(unittest.TestCase):
             )
 
             cancel_started = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                f"/api/v1/chatflows/{chatflow['id']}/runs",
                 json={
                     "input": {
                         "sys.query": "还要人工",
@@ -112,7 +112,7 @@ class RuntimeV2SafeNodeCoveragePack2Test(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = _create_code_chatflow(client, stamp)
             started_response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                f"/api/v1/chatflows/{chatflow['id']}/runs",
                 json={"input": {"sys.query": "Ada"}},
             )
             self.assertEqual(started_response.status_code, 200, started_response.text)

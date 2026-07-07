@@ -38,7 +38,7 @@ class RuntimeV2ProviderBackedLlmBindingTest(unittest.TestCase):
                 published = client.post(f"/api/v1/workflows/{workflow['id']}/publish")
                 self.assertEqual(published.status_code, 200, published.text)
                 started = client.post(
-                    f"/api/v1/workflows/{workflow['id']}/runs-v2",
+                    f"/api/v1/workflows/{workflow['id']}/runs",
                     json={"input": {"userMessage": "runtime v2 provider"}},
                 ).json()["data"]
                 terminal = _wait_for_result(client, started["resultRef"], "SUCCEEDED")
@@ -79,7 +79,7 @@ class RuntimeV2ProviderBackedLlmBindingTest(unittest.TestCase):
             with TestClient(app) as client:
                 chatflow = _create_llm_chatflow(client)
                 started = client.post(
-                    f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                    f"/api/v1/chatflows/{chatflow['id']}/runs",
                     json={
                         "input": {
                             "sys.query": "need fallback",
@@ -113,7 +113,7 @@ class RuntimeV2ProviderBackedLlmBindingTest(unittest.TestCase):
             with TestClient(app) as client:
                 chatflow = _create_llm_chatflow(client, llm_config={"modelConfigId": model_config_id})
                 started = client.post(
-                    f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                    f"/api/v1/chatflows/{chatflow['id']}/runs",
                     json={
                         "input": {
                             "sys.query": "direct node model",
@@ -142,7 +142,7 @@ class RuntimeV2ProviderBackedLlmBindingTest(unittest.TestCase):
             with TestClient(app) as client:
                 chatflow = _create_llm_chatflow(client, llm_config={"modelConfigId": model_config_id})
                 started = client.post(
-                    f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                    f"/api/v1/chatflows/{chatflow['id']}/runs",
                     json={
                         "input": {
                             "sys.query": "direct node model",

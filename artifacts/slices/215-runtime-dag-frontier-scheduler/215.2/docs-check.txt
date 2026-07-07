@@ -1,0 +1,4 @@
+42:| 215.2 | Frontier scheduler 取代单 `_next_node_key` while-loop；普通顺序链路行为不变 | RED / Unit / Integration / E2E |
+52:- 215.2 已把 runtime v2 顺序链路切到 frontier scheduler：每轮从
+53:  `compute_frontier()` 取第一个 runnable node 执行，保持现有顺序链路输出、
+70:| 普通顺序链路语义不变 | 215.2 | spec 212.5 UAT 全套 |

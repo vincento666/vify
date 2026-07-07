@@ -1,0 +1,52 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ FrontierSchedulerSequentialParityTest.test_runtime_v2_uses_frontier_scheduler_without_changing_linear_order _
+
+self = <tests.integration.runtime.test_frontier_scheduler_sequential_parity.FrontierSchedulerSequentialParityTest testMethod=test_runtime_v2_uses_frontier_scheduler_without_changing_linear_order>
+
+    def test_runtime_v2_uses_frontier_scheduler_without_changing_linear_order(self) -> None:
+>       with patch("app.modules.workflow.domain.runtime_v2.compute_frontier", wraps=compute_frontier) as frontier:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/integration/runtime/test_frontier_scheduler_sequential_parity.py:16:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/unittest/mock.py:1467: in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <unittest.mock._patch object at 0x119536e10>
+
+    def get_original(self):
+        target = self.getter()
+        name = self.attribute
+
+        original = DEFAULT
+        local = False
+
+        try:
+            original = target.__dict__[name]
+        except (AttributeError, KeyError):
+            original = getattr(target, name, DEFAULT)
+        else:
+            local = True
+
+        if name in _builtins and isinstance(target, ModuleType):
+            self.create = True
+
+        if not self.create and original is DEFAULT:
+>           raise AttributeError(
+                "%s does not have the attribute %r" % (target, name)
+            )
+E           AttributeError: <module 'app.modules.workflow.domain.runtime_v2' from '/private/tmp/hify-213-verify3.uX7Jpk/app/modules/workflow/domain/runtime_v2.py'> does not have the attribute 'compute_frontier'
+
+/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/unittest/mock.py:1437: AttributeError
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /private/tmp/hify-213-verify3.uX7Jpk/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/integration/runtime/test_frontier_scheduler_sequential_parity.py::FrontierSchedulerSequentialParityTest::test_runtime_v2_uses_frontier_scheduler_without_changing_linear_order
+1 failed, 1 warning in 0.87s

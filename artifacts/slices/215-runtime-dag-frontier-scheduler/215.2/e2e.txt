@@ -1,0 +1,7 @@
+== workflow-six-node-matrix.mjs ==
+PASS workflow/chatflow six-node matrix e2e
+PASS workflow-six-node-matrix.mjs
+
+== chatflow-channels.mjs ==
+PASS chatflow channels e2e chatflow=15408
+PASS chatflow-channels.mjs

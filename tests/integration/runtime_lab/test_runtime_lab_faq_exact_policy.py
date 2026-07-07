@@ -46,7 +46,7 @@ class RuntimeLabFaqExactPolicyTest(unittest.TestCase):
             self.assertEqual(turn.route_decision.handoff["reasonCode"], "USER_REQUEST")
             self.assertEqual(faq_gate.messages, [])
 
-    def test_active_sop_exact_faq_answer_preserves_task_checkpoint_and_business_refs(self) -> None:
+    def test_active_sop_exact_faq_answer_does_not_mutate_task_refs_or_step(self) -> None:
         with _session() as session:
             faq_gate = _StaticFaqGate(_child_ticket_refund_proposal())
             repository = RuntimeLabRepository(session)
@@ -57,15 +57,15 @@ class RuntimeLabFaqExactPolicyTest(unittest.TestCase):
             started = service.handle_message(session_id, "我要退票")
             before = dict(started.active_task)
             answered = service.handle_message(session_id, "儿童票可以退吗？")
-            after_checkpoint = repository.get_latest_checkpoint(int(before["id"]))
+            after = repository.get_task(int(before["id"]))
+            assert after is not None
 
             self.assertEqual(answered.route_decision.action, "ANSWER_FAQ")
             self.assertEqual(answered.reply, "儿童票如未使用可按客票规则申请退票。")
             self.assertEqual(answered.active_task["id"], before["id"])
             self.assertEqual(answered.active_task["current_step"], before["current_step"])
-            self.assertEqual(answered.active_task["checkpoint_id"], before["checkpoint_id"])
-            self.assertEqual(answered.active_task["business_refs"], before["business_refs"])
-            self.assertEqual(after_checkpoint["id"], before["checkpoint_id"])
+            self.assertNotIn("checkpoint_id", answered.active_task)
+            self.assertEqual(after["chatflow_run_id"], before["chatflow_run_id"])
             self.assertNotIn("TASK_CONTINUED", [event["event_type"] for event in answered.events])
 
     def test_active_sop_ambiguous_faq_and_slot_input_clarifies_without_task_mutation(self) -> None:
@@ -83,7 +83,7 @@ class RuntimeLabFaqExactPolicyTest(unittest.TestCase):
             self.assertEqual(clarified.route_decision.faq_answer["reasonCode"], "AMBIGUOUS_ACTIVE_SOP")
             self.assertEqual(clarified.active_task["id"], before["id"])
             self.assertEqual(clarified.active_task["current_step"], before["current_step"])
-            self.assertEqual(clarified.active_task["checkpoint_id"], before["checkpoint_id"])
+            self.assertNotIn("checkpoint_id", clarified.active_task)
             self.assertNotIn("TASK_CONTINUED", [event["event_type"] for event in clarified.events])
 
 

@@ -37,33 +37,21 @@ class AdapterRequestUsesAggregatorTest(unittest.TestCase):
                 sop_id="refund_ticket",
                 business_refs={"poison": "from_task", "passenger_count": "from_task"},
             )
-            checkpoint_row = repository.create_checkpoint(
-                session_id,
-                int(task["id"]),
-                sop_id="refund_ticket",
-                current_step="collect_order_no",
-                pending_prompt="",
-                collected={},
-                scoped_variables={},
-            )
 
             request = service._adapter_request(  # noqa: SLF001
                 session_id,
                 "refund_ticket",
                 message="退刚才订的票",
                 task=task,
-                checkpoint_row=checkpoint_row,
                 collected=aggregator.collect(session_id),
             )
 
-            self.assertNotEqual(request.business_refs, task["business_refs"])
             self.assertNotIn("poison", request.business_refs)
             self.assertNotIn("passenger_count", request.business_refs)
             self.assertEqual(request.collected["order_no"], "AGG-ORDER")
             self.assertEqual(request.collected["phone"], "13900000000")
             self.assertNotIn("passenger_count", request.collected)
-            assert request.checkpoint is not None
-            self.assertNotIn("passenger_count", request.checkpoint.collected)
+            self.assertIsNone(request.checkpoint)
 
     def test_suspend_task_uses_aggregator_not_task_business_refs(self) -> None:
         with _session() as db_session:
@@ -84,15 +72,6 @@ class AdapterRequestUsesAggregatorTest(unittest.TestCase):
                 session_id,
                 sop_id="refund_ticket",
                 business_refs={"order_no": "TASK-POISON", "poison": "from_task"},
-            )
-            repository.create_checkpoint(
-                session_id,
-                int(task["id"]),
-                sop_id="refund_ticket",
-                current_step="collect_order_no",
-                pending_prompt="",
-                collected={},
-                scoped_variables={},
             )
 
             service._suspend_task(session_id, task)  # noqa: SLF001
@@ -119,6 +98,7 @@ class _FixedAggregator:
         self._context = dict(context)
         self.recorded_contexts: list[dict[str, Any]] = []
         self.collect_calls: list[int] = []
+        self._task_steps: dict[int, str] = {}
 
     def collect(self, session_id: int) -> dict[str, Any]:
         self.collect_calls.append(session_id)
@@ -126,6 +106,12 @@ class _FixedAggregator:
 
     def record_turn_context(self, _session_id: int, context: Mapping[str, Any]) -> None:
         self.recorded_contexts.append(dict(context))
+
+    def record_task_step(self, task_id: int, current_step: str) -> None:
+        self._task_steps[int(task_id)] = current_step
+
+    def task_current_step(self, task_id: int) -> str | None:
+        return self._task_steps.get(int(task_id))
 
 
 class _RecordingSuspendAdapter:

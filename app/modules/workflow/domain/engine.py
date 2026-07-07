@@ -2374,6 +2374,39 @@ def _extract_collection_values_fake(text: str, fields: list[dict[str, Any]]) -> 
         if any(term in label for term in ["phone", "mobile", "手机号", "手机", "电话"]):
             match = re.search(r"(?<!\d)(1[3-9]\d{9})(?!\d)", text)
             value = match.group(1) if match else None
+        elif any(term in label for term in ["order_no", "order", "订单号", "订单编号", "预订编号"]):
+            value = _extract_order_no_value(text)
+        elif any(term in label for term in ["passenger_count", "出行人数", "团队人数"]):
+            match = re.search(r"(\d+|[一二三四五六七八九十两]{1,3}|十几|二十几|三十几)个?人", text)
+            value = match.group(1) if match else None
+        elif any(term in label for term in ["route", "origin", "destination", "出发到达城市", "航线"]):
+            value = _extract_labeled_value(text, name) or _extract_labeled_value(text, description) or _extract_route_value(text)
+        elif any(term in label for term in ["travel_time", "target_time", "出行时间", "期望改签时间"]):
+            value = _extract_labeled_value(text, name) or _extract_labeled_value(text, description) or _extract_travel_time_value(text)
+        elif any(term in label for term in ["flight_no", "flight number", "航班号"]):
+            match = re.search(r"(?:航班号|航班|flight)\s*[:：]?\s*([A-Za-z]{2}\d{3,5})", text, flags=re.IGNORECASE)
+            value = match.group(1).upper() if match else _extract_order_no_value(text)
+        elif any(term in label for term in ["passenger_name", "乘机人", "旅客"]):
+            value = _extract_passenger_name_value(text)
+        elif any(term in label for term in ["member_no", "会员号", "会员编号"]):
+            match = re.search(r"(?:会员号|会员编号|member)\s*[:：]?\s*([A-Za-z]{1,8}\d{3,12})", text, flags=re.IGNORECASE)
+            value = match.group(1) if match else None
+        elif any(term in label for term in ["invoice_title", "发票抬头"]):
+            value = _extract_labeled_value(text, "发票抬头") or _extract_labeled_value(text, name)
+        elif any(term in label for term in ["service_items", "增值服务项目"]):
+            value = _extract_keyword_phrase(text, ("餐食", "贵宾厅", "保险", "接送机", "行李"))
+        elif any(term in label for term in ["baggage_need", "行李需求"]):
+            value = _extract_keyword_phrase(text, ("行李", "箱子", "托运", "超重", "婴儿车"))
+        elif any(term in label for term in ["seat_preference", "座位偏好"]):
+            value = _extract_keyword_phrase(text, ("靠窗", "靠过道", "坐一起", "值机", "登机牌"))
+        elif any(term in label for term in ["assistance_need", "特殊协助需求"]):
+            value = _extract_keyword_phrase(text, ("轮椅", "老人", "无障碍", "特殊", "受伤"))
+        elif any(term in label for term in ["pet_info", "宠物信息"]):
+            value = _extract_keyword_phrase(text, ("猫", "狗", "宠物", "托运", "客舱"))
+        elif any(term in label for term in ["issue_detail", "异常情况"]):
+            value = _extract_keyword_phrase(text, ("取消", "延误", "异常", "补偿", "非自愿"))
+        elif any(term in label for term in ["change_detail", "需要修改的资料"]):
+            value = _extract_keyword_phrase(text, ("证件号", "手机号", "联系人", "姓名", "拼音", "更正", "填错"))
         elif any(term in label for term in ["email", "邮箱", "mail"]):
             match = re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text)
             value = match.group(0) if match else None
@@ -2387,6 +2420,8 @@ def _extract_collection_values_fake(text: str, fields: list[dict[str, Any]]) -> 
         else:
             value = _extract_labeled_value(text, name) or _extract_labeled_value(text, description)
         if value is None:
+            value = _extract_labeled_value(text, name) or _extract_labeled_value(text, description)
+        if value is None:
             continue
         if field_type in {"number", "integer", "float"}:
             try:
@@ -2398,6 +2433,79 @@ def _extract_collection_values_fake(text: str, fields: list[dict[str, Any]]) -> 
             value = normalized in {"true", "1", "yes", "y", "是", "同意"}
         values[name] = value
     return values
+
+
+def _extract_order_no_value(text: str) -> str | None:
+    match = re.search(
+        r"(?:订单编号|订单号|预订编号|order_no|order)\s*[:：]?\s*"
+        r"([A-Za-z]{1,4}\d{2,8}(?:[-_]\d{3,12}){0,3}|[A-Za-z]{1,4}[-_]?\d{3,20})",
+        text,
+        flags=re.IGNORECASE,
+    )
+    return match.group(1) if match else None
+
+
+def _extract_route_value(text: str) -> str | None:
+    from_route = re.search(
+        r"从([\u4e00-\u9fffA-Za-z]{2,16})(?:出发)?(?:到|去|飞)([\u4e00-\u9fffA-Za-z]{2,16}?)"
+        r"(?:的?机票|的?航班|航班|，|,|。|$)",
+        text,
+    )
+    if from_route is not None:
+        return f"{_clean_route_city(from_route.group(1))}到{_clean_route_city(from_route.group(2))}"
+    match = re.search(r"([\u4e00-\u9fffA-Za-z]{2,8})(?:到|去|飞)([\u4e00-\u9fffA-Za-z]{2,8})", text)
+    if match is not None:
+        return f"{_clean_route_city(match.group(1))}到{_clean_route_city(match.group(2))}"
+    return None
+
+
+def _clean_route_city(value: str) -> str:
+    cleaned = value.strip()
+    for prefix in ("我要订", "我要定", "我想订", "我想定", "帮我订", "帮我定", "订", "定", "买"):
+        if cleaned.startswith(prefix):
+            cleaned = cleaned.removeprefix(prefix).strip()
+    return cleaned
+
+
+def _extract_travel_time_value(text: str) -> str | None:
+    time_match = re.search(
+        r"((?:今天|明天|后天|大后天|下?周[一二三四五六日天]|下?星期[一二三四五六日天])?"
+        r"(?:早上|上午|中午|下午|晚上|夜里)?\s*\d{1,2}点(?:\d{1,2}分|半)?(?:左右)?)",
+        text,
+    )
+    if time_match is not None:
+        return time_match.group(1).replace(" ", "")
+    date_period_match = re.search(
+        r"((?:今天|明天|后天|大后天|下?周[一二三四五六日天]|下?星期[一二三四五六日天])"
+        r"(?:早上|上午|中午|下午|晚上|夜里|晚间))",
+        text,
+    )
+    if date_period_match is not None:
+        return date_period_match.group(1)
+    date_match = re.search(r"(今天|明天|后天|大后天|下?周[一二三四五六日天]|下?星期[一二三四五六日天])", text)
+    return date_match.group(1) if date_match is not None else None
+
+
+def _extract_passenger_name_value(text: str) -> str | None:
+    match = re.search(
+        r"乘机人\s*[:：]?\s*(?!和|及|与|、|还有|手机号|电话|信息|姓名|等下|稍后|后面|再给)"
+        r"([A-Za-z\u4e00-\u9fff][A-Za-z0-9_\-\u4e00-\u9fff]{0,20})",
+        text,
+    )
+    if match is None:
+        return None
+    value = match.group(1).strip()
+    for prefix in ("是", "叫", "为"):
+        if value.startswith(prefix) and len(value) > len(prefix):
+            value = value.removeprefix(prefix).strip()
+    if any(term in value for term in ("手机号", "电话", "等下", "稍后", "后面", "再给", "信息")):
+        return None
+    return value
+
+
+def _extract_keyword_phrase(text: str, keywords: tuple[str, ...]) -> str | None:
+    hits = [keyword for keyword in keywords if keyword in text]
+    return "、".join(hits) if hits else None
 
 
 def _extract_labeled_value(text: str, label: str) -> str | None:

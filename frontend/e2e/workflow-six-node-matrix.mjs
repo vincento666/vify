@@ -5,6 +5,7 @@ const baseUrl = process.env.HIFY_E2E_BASE_URL || 'http://127.0.0.1:5173'
 const screenshotPath = process.env.HIFY_E2E_SCREENSHOT
 const chatflowScreenshotPath = process.env.HIFY_E2E_CHATFLOW_SCREENSHOT
 const requireLiveLlm = process.env.HIFY_E2E_REQUIRE_LIVE_LLM === '1'
+const invalidConfigOnly = process.env.HIFY_E2E_INVALID_CONFIG === '1'
 
 function assert(condition, message) {
   if (!condition) throw new Error(message)
@@ -15,6 +16,15 @@ async function unwrap(response, label) {
   const payload = await response.json()
   assert(payload.code === 200, `${label} API ${payload.message}`)
   return payload.data
+}
+
+async function waitForRuntimeResult(page, resultRef) {
+  for (let index = 0; index < 60; index += 1) {
+    const latest = await unwrap(await page.request.get(`${baseUrl}${resultRef}`), 'runtime result')
+    if (['SUCCEEDED', 'FAILED', 'INTERRUPTED', 'CANCELLED'].includes(latest.status)) return latest
+    await page.waitForTimeout(500)
+  }
+  throw new Error(`runtime result did not finish: ${resultRef}`)
 }
 
 async function startLocalApiServer() {
@@ -68,6 +78,32 @@ async function createKnowledgeBase(page, marker) {
   throw new Error('knowledge document did not finish processing')
 }
 
+async function createApiResource(page, marker, apiBaseUrl) {
+  return unwrap(
+    await page.request.post(`${baseUrl}/api/v1/api-resources`, {
+      data: {
+        name: `Six Node Matrix API ${marker}`,
+        description: 'six-node matrix API resource',
+        method: 'POST',
+        endpoint: `${apiBaseUrl}/text/{{answer}}`,
+        authMode: 'none',
+        headers: [],
+        bodyTemplate: '',
+        inputSchema: {
+          type: 'object',
+          properties: { answer: { type: 'string' } },
+          required: ['answer'],
+        },
+        outputSchema: { type: 'object', properties: { body: { type: 'string' } } },
+        timeoutMs: 5000,
+        testPayload: { answer: `LLM_MATRIX_${marker}` },
+        enabled: true,
+      },
+    }),
+    'create API resource',
+  )
+}
+
 async function findOpenRouterQwenModel(page) {
   for (let pageNo = 1; pageNo <= 20; pageNo += 1) {
     const providers = await unwrap(
@@ -88,7 +124,7 @@ async function findOpenRouterQwenModel(page) {
   return null
 }
 
-function graphPayload({ name, flowType, kbId, marker, startVariable, apiBaseUrl, modelConfigId }) {
+function graphPayload({ name, flowType, kbId, marker, startVariable, apiResourceId, modelConfigId }) {
   const matrixAnswer = `LLM_MATRIX_${marker}`
   return {
     name,
@@ -153,10 +189,21 @@ function graphPayload({ name, flowType, kbId, marker, startVariable, apiBaseUrl,
         type: 'API_CALL',
         name: 'API 调用',
         config: {
-          method: 'POST',
-          endpoint: `${apiBaseUrl}/text/{{llm.answer}}`,
+          resourceId: `api-resource:${apiResourceId}`,
+          inputMappings: [{ name: 'answer', valueMode: 'reference', value: '{{llm.answer}}', required: true }],
           outputVariable: 'response',
           ui: { position: { x: 1040, y: 360 } },
+        },
+      },
+      {
+        nodeKey: 'default_reply',
+        type: 'TEXT_PROCESS',
+        name: '默认回复',
+        config: {
+          operation: 'format_template',
+          template: 'default {{start.' + startVariable + '}}',
+          outputParameters: [{ name: 'summary', type: 'string' }],
+          ui: { position: { x: 700, y: 360 } },
         },
       },
       {
@@ -173,9 +220,37 @@ function graphPayload({ name, flowType, kbId, marker, startVariable, apiBaseUrl,
     edges: [
       { sourceNodeKey: 'start', targetNodeKey: 'router', condition: null },
       { sourceNodeKey: 'router', targetNodeKey: 'kb', condition: 'kb' },
+      { sourceNodeKey: 'router', targetNodeKey: 'default_reply', condition: null },
       { sourceNodeKey: 'kb', targetNodeKey: 'llm', condition: null },
       { sourceNodeKey: 'llm', targetNodeKey: 'api', condition: null },
       { sourceNodeKey: 'api', targetNodeKey: 'end', condition: null },
+      { sourceNodeKey: 'default_reply', targetNodeKey: 'end', condition: null },
+    ],
+  }
+}
+
+function invalidConfigPayload(marker) {
+  return {
+    name: `Workflow Invalid Runtime Config ${marker}`,
+    description: 'runtime v2 invalid config readable error e2e',
+    flowType: 'WORKFLOW',
+    nodes: [
+      { nodeKey: 'start', type: 'START', name: '开始', config: {} },
+      {
+        nodeKey: 'api_1',
+        type: 'API_CALL',
+        name: 'Raw API',
+        config: {
+          method: 'GET',
+          url: 'https://example.test/raw',
+          outputVariable: 'response',
+        },
+      },
+      { nodeKey: 'end', type: 'END', name: '结束', config: { outputVariable: 'final', output: '{{api_1.response}}' } },
+    ],
+    edges: [
+      { sourceNodeKey: 'start', targetNodeKey: 'api_1', condition: null },
+      { sourceNodeKey: 'api_1', targetNodeKey: 'end', condition: null },
     ],
   }
 }
@@ -189,6 +264,20 @@ async function createFlow(page, payload, isChatflow) {
   )
 }
 
+async function runInvalidConfigReadableError(page, marker) {
+  const workflow = await createFlow(page, invalidConfigPayload(marker), false)
+  const response = await page.request.post(`${baseUrl}/api/v1/workflows/${workflow.id}/runs`, {
+    data: { input: { USER_INPUT: 'invalid' } },
+  })
+  assert(response.status() === 400, `Expected invalid runtime config HTTP 400, got ${response.status()}`)
+  const payload = await response.json()
+  const message = String(payload.message || '')
+  assert(message.includes('api_1 must use an API Resource reference'), `Expected readable API resource error, got: ${message}`)
+  assert(message.includes('raw URL mode'), `Expected raw URL guidance in error, got: ${message}`)
+  assert(!message.includes('unsupportedNodes'), `Error leaked internal unsupportedNodes payload: ${message}`)
+  assert(!message.includes('Unsupported runtime v2 graph'), `Error leaked legacy runtime-v2 graph label: ${message}`)
+}
+
 async function probeFullChainApi(page, flow, marker, isChatflow) {
   const runPath = isChatflow
     ? `/api/v1/chatflows/${flow.id}/runs-legacy`
@@ -200,8 +289,16 @@ async function probeFullChainApi(page, flow, marker, isChatflow) {
   if (response.ok()) {
     const payload = await response.json()
     assert(payload.code === 200, `${isChatflow ? 'chatflow' : 'workflow'} run API ${payload.message}`)
-    assert(payload.data.status === 'SUCCEEDED', `Expected SUCCEEDED, got ${payload.data.status}`)
-    const outputText = JSON.stringify(payload.data.output)
+    const run = payload.data.resultRef && payload.data.status === 'RUNNING'
+      ? await waitForRuntimeResult(page, payload.data.resultRef)
+      : payload.data
+    if (run.status !== 'SUCCEEDED') {
+      assert(run.status === 'FAILED', `Expected SUCCEEDED or graceful provider failure, got ${run.status}`)
+      assert(String(run.error || '').includes('LLM provider request failed'), `Unexpected run failure: ${JSON.stringify(run)}`)
+      assert(!requireLiveLlm, `Live LLM is required but unavailable: ${JSON.stringify(run)}`)
+      return false
+    }
+    const outputText = JSON.stringify(run.output)
     assert(outputText.includes('API_REAL: POST /text/'), `Expected API output, got: ${outputText}`)
     assert(outputText.includes(`LLM_MATRIX_${marker}`), `Expected LLM marker, got: ${outputText}`)
     return true
@@ -286,7 +383,7 @@ async function runSelectedNode(page, selector, inputs, expected) {
     await fillNodeInput(drawer, name, value)
   }
   await drawer.getByRole('button', { name: '运行', exact: true }).click()
-  await drawer.getByText('SUCCEEDED').waitFor({ state: 'visible', timeout: 60000 })
+  await drawer.locator('.node-test-status.success', { hasText: 'SUCCEEDED' }).first().waitFor({ state: 'visible', timeout: 60000 })
   const resultText = await drawer.innerText()
   assert(resultText.includes(expected), `Expected ${expected} for ${selector}, got: ${resultText}`)
   assert(resultText.includes('输入'), `Expected selected node input echo for ${selector}`)
@@ -325,56 +422,63 @@ const browser = await chromium.launch({
   slowMo: process.env.HIFY_E2E_HEADED === '1' ? 120 : 0,
 })
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
-const localApi = await startLocalApiServer()
+let localApi
 
 try {
   const marker = `SN_${Date.now()}`
-  const modelConfigId = await findOpenRouterQwenModel(page)
-  assert(modelConfigId, 'OpenRouter qwen/qwen3.5-9b model config is required for six-node matrix UAT')
-  const kb = await createKnowledgeBase(page, marker)
-  const workflow = await createFlow(
-    page,
-    graphPayload({
-      name: `Workflow Six Node Matrix ${marker}`,
-      flowType: 'WORKFLOW',
-      kbId: kb.id,
-      marker,
-      startVariable: 'USER_INPUT',
-      apiBaseUrl: localApi.url,
-      modelConfigId,
-    }),
-    false,
-  )
-  const workflowLiveLlm = await probeFullChainApi(page, workflow, marker, false)
-  await page.goto(`${baseUrl}/workflows/${workflow.id}/canvas`, { waitUntil: 'networkidle' })
-  if (workflowLiveLlm) {
-    await runWorkflowFullChain(page, marker)
-  }
-  await runWorkflowSelectedNodeMatrix(page, marker, workflowLiveLlm)
-  if (screenshotPath) await page.screenshot({ path: screenshotPath, fullPage: true })
+  if (invalidConfigOnly) {
+    await runInvalidConfigReadableError(page, marker)
+    console.log('PASS workflow six-node matrix invalid-config readable error e2e')
+  } else {
+    localApi = await startLocalApiServer()
+    const modelConfigId = await findOpenRouterQwenModel(page)
+    assert(modelConfigId, 'OpenRouter qwen/qwen3.5-9b model config is required for six-node matrix UAT')
+    const kb = await createKnowledgeBase(page, marker)
+    const apiResource = await createApiResource(page, marker, localApi.url)
+    const workflow = await createFlow(
+      page,
+      graphPayload({
+        name: `Workflow Six Node Matrix ${marker}`,
+        flowType: 'WORKFLOW',
+        kbId: kb.id,
+        marker,
+        startVariable: 'USER_INPUT',
+        apiResourceId: apiResource.id,
+        modelConfigId,
+      }),
+      false,
+    )
+    const workflowLiveLlm = await probeFullChainApi(page, workflow, marker, false)
+    await page.goto(`${baseUrl}/workflows/${workflow.id}/canvas`, { waitUntil: 'networkidle' })
+    if (workflowLiveLlm) {
+      await runWorkflowFullChain(page, marker)
+    }
+    await runWorkflowSelectedNodeMatrix(page, marker, workflowLiveLlm)
+    if (screenshotPath) await page.screenshot({ path: screenshotPath, fullPage: true })
 
-  const chatflow = await createFlow(
-    page,
-    graphPayload({
-      name: `Chatflow Six Node Matrix ${marker}`,
-      flowType: 'CHATFLOW',
-      kbId: kb.id,
-      marker,
-      startVariable: 'sys.query',
-      apiBaseUrl: localApi.url,
-      modelConfigId,
-    }),
-    true,
-  )
-  const chatflowLiveLlm = await probeFullChainApi(page, chatflow, marker, true)
-  await page.goto(`${baseUrl}/chatflows/${chatflow.id}/canvas`, { waitUntil: 'networkidle' })
-  if (chatflowLiveLlm) {
-    await runChatflowFullChain(page, marker)
-  }
-  if (chatflowScreenshotPath) await page.screenshot({ path: chatflowScreenshotPath, fullPage: true })
+    const chatflow = await createFlow(
+      page,
+      graphPayload({
+        name: `Chatflow Six Node Matrix ${marker}`,
+        flowType: 'CHATFLOW',
+        kbId: kb.id,
+        marker,
+        startVariable: 'sys.query',
+        apiResourceId: apiResource.id,
+        modelConfigId,
+      }),
+      true,
+    )
+    const chatflowLiveLlm = await probeFullChainApi(page, chatflow, marker, true)
+    await page.goto(`${baseUrl}/chatflows/${chatflow.id}/canvas`, { waitUntil: 'networkidle' })
+    if (chatflowLiveLlm) {
+      await runChatflowFullChain(page, marker)
+    }
+    if (chatflowScreenshotPath) await page.screenshot({ path: chatflowScreenshotPath, fullPage: true })
 
-  console.log('PASS workflow/chatflow six-node matrix e2e')
+    console.log('PASS workflow/chatflow six-node matrix e2e')
+  }
 } finally {
-  await localApi.close()
+  if (localApi) await localApi.close()
   await browser.close()
 }

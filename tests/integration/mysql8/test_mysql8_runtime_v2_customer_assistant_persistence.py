@@ -345,23 +345,7 @@ class Mysql8RuntimeV2DemoPersistenceContractTest(unittest.TestCase):
                     session_id=runtime_session_id,
                     sop_id="refund-ticket",
                     status="SUSPENDED",
-                    current_step="collect_order_no",
                     resume_summary="等待订单号后继续退票并同步行李额说明",
-                    business_refs={"customerAssistantSessionId": session_id, "storyId": "refund_baggage_parallel"},
-                    created_at=now,
-                    updated_at=now,
-                )
-                checkpoint_id = _insert(
-                    connection,
-                    "runtime_lab_checkpoint",
-                    session_id=runtime_session_id,
-                    task_id=task_id,
-                    sop_id="refund-ticket",
-                    current_step="collect_order_no",
-                    pending_prompt="请补充订单号，系统会继续处理退票。",
-                    collected={"ticket": {"orderNo": "TK-111"}},
-                    scoped_variables={"profileId": "refund-ticket-runtime-v2"},
-                    status="ACTIVE",
                     created_at=now,
                     updated_at=now,
                 )
@@ -371,7 +355,12 @@ class Mysql8RuntimeV2DemoPersistenceContractTest(unittest.TestCase):
                     session_id=runtime_session_id,
                     sequence=1,
                     event_type="TASK_SUSPENDED",
-                    payload={"checkpointId": checkpoint_id, "reason": "missing_order"},
+                    payload={
+                        "taskId": task_id,
+                        "currentStep": "collect_order_no",
+                        "ticket": {"orderNo": "TK-111"},
+                        "reason": "missing_order",
+                    },
                     created_at=now,
                     updated_at=now,
                 )
@@ -479,7 +468,7 @@ class Mysql8RuntimeV2DemoPersistenceContractTest(unittest.TestCase):
                 )
                 self.assertEqual(
                     "TK-111",
-                    _read_json(connection, "runtime_lab_checkpoint", checkpoint_id, "collected")[
+                    _read_json(connection, "runtime_lab_event", runtime_event_id, "payload")[
                         "ticket"
                     ]["orderNo"],
                 )
@@ -651,23 +640,7 @@ class Mysql8RuntimeV2CustomerAssistantPersistenceTest(unittest.TestCase):
                 session_id=ids["runtime_lab_session"],
                 sop_id=f"refund-{token}",
                 status="SUSPENDED",
-                current_step="collect_order_no",
                 resume_summary="等待订单号后继续退票",
-                business_refs={"ticketNo": "TK-087", "parallel": ["baggage"]},
-                created_at=now,
-                updated_at=now,
-            )
-            ids["runtime_lab_checkpoint"] = _insert(
-                connection,
-                "runtime_lab_checkpoint",
-                session_id=ids["runtime_lab_session"],
-                task_id=ids["runtime_lab_task"],
-                sop_id=f"refund-{token}",
-                current_step="collect_order_no",
-                pending_prompt="请提供订单号",
-                collected={"passenger": {"name": "Demo User"}, "ticket": {"orderNo": "TK-087"}},
-                scoped_variables={"chatflow": {"sessionId": token, "node": "collect_order"}},
-                status="ACTIVE",
                 created_at=now,
                 updated_at=now,
             )
@@ -677,7 +650,13 @@ class Mysql8RuntimeV2CustomerAssistantPersistenceTest(unittest.TestCase):
                 session_id=ids["runtime_lab_session"],
                 sequence=1,
                 event_type="TASK_SUSPENDED",
-                payload={"checkpointId": ids["runtime_lab_checkpoint"], "reason": "missing_order"},
+                payload={
+                    "taskId": ids["runtime_lab_task"],
+                    "currentStep": "collect_order_no",
+                    "passenger": {"name": "Demo User"},
+                    "ticket": {"orderNo": "TK-087"},
+                    "reason": "missing_order",
+                },
                 created_at=now,
                 updated_at=now,
             )
@@ -851,7 +830,7 @@ class Mysql8RuntimeV2CustomerAssistantPersistenceTest(unittest.TestCase):
             )
             self.assertEqual(
                 "TK-087",
-                _read_json(connection, "runtime_lab_checkpoint", ids["runtime_lab_checkpoint"], "collected")[
+                _read_json(connection, "runtime_lab_event", ids["runtime_lab_event"], "payload")[
                     "ticket"
                 ]["orderNo"],
             )
@@ -988,7 +967,6 @@ _TABLE_NAMES = [
     "chatflow_channel_config",
     "runtime_lab_session",
     "runtime_lab_task",
-    "runtime_lab_checkpoint",
     "runtime_lab_event",
     "runtime_lab_command",
     "customer_assistant_session",
@@ -1016,8 +994,7 @@ _REQUIRED_MVP_SURFACE_COLUMNS = {
     ],
     "chatflow_channel_config": ["config", "enabled"],
     "runtime_lab_session": ["status", "active_task_id", "version"],
-    "runtime_lab_task": ["resume_summary", "business_refs", "suspended_at", "completed_at"],
-    "runtime_lab_checkpoint": ["pending_prompt", "collected", "scoped_variables"],
+    "runtime_lab_task": ["resume_summary", "suspended_at", "completed_at"],
     "runtime_lab_event": ["sequence", "payload"],
     "runtime_lab_command": ["response_payload", "created_at"],
     "customer_assistant_session": ["context_json", "version"],

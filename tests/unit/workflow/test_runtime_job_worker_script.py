@@ -23,3 +23,4 @@ def test_runtime_job_worker_script_exposes_owner_selection() -> None:
     assert "workflow" in result.stdout
     assert "chatflow" in result.stdout
     assert "both" in result.stdout
+    assert "--job-id" in result.stdout

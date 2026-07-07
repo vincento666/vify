@@ -20,7 +20,7 @@ SENSITIVE_ASSIGNMENT_RE = re.compile(
 PII_PATTERNS = (
     re.compile(r"\b1[3-9]\d{9}\b"),
     re.compile(r"\b[\w.+-]+@[\w.-]+\.\w+\b"),
-    re.compile(r"\b(?:CA|MU|TK|INV)[A-Z0-9-]{3,}\b"),
+    re.compile(r"\b(?:CA|MU|TK|INV)(?=[A-Z0-9-]*\d)[A-Z0-9-]{3,}\b"),
 )
 
 

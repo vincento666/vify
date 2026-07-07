@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -10,11 +11,24 @@ class Settings(BaseSettings):
     app_name: str = "Hify"
     api_prefix: str = "/api/v1"
     database_url: str = DEFAULT_MYSQL8_DATABASE_URL
+    database_pool_size: int = Field(default=5, ge=1)
+    database_max_overflow: int = Field(default=10, ge=0)
+    database_pool_timeout_seconds: float = Field(default=30.0, gt=0)
+    database_pool_recycle_seconds: int = Field(default=1800, ge=0)
+    database_pool_pre_ping: bool = True
     redis_url: str | None = None
     log_level: str = "INFO"
     persistence_mode: str = "local"
     runtime_lab_sop_chatflow_ids: str | None = None
     runtime_lab_sop_runtime_invocation_mode: str = "sync"
+    runtime_lab_sop_llm_mode: str = "mock"
+    runtime_v2_request_thread_completion_enabled: bool = True
+    runtime_v2_tenant_active_limit: int = Field(default=0, ge=0)
+    runtime_v2_workflow_active_limit: int = Field(default=0, ge=0)
+    runtime_v2_chatflow_active_limit: int = Field(default=0, ge=0)
+    runtime_v2_worker_running_limit: int = Field(default=0, ge=0)
+    runtime_v2_provider_active_limit: int = Field(default=0, ge=0)
+    runtime_v2_queue_capacity_limit: int = Field(default=0, ge=0)
     runtime_lab_intent_arbitrator_mode: str = "fake"
     runtime_lab_intent_arbitrator_base_url: str | None = None
     runtime_lab_intent_arbitrator_api_key: str | None = None
@@ -33,6 +47,8 @@ class Settings(BaseSettings):
     customer_assistant_worker_timeout_seconds: float = 5.0
     customer_assistant_stub_qa_delay_seconds: float = 0.0
     customer_assistant_worker_profiles_json: str | None = None
+    customer_assistant_sop_runtime_invocation_mode: str = "async"
+    customer_assistant_sop_llm_mode: str = "live"
     ai_assistant_llm_mode: str = "deterministic"
     ai_assistant_openrouter_base_url: str = "https://openrouter.ai/api/v1"
     ai_assistant_openrouter_model: str = "qwen/qwen3.6-27b"

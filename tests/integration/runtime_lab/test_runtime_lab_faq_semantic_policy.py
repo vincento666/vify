@@ -124,15 +124,16 @@ class RuntimeLabFaqSemanticPolicyTest(unittest.TestCase):
             started = service.handle_message(session_id, "我要退票")
             before = dict(started.active_task)
             clarified = service.handle_message(session_id, "儿童机票能不能返钱？订单TK-100")
-            after_checkpoint = repository.get_latest_checkpoint(int(before["id"]))
+            after = repository.get_task(int(before["id"]))
+            assert after is not None
 
             self.assertEqual(clarified.route_decision.action, "CLARIFY")
             self.assertEqual(clarified.route_decision.faq_answer["sourceLayer"], "faq_semantic")
             self.assertEqual(clarified.route_decision.faq_answer["reasonCode"], "SEMANTIC_ACTIVE_AMBIGUOUS")
             self.assertEqual(clarified.active_task["id"], before["id"])
             self.assertEqual(clarified.active_task["current_step"], before["current_step"])
-            self.assertEqual(clarified.active_task["checkpoint_id"], before["checkpoint_id"])
-            self.assertEqual(after_checkpoint["id"], before["checkpoint_id"])
+            self.assertNotIn("checkpoint_id", clarified.active_task)
+            self.assertEqual(after["chatflow_run_id"], before["chatflow_run_id"])
             self.assertNotIn("TASK_CONTINUED", [event["event_type"] for event in clarified.events])
 
 

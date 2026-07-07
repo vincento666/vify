@@ -350,6 +350,7 @@ class CustomerAssistantWorkersTest(unittest.TestCase):
                 message="订单号 TK-100",
                 idempotency_key="chatflow-pending-second",
             )
+            time.sleep(0.6)
 
         self.assertIsNotNone(first["chatflowSession"], f"first turn must expose chatflowSession: {first}")
         self.assertEqual(first["chatflowSession"]["gatewayMode"], "messages:stream")

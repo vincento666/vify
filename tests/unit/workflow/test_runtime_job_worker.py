@@ -65,10 +65,29 @@ class RuntimeJobWorkerTest(unittest.TestCase):
         self.assertEqual(repository.claim_next_owner_types, ("CHATFLOW",))
         self.assertEqual(repository.claim_owner_types, ("CHATFLOW",))
 
+    def test_run_once_returns_cancelled_when_job_cancelled_before_complete(self) -> None:
+        repository = _FakeJobRepository({"id": 10, "run_id": 14, "status": "QUEUED"})
+        repository.complete_error = RuntimeError("lease no longer owned")
+        repository.current_job = {"id": 10, "run_id": 14, "status": "CANCELLED"}
+        worker = RuntimeJobWorker(
+            job_repository=repository,
+            complete_run=lambda _run_id: None,
+            worker_id="worker-a",
+        )
+
+        result = worker.run_once()
+
+        self.assertTrue(result["claimed"])
+        self.assertEqual(result["jobId"], 10)
+        self.assertEqual(result["runId"], 14)
+        self.assertEqual(result["status"], "CANCELLED")
+
 
 class _FakeJobRepository:
     def __init__(self, job: dict[str, object] | None) -> None:
         self._job = job
+        self.current_job: dict[str, object] | None = None
+        self.complete_error: RuntimeError | None = None
         self.completed_job_id: int | None = None
         self.failed_error: str | None = None
         self.claim_next_owner_types: tuple[str, ...] | None = None
@@ -105,7 +124,14 @@ class _FakeJobRepository:
 
     def complete(self, job_id: int, *, worker_id: str, lease_token: str | None = None) -> dict[str, object]:
         self.completed_job_id = job_id
+        if self.complete_error is not None:
+            raise self.complete_error
         return {"id": job_id, "status": "COMPLETED", "lease_owner": worker_id}
+
+    def get(self, job_id: int) -> dict[str, object] | None:
+        if self.current_job is not None and int(self.current_job["id"]) == job_id:
+            return self.current_job
+        return None
 
     def fail(
         self,

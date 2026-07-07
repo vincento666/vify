@@ -10,7 +10,7 @@ _READ_ONLY_SCOPES = {"sys"}
 _ERROR_BRANCH_NODE_TYPES = {"LLM", "API_CALL", "TOOL_CALL", "CODE", "EXECUTE_WORKFLOW", "AGENT_CALL"}
 _SUPPORTED_OUTPUT_TYPES = {"string", "number", "integer", "boolean", "object", "array", "any"}
 _SUPPORTED_WRITE_MODES = {"set", "append", "clear"}
-_SUPPORTED_ERROR_BEHAVIORS = {"fail", "continue", "branch"}
+_SUPPORTED_ERROR_BEHAVIORS = {"fail", "continue", "branch", "partial"}
 
 
 def validate_node_endpoints(nodes: list[dict[str, Any]], edges: list[dict[str, Any]]) -> list[dict[str, str]]:
@@ -105,6 +105,8 @@ def validate_node_endpoints(nodes: list[dict[str, Any]], edges: list[dict[str, A
                     }
                 )
             continue
+        if not conditions and _is_side_effect_terminal(node, edges):
+            continue
         if None not in conditions:
             issues.append(
                 {
@@ -116,6 +118,8 @@ def validate_node_endpoints(nodes: list[dict[str, Any]], edges: list[dict[str, A
                     "message": f"{node_key} default outlet must connect downstream",
                 }
             )
+    issues.extend(_validate_fan_out(nodes, edges))
+    issues.extend(_validate_reachable_from_start(nodes, edges))
     return issues
 
 
@@ -198,6 +202,122 @@ def _edge_condition(edge: Mapping[str, Any]) -> str | None:
         value = edge.get("condition_expr")
     text = str(value or "").strip()
     return text or None
+
+
+def _edge_source_port_key(edge: Mapping[str, Any]) -> str:
+    value = edge.get("sourcePortKey")
+    if value is None:
+        value = edge.get("source_port_key")
+    text = str(value or "").strip()
+    if text:
+        return text
+    return _edge_condition(edge) or "default"
+
+
+def _validate_fan_out(nodes: list[dict[str, Any]], edges: list[dict[str, Any]]) -> list[dict[str, str]]:
+    nodes_by_key = {_node_key(node): node for node in nodes if _node_key(node)}
+    targets_by_source_port: dict[tuple[str, str], set[str]] = {}
+    for edge in edges:
+        source = _node_ref(edge, "source")
+        target = _node_ref(edge, "target")
+        if not source or not target:
+            continue
+        port_key = _edge_source_port_key(edge)
+        targets_by_source_port.setdefault((source, port_key), set()).add(target)
+
+    issues: list[dict[str, str]] = []
+    for (source, port_key), targets in targets_by_source_port.items():
+        if len(targets) <= 1:
+            continue
+        node = nodes_by_key.get(source)
+        if node is None or _allows_fan_out(node, port_key):
+            continue
+        node_type = str(node.get("type") or "").upper()
+        issues.append(
+            {
+                "nodeKey": source,
+                "nodeType": node_type,
+                "branchKey": port_key,
+                "branchType": "fanOut",
+                "code": f"{source}.{port_key}.fanOut",
+                "message": f"{source} {port_key} outlet must enable fan-out before connecting multiple downstream nodes",
+            }
+        )
+    return issues
+
+
+def _validate_reachable_from_start(nodes: list[dict[str, Any]], edges: list[dict[str, Any]]) -> list[dict[str, str]]:
+    start_keys = {_node_key(node) for node in nodes if str(node.get("type") or "").upper() == "START" and _node_key(node)}
+    if not start_keys:
+        return []
+
+    adjacency: dict[str, set[str]] = {}
+    for edge in edges:
+        source = _node_ref(edge, "source")
+        target = _node_ref(edge, "target")
+        if source and target:
+            adjacency.setdefault(source, set()).add(target)
+
+    reachable: set[str] = set()
+    stack = list(start_keys)
+    while stack:
+        node_key = stack.pop()
+        if node_key in reachable:
+            continue
+        reachable.add(node_key)
+        stack.extend(sorted(adjacency.get(node_key, set()) - reachable))
+
+    issues: list[dict[str, str]] = []
+    for node in nodes:
+        node_key = _node_key(node)
+        node_type = str(node.get("type") or "").upper()
+        if not node_key or node_type in {"START", "END"} or node_key in reachable:
+            continue
+        issues.append(
+            {
+                "nodeKey": node_key,
+                "nodeType": node_type,
+                "branchKey": "start",
+                "branchType": "island",
+                "code": f"{node_key}.island",
+                "message": f"{node_key} is not reachable from START",
+            }
+        )
+    return issues
+
+
+def _allows_fan_out(node: Mapping[str, Any], port_key: str) -> bool:
+    node_type = str(node.get("type") or "").upper()
+    if node_type in {"CONDITION", "INTENT_RECOGNITION"}:
+        return True
+    if port_key != "default":
+        return True
+    config = node.get("config") if isinstance(node.get("config"), Mapping) else {}
+    if _is_truthy(config.get("allowFanOut") or config.get("allow_fan_out")):
+        return True
+    for field_name in ("ports", "outputPorts", "output_ports"):
+        raw_ports = config.get(field_name)
+        if not isinstance(raw_ports, list):
+            continue
+        for raw_port in raw_ports:
+            if not isinstance(raw_port, Mapping):
+                continue
+            key = str(raw_port.get("key") or raw_port.get("name") or "default").strip() or "default"
+            if key == port_key and _is_truthy(raw_port.get("allowFanOut") or raw_port.get("allow_fan_out")):
+                return True
+    return False
+
+
+def _is_side_effect_terminal(node: Mapping[str, Any], edges: list[dict[str, Any]]) -> bool:
+    node_key = _node_key(node)
+    config = node.get("config") if isinstance(node.get("config"), Mapping) else {}
+    if _is_truthy(config.get("sideEffectTerminal") or config.get("side_effect_terminal")):
+        return True
+    return any(
+        _node_ref(edge, "target") == node_key
+        and _is_truthy(edge.get("sideEffectTerminal") or edge.get("side_effect_terminal"))
+        for edge in edges
+    )
 
 
 def _configured_keys(config: Mapping[str, Any], field: str) -> list[str]:

@@ -38,9 +38,35 @@ function hasPathToEnd(graph: WorkflowCanvasGraph) {
   return false
 }
 
+function reachableNodeKeys(graph: WorkflowCanvasGraph) {
+  const adjacency = new Map<string, string[]>()
+  for (const edge of graph.edges) {
+    const next = adjacency.get(edge.sourceNodeKey) || []
+    next.push(edge.targetNodeKey)
+    adjacency.set(edge.sourceNodeKey, next)
+  }
+
+  const startKeys = graph.nodes
+    .filter((node) => node.type === 'START' || node.nodeKey === 'start')
+    .map((node) => node.nodeKey)
+  const seen = new Set<string>()
+  const stack = [...startKeys]
+  while (stack.length > 0) {
+    const current = stack.pop()!
+    if (seen.has(current)) continue
+    seen.add(current)
+    stack.push(...(adjacency.get(current) || []).filter((nodeKey) => !seen.has(nodeKey)))
+  }
+  return seen
+}
+
 function normalizeBranchKey(value: unknown) {
   const text = String(value ?? '').trim()
   return text.length > 0 ? text : null
+}
+
+function edgeSourcePortKey(edge: { condition?: string | null; sourcePortKey?: string | null }) {
+  return normalizeBranchKey(edge.sourcePortKey) || normalizeBranchKey(edge.condition) || 'default'
 }
 
 function outgoingConditions(graph: WorkflowCanvasGraph, nodeKey: string) {
@@ -89,6 +115,11 @@ const SENSITIVE_HEADER_NAMES = new Set([
 
 function hasExplicitValue(value: unknown) {
   return String(value ?? '').trim().length > 0
+}
+
+function isTruthy(value: unknown) {
+  if (typeof value === 'boolean') return value
+  return ['1', 'true', 'yes', 'on'].includes(String(value ?? '').trim().toLowerCase())
 }
 
 function hasPositiveNumber(value: unknown) {
@@ -171,6 +202,7 @@ function validateNodeEndpoints(graph: WorkflowCanvasGraph, errors: string[]) {
   for (const node of graph.nodes) {
     if (node.type === 'END') continue
     const conditions = outgoingConditions(graph, node.nodeKey)
+    if (conditions.size === 0 && isSideEffectTerminalNode(graph, node.nodeKey)) continue
     if (node.type === 'CONDITION') {
       for (const branchKey of conditionBranchKeys(node.config)) {
         if (!conditions.has(branchKey)) errors.push(`条件节点 ${node.nodeKey} 缺少分支 ${branchKey} 下游连接`)
@@ -189,14 +221,70 @@ function validateNodeEndpoints(graph: WorkflowCanvasGraph, errors: string[]) {
   }
 }
 
+function isSideEffectTerminalNode(graph: WorkflowCanvasGraph, nodeKey: string) {
+  const node = graph.nodes.find((item) => item.nodeKey === nodeKey)
+  if (node && isTruthy(node.config.sideEffectTerminal)) return true
+  return graph.edges.some((edge) => edge.targetNodeKey === nodeKey && isTruthy(edge.sideEffectTerminal))
+}
+
+function hasReachableSideEffectTerminal(graph: WorkflowCanvasGraph) {
+  const reachable = reachableNodeKeys(graph)
+  const outgoingCounts = new Map<string, number>()
+  for (const edge of graph.edges) {
+    outgoingCounts.set(edge.sourceNodeKey, (outgoingCounts.get(edge.sourceNodeKey) || 0) + 1)
+  }
+  return graph.nodes.some(
+    (node) =>
+      node.type !== 'START' &&
+      node.type !== 'END' &&
+      reachable.has(node.nodeKey) &&
+      !outgoingCounts.has(node.nodeKey) &&
+      isSideEffectTerminalNode(graph, node.nodeKey),
+  )
+}
+
+function allowsFanOut(graph: WorkflowCanvasGraph, nodeKey: string, portKey: string) {
+  const node = graph.nodes.find((item) => item.nodeKey === nodeKey)
+  if (!node) return true
+  if (node.type === 'CONDITION' || node.type === 'INTENT_RECOGNITION') return true
+  if (portKey !== 'default') return true
+  if (isTruthy(node.config.allowFanOut)) return true
+  for (const fieldName of ['ports', 'outputPorts']) {
+    const ports = node.config[fieldName]
+    if (!Array.isArray(ports)) continue
+    if (ports.some((port) => (normalizeBranchKey(port?.key ?? port?.name) || 'default') === portKey && isTruthy(port?.allowFanOut))) {
+      return true
+    }
+  }
+  return false
+}
+
+function validateFanOut(graph: WorkflowCanvasGraph, errors: string[]) {
+  const targetsBySourcePort = new Map<string, Set<string>>()
+  for (const edge of graph.edges) {
+    const portKey = edgeSourcePortKey(edge)
+    const mapKey = `${edge.sourceNodeKey}::${portKey}`
+    const targets = targetsBySourcePort.get(mapKey) || new Set<string>()
+    targets.add(edge.targetNodeKey)
+    targetsBySourcePort.set(mapKey, targets)
+  }
+  for (const [mapKey, targets] of targetsBySourcePort) {
+    if (targets.size <= 1) continue
+    const [nodeKey, portKey] = mapKey.split('::')
+    if (allowsFanOut(graph, nodeKey, portKey)) continue
+    errors.push(`节点 ${nodeKey} ${portKey} 出口需要开启 fan-out 后才能连接多个下游`)
+  }
+}
+
 export function validateWorkflowGraph(graph: WorkflowCanvasGraph): WorkflowValidationResult {
   const errors: string[] = []
   const nodeKeys = new Set(graph.nodes.map((node) => node.nodeKey))
+  const reachable = reachableNodeKeys(graph)
 
   if (!nodeKeys.has('start')) errors.push('START node is required')
   if (!nodeKeys.has('end')) errors.push('END node is required')
 
-  if (nodeKeys.has('start') && nodeKeys.has('end') && !hasPathToEnd(graph)) {
+  if (nodeKeys.has('start') && nodeKeys.has('end') && !hasPathToEnd(graph) && !hasReachableSideEffectTerminal(graph)) {
     errors.push('START must connect to END through at least one path')
   }
 
@@ -206,6 +294,7 @@ export function validateWorkflowGraph(graph: WorkflowCanvasGraph): WorkflowValid
       (edge) => edge.sourceNodeKey === node.nodeKey || edge.targetNodeKey === node.nodeKey,
     )
     if (!connected) errors.push(`Node ${node.nodeKey} is not connected`)
+    else if (!reachable.has(node.nodeKey)) errors.push(`Node ${node.nodeKey} is not reachable from START`)
     if (node.type === 'LLM' && !node.config.modelConfigId && !node.config.model) {
       errors.push(`大模型节点 ${node.nodeKey} 需要选择模型`)
     }
@@ -213,6 +302,7 @@ export function validateWorkflowGraph(graph: WorkflowCanvasGraph): WorkflowValid
     if (node.type === 'TOOL_CALL') validateToolGovernance(node.nodeKey, node.config, errors)
   }
   validateNodeEndpoints(graph, errors)
+  validateFanOut(graph, errors)
 
   return {
     valid: errors.length === 0,

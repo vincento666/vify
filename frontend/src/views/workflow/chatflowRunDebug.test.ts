@@ -124,4 +124,36 @@ describe('chatflow run debug view model', () => {
       },
     })
   })
+
+  it('clears stale runtime v2 waiting state when a chatflow run reaches terminal status', () => {
+    const session = projectRuntimeV2ChatflowSessionState(
+      {
+        runId: 91,
+        sessionId: 'session-91',
+        status: 'SUCCEEDED',
+        variables: {
+          conversation: { topic: 'refund' },
+        },
+      },
+      'SUCCEEDED',
+      {
+        sessionId: 'session-91',
+        conversationId: 'conv-91',
+        userId: 'user-91',
+        channel: 'web',
+        status: 'waiting',
+        checkpoint: { id: 7, pendingNodeKey: 'question_1' },
+        waitingEvent: { id: 15, nodeKey: 'question_1' },
+      },
+    )
+
+    expect(session).toMatchObject({
+      status: 'completed',
+      checkpoint: null,
+      waitingEvent: null,
+      variables: {
+        conversation: { topic: 'refund' },
+      },
+    })
+  })
 })

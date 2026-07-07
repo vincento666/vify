@@ -69,7 +69,7 @@ try {
   await dock.getByRole('button', { name: '提交回复继续', exact: true }).click()
 
   await timeline.getByText('继续执行').waitFor({ state: 'visible', timeout: 8000 })
-  await timeline.getByText('完成', { exact: true }).waitFor({ state: 'visible', timeout: 8000 })
+  await timeline.getByText('运行完成', { exact: true }).waitFor({ state: 'visible', timeout: 8000 })
   await dock.getByText('conversation.topic', { exact: true }).waitFor({ state: 'visible', timeout: 8000 })
   await dock.getByText('refund', { exact: true }).waitFor({ state: 'visible', timeout: 8000 })
 

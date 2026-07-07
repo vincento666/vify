@@ -1,10 +1,4 @@
-"""Spec 213.3.5e-prep — current_step in-memory side-channel.
-
-Prepares for banning ``runtime_lab_checkpoint.current_step`` writes by pinning
-an in-memory task-step overlay on the runtime-lab aggregator. The overlay must
-be refreshed after adapter turns and must take precedence over stale checkpoint
-rows when policy decides whether an active SOP can be interrupted.
-"""
+"""Spec 216.3 — current_step is not mirrored in the RuntimeLab ledger."""
 
 from contextlib import contextmanager
 import unittest
@@ -21,17 +15,13 @@ from tests.support.mysql import mysql8_session
 
 
 class CurrentStepSideChannelTest(unittest.TestCase):
-    def test_aggregator_records_task_current_step_by_task_id(self) -> None:
+    def test_aggregator_no_longer_records_task_current_step_by_task_id(self) -> None:
         aggregator = RuntimeLabBusinessContextAggregator(MagicMock(), MagicMock())
 
-        self.assertIsNone(aggregator.task_current_step(10))
+        self.assertFalse(hasattr(aggregator, "task_current_step"))
+        self.assertFalse(hasattr(aggregator, "record_task_step"))
 
-        aggregator.record_task_step(10, "collect_order_no")
-        aggregator.record_task_step(10, "confirm")
-
-        self.assertEqual(aggregator.task_current_step(10), "confirm")
-
-    def test_service_records_current_step_after_continue_turn(self) -> None:
+    def test_service_resolves_current_step_from_adapter_child_checkpoint_after_continue_turn(self) -> None:
         with _session() as session:
             repository = RuntimeLabRepository(session)
             service = RuntimeLabService(repository)
@@ -45,9 +35,12 @@ class CurrentStepSideChannelTest(unittest.TestCase):
 
             service.handle_message(session_id, "TK-100")
 
-            self.assertEqual(service._aggregator.task_current_step(task_id), "confirm")
+            resolved = service._latest_checkpoint_with_overlay_step(  # noqa: SLF001
+                repository.get_task(task_id)
+            )
+            self.assertEqual(resolved, {"current_step": "confirm"})
 
-    def test_classifier_decision_uses_current_step_overlay_before_checkpoint_row(self) -> None:
+    def test_classifier_decision_uses_child_runtime_before_stale_event_ledger(self) -> None:
         with _session() as session:
             repository = RuntimeLabRepository(session)
             service = RuntimeLabService(repository)
@@ -58,14 +51,15 @@ class CurrentStepSideChannelTest(unittest.TestCase):
             service.handle_message(session_id, "TK-100")
             active_task = repository.get_active_task(session_id)
             assert active_task is not None
-            task_id = int(active_task["id"])
 
-            latest_checkpoint = repository.get_latest_checkpoint(task_id)
-            assert latest_checkpoint is not None
-            stale_checkpoint = dict(latest_checkpoint)
-            stale_checkpoint["current_step"] = "collect_order_no"
-            service._repository.get_latest_checkpoint = MagicMock(return_value=stale_checkpoint)  # type: ignore[method-assign]
-            service._aggregator.record_task_step(task_id, "confirm")
+            original_list_events = service._repository.list_events
+            stale_events = [
+                event
+                if event["event_type"] != "TASK_CONTINUED"
+                else {**event, "payload": {**event["payload"], "currentStep": "collect_order_no"}}
+                for event in original_list_events(session_id)
+            ]
+            service._repository.list_events = MagicMock(return_value=stale_events)  # type: ignore[method-assign]
 
             overlaid = service._latest_checkpoint_with_overlay_step(active_task)
 
