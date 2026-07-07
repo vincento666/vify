@@ -1,0 +1,40 @@
+{
+  "sessionId": 1502,
+  "routeAction": "COMPLETE_TASK",
+  "trace": {
+    "taskId": 1504,
+    "sopId": "refund_ticket",
+    "status": "COMPLETED",
+    "runId": 13970,
+    "statusRef": "/api/v1/runtime-runs/13970",
+    "eventsRef": "/api/v1/runtime-runs/13970/events",
+    "eventStreamRef": "/api/v1/runtime-runs/13970/events/stream?afterSequence=0",
+    "resultRef": "/api/v1/runtime-runs/13970/result"
+  },
+  "run": {
+    "runId": 13970,
+    "status": "SUCCEEDED",
+    "ownerType": "CHATFLOW"
+  },
+  "result": {
+    "status": "SUCCEEDED",
+    "ownerType": "CHATFLOW",
+    "latencyMs": 0,
+    "retryable": false,
+    "usage": {
+      "inputTokens": 2,
+      "outputTokens": 2,
+      "totalTokens": 4,
+      "estimated": false
+    }
+  },
+  "eventSources": [
+    "chatflow_runtime_v2"
+  ],
+  "streamFrame": {
+    "sequence": 1,
+    "type": "workflow_run_started",
+    "source": "chatflow_runtime_v2"
+  },
+  "screenshot": "artifacts/slices/214-runtime-dag-multipath-semantics/214.5/screenshots/unified-routing-sop-chatflow-runtime.png"
+}

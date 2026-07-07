@@ -19,7 +19,7 @@ class RuntimeV2ApiCallNodeIntegrationTest(unittest.TestCase):
             api_resource = _create_api_resource(client, server.url)
             chatflow = _create_api_call_chatflow(client, int(api_resource["id"]))
             started_response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                f"/api/v1/chatflows/{chatflow['id']}/runs",
                 json={"input": {"orderId": "A-194"}},
             )
             started = started_response.json()["data"]
@@ -52,12 +52,13 @@ class RuntimeV2ApiCallNodeIntegrationTest(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = _create_direct_url_api_call_chatflow(client)
             response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                f"/api/v1/chatflows/{chatflow['id']}/runs",
                 json={"input": {"orderId": "A-unsafe"}},
             )
 
         self.assertEqual(response.status_code, 400, response.text)
-        self.assertIn("api_call_requires_api_resource", response.json()["message"])
+        self.assertIn("API Resource reference", response.json()["message"])
+        self.assertIn("raw URL mode", response.json()["message"])
 
 
 def _wait_for_result(client: TestClient, result_ref: str, wanted_status: str = "SUCCEEDED", timeout: float = 5.0) -> dict[str, Any]:

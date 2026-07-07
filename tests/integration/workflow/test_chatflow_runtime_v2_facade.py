@@ -13,7 +13,7 @@ class ChatflowRuntimeV2FacadeTest(unittest.TestCase):
             kb_id = _create_knowledge_base_with_faq(client)
             chatflow = _create_knowledge_chatflow(client, kb_id)
             started_response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                f"/api/v1/chatflows/{chatflow['id']}/runs",
                 json={
                     "input": {
                         "sys.query": "runtime v2 refund knowledge",
@@ -30,6 +30,7 @@ class ChatflowRuntimeV2FacadeTest(unittest.TestCase):
             nodes = client.get(started["nodesRef"]).json()["data"]["list"]
 
         self.assertEqual(terminal["output"]["answer"], "Runtime v2 knowledge FAQ answer.")
+        self.assertEqual(terminal["sessionId"], started["sessionId"])
         self.assertTrue(
             any(
                 event["type"] == "workflow_node_completed"
@@ -46,21 +47,22 @@ class ChatflowRuntimeV2FacadeTest(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = _create_unsupported_chatflow(client)
             response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                f"/api/v1/chatflows/{chatflow['id']}/runs",
                 json={"input": {"sys.query": "Ada"}},
             )
 
         self.assertEqual(response.status_code, 400)
         payload = response.json()
         self.assertEqual(payload["code"], 400)
-        self.assertIn("unsupportedPatterns", payload["message"])
+        self.assertIn("Runtime V2 graph is not compatible", payload["message"])
+        self.assertIn("default outlet must enable fan-out", payload["message"])
         self.assertNotIn("eventStreamRef", payload)
 
     def test_resume_is_idempotent_for_same_checkpoint_and_input(self) -> None:
         with TestClient(app) as client:
             chatflow = _create_question_chatflow(client)
             started = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                f"/api/v1/chatflows/{chatflow['id']}/runs",
                 json={"input": {"sys.query": "start"}},
             ).json()["data"]
             interrupted = _wait_for_result(client, started["resultRef"], "INTERRUPTED")

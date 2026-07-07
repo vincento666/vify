@@ -1,0 +1,52 @@
+FF.............                                                          [100%]
+=================================== FAILURES ===================================
+__________ SettingsTest.test_defaults_keep_local_development_runnable __________
+
+self = <tests.unit.core.test_config.SettingsTest testMethod=test_defaults_keep_local_development_runnable>
+
+    def test_defaults_keep_local_development_runnable(self) -> None:
+        with patch.dict("os.environ", {}, clear=True):
+            settings = Settings(_env_file=None)
+
+        self.assertEqual(settings.app_name, "Hify")
+        self.assertEqual(settings.api_prefix, "/api/v1")
+        self.assertEqual(settings.database_url, DEFAULT_MYSQL8_DATABASE_URL)
+        self.assertIsNone(settings.redis_url)
+        self.assertTrue(settings.runtime_v2_request_thread_completion_enabled)
+>       self.assertEqual(settings.runtime_lab_sop_runtime_invocation_mode, "async")
+E       AssertionError: 'sync' != 'async'
+E       - sync
+E       + async
+E       ? +
+
+tests/unit/core/test_config.py:18: AssertionError
+_ RuntimeLabWebFactoryTest.test_chatflow_sop_binding_defaults_to_async_background_invocation _
+
+self = <test_runtime_lab_web_factory.RuntimeLabWebFactoryTest testMethod=test_chatflow_sop_binding_defaults_to_async_background_invocation>
+
+    def test_chatflow_sop_binding_defaults_to_async_background_invocation(self) -> None:
+        with mysql8_session("runtime_lab_web_factory_default_async", register=register_baseline_tables) as session:
+            with (
+                patch(
+                    "app.modules.runtime_lab.web.router.get_settings",
+                    return_value=Settings(runtime_lab_sop_chatflow_ids="refund_ticket:42"),
+                ),
+                patch(
+                    "app.modules.runtime_lab.web.router.RuntimePolicyResolver.resolve",
+                    return_value={"policySnapshot": {}},
+                ),
+            ):
+                service = get_runtime_lab_service(session)
+
+        adapter = service._adapter
+>       self.assertEqual(adapter._runtime_invocation_mode, "async")
+E       AssertionError: 'sync' != 'async'
+E       - sync
+E       + async
+E       ? +
+
+tests/unit/runtime_lab/test_runtime_lab_web_factory.py:185: AssertionError
+=========================== short test summary info ============================
+FAILED tests/unit/core/test_config.py::SettingsTest::test_defaults_keep_local_development_runnable
+FAILED tests/unit/runtime_lab/test_runtime_lab_web_factory.py::RuntimeLabWebFactoryTest::test_chatflow_sop_binding_defaults_to_async_background_invocation
+2 failed, 13 passed in 8.98s

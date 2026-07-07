@@ -61,6 +61,7 @@ class RuntimeJobRepositoryTest(unittest.TestCase):
                 owner_type="WORKFLOW",
                 owner_id=404,
                 job_type="runtime_v2_completion",
+                max_attempts=1,
             )
             claimed = repository.claim_next(worker_id="worker-a", lease_seconds=30)
             self.assertEqual(claimed["id"], created["id"])

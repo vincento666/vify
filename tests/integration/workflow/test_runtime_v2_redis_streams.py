@@ -30,7 +30,11 @@ class RuntimeV2RedisStreamsTest(unittest.TestCase):
         self.assertEqual(len(streamed), 1)
         self.assertEqual(streamed[0]["sequence"], event["sequence"])
         self.assertEqual(streamed[0]["type"], "workflow_run_started")
-        self.assertEqual(streamed[0]["payload"], {"message": "stream me"})
+        self.assertEqual(streamed[0]["source"], "chatflow_runtime_v2")
+        self.assertEqual(
+            streamed[0]["payload"],
+            {"message": "stream me", "ownerType": "CHATFLOW", "source": "chatflow_runtime_v2"},
+        )
 
     def test_runtime_v2_sse_reads_stream_bus_before_db_polling(self) -> None:
         bus = InMemoryRuntimeEventStreamBus()

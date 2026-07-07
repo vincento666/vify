@@ -23,6 +23,7 @@ def main() -> None:
     parser.add_argument("--worker-id", default=None, help="Stable worker id used for job leases.")
     parser.add_argument("--lease-seconds", type=int, default=300)
     parser.add_argument("--poll-interval", type=float, default=1.0)
+    parser.add_argument("--job-id", type=int, default=None, help="Claim a specific runtime job id.")
     args = parser.parse_args()
 
     initialise_database()
@@ -39,7 +40,7 @@ def main() -> None:
                 lease_seconds=args.lease_seconds,
                 event_stream_bus=event_stream_bus,
             )
-            result = worker.run_once()
+            result = worker.run_once(job_id=args.job_id)
         print(json.dumps(result, ensure_ascii=False), flush=True)
         if args.once:
             return

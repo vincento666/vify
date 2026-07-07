@@ -5,6 +5,8 @@ from typing import Any, Protocol
 
 
 class RuntimeJobRepositoryProtocol(Protocol):
+    def get(self, job_id: int) -> dict[str, Any] | None: ...
+
     def claim_next(
         self,
         *,
@@ -31,6 +33,7 @@ class RuntimeJobRepositoryProtocol(Protocol):
         worker_id: str,
         error: str,
         lease_token: str | None = None,
+        retry_backoff_seconds: tuple[int, ...] = (5, 30, 120),
     ) -> dict[str, Any]: ...
 
 
@@ -85,11 +88,22 @@ class RuntimeJobWorker:
                 "status": failed["status"],
                 "error": str(exc),
             }
-        completed = self._job_repository.complete(
-            claimed_job_id,
-            worker_id=self._worker_id,
-            lease_token=lease_token,
-        )
+        try:
+            completed = self._job_repository.complete(
+                claimed_job_id,
+                worker_id=self._worker_id,
+                lease_token=lease_token,
+            )
+        except RuntimeError:
+            current = self._job_repository.get(claimed_job_id)
+            if current is not None and str(current.get("status") or "").upper() in {"CANCELLED", "IGNORED"}:
+                return {
+                    "claimed": True,
+                    "jobId": claimed_job_id,
+                    "runId": int(job["run_id"]),
+                    "status": str(current["status"]),
+                }
+            raise
         return {
             "claimed": True,
             "jobId": claimed_job_id,

@@ -92,7 +92,7 @@ async function runLlmConcurrencyUat(page, modelConfigId, stamp) {
   const markers = Array.from({ length: 5 }, (_, index) => `LLM_V2_${stamp}_${index}`)
   const starts = await Promise.all(markers.map(async (marker, index) =>
     unwrap(
-      await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs-v2`, {
+      await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs`, {
         data: { input: runtimeInput(marker), idempotencyKey: `llm-v2-${stamp}-${index}` },
       }),
       `start llm run ${marker}`,
@@ -161,7 +161,7 @@ async function runAgentV2Uat(page, modelConfigId, stamp) {
     'create runtime v2 agent chatflow',
   )
   const started = await unwrap(
-    await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs-v2`, {
+    await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs`, {
       data: { input: runtimeInput(ticket), idempotencyKey: `agent-v2-${stamp}` },
     }),
     'start runtime v2 agent run',
@@ -213,7 +213,7 @@ async function runConditionV2Uat(page, stamp) {
     'create condition chatflow',
   )
   const started = await unwrap(
-    await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs-v2`, {
+    await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs`, {
       data: { input: runtimeInput(`vip ${stamp}`), idempotencyKey: `condition-v2-${stamp}` },
     }),
     'start condition run',
@@ -246,7 +246,7 @@ async function runErrorV2Uat(page, stamp) {
     'create error chatflow',
   )
   const started = await unwrap(
-    await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs-v2`, {
+    await page.request.post(`${baseUrl}/api/v1/chatflows/${chatflow.id}/runs`, {
       data: { input: runtimeInput(`error ${stamp}`), idempotencyKey: `error-v2-${stamp}` },
     }),
     'start error run',

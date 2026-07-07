@@ -57,7 +57,7 @@ try {
     ],
   }), 'create chatflow')
 
-  const started = unwrap(await api(page, 'POST', `/api/v1/chatflows/${chatflow.id}/runs-v2`, {
+  const started = unwrap(await api(page, 'POST', `/api/v1/chatflows/${chatflow.id}/runs`, {
     input: { 'sys.query': 'Ada', callerContext: { uat: 'runtime-v2-cancel' } },
   }), 'start runtime v2 run')
 

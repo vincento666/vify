@@ -1,0 +1,14 @@
+PASS
+
+Commands:
+- HIFY_E2E_BASE_URL=http://127.0.0.1:15176 HIFY_E2E_SCREENSHOT=artifacts/slices/214-runtime-dag-multipath-semantics/214.4/chatflow-execute-workflow-node.png /opt/homebrew/bin/rtk node frontend/e2e/chatflow-execute-workflow-node.mjs
+- HIFY_E2E_BASE_URL=http://127.0.0.1:15176 HIFY_E2E_SCREENSHOT=artifacts/slices/214-runtime-dag-multipath-semantics/214.4/workflow-six-node-matrix.png HIFY_E2E_CHATFLOW_SCREENSHOT=artifacts/slices/214-runtime-dag-multipath-semantics/214.4/chatflow-six-node-matrix.png /opt/homebrew/bin/rtk node frontend/e2e/workflow-six-node-matrix.mjs
+
+Outputs:
+- e2e-chatflow-execute-workflow-node.txt: PASS chatflow execute workflow node e2e
+- e2e-workflow-six-node-matrix.txt: PASS workflow/chatflow six-node matrix e2e
+
+Screenshots:
+- chatflow-execute-workflow-node.png
+- workflow-six-node-matrix.png
+- chatflow-six-node-matrix.png

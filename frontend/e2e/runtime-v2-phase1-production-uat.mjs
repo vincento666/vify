@@ -170,7 +170,7 @@ async function runErrorRoutingDebugUat(page, stamp) {
       { sourceNodeKey: 'success_msg', targetNodeKey: 'end', condition: null },
     ],
   }, 'create error routing chatflow')
-  const started = await requestJson(page, `/api/v1/chatflows/${chatflow.id}/runs-v2`, {
+  const started = await requestJson(page, `/api/v1/chatflows/${chatflow.id}/runs`, {
     input: startInput(stamp),
     idempotencyKey: `phase1-error-${stamp}`,
   }, 'start error routing v2 run')

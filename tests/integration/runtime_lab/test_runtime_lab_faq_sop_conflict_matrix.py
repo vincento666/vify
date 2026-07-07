@@ -94,7 +94,7 @@ class RuntimeLabFaqSopConflictMatrixTest(unittest.TestCase):
                     self.assertEqual(after["sop_id"], expected_active_sop)
                     if action == "ANSWER_FAQ":
                         self.assertEqual(after["id"], before["id"])
-                        self.assertEqual(after["checkpoint_id"], before["checkpoint_id"])
+                        self.assertNotIn("checkpoint_id", after)
                         self.assertEqual(turn.route_decision.faq_answer["sourceLayer"], "runtime_airline_faq")
                     else:
                         self.assertNotEqual(after["id"], before["id"])
@@ -125,7 +125,7 @@ class RuntimeLabFaqSopConflictMatrixTest(unittest.TestCase):
             self.assertEqual(turn.route_decision.classifier_result["selected_action"], "ANSWER_FAQ")
             self.assertEqual(turn.route_decision.classifier_result["_debug"]["clarifyRecovery"]["from"], "CLARIFY")
             self.assertEqual(after["id"], before["id"])
-            self.assertEqual(after["checkpoint_id"], before["checkpoint_id"])
+            self.assertNotIn("checkpoint_id", after)
 
     def test_pet_material_comparison_faq_is_not_blocked_as_document_comparison(self) -> None:
         with _session() as session:
@@ -151,7 +151,7 @@ class RuntimeLabFaqSopConflictMatrixTest(unittest.TestCase):
             self.assertEqual(turn.route_decision.action, "ANSWER_FAQ")
             self.assertEqual(turn.route_decision.faq_answer["reasonCode"], "PET_CABIN_DOCS")
             self.assertEqual(after["id"], before["id"])
-            self.assertEqual(after["checkpoint_id"], before["checkpoint_id"])
+            self.assertNotIn("checkpoint_id", after)
 
 
 class _SwitchAwareClassifier:

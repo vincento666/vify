@@ -229,4 +229,6 @@ def _event_type_for_result(result: WorkerResult) -> str:
         return "task_waiting"
     if result.status == TaskStatus.FAILED:
         return "task_failed"
+    if result.status == TaskStatus.CANCELLED:
+        return "task_cancelled"
     return "worker_result_received"

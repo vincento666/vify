@@ -1,5 +1,4 @@
 import logging
-from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
 
@@ -26,7 +25,6 @@ class RuntimeLabRepository:
         self._session = session
         self._session_table = Base.metadata.tables["runtime_lab_session"]
         self._task_table = Base.metadata.tables["runtime_lab_task"]
-        self._checkpoint_table = Base.metadata.tables["runtime_lab_checkpoint"]
         self._event_table = Base.metadata.tables["runtime_lab_event"]
         self._command_table = Base.metadata.tables["runtime_lab_command"]
         self._ensure_tables()
@@ -118,10 +116,8 @@ class RuntimeLabRepository:
                 "session_id": session_id,
                 "sop_id": sop_id,
                 "status": status,
-                "checkpoint_id": None,
                 "parent_task_id": parent_task_id,
                 "resume_summary": resume_summary,
-                "business_refs": {},
                 "chatflow_id": chatflow_id,
                 "chatflow_session_id": chatflow_session_id,
                 "chatflow_run_id": chatflow_run_id,
@@ -206,7 +202,11 @@ class RuntimeLabRepository:
                 current_step,
             )
         if checkpoint_id is not None:
-            values["checkpoint_id"] = checkpoint_id
+            _logger.warning(
+                "Ignoring update_task_state(task_id=%s, checkpoint_id=%r) — banned field per spec 216.3",
+                task_id,
+                checkpoint_id,
+            )
         if resume_summary is not None:
             values["resume_summary"] = resume_summary
         if business_refs is not None:
@@ -245,93 +245,6 @@ class RuntimeLabRepository:
         if updated is None:
             raise KeyError(f"Runtime task not found after update: {task_id}")
         return updated
-
-    def create_checkpoint(
-        self,
-        session_id: int,
-        task_id: int,
-        sop_id: str,
-        current_step: str = "",
-        pending_prompt: str = "",
-        collected: dict[str, Any] | None = None,
-        scoped_variables: dict[str, Any] | None = None,
-        status: str = "ACTIVE",
-    ) -> dict[str, Any]:
-        if current_step:
-            _logger.warning(
-                "Ignoring create_checkpoint(task_id=%s, current_step=%r) — banned field per spec 213.3.5e",
-                task_id,
-                current_step,
-            )
-        if pending_prompt:
-            _logger.warning(
-                "Ignoring create_checkpoint(task_id=%s, pending_prompt=%r) — banned field per spec 213.3.4",
-                task_id,
-                pending_prompt,
-            )
-        if collected:
-            _logger.warning(
-                "Ignoring create_checkpoint(task_id=%s, collected=%r) — banned field per spec 213.3.5e",
-                task_id,
-                collected,
-            )
-        scoped_filtered: dict[str, Any] = {}
-        if isinstance(scoped_variables, Mapping):
-            chatflow_meta = scoped_variables.get("__chatflow")
-            if chatflow_meta is not None:
-                scoped_filtered["__chatflow"] = chatflow_meta
-        if status == "ACTIVE":
-            self._session.execute(
-                self._checkpoint_table.update()
-                .where(
-                    self._checkpoint_table.c.task_id == task_id,
-                    self._checkpoint_table.c.status == "ACTIVE",
-                    self._checkpoint_table.c.deleted.is_(False),
-                )
-                .values(status="SUPERSEDED", updated_at=datetime.now())
-            )
-        now = datetime.now()
-        row = insert_and_fetch(
-            self._session,
-            self._checkpoint_table,
-            {
-                "session_id": session_id,
-                "task_id": task_id,
-                "sop_id": sop_id,
-                "current_step": "",
-                # pending_prompt banned per 213.3.4; write NOT NULL placeholder.
-                "pending_prompt": "",
-                "collected": {},
-                "scoped_variables": scoped_filtered,
-                "status": status,
-                "deleted": False,
-                "created_at": now,
-                "updated_at": now,
-            },
-        )
-        self._session.commit()
-        return row
-
-    def get_checkpoint(self, checkpoint_id: int) -> dict[str, Any] | None:
-        row = self._session.execute(
-            sa.select(self._checkpoint_table).where(
-                self._checkpoint_table.c.id == checkpoint_id,
-                self._checkpoint_table.c.deleted.is_(False),
-            )
-        ).mappings().one_or_none()
-        return dict(row) if row else None
-
-    def get_latest_checkpoint(self, task_id: int) -> dict[str, Any] | None:
-        row = self._session.execute(
-            sa.select(self._checkpoint_table)
-            .where(
-                self._checkpoint_table.c.task_id == task_id,
-                self._checkpoint_table.c.deleted.is_(False),
-            )
-            .order_by(self._checkpoint_table.c.id.desc())
-            .limit(1)
-        ).mappings().one_or_none()
-        return dict(row) if row else None
 
     def list_tasks(self, session_id: int, statuses: set[str] | None = None) -> list[dict[str, Any]]:
         conditions: list[ColumnElement[bool]] = [
@@ -399,33 +312,34 @@ class RuntimeLabRepository:
         if bind is None:
             return
         Base.metadata.create_all(bind=bind, tables=runtime_lab_tables())
-        self._ensure_checkpoint_scoped_variables_column()
+        self._drop_runtime_lab_state_mirror_schema()
         self._ensure_runtime_lab_task_ref_columns()
         if self._session.in_transaction():
             self._session.commit()
         self._session.expire_all()
 
-    def _ensure_checkpoint_scoped_variables_column(self) -> None:
+    def _drop_runtime_lab_state_mirror_schema(self) -> None:
         bind = self._session.get_bind()
         if bind is None:
             return
         inspector = sa.inspect(bind)
-        if "runtime_lab_checkpoint" not in inspector.get_table_names():
-            return
-        column_names = {column["name"] for column in inspector.get_columns("runtime_lab_checkpoint")}
-        if "scoped_variables" in column_names:
-            return
-        column_type = self._checkpoint_table.c.scoped_variables.type.compile(dialect=bind.dialect)
-        self._session.execute(
-            sa.text(f"ALTER TABLE runtime_lab_checkpoint ADD COLUMN scoped_variables {column_type}")  # noqa: S608
-        )
-        self._session.commit()
+        table_names = set(inspector.get_table_names())
+        if "runtime_lab_checkpoint" in table_names:
+            self._session.execute(sa.text("DROP TABLE runtime_lab_checkpoint"))  # noqa: S608
+        if "runtime_lab_task" in table_names:
+            existing = {column["name"] for column in inspector.get_columns("runtime_lab_task")}
+            for column_name in ("current_step", "business_refs", "checkpoint_id"):
+                if column_name in existing:
+                    self._session.execute(
+                        sa.text(f"ALTER TABLE runtime_lab_task DROP COLUMN {column_name}")  # noqa: S608
+                    )
+        if self._session.in_transaction():
+            self._session.commit()
 
     def _ensure_runtime_lab_task_ref_columns(self) -> None:
         """Lazy migration: ADD COLUMN for chatflow_id, chatflow_session_id, ...
 
-        Mirrors :meth:`_ensure_checkpoint_scoped_variables_column`. Tolerates
-        idempotent re-runs since the columns are nullable.
+        Tolerates idempotent re-runs since the columns are nullable.
         """
         bind = self._session.get_bind()
         if bind is None:

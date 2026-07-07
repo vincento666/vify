@@ -124,7 +124,7 @@ def _create_question_chatflow(client: TestClient, stamp: int) -> dict[str, objec
 
 def _start_runtime_v2_run(client: TestClient, chatflow_id: int, session_suffix: str) -> dict[str, object]:
     response = client.post(
-        f"/api/v1/chatflows/{chatflow_id}/runs-v2",
+        f"/api/v1/chatflows/{chatflow_id}/runs",
         json={
             "input": {
                 "sys.query": "start",

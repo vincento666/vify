@@ -3,6 +3,13 @@ export type WorkflowRunNodeDetail = {
   nodeKey?: string
   nodeType?: string
   status?: string
+  selectionState?: {
+    nodeKey?: string
+    state?: string
+    selectedUpstreamNodeKeys?: string[]
+    skippedUpstreamNodeKeys?: string[]
+    reason?: string
+  }
   elapsedMs?: number
   latencyMs?: number
   outputs?: Record<string, any>

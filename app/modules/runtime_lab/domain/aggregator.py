@@ -2,21 +2,18 @@
 
 Replaces RuntimeLabService._session_business_context. Walks the runtime tasks
 of a session and asks each task's child-chatflow runtime for the
-`conversation` scope variables. Falls back to ``task.business_refs`` so
-regex-derived slots (extracted by SOP Router's _business_values_from_message)
-survive when the chatflow ``conversation`` scope does not persist them.
+`conversation` scope variables. Regex-derived slots that are not yet durable in
+child Chatflow are supplied by the service's in-memory overlay.
 
 Merge rules (audit §6):
 
-- per task: ``business_refs`` first; chatflow ``conversation`` scope wins on
-  key collision.
 - across tasks: historical / suspended tasks first (in repository order);
   the active task is merged last, so its keys win on collision.
 
 The workflow service is consulted via ``get_session_state``. ``BizError``
 indicates that the chatflow session is missing or the state repository is
-not configured; in either case the aggregator falls back to ``business_refs``
-without propagating the error.
+not configured; in either case the aggregator skips that task's durable
+conversation state without propagating the error.
 """
 
 from collections.abc import Mapping
@@ -48,14 +45,6 @@ class RuntimeLabBusinessContextAggregator:
         self._repository = repository
         self._workflow_service = workflow_service
         self._in_memory_overlay: dict[int, dict[str, Any]] = {}
-        self._task_step_overlay: dict[int, str] = {}
-
-    def record_task_step(self, task_id: int, current_step: str) -> None:
-        if current_step:
-            self._task_step_overlay[int(task_id)] = str(current_step)
-
-    def task_current_step(self, task_id: int) -> str | None:
-        return self._task_step_overlay.get(int(task_id))
 
     def record_turn_context(
         self, session_id: int, context: Mapping[str, Any]
@@ -82,7 +71,6 @@ class RuntimeLabBusinessContextAggregator:
 
         1. chatflow ``conversation`` scope (active task wins on collision)
         2. in-memory overlay populated by :meth:`record_turn_context`
-        3. legacy DB ``business_refs`` (removed in slice 213.3.5g)
         """
         active_id = self._active_task_id(session_id)
         merged: dict[str, Any] = {}
@@ -102,10 +90,7 @@ class RuntimeLabBusinessContextAggregator:
         return merged
 
     def _task_conversation_variables(self, task: Mapping[str, Any]) -> dict[str, Any]:
-        business_refs = task.get("business_refs") or {}
-        merged: dict[str, Any] = (
-            dict(business_refs) if isinstance(business_refs, Mapping) else {}
-        )
+        merged: dict[str, Any] = {}
         chatflow_id = task.get("chatflow_id")
         chatflow_session_id = task.get("chatflow_session_id")
         if not chatflow_id or not chatflow_session_id or self._workflow_service is None:

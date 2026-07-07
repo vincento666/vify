@@ -20,15 +20,15 @@
 
 All runtime-v2 starts expose the same ref family:
 
-| Ref | Endpoint | Purpose |
-| --- | --- | --- |
-| `statusRef` | `GET /api/v1/runtime-runs/{runId}` | Current run status and ownership |
-| `eventsRef` | `GET /api/v1/runtime-runs/{runId}/events?afterSequence=N` | Durable event replay |
-| `eventStreamRef` | `GET /api/v1/runtime-runs/{runId}/events/stream?afterSequence=N` | SSE reconnect stream with heartbeat support |
-| `nodesRef` | `GET /api/v1/runtime-runs/{runId}/nodes` | Runtime node state for canvas/task panels |
-| `resultRef` | `GET /api/v1/runtime-runs/{runId}/result` | Terminal or current result projection |
-| resume | `POST /api/v1/runtime-runs/{runId}/resume` | Resume interrupted run from checkpoint |
-| cancel | `POST /api/v1/runtime-runs/{runId}/cancel` | Mark running/interrupted run cancelled |
+| Ref | Endpoint | Purpose | Recovery |
+| --- | --- | --- | --- |
+| `statusRef` | `GET /api/v1/runtime-runs/{runId}` | Current run status and ownership | Rebuilds the full six-ref family, including `runtimeRefs`, from runId |
+| `eventsRef` | `GET /api/v1/runtime-runs/{runId}/events?afterSequence=N` | Durable event replay | Replays events after the caller's last durable sequence |
+| `eventStreamRef` | `GET /api/v1/runtime-runs/{runId}/events/stream?afterSequence=N` | SSE reconnect stream with heartbeat support | Reconnects from the same durable cursor as `eventsRef` |
+| `nodesRef` | `GET /api/v1/runtime-runs/{runId}/nodes` | Runtime node state for canvas/task panels | Rehydrates node-run state from durable node rows |
+| `resultRef` | `GET /api/v1/runtime-runs/{runId}/result` | Terminal or current result projection | Returns the same status/result projection and full six-ref family as `statusRef` |
+| resume | `POST /api/v1/runtime-runs/{runId}/resume` | Resume interrupted run from checkpoint | Uses the existing run checkpoint and returns same-run refs |
+| cancel | `POST /api/v1/runtime-runs/{runId}/cancel` | Mark running/interrupted run cancelled | Uses runId idempotently and returns the updated run projection |
 
 ## Internal Invocation Modes
 
@@ -66,3 +66,15 @@ Helpers:
 Contract test: `tests/contract/runtime_gateway/test_six_ref_dto.py` locks this DTO shape;
 subsequent slices (213.2 / 213.3 / 213.4) MUST import this DTO rather than re-defining
 local ref shapes.
+
+## 213.5 amendment — runId recovery contract
+
+Spec 213 slice 213.5 locks disconnect recovery through
+`tests/contract/runtime_recovery/test_runid_recovery.py`.
+
+Given only `runId`, callers can rebuild:
+
+- `GET /api/v1/runtime-runs/{runId}` status plus all six refs.
+- `GET /api/v1/runtime-runs/{runId}/events?afterSequence=N` durable event replay.
+- `GET /api/v1/runtime-runs/{runId}/nodes` durable node state.
+- `GET /api/v1/runtime-runs/{runId}/result` current or terminal result plus all six refs.

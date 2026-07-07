@@ -1,0 +1,17 @@
+Seeded RuntimeLab airline Chatflow SOPs:
+- flight_booking: 4768
+- fare_quote: 4769
+- group_booking: 4770
+- ancillary_sales: 4771
+- refund_ticket: 4772
+- change_flight: 4773
+- passenger_info_change: 4774
+- invoice_apply: 4775
+- baggage_service: 4776
+- seat_checkin: 4777
+- flight_status: 4778
+- special_assistance: 4779
+- pet_cabin: 4780
+- irregular_flight: 4781
+- membership_service: 4782
+No OPENROUTER_API_KEY found; .env keeps fake arbitrator mode and no API key was written.

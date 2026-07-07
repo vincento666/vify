@@ -1,0 +1,4 @@
+78:## Frontier Algorithm
+81:execution state. A node enters `runnableNodeKeys` when it is selected, is not
+86:in `waitingNodeKeys`. Explicit runtime `waiting` nodes also stay out of the
+88:ports enter `skippedNodeKeys` and never block an implicit join.

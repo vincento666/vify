@@ -38,11 +38,11 @@ describe('workflow runtime v2 frontend API client', () => {
     await listRuntimeV2Events(701, { afterSequence: 4 })
     await listRuntimeV2Nodes(701)
 
-    expect(requestMocks.post).toHaveBeenNthCalledWith(1, '/v1/workflows/12/runs-v2', {
+    expect(requestMocks.post).toHaveBeenNthCalledWith(1, '/v1/workflows/12/runs', {
       input: { USER_INPUT: 'hello' },
       idempotencyKey: 'workflow-key',
     })
-    expect(requestMocks.post).toHaveBeenNthCalledWith(2, '/v1/chatflows/21/runs-v2', {
+    expect(requestMocks.post).toHaveBeenNthCalledWith(2, '/v1/chatflows/21/runs', {
       input: { message: 'hello' },
       idempotencyKey: 'chatflow-key',
     })
@@ -67,12 +67,12 @@ describe('workflow runtime v2 frontend API client', () => {
     await runWorkflowV2(12, { USER_INPUT: 'historical' }, 'workflow-version-key', 41)
     await runChatflowV2(21, { message: 'historical' }, 'chatflow-version-key', 42)
 
-    expect(requestMocks.post).toHaveBeenNthCalledWith(1, '/v1/workflows/12/runs-v2', {
+    expect(requestMocks.post).toHaveBeenNthCalledWith(1, '/v1/workflows/12/runs', {
       input: { USER_INPUT: 'historical' },
       idempotencyKey: 'workflow-version-key',
       versionId: 41,
     })
-    expect(requestMocks.post).toHaveBeenNthCalledWith(2, '/v1/chatflows/21/runs-v2', {
+    expect(requestMocks.post).toHaveBeenNthCalledWith(2, '/v1/chatflows/21/runs', {
       input: { message: 'historical' },
       idempotencyKey: 'chatflow-version-key',
       versionId: 42,
@@ -90,11 +90,11 @@ describe('workflow runtime v2 frontend API client', () => {
     await runWorkflowV2(12, { USER_INPUT: 'fallback probe' }, 'workflow-silent-key', undefined, { silentError: true })
     await runChatflowV2(21, { message: 'fallback probe' }, 'chatflow-silent-key', undefined, { silentError: true })
 
-    expect(requestMocks.post).toHaveBeenNthCalledWith(1, '/v1/workflows/12/runs-v2', {
+    expect(requestMocks.post).toHaveBeenNthCalledWith(1, '/v1/workflows/12/runs', {
       input: { USER_INPUT: 'fallback probe' },
       idempotencyKey: 'workflow-silent-key',
     }, { silentError: true })
-    expect(requestMocks.post).toHaveBeenNthCalledWith(2, '/v1/chatflows/21/runs-v2', {
+    expect(requestMocks.post).toHaveBeenNthCalledWith(2, '/v1/chatflows/21/runs', {
       input: { message: 'fallback probe' },
       idempotencyKey: 'chatflow-silent-key',
     }, { silentError: true })

@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any, Protocol
+from typing import Any, ClassVar, Protocol
 
-from app.modules.runtime_lab.domain.sop import MockSopAdapter, SopTurnResult
+from app.modules.runtime_lab.domain.sop import MockSopAdapter, SopTurnResult, missing_chatflow_binding_error
 
 
 class SopExecutionStatus(StrEnum):
@@ -88,7 +88,28 @@ class SopRuntimeAdapter(Protocol):
         ...
 
 
+class MissingChatflowBindingAdapter:
+    def start_sop(self, request: SopExecutionRequest) -> SopExecutionResult:
+        return _missing_chatflow_binding_result(request)
+
+    def continue_sop(self, request: SopExecutionRequest) -> SopExecutionResult:
+        return _missing_chatflow_binding_result(request)
+
+    def suspend_sop(self, request: SopExecutionRequest) -> SopCheckpoint:
+        if request.checkpoint is not None:
+            return request.checkpoint
+        return _missing_chatflow_binding_checkpoint(request)
+
+    def resume_sop(self, request: SopExecutionRequest) -> SopExecutionResult:
+        return _missing_chatflow_binding_result(request)
+
+    def is_interruptible(self, sop_id: str, step_id: str) -> bool:
+        return False
+
+
 class FakeSopRuntimeAdapter:
+    _runtime_results: ClassVar[dict[int, dict[str, Any]]] = {}
+
     def __init__(self, mock_adapter: MockSopAdapter | None = None) -> None:
         self._mock_adapter = mock_adapter or MockSopAdapter()
 
@@ -115,13 +136,16 @@ class FakeSopRuntimeAdapter:
 
     def suspend_sop(self, request: SopExecutionRequest) -> SopCheckpoint:
         if request.checkpoint is not None:
+            self._remember_checkpoint(request.checkpoint)
             return request.checkpoint
-        return self._checkpoint(
+        checkpoint = self._checkpoint(
             request,
             current_step="collect_order_no",
             pending_prompt="",
             collected=request.collected,
         )
+        self._remember_checkpoint(checkpoint)
+        return checkpoint
 
     def resume_sop(self, request: SopExecutionRequest) -> SopExecutionResult:
         if request.checkpoint is None:
@@ -133,7 +157,7 @@ class FakeSopRuntimeAdapter:
             )
         else:
             checkpoint = request.checkpoint
-        return SopExecutionResult(
+        result = SopExecutionResult(
             status=SopExecutionStatus.WAITING,
             current_step=checkpoint.current_step,
             reply=f"已恢复流程。{checkpoint.pending_prompt}",
@@ -144,9 +168,14 @@ class FakeSopRuntimeAdapter:
             events=[{"type": "SOP_RESUMED", "sopId": request.sop_id}],
             error=None,
         )
+        self._remember_result(result)
+        return result
 
     def is_interruptible(self, sop_id: str, step_id: str) -> bool:
         return self._mock_adapter.is_interruptible(sop_id, step_id)
+
+    def get_result(self, run_id: int) -> dict[str, Any]:
+        return dict(self._runtime_results.get(int(run_id)) or {})
 
     def _execution_result(
         self,
@@ -161,7 +190,7 @@ class FakeSopRuntimeAdapter:
             collected=result.collected,
         )
         status = SopExecutionStatus.COMPLETED if result.completed else SopExecutionStatus.WAITING
-        return SopExecutionResult(
+        execution_result = SopExecutionResult(
             status=status,
             current_step=result.current_step,
             reply=result.reply,
@@ -172,6 +201,8 @@ class FakeSopRuntimeAdapter:
             events=[{"type": event_type, "sopId": request.sop_id, "currentStep": result.current_step}],
             error=None,
         )
+        self._remember_result(execution_result)
+        return execution_result
 
     def _checkpoint(
         self,
@@ -200,7 +231,7 @@ class FakeSopRuntimeAdapter:
 
     def _failure(self, request: SopExecutionRequest) -> SopExecutionResult:
         checkpoint = self._checkpoint(request, current_step="", pending_prompt="", collected={})
-        return SopExecutionResult(
+        result = SopExecutionResult(
             status=SopExecutionStatus.FAILED,
             current_step="",
             reply="",
@@ -211,6 +242,29 @@ class FakeSopRuntimeAdapter:
             events=[{"type": "SOP_FAILED", "sopId": request.sop_id}],
             error={"code": "SOP_NOT_FOUND", "message": f"Unknown SOP: {request.sop_id}"},
         )
+        self._remember_result(result)
+        return result
+
+    def _remember_result(self, result: SopExecutionResult) -> None:
+        self._remember_checkpoint(result.checkpoint, status=result.status.value)
+
+    def _remember_checkpoint(self, checkpoint: SopCheckpoint, status: str = "WAITING") -> None:
+        meta = checkpoint.scoped_variables.get("__chatflow")
+        if not isinstance(meta, dict):
+            return
+        run_id = meta.get("runId")
+        try:
+            run_id_int = int(run_id)
+        except (TypeError, ValueError):
+            return
+        self._runtime_results[run_id_int] = {
+            "runId": run_id_int,
+            "status": status,
+            "checkpoint": {
+                "pendingNodeKey": checkpoint.current_step,
+                "pendingPrompt": checkpoint.pending_prompt,
+            },
+        }
 
 
 def _synthetic_chatflow_meta(
@@ -253,3 +307,31 @@ def _synthetic_chatflow_meta(
         "runtimeStatus": "RUNNING",
         "fallbackReason": None,
     }
+
+
+def _missing_chatflow_binding_result(request: SopExecutionRequest) -> SopExecutionResult:
+    error = missing_chatflow_binding_error(request.sop_id)
+    return SopExecutionResult(
+        status=SopExecutionStatus.FAILED,
+        current_step="",
+        reply="",
+        pending_prompt="",
+        checkpoint=_missing_chatflow_binding_checkpoint(request),
+        collected={},
+        business_refs={},
+        events=[{"type": "MISSING_CHATFLOW_BINDING", "sopId": request.sop_id}],
+        error=error,
+    )
+
+
+def _missing_chatflow_binding_checkpoint(request: SopExecutionRequest) -> SopCheckpoint:
+    runtime_id = request.runtime_task_id if request.runtime_task_id is not None else "new"
+    return SopCheckpoint(
+        sop_runtime_id=f"missing-chatflow-binding:{request.sop_id}:{runtime_id}",
+        current_node_id="",
+        current_step="",
+        pending_prompt="",
+        collected={},
+        scoped_variables={},
+        version=1,
+    )

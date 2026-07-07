@@ -2,6 +2,8 @@ from dataclasses import dataclass
 import re
 from typing import Any
 
+MISSING_CHATFLOW_BINDING_CODE = "MISSING_CHATFLOW_BINDING"
+
 
 @dataclass(frozen=True)
 class SopStep:
@@ -49,6 +51,13 @@ class SopTurnResult:
     collected: dict[str, Any]
     completed: bool
     checkpoint: dict[str, Any]
+
+
+def missing_chatflow_binding_error(sop_id: str) -> dict[str, str]:
+    return {
+        "code": MISSING_CHATFLOW_BINDING_CODE,
+        "message": f"SOP has no Chatflow binding: {sop_id}",
+    }
 
 
 def match_strong_trigger_template(text: str, manifest: SopManifest) -> TriggerTemplateMatch | None:

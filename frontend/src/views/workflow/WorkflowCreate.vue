@@ -3278,6 +3278,12 @@
               <li v-for="error in validationErrors" :key="error">{{ error }}</li>
             </ul>
           </section>
+          <section v-if="testRunErrorMessage" class="config-section">
+            <div class="section-title validation-title"><span>!</span> 校验失败</div>
+            <ul class="validation-list">
+              <li>{{ testRunErrorMessage }}</li>
+            </ul>
+          </section>
 
           <section class="chatflow-run-chat-window" data-testid="chatflow-run-chat-window">
             <div class="chatflow-message-list" data-testid="chatflow-run-messages">
@@ -3362,8 +3368,7 @@
                 <input
                   :aria-label="field.label"
                   :placeholder="field.placeholder"
-                  :value="chatflowResumeValues[field.key] || ''"
-                  @input="setChatflowResumeField(field.key, ($event.target as HTMLInputElement).value)"
+                  v-model="chatflowResumeValues[field.key]"
                 />
               </div>
               <button
@@ -3431,6 +3436,12 @@
             <div class="section-title validation-title"><span>!</span> 校验失败</div>
             <ul class="validation-list">
               <li v-for="error in validationErrors" :key="error">{{ error }}</li>
+            </ul>
+          </section>
+          <section v-if="testRunErrorMessage" class="config-section">
+            <div class="section-title validation-title"><span>!</span> 校验失败</div>
+            <ul class="validation-list">
+              <li>{{ testRunErrorMessage }}</li>
             </ul>
           </section>
 
@@ -3559,8 +3570,7 @@
               <input
                 :aria-label="field.label"
                 :placeholder="field.placeholder"
-                :value="chatflowResumeValues[field.key] || ''"
-                @input="setChatflowResumeField(field.key, ($event.target as HTMLInputElement).value)"
+                v-model="chatflowResumeValues[field.key]"
               />
             </div>
             <button
@@ -5009,6 +5019,7 @@ const runOutputRows = computed(() => {
     value: formatRunOutputValue(value),
   }))
 })
+const testRunErrorMessage = computed(() => String(testResult.value?.error || '').trim())
 const filteredVariableGroups = computed(() => {
   const keyword = variableSearch.value.trim().toLowerCase()
   if (!keyword) return inlineVariableGroups.value
@@ -9186,17 +9197,13 @@ async function loadChatflowDebugState(id: number, result: Record<string, any> | 
     ensureSelectedDebugNode(detail.nodeDetails || [])
     chatflowResumeValues.value = Object.fromEntries(
       buildChatflowResumeFields((session.waitingEvent?.payload || session.checkpoint?.resumeSchema || {}) as Record<string, any>)
-        .map((field) => [field.key, '']),
+        .map((field) => [field.key, chatflowResumeValues.value[field.key] ?? '']),
     )
   } catch (e: any) {
     validationErrors.value = [e?.message || '加载调试状态失败']
   } finally {
     chatflowDebugLoading.value = false
   }
-}
-
-function setChatflowResumeField(key: string, value: string) {
-  chatflowResumeValues.value = { ...chatflowResumeValues.value, [key]: value }
 }
 
 async function submitChatflowResume() {

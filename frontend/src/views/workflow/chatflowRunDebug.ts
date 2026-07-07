@@ -67,8 +67,9 @@ export function projectRuntimeV2ChatflowSessionState(
   status: unknown,
   previous: ChatflowSessionDebugState | null | undefined = null,
 ): ChatflowSessionDebugState {
-  const checkpoint = run.checkpoint || previous?.checkpoint || null
   const normalizedStatus = String(status || run.status || '').trim().toUpperCase()
+  const terminal = ['SUCCEEDED', 'COMPLETED', 'FAILED', 'CANCELLED', 'CANCELED'].includes(normalizedStatus)
+  const checkpoint = terminal ? null : run.checkpoint || previous?.checkpoint || null
   const sessionStatus = checkpoint && ['INTERRUPTED', 'WAITING'].includes(normalizedStatus)
     ? 'waiting'
     : normalizeSessionStatus(normalizedStatus)
@@ -82,7 +83,7 @@ export function projectRuntimeV2ChatflowSessionState(
     status: sessionStatus,
     currentRunId: Number(run.runId || previous?.currentRunId || 0),
     variables: isRecord(run.variables) ? run.variables : previous?.variables || {},
-    waitingEvent: run.waitingEvent || previous?.waitingEvent || null,
+    waitingEvent: terminal ? null : run.waitingEvent || previous?.waitingEvent || null,
     checkpoint,
   }
 }

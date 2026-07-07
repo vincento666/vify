@@ -28,7 +28,7 @@ const scenarios = [
     label: '团队订票',
     sopId: 'group_booking',
     start: '我们公司十六个人出差，想咨询团队机票怎么订',
-    collect: '订单号 CA0234，手机号 13800138012，乘机人沈测试',
+    collect: '上海到广州，下周三上午，十六个人，订单号 CA0234，手机号 13800138012，乘机人沈测试',
     confirm: '确认团队询价',
   },
   {
@@ -63,7 +63,7 @@ const scenarios = [
     label: '发票申请',
     sopId: 'invoice_apply',
     start: '公司报销要凭证，帮我开一下电子发票',
-    collect: '订单号 CA3034，手机号 13800138002，乘机人王测试',
+    collect: '订单号 CA3034，手机号 13800138002，乘机人王测试，发票抬头：Hify 科技',
     confirm: '确认开票',
   },
   {
@@ -84,7 +84,7 @@ const scenarios = [
     label: '航班动态',
     sopId: 'flight_status',
     start: '我想查一下今天航班动态，听说天气不好',
-    collect: '订单号 CA6034，手机号 13800138005，乘机人孙测试',
+    collect: '航班号 CA6034，今天北京飞广州',
     confirm: '确认继续关注',
   },
   {
@@ -202,7 +202,7 @@ async function runCompleteScenario(page, scenario) {
   await waitForRouteAction(page, 'START_SOP')
   await expectTaskStatus(page, scenario.sopId, 'RUNNING')
   if (chatflowBound && scenario.sopId === 'refund_ticket') {
-    await page.getByText('请补充订单号和手机号').last().waitFor({ timeout: 15_000 })
+    await page.getByText(/(请补充|当前只差).*订单号.*手机号/).last().waitFor({ timeout: 15_000 })
   }
 
   await sendTurn(page, scenario.collect)

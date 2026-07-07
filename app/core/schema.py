@@ -15,6 +15,7 @@ def register_baseline_tables() -> None:
     metadata = Base.metadata
     if "provider" in metadata.tables:
         register_chatflow_state_tables(metadata)
+        register_runtime_event_outbox_table(metadata)
         register_chatflow_channel_tables(metadata)
         register_workflow_publish_tables(metadata)
         register_runtime_job_tables(metadata)
@@ -253,6 +254,7 @@ def register_baseline_tables() -> None:
         sa.Column("node_key", sa.String(100), nullable=False),
         sa.Column("node_type", sa.String(50), nullable=False),
         sa.Column("status", sa.String(20), nullable=False, server_default="RUNNING"),
+        sa.Column("selection_state", sa.JSON(), nullable=True),
         sa.Column("inputs", sa.JSON(), nullable=True),
         sa.Column("outputs", sa.JSON(), nullable=True),
         sa.Column("error", sa.String(500), nullable=True),
@@ -263,6 +265,7 @@ def register_baseline_tables() -> None:
         sa.Index("idx_workflow_node_run_workflow_run_id", "workflow_run_id"),
     )
     register_chatflow_state_tables(metadata)
+    register_runtime_event_outbox_table(metadata)
     register_chatflow_channel_tables(metadata)
     register_workflow_publish_tables(metadata)
     register_runtime_job_tables(metadata)
@@ -322,6 +325,7 @@ def _register_ai_assistant_tables(metadata: sa.MetaData) -> None:
 
 def register_chatflow_state_tables(metadata: sa.MetaData) -> None:
     if "chatflow_session" in metadata.tables:
+        register_runtime_event_outbox_table(metadata)
         return
 
     sa.Table(
@@ -383,6 +387,32 @@ def register_chatflow_state_tables(metadata: sa.MetaData) -> None:
         *timestamps(),
         sa.Index("idx_chatflow_checkpoint_run_id", "run_id"),
         sa.Index("idx_chatflow_checkpoint_session_id", "session_id"),
+    )
+
+    register_runtime_event_outbox_table(metadata)
+
+
+def register_runtime_event_outbox_table(metadata: sa.MetaData) -> None:
+    if "runtime_event_outbox" in metadata.tables:
+        return
+
+    sa.Table(
+        "runtime_event_outbox",
+        metadata,
+        id_column(),
+        sa.Column("run_id", BIGINT, nullable=False),
+        sa.Column("event_id", BIGINT, nullable=False),
+        sa.Column("sequence", sa.Integer, nullable=False),
+        sa.Column("status", sa.String(20), nullable=False, server_default="PENDING"),
+        sa.Column("attempt_count", sa.Integer, nullable=False, server_default="0"),
+        sa.Column("last_error", sa.Text(), nullable=True),
+        sa.Column("payload", sa.JSON(), nullable=True),
+        sa.Column("published_at", sa.DateTime(), nullable=True),
+        deleted_column(),
+        *timestamps(),
+        sa.UniqueConstraint("event_id", name="idx_runtime_event_outbox_event_id"),
+        sa.Index("idx_runtime_event_outbox_run_id", "run_id"),
+        sa.Index("idx_runtime_event_outbox_status", "status", "updated_at"),
     )
 
 

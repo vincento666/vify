@@ -77,7 +77,7 @@ class RuntimeLabSemanticPolicyTest(unittest.TestCase):
             self.assertEqual(turn.route_decision.action, "SUSPEND_AND_START")
             self.assertEqual(turn.active_task["sop_id"], "invoice_apply")
             self.assertEqual(tasks[0]["sop_id"], "refund_ticket")
-            self.assertEqual(tasks[0]["business_refs"], {})
+            self.assertNotIn("business_refs", tasks[0])
 
     def test_active_non_interruptible_classifier_switch_is_rejected(self) -> None:
         with _session() as session:

@@ -14,6 +14,9 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(settings.api_prefix, "/api/v1")
         self.assertEqual(settings.database_url, DEFAULT_MYSQL8_DATABASE_URL)
         self.assertIsNone(settings.redis_url)
+        self.assertTrue(settings.runtime_v2_request_thread_completion_enabled)
+        self.assertEqual(settings.runtime_lab_sop_runtime_invocation_mode, "async")
+        self.assertEqual(settings.customer_assistant_sop_runtime_invocation_mode, "async")
 
 
 if __name__ == "__main__":

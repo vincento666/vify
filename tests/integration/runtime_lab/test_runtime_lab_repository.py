@@ -10,7 +10,7 @@ from app.modules.runtime_lab.infra.schema import register_runtime_lab_tables
 
 
 class RuntimeLabRepositoryTest(unittest.TestCase):
-    def test_persists_session_task_checkpoint_event_and_command_replay(self) -> None:
+    def test_persists_session_task_event_and_command_replay_without_checkpoint_table(self) -> None:
         with _session() as session:
             repository = RuntimeLabRepository(session)
 
@@ -25,25 +25,15 @@ class RuntimeLabRepositoryTest(unittest.TestCase):
                 sop_id="refund_ticket",
                 current_step="collect_order_no",
             )
-            checkpoint = repository.create_checkpoint(
-                int(runtime_session["id"]),
-                int(task["id"]),
-                sop_id="refund_ticket",
-                current_step="collect_order_no",
-                pending_prompt="请提供订单号",
-                collected={"order_no": "TK-100"},
-                scoped_variables={"__chatflow": {"runId": 123}, "conversation.order_no": "TK-100"},
-            )
             task = repository.update_task_state(
                 int(task["id"]),
                 status="SUSPENDED",
-                checkpoint_id=int(checkpoint["id"]),
                 resume_summary="退票已收集订单号",
             )
             second_event = repository.append_event(
                 int(runtime_session["id"]),
                 "TASK_SUSPENDED",
-                {"taskId": task["id"]},
+                {"taskId": task["id"], "currentStep": "collect_order_no"},
             )
             command, replayed = repository.store_command_response(
                 int(runtime_session["id"]),
@@ -61,12 +51,10 @@ class RuntimeLabRepositoryTest(unittest.TestCase):
             self.assertEqual(first_event["sequence"], 1)
             self.assertEqual(second_event["sequence"], 2)
             self.assertEqual(task["status"], "SUSPENDED")
-            self.assertEqual(task["checkpoint_id"], checkpoint["id"])
-            self.assertEqual(
-                repository.get_latest_checkpoint(int(task["id"]))["scoped_variables"]["__chatflow"]["runId"],
-                123,
-            )
-            self.assertEqual(repository.list_tasks(int(runtime_session["id"]))[0]["business_refs"], {})
+            self.assertNotIn("checkpoint_id", task)
+            listed_task = repository.list_tasks(int(runtime_session["id"]))[0]
+            self.assertNotIn("business_refs", listed_task)
+            self.assertNotIn("current_step", listed_task)
             self.assertEqual(repository.list_events(int(runtime_session["id"]))[-1]["event_type"], "TASK_SUSPENDED")
             self.assertFalse(replayed)
             self.assertTrue(replayed_again)

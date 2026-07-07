@@ -15,11 +15,11 @@ class RuntimeV2PublishedVersionTargetingTest(unittest.TestCase):
             publish_v2 = client.post(f"/api/v1/workflows/{workflow['id']}/publish").json()["data"]
 
             active_started = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs-v2",
+                f"/api/v1/workflows/{workflow['id']}/runs",
                 json={"input": {"sys.query": "active"}},
             ).json()["data"]
             targeted_started = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs-v2",
+                f"/api/v1/workflows/{workflow['id']}/runs",
                 json={"input": {"sys.query": "targeted"}, "versionId": publish_v1["id"]},
             ).json()["data"]
             active_result = _wait_for_result(client, active_started["resultRef"])
@@ -49,11 +49,11 @@ class RuntimeV2PublishedVersionTargetingTest(unittest.TestCase):
             publish_v2 = client.post(f"/api/v1/chatflows/{chatflow['id']}/publish").json()["data"]
 
             active_started = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                f"/api/v1/chatflows/{chatflow['id']}/runs",
                 json={"input": {"sys.query": "active", "sys.conversation_id": f"active-{time.time_ns()}"}},
             ).json()["data"]
             targeted_started = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                f"/api/v1/chatflows/{chatflow['id']}/runs",
                 json={
                     "input": {"sys.query": "targeted", "sys.conversation_id": f"targeted-{time.time_ns()}"},
                     "versionId": publish_v1["id"],
@@ -84,11 +84,11 @@ class RuntimeV2PublishedVersionTargetingTest(unittest.TestCase):
             chatflow_version = client.post(f"/api/v1/chatflows/{chatflow['id']}/publish").json()["data"]
 
             unknown = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs-v2",
+                f"/api/v1/workflows/{workflow['id']}/runs",
                 json={"input": {}, "versionId": 999999999},
             )
             cross_flow = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs-v2",
+                f"/api/v1/workflows/{workflow['id']}/runs",
                 json={"input": {}, "versionId": chatflow_version["id"]},
             )
 
@@ -107,7 +107,7 @@ class RuntimeV2PublishedVersionTargetingTest(unittest.TestCase):
             client.post(f"/api/v1/workflows/{workflow['id']}/publish")
 
             started = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs-v2",
+                f"/api/v1/workflows/{workflow['id']}/runs",
                 json={"input": {"sys.query": "start"}, "versionId": publish_v1["id"]},
             ).json()["data"]
             interrupted = _wait_for_result(client, started["resultRef"], wanted_status="INTERRUPTED")

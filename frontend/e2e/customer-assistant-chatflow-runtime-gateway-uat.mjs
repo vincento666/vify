@@ -105,6 +105,7 @@ page.on('request', (request) => {
 try {
   await mkdir(screenshotDir, { recursive: true })
   await page.addInitScript((context) => {
+    localStorage.clear()
     globalThis.__HIFY_HOST__ = context
   }, hostContext)
 
@@ -174,6 +175,7 @@ try {
   assert(recoveryFrame.source === 'chatflow_runtime_v2', `recovery SSE should be v2: ${JSON.stringify(recoveryFrame)}`)
 
   const screenshot = join(screenshotDir, 'customer-assistant-chatflow-runtime-gateway.png')
+  await page.waitForTimeout(6000)
   await page.screenshot({ path: screenshot, fullPage: true })
   const report = {
     ui: {

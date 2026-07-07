@@ -35,7 +35,7 @@ from app.modules.runtime_lab.domain.payload import format_event, format_session,
 from app.modules.runtime_lab.domain.rag_gate import RagAnswerGate
 from app.modules.runtime_lab.domain.aggregator import RuntimeLabBusinessContextAggregator
 from app.modules.runtime_lab.domain.service import RuntimeLabService, _chatflow_meta_from_task
-from app.modules.runtime_lab.domain.sop_adapter import FakeSopRuntimeAdapter
+from app.modules.runtime_lab.domain.sop_adapter import MissingChatflowBindingAdapter
 from app.modules.runtime_lab.infra.repository import RuntimeLabRepository
 from app.modules.runtime_lab.web.schemas import (
     RuntimeLabFallbackAgentRequest,
@@ -95,6 +95,7 @@ def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeL
     if not bindings:
         return RuntimeLabService(
             RuntimeLabRepository(session),
+            adapter=MissingChatflowBindingAdapter(),
             classifier=classifier,
             faq_answer_gate=faq_answer_gate,
             faq_semantic_gate=faq_semantic_gate,
@@ -103,14 +104,13 @@ def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeL
             agent_output_policy=agent_output_policy,
             policy_thresholds=policy_thresholds,
         )
-    use_mock_workflow_llm = settings.runtime_lab_intent_arbitrator_mode.strip().lower() == "fake"
     workflow_repository = WorkflowRepository(session)
     chatflow_state_repository = ChatflowStateRepository(session)
     workflow_service = WorkflowService(
         workflow_repository,
         flow_type="CHATFLOW",
-        agent_repository=None if use_mock_workflow_llm else AgentRepository(session),
-        model_facade=None if use_mock_workflow_llm else ProviderModelFacade(session),
+        agent_repository=AgentRepository(session),
+        model_facade=ProviderModelFacade(session),
         chatflow_state_repository=chatflow_state_repository,
         preferred_llm_agent_name=RUNTIME_LAB_AIRLINE_LLM_AGENT_NAME,
     )
@@ -126,13 +126,15 @@ def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeL
         workflow_repository,
         chatflow_state_repository,
         knowledge_facade=KnowledgeFacade(session),
-        llm_completer_resolver=runtime_v2_llm_service.runtime_v2_llm_completer,
+        llm_completer_resolver=(
+            runtime_v2_llm_service.runtime_v2_llm_completer
+            if _runtime_lab_sop_uses_live_llm(settings)
+            else None
+        ),
     )
     adapter = ChatflowSopRuntimeAdapter(
         workflow_service,
         sop_chatflow_ids=bindings,
-        fallback_adapter=FakeSopRuntimeAdapter(),
-        fallback_on_missing_chatflow=True,
         runtime_v2_service=runtime_v2_service,
         runtime_invocation_gateway=RuntimeInvocationGateway(
             runtime_v2_service,
@@ -347,13 +349,25 @@ def _runtime_invocation_uses_background(mode: str) -> bool:
     }
 
 
+def _runtime_lab_sop_uses_live_llm(settings: Settings) -> bool:
+    mode = str(settings.runtime_lab_sop_llm_mode or "mock").strip().lower()
+    return mode not in {"mock", "fake", "deterministic", "off", "none"}
+
+
 def _runtime_lab_background_enqueue(session: Session):
     def enqueue(owner_id: int, run_id: int) -> dict[str, Any]:
         job = RuntimeJobRepository(session).enqueue(
             run_id=run_id,
             owner_type="CHATFLOW",
             owner_id=owner_id,
-            payload={"source": "runtime_lab_sop_adapter"},
+            payload={
+                "runId": run_id,
+                "ownerType": "CHATFLOW",
+                "ownerId": owner_id,
+                "idempotencyKey": "",
+                "idempotencyLayer": "run",
+                "source": "runtime_lab_sop_adapter",
+            },
         )
         return {"jobId": int(job["id"]), "status": str(job["status"])}
 
@@ -930,8 +944,18 @@ def _runtime_lab_chatflow_trace(session_id: int, session: Session) -> dict[str, 
     )
     aggregator = RuntimeLabBusinessContextAggregator(runtime_repository, workflow_service)
     business_refs = aggregator.collect(session_id)
+    ledger_events = [
+        _format_runtime_lab_ledger_event(event)
+        for event in runtime_repository.list_events(session_id)
+    ]
     traces = [
-        _runtime_task_chatflow_trace(task, workflow_repository, state_repository, business_refs)
+        _runtime_task_chatflow_trace(
+            task,
+            workflow_repository,
+            state_repository,
+            business_refs,
+            ledger_events,
+        )
         for task in runtime_repository.list_tasks(session_id)
     ]
     return {"tasks": traces, "total": len(traces)}
@@ -942,6 +966,7 @@ def _runtime_task_chatflow_trace(
     workflow_repository: WorkflowRepository,
     state_repository: ChatflowStateRepository,
     business_refs: dict[str, Any],
+    ledger_events: list[dict[str, Any]],
 ) -> dict[str, Any]:
     # chatflow meta is sourced from the task's first-class ``chatflow_*`` ref
     # columns (slice 213.3.1), not checkpoint.scoped_variables.__chatflow.
@@ -953,6 +978,7 @@ def _runtime_task_chatflow_trace(
     edge_rows = workflow_repository.list_edges(chatflow_id) if workflow is not None else []
     node_runs = workflow_repository.list_node_runs(run_id) if run_id > 0 else []
     node_runs_by_key = _latest_node_runs_by_key(node_runs)
+    run = workflow_repository.get_run(run_id) if run_id > 0 else None
     waiting_checkpoint = (
         state_repository.get_waiting_checkpoint(chatflow_id, run_id) if chatflow_id > 0 and run_id > 0 else None
     )
@@ -969,12 +995,18 @@ def _runtime_task_chatflow_trace(
     events = [_format_runtime_chatflow_event(event) for event in raw_events]
     session_variables = _chatflow_session_variables(state_repository, chatflow_id, chatflow_session_id)
     runtime_refs = _chatflow_runtime_refs(meta, run_id)
+    pending_prompt = _trace_pending_prompt(waiting_checkpoint, raw_events, session_variables)
+    checkpoint = _format_trace_checkpoint(waiting_checkpoint)
+    scoped_variables = _trace_scoped_variables(waiting_checkpoint)
 
     return {
         "taskId": int(task["id"]),
         "sopId": task["sop_id"],
         "status": task["status"],
+        "runStatus": str(run.get("status") or "") if run else "",
         "currentStep": current_step,
+        "pendingPrompt": pending_prompt,
+        "checkpoint": checkpoint,
         "chatflow": {
             "chatflowId": chatflow_id or None,
             "chatflowName": str(workflow.get("name") or "") if workflow else "",
@@ -1002,13 +1034,101 @@ def _runtime_task_chatflow_trace(
             for edge in edge_rows
         ],
         "events": events,
+        "nodeEvents": events,
+        "ledgerEvents": ledger_events,
         "variables": {
             "businessRefs": business_refs,
             "collected": business_refs,
-            "scoped": {},
+            "scoped": scoped_variables,
+            "scopedVariables": scoped_variables,
             "session": session_variables,
         },
     }
+
+
+def _format_runtime_lab_ledger_event(row: dict[str, Any]) -> dict[str, Any]:
+    event = format_event(row)
+    payload = event.get("payload")
+    if isinstance(payload, Mapping):
+        event["payload"] = {
+            str(key): value
+            for key, value in payload.items()
+            if str(key)
+            not in {
+                "currentStep",
+                "pendingPrompt",
+                "collected",
+                "scopedVariables",
+                "checkpoint",
+                "checkpointId",
+                "nodeEvents",
+                "runStatus",
+                "businessRefs",
+            }
+        }
+    return event
+
+
+def _trace_pending_prompt(
+    waiting_checkpoint: dict[str, Any] | None,
+    raw_events: list[dict[str, Any]],
+    session_variables: dict[str, Any],
+) -> str:
+    node_key = str((waiting_checkpoint or {}).get("pending_node_key") or "")
+    for event in reversed(raw_events):
+        if node_key and str(event.get("node_key") or "") not in {"", node_key}:
+            continue
+        payload = event.get("payload") if isinstance(event.get("payload"), Mapping) else {}
+        for key in ("question", "prompt", "followup"):
+            value = payload.get(key) if isinstance(payload, Mapping) else None
+            if value:
+                return str(value)
+    node_outputs = session_variables.get("node_outputs")
+    if isinstance(node_outputs, Mapping) and node_key:
+        node_output = node_outputs.get(node_key)
+        if isinstance(node_output, Mapping):
+            for key in ("question", "prompt", "followup"):
+                value = node_output.get(key)
+                if value:
+                    return str(value)
+    resume_schema = (waiting_checkpoint or {}).get("resume_schema")
+    if isinstance(resume_schema, Mapping):
+        for key in ("question", "prompt", "title"):
+            value = resume_schema.get(key)
+            if value:
+                return str(value)
+    return ""
+
+
+def _format_trace_checkpoint(checkpoint: dict[str, Any] | None) -> dict[str, Any] | None:
+    if checkpoint is None:
+        return None
+    return {
+        "id": int(checkpoint["id"]),
+        "eventId": int(checkpoint["event_id"]) if checkpoint.get("event_id") else None,
+        "pendingNodeKey": str(checkpoint["pending_node_key"]),
+        "resumeSchema": dict(checkpoint.get("resume_schema") or {}),
+        "status": str(checkpoint["status"]),
+        "nodeOutputs": dict(checkpoint.get("node_outputs") or {}),
+        "variableScopes": dict(checkpoint.get("variable_scopes") or {}),
+        "expiresAt": _format_datetime(checkpoint.get("expires_at")),
+    }
+
+
+def _trace_scoped_variables(checkpoint: dict[str, Any] | None) -> dict[str, Any]:
+    if checkpoint is None:
+        return {}
+    variable_scopes = checkpoint.get("variable_scopes")
+    if not isinstance(variable_scopes, Mapping):
+        return {}
+    flattened: dict[str, Any] = {}
+    for scope, values in variable_scopes.items():
+        if isinstance(values, Mapping):
+            for key, value in values.items():
+                flattened[f"{scope}.{key}"] = value
+        else:
+            flattened[str(scope)] = values
+    return flattened
 
 
 def _trace_chatflow_session_id(

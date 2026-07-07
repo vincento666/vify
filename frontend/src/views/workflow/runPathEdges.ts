@@ -8,6 +8,10 @@ export type RunPathEdgeLike = {
 export type RunPathNodeDetailLike = {
   nodeKey?: string
   status?: string
+  selectionState?: {
+    selectedUpstreamNodeKeys?: string[]
+    skippedUpstreamNodeKeys?: string[]
+  }
   outputs?: Record<string, unknown>
 }
 
@@ -29,7 +33,20 @@ export function deriveRunPathEdgeClasses(
   )
 
   for (const edge of edges) {
-    const targetStatus = normalizeRunStatus(detailByNodeKey.get(edge.targetNodeKey)?.status)
+    const targetDetail = detailByNodeKey.get(edge.targetNodeKey)
+    const selection = targetDetail?.selectionState
+    if (includesNodeKey(selection?.skippedUpstreamNodeKeys, edge.sourceNodeKey)) {
+      addEdgeClass(classes, edge.id, 'edge-inactive-branch')
+      continue
+    }
+    if (
+      includesNodeKey(selection?.selectedUpstreamNodeKeys, edge.sourceNodeKey)
+      && Array.isArray(selection?.skippedUpstreamNodeKeys)
+      && selection.skippedUpstreamNodeKeys.length > 0
+    ) {
+      addEdgeClass(classes, edge.id, 'edge-active-branch')
+    }
+    const targetStatus = normalizeRunStatus(targetDetail?.status)
     if (['RUNNING', 'INTERRUPTED', 'PENDING', 'WAITING'].includes(targetStatus)) addEdgeClass(classes, edge.id, 'edge-running')
     if (['SUCCEEDED', 'COMPLETED'].includes(targetStatus)) addEdgeClass(classes, edge.id, 'edge-succeeded')
   }
@@ -96,4 +113,8 @@ function scalarOutputValue(value: unknown): string | null {
   if (typeof value === 'string' && value.trim()) return value.trim()
   if (typeof value === 'number' || typeof value === 'boolean') return String(value)
   return null
+}
+
+function includesNodeKey(nodeKeys: unknown, nodeKey: string) {
+  return Array.isArray(nodeKeys) && nodeKeys.map(String).includes(nodeKey)
 }

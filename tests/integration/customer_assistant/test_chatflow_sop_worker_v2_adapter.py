@@ -97,7 +97,7 @@ class ChatflowSopWorkerV2AdapterTest(unittest.TestCase):
         self.assertEqual(live_node_event["payload"]["node"]["status"], "RUNNING")
         self.assertGreater(live_node_event["payload"]["node"]["runId"], 0)
 
-        self.assertIn("Unsupported runtime v2 graph", fallback.evidence["fallbackReason"])
+        self.assertIn("Runtime V2 graph is not compatible", fallback.evidence["fallbackReason"])
 
     def test_chatflow_v2_node_events_are_first_class_worker_events_before_compatibility_summary(self) -> None:
         with TestClient(app) as client:

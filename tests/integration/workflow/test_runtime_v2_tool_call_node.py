@@ -14,7 +14,7 @@ class RuntimeV2ToolCallNodeIntegrationTest(unittest.TestCase):
             server_id = _create_mcp_server(client)
             chatflow = _create_tool_call_chatflow(client, server_id)
             started_response = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                f"/api/v1/chatflows/{chatflow['id']}/runs",
                 json={"input": {"sys.query": "A-194"}},
             )
             started = started_response.json()["data"]

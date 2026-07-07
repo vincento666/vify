@@ -42,6 +42,7 @@ const EVENT_LABELS: Record<string, string> = {
   node_started: '节点开始',
   node_completed: '节点完成',
   workflow_run_started: '运行开始',
+  workflow_run_resumed: '继续执行',
   workflow_run_completed: '运行完成',
   workflow_run_failed: '运行失败',
   workflow_node_started: '节点开始',

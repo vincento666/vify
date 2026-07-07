@@ -14,7 +14,7 @@ class ChatflowRuntimeV2SpikeTest(unittest.TestCase):
             chatflow = _create_message_chatflow(client)
 
             started = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                f"/api/v1/chatflows/{chatflow['id']}/runs",
                 json={"input": {"sys.query": "Ada"}},
             )
 
@@ -42,7 +42,7 @@ class ChatflowRuntimeV2SpikeTest(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = _create_question_chatflow(client)
             started = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                f"/api/v1/chatflows/{chatflow['id']}/runs",
                 json={"input": {"sys.query": "start"}},
             )
 

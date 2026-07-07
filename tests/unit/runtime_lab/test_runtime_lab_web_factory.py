@@ -4,6 +4,7 @@ from unittest.mock import patch
 from app.core.config import Settings
 from app.core.schema import register_baseline_tables
 from app.modules.runtime_lab.domain.classifier import LlmConstrainedIntentClassifier
+from app.modules.runtime_lab.domain.sop_adapter import FakeSopRuntimeAdapter
 from app.modules.workflow.domain.runtime_v2 import ChatflowRuntimeV2Service
 from app.modules.runtime_lab.web.router import (
     _runtime_lab_chatflow_bindings,
@@ -32,6 +33,22 @@ class RuntimeLabWebFactoryTest(unittest.TestCase):
     def test_empty_chatflow_bindings_disable_adapter_bridge(self) -> None:
         self.assertEqual(_runtime_lab_chatflow_bindings(None), {})
         self.assertEqual(_runtime_lab_chatflow_bindings(""), {})
+
+    def test_empty_chatflow_bindings_production_bootstrap_does_not_use_fake_adapter(self) -> None:
+        with mysql8_session("runtime_lab_web_factory_no_binding", register=register_baseline_tables) as session:
+            with (
+                patch(
+                    "app.modules.runtime_lab.web.router.get_settings",
+                    return_value=Settings(runtime_lab_sop_chatflow_ids=""),
+                ),
+                patch(
+                    "app.modules.runtime_lab.web.router.RuntimePolicyResolver.resolve",
+                    return_value={"policySnapshot": {}},
+                ),
+            ):
+                service = get_runtime_lab_service(session)
+
+        self.assertNotIsInstance(service._adapter, FakeSopRuntimeAdapter)
 
     def test_default_intent_arbitrator_mode_uses_fake_classifier(self) -> None:
         self.assertIsNone(_runtime_lab_intent_classifier(Settings()))
@@ -87,6 +104,48 @@ class RuntimeLabWebFactoryTest(unittest.TestCase):
 
         adapter = service._adapter
         self.assertIsInstance(adapter._runtime_v2_service, ChatflowRuntimeV2Service)
+        self.assertIsNone(adapter._fallback_adapter)
+        self.assertFalse(adapter._fallback_on_missing_chatflow)
+
+    def test_mock_sop_llm_mode_does_not_wire_runtime_v2_live_llm_resolver(self) -> None:
+        with mysql8_session("runtime_lab_web_factory_fake_v2_llm", register=register_baseline_tables) as session:
+            with (
+                patch(
+                    "app.modules.runtime_lab.web.router.get_settings",
+                    return_value=Settings(
+                        runtime_lab_sop_chatflow_ids="refund_ticket:42",
+                        runtime_lab_intent_arbitrator_mode="fake",
+                    ),
+                ),
+                patch(
+                    "app.modules.runtime_lab.web.router.RuntimePolicyResolver.resolve",
+                    return_value={"policySnapshot": {}},
+                ),
+            ):
+                service = get_runtime_lab_service(session)
+                resolver = service._adapter._runtime_v2_service._llm_completer_resolver
+
+        self.assertIsNone(resolver)
+
+    def test_live_sop_llm_mode_wires_runtime_v2_live_llm_resolver(self) -> None:
+        with mysql8_session("runtime_lab_web_factory_live_v2_llm", register=register_baseline_tables) as session:
+            with (
+                patch(
+                    "app.modules.runtime_lab.web.router.get_settings",
+                    return_value=Settings(
+                        runtime_lab_sop_chatflow_ids="refund_ticket:42",
+                        runtime_lab_sop_llm_mode="live",
+                    ),
+                ),
+                patch(
+                    "app.modules.runtime_lab.web.router.RuntimePolicyResolver.resolve",
+                    return_value={"policySnapshot": {}},
+                ),
+            ):
+                service = get_runtime_lab_service(session)
+                resolver = service._adapter._runtime_v2_service._llm_completer_resolver
+
+        self.assertIsNotNone(resolver)
 
     def test_chatflow_sop_binding_wires_runtime_invocation_mode_from_settings(self) -> None:
         with mysql8_session("runtime_lab_web_factory_mode", register=register_baseline_tables) as session:
@@ -107,3 +166,21 @@ class RuntimeLabWebFactoryTest(unittest.TestCase):
 
         adapter = service._adapter
         self.assertEqual(adapter._runtime_invocation_mode, "async")
+
+    def test_chatflow_sop_binding_defaults_to_async_background_invocation(self) -> None:
+        with mysql8_session("runtime_lab_web_factory_default_async", register=register_baseline_tables) as session:
+            with (
+                patch(
+                    "app.modules.runtime_lab.web.router.get_settings",
+                    return_value=Settings(runtime_lab_sop_chatflow_ids="refund_ticket:42"),
+                ),
+                patch(
+                    "app.modules.runtime_lab.web.router.RuntimePolicyResolver.resolve",
+                    return_value={"policySnapshot": {}},
+                ),
+            ):
+                service = get_runtime_lab_service(session)
+
+        adapter = service._adapter
+        self.assertEqual(adapter._runtime_invocation_mode, "async")
+        self.assertIsNotNone(adapter._runtime_invocation_gateway._enqueue_background_run)

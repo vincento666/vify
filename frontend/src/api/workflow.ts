@@ -34,6 +34,9 @@ export interface WorkflowEdge {
   sourceNodeKey: string
   targetNodeKey: string
   condition: string | null
+  sourcePortKey?: string
+  targetPortKey?: string
+  sideEffectTerminal?: boolean
 }
 
 export interface WorkflowCreateRequest {
@@ -75,7 +78,7 @@ export function runWorkflowV2(
     ...(idempotencyKey ? { idempotencyKey } : {}),
     ...(typeof versionId === 'number' ? { versionId } : {}),
   }
-  return options ? post<any>(`/v1/workflows/${id}/runs-v2`, payload, options) : post<any>(`/v1/workflows/${id}/runs-v2`, payload)
+  return options ? post<any>(`/v1/workflows/${id}/runs`, payload, options) : post<any>(`/v1/workflows/${id}/runs`, payload)
 }
 
 export function getWorkflowRunDebug(id: number, runId: number) {
@@ -145,7 +148,7 @@ export function runChatflowV2(
     ...(idempotencyKey ? { idempotencyKey } : {}),
     ...(typeof versionId === 'number' ? { versionId } : {}),
   }
-  return options ? post<any>(`/v1/chatflows/${id}/runs-v2`, payload, options) : post<any>(`/v1/chatflows/${id}/runs-v2`, payload)
+  return options ? post<any>(`/v1/chatflows/${id}/runs`, payload, options) : post<any>(`/v1/chatflows/${id}/runs`, payload)
 }
 
 export function getChatflowRunDebug(id: number, runId: number) {

@@ -1,0 +1,21 @@
+221.2 RED diagnostic
+
+Command:
+/opt/homebrew/bin/rtk uv run pytest tests/integration/runtime/load -q -k concurrent_100_200
+
+Initial implementation:
+- request-thread completion enabled
+- test-local pool override HIFY_DATABASE_POOL_SIZE=256 / HIFY_DATABASE_MAX_OVERFLOW=256
+- 100 / 150 / 200 concurrent requests started completion work from request threads
+
+Failure:
+- 3 failed in 73.85s
+- SQLAlchemy/PyMySQL raised:
+  sqlalchemy.exc.OperationalError: (pymysql.err.OperationalError) (1040, 'Too many connections')
+
+Resolution:
+- Disable request-thread completion for 221.2 smoke.
+- Keep concurrent invocation at 100 / 150 / 200.
+- Assert all invocations enqueue runtime jobs.
+- Drain exact job ids through 16 bounded workflow workers.
+- Poll terminal results and validate monotonic runtime event sequences.

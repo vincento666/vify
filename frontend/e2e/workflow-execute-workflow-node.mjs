@@ -1,4 +1,5 @@
 import { chromium } from 'playwright'
+import { waitForRuntimeResult } from './runtime-run-helpers.mjs'
 
 const baseUrl = process.env.HIFY_E2E_BASE_URL || 'http://127.0.0.1:5173'
 const screenshotPath = process.env.HIFY_E2E_SCREENSHOT
@@ -112,9 +113,10 @@ try {
   const child = await createPublishedChild(page, stamp)
   const parent = await createParent(page, stamp, child.id)
 
-  const run = await unwrap(await page.request.post(`${baseUrl}/api/v1/workflows/${parent.id}/runs`, {
+  const started = await unwrap(await page.request.post(`${baseUrl}/api/v1/workflows/${parent.id}/runs`, {
     data: { input: { ticket: 'A-451' } },
   }), 'run parent workflow')
+  const run = await waitForRuntimeResult(page, baseUrl, started, 'execute workflow parent')
   assert(run.status === 'SUCCEEDED', 'Expected parent workflow success')
   assert(run.output.final === 'parent received child handled A-451', 'Expected child output mapped downstream')
 

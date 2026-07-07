@@ -76,6 +76,7 @@ HIFY_DATABASE_URL=mysql+pymysql://hify:hify@127.0.0.1:3306/hify?charset=utf8mb4 
 HIFY_VECTOR_STORE=weaviate \
 HIFY_WEAVIATE_URL=http://127.0.0.1:8080 \
 HIFY_RUNTIME_LAB_INTENT_ARBITRATOR_MODE=fake \
+HIFY_RUNTIME_LAB_SOP_LLM_MODE=mock \
 HIFY_RUNTIME_LAB_SOP_CHATFLOW_IDS= \
 uv run pytest tests/contract tests/integration tests/e2e
 ```
@@ -105,6 +106,8 @@ uv run pytest tests/integration/mysql8/test_mysql8_runtime_v2_customer_assistant
   demo classes if changing embedding dimensions.
 - Runtime lab demo gates should set `HIFY_RUNTIME_LAB_INTENT_ARBITRATOR_MODE=fake`
   unless explicitly testing a live LLM route.
+- Runtime lab SOP Chatflow gates should keep `HIFY_RUNTIME_LAB_SOP_LLM_MODE=mock`
+  unless explicitly testing provider-backed child Chatflow LLM nodes.
 - Runtime lab Chatflow bindings are database-local IDs. After DB reset or
   migration, rerun the seed script or leave `HIFY_RUNTIME_LAB_SOP_CHATFLOW_IDS`
   empty to use the mock SOP adapter.

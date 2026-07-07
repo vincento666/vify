@@ -1,5 +1,6 @@
 import http from 'node:http'
 import { chromium } from 'playwright'
+import { waitForRuntimeResult } from './runtime-run-helpers.mjs'
 
 const baseUrl = process.env.HIFY_E2E_BASE_URL || 'http://127.0.0.1:5173'
 const screenshotPath = process.env.HIFY_E2E_SCREENSHOT
@@ -126,9 +127,10 @@ try {
   assert(toolNode.config.resourceType === 'API_TOOL', `Expected API_TOOL config: ${JSON.stringify(toolNode.config)}`)
   assert(toolNode.config.resourceId === apiTool.resourceId, `Expected selected resource id: ${JSON.stringify(toolNode.config)}`)
 
-  const run = await unwrap(await page.request.post(`${baseUrl}/api/v1/workflows/${workflow.id}/runs`, {
+  const started = await unwrap(await page.request.post(`${baseUrl}/api/v1/workflows/${workflow.id}/runs`, {
     data: { input: { orderId: 'A-211' } },
   }), 'run workflow')
+  const run = await waitForRuntimeResult(page, baseUrl, started, 'api resource workflow')
   assert(run.status === 'SUCCEEDED', 'Expected workflow run success')
   assert(run.output.final === 'API_REAL: GET /text/orders/A-211', `Unexpected output: ${JSON.stringify(run.output)}`)
 

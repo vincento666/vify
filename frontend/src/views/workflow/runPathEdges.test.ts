@@ -67,4 +67,29 @@ describe('workflow running path edge state', () => {
     expect(classes.get('router->fallback')).toEqual(expect.arrayContaining(['edge-inactive-branch']))
     expect(classes.get('router->fallback') || []).not.toContain('edge-running')
   })
+
+  it('uses runtime v2 selection state to dim skipped join upstreams', () => {
+    const classes = deriveRunPathEdgeClasses(
+      [
+        { id: 'vip->end', sourceNodeKey: 'vip', targetNodeKey: 'end', condition: null },
+        { id: 'fallback->end', sourceNodeKey: 'fallback', targetNodeKey: 'end', condition: null },
+      ],
+      [
+        { nodeKey: 'vip', status: 'COMPLETED', outputs: { answer: 'vip' } },
+        {
+          nodeKey: 'end',
+          status: 'COMPLETED',
+          outputs: { final: 'vip' },
+          selectionState: {
+            selectedUpstreamNodeKeys: ['vip'],
+            skippedUpstreamNodeKeys: ['fallback'],
+          },
+        },
+      ],
+    )
+
+    expect(classes.get('vip->end')).toEqual(expect.arrayContaining(['edge-active-branch', 'edge-succeeded']))
+    expect(classes.get('fallback->end')).toEqual(expect.arrayContaining(['edge-inactive-branch']))
+    expect(classes.get('fallback->end') || []).not.toContain('edge-succeeded')
+  })
 })

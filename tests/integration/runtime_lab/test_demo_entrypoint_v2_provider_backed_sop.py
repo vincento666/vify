@@ -49,6 +49,7 @@ class DemoEntrypointRuntimeV2ProviderBackedSopTest(unittest.TestCase):
             settings = Settings(
                 runtime_lab_sop_chatflow_ids=f"refund_ticket:{chatflow['id']}",
                 runtime_lab_intent_arbitrator_mode="fake",
+                runtime_lab_sop_llm_mode="live",
             )
             with patch.object(runtime_lab_router, "get_settings", return_value=settings):
                 with get_session_factory()() as session:
@@ -105,6 +106,46 @@ class DemoEntrypointRuntimeV2ProviderBackedSopTest(unittest.TestCase):
         self.assertIn("chatflowRuntimeRefs", result.evidence)
         self.assertNotIn("LLM mock:", result.customer_reply_draft)
         self.assertEqual(fake_client.captured_payload["model"], "runtime-v2-entry-model")
+
+    def test_customer_assistant_chatflow_sop_v2_mock_mode_does_not_use_provider_agent(self) -> None:
+        agent_name = f"{TEST_AGENT_NAME_PREFIX} CustomerAssistant Mock {time.time_ns()}"
+        _seed_live_agent(agent_name)
+        fake_client = FakeOpenAIChatClient(response_payload=_assistant_payload("SHOULD_NOT_CALL_PROVIDER"))
+
+        with (
+            patch.object(customer_assistant_router, "CUSTOMER_ASSISTANT_LLM_AGENT_NAME", agent_name),
+            patch("app.modules.workflow.domain.service.ProviderBackedOpenAIChatClient", lambda _config: fake_client),
+            TestClient(app) as client,
+        ):
+            chatflow = _create_llm_chatflow(client)
+            with get_session_factory()() as session:
+                adapter = customer_assistant_router._customer_assistant_sop_adapter(
+                    session,
+                    {"refund_ticket": int(chatflow["id"])},
+                    sop_llm_mode="mock",
+                )
+                worker = ChatflowSopWorker(adapter)
+                result = worker.run(
+                    TaskItem(
+                        id=13302,
+                        session_id=134,
+                        task_key="refund_ticket",
+                        task_type="sop",
+                        business_key="refund_ticket",
+                        short_id="T13302",
+                        status=TaskStatus.PENDING,
+                        worker_type="chatflow_sop",
+                        worker_ref="refund_ticket",
+                        checkpoint={},
+                        input_snapshot={},
+                    ),
+                    "我要退票",
+                )
+
+        self.assertEqual(result.status, TaskStatus.COMPLETED)
+        self.assertIn("LLM mock:", result.customer_reply_draft)
+        self.assertEqual(result.evidence["runtimeVersion"], 2)
+        self.assertEqual(fake_client.captured_payloads, [])
 
 
 def _seed_live_agent(agent_name: str) -> int:

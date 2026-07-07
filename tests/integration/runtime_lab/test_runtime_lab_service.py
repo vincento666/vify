@@ -229,6 +229,25 @@ class RuntimeLabServiceTest(unittest.TestCase):
             assert refund_continue_request.checkpoint is not None
             self.assertEqual(refund_continue_request.checkpoint.collected["order_no"], "CA1301-20231027-8899")
 
+    def test_active_sop_continue_preserves_own_collected_slots_without_context_reference(self) -> None:
+        with _session() as session:
+            adapter = _RecordingContextAdapter()
+            service = RuntimeLabService(RuntimeLabRepository(session), adapter=adapter)
+            runtime_session = service.create_session()
+            session_id = int(runtime_session["id"])
+
+            started = service.handle_message(session_id, "我要团队订票")
+            service.handle_message(session_id, "手机号 13800138010，乘机人陈测试")
+
+            self.assertEqual(started.route_decision.action, "START_SOP")
+            self.assertEqual(started.active_task["sop_id"], "group_booking")
+            continue_request = adapter.continue_requests[-1]
+            self.assertEqual(continue_request.sop_id, "group_booking")
+            self.assertFalse(continue_request.metadata["contextReference"])
+            assert continue_request.checkpoint is not None
+            self.assertEqual(continue_request.checkpoint.collected["route"], "上海到广州")
+            self.assertEqual(continue_request.checkpoint.collected["passenger_count"], "团队")
+
     def test_pause_active_sop_phrase_does_not_swallow_switch_request(self) -> None:
         with _session() as session:
             adapter = _RecordingContextAdapter()

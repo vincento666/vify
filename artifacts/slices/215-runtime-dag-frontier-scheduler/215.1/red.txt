@@ -1,0 +1,16 @@
+
+==================================== ERRORS ====================================
+__ ERROR collecting tests/unit/runtime/scheduler/test_frontier_computation.py __
+ImportError while importing test module '/private/tmp/hify-213-verify3.uX7Jpk/tests/unit/runtime/scheduler/test_frontier_computation.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/unit/runtime/scheduler/test_frontier_computation.py:1: in <module>
+    from app.modules.runtime.domain.scheduler import compute_frontier
+E   ModuleNotFoundError: No module named 'app.modules.runtime.domain.scheduler'
+=========================== short test summary info ============================
+ERROR tests/unit/runtime/scheduler/test_frontier_computation.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 error in 0.05s

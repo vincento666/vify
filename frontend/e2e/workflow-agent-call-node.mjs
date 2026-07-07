@@ -1,4 +1,5 @@
 import { chromium } from 'playwright'
+import { waitForRuntimeResult } from './runtime-run-helpers.mjs'
 
 const baseUrl = process.env.HIFY_E2E_BASE_URL || 'http://127.0.0.1:5173'
 const screenshotPath = process.env.HIFY_E2E_SCREENSHOT
@@ -115,12 +116,13 @@ async function assertWorkflowAgentCall(page, agent, marker) {
     }),
     'create workflow',
   )
-  const run = await unwrap(
+  const started = await unwrap(
     await page.request.post(`${baseUrl}/api/v1/workflows/${workflow.id}/runs`, {
       data: { input: { ticket: `WF-${marker}` } },
     }),
     'run workflow',
   )
+  const run = await waitForRuntimeResult(page, baseUrl, started, 'agent call workflow')
   assert(run.status === 'SUCCEEDED', `workflow run should succeed: ${JSON.stringify(run)}`)
   assert(String(run.output.final).includes(marker), `workflow output should include marker: ${JSON.stringify(run.output)}`)
   assert(String(run.output.final).includes(`WF-${marker}`), `workflow output should include ticket: ${JSON.stringify(run.output)}`)
@@ -135,10 +137,12 @@ async function assertWorkflowAgentCall(page, agent, marker) {
   assert(nodeRun.output.sessionId > 0, `selected node should expose sessionId: ${JSON.stringify(nodeRun)}`)
   assert(String(nodeRun.output.agentAnswer).includes(marker), `selected node answer should include marker: ${JSON.stringify(nodeRun)}`)
 
-  await page.goto(`${baseUrl}${run.debugUrl}`, { waitUntil: 'load' })
+  const debugUrl = started.debugUrl || run.debugUrl
+  assert(debugUrl, `workflow run should expose debugUrl: ${JSON.stringify({ started, run })}`)
+  await page.goto(`${baseUrl}${debugUrl}`, { waitUntil: 'load' })
   await page.getByText('智能体').waitFor({ state: 'visible', timeout: 10000 })
   if (screenshotPath) await page.screenshot({ path: screenshotPath, fullPage: true })
-  return { workflow, run }
+  return { workflow, run: { ...run, debugUrl } }
 }
 
 async function assertChatflowAgentCall(page, agent, marker) {

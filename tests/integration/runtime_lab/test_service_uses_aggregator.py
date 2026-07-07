@@ -1,15 +1,8 @@
-"""Spec 213.3.3 step 3 — RuntimeLabService delegates business context to the
-:class:`RuntimeLabBusinessContextAggregator`.
-
-This locks the migration: the legacy ``_session_business_context`` survives as
-a one-line delegate, every existing call-site keeps calling it, and the actual
-collection is performed by the aggregator.
-"""
+"""RuntimeLabService wires business context through the aggregator."""
 
 import unittest
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Any
 from unittest.mock import MagicMock
 
 from sqlalchemy.orm import Session
@@ -33,7 +26,7 @@ class ServiceUsesAggregatorTest(unittest.TestCase):
                 RuntimeLabBusinessContextAggregator,
             )
 
-    def test_legacy_session_business_context_delegates_to_aggregator(self) -> None:
+    def test_legacy_session_business_context_delegate_is_removed(self) -> None:
         with _session() as session:
             repository = RuntimeLabRepository(session)
             service = RuntimeLabService(repository)
@@ -41,10 +34,8 @@ class ServiceUsesAggregatorTest(unittest.TestCase):
             stub.collect.return_value = {"order_no": "AGG-1"}
             service._aggregator = stub  # type: ignore[assignment]  # noqa: SLF001
 
-            result: dict[str, Any] = service._session_business_context(42)  # noqa: SLF001
-
-            stub.collect.assert_called_once_with(42)
-            self.assertEqual(result, {"order_no": "AGG-1"})
+            self.assertFalse(hasattr(service, "_session_business_context"))
+            self.assertEqual(service._aggregator.collect(42), {"order_no": "AGG-1"})  # noqa: SLF001
 
     def test_service_accepts_injected_aggregator(self) -> None:
         with _session() as session:

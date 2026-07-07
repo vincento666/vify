@@ -85,6 +85,13 @@ describe('runtime v2 canvas debug projection', () => {
         nodeKey: 'message_1',
         nodeType: 'MESSAGE',
         status: 'COMPLETED',
+        selectionState: {
+          nodeKey: 'message_1',
+          state: 'completed',
+          selectedUpstreamNodeKeys: ['start'],
+          skippedUpstreamNodeKeys: [],
+          reason: '',
+        },
         outputs: { answer: 'hello' },
       },
     ])
@@ -94,6 +101,13 @@ describe('runtime v2 canvas debug projection', () => {
       nodeKey: 'message_1',
       nodeType: 'MESSAGE',
       status: 'COMPLETED',
+      selectionState: {
+        nodeKey: 'message_1',
+        state: 'completed',
+        selectedUpstreamNodeKeys: ['start'],
+        skippedUpstreamNodeKeys: [],
+        reason: '',
+      },
       outputs: { answer: 'hello' },
     })
 

@@ -19,7 +19,7 @@ class WorkflowRuntimeV2FacadeTest(unittest.TestCase):
             workflow = _create_workflow(client, message="published")
             version = client.post(f"/api/v1/workflows/{workflow['id']}/publish").json()["data"]
             first = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs-v2",
+                f"/api/v1/workflows/{workflow['id']}/runs",
                 json={
                     "input": {
                         "sys.query": "pricing",
@@ -29,7 +29,7 @@ class WorkflowRuntimeV2FacadeTest(unittest.TestCase):
                 },
             )
             duplicate = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs-v2",
+                f"/api/v1/workflows/{workflow['id']}/runs",
                 json={
                     "input": {
                         "sys.query": "pricing",
@@ -69,7 +69,7 @@ class WorkflowRuntimeV2FacadeTest(unittest.TestCase):
                 workflow = _create_workflow(client, message="unsupported", node_type="LLM")
                 client.post(f"/api/v1/workflows/{workflow['id']}/publish")
                 started = client.post(
-                    f"/api/v1/workflows/{workflow['id']}/runs-v2",
+                    f"/api/v1/workflows/{workflow['id']}/runs",
                     json={"input": {"sys.query": "hello runtime v2 llm"}},
                 ).json()["data"]
                 terminal = _wait_for_result(client, started["resultRef"])
@@ -91,27 +91,42 @@ class WorkflowRuntimeV2FacadeTest(unittest.TestCase):
         self.assertEqual(llm_node["status"], "COMPLETED")
         self.assertEqual(llm_node["outputs"]["content"], "LLM mock: unsupported")
 
-    def test_workflow_v2_rejects_unsupported_graph_without_partial_execution(self) -> None:
+    def test_workflow_v2_executes_explicit_default_fanout_without_partial_execution(self) -> None:
         with TestClient(app) as client:
             workflow = _create_branching_message_workflow(client)
             published = client.post(f"/api/v1/workflows/{workflow['id']}/publish")
             self.assertEqual(published.status_code, 200, published.text)
             response = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs-v2",
+                f"/api/v1/workflows/{workflow['id']}/runs",
                 json={"input": {"sys.query": "hello"}},
             )
+            started = response.json()["data"]
+            terminal = _wait_for_result(client, started["resultRef"])
+            nodes = client.get(started["nodesRef"]).json()["data"]["list"]
+            events = client.get(started["eventsRef"]).json()["data"]["list"]
 
-        self.assertEqual(response.status_code, 400)
-        payload = response.json()
-        self.assertIn("unsupportedPatterns", payload["message"])
-        self.assertNotIn("eventStreamRef", payload)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(terminal["status"], "SUCCEEDED")
+        self.assertEqual(terminal["output"], {"final": "branch a"})
+        node_statuses = {node["nodeKey"]: node["status"] for node in nodes}
+        self.assertEqual(node_statuses["message_a"], "COMPLETED")
+        self.assertEqual(node_statuses["message_b"], "COMPLETED")
+        self.assertEqual(node_statuses["end"], "COMPLETED")
+        completed_node_keys = [
+            event.get("nodeId")
+            for event in events
+            if event.get("type") == "workflow_node_completed"
+        ]
+        self.assertIn("message_a", completed_node_keys)
+        self.assertIn("message_b", completed_node_keys)
+        self.assertIn("end", completed_node_keys)
 
     def test_workflow_v2_resume_uses_published_snapshot_after_draft_edit(self) -> None:
         with TestClient(app) as client:
             workflow = _create_question_message_workflow(client, message="published")
             version = client.post(f"/api/v1/workflows/{workflow['id']}/publish").json()["data"]
             started = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs-v2",
+                f"/api/v1/workflows/{workflow['id']}/runs",
                 json={"input": {"sys.query": "refund"}},
             ).json()["data"]
             interrupted = _wait_for_result(client, started["resultRef"])
@@ -136,7 +151,7 @@ class WorkflowRuntimeV2FacadeTest(unittest.TestCase):
             version = client.post(f"/api/v1/workflows/{workflow['id']}/publish").json()["data"]
             _replace_workflow_message(client, workflow["id"], message="draft-edited")
             started = client.post(
-                f"/api/v1/workflows/{workflow['id']}/runs-v2",
+                f"/api/v1/workflows/{workflow['id']}/runs",
                 json={"input": {"sys.query": "workflow v2 refund knowledge"}},
             ).json()["data"]
             terminal = _wait_for_result(client, started["resultRef"])
@@ -241,10 +256,15 @@ def _create_branching_message_workflow(client: TestClient) -> dict[str, object]:
     response = client.post(
         "/api/v1/workflows",
         json={
-            "name": f"Workflow V2 Branching Unsupported {datetime.now().timestamp()}",
-            "description": "runtime v2 rejects non-condition branching before partial execution",
+            "name": f"Workflow V2 Explicit Fanout {datetime.now().timestamp()}",
+            "description": "runtime v2 executes explicit default fan-out without partial execution",
             "nodes": [
-                {"nodeKey": "start", "type": "START", "name": "Start", "config": {}},
+                {
+                    "nodeKey": "start",
+                    "type": "START",
+                    "name": "Start",
+                    "config": {"ports": [{"key": "default", "allowFanOut": True}]},
+                },
                 {
                     "nodeKey": "message_a",
                     "type": "MESSAGE",

@@ -14,6 +14,19 @@ async function unwrap(response, label) {
   return payload.data
 }
 
+async function waitForRunResult(page, resultRef, label, timeout = 8000) {
+  const deadline = Date.now() + timeout
+  let latest = null
+  while (Date.now() < deadline) {
+    latest = await unwrap(await page.request.get(new URL(resultRef, baseUrl).toString()), `${label} result`)
+    if (['SUCCEEDED', 'FAILED', 'INTERRUPTED', 'CANCELLED'].includes(String(latest.status || '').toUpperCase())) {
+      return latest
+    }
+    await page.waitForTimeout(120)
+  }
+  throw new Error(`${label} did not finish before timeout: ${JSON.stringify(latest)}`)
+}
+
 async function edgeClasses(page, edgeId) {
   return page.evaluate((id) => {
     const element = document.querySelector(`.vue-flow__edge[data-id="${id}"] .coze-edge-path`)
@@ -90,6 +103,8 @@ try {
   const run = await unwrap(await page.request.post(`${baseUrl}/api/v1/workflows/${workflow.id}/runs`, {
     data: { input: { userMessage: 'gold', USER_INPUT: 'gold', intent: 'vip' } },
   }), 'run branch workflow')
+  const terminal = await waitForRunResult(page, run.resultRef, 'branch workflow')
+  assert(terminal.status === 'SUCCEEDED', `Expected branch workflow to finish successfully: ${JSON.stringify(terminal)}`)
   await page.goto(`${baseUrl}/workflows/${workflow.id}/canvas?debug=1&runId=${run.runId}`, { waitUntil: 'networkidle' })
   await waitForEdgeClass(page, 'router->vip', 'edge-active-branch')
   await waitForEdgeClass(page, 'router->fallback', 'edge-inactive-branch')

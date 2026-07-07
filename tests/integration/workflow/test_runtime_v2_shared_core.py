@@ -12,7 +12,7 @@ class RuntimeV2SharedCoreTest(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = _create_message_chatflow(client)
             started = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                f"/api/v1/chatflows/{chatflow['id']}/runs",
                 json={
                     "input": {
                         "sys.query": "Ada",
@@ -55,7 +55,7 @@ class RuntimeV2SharedCoreTest(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = _create_failing_message_chatflow(client)
             started = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                f"/api/v1/chatflows/{chatflow['id']}/runs",
                 json={"input": {"sys.query": "Ada"}},
             ).json()["data"]
             failed = _wait_for_result(client, started["resultRef"], wanted_status="FAILED")
@@ -73,7 +73,7 @@ class RuntimeV2SharedCoreTest(unittest.TestCase):
         with TestClient(app) as client:
             chatflow = _create_message_chatflow(client)
             started = client.post(
-                f"/api/v1/chatflows/{chatflow['id']}/runs-v2",
+                f"/api/v1/chatflows/{chatflow['id']}/runs",
                 json={"input": {"sys.query": "Ada"}},
             ).json()["data"]
             cancelled = client.post(f"/api/v1/runtime-runs/{started['runId']}/cancel")

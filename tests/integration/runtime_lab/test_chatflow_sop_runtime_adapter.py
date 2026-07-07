@@ -21,6 +21,8 @@ from app.modules.runtime_lab.domain.sop_adapter import (
     SopExecutionStatus,
 )
 from app.modules.workflow.domain.service import WorkflowService
+from app.modules.workflow.domain.runtime_invocation_gateway import RuntimeInvocationGateway
+from app.modules.workflow.domain.runtime_v2 import ChatflowRuntimeV2Service
 from app.modules.workflow.infra.chatflow_state_repository import ChatflowStateRepository
 from app.modules.workflow.infra.repository import WorkflowRepository
 
@@ -54,7 +56,37 @@ class ChatflowSopRuntimeAdapterIntegrationTest(unittest.TestCase):
         self.assertEqual(completed.collected["order_no"], "TK-100")
         self.assertEqual(completed.collected["phone"], "13800138000")
 
-    def test_unknown_sop_returns_normalized_failure(self) -> None:
+    def test_v2_bridge_collect_resume_advances_to_confirm_and_completes_after_question(self) -> None:
+        stamp = time.time_ns()
+        with TestClient(app) as client:
+            chatflow = _create_chatflow_sop_fixture_with_policy_llm(client, stamp)
+            publish = client.post(f"/api/v1/chatflows/{chatflow['id']}/publish")
+            self.assertEqual(publish.status_code, 200, publish.text)
+            adapter = _adapter_v2(int(cast(int | str, chatflow["id"])))
+
+            started = adapter.start_sop(_request(message="我要退票", stamp=stamp))
+            collected = adapter.continue_sop(
+                _request(
+                    message="订单号：TK-100，手机号 13800138000",
+                    checkpoint=started.checkpoint,
+                    stamp=stamp,
+                )
+            )
+            completed = adapter.resume_sop(
+                _request(message="确认", checkpoint=collected.checkpoint, stamp=stamp)
+            )
+
+        self.assertEqual(started.status, SopExecutionStatus.WAITING)
+        self.assertEqual(started.current_step, "info_order")
+        self.assertEqual(collected.status, SopExecutionStatus.WAITING)
+        self.assertEqual(collected.current_step, "confirm_1")
+        self.assertNotIn("正在同步 runtime 状态", collected.reply)
+        self.assertEqual(completed.status, SopExecutionStatus.COMPLETED)
+        self.assertEqual(completed.current_step, "completed")
+        self.assertEqual(completed.collected["order_no"], "TK-100")
+        self.assertEqual(completed.collected["phone"], "13800138000")
+
+    def test_unknown_sop_returns_missing_chatflow_binding_failure(self) -> None:
         with TestClient(app) as client:
             chatflow = _create_chatflow_sop_fixture(client, time.time_ns())
             adapter = _adapter(int(cast(int | str, chatflow["id"])))
@@ -64,7 +96,7 @@ class ChatflowSopRuntimeAdapterIntegrationTest(unittest.TestCase):
         self.assertEqual(result.status, SopExecutionStatus.FAILED)
         self.assertIsNotNone(result.error)
         assert result.error is not None
-        self.assertEqual(result.error["code"], "SOP_CHATFLOW_NOT_BOUND")
+        self.assertEqual(result.error["code"], "MISSING_CHATFLOW_BINDING")
 
     def test_start_sop_normalizes_unexpected_chatflow_runtime_failure(self) -> None:
         adapter = ChatflowSopRuntimeAdapter(_FailingWorkflowService(), sop_chatflow_ids={"refund_ticket": 1})
@@ -267,6 +299,28 @@ def _adapter(chatflow_id: int) -> ChatflowSopRuntimeAdapter:
     return ChatflowSopRuntimeAdapter(service, sop_chatflow_ids={"refund_ticket": chatflow_id})
 
 
+def _adapter_v2(chatflow_id: int) -> ChatflowSopRuntimeAdapter:
+    session = get_session_factory()()
+    repository = WorkflowRepository(session)
+    state_repository = ChatflowStateRepository(session)
+    service = WorkflowService(
+        repository,
+        flow_type="CHATFLOW",
+        chatflow_state_repository=state_repository,
+    )
+    runtime_v2_service = ChatflowRuntimeV2Service(
+        repository,
+        state_repository,
+        llm_completer_resolver=service.runtime_v2_llm_completer,
+    )
+    return ChatflowSopRuntimeAdapter(
+        service,
+        sop_chatflow_ids={"refund_ticket": chatflow_id},
+        runtime_v2_service=runtime_v2_service,
+        runtime_invocation_gateway=RuntimeInvocationGateway(runtime_v2_service),
+    )
+
+
 class _FailingWorkflowService:
     def execute(self, *_args: object, **_kwargs: object) -> dict[str, object]:
         raise RuntimeError("primary model rate limited")
@@ -392,6 +446,78 @@ def _create_chatflow_sop_fixture(client: TestClient, stamp: int) -> dict[str, ob
             "edges": [
                 {"sourceNodeKey": "start", "targetNodeKey": "info_order", "condition": None},
                 {"sourceNodeKey": "info_order", "targetNodeKey": "confirm_1", "condition": None},
+                {"sourceNodeKey": "confirm_1", "targetNodeKey": "end", "condition": None},
+            ],
+        },
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()["data"]
+    assert isinstance(data, dict)
+    return cast(dict[str, object], data)
+
+
+def _create_chatflow_sop_fixture_with_policy_llm(client: TestClient, stamp: int) -> dict[str, object]:
+    response = client.post(
+        "/api/v1/chatflows",
+        json={
+            "name": f"032 Runtime SOP V2 Bridge {stamp}",
+            "description": "test-only runtime adapter SOP v2 bridge fixture",
+            "nodes": [
+                {"nodeKey": "start", "type": "START", "name": "Start", "config": {}},
+                {
+                    "nodeKey": "info_order",
+                    "type": "INFORMATION_COLLECTION",
+                    "name": "收集手机号",
+                    "config": {
+                        "inputSource": "{{start.sys.query}}",
+                        "outputVariable": "contact",
+                        "collectionKey": "contact",
+                        "fields": [
+                            {"name": "order_no", "type": "string", "required": True, "description": "订单号"},
+                            {
+                                "name": "phone",
+                                "type": "string",
+                                "required": True,
+                                "description": "手机号",
+                                "targetScope": "conversation",
+                                "targetVariable": "phone",
+                            },
+                        ],
+                    },
+                },
+                {
+                    "nodeKey": "policy_llm",
+                    "type": "LLM",
+                    "name": "政策说明",
+                    "config": {
+                        "prompt": "请确认退票订单 {{info_order.order_no}} 手机 {{info_order.phone}}。",
+                        "outputVariable": "policy",
+                    },
+                },
+                {
+                    "nodeKey": "confirm_1",
+                    "type": "QUESTION",
+                    "name": "确认办理",
+                    "config": {
+                        "question": "{{policy_llm.policy}}\n请确认是否继续办理退票。",
+                        "outputVariable": "confirm",
+                        "answerType": "text",
+                    },
+                },
+                {
+                    "nodeKey": "end",
+                    "type": "END",
+                    "name": "End",
+                    "config": {
+                        "outputVariable": "final",
+                        "output": "order={{info_order.order_no}} phone={{info_order.phone}} confirm={{confirm_1.answer}}",
+                    },
+                },
+            ],
+            "edges": [
+                {"sourceNodeKey": "start", "targetNodeKey": "info_order", "condition": None},
+                {"sourceNodeKey": "info_order", "targetNodeKey": "policy_llm", "condition": None},
+                {"sourceNodeKey": "policy_llm", "targetNodeKey": "confirm_1", "condition": None},
                 {"sourceNodeKey": "confirm_1", "targetNodeKey": "end", "condition": None},
             ],
         },

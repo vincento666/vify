@@ -83,7 +83,7 @@ class AggregatorScaffoldTest(unittest.TestCase):
 
         self.assertEqual(result, {"name": "new"})
 
-    def test_missing_chatflow_refs_falls_back_to_business_refs(self) -> None:
+    def test_missing_chatflow_refs_returns_empty_without_business_refs_fallback(self) -> None:
         repository = MagicMock()
         repository.list_tasks.return_value = [
             {
@@ -101,10 +101,10 @@ class AggregatorScaffoldTest(unittest.TestCase):
 
         result = agg.collect(session_id=1)
 
-        self.assertEqual(result, {"order_no": "TX1"})
+        self.assertEqual(result, {})
         workflow_service.get_session_state.assert_not_called()
 
-    def test_bizerror_falls_back_to_business_refs(self) -> None:
+    def test_bizerror_returns_empty_without_business_refs_fallback(self) -> None:
         repository = MagicMock()
         repository.list_tasks.return_value = [
             {
@@ -125,10 +125,9 @@ class AggregatorScaffoldTest(unittest.TestCase):
 
         result = agg.collect(session_id=1)
 
-        self.assertEqual(result, {"order_no": "TX2", "phone": "13800000000"})
+        self.assertEqual(result, {})
 
-    def test_chatflow_conversation_wins_over_business_refs_for_same_key(self) -> None:
-        """Regex-only slots survive while chatflow conversation overrides on collision."""
+    def test_chatflow_conversation_is_only_durable_task_context(self) -> None:
         repository = MagicMock()
         repository.list_tasks.return_value = [
             {
@@ -150,9 +149,7 @@ class AggregatorScaffoldTest(unittest.TestCase):
 
         result = agg.collect(session_id=1)
 
-        # order_no survives (regex-only slot not in chatflow conversation)
-        # name overridden by chatflow conversation
-        self.assertEqual(result, {"order_no": "REGEX-ORDER", "name": "NewName"})
+        self.assertEqual(result, {"name": "NewName"})
 
 
 if __name__ == "__main__":

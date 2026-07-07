@@ -131,6 +131,17 @@ async function runWorkflowPanel(page, input, expected) {
   await page.getByRole('button', { name: '运行', exact: true }).click()
   const output = page.locator('[data-testid="workflow-run-output"]')
   await output.waitFor({ state: 'visible', timeout: 20000 })
+  await page.waitForFunction(
+    ({ expectedText }) => {
+      const outputElement = document.querySelector('[data-testid="workflow-run-output"]')
+      const panelElement = document.querySelector('[data-testid="test-run-panel"]')
+      const outputText = outputElement?.textContent || ''
+      const panelText = panelElement?.textContent || ''
+      return outputText.includes(expectedText) || panelText.includes('FAILED')
+    },
+    { expectedText: expected },
+    { timeout: 60000 },
+  )
   const text = await output.innerText()
   assert(text.includes(expected), `Expected workflow output ${expected}, got: ${text}`)
   assert(!text.includes('Knowledge mock:'), `Expected workflow to avoid knowledge mock, got: ${text}`)

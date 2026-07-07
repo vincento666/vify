@@ -181,6 +181,7 @@ export function applyRuntimeV2NodesToDebugDetail(
       nodeKey: node.nodeKey || current.nodeKey,
       nodeType: node.nodeType || current.nodeType,
       status: normalizeRuntimeNodeStatus(node.status || current.status),
+      selectionState: node.selectionState || current.selectionState,
       elapsedMs: Number(node.elapsedMs ?? current.elapsedMs ?? 0),
       latencyMs: Number(node.latencyMs ?? current.latencyMs ?? 0),
       outputs: node.outputs || current.outputs || {},
@@ -233,7 +234,8 @@ function applyRuntimeV2EventToDebugDetail(
       status,
       error,
       errorSummary: error,
-      outputs: event.payload?.output || {},
+      outputs: runtimeEventOutputs(event),
+      selectionState: runtimeEventSelectionState(event),
       events: [event],
     })
   }
@@ -263,7 +265,9 @@ function upsertRuntimeNode(
     nodeKey: patch.nodeKey || current.nodeKey,
     nodeType: patch.nodeType || current.nodeType,
     status: normalizeRuntimeNodeStatus(patch.status || current.status),
+    selectionState: patch.selectionState || current.selectionState,
     elapsedMs: Number(patch.elapsedMs ?? current.elapsedMs ?? 0),
+    outputs: patch.outputs ?? current.outputs ?? {},
     events: [...(current.events || []), ...(patch.events || [])],
   }
   if (index >= 0) nodes[index] = nextNode
@@ -283,6 +287,21 @@ function runtimeEventNodeStatus(event: RuntimeV2Event): string {
     workflow_node_waiting: 'WAITING',
     workflow_node_skipped: 'SKIPPED',
   }[String(event.type || '')] || '')
+}
+
+function runtimeEventOutputs(event: RuntimeV2Event): Record<string, any> | undefined {
+  const payload = event.payload || {}
+  const outputs = payload.outputs ?? payload.output
+  return isRuntimeRecord(outputs) ? outputs : undefined
+}
+
+function runtimeEventSelectionState(event: RuntimeV2Event): WorkflowRunNodeDetail['selectionState'] | undefined {
+  const selectionState = event.payload?.selectionState
+  return isRuntimeRecord(selectionState) ? (selectionState as WorkflowRunNodeDetail['selectionState']) : undefined
+}
+
+function isRuntimeRecord(value: unknown): value is Record<string, any> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
 function runtimeEventRunStatus(event: RuntimeV2Event, fallback: string | undefined): string {

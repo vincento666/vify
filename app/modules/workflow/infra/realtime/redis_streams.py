@@ -8,6 +8,21 @@ from datetime import date, datetime
 from typing import Any, Protocol
 
 
+def _source_from_owner_type(owner_type: Any) -> str:
+    """Derive runtime event source from owner_type for fallback paths.
+
+    Spec 213.3.5h: CHATFLOW-owned runs emit 'chatflow_runtime_v2',
+    WORKFLOW-owned runs emit 'workflow_runtime_v2'. Returns 'runtime_v2'
+    when owner_type is absent (legacy compat).
+    """
+    if not owner_type:
+        return "runtime_v2"
+    normalized = str(owner_type).strip().upper()
+    if normalized in {"CHATFLOW", "WORKFLOW"}:
+        return f"{normalized.lower()}_runtime_v2"
+    return "runtime_v2"
+
+
 class RuntimeEventStreamBus(Protocol):
     def publish(self, event: Mapping[str, Any]) -> None:
         ...
@@ -126,7 +141,7 @@ def normalize_runtime_stream_event(event: Mapping[str, Any]) -> dict[str, Any]:
         "sequence": sequence,
         "type": event_type,
         "level": str(event.get("level") or payload.get("level") or "L1"),
-        "source": str(event.get("source") or payload.get("source") or "runtime_v2"),
+        "source": str(event.get("source") or payload.get("source") or _source_from_owner_type(payload.get("ownerType"))),
         "actor": str(event.get("actor") or payload.get("actor") or "system"),
         "nodeId": str(event.get("nodeId") or event.get("node_key") or ""),
         "checkpointId": event.get("checkpointId") or event.get("checkpoint_id"),

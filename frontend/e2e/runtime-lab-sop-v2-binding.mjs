@@ -36,7 +36,7 @@ try {
   await sendTurn(page, '我要退票')
   await waitForRouteAction(page, 'START_SOP')
   await expectTaskStatus(page, 'refund_ticket', 'RUNNING')
-  await expectTraceNode(page, 'info_order')
+  await expectTraceNode(page, 'collect')
 
   await selectSop(page, '发票申请')
   await sendTurn(page, '我要开发票')
@@ -44,6 +44,10 @@ try {
   await expectTaskStatus(page, 'refund_ticket', 'SUSPENDED')
   await expectTaskStatus(page, 'invoice_apply', 'RUNNING')
 
+  await sendTurn(page, '订单号 CA3034，手机号 13800138002，乘机人王测试')
+  await waitForRouteAction(page, 'CONTINUE_ACTIVE_SOP')
+  await sendTurn(page, '发票抬头：Hify 科技')
+  await waitForRouteAction(page, 'CONTINUE_ACTIVE_SOP')
   await sendTurn(page, '确认')
   await waitForRouteAction(page, 'COMPLETE_TASK')
   await expectTaskStatus(page, 'invoice_apply', 'COMPLETED')
@@ -51,11 +55,11 @@ try {
   await sendTurn(page, '继续处理退票')
   await waitForRouteAction(page, 'RESUME_TASK')
   await expectTaskStatus(page, 'refund_ticket', 'RUNNING')
-  await expectTraceNode(page, 'info_order')
+  await expectTraceNode(page, 'collect')
 
-  await sendTurn(page, '手机号 13800138000')
+  await sendTurn(page, '订单号 TK207，手机号 13800138000，乘机人张测试')
   await waitForRouteAction(page, 'CONTINUE_ACTIVE_SOP')
-  await expectTraceNode(page, 'confirm_1')
+  await expectTraceNode(page, 'confirm')
 
   await sendTurn(page, '确认')
   await waitForRouteAction(page, 'COMPLETE_TASK')

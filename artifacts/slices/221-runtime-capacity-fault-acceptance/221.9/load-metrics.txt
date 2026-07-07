@@ -1,0 +1,14 @@
+capacity_metrics slice=221.1 concurrency=20 p50_ms=1363.56 p95_ms=1399.01 p99_ms=1401.16 events=200
+.capacity_metrics slice=221.1 concurrency=35 p50_ms=2176.87 p95_ms=2215.29 p99_ms=2216.09 events=350
+.capacity_metrics slice=221.1 concurrency=50 p50_ms=2993.84 p95_ms=3060.66 p99_ms=3067.31 events=500
+.capacity_metrics slice=221.2 concurrency=100 p50_ms=6902.64 p95_ms=7395.29 p99_ms=7428.01 events=1000 queue_states=queued
+.capacity_metrics slice=221.2 concurrency=150 p50_ms=10151.38 p95_ms=10832.26 p99_ms=10899.18 events=1500 queue_states=queued
+.capacity_metrics slice=221.2 concurrency=200 p50_ms=13521.22 p95_ms=14468.03 p99_ms=14592.46 events=2000 queue_states=queued
+.
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /private/tmp/hify-213-verify3.uX7Jpk/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+6 passed, 1 warning in 42.02s

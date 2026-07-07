@@ -1,0 +1,71 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ ChatflowSopRuntimeAdapterGatewayTest.test_continue_sop_v2_wait_budget_covers_scale_terminal_result _
+
+self = <test_chatflow_sop_runtime_adapter_gateway.ChatflowSopRuntimeAdapterGatewayTest testMethod=test_continue_sop_v2_wait_budget_covers_scale_terminal_result>
+
+    def test_continue_sop_v2_wait_budget_covers_scale_terminal_result(self) -> None:
+        gateway = _FakeRuntimeInvocationGateway()
+        gateway.resume_invocation = _invocation(
+            status="INTERRUPTED",
+            output={
+                "interrupt": {"nodeKey": "confirm", "question": "请确认团队询价。"},
+                "collected": {"route": "上海到广州", "travel_time": "下周三上午", "passenger_count": "十六"},
+            },
+            events=[
+                {
+                    "id": 3,
+                    "sequence": 3,
+                    "type": "workflow_run_interrupted",
+                    "runId": 501,
+                    "checkpointId": 9001,
+                    "payload": {},
+                    "observability": {"correlationRefs": {"nodeKey": "confirm"}},
+                }
+            ],
+        )
+        pending = _runtime_result(
+            status="INTERRUPTED",
+            output={
+                "interrupt": {"nodeKey": "confirm", "question": "请确认团队询价。"},
+                "collected": {"route": "上海到广州", "travel_time": "下周三上午", "passenger_count": "十六"},
+            },
+            checkpoint_id=9001,
+            events=[],
+        )
+        terminal = _runtime_result(
+            status="SUCCEEDED",
+            output={
+                "final": "group booking complete",
+                "collected": {"route": "上海到广州", "travel_time": "下周三上午", "passenger_count": "十六"},
+            },
+            checkpoint_id=9001,
+            events=[
+                {
+                    "id": 4,
+                    "sequence": 4,
+                    "type": "workflow_run_completed",
+                    "runId": 501,
+                    "payload": {"status": "SUCCEEDED"},
+                    "observability": {},
+                }
+            ],
+        )
+        runtime_v2_service = _FakeRuntimeV2Service([*(dict(pending) for _ in range(44)), terminal])
+        adapter = ChatflowSopRuntimeAdapter(
+            _FakeWorkflowService(),
+            sop_chatflow_ids={"refund_ticket": 42},
+            runtime_v2_service=runtime_v2_service,
+            runtime_invocation_gateway=gateway,
+        )
+
+        started = adapter.start_sop(_request(message="我要退票"))
+        continued = adapter.continue_sop(_request(message="确认团队询价", checkpoint=started.checkpoint))
+
+>       self.assertEqual(continued.status, SopExecutionStatus.COMPLETED)
+E       AssertionError: <SopExecutionStatus.WAITING: 'WAITING'> != <SopExecutionStatus.COMPLETED: 'COMPLETED'>
+
+tests/unit/runtime_lab/test_chatflow_sop_runtime_adapter_gateway.py:229: AssertionError
+=========================== short test summary info ============================
+FAILED tests/unit/runtime_lab/test_chatflow_sop_runtime_adapter_gateway.py::ChatflowSopRuntimeAdapterGatewayTest::test_continue_sop_v2_wait_budget_covers_scale_terminal_result
+1 failed in 2.45s

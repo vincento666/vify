@@ -22,7 +22,7 @@ class RuntimeLabReliabilityTest(unittest.TestCase):
 
         self.assertEqual(second, first)
         self.assertEqual([task["status"] for task in tasks], ["RUNNING"])
-        self.assertIn(tasks[0]["currentStep"], {"collect", "collect_order_no"})
+        self.assertNotIn("currentStep", tasks[0])
         self.assertEqual([event["sequence"] for event in events], list(range(1, len(events) + 1)))
         self.assertEqual(
             [event["eventType"] for event in events],
