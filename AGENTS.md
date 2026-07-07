@@ -101,12 +101,17 @@ artifacts/slices/{spec-id}/{slice-id}/
 本项目的 loop 是“有界 slice -> 验证 -> 评审 -> 记录 -> 下一 slice / 停止”。
 具体运行细节放在 `loop/README.md`。
 
+- 写入前必须记录 `git status --short`、当前分支、worktree 模式、base branch 和 merge target。
 - 默认可在同一个 active spec 内连续推进已定义 slice。
 - 用户要求 `single-slice`、完成后停止或等待确认时，必须停止。
 - 不得自动新增 slice、重排 slice、扩大 active spec 范围。
 - 不得弱化、删除、跳过测试、verifier、spec 或门禁。
 - 不得在没有 checker 输出和证据时声称成功。
 - 不得覆盖用户已有的无关改动。
+- 每个 slice 全绿且 Reviewer 无 blocker 后，必须在当前 loop branch 提交一次绑定
+  `spec-id` / `slice-id` 的 commit。
+- active spec 完成或用户要求合并时才进入 Merge Gate；merge/PR 前必须重新跑必要
+  verifiers，确认工作区干净、目标分支明确、所有 slice 已提交。
 
 停止条件：
 
@@ -115,6 +120,9 @@ artifacts/slices/{spec-id}/{slice-id}/
 - 修复导致之前通过的检查失败。
 - 连续两轮失败项数量没有减少。
 - 功能边界变化但缺少对应 `spec.md`、`plan.md`、`tasks.md` 或 RED 证据。
+- branch/worktree/merge target 不明确，或存在无关 dirty changes。
+- slice 完成但无法安全 commit。
+- merge/PR 冲突、验证失败、scope drift，或需要 push/release 授权。
 - 需要新增依赖、架构改动、公共 API / 数据模型改动、权限、生产、发布、真实数据、
   外部动作或不可逆操作，且缺少用户确认。
 - 阻塞原因涉及当前仓库无法解决的外部依赖、密钥、服务、浏览器 UAT 条件或数据库环境。
