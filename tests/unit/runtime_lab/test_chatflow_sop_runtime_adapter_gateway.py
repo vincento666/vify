@@ -13,6 +13,7 @@ class ChatflowSopRuntimeAdapterGatewayTest(unittest.TestCase):
             _FakeWorkflowService(),
             sop_chatflow_ids={"refund_ticket": 42},
             runtime_invocation_gateway=gateway,
+            runtime_invocation_mode="sync",
         )
 
         result = adapter.start_sop(_request(message="我要退票"))
@@ -32,6 +33,7 @@ class ChatflowSopRuntimeAdapterGatewayTest(unittest.TestCase):
             _FakeWorkflowService(),
             sop_chatflow_ids={"refund_ticket": 42},
             runtime_invocation_gateway=gateway,
+            runtime_invocation_mode="sync",
         )
 
         started = adapter.start_sop(_request(message="我要退票"))
@@ -50,6 +52,7 @@ class ChatflowSopRuntimeAdapterGatewayTest(unittest.TestCase):
             _FakeWorkflowService(),
             sop_chatflow_ids={"refund_ticket": 42},
             runtime_invocation_gateway=gateway,
+            runtime_invocation_mode="sync",
         )
 
         started = adapter.start_sop(_request(message="我要退票"))
@@ -158,6 +161,7 @@ class ChatflowSopRuntimeAdapterGatewayTest(unittest.TestCase):
             sop_chatflow_ids={"refund_ticket": 42},
             runtime_v2_service=runtime_v2_service,
             runtime_invocation_gateway=gateway,
+            runtime_invocation_mode="sync",
         )
 
         started = adapter.start_sop(_request(message="我要退票"))
@@ -221,6 +225,7 @@ class ChatflowSopRuntimeAdapterGatewayTest(unittest.TestCase):
             sop_chatflow_ids={"group_booking": 42},
             runtime_v2_service=runtime_v2_service,
             runtime_invocation_gateway=gateway,
+            runtime_invocation_mode="sync",
         )
 
         started = adapter.start_sop(_request(message="我们公司十六个人出差", sop_id="group_booking"))

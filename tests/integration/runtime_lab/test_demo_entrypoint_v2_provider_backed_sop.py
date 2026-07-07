@@ -50,6 +50,7 @@ class DemoEntrypointRuntimeV2ProviderBackedSopTest(unittest.TestCase):
                 runtime_lab_sop_chatflow_ids=f"refund_ticket:{chatflow['id']}",
                 runtime_lab_intent_arbitrator_mode="fake",
                 runtime_lab_sop_llm_mode="live",
+                runtime_lab_sop_runtime_invocation_mode="sync",
             )
             with patch.object(runtime_lab_router, "get_settings", return_value=settings):
                 with get_session_factory()() as session:

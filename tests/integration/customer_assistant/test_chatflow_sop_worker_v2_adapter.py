@@ -370,6 +370,7 @@ def _adapter(session: Session, bindings: dict[str, int]) -> ChatflowSopRuntimeAd
             ChatflowStateRepository(session),
             completion_delay_seconds=0,
         ),
+        runtime_invocation_mode="sync",
     )
 
 

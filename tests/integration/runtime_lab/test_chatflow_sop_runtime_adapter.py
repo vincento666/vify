@@ -318,6 +318,7 @@ def _adapter_v2(chatflow_id: int) -> ChatflowSopRuntimeAdapter:
         sop_chatflow_ids={"refund_ticket": chatflow_id},
         runtime_v2_service=runtime_v2_service,
         runtime_invocation_gateway=RuntimeInvocationGateway(runtime_v2_service),
+        runtime_invocation_mode="sync",
     )
 
 
