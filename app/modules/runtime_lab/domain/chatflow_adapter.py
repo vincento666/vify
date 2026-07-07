@@ -30,7 +30,7 @@ class ChatflowSopRuntimeAdapter:
         fallback_adapter: SopRuntimeAdapter | None = None,
         runtime_v2_service: ChatflowRuntimeV2Service | None = None,
         runtime_invocation_gateway: RuntimeInvocationGateway | None = None,
-        runtime_invocation_mode: str = "sync",
+        runtime_invocation_mode: str = "async",
         fallback_on_missing_chatflow: bool = False,
     ) -> None:
         self._workflow_service = workflow_service

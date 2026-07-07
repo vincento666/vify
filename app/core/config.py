@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     persistence_mode: str = "local"
     runtime_lab_sop_chatflow_ids: str | None = None
-    runtime_lab_sop_runtime_invocation_mode: str = "sync"
+    runtime_lab_sop_runtime_invocation_mode: str = "async"
     runtime_lab_sop_llm_mode: str = "mock"
     runtime_v2_request_thread_completion_enabled: bool = True
     runtime_v2_tenant_active_limit: int = Field(default=0, ge=0)

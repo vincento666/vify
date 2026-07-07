@@ -166,3 +166,21 @@ class RuntimeLabWebFactoryTest(unittest.TestCase):
 
         adapter = service._adapter
         self.assertEqual(adapter._runtime_invocation_mode, "async")
+
+    def test_chatflow_sop_binding_defaults_to_async_background_invocation(self) -> None:
+        with mysql8_session("runtime_lab_web_factory_default_async", register=register_baseline_tables) as session:
+            with (
+                patch(
+                    "app.modules.runtime_lab.web.router.get_settings",
+                    return_value=Settings(runtime_lab_sop_chatflow_ids="refund_ticket:42"),
+                ),
+                patch(
+                    "app.modules.runtime_lab.web.router.RuntimePolicyResolver.resolve",
+                    return_value={"policySnapshot": {}},
+                ),
+            ):
+                service = get_runtime_lab_service(session)
+
+        adapter = service._adapter
+        self.assertEqual(adapter._runtime_invocation_mode, "async")
+        self.assertIsNotNone(adapter._runtime_invocation_gateway._enqueue_background_run)
