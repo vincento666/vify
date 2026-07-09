@@ -342,6 +342,7 @@ class AiAssistantRepository:
         correlation_ids: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         now = datetime.now()
+        self._lock_run_for_event_sequence(run_id)
         row = insert_and_fetch(
             self._session,
             self._event_table,
@@ -730,3 +731,13 @@ class AiAssistantRepository:
             )
         ).scalar_one_or_none()
         return int(current or 0) + 1
+
+    def _lock_run_for_event_sequence(self, run_id: int) -> None:
+        self._session.execute(
+            sa.select(self._run_table.c.id)
+            .where(
+                self._run_table.c.id == run_id,
+                self._run_table.c.deleted.is_(False),
+            )
+            .with_for_update()
+        ).scalar_one_or_none()

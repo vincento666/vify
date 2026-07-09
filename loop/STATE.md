@@ -3,16 +3,16 @@
 ## Current
 
 - active spec: `222-ai-assistant-general-harness-mvp`
-- current slice: `222.14 Corrective Wave Contract`
-- frozen scope: docs-only corrective contract for five remaining gaps; no implementation
-- current checklist item: commit contract slice
-- current status: `222.14 contract-ready, Checker PASS, Reviewer PASS, commit pending`
-- human decision: user requested 222.14 corrective wave contract construction and excluded sandbox work
+- current slice: `222.14.1 Event Sequence Concurrency Safety`
+- frozen scope: AI Assistant event append sequence concurrency only
+- current checklist item: commit slice
+- current status: `222.14.1 complete, Checker PASS, Reviewer PASS, commit pending`
+- human decision: continue from 222.14 contract into first corrective implementation slice
 - worktree: `/Users/vincento/work/develop/hify`
-- branch: `codex/spec-222-14-corrective-contract`
-- base: `4a987d67`
+- branch: `codex/spec-222-14-1-event-sequence`
+- base: `699cc6d4`
 - merge target: `codex/runtime-v2-production-upgrade`
-- evidence root: `artifacts/slices/222-ai-assistant-general-harness-mvp/222.14-contract/`
+- evidence root: `artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.1/`
 - waiting human: none
 
 ## Evidence So Far
@@ -51,6 +51,15 @@ Review: checker-round1.md PASS, reviewer-round1.md PASS
 222.14.4 Live Gate Rerun
 222.14.5 Durable Idempotency And Circuit Breaker Spec
 Evidence: preflight.md, checker-round1.md PASS, reviewer-round1.md PASS
+```
+
+222.14.1 evidence produced in this loop:
+
+```text
+RED: red-concurrency.txt
+Green: integration.txt, contract.txt, e2e.txt
+Static: ruff.txt, py_compile.txt, diff-check.txt
+Review: checker-round1.md PASS, reviewer-round1.md PASS
 ```
 
 ## Spec 222 Closed-Loop Preflight Stop
@@ -119,9 +128,9 @@ Recommended options:
 
 ## Next Action
 
-Finish 222.14 contract Checker and Reviewer, then commit the docs-only contract
-slice on `codex/spec-222-14-corrective-contract`. Next implementation slice is
-`222.14.1 Event Sequence Concurrency Safety`.
+Finish 222.14.1 Checker and Reviewer, then commit the slice on
+`codex/spec-222-14-1-event-sequence`. Next implementation slice is
+`222.14.2 Aggregate Eval Runtime Evidence`.
 
 ## Reviewer Findings
 

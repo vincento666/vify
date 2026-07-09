@@ -1,10 +1,12 @@
 from contextlib import contextmanager
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
+import threading
 import unittest
 
 from sqlalchemy.orm import Session
 
-from tests.support.mysql import mysql8_session
+from tests.support.mysql import Mysql8TestDatabase, mysql8_session
 
 
 class AiAssistantHarnessRepositoryTest(unittest.TestCase):
@@ -42,6 +44,52 @@ class AiAssistantHarnessRepositoryTest(unittest.TestCase):
         self.assertEqual(second["sequence"], 2)
         self.assertEqual([event["sequence"] for event in replayed], [1, 2])
         self.assertEqual([event["type"] for event in replayed], ["run.started", "tool.call_completed"])
+
+    def test_run_events_are_gapless_when_appended_concurrently(self) -> None:
+        from app.modules.ai_assistant.infra.repository import AiAssistantRepository
+        from app.modules.ai_assistant.infra.schema import ai_assistant_tables, register_ai_assistant_tables
+
+        worker_count = 16
+        with Mysql8TestDatabase("ai_assistant_event_sequence") as database:
+            database.create_all(tables=ai_assistant_tables(), register=register_ai_assistant_tables)
+            with database.session() as session:
+                repository = AiAssistantRepository(session)
+                assistant_session = repository.create_session(title="Concurrent events")
+                run = repository.create_run(
+                    session_id=assistant_session["id"],
+                    user_message="Append concurrently",
+                    idempotency_key="repo-run-concurrent-events",
+                )
+                run_id = int(run["id"])
+                session_id = int(assistant_session["id"])
+
+            barrier = threading.Barrier(worker_count)
+
+            def append_event(index: int) -> int:
+                barrier.wait(timeout=5)
+                with database.session() as session:
+                    repository = AiAssistantRepository(session)
+                    event = repository.append_event(
+                        run_id=run_id,
+                        session_id=session_id,
+                        event_type="tool.call_completed",
+                        visible_title=f"Tool completed {index}",
+                        visible_summary="Concurrent event append.",
+                        payload={"index": index},
+                    )
+                    return int(event["sequence"])
+
+            with ThreadPoolExecutor(max_workers=worker_count) as executor:
+                sequences = list(executor.map(append_event, range(worker_count)))
+
+            with database.session() as session:
+                replayed = AiAssistantRepository(session).list_run_events(run_id)
+                replayed_after_five = AiAssistantRepository(session).list_run_events(run_id, after_sequence=5)
+
+        expected = list(range(1, worker_count + 1))
+        self.assertEqual(sorted(sequences), expected)
+        self.assertEqual([int(event["sequence"]) for event in replayed], expected)
+        self.assertEqual([int(event["sequence"]) for event in replayed_after_five], list(range(6, worker_count + 1)))
 
     def test_tool_call_persistence_records_input_output_status_and_duration(self) -> None:
         from app.modules.ai_assistant.infra.repository import AiAssistantRepository

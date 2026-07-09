@@ -706,7 +706,7 @@ artifacts/slices/222-ai-assistant-general-harness-mvp/222.14-contract/reviewer-r
 
 ## 222.14.1 Event Sequence Concurrency Safety
 
-Status: `pending`.
+Status: `complete`.
 
 Purpose:
 
@@ -717,14 +717,14 @@ snapshot, and Last-Event-ID recovery are trustworthy under concurrent writers.
 
 Tasks:
 
-- [ ] RED: AI Assistant repository integration test concurrently appends N
+- [x] RED: AI Assistant repository integration test concurrently appends N
       events to the same run and fails while sequences are not exactly `1..N`.
-- [ ] RED: contract or E2E replay test proves `afterSequence` returns ordered,
+- [x] RED: contract or E2E replay test proves `afterSequence` returns ordered,
       gapless events after concurrent append.
-- [ ] Implement atomic per-run sequence assignment in the AI Assistant event
+- [x] Implement atomic per-run sequence assignment in the AI Assistant event
       append path only.
-- [ ] Re-run SSE replay and snapshot recovery regressions.
-- [ ] Run Checker and Reviewer before commit.
+- [x] Re-run SSE replay and snapshot recovery regressions.
+- [x] Run Checker and Reviewer before commit.
 
 Evidence:
 
@@ -733,6 +733,9 @@ artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.1/red-concurrency.t
 artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.1/integration.txt
 artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.1/contract.txt
 artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.1/e2e.txt
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.1/ruff.txt
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.1/py_compile.txt
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.1/diff-check.txt
 artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.1/checker-round1.md
 artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.1/reviewer-round1.md
 ```

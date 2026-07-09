@@ -61,7 +61,7 @@ conversation
 222.12 Real-Time Streaming And Durable Worker Correction: complete
 222.13 Tool Observation Self-Correction Correction: complete
 222.14 Corrective Wave Contract: contract-ready
-222.14.1 Event Sequence Concurrency Safety: pending
+222.14.1 Event Sequence Concurrency Safety: complete
 222.14.2 Aggregate Eval Runtime Evidence: pending
 222.14.3 Backend Autonomous Worker MVP: pending
 222.14.4 Live Gate Rerun: env-gated

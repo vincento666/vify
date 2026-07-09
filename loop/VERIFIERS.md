@@ -1,30 +1,33 @@
 # Loop Verifiers
 
-These commands verify Spec 222 contract slice `222.14 Corrective Wave Contract`.
+These commands verify Spec 222 slice `222.14.1`.
 
-## Contract Reads
-
-```bash
-/opt/homebrew/bin/rtk rg -n "222\\.14|Corrective Wave|Event Sequence|Aggregate Eval|Autonomous Worker|Live Gate|Idempotency" specs/222-ai-assistant-general-harness-mvp loop
-```
-
-## Scope Guard
+## RED
 
 ```bash
-/opt/homebrew/bin/rtk sed -n '220,330p' specs/222-ai-assistant-general-harness-mvp/spec.md
-/opt/homebrew/bin/rtk sed -n '348,445p' specs/222-ai-assistant-general-harness-mvp/plan.md
-/opt/homebrew/bin/rtk sed -n '665,890p' specs/222-ai-assistant-general-harness-mvp/tasks.md
-/opt/homebrew/bin/rtk sed -n '70,95p' loop/CURRENT.md
+/opt/homebrew/bin/rtk uv run pytest tests/integration/ai_assistant/test_harness_repository.py -q
 ```
 
-Expected result: in the 222.14 contract ranges, sandbox/HA/production terms may
-appear only as explicit non-goals or human gates.
+Expected RED before implementation:
+
+```text
+Concurrent event append raises duplicate run/sequence or fails to produce 1..N.
+```
+
+## Focused Gates
+
+```bash
+/opt/homebrew/bin/rtk uv run pytest tests/integration/ai_assistant/test_harness_repository.py -q
+/opt/homebrew/bin/rtk uv run pytest tests/contract/test_ai_assistant_event_sequence_api.py tests/contract/test_ai_assistant_streaming_api.py tests/contract/test_ai_assistant_session_runtime_api.py -q
+/opt/homebrew/bin/rtk uv run pytest tests/e2e/test_ai_assistant_session_runtime_e2e.py tests/e2e/test_ai_assistant_streaming_e2e.py -q
+```
 
 ## Static And Diff
 
 ```bash
+/opt/homebrew/bin/rtk uv run ruff check app/modules/ai_assistant/infra/repository.py tests/integration/ai_assistant/test_harness_repository.py tests/contract/test_ai_assistant_event_sequence_api.py
+/opt/homebrew/bin/rtk uv run python -m compileall app/modules/ai_assistant/infra/repository.py tests/integration/ai_assistant/test_harness_repository.py tests/contract/test_ai_assistant_event_sequence_api.py
 /opt/homebrew/bin/rtk git diff --check
-/opt/homebrew/bin/rtk git diff --stat
 ```
 
 ## Checker And Reviewer
@@ -32,18 +35,18 @@ appear only as explicit non-goals or human gates.
 Checker must verify:
 
 ```text
-222.14 is split into five objective corrective slices.
-Each slice has in-scope/out-of-scope boundaries, pass criteria, and evidence paths.
-Sandbox isolation is explicitly excluded from this corrective wave.
-Live gate missing credentials become env-blocked/waiting-human, not PASS.
-Durable idempotency/circuit breaker is docs-only and separate from implementation.
+RED proves concurrent append was unsafe before implementation.
+Integration proves same-run concurrent append stores exactly 1..N.
+API contract proves afterSequence replay is ordered and gapless after concurrent append.
+Existing snapshot/SSE resume gates still pass.
+No schema migration or cross-module event system change was introduced.
 ```
 
 Reviewer must verify:
 
 ```text
-Diff scope is docs/loop only.
-No code, tests, dependency, schema, or production behavior changed.
-No secrets are committed.
-No claim says 222.14 implementation is complete.
+Diff scope is limited to AI Assistant repository, tests, spec/loop updates.
+The fix uses existing schema constraints or run-level locking, not a new migration.
+No tests or gates are weakened.
+No secrets or production behavior are introduced.
 ```

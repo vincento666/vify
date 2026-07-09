@@ -2,16 +2,16 @@
 
 ## Status
 
-Active contract sprint:
+Latest completed slice:
 
 ```text
-222.14 Corrective Wave Contract (contract construction)
+222.14.1 Event Sequence Concurrency Safety (complete)
 ```
 
-Next implementation slice after this contract:
+Next implementation slice:
 
 ```text
-222.14.1 Event Sequence Concurrency Safety
+222.14.2 Aggregate Eval Runtime Evidence
 ```
 
 This file is the spec-facing loop pointer. Other loop engineering files such as
@@ -37,13 +37,13 @@ specs/222-ai-assistant-general-harness-mvp/tasks.md
 ## Worktree
 
 ```text
-branch: codex/spec-222-14-corrective-contract
+branch: codex/spec-222-14-1-event-sequence
 path: /Users/vincento/work/develop/hify
-base: 4a987d67 codex/runtime-v2-production-upgrade
+base: 699cc6d4 codex/spec-222-14-corrective-contract
 merge target: codex/runtime-v2-production-upgrade
 ```
 
-Current worktree is used because the work is a docs-only contract slice and no
+Current worktree is used because this is one active Builder stream and no
 unrelated dirty changes were present before the branch was created.
 
 ## Frozen Scope
@@ -51,35 +51,26 @@ unrelated dirty changes were present before the branch was created.
 Allowed:
 
 ```text
-specs/222-ai-assistant-general-harness-mvp/spec.md
-specs/222-ai-assistant-general-harness-mvp/plan.md
-specs/222-ai-assistant-general-harness-mvp/tasks.md
+app/modules/ai_assistant/infra/repository.py
+tests/integration/ai_assistant/test_harness_repository.py
+tests/contract/test_ai_assistant_event_sequence_api.py
+tests/contract/test_ai_assistant_streaming_api.py
+tests/contract/test_ai_assistant_session_runtime_api.py
+tests/e2e/test_ai_assistant_session_runtime_e2e.py
+tests/e2e/test_ai_assistant_streaming_e2e.py
+specs/222-ai-assistant-general-harness-mvp/
 loop/CURRENT.md
 loop/STATE.md
 loop/VERIFIERS.md
-artifacts/slices/222-ai-assistant-general-harness-mvp/222.14-contract/
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.1/
 ```
 
 Behavior target:
 
 ```text
-Turn the old 222.14 backlog into a bounded corrective wave contract:
-event sequence concurrency safety, runtime-evidence aggregate eval, same-process
-backend autonomous worker MVP, env-gated 222.11 live rerun, and a separate
-durable idempotency/circuit breaker spec task.
-```
-
-Explicit non-goals:
-
-```text
-real OS/container sandbox isolation
-network/CPU/memory isolation
-multi-tenant infrastructure
-cross-machine HA worker takeover
-standalone worker service
-business adapter expansion
-large UI redesign
-production push/release
+AI Assistant events within the same run replay as strict 1..N sequence under
+concurrent append. API afterSequence replay and snapshot/SSE resume remain
+ordered and trustworthy.
 ```
 
 ## Stop Conditions
@@ -87,11 +78,10 @@ production push/release
 Stop and enter `waiting-human` if:
 
 ```text
-contract requires implementation before spec confirmation
-scope expands into sandbox, HA worker, multi-tenant, production, or business adapter work
-acceptance cannot be made objectively checkable
+fix requires schema migration, new unique index, broker, or dependency
+scope expands outside app/modules/ai_assistant event append/replay
+runtime v2, customer assistant, or chatflow event systems must change
 Checker finds missing evidence or gate bypass
-Reviewer finds scope expansion, weakened gates, or secret exposure
-merge target becomes ambiguous or dirty
+Reviewer finds scope expansion, weakened tests, or secret exposure
 slice completes but cannot be committed safely
 ```
