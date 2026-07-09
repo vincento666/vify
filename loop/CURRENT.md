@@ -2,16 +2,16 @@
 
 ## Status
 
-Latest completed slice:
+Active contract sprint:
 
 ```text
-222.13 Tool Observation Self-Correction Correction (complete)
+222.14 Corrective Wave Contract (contract construction)
 ```
 
-Pending after this slice:
+Next implementation slice after this contract:
 
 ```text
-222.14 Production Hardening Backlog (proposed-confirmation)
+222.14.1 Event Sequence Concurrency Safety
 ```
 
 This file is the spec-facing loop pointer. Other loop engineering files such as
@@ -37,13 +37,13 @@ specs/222-ai-assistant-general-harness-mvp/tasks.md
 ## Worktree
 
 ```text
-branch: codex/spec-222-13-tool-self-correction
+branch: codex/spec-222-14-corrective-contract
 path: /Users/vincento/work/develop/hify
-base: a57cb783 codex/runtime-v2-production-upgrade
+base: 4a987d67 codex/runtime-v2-production-upgrade
 merge target: codex/runtime-v2-production-upgrade
 ```
 
-Current worktree is used because this is one active Builder stream and no
+Current worktree is used because the work is a docs-only contract slice and no
 unrelated dirty changes were present before the branch was created.
 
 ## Frozen Scope
@@ -51,26 +51,35 @@ unrelated dirty changes were present before the branch was created.
 Allowed:
 
 ```text
-app/modules/ai_assistant/
-frontend/src/views/aiAssistant/
-frontend/src/api/aiAssistant*
-tests/unit/ai_assistant/
-tests/contract/test_ai_assistant_*.py
-tests/e2e/test_ai_assistant_*.py
-specs/222-ai-assistant-general-harness-mvp/
+specs/222-ai-assistant-general-harness-mvp/spec.md
+specs/222-ai-assistant-general-harness-mvp/plan.md
+specs/222-ai-assistant-general-harness-mvp/tasks.md
 loop/CURRENT.md
 loop/STATE.md
 loop/VERIFIERS.md
-artifacts/slices/222-ai-assistant-general-harness-mvp/222.13/
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14-contract/
 ```
 
 Behavior target:
 
 ```text
-Recoverable tool timeout, 5xx, and rate-limit observations must feed a
-repair/replan loop. The run may retry with repaired arguments, select a fallback
-adapter/tool, or degrade within budget. Permission, sandbox, approval, and
-exhausted-budget failures remain structured terminal failures.
+Turn the old 222.14 backlog into a bounded corrective wave contract:
+event sequence concurrency safety, runtime-evidence aggregate eval, same-process
+backend autonomous worker MVP, env-gated 222.11 live rerun, and a separate
+durable idempotency/circuit breaker spec task.
+```
+
+Explicit non-goals:
+
+```text
+real OS/container sandbox isolation
+network/CPU/memory isolation
+multi-tenant infrastructure
+cross-machine HA worker takeover
+standalone worker service
+business adapter expansion
+large UI redesign
+production push/release
 ```
 
 ## Stop Conditions
@@ -78,12 +87,11 @@ exhausted-budget failures remain structured terminal failures.
 Stop and enter `waiting-human` if:
 
 ```text
-scope needs new dependency, schema/API migration, production secret, push,
-release, real external service, or irreversible action
-222.13 acceptance requires changing 222.14 backlog boundary
-same verifier failure repeats twice without narrower hypothesis
+contract requires implementation before spec confirmation
+scope expands into sandbox, HA worker, multi-tenant, production, or business adapter work
+acceptance cannot be made objectively checkable
 Checker finds missing evidence or gate bypass
-Reviewer finds scope expansion, weakened tests, or missing evidence
+Reviewer finds scope expansion, weakened gates, or secret exposure
 merge target becomes ambiguous or dirty
 slice completes but cannot be committed safely
 ```

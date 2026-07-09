@@ -1,43 +1,30 @@
 # Loop Verifiers
 
-These commands verify Spec 222 slice `222.13`.
+These commands verify Spec 222 contract slice `222.14 Corrective Wave Contract`.
 
-## RED
-
-```bash
-/opt/homebrew/bin/rtk uv run pytest tests/unit/ai_assistant/test_tool_self_correction.py -q
-/opt/homebrew/bin/rtk uv run pytest tests/contract/test_ai_assistant_tool_self_correction_api.py -q
-/opt/homebrew/bin/rtk uv run pytest tests/e2e/test_ai_assistant_tool_self_correction_e2e.py -q
-```
-
-## Focused Backend
+## Contract Reads
 
 ```bash
-/opt/homebrew/bin/rtk uv run pytest tests/unit/ai_assistant/test_tool_runtime.py tests/unit/ai_assistant/test_tool_self_correction.py -q
-/opt/homebrew/bin/rtk uv run pytest tests/contract/test_ai_assistant_tool_runtime_api.py tests/contract/test_ai_assistant_tool_self_correction_api.py tests/contract/test_ai_assistant_trace_audit_api.py -q
-/opt/homebrew/bin/rtk uv run pytest tests/e2e/test_ai_assistant_tool_runtime_e2e.py tests/e2e/test_ai_assistant_tool_self_correction_e2e.py tests/e2e/test_ai_assistant_trace_audit_e2e.py -q
+/opt/homebrew/bin/rtk rg -n "222\\.14|Corrective Wave|Event Sequence|Aggregate Eval|Autonomous Worker|Live Gate|Idempotency" specs/222-ai-assistant-general-harness-mvp loop
 ```
 
-## Frontend And Browser UAT
+## Scope Guard
 
 ```bash
-/opt/homebrew/bin/rtk npm --prefix frontend run test:unit -- src/api/aiAssistant.test.ts src/views/aiAssistant/aiAssistantShell.test.ts
-/opt/homebrew/bin/rtk npm --prefix frontend run test:unit -- src/remScaleClosure.test.ts
+/opt/homebrew/bin/rtk sed -n '220,330p' specs/222-ai-assistant-general-harness-mvp/spec.md
+/opt/homebrew/bin/rtk sed -n '348,445p' specs/222-ai-assistant-general-harness-mvp/plan.md
+/opt/homebrew/bin/rtk sed -n '665,890p' specs/222-ai-assistant-general-harness-mvp/tasks.md
+/opt/homebrew/bin/rtk sed -n '70,95p' loop/CURRENT.md
 ```
 
-Browser UAT uses the in-app browser at `/ai-assistant` and records:
-
-```text
-artifacts/slices/222-ai-assistant-general-harness-mvp/222.13/browser-uat.md
-artifacts/slices/222-ai-assistant-general-harness-mvp/222.13/screenshots/
-```
+Expected result: in the 222.14 contract ranges, sandbox/HA/production terms may
+appear only as explicit non-goals or human gates.
 
 ## Static And Diff
 
 ```bash
-/opt/homebrew/bin/rtk uv run ruff check app/modules/ai_assistant tests/unit/ai_assistant tests/contract/test_ai_assistant_tool_self_correction_api.py tests/e2e/test_ai_assistant_tool_self_correction_e2e.py
-/opt/homebrew/bin/rtk uv run python -m compileall app/modules/ai_assistant tests/unit/ai_assistant tests/contract tests/e2e
 /opt/homebrew/bin/rtk git diff --check
+/opt/homebrew/bin/rtk git diff --stat
 ```
 
 ## Checker And Reviewer
@@ -45,12 +32,18 @@ artifacts/slices/222-ai-assistant-general-harness-mvp/222.13/screenshots/
 Checker must verify:
 
 ```text
-RED evidence exists for timeout, 5xx, rate-limit, and budget exhaustion.
-Recoverable observation re-enters orchestration and completes after repair or fallback.
-Unrecoverable permission/sandbox/approval/budget failures remain structured terminal failures.
-Trace/audit export includes repair attempts, plan/task updates, tool events, and budget usage.
-Browser UAT shows failed tool -> repair/replan -> final result or structured terminal failure.
+222.14 is split into five objective corrective slices.
+Each slice has in-scope/out-of-scope boundaries, pass criteria, and evidence paths.
+Sandbox isolation is explicitly excluded from this corrective wave.
+Live gate missing credentials become env-blocked/waiting-human, not PASS.
+Durable idempotency/circuit breaker is docs-only and separate from implementation.
 ```
 
-Reviewer must verify diff scope, no weakened tests/gates, no secrets, and no
-claim of `222.14` completion.
+Reviewer must verify:
+
+```text
+Diff scope is docs/loop only.
+No code, tests, dependency, schema, or production behavior changed.
+No secrets are committed.
+No claim says 222.14 implementation is complete.
+```

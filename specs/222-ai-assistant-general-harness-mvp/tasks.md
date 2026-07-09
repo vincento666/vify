@@ -662,39 +662,226 @@ artifacts/slices/222-ai-assistant-general-harness-mvp/222.13/checker-round1.md
 artifacts/slices/222-ai-assistant-general-harness-mvp/222.13/reviewer-round1.md
 ```
 
-## 222.14 Production Hardening Backlog
+## 222.14 Corrective Wave Contract
 
-Status: `proposed-confirmation`.
+Status: `contract-ready`.
 
 Purpose:
 
 ```text
-Track P1 production-hardening work that should not be treated as already
-complete by the MVP slice labels.
+Freeze a bounded corrective wave for backend closure and runtime-evidence
+credibility without expanding into sandbox isolation or general production
+platform work.
 ```
 
-Candidate tasks:
-
-- [ ] DB-backed ToolRunner idempotency ledger and circuit breaker state.
-- [ ] Event sequence concurrency safety with unique conflict retry or run-level
-      sequence lock.
-- [ ] Context compaction that materializes reliable summaries of dropped
-      context, with source message/event ids and summary hash.
-- [ ] Explicit sandbox boundary docs and tests distinguishing policy-level
-      sandbox controls from OS/container isolation.
-- [ ] Optional OS/container/network/CPU/memory isolation only after a separate
-      dependency and architecture human gate.
-
-Required evidence after this slice is activated:
+Non-goals for every 222.14 slice:
 
 ```text
-artifacts/slices/222-ai-assistant-general-harness-mvp/222.14/preflight.md
-artifacts/slices/222-ai-assistant-general-harness-mvp/222.14/red.txt
-artifacts/slices/222-ai-assistant-general-harness-mvp/222.14/unit.txt
-artifacts/slices/222-ai-assistant-general-harness-mvp/222.14/integration.txt
-artifacts/slices/222-ai-assistant-general-harness-mvp/222.14/contract.txt
-artifacts/slices/222-ai-assistant-general-harness-mvp/222.14/e2e.txt
-artifacts/slices/222-ai-assistant-general-harness-mvp/222.14/browser-uat.md
-artifacts/slices/222-ai-assistant-general-harness-mvp/222.14/checker-round1.md
-artifacts/slices/222-ai-assistant-general-harness-mvp/222.14/reviewer-round1.md
+real OS/container sandbox isolation
+network/CPU/memory isolation
+multi-tenant infrastructure
+cross-machine HA worker takeover
+standalone worker service
+business adapter expansion
+large UI redesign
+production push/release
+```
+
+Contract tasks:
+
+- [x] Convert the old 222.14 backlog into ordered corrective slices.
+- [x] Define in-scope, out-of-scope, pass criteria, stop rules, and evidence
+      files for each corrective slice.
+- [x] Move durable ToolRunner idempotency/circuit breaker implementation into a
+      separate docs-only spec task.
+- [x] Keep sandbox isolation explicitly out of this wave.
+
+Required evidence for this contract slice:
+
+```text
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14-contract/preflight.md
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14-contract/checker-round1.md
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14-contract/reviewer-round1.md
+```
+
+## 222.14.1 Event Sequence Concurrency Safety
+
+Status: `pending`.
+
+Purpose:
+
+```text
+Make AI Assistant run event sequence allocation concurrency-safe so replay,
+snapshot, and Last-Event-ID recovery are trustworthy under concurrent writers.
+```
+
+Tasks:
+
+- [ ] RED: AI Assistant repository integration test concurrently appends N
+      events to the same run and fails while sequences are not exactly `1..N`.
+- [ ] RED: contract or E2E replay test proves `afterSequence` returns ordered,
+      gapless events after concurrent append.
+- [ ] Implement atomic per-run sequence assignment in the AI Assistant event
+      append path only.
+- [ ] Re-run SSE replay and snapshot recovery regressions.
+- [ ] Run Checker and Reviewer before commit.
+
+Evidence:
+
+```text
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.1/red-concurrency.txt
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.1/integration.txt
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.1/contract.txt
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.1/e2e.txt
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.1/checker-round1.md
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.1/reviewer-round1.md
+```
+
+Human gate:
+
+```text
+Stop if the safe fix requires a new migration, unique index, or schema contract
+change not already confirmed for this slice.
+```
+
+## 222.14.2 Aggregate Eval Runtime Evidence
+
+Status: `pending`.
+
+Purpose:
+
+```text
+Make aggregate_production_eval judge real runtime evidence rather than source
+strings or pseudo-evidence.
+```
+
+Tasks:
+
+- [ ] RED: eval test fails when only test-source strings contain requirement
+      keywords but runtime evidence is missing.
+- [ ] Define the runtime evidence input contract for events, snapshot, audit
+      export, Browser UAT artifact, and live gate artifact.
+- [ ] Replace source-string checks for token delta default, reconnect recovery,
+      tool failure self-correction, file workspace concurrency safety, and
+      context visibility.
+- [ ] Ensure failures name the missing runtime evidence.
+- [ ] Run Checker and Reviewer before commit.
+
+Evidence:
+
+```text
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.2/red.txt
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.2/unit.txt
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.2/eval.txt
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.2/runtime-evidence-fixture.json
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.2/checker-round1.md
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.2/reviewer-round1.md
+```
+
+## 222.14.3 Backend Autonomous Worker MVP
+
+Status: `pending`.
+
+Purpose:
+
+```text
+Let the AI Assistant backend consume queued runs after messages/async without
+requiring the frontend to call worker/process.
+```
+
+Tasks:
+
+- [ ] RED: contract/E2E test calls only `messages/async` and fails while the
+      run stays `QUEUED`.
+- [ ] RED: duplicate worker claim test fails until explicit `worker/process`
+      does not double-execute a run already consumed by the backend trigger.
+- [ ] Keep `/events/stream` subscribe/replay only.
+- [ ] Implement same-process module-local autonomous worker trigger.
+- [ ] Preserve checkpoint, lease, pause, resume, and cancel behavior.
+- [ ] Run frontend regression only if the existing frontend call path is
+      changed.
+- [ ] Run Browser/API UAT showing queued-to-terminal without a frontend
+      worker/process call.
+- [ ] Run Checker and Reviewer before commit.
+
+Evidence:
+
+```text
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.3/red-async-worker.txt
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.3/red-duplicate-claim.txt
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.3/contract.txt
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.3/e2e.txt
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.3/browser-uat.md
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.3/checker-round1.md
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.3/reviewer-round1.md
+```
+
+Human gate:
+
+```text
+Stop if the fix requires a broker, daemon, separate worker service, new
+dependency, cross-machine takeover, or production deployment behavior.
+```
+
+## 222.14.4 Live Gate Rerun
+
+Status: `env-gated`.
+
+Purpose:
+
+```text
+Rerun the existing 222.11 live OpenRouter qwen/qwen3.6-27b UAT against the
+current code and update evidence.
+```
+
+Tasks:
+
+- [ ] Check `HIFY_RUN_LIVE_AI_ASSISTANT=1` and `OPENROUTER_API_KEY`.
+- [ ] If missing, write env-blocked/waiting-human artifact and do not mark PASS.
+- [ ] If present, run the 222.11 live UAT without broadening provider/model
+      scope.
+- [ ] Cover pure text streaming, mock aviation realistic cases, approval path,
+      audit redaction, context/token/cost budget, snapshot/SSE resume.
+- [ ] Run Checker and Reviewer before commit.
+
+Evidence:
+
+```text
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.4/live-gate.txt
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.4/live-gate.md
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.4/audit-export.json
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.4/browser-uat.md
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.4/checker-round1.md
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.4/reviewer-round1.md
+```
+
+## 222.14.5 Durable Idempotency And Circuit Breaker Spec
+
+Status: `pending-docs-only`.
+
+Purpose:
+
+```text
+Create a separate implementable spec for durable ToolRunner idempotency ledger
+and circuit breaker semantics without implementing code in this wave.
+```
+
+Tasks:
+
+- [ ] Create a new spec directory with `spec.md`, `plan.md`, and `tasks.md`.
+- [ ] Define ledger granularity and idempotency key generation.
+- [ ] Define timeout `UNKNOWN` lifecycle, retention, and release authority.
+- [ ] Define fallback-primary operation identity relation.
+- [ ] Define read-tool vs side-effect-tool ledger differences.
+- [ ] Define session/run-level vs operation-level idempotency.
+- [ ] Define durable circuit breaker state, reset conditions, and audit
+      evidence.
+- [ ] Run docs Checker and Reviewer before commit.
+
+Evidence:
+
+```text
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.5/spec-check.md
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.5/checker-round1.md
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.5/reviewer-round1.md
 ```

@@ -60,7 +60,12 @@ conversation
 222.11 Live LLM Real-Case UAT: complete
 222.12 Real-Time Streaming And Durable Worker Correction: complete
 222.13 Tool Observation Self-Correction Correction: complete
-222.14 Production Hardening Backlog: proposed-confirmation
+222.14 Corrective Wave Contract: contract-ready
+222.14.1 Event Sequence Concurrency Safety: pending
+222.14.2 Aggregate Eval Runtime Evidence: pending
+222.14.3 Backend Autonomous Worker MVP: pending
+222.14.4 Live Gate Rerun: env-gated
+222.14.5 Durable Idempotency And Circuit Breaker Spec: pending-docs-only
 ```
 
 ## Product Boundary
@@ -188,10 +193,15 @@ P0 corrective blockers:
 222.13 Tool Observation Self-Correction Correction
 ```
 
-P1 production-hardening backlog:
+P1/P2 corrective wave:
 
 ```text
-222.14 Production Hardening Backlog
+222.14 Corrective Wave Contract
+222.14.1 Event Sequence Concurrency Safety
+222.14.2 Aggregate Eval Runtime Evidence
+222.14.3 Backend Autonomous Worker MVP
+222.14.4 Live Gate Rerun
+222.14.5 Durable Idempotency And Circuit Breaker Spec
 ```
 
 `222.12` must close the structural risk where `/runs/{id}/events/stream`
@@ -214,19 +224,96 @@ budget. A tool failure may finalize the run only after the configured
 self-correction budget or an unrecoverable policy/sandbox/approval condition is
 reached.
 
-`222.14` tracks production-hardening gaps that are not required to start the P0
-runtime correction but must be explicit before production claims:
+`222.14` tracks a corrective wave for remaining backend closure and evidence
+credibility gaps. It is intentionally narrower than a general production
+hardening program.
+
+Current gap facts:
 
 ```text
-DB-backed ToolRunner idempotency ledger and circuit breaker state
-event sequence concurrency safety with unique conflict retry or run-level lock
-context compaction that materializes reliable summaries of dropped context
-sandbox boundary clarity between policy-level controls and OS/container isolation
+AI Assistant run execution can still depend on an explicit worker/process call
+AI Assistant event sequence allocation uses max(sequence)+1 and lacks concurrent writer proof
+aggregate production eval still accepts artifact/source-string evidence for core requirements
+222.11 live gate exists but must be rerunnable and env-blocked when live prerequisites are missing
+ToolRunner idempotency ledger and circuit breaker remain process-local and need a separate spec
 ```
 
-OS-level sandboxing, network isolation, CPU/memory enforcement, or new external
-runtime dependencies remain human-gated and must not be implied by the current
-policy-level sandbox.
+In scope for this corrective wave:
+
+```text
+AI Assistant event append concurrency safety
+runtime-evidence-based aggregate eval
+same-process autonomous backend worker MVP for queued AI Assistant runs
+222.11 live gate rerun evidence when provider key and live switch are present
+new docs-only spec for durable ToolRunner idempotency ledger and circuit breaker semantics
+```
+
+Out of scope for this corrective wave:
+
+```text
+OS/container sandbox isolation
+network isolation, CPU limit, memory limit, seccomp, firejail, or container runtime work
+multi-tenant infrastructure
+cross-machine or HA worker takeover
+independent worker service or full job platform
+business adapter expansion or real civil-aviation adapter
+large UI redesign
+production deployment, push, or release actions
+```
+
+Sandbox hardening remains explicitly out of scope here. The current sandbox is
+policy-level path, command, environment, and redaction control; this wave must
+not claim OS/session isolation.
+
+222.14.1 Event Sequence Concurrency Safety:
+
+```text
+Goal: events within the same run replay as a strict 1..N sequence under concurrent append.
+Include: app/modules/ai_assistant repository append path, AI Assistant tests, SSE replay/snapshot regression.
+Exclude: global ordering across runs, runtime v2/customer assistant/chatflow event systems, distributed queue.
+Pass: concurrent append test proves no duplicate sequence, no gaps, and replay afterSequence remains ordered.
+Evidence: red/integration/contract/e2e artifacts under artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.1/.
+```
+
+222.14.2 Aggregate Eval Runtime Evidence:
+
+```text
+Goal: aggregate_production_eval judges real runtime artifacts, not test-source strings.
+Include: AI Assistant aggregate eval logic, evidence input format, tests, and fixture artifacts.
+Exclude: company-wide eval platform, auto red-team suite, unrelated evaluation modules.
+Pass: token delta default, reconnect recovery, tool self-correction, file workspace concurrency safety, and context visibility are proven from events/snapshot/audit/UAT/live artifacts; missing evidence produces FAIL with traceable reasons.
+Evidence: red/unit/eval artifacts under artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.2/.
+```
+
+222.14.3 Backend Autonomous Worker MVP:
+
+```text
+Goal: messages/async can be consumed by the AI Assistant backend without the frontend calling worker/process.
+Include: same-process automatic worker trigger, existing claim/lease/checkpoint/cancel/resume semantics, idempotent duplicate worker/process behavior.
+Exclude: cross-machine HA takeover, standalone worker service, full durable scheduler platform, broker dependency.
+Pass: API/E2E tests prove messages/async alone reaches RUNNING then terminal; events/stream remains subscribe/replay only; duplicate claims do not double-execute; pause/resume/cancel do not regress.
+Evidence: red/contract/e2e/uat artifacts under artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.3/.
+```
+
+222.14.4 Live Gate Rerun:
+
+```text
+Goal: rerun 222.11 against the current code with real OpenRouter credentials when available.
+Include: existing qwen/qwen3.6-27b live UAT, mock aviation realistic cases, approval path, audit redaction, context/token/cost budget, snapshot/SSE resume.
+Exclude: default CI live runs, new provider/model expansion, real airline systems.
+Pass: HIFY_RUN_LIVE_AI_ASSISTANT=1 and OPENROUTER_API_KEY produce updated PASS artifacts, or missing key/network/quota/model availability records env-blocked/waiting-human without passing.
+Evidence: live gate artifacts under artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.4/.
+```
+
+222.14.5 Durable Idempotency And Circuit Breaker Spec:
+
+```text
+Goal: create a separate implementable spec for persisted ToolRunner idempotency ledger and circuit breaker semantics.
+Include: ledger granularity, key generation, UNKNOWN lifecycle, fallback-primary relation, side-effect vs read tools, session/run vs operation idempotency, circuit breaker persistence.
+Exclude: code implementation in this wave, sandbox/HA/multi-tenant work.
+Pass: new spec/plan/tasks answer key generation, timeout unknown retention, unknown release authority, fallback operation_id policy, and durable circuit breaker state.
+Evidence: docs/checker/reviewer artifacts under artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.5/.
+```
 
 ## Planning Model
 

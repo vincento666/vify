@@ -3,16 +3,16 @@
 ## Current
 
 - active spec: `222-ai-assistant-general-harness-mvp`
-- current slice: `222.13 Tool Observation Self-Correction Correction`
-- frozen scope: recoverable tool observations feed repair/replan; unrecoverable gates remain terminal
-- current checklist item: commit slice
-- current status: `222.13 complete, Checker PASS, Reviewer PASS, commit pending`
-- human decision: option `A`, use `codex/runtime-v2-production-upgrade` as Spec 222 continuation base
+- current slice: `222.14 Corrective Wave Contract`
+- frozen scope: docs-only corrective contract for five remaining gaps; no implementation
+- current checklist item: commit contract slice
+- current status: `222.14 contract-ready, Checker PASS, Reviewer PASS, commit pending`
+- human decision: user requested 222.14 corrective wave contract construction and excluded sandbox work
 - worktree: `/Users/vincento/work/develop/hify`
-- branch: `codex/spec-222-13-tool-self-correction`
-- base: `a57cb783`
+- branch: `codex/spec-222-14-corrective-contract`
+- base: `4a987d67`
 - merge target: `codex/runtime-v2-production-upgrade`
-- evidence root: `artifacts/slices/222-ai-assistant-general-harness-mvp/222.13/`
+- evidence root: `artifacts/slices/222-ai-assistant-general-harness-mvp/222.14-contract/`
 - waiting human: none
 
 ## Evidence So Far
@@ -40,6 +40,17 @@ Static: ruff.txt, py_compile.txt, diff-check.txt
 Audit/UAT: audit-export.json, uat-api-evidence.json, browser-uat.md,
 browser-uat-dom.json, screenshots/browser-uat-self-correction.png
 Review: checker-round1.md PASS, reviewer-round1.md PASS
+```
+
+222.14 contract scope:
+
+```text
+222.14.1 Event Sequence Concurrency Safety
+222.14.2 Aggregate Eval Runtime Evidence
+222.14.3 Backend Autonomous Worker MVP
+222.14.4 Live Gate Rerun
+222.14.5 Durable Idempotency And Circuit Breaker Spec
+Evidence: preflight.md, checker-round1.md PASS, reviewer-round1.md PASS
 ```
 
 ## Spec 222 Closed-Loop Preflight Stop
@@ -108,10 +119,9 @@ Recommended options:
 
 ## Next Action
 
-Finish 222.13 Checker and Reviewer, then commit the slice on
-`codex/spec-222-13-tool-self-correction`. After that, `222.14 Production
-Hardening Backlog` remains `proposed-confirmation` and should not start without
-human confirmation.
+Finish 222.14 contract Checker and Reviewer, then commit the docs-only contract
+slice on `codex/spec-222-14-corrective-contract`. Next implementation slice is
+`222.14.1 Event Sequence Concurrency Safety`.
 
 ## Reviewer Findings
 

@@ -345,29 +345,102 @@ Required automated evidence:
 - browser UAT showing a failed tool, repair/replan progress, and final result or
   structured terminal failure.
 
-### 222.14 Production Hardening Backlog
+### 222.14 Corrective Wave Contract
 
-Track P1 hardening discovered during the 2026-07-06 gap review.
+Deliver a bounded corrective wave for backend closure and evidence credibility.
+Do not fold sandbox isolation, HA workers, multi-tenancy, business adapters, or
+durable ToolRunner idempotency implementation into this wave.
 
-These items should not be silently claimed by earlier MVP slices:
+Slice order:
 
-- ToolRunner idempotency ledger and circuit breaker state are currently
-  process-memory concerns and need DB-backed semantics for multi-worker or
-  restart safety;
-- event sequence generation must be concurrency-safe under multiple writers,
-  using a unique constraint plus retry or an explicit run-level sequence lock;
-- context compaction must produce reliable summaries of dropped context, not
-  only selected/dropped layer accounting;
-- sandbox guarantees must distinguish policy-level controls from OS/container
-  network, CPU, memory, and filesystem isolation.
+1. `222.14.1 Event Sequence Concurrency Safety`
+2. `222.14.2 Aggregate Eval Runtime Evidence`
+3. `222.14.3 Backend Autonomous Worker MVP`
+4. `222.14.4 Live Gate Rerun`
+5. `222.14.5 Durable Idempotency And Circuit Breaker Spec`
+
+#### 222.14.1 Event Sequence Concurrency Safety
+
+Implementation direction:
+
+- add an AI Assistant-specific concurrent append regression before changing the
+  repository;
+- make per-run event sequence assignment atomic under MySQL8 concurrent writers,
+  either by a run-level lock/update strategy or by a unique sequence constraint
+  with retry;
+- preserve `afterSequence`, snapshot, and SSE replay ordering;
+- do not change runtime v2, customer assistant, or chatflow event systems.
+
+Human gate:
+
+- stop if the chosen fix needs a database migration or new schema index that is
+  not already present and confirmed for this corrective wave.
+
+#### 222.14.2 Aggregate Eval Runtime Evidence
+
+Implementation direction:
+
+- replace source-code-string checks with an explicit runtime evidence reader;
+- accept evidence from run events, run snapshot, audit export, Browser UAT
+  artifact, and live gate artifact;
+- make each requirement fail with a missing-evidence reason when runtime
+  evidence is absent;
+- cover at least token delta default, reconnect recovery, tool failure
+  self-correction, file workspace concurrency safety, and context visibility.
+
+Non-goal:
+
+- do not rebuild the company-wide evaluation framework.
+
+#### 222.14.3 Backend Autonomous Worker MVP
+
+Implementation direction:
+
+- keep the MVP same-process and module-local;
+- after `messages/async`, trigger backend consumption of the queued run without
+  depending on the frontend to call `worker/process`;
+- keep `/events/stream` as subscribe/replay only;
+- make explicit `worker/process` idempotent so existing frontend behavior does
+  not double-execute the run;
+- preserve current lease, checkpoint, pause, resume, and cancel semantics.
+
+Non-goals:
+
+- no standalone worker service;
+- no cross-machine HA takeover;
+- no broker or distributed scheduler.
+
+#### 222.14.4 Live Gate Rerun
+
+Implementation direction:
+
+- reuse the existing 222.11 live UAT target and OpenRouter
+  `qwen/qwen3.6-27b`;
+- require `HIFY_RUN_LIVE_AI_ASSISTANT=1` and `OPENROUTER_API_KEY`;
+- on missing credentials, quota, network, or model availability, produce an
+  `env-blocked` or `waiting-human` artifact rather than PASS;
+- update only live gate artifacts and evidence references, not provider/model
+  scope.
+
+#### 222.14.5 Durable Idempotency And Circuit Breaker Spec
+
+Implementation direction:
+
+- create a separate spec directory with `spec.md`, `plan.md`, and `tasks.md`;
+- define durable ToolRunner ledger and circuit breaker semantics before code;
+- answer key generation, UNKNOWN retention, release authority, fallback
+  operation identity, read-vs-side-effect differences, and persistent circuit
+  state;
+- do not implement code in this corrective wave.
 
 Human gates:
 
 - database schema or migration changes;
 - new worker, broker, container, seccomp, firejail, or OS sandbox dependency;
 - production runtime deployment behavior;
-- any change that turns simulated or policy-only sandboxing into a claimed hard
-  isolation boundary.
+- any claim that policy-level sandbox controls are OS/container isolation;
+- external live-provider execution when credentials, quota, or budget are
+  missing.
 
 ## Persistence Guidance
 
