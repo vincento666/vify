@@ -1,31 +1,28 @@
 # Loop Verifiers
 
-These commands verify Spec 222 slice `222.14.3`.
+These commands verify Spec 222 slice `222.14.4`.
 
 ## RED
 
 ```bash
-/opt/homebrew/bin/rtk uv run pytest tests/contract/test_ai_assistant_session_runtime_api.py::AiAssistantSessionRuntimeApiContractTest::test_async_message_autonomously_runs_without_worker_process_api -q
+HIFY_RUN_LIVE_AI_ASSISTANT=1 OPENROUTER_API_KEY=[REDACTED] /opt/homebrew/bin/rtk uv run pytest tests/e2e/test_ai_assistant_live_qwen36_real_case_uat.py -q -s
 ```
 
 Expected RED before implementation:
 
 ```text
-messages/async leaves the run QUEUED without backend autonomous worker consumption.
+This slice is a live rerun gate; missing key/network/quota/model availability must be recorded as blocked, not PASS.
 ```
 
 ## Focused Gates
 
 ```bash
-/opt/homebrew/bin/rtk uv run pytest tests/contract/test_ai_assistant_session_runtime_api.py -q
-/opt/homebrew/bin/rtk uv run pytest tests/e2e/test_ai_assistant_session_runtime_e2e.py tests/e2e/test_ai_assistant_streaming_e2e.py tests/e2e/test_ai_assistant_memory_context_e2e.py -q
+HIFY_RUN_LIVE_AI_ASSISTANT=1 OPENROUTER_API_KEY=[REDACTED] /opt/homebrew/bin/rtk uv run pytest tests/e2e/test_ai_assistant_live_qwen36_real_case_uat.py -q -s
 ```
 
 ## Static And Diff
 
 ```bash
-/opt/homebrew/bin/rtk uv run ruff check app/modules/ai_assistant/web/router.py tests/contract/test_ai_assistant_session_runtime_api.py tests/e2e/test_ai_assistant_session_runtime_e2e.py tests/e2e/test_ai_assistant_streaming_e2e.py
-/opt/homebrew/bin/rtk uv run python -m py_compile app/modules/ai_assistant/web/router.py tests/contract/test_ai_assistant_session_runtime_api.py tests/e2e/test_ai_assistant_session_runtime_e2e.py tests/e2e/test_ai_assistant_streaming_e2e.py
 /opt/homebrew/bin/rtk git diff --check
 ```
 
@@ -34,18 +31,18 @@ messages/async leaves the run QUEUED without backend autonomous worker consumpti
 Checker must verify:
 
 ```text
-RED proves messages/async alone previously did not close the backend loop.
-Contract proves messages/async reaches terminal without worker/process.
-Duplicate worker/process call does not double-execute the run.
-SSE stream tests still pass and do not start execution.
-No broker, dependency, schema migration, or standalone worker service was introduced.
+Live gate used qwen/qwen3.6-27b through OpenRouter.
+Pure text case produced raw stream chunks before model completion.
+Mock aviation refund/change/baggage/flight disruption cases completed.
+Approval path, audit redaction, token/cost/context budget were validated.
+Artifacts do not contain the API key.
 ```
 
 Reviewer must verify:
 
 ```text
-Diff scope is limited to AI Assistant router, session-runtime tests, spec/loop updates.
-The worker trigger is module-local, in-process, and guarded by runId in-flight de-dupe plus existing claim.
-No tests or gates are weakened.
-No secrets or production behavior are introduced.
+Diff scope is limited to spec/loop state because this slice is a live rerun.
+No provider/model expansion, real airline integration, or code change was introduced.
+No secrets are committed or copied into artifacts.
+The artifact states PASS only because the real live gate passed.
 ```

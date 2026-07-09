@@ -834,7 +834,7 @@ dependency, cross-machine takeover, or production deployment behavior.
 
 ## 222.14.4 Live Gate Rerun
 
-Status: `env-gated`.
+Status: `complete`.
 
 Purpose:
 
@@ -845,13 +845,13 @@ current code and update evidence.
 
 Tasks:
 
-- [ ] Check `HIFY_RUN_LIVE_AI_ASSISTANT=1` and `OPENROUTER_API_KEY`.
-- [ ] If missing, write env-blocked/waiting-human artifact and do not mark PASS.
-- [ ] If present, run the 222.11 live UAT without broadening provider/model
+- [x] Check `HIFY_RUN_LIVE_AI_ASSISTANT=1` and `OPENROUTER_API_KEY`.
+- [x] If missing, write env-blocked/waiting-human artifact and do not mark PASS.
+- [x] If present, run the 222.11 live UAT without broadening provider/model
       scope.
-- [ ] Cover pure text streaming, mock aviation realistic cases, approval path,
+- [x] Cover pure text streaming, mock aviation realistic cases, approval path,
       audit redaction, context/token/cost budget, snapshot/SSE resume.
-- [ ] Run Checker and Reviewer before commit.
+- [x] Run Checker and Reviewer before commit.
 
 Evidence:
 
