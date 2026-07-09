@@ -102,6 +102,7 @@ def test_aggregate_production_eval_assembles_real_artifact_evidence(tmp_path: Pa
     spec_dir = workspace_root / "specs" / "222-ai-assistant-general-harness-mvp"
     _write_realistic_artifacts(artifact_root)
     _write_realistic_sources(workspace_root)
+    _write_runtime_evidence(artifact_root)
     _write_complete_docs(spec_dir)
     _write_complete_audit_export(artifact_root)
 
@@ -136,6 +137,7 @@ def test_aggregate_production_eval_fails_without_real_audit_export_artifact(tmp_
     spec_dir = workspace_root / "specs" / "222-ai-assistant-general-harness-mvp"
     _write_realistic_artifacts(artifact_root)
     _write_realistic_sources(workspace_root)
+    _write_runtime_evidence(artifact_root)
     _write_complete_docs(spec_dir)
 
     evidence = build_aggregate_evidence_from_artifacts(
@@ -151,12 +153,41 @@ def test_aggregate_production_eval_fails_without_real_audit_export_artifact(tmp_
     assert "missing_required_evidence" in complete_audit["reasons"]
 
 
+def test_aggregate_production_eval_rejects_source_only_runtime_proofs(tmp_path: Path) -> None:
+    artifact_root = tmp_path / "artifacts" / "222.10"
+    workspace_root = tmp_path / "workspace"
+    spec_dir = workspace_root / "specs" / "222-ai-assistant-general-harness-mvp"
+    _write_realistic_artifacts(artifact_root)
+    _write_realistic_sources(workspace_root)
+    _write_complete_docs(spec_dir)
+    _write_complete_audit_export(artifact_root)
+
+    evidence = build_aggregate_evidence_from_artifacts(
+        artifact_root=artifact_root,
+        workspace_root=workspace_root,
+        spec_dir=spec_dir,
+    )
+    report = build_aggregate_production_report(evidence, artifact_root=artifact_root)
+    checks = {check["id"]: check for check in report["checks"]}
+
+    for requirement_id in [
+        "token_delta_default",
+        "refresh_reconnect_recovery",
+        "tool_failure_self_correction",
+        "file_workspace_concurrency_safety",
+        "context_usage_and_compaction_visibility",
+    ]:
+        assert checks[requirement_id]["passed"] is False
+        assert "missing_runtime_evidence" in checks[requirement_id]["reasons"]
+
+
 def test_aggregate_production_eval_fails_when_docs_gate_is_open(tmp_path: Path) -> None:
     artifact_root = tmp_path / "artifacts" / "222.10"
     workspace_root = tmp_path / "workspace"
     spec_dir = workspace_root / "specs" / "222-ai-assistant-general-harness-mvp"
     _write_realistic_artifacts(artifact_root)
     _write_realistic_sources(workspace_root)
+    _write_runtime_evidence(artifact_root)
     _write_incomplete_docs(spec_dir)
     _write_complete_audit_export(artifact_root)
 
@@ -178,6 +209,7 @@ def test_aggregate_production_eval_writes_required_markdown_report(tmp_path: Pat
     spec_dir = workspace_root / "specs" / "222-ai-assistant-general-harness-mvp"
     _write_realistic_artifacts(artifact_root)
     _write_realistic_sources(workspace_root)
+    _write_runtime_evidence(artifact_root)
     _write_complete_docs(spec_dir)
     _write_complete_audit_export(artifact_root)
 
@@ -434,6 +466,71 @@ def _write_realistic_sources(workspace_root: Path) -> None:
         file_path = workspace_root / path
         file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_text(content, encoding="utf-8")
+
+
+def _write_runtime_evidence(artifact_root: Path) -> None:
+    runtime_evidence = {
+        "version": 1,
+        "source": "runtime-evidence-fixture",
+        "requirements": {
+            "token_delta_default": [
+                {
+                    "status": "PASS",
+                    "events": ["text.delta", "run.completed"],
+                    "assertions": {"deltaBeforeCompletion": True},
+                }
+            ],
+            "refresh_reconnect_recovery": [
+                {
+                    "status": "PASS",
+                    "events": ["heartbeat", "run.snapshot"],
+                    "assertions": {
+                        "lastEventId": True,
+                        "afterSequence": True,
+                        "restoresPlanProgress": True,
+                        "restoresEmittedTokens": True,
+                        "restoresPendingApprovals": True,
+                        "restoresToolState": True,
+                    },
+                }
+            ],
+            "tool_failure_self_correction": [
+                {
+                    "status": "PASS",
+                    "events": ["tool.retry_scheduled", "tool.error_observation", "plan.revised"],
+                    "assertions": {
+                        "timeoutRetry": True,
+                        "fiveHundredRetry": True,
+                        "rateLimitBackoff": True,
+                    },
+                }
+            ],
+            "file_workspace_concurrency_safety": [
+                {
+                    "status": "PASS",
+                    "events": ["file.edit_preview", "resource_lock.acquired"],
+                    "assertions": {
+                        "concurrentWritesBlocked": True,
+                        "failedEditKeepsOriginal": True,
+                    },
+                }
+            ],
+            "context_usage_and_compaction_visibility": [
+                {
+                    "status": "PASS",
+                    "events": ["context.budget_estimated", "context.compaction_completed"],
+                    "assertions": {
+                        "usagePercentVisible": True,
+                        "compactionRatioVisible": True,
+                    },
+                }
+            ],
+        },
+    }
+    (artifact_root / "runtime-evidence-fixture.json").write_text(
+        json.dumps(runtime_evidence),
+        encoding="utf-8",
+    )
 
 
 def _write_complete_docs(spec_dir: Path) -> None:

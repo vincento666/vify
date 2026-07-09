@@ -62,7 +62,7 @@ conversation
 222.13 Tool Observation Self-Correction Correction: complete
 222.14 Corrective Wave Contract: contract-ready
 222.14.1 Event Sequence Concurrency Safety: complete
-222.14.2 Aggregate Eval Runtime Evidence: pending
+222.14.2 Aggregate Eval Runtime Evidence: complete
 222.14.3 Backend Autonomous Worker MVP: pending
 222.14.4 Live Gate Rerun: env-gated
 222.14.5 Durable Idempotency And Circuit Breaker Spec: pending-docs-only

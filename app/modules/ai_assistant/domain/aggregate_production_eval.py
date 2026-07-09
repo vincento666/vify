@@ -33,6 +33,16 @@ REQUIRED_PROMPT_LAYERS = {
 
 MOCK_AVIATION_SCENARIOS = {"refund", "change_ticket", "baggage", "flight_disruption"}
 
+RUNTIME_REQUIRED_REQUIREMENTS = {
+    "token_delta_default",
+    "refresh_reconnect_recovery",
+    "tool_failure_self_correction",
+    "file_workspace_concurrency_safety",
+    "context_usage_and_compaction_visibility",
+}
+
+RUNTIME_EVIDENCE_GLOBS = ("runtime-evidence*.json", "*-runtime-evidence.json")
+
 AGGREGATE_ACCEPTANCE_REQUIREMENTS = [
     {
         "id": "token_delta_default",
@@ -214,6 +224,8 @@ def _build_check(requirement: dict[str, Any], entries: list[dict[str, Any]], art
     missing_artifacts = _missing_artifacts(artifacts, artifact_root)
     if not passing_entries:
         reasons.append("missing_required_evidence")
+        if requirement_id in RUNTIME_REQUIRED_REQUIREMENTS:
+            reasons.append("missing_runtime_evidence")
     if missing_events:
         reasons.append("missing_required_events")
     if missing_artifacts:
@@ -233,19 +245,7 @@ def _build_check(requirement: dict[str, Any], entries: list[dict[str, Any]], art
 
 
 def _token_delta_evidence(artifact_root: Path, workspace_root: Path) -> list[dict[str, Any]]:
-    if not _gate_file_passes(artifact_root / "contract.txt", ["passed"]) or not _source_has(
-        workspace_root,
-        "tests/contract/test_ai_assistant_streaming_api.py",
-        ["text.delta", "model.call_completed"],
-    ):
-        return []
-    return [
-        _entry(
-            "contract.txt",
-            events=["text.delta", "run.completed"],
-            assertions={"deltaBeforeCompletion": True},
-        )
-    ]
+    return _runtime_requirement_evidence(artifact_root, "token_delta_default")
 
 
 def _fallback_evidence(artifact_root: Path, workspace_root: Path) -> list[dict[str, Any]]:
@@ -265,77 +265,15 @@ def _fallback_evidence(artifact_root: Path, workspace_root: Path) -> list[dict[s
 
 
 def _reconnect_evidence(artifact_root: Path, workspace_root: Path) -> list[dict[str, Any]]:
-    source_ok = _source_has(
-        workspace_root,
-        "tests/contract/test_ai_assistant_streaming_api.py",
-        ["Last-Event-ID", "afterSequence", "heartbeat"],
-    ) and _source_has(
-        workspace_root,
-        "tests/contract/test_ai_assistant_session_runtime_api.py",
-        [
-            "checkpoint",
-            "approvalQueue",
-            "WAITING_APPROVAL",
-            "write_workspace_file",
-        ],
-    )
-    if not _gate_file_passes(artifact_root / "contract.txt", ["passed"]) or not source_ok:
-        return []
-    return [
-        _entry(
-            "contract.txt",
-            events=["heartbeat", "run.snapshot"],
-            assertions={
-                "lastEventId": True,
-                "afterSequence": True,
-                "restoresPlanProgress": True,
-                "restoresEmittedTokens": True,
-                "restoresPendingApprovals": True,
-                "restoresToolState": True,
-            },
-        )
-    ]
+    return _runtime_requirement_evidence(artifact_root, "refresh_reconnect_recovery")
 
 
 def _tool_self_correction_evidence(artifact_root: Path, workspace_root: Path) -> list[dict[str, Any]]:
-    source_ok = _source_has(
-        workspace_root,
-        "tests/unit/ai_assistant/test_tool_runtime.py",
-        ["timeout", "tool.retry_scheduled", "tool.error_observation", "rate limit"],
-    ) and _source_has(
-        workspace_root,
-        "tests/contract/test_ai_assistant_tool_runtime_api.py",
-        ["tool.error_observation", "plan.revised", "simulated 5xx"],
-    )
-    if not (
-        _gate_file_passes(artifact_root / "unit.txt", ["passed"])
-        and _gate_file_passes(artifact_root / "contract.txt", ["passed"])
-        and source_ok
-    ):
-        return []
-    return [
-        _entry(
-            "unit.txt",
-            events=["tool.retry_scheduled", "tool.error_observation", "plan.revised"],
-            assertions={"timeoutRetry": True, "fiveHundredRetry": True, "rateLimitBackoff": True},
-        )
-    ]
+    return _runtime_requirement_evidence(artifact_root, "tool_failure_self_correction")
 
 
 def _file_workspace_evidence(artifact_root: Path, workspace_root: Path) -> list[dict[str, Any]]:
-    if not _gate_file_passes(artifact_root / "unit.txt", ["passed"]) or not _source_has(
-        workspace_root,
-        "tests/unit/ai_assistant/test_file_workspace.py",
-        ["ThreadPoolExecutor", "PRECONDITION_FAILED", "rollbackSnapshot", "diffPreview"],
-    ):
-        return []
-    return [
-        _entry(
-            "unit.txt",
-            events=["file.edit_preview", "resource_lock.acquired"],
-            assertions={"concurrentWritesBlocked": True, "failedEditKeepsOriginal": True},
-        )
-    ]
+    return _runtime_requirement_evidence(artifact_root, "file_workspace_concurrency_safety")
 
 
 def _security_evidence(artifact_root: Path, workspace_root: Path) -> list[dict[str, Any]]:
@@ -377,24 +315,7 @@ def _security_evidence(artifact_root: Path, workspace_root: Path) -> list[dict[s
 
 
 def _context_visibility_evidence(artifact_root: Path, workspace_root: Path) -> list[dict[str, Any]]:
-    source_ok = _source_has(
-        workspace_root,
-        "tests/unit/ai_assistant/test_context_budget.py",
-        ["usagePercent", "rawUsagePercent", "savedPercent"],
-    )
-    uat_ok = _gate_file_passes(
-        artifact_root / "uat.md",
-        ["AI Assistant shell", "Plan/task", "Context-budget", "PASS"],
-    )
-    if not (_gate_file_passes(artifact_root / "unit.txt", ["passed"]) and source_ok and uat_ok):
-        return []
-    return [
-        _entry(
-            "uat.md",
-            events=["context.budget_estimated", "context.compaction_completed"],
-            assertions={"usagePercentVisible": True, "compactionRatioVisible": True},
-        )
-    ]
+    return _runtime_requirement_evidence(artifact_root, "context_usage_and_compaction_visibility")
 
 
 def _prompt_layer_evidence(artifact_root: Path, workspace_root: Path) -> list[dict[str, Any]]:
@@ -457,6 +378,69 @@ def _mock_adapter_evidence(artifact_root: Path, workspace_root: Path) -> list[di
             },
         )
     ]
+
+
+def _runtime_requirement_evidence(artifact_root: Path, requirement_id: str) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    for path, payload in _runtime_evidence_payloads(artifact_root):
+        raw_entries = _runtime_requirement_entries(payload, requirement_id)
+        for raw_entry in raw_entries:
+            entry = _normalize_runtime_entry(raw_entry, artifact_root=artifact_root, path=path)
+            if entry:
+                entries.append(entry)
+    return entries
+
+
+def _runtime_evidence_payloads(artifact_root: Path) -> list[tuple[Path, dict[str, Any]]]:
+    paths: list[Path] = []
+    for pattern in RUNTIME_EVIDENCE_GLOBS:
+        paths.extend(sorted(artifact_root.glob(pattern)))
+    payloads: list[tuple[Path, dict[str, Any]]] = []
+    for path in dict.fromkeys(paths):
+        if not path.is_file():
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            payloads.append((path, payload))
+    return payloads
+
+
+def _runtime_requirement_entries(payload: dict[str, Any], requirement_id: str) -> list[Any]:
+    candidates = [
+        _dict(payload.get("requirements")).get(requirement_id),
+        payload.get(requirement_id),
+    ]
+    entries: list[Any] = []
+    for candidate in candidates:
+        if isinstance(candidate, list):
+            entries.extend(candidate)
+        elif isinstance(candidate, dict):
+            entries.append(candidate)
+    return entries
+
+
+def _normalize_runtime_entry(
+    raw_entry: Any,
+    *,
+    artifact_root: Path,
+    path: Path,
+) -> dict[str, Any] | None:
+    if not isinstance(raw_entry, dict):
+        return None
+    artifact = str(raw_entry.get("artifact") or path.relative_to(artifact_root))
+    status = str(raw_entry.get("status") or ("PASS" if raw_entry.get("passed") else "")).upper()
+    if status != "PASS":
+        return None
+    assertions = _dict(raw_entry.get("assertions"))
+    return {
+        "status": "PASS",
+        "artifact": artifact,
+        "events": list(_string_set(raw_entry.get("events"))),
+        "assertions": assertions,
+    }
 
 
 def _complete_audit_evidence(artifact_root: Path) -> list[dict[str, Any]]:

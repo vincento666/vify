@@ -749,7 +749,7 @@ change not already confirmed for this slice.
 
 ## 222.14.2 Aggregate Eval Runtime Evidence
 
-Status: `pending`.
+Status: `complete`.
 
 Purpose:
 
@@ -760,15 +760,15 @@ strings or pseudo-evidence.
 
 Tasks:
 
-- [ ] RED: eval test fails when only test-source strings contain requirement
+- [x] RED: eval test fails when only test-source strings contain requirement
       keywords but runtime evidence is missing.
-- [ ] Define the runtime evidence input contract for events, snapshot, audit
+- [x] Define the runtime evidence input contract for events, snapshot, audit
       export, Browser UAT artifact, and live gate artifact.
-- [ ] Replace source-string checks for token delta default, reconnect recovery,
+- [x] Replace source-string checks for token delta default, reconnect recovery,
       tool failure self-correction, file workspace concurrency safety, and
       context visibility.
-- [ ] Ensure failures name the missing runtime evidence.
-- [ ] Run Checker and Reviewer before commit.
+- [x] Ensure failures name the missing runtime evidence.
+- [x] Run Checker and Reviewer before commit.
 
 Evidence:
 
@@ -777,6 +777,9 @@ artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.2/red.txt
 artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.2/unit.txt
 artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.2/eval.txt
 artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.2/runtime-evidence-fixture.json
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.2/ruff.txt
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.2/py_compile.txt
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.2/diff-check.txt
 artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.2/checker-round1.md
 artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.2/reviewer-round1.md
 ```
