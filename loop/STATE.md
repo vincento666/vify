@@ -3,16 +3,16 @@
 ## Current
 
 - active spec: `222-ai-assistant-general-harness-mvp`
-- current slice: `222.14.4 Live Gate Rerun`
-- frozen scope: existing qwen/qwen3.6-27b OpenRouter live UAT rerun only
+- current slice: `222.14.5 Durable Idempotency And Circuit Breaker Spec`
+- frozen scope: docs-only durable ToolRunner idempotency/circuit breaker spec
 - current checklist item: commit slice
-- current status: `222.14.4 complete, Checker PASS, Reviewer PASS, commit pending`
-- human decision: live provider run approved with OpenRouter qwen/qwen3.6-27b credentials
+- current status: `222.14.5 complete, Checker PASS, Reviewer PASS, commit pending`
+- human decision: continue docs-only corrective slice after live gate
 - worktree: `/Users/vincento/work/develop/hify`
-- branch: `codex/spec-222-14-4-live-gate`
-- base: `0b915aea`
+- branch: `codex/spec-222-14-5-idempotency-spec`
+- base: `23665afd`
 - merge target: `codex/runtime-v2-production-upgrade`
-- evidence root: `artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.4/`
+- evidence root: `artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.5/`
 - waiting human: none
 
 ## Evidence So Far
@@ -49,6 +49,16 @@ Live gate: live-gate.txt PASS, 2 passed in 38.93s
 Summary: live-gate.md
 Audit: audit-export.json redacted summary
 UAT: browser-uat.md documents live API UAT path
+Review: checker-round1.md PASS, reviewer-round1.md PASS
+```
+
+222.14.5 evidence produced in this loop:
+
+```text
+Docs: specs/224-ai-assistant-durable-toolrunner-idempotency/spec.md
+Plan: specs/224-ai-assistant-durable-toolrunner-idempotency/plan.md
+Tasks: specs/224-ai-assistant-durable-toolrunner-idempotency/tasks.md
+Index: specs/README.md
 Review: checker-round1.md PASS, reviewer-round1.md PASS
 ```
 

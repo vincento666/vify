@@ -866,7 +866,7 @@ artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.4/reviewer-round1.m
 
 ## 222.14.5 Durable Idempotency And Circuit Breaker Spec
 
-Status: `pending-docs-only`.
+Status: `complete`.
 
 Purpose:
 
@@ -877,15 +877,15 @@ and circuit breaker semantics without implementing code in this wave.
 
 Tasks:
 
-- [ ] Create a new spec directory with `spec.md`, `plan.md`, and `tasks.md`.
-- [ ] Define ledger granularity and idempotency key generation.
-- [ ] Define timeout `UNKNOWN` lifecycle, retention, and release authority.
-- [ ] Define fallback-primary operation identity relation.
-- [ ] Define read-tool vs side-effect-tool ledger differences.
-- [ ] Define session/run-level vs operation-level idempotency.
-- [ ] Define durable circuit breaker state, reset conditions, and audit
+- [x] Create a new spec directory with `spec.md`, `plan.md`, and `tasks.md`.
+- [x] Define ledger granularity and idempotency key generation.
+- [x] Define timeout `UNKNOWN` lifecycle, retention, and release authority.
+- [x] Define fallback-primary operation identity relation.
+- [x] Define read-tool vs side-effect-tool ledger differences.
+- [x] Define session/run-level vs operation-level idempotency.
+- [x] Define durable circuit breaker state, reset conditions, and audit
       evidence.
-- [ ] Run docs Checker and Reviewer before commit.
+- [x] Run docs Checker and Reviewer before commit.
 
 Evidence:
 

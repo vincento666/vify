@@ -1,23 +1,24 @@
 # Loop Verifiers
 
-These commands verify Spec 222 slice `222.14.4`.
+These commands verify Spec 222 slice `222.14.5`.
 
 ## RED
 
 ```bash
-HIFY_RUN_LIVE_AI_ASSISTANT=1 OPENROUTER_API_KEY=[REDACTED] /opt/homebrew/bin/rtk uv run pytest tests/e2e/test_ai_assistant_live_qwen36_real_case_uat.py -q -s
+/opt/homebrew/bin/rtk rg -n "operation_id|UNKNOWN|fallback|side-effect|read tools|circuit breaker|release authority" specs/224-ai-assistant-durable-toolrunner-idempotency
 ```
 
 Expected RED before implementation:
 
 ```text
-This slice is a live rerun gate; missing key/network/quota/model availability must be recorded as blocked, not PASS.
+This is a docs-only slice; missing required semantic answers fail the docs checker.
 ```
 
 ## Focused Gates
 
 ```bash
-HIFY_RUN_LIVE_AI_ASSISTANT=1 OPENROUTER_API_KEY=[REDACTED] /opt/homebrew/bin/rtk uv run pytest tests/e2e/test_ai_assistant_live_qwen36_real_case_uat.py -q -s
+/opt/homebrew/bin/rtk rg -n "operation_id|UNKNOWN|release authority|fallback|read tools|side-effect tools|Session/run|Durable Circuit Breaker" specs/224-ai-assistant-durable-toolrunner-idempotency/spec.md
+/opt/homebrew/bin/rtk rg -n "224\\.1|224\\.2|224\\.3|224\\.4|224\\.5|224\\.6|224\\.7|224\\.8" specs/224-ai-assistant-durable-toolrunner-idempotency/tasks.md
 ```
 
 ## Static And Diff
@@ -31,18 +32,17 @@ HIFY_RUN_LIVE_AI_ASSISTANT=1 OPENROUTER_API_KEY=[REDACTED] /opt/homebrew/bin/rtk
 Checker must verify:
 
 ```text
-Live gate used qwen/qwen3.6-27b through OpenRouter.
-Pure text case produced raw stream chunks before model completion.
-Mock aviation refund/change/baggage/flight disruption cases completed.
-Approval path, audit redaction, token/cost/context budget were validated.
-Artifacts do not contain the API key.
+Spec 224 exists with spec/plan/tasks.
+Spec answers key generation, UNKNOWN retention, release authority, fallback operation_id policy, and durable breaker state.
+Tasks are implementable slices with RED tests.
+No implementation code was changed.
 ```
 
 Reviewer must verify:
 
 ```text
-Diff scope is limited to spec/loop state because this slice is a live rerun.
-No provider/model expansion, real airline integration, or code change was introduced.
-No secrets are committed or copied into artifacts.
-The artifact states PASS only because the real live gate passed.
+Diff scope is limited to docs/spec/loop state.
+The new spec separates MVP and production boundaries.
+It does not mix durable idempotency with sandbox, HA, multi-tenant infra, or business adapter work.
+No code, schema, dependency, or secret was introduced.
 ```

@@ -32,6 +32,7 @@ defined in `docs/testing/acceptance-gates.md` before the next slice starts.
 | 19 | 070 | Realtime control or scale-out transport only after SSE/durable polling is proven insufficient |
 | 20 | 212-221 | Chatflow/Workflow production runtime upgrade per `docs/chatflow-workflow-production-upgrade.md` |
 | 21 | 222 | Generic AI Assistant harness MVP, live LLM real-case UAT, and corrective runtime hardening |
+| 22 | 224 | Durable AI Assistant ToolRunner idempotency ledger and circuit breaker semantics |
 
 ## Directory Index
 
@@ -120,6 +121,7 @@ defined in `docs/testing/acceptance-gates.md` before the next slice starts.
 | 220-runtime-observability-ops-module | Runtime Ops main-menu module with run/job/DLQ panels and safe ops actions §12 |
 | 221-runtime-capacity-fault-acceptance | Capacity & fault acceptance with chaos drills and capacity report §13 |
 | 222-ai-assistant-general-harness-mvp | Generic AI Assistant harness MVP with first-class planning, streaming, tools, workspace, session recovery, policy, memory, skills, audit, live LLM real-case UAT, and corrective runtime hardening |
+| 224-ai-assistant-durable-toolrunner-idempotency | Durable ToolRunner idempotency ledger, UNKNOWN lifecycle, fallback identity, and circuit breaker semantics |
 
 ## Required Files Per Spec
 
