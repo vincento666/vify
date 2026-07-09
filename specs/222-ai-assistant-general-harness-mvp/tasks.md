@@ -786,7 +786,7 @@ artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.2/reviewer-round1.m
 
 ## 222.14.3 Backend Autonomous Worker MVP
 
-Status: `pending`.
+Status: `complete`.
 
 Purpose:
 
@@ -797,18 +797,18 @@ requiring the frontend to call worker/process.
 
 Tasks:
 
-- [ ] RED: contract/E2E test calls only `messages/async` and fails while the
+- [x] RED: contract/E2E test calls only `messages/async` and fails while the
       run stays `QUEUED`.
-- [ ] RED: duplicate worker claim test fails until explicit `worker/process`
+- [x] Add duplicate worker claim regression proving explicit `worker/process`
       does not double-execute a run already consumed by the backend trigger.
-- [ ] Keep `/events/stream` subscribe/replay only.
-- [ ] Implement same-process module-local autonomous worker trigger.
-- [ ] Preserve checkpoint, lease, pause, resume, and cancel behavior.
-- [ ] Run frontend regression only if the existing frontend call path is
+- [x] Keep `/events/stream` subscribe/replay only.
+- [x] Implement same-process module-local autonomous worker trigger.
+- [x] Preserve checkpoint, lease, pause, resume, and cancel behavior.
+- [x] Run frontend regression only if the existing frontend call path is
       changed.
-- [ ] Run Browser/API UAT showing queued-to-terminal without a frontend
+- [x] Run Browser/API UAT showing queued-to-terminal without a frontend
       worker/process call.
-- [ ] Run Checker and Reviewer before commit.
+- [x] Run Checker and Reviewer before commit.
 
 Evidence:
 
@@ -818,6 +818,9 @@ artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.3/red-duplicate-cla
 artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.3/contract.txt
 artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.3/e2e.txt
 artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.3/browser-uat.md
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.3/ruff.txt
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.3/py_compile.txt
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.3/diff-check.txt
 artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.3/checker-round1.md
 artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.3/reviewer-round1.md
 ```

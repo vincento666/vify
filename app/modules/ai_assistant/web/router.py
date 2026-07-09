@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
 from time import monotonic, sleep
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import Settings, get_settings
 from app.core.database import get_session
@@ -25,6 +27,13 @@ from app.modules.ai_assistant.web.schemas import (
 
 
 router = APIRouter(prefix="/api/v1/ai-assistant", tags=["ai-assistant"])
+
+_AUTONOMOUS_WORKER_EXECUTOR = ThreadPoolExecutor(
+    max_workers=4,
+    thread_name_prefix="ai-assistant-worker",
+)
+_AUTONOMOUS_WORKER_LOCK = Lock()
+_AUTONOMOUS_WORKER_IN_FLIGHT: set[int] = set()
 
 
 def get_ai_assistant_service(
@@ -130,6 +139,7 @@ def send_message(
 @router.post("/sessions/{session_id}/messages/async")
 def start_message(
     session_id: int,
+    http_request: Request,
     request: SendAiAssistantMessageRequest,
     service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
     settings: Settings = Depends(get_settings),
@@ -174,6 +184,12 @@ def start_message(
             model_config=model_config,
             ai_assistant_budget=dict(request.ai_assistant_budget),
             model_budget_policy=dict(request.model_budget_policy),
+        )
+        _schedule_autonomous_run_worker(
+            run_id=int(result.run["id"]),
+            service=service,
+            model_config=model_config,
+            http_request=http_request,
         )
     payload = _turn_payload(result)
     payload["eventStreamRef"] = f"/api/v1/ai-assistant/runs/{result.run['id']}/events/stream?afterSequence=0"
@@ -344,6 +360,7 @@ def pause_run(
 @router.post("/runs/{run_id}/resume")
 def resume_run(
     run_id: int,
+    http_request: Request,
     request: ApprovalDecisionRequest,
     service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
 ) -> dict[str, Any]:
@@ -353,6 +370,13 @@ def resume_run(
         raise HTTPException(status_code=404, detail="AI Assistant run not found") from exc
     except RunControlConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if run["status"] == "QUEUED":
+        _schedule_autonomous_run_worker(
+            run_id=run_id,
+            service=service,
+            model_config=None,
+            http_request=http_request,
+        )
     return success(_run_payload(run) | {"checkpoint": _checkpoint_payload(run)})
 
 
@@ -369,6 +393,77 @@ def cancel_run(
     except RunControlConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return success(_run_payload(run) | {"checkpoint": _checkpoint_payload(run)})
+
+
+def _schedule_autonomous_run_worker(
+    *,
+    run_id: int,
+    service: AiAssistantHarnessService,
+    model_config: LivePlannerConfig | None,
+    http_request: Request,
+) -> bool:
+    if not bool(getattr(http_request.app.state, "ai_assistant_autonomous_worker_enabled", True)):
+        return False
+    run_key = int(run_id)
+    with _AUTONOMOUS_WORKER_LOCK:
+        if run_key in _AUTONOMOUS_WORKER_IN_FLIGHT:
+            return False
+        _AUTONOMOUS_WORKER_IN_FLIGHT.add(run_key)
+
+    try:
+        session_factory = _worker_session_factory_from_service(service)
+        worker_service_kwargs = _worker_service_kwargs(service)
+        delay_seconds = float(getattr(http_request.app.state, "ai_assistant_autonomous_worker_delay_seconds", 0.05))
+        _AUTONOMOUS_WORKER_EXECUTOR.submit(
+            _run_autonomous_worker,
+            run_key,
+            session_factory,
+            worker_service_kwargs,
+            model_config,
+            delay_seconds,
+        )
+    except Exception:
+        with _AUTONOMOUS_WORKER_LOCK:
+            _AUTONOMOUS_WORKER_IN_FLIGHT.discard(run_key)
+        raise
+    return True
+
+
+def _run_autonomous_worker(
+    run_id: int,
+    session_factory: sessionmaker[Session],
+    service_kwargs: dict[str, Any],
+    model_config: LivePlannerConfig | None,
+    delay_seconds: float,
+) -> None:
+    try:
+        if delay_seconds > 0:
+            sleep(delay_seconds)
+        with session_factory() as session:
+            service = AiAssistantHarnessService(AiAssistantRepository(session), **service_kwargs)
+            service.process_queued_run(run_id, model_config=model_config)
+    finally:
+        with _AUTONOMOUS_WORKER_LOCK:
+            _AUTONOMOUS_WORKER_IN_FLIGHT.discard(run_id)
+
+
+def _worker_session_factory_from_service(
+    service: AiAssistantHarnessService,
+) -> sessionmaker[Session]:
+    repository = getattr(service, "_repository")
+    session = getattr(repository, "_session")
+    bind = session.get_bind()
+    return sessionmaker(bind=bind, autoflush=False, autocommit=False, expire_on_commit=False)
+
+
+def _worker_service_kwargs(service: AiAssistantHarnessService) -> dict[str, Any]:
+    return {
+        "tool_registry": getattr(service, "_tools", None),
+        "approval_policy": getattr(service, "_approval_policy", None),
+        "sandbox_policy": getattr(service, "_sandbox_policy", None),
+        "live_planner": getattr(service, "_live_planner", None),
+        "skill_runtime": getattr(service, "_skill_runtime", None),
+    }
 
 
 @router.get("/tools")

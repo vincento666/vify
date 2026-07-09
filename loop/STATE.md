@@ -3,16 +3,16 @@
 ## Current
 
 - active spec: `222-ai-assistant-general-harness-mvp`
-- current slice: `222.14.2 Aggregate Eval Runtime Evidence`
-- frozen scope: AI Assistant aggregate eval runtime-evidence credibility only
+- current slice: `222.14.3 Backend Autonomous Worker MVP`
+- frozen scope: AI Assistant same-process autonomous worker trigger only
 - current checklist item: commit slice
-- current status: `222.14.2 complete, Checker PASS, Reviewer PASS, commit pending`
+- current status: `222.14.3 complete, Checker PASS, Reviewer PASS, commit pending`
 - human decision: continue from 222.14 contract into first corrective implementation slice
 - worktree: `/Users/vincento/work/develop/hify`
-- branch: `codex/spec-222-14-2-aggregate-eval`
-- base: `bedcb368`
+- branch: `codex/spec-222-14-3-autonomous-worker`
+- base: `38ac37f3`
 - merge target: `codex/runtime-v2-production-upgrade`
-- evidence root: `artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.2/`
+- evidence root: `artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.3/`
 - waiting human: none
 
 ## Evidence So Far
@@ -39,6 +39,16 @@ Green: unit.txt, contract.txt, e2e.txt, frontend.txt, frontend-rem.txt
 Static: ruff.txt, py_compile.txt, diff-check.txt
 Audit/UAT: audit-export.json, uat-api-evidence.json, browser-uat.md,
 browser-uat-dom.json, screenshots/browser-uat-self-correction.png
+Review: checker-round1.md PASS, reviewer-round1.md PASS
+```
+
+222.14.3 evidence produced in this loop:
+
+```text
+RED: red-async-worker.txt
+Green: contract-autonomous.txt, duplicate-claim.txt, contract.txt, e2e.txt
+Static: ruff.txt, py_compile.txt, diff-check.txt
+UAT: browser-uat.md documents API UAT for backend-only slice
 Review: checker-round1.md PASS, reviewer-round1.md PASS
 ```
 

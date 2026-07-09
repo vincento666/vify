@@ -5,13 +5,13 @@
 Latest completed slice:
 
 ```text
-222.14.2 Aggregate Eval Runtime Evidence (complete)
+222.14.3 Backend Autonomous Worker MVP (complete)
 ```
 
 Next implementation slice:
 
 ```text
-222.14.3 Backend Autonomous Worker MVP
+222.14.4 Live Gate Rerun
 ```
 
 This file is the spec-facing loop pointer. Other loop engineering files such as
@@ -37,9 +37,9 @@ specs/222-ai-assistant-general-harness-mvp/tasks.md
 ## Worktree
 
 ```text
-branch: codex/spec-222-14-2-aggregate-eval
+branch: codex/spec-222-14-3-autonomous-worker
 path: /Users/vincento/work/develop/hify
-base: bedcb368 codex/spec-222-14-1-event-sequence
+base: 38ac37f3 codex/spec-222-14-2-aggregate-eval
 merge target: codex/runtime-v2-production-upgrade
 ```
 
@@ -51,21 +51,21 @@ unrelated dirty changes were present before the branch was created.
 Allowed:
 
 ```text
-app/modules/ai_assistant/domain/aggregate_production_eval.py
-tests/eval/test_ai_assistant_aggregate_production_eval.py
+app/modules/ai_assistant/web/router.py
+tests/contract/test_ai_assistant_session_runtime_api.py
 specs/222-ai-assistant-general-harness-mvp/
 loop/CURRENT.md
 loop/STATE.md
 loop/VERIFIERS.md
-artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.2/
+artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.3/
 ```
 
 Behavior target:
 
 ```text
-Aggregate production eval proves runtime behavior from evidence artifacts,
-not from source/test-string matches, for token streaming, reconnect recovery,
-tool self-correction, file workspace safety, and context visibility.
+messages/async queues a durable run and the backend module autonomously
+consumes it in-process. Explicit worker/process remains idempotent and SSE
+streaming remains subscribe/replay only.
 ```
 
 ## Stop Conditions
@@ -73,9 +73,9 @@ tool self-correction, file workspace safety, and context visibility.
 Stop and enter `waiting-human` if:
 
 ```text
-fix requires company-wide eval framework changes, new dependency, or schema work
-scope expands outside AI Assistant aggregate eval and its tests
-runtime evidence contract must change beyond current Spec 222.14.2 boundary
+fix requires broker, standalone worker service, schema migration, or new dependency
+scope expands outside AI Assistant async worker trigger and its tests
+events/stream needs to start execution
 Checker finds missing evidence or gate bypass
 Reviewer finds scope expansion, weakened tests, or secret exposure
 slice completes but cannot be committed safely

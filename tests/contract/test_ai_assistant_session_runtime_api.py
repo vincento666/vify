@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from collections.abc import Generator
 from pathlib import Path
+from time import sleep
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -100,6 +101,61 @@ class AiAssistantSessionRuntimeApiContractTest(unittest.TestCase):
         self.assertEqual(processed.json()["data"]["status"], "COMPLETED")
         self.assertEqual(snapshot["run"]["status"], "COMPLETED")
         self.assertEqual(snapshot["checkpoint"]["worker"]["scope"], "durable-lease")
+
+    def test_async_message_autonomously_runs_without_worker_process_api(self) -> None:
+        with TestClient(app) as client:
+            session_id = client.post("/api/v1/ai-assistant/sessions", json={"title": "Autonomous worker"}).json()[
+                "data"
+            ]["id"]
+            started = client.post(
+                f"/api/v1/ai-assistant/sessions/{session_id}/messages/async",
+                json={
+                    "message": "backend closes the loop",
+                    "idempotencyKey": "session-runtime-autonomous-worker",
+                    "approvalMode": "smart_approval",
+                    "toolName": "echo_context",
+                },
+            )
+            run_id = started.json()["data"]["runId"]
+            snapshot = _wait_for_run_status(client, run_id, {"COMPLETED"})
+            _wait_for_event_type(client, run_id, "run.worker_heartbeat")
+            events = client.get(f"/api/v1/ai-assistant/runs/{run_id}/events").json()["data"]["list"]
+
+        self.assertEqual(started.status_code, 200, started.text)
+        self.assertEqual(started.json()["data"]["status"], "QUEUED")
+        self.assertEqual(snapshot["run"]["status"], "COMPLETED")
+        event_types = [event["type"] for event in events]
+        self.assertIn("run.queued", event_types)
+        self.assertIn("run.worker_started", event_types)
+        self.assertIn("run.worker_heartbeat", event_types)
+        self.assertIn("run.checkpoint_saved", event_types)
+
+    def test_worker_process_api_does_not_duplicate_autonomous_worker_claim(self) -> None:
+        with TestClient(app) as client:
+            session_id = client.post("/api/v1/ai-assistant/sessions", json={"title": "Duplicate claim"}).json()[
+                "data"
+            ]["id"]
+            started = client.post(
+                f"/api/v1/ai-assistant/sessions/{session_id}/messages/async",
+                json={
+                    "message": "manual worker races auto worker",
+                    "idempotencyKey": "session-runtime-duplicate-worker-claim",
+                    "approvalMode": "smart_approval",
+                    "toolName": "echo_context",
+                },
+            ).json()["data"]
+            manual_worker = client.post(f"/api/v1/ai-assistant/runs/{started['runId']}/worker/process")
+            _wait_for_event_type(client, started["runId"], "run.worker_heartbeat")
+            sleep(0.1)
+            events = client.get(f"/api/v1/ai-assistant/runs/{started['runId']}/events").json()["data"]["list"]
+            snapshot = client.get(f"/api/v1/ai-assistant/runs/{started['runId']}/snapshot").json()["data"]
+
+        self.assertEqual(manual_worker.status_code, 200, manual_worker.text)
+        self.assertEqual(snapshot["run"]["status"], "COMPLETED")
+        event_types = [event["type"] for event in events]
+        self.assertEqual(event_types.count("run.worker_started"), 1)
+        self.assertEqual(event_types.count("run.worker_heartbeat"), 1)
+        self.assertEqual(event_types.count("run.completed"), 1)
 
     def test_pause_resume_and_cancel_controls_are_persisted(self) -> None:
         with TestClient(app) as client:
@@ -234,6 +290,26 @@ def _read_sse_frames(response, count: int) -> list[dict]:
             if len(frames) >= count:
                 return frames
     return frames
+
+
+def _wait_for_run_status(client: TestClient, run_id: int, expected_statuses: set[str]) -> dict:
+    last: dict | None = None
+    for _ in range(40):
+        last = client.get(f"/api/v1/ai-assistant/runs/{run_id}/snapshot").json()["data"]
+        if last["run"]["status"] in expected_statuses:
+            return last
+        sleep(0.025)
+    raise AssertionError(f"run {run_id} did not reach {expected_statuses}; last={last}")
+
+
+def _wait_for_event_type(client: TestClient, run_id: int, event_type: str) -> list[dict]:
+    last: list[dict] = []
+    for _ in range(40):
+        last = client.get(f"/api/v1/ai-assistant/runs/{run_id}/events").json()["data"]["list"]
+        if event_type in {event["type"] for event in last}:
+            return last
+        sleep(0.025)
+    raise AssertionError(f"run {run_id} did not emit {event_type}; last={last}")
 
 
 if __name__ == "__main__":
