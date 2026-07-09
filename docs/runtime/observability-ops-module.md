@@ -186,3 +186,20 @@ Reconnect rules mirror spec 219:
 
 This slice does not change the SSE backend; it only consumes the existing
 runtime event stream in the Runtime Ops module.
+
+## Post-220 Visual Closure
+
+Spec 220 provides the Runtime Ops module baseline. Spec 223 owns the missing
+product-specific visual evidence:
+
+- Workflow must show fan-out, selected/skipped edges, join state, and parallel
+  wave/timeline overlap. A simultaneous `RUNNING` state is not enough to prove
+  parallel execution.
+- Chatflow must show the current blocking node, pending prompt, and resume
+  target. The recommended canvas treatment is a looping border-light animation
+  on the active `WAITING` / `INTERRUPTED` node, with a static high-contrast
+  fallback under `prefers-reduced-motion`.
+
+Runtime Ops may reuse the same node state projections, but the visual language
+must stay product-specific: Workflow proves DAG execution; Chatflow proves
+blocking/resume continuity.

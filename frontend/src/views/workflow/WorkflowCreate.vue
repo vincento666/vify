@@ -436,8 +436,12 @@
             :class="[
               `node-${nodeProps.data.type.toLowerCase()}`,
               nodeProps.data.runStatus ? `run-${String(nodeProps.data.runStatus).toLowerCase()}` : '',
-              { selected: selectedNodeKey === nodeProps.data.nodeKey },
+              {
+                selected: selectedNodeKey === nodeProps.data.nodeKey,
+                'chatflow-blocking-node': isChatflowBlockingNode(nodeProps.data.nodeKey),
+              },
             ]"
+            :data-testid="isChatflowBlockingNode(nodeProps.data.nodeKey) ? 'chatflow-blocking-node' : undefined"
             @mouseenter="handleNodeMouseEnter(nodeProps.data.nodeKey)"
             @mouseleave="handleNodeMouseLeave(nodeProps.data.nodeKey)"
           >
@@ -4960,6 +4964,9 @@ const chatflowDebugStreamPreview = computed(() =>
 const chatflowVariableRows = computed(() => flattenChatflowVariables(chatflowSessionState.value?.variables || {}))
 const chatflowWaitingEvent = computed(() => chatflowSessionState.value?.waitingEvent || null)
 const chatflowCheckpoint = computed(() => chatflowSessionState.value?.checkpoint || null)
+const chatflowBlockingNodeKey = computed(() =>
+  String(chatflowCheckpoint.value?.pendingNodeKey || chatflowWaitingEvent.value?.nodeKey || '').trim(),
+)
 const chatflowRunDebugSummary = computed(() => summarizeChatflowRunDebug(chatflowRunDebugDetail.value || {
   runId: lastTestRunId.value,
   status: lastTestRunStatus.value,
@@ -5373,6 +5380,14 @@ function debugStatusLabel(status: string | undefined) {
 
 function nodeRunStatus(nodeKey: string) {
   return String(nodeRunStateByKey.value.get(nodeKey)?.status || '')
+}
+
+function isChatflowBlockingNode(nodeKey: string) {
+  if (!isChatflowMode.value) return false
+  const normalizedNodeKey = String(nodeKey || '').trim()
+  if (!normalizedNodeKey) return false
+  if (chatflowBlockingNodeKey.value) return chatflowBlockingNodeKey.value === normalizedNodeKey
+  return ['INTERRUPTED', 'WAITING'].includes(nodeRunStatus(normalizedNodeKey).toUpperCase())
 }
 
 function nodeRunStatusLabel(nodeKey: string) {
@@ -10619,6 +10634,44 @@ onUnmounted(() => {
     inset 0 0 0 0.0625rem rgba(102, 103, 246, 0.42),
     0 0 0 0.125rem rgba(102, 103, 246, 0.18),
     0 0.625rem 1.75rem rgba(36, 45, 67, 0.08);
+}
+
+.coze-node.chatflow-blocking-node {
+  border-color: #f59e0b;
+  box-shadow:
+    inset 0 0 0 0.0625rem rgba(245, 158, 11, 0.32),
+    0 0 0 0.125rem rgba(245, 158, 11, 0.16),
+    0 0.625rem 1.75rem rgba(36, 45, 67, 0.08);
+}
+
+.coze-node.chatflow-blocking-node::before {
+  position: absolute;
+  inset: -0.1875rem;
+  z-index: 0;
+  padding: 0.125rem;
+  border-radius: 0.8125rem;
+  background: conic-gradient(from 0deg, transparent 0 18%, #f59e0b 30%, #22c55e 42%, transparent 56% 100%);
+  content: "";
+  pointer-events: none;
+  animation: chatflow-blocking-border-flow 1.4s linear infinite;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+@keyframes chatflow-blocking-border-flow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coze-node.chatflow-blocking-node::before {
+    background: #f59e0b;
+    animation: none;
+  }
 }
 
 .node-header {

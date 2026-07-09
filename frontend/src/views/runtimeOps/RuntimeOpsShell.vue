@@ -136,12 +136,29 @@
                 <span>{{ node.nodeType }}</span>
                 <strong>{{ node.name }}</strong>
                 <em>{{ node.stateLabel }}</em>
+                <small v-if="node.joinState" class="runtime-ops-dag-node__join">
+                  {{ node.joinStateLabel }}
+                  <template v-if="node.joinWaitingOnNodeKeys.length">
+                    · {{ node.joinWaitingOnNodeKeys.join(', ') }}
+                  </template>
+                </small>
                 <small v-if="node.error">{{ node.error }}</small>
               </article>
             </div>
             <ul class="runtime-ops-dag-edges">
-              <li v-for="edge in dagView.edges" :key="`${edge.state}-${edge.source}-${edge.target}`">
-                {{ edge.state }} {{ edge.source }} → {{ edge.target }}
+              <li
+                v-for="edge in dagView.edges"
+                :key="`${edge.state}-${edge.source}-${edge.target}`"
+                :class="`state-${edge.state}`"
+              >
+                {{ edge.stateLabel }} {{ edge.source }} → {{ edge.target }}
+              </li>
+            </ul>
+            <ul v-if="dagView.parallelWaves.length" class="runtime-ops-dag-waves">
+              <li v-for="wave in dagView.parallelWaves" :key="wave.key">
+                <strong>{{ wave.key }}</strong>
+                <span>{{ wave.overlapLabel }}</span>
+                <em>{{ wave.nodeKeys.join(', ') }}</em>
               </li>
             </ul>
 
@@ -901,6 +918,10 @@ function maxEventSequence(events: Record<string, any>[]): number {
   font-size: 0.75rem;
 }
 
+.runtime-ops-dag-node__join {
+  color: #475569;
+}
+
 .runtime-ops-dag-node.state-completed {
   border-left-color: #16a34a;
 }
@@ -941,6 +962,44 @@ function maxEventSequence(events: Record<string, any>[]): number {
   color: #3730a3;
   font-size: 0.75rem;
   padding: 0.25rem 0.5rem;
+}
+
+.runtime-ops-dag-edges li.state-skipped {
+  background: #f1f5f9;
+  color: #475569;
+  text-decoration: line-through;
+}
+
+.runtime-ops-dag-waves {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.runtime-ops-dag-waves li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 0.0625rem solid #bfdbfe;
+  border-radius: 0.5rem;
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-size: 0.75rem;
+  padding: 0.375rem 0.5rem;
+}
+
+.runtime-ops-dag-waves strong,
+.runtime-ops-dag-waves span,
+.runtime-ops-dag-waves em {
+  display: inline;
+}
+
+.runtime-ops-dag-waves em {
+  color: #475569;
+  font-style: normal;
 }
 
 .runtime-ops-node-detail {

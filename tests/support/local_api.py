@@ -1,6 +1,8 @@
 import json
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlparse
 
 
 class LocalApiServer:
@@ -24,6 +26,15 @@ class LocalApiServer:
 
 class _Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
+        if self.path.startswith("/delay"):
+            parsed = urlparse(self.path)
+            query = parse_qs(parsed.query)
+            delay_ms = int(query.get("delayMs", ["0"])[0] or 0)
+            branch = str(query.get("branch", [""])[0] or "")
+            if delay_ms > 0:
+                time.sleep(delay_ms / 1000)
+            self._write_json({"ok": True, "branch": branch, "delayMs": delay_ms, "path": parsed.path})
+            return
         if self.path.startswith("/text/"):
             self._write_text(f"API_REAL: GET {self.path}")
             return

@@ -6,6 +6,13 @@
 
 DAG scheduler 与 Chatflow / SOP 兼容做完后，必须逐节点验证所有一等画布节点在 runtime v2 下的可执行性、状态、事件、上下文隔离与幂等保护。spec 217 把每个节点的 v2 兼容性形成可对照矩阵，把非法配置错误从"运行时模糊错误"挪到"compatibility check 阶段"，并明确 Chatflow / Workflow 同类节点的能力一致性。
 
+## Post-Closure Note
+
+spec 217 的矩阵记录 executor / capability 兼容性。2026-07-09 的复核发现，矩阵还
+需要单独记录 Workflow 与 Chatflow 的产品 UAT 证据状态，避免把"有 executor"误读为
+"所有 async / stream / published / resume / visual 场景均已验收"。证据状态闭环由
+spec 223 承接。
+
 ## 目标（What）
 
 逐条复用文档 §9 的目标和验收标准：

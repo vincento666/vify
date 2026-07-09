@@ -6,6 +6,13 @@
 
 spec 214 已固化 DAG 语义，但 runtime v2 仍是单 current-node while-loop 推进。spec 215 把执行引擎升级为 frontier-based DAG scheduler，支持多个无依赖下游并发执行、隐式 join、skipped 状态传播、side-effect terminal leaf，以及失败策略矩阵（fail-fast / continue-on-error / error branch / partial success）。这是把 Hify 推到"生产 DAG runtime"的关键步骤。
 
+## Post-Closure Note
+
+2026-07-09 的浏览器 UAT 发现：当前实现已支持 frontier wave、selection state、
+implicit join 与 terminal leaf，但同一 wave 的节点执行仍是串行完成。预写
+`RUNNING` 事件不能作为真实并行证明。真实并行、wall-clock overlap 证据与前端
+parallel wave 可视化由 spec 223 承接，不回写修改本 spec 的历史完成记录。
+
 ## 目标（What）
 
 逐条复用文档 §7 的目标和验收标准：

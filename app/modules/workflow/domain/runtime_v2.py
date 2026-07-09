@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -86,6 +87,9 @@ _RUNTIME_V2_PRESTART_WAVE_NODE_TYPES = {
     "TOOL_CALL",
     "EXECUTE_WORKFLOW",
 }
+_RUNTIME_V2_PARALLEL_WAVE_NODE_TYPES = {
+    "API_CALL",
+}
 _RUNTIME_V2_SIDE_EFFECT_PROTECTION: dict[str, tuple[str, str]] = {
     "MESSAGE": ("message_send", "idempotency_key"),
     "VARIABLE_ASSIGN": ("runtime_variable_write", "execution_record"),
@@ -97,6 +101,34 @@ _RUNTIME_V2_SIDE_EFFECT_PROTECTION: dict[str, tuple[str, str]] = {
 RuntimeV2LlmCompleterResolver = Callable[[int], WorkflowLlmCompleter | None]
 RuntimeV2AgentInvokerResolver = Callable[[int], AgentInvocationFacade | None]
 _RUNTIME_EXTERNAL_CALL_GOVERNANCE = ExternalCallGovernance()
+
+
+class _PreloadedApiResourceExecutor:
+    def __init__(self, base_executor: ApiToolExecutor, rows_by_resource_id: dict[str, dict[str, Any]]) -> None:
+        self._base_executor = base_executor
+        self._rows_by_resource_id = rows_by_resource_id
+
+    def execute_api_resource(
+        self,
+        resource_id: str,
+        arguments: dict[str, object],
+        overrides: dict[str, Any] | None = None,
+        timeout_ms: int | None = None,
+    ) -> Any:
+        row = self._rows_by_resource_id.get(_api_resource_cache_key(resource_id))
+        invoke_resource = getattr(self._base_executor, "_invoke_resource", None)
+        if row is None or not callable(invoke_resource):
+            return self._base_executor.execute_api_resource(resource_id, arguments, overrides, timeout_ms)
+        return invoke_resource(row, arguments, overrides=overrides, timeout_ms=timeout_ms)
+
+    def execute_api_tool(
+        self,
+        resource_id: str,
+        tool_name: str,
+        arguments: dict[str, object],
+        timeout_ms: int | None = None,
+    ) -> Any:
+        return self._base_executor.execute_api_tool(resource_id, tool_name, arguments, timeout_ms)
 
 
 class RuntimeV2RefBuilder:
@@ -898,6 +930,7 @@ class ChatflowRuntimeV2Service:
         selected_ports = _selected_ports_from_completed_node_runs(edge_rows, node_rows, previous_node_runs)
         forced_next = [node_key] if node_key else []
         output: dict[str, Any] = {}
+        parallel_wave_index = 0
         while True:
             self._raise_if_run_cancelled(run_id=run_id, chatflow_id=chatflow_id, session_id=session_id)
             frontier = _runtime_frontier(
@@ -924,6 +957,14 @@ class ChatflowRuntimeV2Service:
             prestarted: dict[str, tuple[int, float]] = {}
             wave_node_types = {str(node["type"]).upper() for _, node, _ in wave_items}
             prestart_wave = len(wave_items) > 1 and wave_node_types.issubset(_RUNTIME_V2_PRESTART_WAVE_NODE_TYPES)
+            parallel_wave = prestart_wave and wave_node_types.issubset(_RUNTIME_V2_PARALLEL_WAVE_NODE_TYPES)
+            if parallel_wave:
+                parallel_wave_index += 1
+                wave_key = f"wave-{run_id}-{parallel_wave_index}"
+                wave_items = [
+                    (current, node, _selection_state_with_parallel_wave_key(selection_state, wave_key))
+                    for current, node, selection_state in wave_items
+                ]
             if prestart_wave:
                 for current, node, selection_state in wave_items:
                     self._raise_if_run_cancelled(run_id=run_id, chatflow_id=chatflow_id, session_id=session_id)
@@ -936,28 +977,39 @@ class ChatflowRuntimeV2Service:
                         selection_state=selection_state,
                     )
             wave_errors: list[Exception] = []
-            for current, node, selection_state in wave_items:
-                self._raise_if_run_cancelled(run_id=run_id, chatflow_id=chatflow_id, session_id=session_id)
-                node_context = _clone_context_for_frontier_node(context) if len(current_wave) > 1 else context
-                node_run_id, node_started_at = prestarted.get(current, (None, None))
-                try:
-                    node_output = self._execute_node(
-                        chatflow_id,
-                        run_id,
-                        session_id,
-                        node,
-                        node_context,
-                        input_data,
-                        selection_state=selection_state,
-                        node_run_id=node_run_id,
-                        started_at=node_started_at,
-                    )
-                except Exception as exc:
-                    if not prestart_wave:
-                        raise
-                    wave_errors.append(exc)
-                    continue
-                wave_results.append((current, node_output, node, str(node["type"]).upper()))
+            if parallel_wave:
+                wave_results, wave_errors = self._execute_prestarted_parallel_wave(
+                    chatflow_id=chatflow_id,
+                    run_id=run_id,
+                    session_id=session_id,
+                    context=context,
+                    input_data=input_data,
+                    wave_items=wave_items,
+                    prestarted=prestarted,
+                )
+            else:
+                for current, node, selection_state in wave_items:
+                    self._raise_if_run_cancelled(run_id=run_id, chatflow_id=chatflow_id, session_id=session_id)
+                    node_context = _clone_context_for_frontier_node(context) if len(current_wave) > 1 else context
+                    node_run_id, node_started_at = prestarted.get(current, (None, None))
+                    try:
+                        node_output = self._execute_node(
+                            chatflow_id,
+                            run_id,
+                            session_id,
+                            node,
+                            node_context,
+                            input_data,
+                            selection_state=selection_state,
+                            node_run_id=node_run_id,
+                            started_at=node_started_at,
+                        )
+                    except Exception as exc:
+                        if not prestart_wave:
+                            raise
+                        wave_errors.append(exc)
+                        continue
+                    wave_results.append((current, node_output, node, str(node["type"]).upper()))
             for current, node_output, node, node_type in wave_results:
                 context.set_output(current, node_output)
                 output = node_output
@@ -968,6 +1020,89 @@ class ChatflowRuntimeV2Service:
             if wave_errors:
                 raise wave_errors[0]
         return output
+
+    def _execute_prestarted_parallel_wave(
+        self,
+        *,
+        chatflow_id: int,
+        run_id: int,
+        session_id: str,
+        context: ExecutionContext,
+        input_data: dict[str, Any],
+        wave_items: list[tuple[str, dict[str, Any], dict[str, Any] | None]],
+        prestarted: dict[str, tuple[int, float]],
+    ) -> tuple[list[tuple[str, dict[str, Any], dict[str, Any], str]], list[Exception]]:
+        wave_results: list[tuple[str, dict[str, Any], dict[str, Any], str]] = []
+        wave_errors: list[Exception] = []
+        futures: dict[Future[dict[str, Any]], tuple[str, dict[str, Any], ExecutionContext, int, float]] = {}
+        api_resource_rows = self._preload_parallel_api_resource_rows(wave_items)
+        with ThreadPoolExecutor(max_workers=max(1, len(wave_items))) as executor:
+            for current, node, _selection_state in wave_items:
+                self._raise_if_run_cancelled(run_id=run_id, chatflow_id=chatflow_id, session_id=session_id)
+                node_run_id, node_started_at = prestarted[current]
+                node_context = _clone_context_for_frontier_node(context)
+                future = executor.submit(
+                    self._execute_parallel_node_operation,
+                    chatflow_id,
+                    node,
+                    node_context,
+                    node_run_id,
+                    api_resource_rows,
+                )
+                futures[future] = (current, node, node_context, node_run_id, node_started_at)
+            for future in as_completed(futures):
+                current, node, _node_context, node_run_id, node_started_at = futures[future]
+                node_type = str(node["type"]).upper()
+                try:
+                    node_output = future.result()
+                    node_output = self._complete_prestarted_node_success(
+                        chatflow_id=chatflow_id,
+                        run_id=run_id,
+                        session_id=session_id,
+                        node=node,
+                        node_run_id=node_run_id,
+                        started_at=node_started_at,
+                        output=node_output,
+                    )
+                except Exception as exc:
+                    try:
+                        handled_output = self._complete_prestarted_node_error(
+                            chatflow_id=chatflow_id,
+                            run_id=run_id,
+                            session_id=session_id,
+                            node=node,
+                            node_run_id=node_run_id,
+                            started_at=node_started_at,
+                            exc=exc,
+                        )
+                    except Exception as completed_exc:
+                        wave_errors.append(completed_exc)
+                        continue
+                    wave_results.append((current, handled_output, node, node_type))
+                    continue
+                wave_results.append((current, node_output, node, node_type))
+        return wave_results, wave_errors
+
+    def _preload_parallel_api_resource_rows(
+        self,
+        wave_items: list[tuple[str, dict[str, Any], dict[str, Any] | None]],
+    ) -> dict[str, dict[str, Any]]:
+        if self._api_tool_executor is None:
+            return {}
+        resource_row = getattr(self._api_tool_executor, "_resource_row", None)
+        if not callable(resource_row):
+            return {}
+        rows: dict[str, dict[str, Any]] = {}
+        for _current, node, _selection_state in wave_items:
+            if str(node.get("type") or "").upper() != "API_CALL":
+                continue
+            config = dict(node.get("config") or {})
+            resource_id = str(config.get("resourceId") or config.get("resource_id") or "").strip()
+            cache_key = _api_resource_cache_key(resource_id)
+            if not cache_key or cache_key in rows:
+                continue
+            rows[cache_key] = dict(resource_row(int(cache_key)))
+        return rows
 
     def _start_runtime_node_execution(
         self,
@@ -1266,6 +1401,200 @@ class ChatflowRuntimeV2Service:
             payload={"nodeType": node_type, "nodeRunId": node_run_id, "status": "COMPLETED"},
         )
         return output
+
+    def _execute_parallel_node_operation(
+        self,
+        chatflow_id: int,
+        node: dict[str, Any],
+        context: ExecutionContext,
+        node_run_id: int,
+        api_resource_rows: dict[str, dict[str, Any]],
+    ) -> dict[str, Any]:
+        node_key = str(node["node_key"])
+        node_type = str(node["type"]).upper()
+        if node_type == "LLM":
+            return self._execute_governed_external_node(
+                node=node,
+                node_run_id=node_run_id,
+                operation=lambda: LlmNodeExecutor(
+                    self._llm_completer_for(chatflow_id),
+                    self._knowledge_facade,
+                    self._mcp_tool_executor,
+                ).execute(node, context),
+            )
+        if node_type == "KNOWLEDGE":
+            if self._knowledge_facade is None:
+                raise ValueError("Runtime v2 KNOWLEDGE node requires KnowledgeFacade")
+            return self._execute_governed_external_node(
+                node=node,
+                node_run_id=node_run_id,
+                operation=lambda: KnowledgeNodeExecutor(self._knowledge_facade).execute(node, context),
+            )
+        if node_type == "API_CALL":
+            reason = _runtime_v2_api_call_unsupported_reason(dict(node.get("config") or {}))
+            if reason:
+                error = _runtime_v2_unsupported_node_error(
+                    {"nodeKey": node_key, "nodeType": node_type, "reason": reason}
+                )
+                raise ValueError(error["message"])
+            output = self._execute_governed_external_node(
+                node=node,
+                node_run_id=node_run_id,
+                operation=lambda: ApiCallNodeExecutor(
+                    _PreloadedApiResourceExecutor(self._api_tool_executor, api_resource_rows)
+                    if self._api_tool_executor is not None and api_resource_rows
+                    else self._api_tool_executor
+                ).execute(node, context),
+            )
+            return _with_runtime_v2_execution_evidence_defaults(output)
+        if node_type == "TOOL_CALL":
+            reason = _runtime_v2_tool_call_unsupported_reason(dict(node.get("config") or {}))
+            if reason:
+                error = _runtime_v2_unsupported_node_error(
+                    {"nodeKey": node_key, "nodeType": node_type, "reason": reason}
+                )
+                raise ValueError(error["message"])
+            output = self._execute_governed_external_node(
+                node=node,
+                node_run_id=node_run_id,
+                operation=lambda: ToolCallNodeExecutor(self._mcp_tool_executor, self._api_tool_executor).execute(
+                    node, context
+                ),
+            )
+            return _with_runtime_v2_execution_evidence_defaults(output)
+        if node_type == "AGENT_CALL":
+            return AgentCallNodeExecutor(self._agent_invoker_for(chatflow_id)).execute(node, context)
+        raise ValueError(f"Runtime v2 node is not eligible for parallel wave execution: {node_type}")
+
+    def _complete_prestarted_node_success(
+        self,
+        *,
+        chatflow_id: int,
+        run_id: int,
+        session_id: str,
+        node: dict[str, Any],
+        node_run_id: int,
+        started_at: float,
+        output: dict[str, Any],
+    ) -> dict[str, Any]:
+        node_key = str(node["node_key"])
+        node_type = str(node["type"]).upper()
+        output = _with_runtime_v2_side_effect_protection(
+            output,
+            run_id=run_id,
+            node_run_id=node_run_id,
+            node_key=node_key,
+            node_type=node_type,
+        )
+        self._raise_if_run_cancelled(
+            run_id=run_id,
+            chatflow_id=chatflow_id,
+            session_id=session_id,
+            node_run_id=node_run_id,
+        )
+        elapsed_ms = max(0, int((time.perf_counter() - started_at) * 1000))
+        self._repository.finish_node_run(node_run_id, "SUCCEEDED", output, elapsed_ms=elapsed_ms)
+        self._append_event(
+            session_id=session_id,
+            chatflow_id=chatflow_id,
+            run_id=run_id,
+            event_type="workflow_node_completed",
+            node_key=node_key,
+            payload={"nodeType": node_type, "nodeRunId": node_run_id, "output": output},
+        )
+        self._append_event(
+            session_id=session_id,
+            chatflow_id=chatflow_id,
+            run_id=run_id,
+            event_type="node_status_changed",
+            node_key=node_key,
+            payload={"nodeType": node_type, "nodeRunId": node_run_id, "status": "COMPLETED"},
+        )
+        return output
+
+    def _complete_prestarted_node_error(
+        self,
+        *,
+        chatflow_id: int,
+        run_id: int,
+        session_id: str,
+        node: dict[str, Any],
+        node_run_id: int,
+        started_at: float,
+        exc: Exception,
+    ) -> dict[str, Any]:
+        node_key = str(node["node_key"])
+        node_type = str(node["type"]).upper()
+        if isinstance(exc, ExternalCallGovernanceError):
+            payload = {**exc.event_payload, "nodeType": node_type, "nodeRunId": node_run_id}
+            self._append_event(
+                session_id=session_id,
+                chatflow_id=chatflow_id,
+                run_id=run_id,
+                event_type=exc.event_type,
+                node_key=node_key,
+                payload=payload,
+            )
+        handled_output = _runtime_v2_handled_error_output(node_type, node, exc, started_at)
+        if handled_output is not None:
+            handled_output = _with_runtime_v2_side_effect_protection(
+                handled_output,
+                run_id=run_id,
+                node_run_id=node_run_id,
+                node_key=node_key,
+                node_type=node_type,
+            )
+            self._repository.finish_node_run(node_run_id, "SUCCEEDED", handled_output)
+            self._append_event(
+                session_id=session_id,
+                chatflow_id=chatflow_id,
+                run_id=run_id,
+                event_type="workflow_node_error_handled",
+                node_key=node_key,
+                payload={
+                    "nodeType": node_type,
+                    "nodeRunId": node_run_id,
+                    "errorBehavior": handled_output["errorBehavior"],
+                    "route": handled_output.get("route"),
+                    "error": handled_output["error"],
+                    "output": handled_output,
+                },
+            )
+            self._append_event(
+                session_id=session_id,
+                chatflow_id=chatflow_id,
+                run_id=run_id,
+                event_type="workflow_node_completed",
+                node_key=node_key,
+                payload={"nodeType": node_type, "nodeRunId": node_run_id, "output": handled_output},
+            )
+            self._append_event(
+                session_id=session_id,
+                chatflow_id=chatflow_id,
+                run_id=run_id,
+                event_type="node_status_changed",
+                node_key=node_key,
+                payload={"nodeType": node_type, "nodeRunId": node_run_id, "status": "COMPLETED"},
+            )
+            return handled_output
+        self._repository.finish_node_run(node_run_id, "FAILED", {}, error=str(exc))
+        self._append_event(
+            session_id=session_id,
+            chatflow_id=chatflow_id,
+            run_id=run_id,
+            event_type="workflow_node_failed",
+            node_key=node_key,
+            payload={"nodeType": node_type, "nodeRunId": node_run_id, "error": str(exc)},
+        )
+        self._append_event(
+            session_id=session_id,
+            chatflow_id=chatflow_id,
+            run_id=run_id,
+            event_type="node_status_changed",
+            node_key=node_key,
+            payload={"nodeType": node_type, "nodeRunId": node_run_id, "status": "FAILED"},
+        )
+        raise exc
 
     def _execute_governed_external_node(
         self,
@@ -2166,6 +2495,15 @@ def _clone_context_for_frontier_node(context: ExecutionContext) -> ExecutionCont
     return cloned
 
 
+def _selection_state_with_parallel_wave_key(
+    selection_state: dict[str, Any] | None,
+    wave_key: str,
+) -> dict[str, Any]:
+    payload = dict(selection_state or {})
+    payload["parallelWaveKey"] = wave_key
+    return payload
+
+
 def _completed_node_keys(node_runs: list[dict[str, Any]]) -> set[str]:
     return {
         str(row.get("node_key") or "")
@@ -2285,6 +2623,16 @@ def _runtime_v2_api_call_unsupported_reason(config: dict[str, Any]) -> str:
         return "api_call_requires_api_resource"
     if not (resource_id.startswith("api-resource:") or resource_id.isdigit()):
         return "api_call_requires_api_resource"
+    return ""
+
+
+def _api_resource_cache_key(resource_id: str) -> str:
+    normalized = str(resource_id or "").strip()
+    if normalized.isdigit():
+        return normalized
+    if normalized.startswith("api-resource:"):
+        raw = normalized.split(":", 2)[1] if ":" in normalized else ""
+        return raw if raw.isdigit() else ""
     return ""
 
 
@@ -2713,6 +3061,7 @@ def _runtime_node_selection_state(row: Mapping[str, Any]) -> dict[str, Any]:
             "selectedUpstreamNodeKeys": list(selected) if isinstance(selected, list) else [],
             "skippedUpstreamNodeKeys": list(skipped) if isinstance(skipped, list) else [],
             "reason": str(raw.get("reason") or ""),
+            **_runtime_node_selection_state_extra(raw),
         }
     return {
         "nodeKey": str(row.get("node_key") or ""),
@@ -2721,6 +3070,17 @@ def _runtime_node_selection_state(row: Mapping[str, Any]) -> dict[str, Any]:
         "skippedUpstreamNodeKeys": [],
         "reason": "",
     }
+
+
+def _runtime_node_selection_state_extra(raw: Mapping[str, Any]) -> dict[str, Any]:
+    extra: dict[str, Any] = {}
+    parallel_wave_key = str(raw.get("parallelWaveKey") or raw.get("parallel_wave_key") or "").strip()
+    if parallel_wave_key:
+        extra["parallelWaveKey"] = parallel_wave_key
+    join = raw.get("join")
+    if isinstance(join, Mapping):
+        extra["join"] = dict(join)
+    return extra
 
 
 def _node_selection_state_from_status(status: str) -> str:

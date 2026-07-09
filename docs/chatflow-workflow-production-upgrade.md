@@ -28,6 +28,18 @@
 - Workflow 可被外部任务系统调用，也可被 Chatflow/SOP/客服助手内部调用。
 - 运维人员能观察、诊断、取消、恢复、重试 runtime run/job/node。
 
+产品边界纠偏：
+
+- Workflow 是完整生产 DAG runtime，必须承诺 fan-out、fan-in、implicit join、
+  selected/skipped、terminal side-effect leaf、真实并行 wave 和可视化证明。
+- Chatflow 是对话状态机 runtime，默认单主路径推进。它的核心是当前阻塞节点、
+  pending prompt、checkpoint、resume、不可 replay 和副作用幂等。
+- Chatflow 只保留受控 DAG 子集：条件分支、selected/skipped 解释、必要 join
+  安全，以及可选后台 enrichment。不得把 Workflow 的完整并行 DAG 语义默认外推
+  到 Chatflow。
+- spec 223 作为 closure spec 承接这些边界纠偏、并行缺口和视觉证据缺口；不重写
+  历史 spec 的完成记录。
+
 SOP Router 的状态边界：
 
 - SOP Router 只维护轻量路由账本，不维护独立的 SOP 执行状态事实源。
@@ -130,6 +142,10 @@ External Workflow API / Internal Workflow Node
 
 目标：把 runtime v2 从单 `current node` while-loop 升级为 frontier-based DAG scheduler。
 
+证据纠偏：同一 wave 预先写入 node-run 和 `RUNNING` 事件不等同于真实并行。
+真实并行必须用 wall-clock、节点开始/完成重叠、事件序列单调和输出隔离共同证明。
+最新 UAT 已证明当前实现仍会串行完成三路慢分支；该缺口由 spec 223 收口。
+
 验收标准：
 
 - Runtime 内部维护 node state graph，而不是只维护一个 current node。
@@ -185,6 +201,9 @@ External Workflow API / Internal Workflow Node
   - 多回复候选按 priority/output mapping 决定；
   - side-effect-only branch 不参与用户回复；
   - 全路径只产生 side effect 时返回结构化执行摘要。
+- Chatflow 画布必须优先强调当前阻塞节点，而不是展示 Workflow 式并行 wave。
+  `WAITING` / `INTERRUPTED` 节点应有明确视觉状态；推荐使用沿节点边框循环的流光
+  动画表示“正在等待输入/恢复”，并提供 `prefers-reduced-motion` 静态高亮降级。
 
 SOP 完整 UAT 场景矩阵：
 
@@ -329,6 +348,13 @@ SOP 完整 UAT 场景矩阵：
 - API/Tool/LLM evidence。
 - 错误详情。
 - 完整 event timeline。
+
+Workflow 画布调试必须能证明 DAG 运行语义：fan-out 边、selected/skipped 边、
+join waiting/ready/completed、并行 wave/timeline 重叠。
+
+Chatflow 画布调试必须能证明对话恢复语义：当前阻塞节点、pending prompt、resume
+target、恢复后不 replay 已完成节点。Chatflow 的等待流光边框表示“等待输入”，不表示
+并行执行。
 
 客服助手和 SOP 侧应展示：
 

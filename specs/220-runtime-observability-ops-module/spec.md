@@ -6,6 +6,12 @@
 
 run / job / node / event 数据模型在 spec 213-219 已稳定下来。spec 220 把这些数据组装成一个独立主菜单模块（建议命名 "运行观测" 或 "Runtime Ops"），让运维人员可观察、诊断、取消、恢复、重试 runtime run / job / node，而不是分散在调试页面。本 spec 不引入新的 runtime 能力，全部能力来自前序 spec 暴露的接口与事件。
 
+## Post-Closure Note
+
+spec 220 提供 Runtime Ops 基线能力。Workflow true parallel wave 视觉证明，以及
+Chatflow 当前阻塞节点 / pending prompt / resume target 的产品化视觉证明，由 spec
+223 承接。Runtime Ops 中同时出现多个 `RUNNING` 节点不是并行执行的充分证据。
+
 ## 目标（What）
 
 逐条复用文档 §12 的目标和验收标准：

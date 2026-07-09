@@ -34,4 +34,14 @@ describe('workflow node run status badge', () => {
     expect(content).toContain("await loadRuntimeV2DebugDetail(lastTestRunId.value, 'WORKFLOW')")
     expect(content).toContain('await loadWorkflowRunDebugDetail(lastTestRunId.value)')
   })
+
+  it('emphasizes the active Chatflow blocking node with reduced-motion fallback', () => {
+    const content = readWorkflowCreateSource()
+
+    expect(content).toContain("'chatflow-blocking-node': isChatflowBlockingNode(nodeProps.data.nodeKey)")
+    expect(content).toContain(":data-testid=\"isChatflowBlockingNode(nodeProps.data.nodeKey) ? 'chatflow-blocking-node' : undefined\"")
+    expect(content).toContain('.coze-node.chatflow-blocking-node::before')
+    expect(content).toContain('@keyframes chatflow-blocking-border-flow')
+    expect(content).toContain('@media (prefers-reduced-motion: reduce)')
+  })
 })

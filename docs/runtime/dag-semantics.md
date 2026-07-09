@@ -4,6 +4,21 @@ Spec 214 defines the shared DAG vocabulary used by Workflow, Chatflow, SOP, and
 later runtime v2 scheduler work. This document is the semantic source for
 `app.modules.runtime.api.schemas`.
 
+## Product Boundary
+
+Workflow is the full production DAG runtime surface. Workflow may expose and
+operate explicit fan-out, fan-in, implicit join, selected/skipped edges,
+terminal side-effect leaves, and true same-frontier parallel execution.
+
+Chatflow is a conversational runtime surface. Chatflow defaults to one active
+conversation path per turn and prioritizes waiting checkpoints, pending prompts,
+resume, and no-replay guarantees. Chatflow may use a controlled DAG subset for
+conditional routes and background enrichment, but it does not default to full
+Workflow-style parallel DAG semantics.
+
+Spec 223 owns the closure work for this boundary, true Workflow parallel
+evidence, and Chatflow blocking/resume visual evidence.
+
 ## Edge Semantics
 
 An edge connects one source node port to one target node port. `sourceNodeKey`,
@@ -94,10 +109,12 @@ sequence and node-run writes can still be serialized by the runtime layer.
 For explicit START fan-out, START remains a virtual input node. When its
 `default` port is marked `allowFanOut`, runtime records the virtual default port
 as selected before the first frontier calculation, so all selected downstream
-targets enter the same wave. For LLM, Knowledge, and Agent waves, runtime
-creates all node-run rows and emits all `RUNNING` events before completing any
-node in that wave. This makes DAG concurrency observable while preserving
-serialized event sequence allocation.
+targets enter the same wave. Some external-node waves may create node-run rows
+and emit `RUNNING` events before any node completes. That prestart state is only
+observability evidence that the nodes are in the same frontier wave; it is not
+proof of true parallel execution. True parallel execution must be proven by
+wall-clock timing, overlapping branch execution, isolated outputs, and
+monotonic event sequences.
 
 ## Terminal Semantics
 

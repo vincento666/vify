@@ -70,8 +70,103 @@ describe('runtime ops DAG view model', () => {
       ['api', 'failed', '已失败'],
     ])
     expect(view.edges).toEqual([
-      { source: 'router', target: 'vip', state: 'selected' },
-      { source: 'router', target: 'fallback', state: 'skipped' },
+      { source: 'router', target: 'vip', state: 'selected', stateLabel: '已选择' },
+      { source: 'router', target: 'fallback', state: 'skipped', stateLabel: '已跳过' },
+    ])
+  })
+
+  it('projects join state and parallel wave overlap evidence', () => {
+    const view = buildRuntimeOpsDagView({
+      runId: 702,
+      nodes: [
+        {
+          nodeKey: 'api_a',
+          nodeType: 'API_CALL',
+          status: 'COMPLETED',
+          createdAt: '2026-07-09T11:00:00.000Z',
+          finishedAt: '2026-07-09T11:00:00.700Z',
+          selectionState: { state: 'completed', selectedUpstreamNodeKeys: ['start'], parallelWaveKey: 'wave-1' },
+        },
+        {
+          nodeKey: 'api_b',
+          nodeType: 'API_CALL',
+          status: 'COMPLETED',
+          createdAt: '2026-07-09T11:00:00.040Z',
+          finishedAt: '2026-07-09T11:00:00.760Z',
+          selectionState: { state: 'completed', selectedUpstreamNodeKeys: ['start'], parallelWaveKey: 'wave-1' },
+        },
+        {
+          nodeKey: 'join',
+          nodeType: 'END',
+          status: 'WAITING',
+          selectionState: {
+            state: 'waiting',
+            selectedUpstreamNodeKeys: ['api_a', 'api_b'],
+            skippedUpstreamNodeKeys: ['audit_leaf'],
+            join: {
+              requiredUpstreamNodeKeys: ['api_a', 'api_b'],
+              completedUpstreamNodeKeys: ['api_a'],
+              skippedUpstreamNodeKeys: ['audit_leaf'],
+            },
+          },
+        },
+        {
+          nodeKey: 'join_ready',
+          nodeType: 'END',
+          status: 'RUNNING',
+          selectionState: {
+            state: 'running',
+            selectedUpstreamNodeKeys: ['api_a', 'api_b'],
+            join: {
+              requiredUpstreamNodeKeys: ['api_a', 'api_b'],
+              completedUpstreamNodeKeys: ['api_a', 'api_b'],
+            },
+          },
+        },
+        {
+          nodeKey: 'join_done',
+          nodeType: 'END',
+          status: 'COMPLETED',
+          selectionState: {
+            state: 'completed',
+            selectedUpstreamNodeKeys: ['api_a', 'api_b'],
+            join: {
+              requiredUpstreamNodeKeys: ['api_a', 'api_b'],
+              completedUpstreamNodeKeys: ['api_a', 'api_b'],
+            },
+          },
+        },
+      ],
+    })
+
+    expect(view.nodes.find((node) => node.nodeKey === 'join')).toMatchObject({
+      joinState: 'waiting',
+      joinStateLabel: '等待汇合',
+      joinWaitingOnNodeKeys: ['api_b'],
+    })
+    expect(view.nodes.find((node) => node.nodeKey === 'join_ready')).toMatchObject({
+      joinState: 'ready',
+      joinStateLabel: '可汇合',
+      joinWaitingOnNodeKeys: [],
+    })
+    expect(view.nodes.find((node) => node.nodeKey === 'join_done')).toMatchObject({
+      joinState: 'completed',
+      joinStateLabel: '已汇合',
+      joinWaitingOnNodeKeys: [],
+    })
+    expect(view.edges).toContainEqual({
+      source: 'audit_leaf',
+      target: 'join',
+      state: 'skipped',
+      stateLabel: '已跳过',
+    })
+    expect(view.parallelWaves).toEqual([
+      {
+        key: 'wave-1',
+        nodeKeys: ['api_a', 'api_b'],
+        overlap: true,
+        overlapLabel: '并行重叠',
+      },
     ])
   })
 })

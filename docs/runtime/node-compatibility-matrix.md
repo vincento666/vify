@@ -6,6 +6,16 @@ Runtime V2 executes first-class canvas nodes through the frontier scheduler. The
 registry source of truth is `app/modules/runtime/api/node_registry.py`; this
 document mirrors the public compatibility contract for reviewers and UAT.
 
+This document separates two concepts:
+
+- implementation compatibility: an executor or documented runtime path exists;
+- evidence status: Workflow and Chatflow UAT have actually proven the node under
+  the relevant async/runtime semantics.
+
+Spec 223 owns the evidence-status closure. Rows marked `partial`,
+`automated-only`, or `missing` must not be used as proof that the full
+Workflow/Chatflow product behavior is complete.
+
 ## Compatibility Summary
 
 | Node type | Executor mapping | Status | Node run | Runtime event | DAG isolation | Chatflow | Workflow |
@@ -30,6 +40,41 @@ document mirrors the public compatibility contract for reviewers and UAT.
 | INFORMATION_COLLECTION | InformationCollectionNodeExecutor | reused | durable | node_event | yes | yes | yes |
 | TRANSFER_TO_HUMAN | RuntimeV2 checkpointed transfer path / TransferToHumanNodeExecutor | native | durable | node_event | yes | yes | product-difference: Chatflow only |
 | END | EndNodeExecutor | reused | durable | node_event | yes | yes | yes |
+
+## Evidence Status
+
+Status values:
+
+- `covered`: latest closure evidence proves the product behavior.
+- `partial`: some runtime/browser evidence exists, but not the full closure
+  matrix.
+- `automated-only`: tests exist, but latest browser/product UAT evidence is not
+  complete.
+- `not-applicable`: product boundary excludes this node for that flow.
+- `missing`: no sufficient closure evidence is recorded.
+
+| Node type | Workflow evidence | Chatflow evidence | Closure owner |
+|---|---|---|---|
+| START | partial | partial | [223.3](../../specs/223-runtime-v2-boundary-parallel-visual-closure/tasks.md) |
+| MESSAGE | partial | partial | [223.3](../../specs/223-runtime-v2-boundary-parallel-visual-closure/tasks.md) |
+| QUESTION | automated-only | partial | [223.5](../../specs/223-runtime-v2-boundary-parallel-visual-closure/tasks.md) |
+| HUMAN_INPUT | automated-only | missing | [223.5](../../specs/223-runtime-v2-boundary-parallel-visual-closure/tasks.md) |
+| LLM | partial | partial | [223.2/223.3](../../specs/223-runtime-v2-boundary-parallel-visual-closure/tasks.md) |
+| KNOWLEDGE | automated-only | automated-only | [223.3](../../specs/223-runtime-v2-boundary-parallel-visual-closure/tasks.md) |
+| AGENT_CALL | automated-only | automated-only | [223.2/223.3](../../specs/223-runtime-v2-boundary-parallel-visual-closure/tasks.md) |
+| API_CALL | partial | automated-only | [223.2/223.3](../../specs/223-runtime-v2-boundary-parallel-visual-closure/tasks.md) |
+| TOOL_CALL | automated-only | automated-only | [223.2/223.3](../../specs/223-runtime-v2-boundary-parallel-visual-closure/tasks.md) |
+| EXECUTE_WORKFLOW | automated-only | automated-only | [223.2/223.3](../../specs/223-runtime-v2-boundary-parallel-visual-closure/tasks.md) |
+| CODE | partial | automated-only | [223.3](../../specs/223-runtime-v2-boundary-parallel-visual-closure/tasks.md) |
+| TEXT_PROCESS | automated-only | automated-only | [223.3](../../specs/223-runtime-v2-boundary-parallel-visual-closure/tasks.md) |
+| JSON_PARSE | automated-only | automated-only | [223.3](../../specs/223-runtime-v2-boundary-parallel-visual-closure/tasks.md) |
+| VARIABLE_ASSIGN | automated-only | automated-only | [223.3](../../specs/223-runtime-v2-boundary-parallel-visual-closure/tasks.md) |
+| VARIABLE_AGGREGATION | automated-only | automated-only | [223.3](../../specs/223-runtime-v2-boundary-parallel-visual-closure/tasks.md) |
+| CONDITION | partial | partial | [223.3](../../specs/223-runtime-v2-boundary-parallel-visual-closure/tasks.md) |
+| INTENT_RECOGNITION | automated-only | partial | [223.5](../../specs/223-runtime-v2-boundary-parallel-visual-closure/tasks.md) |
+| INFORMATION_COLLECTION | automated-only | partial | [223.5](../../specs/223-runtime-v2-boundary-parallel-visual-closure/tasks.md) |
+| TRANSFER_TO_HUMAN | not-applicable | partial | [223.5](../../specs/223-runtime-v2-boundary-parallel-visual-closure/tasks.md) |
+| END | partial | partial | [223.3](../../specs/223-runtime-v2-boundary-parallel-visual-closure/tasks.md) |
 
 ## Chatflow / Workflow Parity
 
