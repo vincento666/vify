@@ -9626,9 +9626,7 @@ onUnmounted(() => {
 }
 
 .workflow-canvas-page.canvas-layout-stage-shelved .canvas-mode-tabs,
-.workflow-canvas-page.canvas-layout-stage-shelved .canvas-actions,
-.workflow-canvas-page.canvas-layout-left-rail .canvas-mode-tabs,
-.workflow-canvas-page.canvas-layout-left-rail .canvas-actions {
+.workflow-canvas-page.canvas-layout-left-rail .canvas-mode-tabs {
   display: none;
 }
 
@@ -15966,8 +15964,7 @@ onUnmounted(() => {
     min-height: 40rem;
   }
 
-  .canvas-mode-tabs,
-  .canvas-actions {
+  .canvas-mode-tabs {
     display: none;
   }
 
