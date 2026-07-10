@@ -12,7 +12,7 @@ def _load_runtime():
     return importlib.import_module(module_name)
 
 
-def _manifest(name: str, *, timeout_ms: int = 100):
+def _manifest(name: str, *, timeout_ms: int = 100, risk_level=None):
     from app.modules.ai_assistant.domain.tools import RiskLevel, ToolManifest
 
     return ToolManifest(
@@ -21,7 +21,7 @@ def _manifest(name: str, *, timeout_ms: int = 100):
         input_schema={"type": "object"},
         output_schema={"type": "object"},
         timeout_ms=timeout_ms,
-        risk_level=RiskLevel.READ,
+        risk_level=risk_level or RiskLevel.READ,
         read_resources=[],
         write_resources=[],
         policy_ref="test_policy",
@@ -78,7 +78,11 @@ class AiAssistantToolRuntimeTest(unittest.TestCase):
             time.sleep(0.05)
             return ToolResult(status="COMPLETED", output={"late": True})
 
-        registry = ToolRegistry({"slow_tool": (_manifest("slow_tool", timeout_ms=1), slow)})
+        from app.modules.ai_assistant.domain.tools import RiskLevel
+
+        registry = ToolRegistry(
+            {"slow_tool": (_manifest("slow_tool", timeout_ms=1, risk_level=RiskLevel.BUSINESS_WRITE), slow)}
+        )
         runner = runtime.ToolRunner(
             registry,
             policy=runtime.ToolRunnerPolicy(max_attempts=1),
@@ -95,6 +99,34 @@ class AiAssistantToolRuntimeTest(unittest.TestCase):
         self.assertTrue(observation["modelVisible"])
         self.assertEqual(result.span["status"], "ERROR")
         self.assertIn("tool.error_observation", [event["type"] for event in result.events])
+
+    def test_read_timeout_does_not_create_unknown_block_and_cache_is_expirable(self) -> None:
+        from app.modules.ai_assistant.domain.tools import ToolRegistry, ToolResult
+
+        runtime = _load_runtime()
+        calls = {"count": 0}
+
+        def eventually_fast(_payload: dict[str, Any]) -> ToolResult:
+            calls["count"] += 1
+            if calls["count"] == 1:
+                time.sleep(0.05)
+            return ToolResult(status="COMPLETED", output={"call": calls["count"]})
+
+        registry = ToolRegistry({"read_tool": (_manifest("read_tool", timeout_ms=1), eventually_fast)})
+        runner = runtime.ToolRunner(
+            registry,
+            policy=runtime.ToolRunnerPolicy(max_attempts=1, read_cache_seconds=0),
+            sleep=lambda _seconds: None,
+        )
+
+        first = runner.run("read_tool", {"caseId": "read-timeout"}, idempotency_key="read-timeout-key")
+        second = runner.run("read_tool", {"caseId": "read-timeout"}, idempotency_key="read-timeout-key")
+        third = runner.run("read_tool", {"caseId": "read-timeout"}, idempotency_key="read-timeout-key")
+
+        self.assertEqual(first.tool_result.output["error"]["code"], "TOOL_TIMEOUT")
+        self.assertEqual(second.tool_result.output, {"call": 2})
+        self.assertEqual(third.tool_result.output, {"call": 3})
+        self.assertEqual(calls["count"], 3)
 
     def test_runner_retries_rate_limit_errors_with_backoff_observation(self) -> None:
         from app.modules.ai_assistant.domain.tools import ToolRegistry
@@ -123,7 +155,7 @@ class AiAssistantToolRuntimeTest(unittest.TestCase):
         self.assertIn("retry_with_backoff", result.tool_result.output["observation"]["suggestedActions"])
 
     def test_runner_does_not_retry_or_fallback_after_timeout_when_completion_is_unknown(self) -> None:
-        from app.modules.ai_assistant.domain.tools import ToolRegistry, ToolResult
+        from app.modules.ai_assistant.domain.tools import RiskLevel, ToolRegistry, ToolResult
 
         runtime = _load_runtime()
         calls: list[dict[str, Any]] = []
@@ -138,7 +170,9 @@ class AiAssistantToolRuntimeTest(unittest.TestCase):
             fallback_calls.append({"toolName": tool_name, "payload": payload, "error": error})
             return ToolResult(status="COMPLETED", output={"fallback": True})
 
-        registry = ToolRegistry({"slow_tool": (_manifest("slow_tool", timeout_ms=1), slow)})
+        registry = ToolRegistry(
+            {"slow_tool": (_manifest("slow_tool", timeout_ms=1, risk_level=RiskLevel.BUSINESS_WRITE), slow)}
+        )
         runner = runtime.ToolRunner(
             registry,
             policy=runtime.ToolRunnerPolicy(max_attempts=3, initial_backoff_ms=1),

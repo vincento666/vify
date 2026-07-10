@@ -44,6 +44,7 @@ class ToolRunnerPolicy:
     jitter_ms: int = 50
     circuit_failure_threshold: int = 3
     circuit_open_seconds: float = 30.0
+    read_cache_seconds: float = 24 * 60 * 60
 
 
 @dataclass(frozen=True)
@@ -69,6 +70,7 @@ class _LedgerEntry:
     state: str
     tool_result: ToolResult | None = None
     error: dict[str, Any] | None = None
+    cached_at: float = 0.0
 
 
 class ToolRunner:
@@ -95,6 +97,7 @@ class ToolRunner:
         started = perf_counter()
         resolved_idempotency_key = idempotency_key or _stable_idempotency_key(tool_name, payload)
         events: list[dict[str, Any]] = []
+        is_read_tool = self._is_read_tool(tool_name)
         operation_id, replayed_operation = self._prepare_side_effect_operation(
             tool_name=tool_name,
             payload=payload,
@@ -158,6 +161,9 @@ class ToolRunner:
                 operation_id=operation_id,
             )
         ledger_entry = self._ledger.get(resolved_idempotency_key)
+        if ledger_entry is not None and is_read_tool and self._is_read_cache_expired(ledger_entry):
+            self._ledger.pop(resolved_idempotency_key, None)
+            ledger_entry = None
         if ledger_entry is not None:
             if ledger_entry.state == "COMPLETED" and ledger_entry.tool_result is not None:
                 duration_ms = _elapsed_ms(started)
@@ -184,27 +190,31 @@ class ToolRunner:
                     budget=_budget(attempts=0, duration_ms=duration_ms, retries=0),
                 )
             if ledger_entry.state == "UNKNOWN":
-                error = _error_payload(
-                    code="TOOL_IDEMPOTENCY_UNCERTAIN",
-                    message="A previous attempt with this idempotency key timed out and may still complete.",
-                    error_type="idempotency_uncertain",
-                    retriable=False,
-                )
-                events.append(
-                    {
-                        "type": "tool.idempotency_uncertain",
-                        "payload": {"toolName": tool_name, "idempotencyKey": resolved_idempotency_key, "error": error},
-                    }
-                )
-                return self._failed_result(
-                    tool_name=tool_name,
-                    payload=payload,
-                    idempotency_key=resolved_idempotency_key,
-                    attempts=0,
-                    duration_ms=_elapsed_ms(started),
-                    error=error,
-                    events=events,
-                )
+                if is_read_tool:
+                    self._ledger.pop(resolved_idempotency_key, None)
+                    ledger_entry = None
+                else:
+                    error = _error_payload(
+                        code="TOOL_IDEMPOTENCY_UNCERTAIN",
+                        message="A previous attempt with this idempotency key timed out and may still complete.",
+                        error_type="idempotency_uncertain",
+                        retriable=False,
+                    )
+                    events.append(
+                        {
+                            "type": "tool.idempotency_uncertain",
+                            "payload": {"toolName": tool_name, "idempotencyKey": resolved_idempotency_key, "error": error},
+                        }
+                    )
+                    return self._failed_result(
+                        tool_name=tool_name,
+                        payload=payload,
+                        idempotency_key=resolved_idempotency_key,
+                        attempts=0,
+                        duration_ms=_elapsed_ms(started),
+                        error=error,
+                        events=events,
+                    )
         circuit = self._circuits.setdefault(tool_name, _CircuitState())
         if self._is_circuit_open(circuit):
             error = _error_payload(
@@ -263,7 +273,7 @@ class ToolRunner:
                         "payload": {"toolName": tool_name, "attempt": attempt, "error": error},
                     }
                 )
-                if error.get("code") == "TOOL_TIMEOUT":
+                if error.get("code") == "TOOL_TIMEOUT" and not is_read_tool:
                     if operation_id and attempt_id and self._operation_ledger is not None:
                         self._operation_ledger.update_tool_attempt(attempt_id, status="UNKNOWN", error_class="TOOL_TIMEOUT")
                         self._operation_ledger.mark_tool_operation_unknown(
@@ -326,7 +336,9 @@ class ToolRunner:
                         output_payload={"status": tool_result.status, "output": tool_result.output},
                         response_hash=_response_hash(tool_result.output),
                     )
-                self._ledger[resolved_idempotency_key] = _LedgerEntry(state="COMPLETED", tool_result=tool_result)
+                self._ledger[resolved_idempotency_key] = _LedgerEntry(
+                    state="COMPLETED", tool_result=tool_result, cached_at=time()
+                )
                 return result
 
         error = last_error or _error_payload(
@@ -336,7 +348,7 @@ class ToolRunner:
             retriable=True,
         )
         self._record_failure(circuit)
-        if error.get("code") == "TOOL_TIMEOUT":
+        if error.get("code") == "TOOL_TIMEOUT" and not is_read_tool:
             self._ledger[resolved_idempotency_key] = _LedgerEntry(state="UNKNOWN", error=error)
             return self._failed_result(
                 tool_name=tool_name,
@@ -414,7 +426,9 @@ class ToolRunner:
                         output_payload={"status": fallback_result.status, "output": fallback_result.output},
                         response_hash=_response_hash(fallback_result.output),
                     )
-                self._ledger[resolved_idempotency_key] = _LedgerEntry(state="COMPLETED", tool_result=fallback_result)
+                self._ledger[resolved_idempotency_key] = _LedgerEntry(
+                    state="COMPLETED", tool_result=fallback_result, cached_at=time()
+                )
                 return result
 
         return self._failed_result(
@@ -481,6 +495,12 @@ class ToolRunner:
             return int(self._registry.get_manifest(tool_name).timeout_ms)
         except Exception:
             return 1000
+
+    def _is_read_tool(self, tool_name: str) -> bool:
+        return self._registry.get_manifest(tool_name).risk_level == RiskLevel.READ
+
+    def _is_read_cache_expired(self, entry: _LedgerEntry) -> bool:
+        return entry.state == "COMPLETED" and time() - entry.cached_at >= max(0.0, self._policy.read_cache_seconds)
 
     def _backoff_seconds(self, failed_attempt: int) -> float:
         base_ms = self._policy.initial_backoff_ms * (self._policy.backoff_multiplier ** max(0, failed_attempt - 1))
