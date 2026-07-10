@@ -51,6 +51,12 @@ class AiAssistantRepository:
         ).mappings().one_or_none()
         return dict(row) if row else None
 
+    def list_tool_circuit_breakers(self) -> list[dict[str, Any]]:
+        rows = self._session.execute(
+            sa.select(self._tool_circuit_breaker_table).order_by(self._tool_circuit_breaker_table.c.id.asc())
+        ).mappings().all()
+        return [dict(row) for row in rows]
+
     def record_tool_circuit_failure(
         self,
         *,
@@ -238,6 +244,14 @@ class AiAssistantRepository:
             )
         ).mappings().one_or_none()
         return dict(row) if row else None
+
+    def list_run_tool_operations(self, run_id: int) -> list[dict[str, Any]]:
+        rows = self._session.execute(
+            sa.select(self._tool_operation_table)
+            .where(self._tool_operation_table.c.run_id == run_id, self._tool_operation_table.c.deleted.is_(False))
+            .order_by(self._tool_operation_table.c.id.asc())
+        ).mappings().all()
+        return [dict(row) for row in rows]
 
     def claim_tool_operation(
         self,

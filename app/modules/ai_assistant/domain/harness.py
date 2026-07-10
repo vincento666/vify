@@ -2762,11 +2762,20 @@ class AiAssistantHarnessService:
         events = self._repository.list_run_events(run_id)
         tool_calls = self._repository.list_run_tool_calls(run_id)
         approvals = self._repository.list_run_approvals(run_id)
+        operations = self._repository.list_run_tool_operations(run_id)
+        attempts = [attempt for operation in operations for attempt in self._repository.list_tool_attempts(operation["operation_id"])]
+        releases = [release for operation in operations for release in self._repository.list_tool_operation_releases(operation["operation_id"])]
         return build_trace_audit_export(
             run=run,
             events=events,
             tool_calls=tool_calls,
             approvals=approvals,
+            durable_tool_ledger={
+                "operations": operations,
+                "attempts": attempts,
+                "releases": releases,
+                "breakers": self._repository.list_tool_circuit_breakers(),
+            },
         )
 
     def list_tool_manifests(self) -> list[dict[str, Any]]:

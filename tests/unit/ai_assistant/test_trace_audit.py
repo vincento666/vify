@@ -6,6 +6,27 @@ from typing import Any
 
 
 class TraceAuditEvalBudgetTest(unittest.TestCase):
+    def test_export_includes_durable_tool_ledger_evidence(self) -> None:
+        trace_audit = importlib.import_module("app.modules.ai_assistant.domain.trace_audit")
+
+        export = trace_audit.build_trace_audit_export(
+            run=_run(),
+            events=_events(),
+            tool_calls=_tool_calls(),
+            approvals=_approvals(),
+            durable_tool_ledger={
+                "operations": [{"operation_id": "op-1", "status": "UNKNOWN"}],
+                "attempts": [{"attempt_id": "attempt-1", "operation_id": "op-1", "adapter_name": "primary"}],
+                "releases": [{"operation_id": "op-1", "actor": "operator-1"}],
+                "breakers": [{"breaker_key": "default:tool:primary:READ:RETRYABLE", "state": "OPEN"}],
+            },
+        )
+
+        ledger = export["audit"]["durableToolLedger"]
+        self.assertEqual(ledger["operations"][0]["status"], "UNKNOWN")
+        self.assertEqual(ledger["releases"][0]["actor"], "operator-1")
+        self.assertEqual(ledger["breakers"][0]["state"], "OPEN")
+
     def test_export_covers_trace_audit_budget_and_eval_surfaces(self) -> None:
         spec = importlib.util.find_spec("app.modules.ai_assistant.domain.trace_audit")
         self.assertIsNotNone(spec, "TraceAuditEvalBudget requires a trace_audit domain module")

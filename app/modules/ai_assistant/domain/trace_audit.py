@@ -43,6 +43,7 @@ def build_trace_audit_export(
     events: list[dict[str, Any]],
     tool_calls: list[dict[str, Any]],
     approvals: list[dict[str, Any]],
+    durable_tool_ledger: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     run_id = int(run["id"])
     budget = build_budget_record(run=run, events=events, tool_calls=tool_calls)
@@ -51,7 +52,14 @@ def build_trace_audit_export(
         "sessionId": int(run["session_id"]),
         "status": str(run["status"]),
         "trace": {"runId": run_id, "spans": build_trace_spans(run=run, events=events, tool_calls=tool_calls, approvals=approvals)},
-        "audit": build_audit_record(run=run, events=events, tool_calls=tool_calls, approvals=approvals, budget=budget),
+        "audit": build_audit_record(
+            run=run,
+            events=events,
+            tool_calls=tool_calls,
+            approvals=approvals,
+            budget=budget,
+            durable_tool_ledger=durable_tool_ledger or {},
+        ),
         "budget": budget,
     }
     export["eval"] = build_trace_eval_report(export)
@@ -91,6 +99,7 @@ def build_audit_record(
     tool_calls: list[dict[str, Any]],
     approvals: list[dict[str, Any]],
     budget: dict[str, Any],
+    durable_tool_ledger: dict[str, Any],
 ) -> dict[str, Any]:
     input_payload = _dict(run.get("input_payload"))
     response_payload = _dict(run.get("response_payload"))
@@ -135,6 +144,12 @@ def build_audit_record(
         "contextBudget": context_budget,
         "compactionSnapshot": _compaction_snapshot(run, events, context_budget),
         "finalResult": str(response_payload.get("finalAnswer") or ""),
+        "durableToolLedger": {
+            "operations": _list(durable_tool_ledger.get("operations")),
+            "attempts": _list(durable_tool_ledger.get("attempts")),
+            "releases": _list(durable_tool_ledger.get("releases")),
+            "breakers": _list(durable_tool_ledger.get("breakers")),
+        },
     }
 
 
