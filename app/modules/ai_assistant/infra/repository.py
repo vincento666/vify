@@ -69,6 +69,7 @@ class AiAssistantRepository:
                 "response_hash": None,
                 "output_payload": None,
                 "completed_at": None,
+                "retention_until": None,
                 "deleted": False,
                 "created_at": now,
                 "updated_at": now,
@@ -145,6 +146,21 @@ class AiAssistantRepository:
                 completed_at=now,
                 updated_at=now,
             )
+        )
+        self._session.commit()
+        updated = self.get_tool_operation(operation_id)
+        if updated is None:
+            raise KeyError(f"AI Assistant tool operation disappeared: {operation_id}")
+        return updated
+
+    def mark_tool_operation_unknown(self, operation_id: str, *, retention_until: datetime) -> dict[str, Any]:
+        self._session.execute(
+            self._tool_operation_table.update()
+            .where(
+                self._tool_operation_table.c.operation_id == operation_id,
+                self._tool_operation_table.c.deleted.is_(False),
+            )
+            .values(status="UNKNOWN", retention_until=retention_until, updated_at=datetime.now())
         )
         self._session.commit()
         updated = self.get_tool_operation(operation_id)

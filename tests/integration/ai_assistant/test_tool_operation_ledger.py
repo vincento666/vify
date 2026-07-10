@@ -1,4 +1,5 @@
 import unittest
+import time
 
 from alembic import command
 from alembic.config import Config
@@ -28,7 +29,11 @@ class ToolOperationLedgerRepositoryTest(unittest.TestCase):
 
         self.assertIn("ai_assistant_tool_operation", table_names)
         self.assertIn("ai_assistant_tool_attempt", table_names)
-        self.assertTrue({"operation_id", "session_id", "run_id", "status", "output_payload"}.issubset(operation_columns))
+        self.assertTrue(
+            {"operation_id", "session_id", "run_id", "status", "output_payload", "retention_until"}.issubset(
+                operation_columns
+            )
+        )
         self.assertTrue({"operation_id", "attempt_id", "adapter_name", "status"}.issubset(attempt_columns))
 
     def test_operation_and_attempt_survive_new_repository_instance(self) -> None:
@@ -203,6 +208,73 @@ class ToolOperationLedgerRepositoryTest(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertEqual(pre_dispatch_operations[0]["status"], "PENDING")
         self.assertEqual(pre_dispatch_operations[0]["idempotency_key"], "side-effect-key-1")
+
+    def test_side_effect_timeout_becomes_durable_unknown_and_blocks_restart_replay(self) -> None:
+        from app.modules.ai_assistant.domain.tool_runtime import ToolRunner, ToolRunnerPolicy
+        from app.modules.ai_assistant.domain.tools import RiskLevel, ToolManifest, ToolRegistry, ToolResult
+        from app.modules.ai_assistant.infra.repository import AiAssistantRepository
+
+        calls: list[dict[str, object]] = []
+
+        def slow(payload: dict[str, object]) -> ToolResult:
+            calls.append(payload)
+            time.sleep(0.05)
+            return ToolResult(status="COMPLETED", output={"late": True})
+
+        manifest = ToolManifest(
+            name="slow_side_effect",
+            description="ambiguous side-effect test tool",
+            input_schema={"type": "object"},
+            output_schema={"type": "object"},
+            timeout_ms=1,
+            risk_level=RiskLevel.BUSINESS_WRITE,
+            read_resources=[],
+            write_resources=["test:slow"],
+            policy_ref="test_side_effect",
+        )
+        registry = ToolRegistry({"slow_side_effect": (manifest, slow)})
+
+        with Mysql8TestDatabase("ai_assistant_tool_operation_unknown") as database:
+            from app.modules.ai_assistant.infra.schema import ai_assistant_tables, register_ai_assistant_tables
+
+            database.create_all(tables=ai_assistant_tables(), register=register_ai_assistant_tables)
+            with database.session() as session:
+                repository = AiAssistantRepository(session)
+                assistant_session = repository.create_session(title="Unknown side effect")
+                run = repository.create_run(
+                    session_id=int(assistant_session["id"]),
+                    user_message="Do not replay uncertain effect",
+                    idempotency_key="unknown-run-1",
+                )
+                payload = {
+                    "caseId": "case-unknown-1",
+                    "_aiAssistantRuntime": {
+                        "sessionId": int(assistant_session["id"]),
+                        "runId": int(run["id"]),
+                        "planStepId": "unknown-step-1",
+                    },
+                }
+                first = ToolRunner(
+                    registry,
+                    policy=ToolRunnerPolicy(max_attempts=1),
+                    operation_ledger=repository,
+                ).run("slow_side_effect", payload, idempotency_key="unknown-key-1")
+                operation = repository.get_tool_operation(first.operation_id)
+                attempts = repository.list_tool_attempts(first.operation_id)
+
+            with database.session() as restarted_session:
+                second = ToolRunner(
+                    registry,
+                    policy=ToolRunnerPolicy(max_attempts=1),
+                    operation_ledger=AiAssistantRepository(restarted_session),
+                ).run("slow_side_effect", payload, idempotency_key="unknown-key-1")
+
+        self.assertEqual(first.tool_result.output["error"]["code"], "TOOL_TIMEOUT")
+        self.assertEqual(operation["status"], "UNKNOWN")
+        self.assertGreater(operation["retention_until"], operation["updated_at"])
+        self.assertEqual(attempts[0]["status"], "UNKNOWN")
+        self.assertEqual(second.tool_result.output["error"]["code"], "TOOL_IDEMPOTENCY_UNCERTAIN")
+        self.assertEqual(len(calls), 1)
 
 
 if __name__ == "__main__":

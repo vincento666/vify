@@ -175,6 +175,7 @@ def register_ai_assistant_tables(metadata: sa.MetaData | None = None) -> None:
             sa.Column("response_hash", sa.String(128), nullable=True),
             sa.Column("output_payload", sa.JSON(), nullable=True),
             sa.Column("completed_at", sa.DateTime(), nullable=True),
+            sa.Column("retention_until", sa.DateTime(), nullable=True),
             deleted_column(),
             *timestamps(),
             sa.UniqueConstraint("operation_id", name="idx_ai_assistant_tool_operation_id"),

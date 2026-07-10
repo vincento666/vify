@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from hashlib import sha256
 import json
 from random import random
+from datetime import datetime, timedelta
 from time import perf_counter, time
 from typing import Any, Callable, Protocol
 
@@ -26,6 +27,12 @@ class ToolOperationLedger(Protocol):
         output_payload: dict[str, Any],
         response_hash: str | None = None,
     ) -> dict[str, Any]: ...
+
+    def create_tool_attempt(self, **values: Any) -> dict[str, Any]: ...
+
+    def update_tool_attempt(self, attempt_id: str, **values: Any) -> dict[str, Any]: ...
+
+    def mark_tool_operation_unknown(self, operation_id: str, *, retention_until: datetime) -> dict[str, Any]: ...
 
 
 @dataclass(frozen=True)
@@ -126,6 +133,29 @@ class ToolRunner:
                 budget=_budget(attempts=0, duration_ms=duration_ms, retries=0),
                 operation_id=operation_id,
             )
+        if replayed_operation is not None and replayed_operation.get("status") == "UNKNOWN":
+            error = _error_payload(
+                code="TOOL_IDEMPOTENCY_UNCERTAIN",
+                message="A previous side-effect attempt is UNKNOWN and requires reconciliation.",
+                error_type="idempotency_uncertain",
+                retriable=False,
+            )
+            events.append(
+                {
+                    "type": "tool.idempotency_uncertain",
+                    "payload": {"toolName": tool_name, "operationId": operation_id, "error": error},
+                }
+            )
+            return self._failed_result(
+                tool_name=tool_name,
+                payload=payload,
+                idempotency_key=resolved_idempotency_key,
+                attempts=0,
+                duration_ms=_elapsed_ms(started),
+                error=error,
+                events=events,
+                operation_id=operation_id,
+            )
         ledger_entry = self._ledger.get(resolved_idempotency_key)
         if ledger_entry is not None:
             if ledger_entry.state == "COMPLETED" and ledger_entry.tool_result is not None:
@@ -199,6 +229,16 @@ class ToolRunner:
         attempts = 0
         for attempt in range(1, max_attempts + 1):
             attempts = attempt
+            attempt_id = ""
+            if operation_id and self._operation_ledger is not None:
+                attempt_id = f"{operation_id}:attempt:{attempt}"
+                self._operation_ledger.create_tool_attempt(
+                    operation_id=operation_id,
+                    attempt_id=attempt_id,
+                    adapter_name="primary",
+                    status="DISPATCHED",
+                    request_hash=_request_hash(payload),
+                )
             dispatch_payload = _payload_with_runtime(
                 payload,
                 resolved_idempotency_key,
@@ -217,6 +257,12 @@ class ToolRunner:
                     }
                 )
                 if error.get("code") == "TOOL_TIMEOUT":
+                    if operation_id and attempt_id and self._operation_ledger is not None:
+                        self._operation_ledger.update_tool_attempt(attempt_id, status="UNKNOWN", error_class="TOOL_TIMEOUT")
+                        self._operation_ledger.mark_tool_operation_unknown(
+                            operation_id,
+                            retention_until=datetime.now() + timedelta(days=7),
+                        )
                     break
                 if attempt < max_attempts and bool(error.get("retriable")):
                     delay_seconds = self._backoff_seconds(attempt)
@@ -262,6 +308,12 @@ class ToolRunner:
                     operation_id=operation_id,
                 )
                 if operation_id and self._operation_ledger is not None:
+                    if attempt_id:
+                        self._operation_ledger.update_tool_attempt(
+                            attempt_id,
+                            status="COMPLETED",
+                            response_hash=_response_hash(tool_result.output),
+                        )
                     self._operation_ledger.complete_tool_operation(
                         operation_id,
                         output_payload={"status": tool_result.status, "output": tool_result.output},
@@ -287,6 +339,7 @@ class ToolRunner:
                 duration_ms=_elapsed_ms(started),
                 error=error,
                 events=events,
+                operation_id=operation_id,
             )
         fallback = self._fallback_adapters.get(tool_name)
         if fallback is not None:
@@ -329,6 +382,7 @@ class ToolRunner:
             duration_ms=_elapsed_ms(started),
             error=error,
             events=events,
+            operation_id=operation_id,
         )
 
     def _dispatch_with_timeout(self, tool_name: str, payload: dict[str, Any], timeout_ms: int) -> ToolResult:
@@ -421,6 +475,7 @@ class ToolRunner:
         duration_ms: int,
         error: dict[str, Any],
         events: list[dict[str, Any]],
+        operation_id: str = "",
     ) -> ToolRunResult:
         observation = structured_tool_error_observation(
             tool_name=tool_name,
@@ -451,8 +506,9 @@ class ToolRunner:
                 attempts=attempts,
                 idempotency_key=idempotency_key,
                 error=error,
-            ),
+            ) | ({"operationId": operation_id} if operation_id else {}),
             budget=_budget(attempts=attempts, duration_ms=duration_ms, retries=max(0, attempts - 1)),
+            operation_id=operation_id,
         )
 
 
