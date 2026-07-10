@@ -37,6 +37,155 @@ class AiAssistantRepository:
         self._approval_table = Base.metadata.tables["ai_assistant_approval"]
         self._proposed_action_table = Base.metadata.tables["ai_assistant_proposed_action"]
         self._resource_lock_table = Base.metadata.tables["ai_assistant_resource_lock"]
+        self._tool_operation_table = Base.metadata.tables["ai_assistant_tool_operation"]
+        self._tool_attempt_table = Base.metadata.tables["ai_assistant_tool_attempt"]
+
+    def create_tool_operation(
+        self,
+        *,
+        operation_id: str,
+        session_id: int,
+        run_id: int,
+        plan_step_id: str,
+        tool_name: str,
+        effect_class: str,
+        idempotency_key: str | None,
+        request_hash: str,
+    ) -> dict[str, Any]:
+        now = datetime.now()
+        row = insert_and_fetch(
+            self._session,
+            self._tool_operation_table,
+            {
+                "operation_id": operation_id,
+                "session_id": session_id,
+                "run_id": run_id,
+                "plan_step_id": plan_step_id,
+                "tool_name": tool_name,
+                "effect_class": effect_class,
+                "idempotency_key": idempotency_key,
+                "request_hash": request_hash,
+                "status": "PENDING",
+                "response_hash": None,
+                "completed_at": None,
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        self._session.commit()
+        return row
+
+    def get_tool_operation(self, operation_id: str) -> dict[str, Any] | None:
+        row = self._session.execute(
+            sa.select(self._tool_operation_table).where(
+                self._tool_operation_table.c.operation_id == operation_id,
+                self._tool_operation_table.c.deleted.is_(False),
+            )
+        ).mappings().one_or_none()
+        return dict(row) if row else None
+
+    def claim_tool_operation(
+        self,
+        operation_id: str,
+        *,
+        expected_status: str,
+        next_status: str,
+    ) -> dict[str, Any] | None:
+        result = self._session.execute(
+            self._tool_operation_table.update()
+            .where(
+                self._tool_operation_table.c.operation_id == operation_id,
+                self._tool_operation_table.c.status == expected_status,
+                self._tool_operation_table.c.deleted.is_(False),
+            )
+            .values(status=next_status, updated_at=datetime.now())
+        )
+        self._session.commit()
+        if not _rowcount(result):
+            return None
+        return self.get_tool_operation(operation_id)
+
+    def create_tool_attempt(
+        self,
+        *,
+        operation_id: str,
+        attempt_id: str,
+        adapter_name: str,
+        status: str,
+        request_hash: str,
+    ) -> dict[str, Any]:
+        now = datetime.now()
+        row = insert_and_fetch(
+            self._session,
+            self._tool_attempt_table,
+            {
+                "operation_id": operation_id,
+                "attempt_id": attempt_id,
+                "adapter_name": adapter_name,
+                "status": status,
+                "request_hash": request_hash,
+                "response_hash": None,
+                "error_class": None,
+                "started_at": now,
+                "completed_at": None,
+                "deleted": False,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        self._session.commit()
+        return row
+
+    def list_tool_attempts(self, operation_id: str) -> list[dict[str, Any]]:
+        rows = self._session.execute(
+            sa.select(self._tool_attempt_table)
+            .where(
+                self._tool_attempt_table.c.operation_id == operation_id,
+                self._tool_attempt_table.c.deleted.is_(False),
+            )
+            .order_by(self._tool_attempt_table.c.id.asc())
+        ).mappings().all()
+        return [dict(row) for row in rows]
+
+    def get_tool_attempt(self, attempt_id: str) -> dict[str, Any] | None:
+        row = self._session.execute(
+            sa.select(self._tool_attempt_table).where(
+                self._tool_attempt_table.c.attempt_id == attempt_id,
+                self._tool_attempt_table.c.deleted.is_(False),
+            )
+        ).mappings().one_or_none()
+        return dict(row) if row else None
+
+    def update_tool_attempt(
+        self,
+        attempt_id: str,
+        *,
+        status: str,
+        response_hash: str | None = None,
+        error_class: str | None = None,
+    ) -> dict[str, Any]:
+        values: dict[str, Any] = {
+            "status": status,
+            "response_hash": response_hash,
+            "error_class": error_class,
+            "updated_at": datetime.now(),
+        }
+        if status in {"COMPLETED", "FAILED", "UNKNOWN"}:
+            values["completed_at"] = datetime.now()
+        self._session.execute(
+            self._tool_attempt_table.update()
+            .where(
+                self._tool_attempt_table.c.attempt_id == attempt_id,
+                self._tool_attempt_table.c.deleted.is_(False),
+            )
+            .values(**values)
+        )
+        self._session.commit()
+        updated = self.get_tool_attempt(attempt_id)
+        if updated is None:
+            raise KeyError(f"AI Assistant tool attempt disappeared: {attempt_id}")
+        return updated
 
     def create_session(self, title: str = "", context: dict[str, Any] | None = None) -> dict[str, Any]:
         now = datetime.now()

@@ -158,6 +158,51 @@ def register_ai_assistant_tables(metadata: sa.MetaData | None = None) -> None:
             sa.Index("idx_ai_assistant_resource_lock_owner", "owner_session_id", "owner_run_id"),
         )
 
+    if "ai_assistant_tool_operation" not in target.tables:
+        sa.Table(
+            "ai_assistant_tool_operation",
+            target,
+            id_column(),
+            sa.Column("operation_id", sa.String(128), nullable=False),
+            sa.Column("session_id", BIGINT, nullable=False),
+            sa.Column("run_id", BIGINT, nullable=False),
+            sa.Column("plan_step_id", sa.String(160), nullable=False),
+            sa.Column("tool_name", sa.String(120), nullable=False),
+            sa.Column("effect_class", sa.String(40), nullable=False),
+            sa.Column("idempotency_key", sa.String(160), nullable=True),
+            sa.Column("request_hash", sa.String(128), nullable=False),
+            sa.Column("status", sa.String(30), nullable=False, server_default="PENDING"),
+            sa.Column("response_hash", sa.String(128), nullable=True),
+            sa.Column("completed_at", sa.DateTime(), nullable=True),
+            deleted_column(),
+            *timestamps(),
+            sa.UniqueConstraint("operation_id", name="idx_ai_assistant_tool_operation_id"),
+            sa.Index("idx_ai_assistant_tool_operation_run", "run_id"),
+            sa.Index("idx_ai_assistant_tool_operation_session", "session_id"),
+            sa.Index("idx_ai_assistant_tool_operation_status", "status"),
+        )
+
+    if "ai_assistant_tool_attempt" not in target.tables:
+        sa.Table(
+            "ai_assistant_tool_attempt",
+            target,
+            id_column(),
+            sa.Column("operation_id", sa.String(128), nullable=False),
+            sa.Column("attempt_id", sa.String(128), nullable=False),
+            sa.Column("adapter_name", sa.String(120), nullable=False),
+            sa.Column("status", sa.String(30), nullable=False, server_default="PENDING"),
+            sa.Column("request_hash", sa.String(128), nullable=False),
+            sa.Column("response_hash", sa.String(128), nullable=True),
+            sa.Column("error_class", sa.String(120), nullable=True),
+            sa.Column("started_at", sa.DateTime(), nullable=True),
+            sa.Column("completed_at", sa.DateTime(), nullable=True),
+            deleted_column(),
+            *timestamps(),
+            sa.UniqueConstraint("attempt_id", name="idx_ai_assistant_tool_attempt_id"),
+            sa.Index("idx_ai_assistant_tool_attempt_operation", "operation_id"),
+            sa.Index("idx_ai_assistant_tool_attempt_status", "status"),
+        )
+
 
 def ai_assistant_tables() -> list[sa.Table]:
     register_ai_assistant_tables()
@@ -170,5 +215,7 @@ def ai_assistant_tables() -> list[sa.Table]:
         "ai_assistant_approval",
         "ai_assistant_proposed_action",
         "ai_assistant_resource_lock",
+        "ai_assistant_tool_operation",
+        "ai_assistant_tool_attempt",
     ]
     return [Base.metadata.tables[name] for name in names]
