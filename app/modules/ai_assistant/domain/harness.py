@@ -93,7 +93,7 @@ class AiAssistantHarnessService:
     ) -> None:
         self._repository = repository
         self._tools = tool_registry or ToolRegistry.with_builtin_tools()
-        self._tool_runner = tool_runner or ToolRunner(self._tools)
+        self._tool_runner = tool_runner or ToolRunner(self._tools, operation_ledger=repository)
         self._resource_locks = ResourceLockManager(repository)
         self._approval_policy = approval_policy or ApprovalPolicy(environment="test")
         self._sandbox_policy = sandbox_policy or SandboxPolicy()

@@ -173,6 +173,7 @@ def register_ai_assistant_tables(metadata: sa.MetaData | None = None) -> None:
             sa.Column("request_hash", sa.String(128), nullable=False),
             sa.Column("status", sa.String(30), nullable=False, server_default="PENDING"),
             sa.Column("response_hash", sa.String(128), nullable=True),
+            sa.Column("output_payload", sa.JSON(), nullable=True),
             sa.Column("completed_at", sa.DateTime(), nullable=True),
             deleted_column(),
             *timestamps(),

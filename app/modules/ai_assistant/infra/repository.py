@@ -67,6 +67,7 @@ class AiAssistantRepository:
                 "request_hash": request_hash,
                 "status": "PENDING",
                 "response_hash": None,
+                "output_payload": None,
                 "completed_at": None,
                 "deleted": False,
                 "created_at": now,
@@ -75,6 +76,23 @@ class AiAssistantRepository:
         )
         self._session.commit()
         return row
+
+    def create_or_get_tool_operation(
+        self,
+        **values: Any,
+    ) -> tuple[dict[str, Any], bool]:
+        operation_id = str(values["operation_id"])
+        existing = self.get_tool_operation(operation_id)
+        if existing is not None:
+            return existing, True
+        try:
+            return self.create_tool_operation(**values), False
+        except sa.exc.IntegrityError:
+            self._session.rollback()
+            existing = self.get_tool_operation(operation_id)
+            if existing is None:
+                raise
+            return existing, True
 
     def get_tool_operation(self, operation_id: str) -> dict[str, Any] | None:
         row = self._session.execute(
@@ -105,6 +123,34 @@ class AiAssistantRepository:
         if not _rowcount(result):
             return None
         return self.get_tool_operation(operation_id)
+
+    def complete_tool_operation(
+        self,
+        operation_id: str,
+        *,
+        output_payload: dict[str, Any],
+        response_hash: str | None = None,
+    ) -> dict[str, Any]:
+        now = datetime.now()
+        self._session.execute(
+            self._tool_operation_table.update()
+            .where(
+                self._tool_operation_table.c.operation_id == operation_id,
+                self._tool_operation_table.c.deleted.is_(False),
+            )
+            .values(
+                status="COMPLETED",
+                output_payload=output_payload,
+                response_hash=response_hash,
+                completed_at=now,
+                updated_at=now,
+            )
+        )
+        self._session.commit()
+        updated = self.get_tool_operation(operation_id)
+        if updated is None:
+            raise KeyError(f"AI Assistant tool operation disappeared: {operation_id}")
+        return updated
 
     def create_tool_attempt(
         self,

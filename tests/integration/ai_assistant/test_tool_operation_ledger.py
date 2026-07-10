@@ -28,7 +28,7 @@ class ToolOperationLedgerRepositoryTest(unittest.TestCase):
 
         self.assertIn("ai_assistant_tool_operation", table_names)
         self.assertIn("ai_assistant_tool_attempt", table_names)
-        self.assertTrue({"operation_id", "session_id", "run_id", "status"}.issubset(operation_columns))
+        self.assertTrue({"operation_id", "session_id", "run_id", "status", "output_payload"}.issubset(operation_columns))
         self.assertTrue({"operation_id", "attempt_id", "adapter_name", "status"}.issubset(attempt_columns))
 
     def test_operation_and_attempt_survive_new_repository_instance(self) -> None:
@@ -124,6 +124,85 @@ class ToolOperationLedgerRepositoryTest(unittest.TestCase):
         self.assertIsNone(stale)
         self.assertEqual(updated_attempt["status"], "COMPLETED")
         self.assertEqual(updated_attempt["response_hash"], "response-hash-claim")
+
+    def test_completed_side_effect_replays_after_tool_runner_restart(self) -> None:
+        from app.modules.ai_assistant.domain.tool_runtime import ToolRunner, ToolRunnerPolicy
+        from app.modules.ai_assistant.domain.tools import RiskLevel, ToolManifest, ToolRegistry, ToolResult
+        from app.modules.ai_assistant.infra.repository import AiAssistantRepository
+
+        calls: list[dict[str, object]] = []
+        pre_dispatch_operations: list[dict[str, object] | None] = []
+        ledger_holder: dict[str, AiAssistantRepository] = {}
+
+        def send(payload: dict[str, object]) -> ToolResult:
+            calls.append(payload)
+            runtime = dict(payload["_toolRuntime"])
+            pre_dispatch_operations.append(ledger_holder["repository"].get_tool_operation(str(runtime["operationId"])))
+            return ToolResult(status="COMPLETED", output={"sent": True})
+
+        manifest = ToolManifest(
+            name="send_tool",
+            description="side-effect test tool",
+            input_schema={"type": "object"},
+            output_schema={"type": "object"},
+            timeout_ms=100,
+            risk_level=RiskLevel.BUSINESS_WRITE,
+            read_resources=[],
+            write_resources=["test:send"],
+            policy_ref="test_side_effect",
+        )
+        registry = ToolRegistry({"send_tool": (manifest, send)})
+
+        with Mysql8TestDatabase("ai_assistant_tool_operation_replay") as database:
+            from app.modules.ai_assistant.infra.schema import ai_assistant_tables, register_ai_assistant_tables
+
+            database.create_all(tables=ai_assistant_tables(), register=register_ai_assistant_tables)
+            with database.session() as session:
+                repository = AiAssistantRepository(session)
+                ledger_holder["repository"] = repository
+                assistant_session = repository.create_session(title="Durable side effect")
+                run = repository.create_run(
+                    session_id=int(assistant_session["id"]),
+                    user_message="Send only once",
+                    idempotency_key="side-effect-run-1",
+                )
+                payload = {
+                    "caseId": "case-side-effect-1",
+                    "details": {"z": 2, "a": 1},
+                    "_aiAssistantRuntime": {
+                        "sessionId": int(assistant_session["id"]),
+                        "runId": int(run["id"]),
+                        "planStepId": "send-step-1",
+                    },
+                }
+                first = ToolRunner(
+                    registry,
+                    policy=ToolRunnerPolicy(max_attempts=1),
+                    operation_ledger=repository,
+                ).run("send_tool", payload, idempotency_key="side-effect-key-1")
+
+            with database.session() as restarted_session:
+                restarted_payload = {
+                    "details": {"a": 1, "z": 2},
+                    "caseId": "case-side-effect-1",
+                    "_aiAssistantRuntime": {
+                        "runId": int(run["id"]),
+                        "planStepId": "send-step-1",
+                        "sessionId": int(assistant_session["id"]),
+                    },
+                }
+                second = ToolRunner(
+                    registry,
+                    policy=ToolRunnerPolicy(max_attempts=1),
+                    operation_ledger=AiAssistantRepository(restarted_session),
+                ).run("send_tool", restarted_payload, idempotency_key="side-effect-key-1")
+
+        self.assertEqual(first.tool_result.output, {"sent": True})
+        self.assertEqual(second.tool_result.output, {"sent": True})
+        self.assertEqual(first.operation_id, second.operation_id)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(pre_dispatch_operations[0]["status"], "PENDING")
+        self.assertEqual(pre_dispatch_operations[0]["idempotency_key"], "side-effect-key-1")
 
 
 if __name__ == "__main__":
