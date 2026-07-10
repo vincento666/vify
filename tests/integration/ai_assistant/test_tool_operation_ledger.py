@@ -24,17 +24,26 @@ class ToolOperationLedgerRepositoryTest(unittest.TestCase):
                 table_names = set(inspector.get_table_names())
                 operation_columns = {column["name"] for column in inspector.get_columns("ai_assistant_tool_operation")}
                 attempt_columns = {column["name"] for column in inspector.get_columns("ai_assistant_tool_attempt")}
+                release_columns = {
+                    column["name"] for column in inspector.get_columns("ai_assistant_tool_operation_release")
+                }
             finally:
                 engine.dispose()
 
         self.assertIn("ai_assistant_tool_operation", table_names)
         self.assertIn("ai_assistant_tool_attempt", table_names)
+        self.assertIn("ai_assistant_tool_operation_release", table_names)
         self.assertTrue(
             {"operation_id", "session_id", "run_id", "status", "output_payload", "retention_until"}.issubset(
                 operation_columns
             )
         )
         self.assertTrue({"operation_id", "attempt_id", "adapter_name", "status"}.issubset(attempt_columns))
+        self.assertTrue(
+            {"operation_id", "authority", "actor", "evidence_ref", "previous_status", "next_status"}.issubset(
+                release_columns
+            )
+        )
 
     def test_operation_and_attempt_survive_new_repository_instance(self) -> None:
         from app.modules.ai_assistant.infra.repository import AiAssistantRepository
@@ -275,6 +284,62 @@ class ToolOperationLedgerRepositoryTest(unittest.TestCase):
         self.assertEqual(attempts[0]["status"], "UNKNOWN")
         self.assertEqual(second.tool_result.output["error"]["code"], "TOOL_IDEMPOTENCY_UNCERTAIN")
         self.assertEqual(len(calls), 1)
+
+    def test_unknown_release_rejects_model_and_audits_operator_transition(self) -> None:
+        from app.modules.ai_assistant.infra.repository import AiAssistantRepository
+
+        with Mysql8TestDatabase("ai_assistant_tool_operation_release") as database:
+            from app.modules.ai_assistant.infra.schema import ai_assistant_tables, register_ai_assistant_tables
+
+            database.create_all(tables=ai_assistant_tables(), register=register_ai_assistant_tables)
+            with database.session() as session:
+                repository = AiAssistantRepository(session)
+                assistant_session = repository.create_session(title="Release unknown operation")
+                run = repository.create_run(
+                    session_id=int(assistant_session["id"]),
+                    user_message="Reconcile unknown effect",
+                    idempotency_key="release-run-1",
+                )
+                repository.create_tool_operation(
+                    operation_id="op-release-1",
+                    session_id=int(assistant_session["id"]),
+                    run_id=int(run["id"]),
+                    plan_step_id="release-step",
+                    tool_name="side_effect_tool",
+                    effect_class="SIDE_EFFECT",
+                    idempotency_key="release-key-1",
+                    request_hash="release-request-hash",
+                )
+                repository.mark_tool_operation_unknown("op-release-1", retention_until=run["created_at"])
+
+                with self.assertRaises(PermissionError):
+                    repository.release_tool_operation(
+                        "op-release-1",
+                        authority="model",
+                        actor="planner",
+                        reason="model guesses success",
+                        evidence_ref="model-output",
+                        next_status="SUCCEEDED",
+                    )
+                released = repository.release_tool_operation(
+                    "op-release-1",
+                    authority="operator",
+                    actor="operator-1",
+                    reason="remote receipt verified",
+                    evidence_ref="receipt:abc123",
+                    next_status="SUCCEEDED",
+                )
+                releases = repository.list_tool_operation_releases("op-release-1")
+                audit_export = repository.export_tool_operation_audit("op-release-1")
+
+        self.assertEqual(released["status"], "SUCCEEDED")
+        self.assertEqual(len(releases), 1)
+        self.assertEqual(releases[0]["authority"], "operator")
+        self.assertEqual(releases[0]["actor"], "operator-1")
+        self.assertEqual(releases[0]["previous_status"], "UNKNOWN")
+        self.assertEqual(releases[0]["next_status"], "SUCCEEDED")
+        self.assertEqual(releases[0]["evidence_ref"], "receipt:abc123")
+        self.assertEqual(audit_export["releases"][0]["actor"], "operator-1")
 
 
 if __name__ == "__main__":

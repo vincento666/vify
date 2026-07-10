@@ -99,7 +99,7 @@ class ToolRunner:
             payload=payload,
             idempotency_key=resolved_idempotency_key,
         )
-        if replayed_operation is not None and replayed_operation.get("status") == "COMPLETED":
+        if replayed_operation is not None and replayed_operation.get("status") in {"COMPLETED", "SUCCEEDED"}:
             completed = dict(replayed_operation.get("output_payload") or {})
             tool_result = ToolResult(
                 status=str(completed.get("status") or "COMPLETED"),

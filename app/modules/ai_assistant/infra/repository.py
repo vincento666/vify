@@ -39,6 +39,7 @@ class AiAssistantRepository:
         self._resource_lock_table = Base.metadata.tables["ai_assistant_resource_lock"]
         self._tool_operation_table = Base.metadata.tables["ai_assistant_tool_operation"]
         self._tool_attempt_table = Base.metadata.tables["ai_assistant_tool_attempt"]
+        self._tool_operation_release_table = Base.metadata.tables["ai_assistant_tool_operation_release"]
 
     def create_tool_operation(
         self,
@@ -167,6 +168,77 @@ class AiAssistantRepository:
         if updated is None:
             raise KeyError(f"AI Assistant tool operation disappeared: {operation_id}")
         return updated
+
+    def release_tool_operation(
+        self,
+        operation_id: str,
+        *,
+        authority: str,
+        actor: str,
+        reason: str,
+        evidence_ref: str,
+        next_status: str,
+    ) -> dict[str, Any]:
+        if authority not in {"operator", "deterministic_adapter", "test_fixture"}:
+            raise PermissionError(f"UNKNOWN release authority is not allowed: {authority}")
+        if next_status not in {"SUCCEEDED", "FAILED", "COMPENSATED"}:
+            raise ValueError(f"UNKNOWN release target is invalid: {next_status}")
+        current = self.get_tool_operation(operation_id)
+        if current is None:
+            raise KeyError(f"AI Assistant tool operation disappeared: {operation_id}")
+        if current["status"] != "UNKNOWN":
+            raise ValueError(f"Only UNKNOWN operations may be released: {operation_id}")
+        now = datetime.now()
+        result = self._session.execute(
+            self._tool_operation_table.update()
+            .where(
+                self._tool_operation_table.c.operation_id == operation_id,
+                self._tool_operation_table.c.status == "UNKNOWN",
+                self._tool_operation_table.c.deleted.is_(False),
+            )
+            .values(status=next_status, completed_at=now, updated_at=now)
+        )
+        if not _rowcount(result):
+            self._session.rollback()
+            raise ValueError(f"UNKNOWN operation release conflicted: {operation_id}")
+        insert_and_fetch(
+            self._session,
+            self._tool_operation_release_table,
+            {
+                "operation_id": operation_id,
+                "authority": authority,
+                "actor": actor,
+                "reason": reason,
+                "evidence_ref": evidence_ref,
+                "previous_status": "UNKNOWN",
+                "next_status": next_status,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        self._session.commit()
+        released = self.get_tool_operation(operation_id)
+        if released is None:
+            raise KeyError(f"AI Assistant tool operation disappeared: {operation_id}")
+        return released
+
+    def list_tool_operation_releases(self, operation_id: str) -> list[dict[str, Any]]:
+        rows = self._session.execute(
+            sa.select(self._tool_operation_release_table)
+            .where(self._tool_operation_release_table.c.operation_id == operation_id)
+            .order_by(self._tool_operation_release_table.c.id.asc())
+        ).mappings().all()
+        return [dict(row) for row in rows]
+
+    def export_tool_operation_audit(self, operation_id: str) -> dict[str, Any]:
+        operation = self.get_tool_operation(operation_id)
+        if operation is None:
+            raise KeyError(f"AI Assistant tool operation disappeared: {operation_id}")
+        return {
+            "operation": operation,
+            "attempts": self.list_tool_attempts(operation_id),
+            "releases": self.list_tool_operation_releases(operation_id),
+        }
 
     def create_tool_attempt(
         self,

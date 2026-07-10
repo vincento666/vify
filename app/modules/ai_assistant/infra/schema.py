@@ -205,6 +205,22 @@ def register_ai_assistant_tables(metadata: sa.MetaData | None = None) -> None:
             sa.Index("idx_ai_assistant_tool_attempt_status", "status"),
         )
 
+    if "ai_assistant_tool_operation_release" not in target.tables:
+        sa.Table(
+            "ai_assistant_tool_operation_release",
+            target,
+            id_column(),
+            sa.Column("operation_id", sa.String(128), nullable=False),
+            sa.Column("authority", sa.String(40), nullable=False),
+            sa.Column("actor", sa.String(160), nullable=False),
+            sa.Column("reason", sa.String(500), nullable=False),
+            sa.Column("evidence_ref", sa.String(500), nullable=False),
+            sa.Column("previous_status", sa.String(30), nullable=False),
+            sa.Column("next_status", sa.String(30), nullable=False),
+            *timestamps(),
+            sa.Index("idx_ai_assistant_tool_operation_release_operation", "operation_id"),
+        )
+
 
 def ai_assistant_tables() -> list[sa.Table]:
     register_ai_assistant_tables()
@@ -219,5 +235,6 @@ def ai_assistant_tables() -> list[sa.Table]:
         "ai_assistant_resource_lock",
         "ai_assistant_tool_operation",
         "ai_assistant_tool_attempt",
+        "ai_assistant_tool_operation_release",
     ]
     return [Base.metadata.tables[name] for name in names]
