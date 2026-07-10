@@ -40,6 +40,140 @@ class AiAssistantRepository:
         self._tool_operation_table = Base.metadata.tables["ai_assistant_tool_operation"]
         self._tool_attempt_table = Base.metadata.tables["ai_assistant_tool_attempt"]
         self._tool_operation_release_table = Base.metadata.tables["ai_assistant_tool_operation_release"]
+        self._tool_circuit_breaker_table = Base.metadata.tables["ai_assistant_tool_circuit_breaker"]
+        self._tool_circuit_override_table = Base.metadata.tables["ai_assistant_tool_circuit_override"]
+
+    def get_tool_circuit_breaker(self, breaker_key: str) -> dict[str, Any] | None:
+        row = self._session.execute(
+            sa.select(self._tool_circuit_breaker_table).where(
+                self._tool_circuit_breaker_table.c.breaker_key == breaker_key
+            )
+        ).mappings().one_or_none()
+        return dict(row) if row else None
+
+    def record_tool_circuit_failure(
+        self,
+        *,
+        breaker_key: str,
+        provider: str,
+        tool_name: str,
+        adapter_name: str,
+        risk_class: str,
+        error_class: str,
+        threshold: int,
+        cooldown_until: datetime,
+        reason: str,
+    ) -> dict[str, Any]:
+        current = self.get_tool_circuit_breaker(breaker_key)
+        failures = int(current["failure_count"]) + 1 if current else 1
+        now = datetime.now()
+        values = {
+            "state": "OPEN" if failures >= threshold else "CLOSED",
+            "failure_count": failures,
+            "opened_reason": reason if failures >= threshold else None,
+            "opened_at": now if failures >= threshold else None,
+            "cooldown_until": cooldown_until if failures >= threshold else None,
+            "updated_at": now,
+        }
+        if current is None:
+            row = insert_and_fetch(
+                self._session,
+                self._tool_circuit_breaker_table,
+                {
+                    "breaker_key": breaker_key,
+                    "provider": provider,
+                    "tool_name": tool_name,
+                    "adapter_name": adapter_name,
+                    "risk_class": risk_class,
+                    "error_class": error_class,
+                    "last_attempt_id": None,
+                    "actor": "system",
+                    "audit_span_id": None,
+                    "created_at": now,
+                    **values,
+                },
+            )
+            self._session.commit()
+            return row
+        self._session.execute(
+            self._tool_circuit_breaker_table.update()
+            .where(self._tool_circuit_breaker_table.c.breaker_key == breaker_key)
+            .values(**values)
+        )
+        self._session.commit()
+        return self.get_tool_circuit_breaker(breaker_key) or {}
+
+    def close_tool_circuit_breaker(self, breaker_key: str) -> None:
+        self._session.execute(
+            self._tool_circuit_breaker_table.update()
+            .where(self._tool_circuit_breaker_table.c.breaker_key == breaker_key)
+            .values(state="CLOSED", failure_count=0, opened_reason=None, opened_at=None, cooldown_until=None, updated_at=datetime.now())
+        )
+        self._session.commit()
+
+    def enter_tool_circuit_half_open(self, breaker_key: str) -> None:
+        self._session.execute(
+            self._tool_circuit_breaker_table.update()
+            .where(
+                self._tool_circuit_breaker_table.c.breaker_key == breaker_key,
+                self._tool_circuit_breaker_table.c.state == "OPEN",
+            )
+            .values(state="HALF_OPEN", updated_at=datetime.now())
+        )
+        self._session.commit()
+
+    def override_tool_circuit_breaker(
+        self,
+        breaker_key: str,
+        *,
+        actor: str,
+        next_state: str,
+        reason: str,
+        audit_span_id: str | None = None,
+    ) -> dict[str, Any]:
+        if next_state not in {"OPEN", "CLOSED"}:
+            raise ValueError(f"Circuit override state is invalid: {next_state}")
+        current = self.get_tool_circuit_breaker(breaker_key)
+        if current is None:
+            raise KeyError(f"AI Assistant circuit breaker disappeared: {breaker_key}")
+        previous_state = str(current["state"])
+        now = datetime.now()
+        self._session.execute(
+            self._tool_circuit_breaker_table.update()
+            .where(self._tool_circuit_breaker_table.c.breaker_key == breaker_key)
+            .values(
+                state=next_state,
+                actor=actor,
+                opened_reason=reason if next_state == "OPEN" else None,
+                opened_at=now if next_state == "OPEN" else None,
+                cooldown_until=None if next_state == "CLOSED" else current["cooldown_until"],
+                updated_at=now,
+            )
+        )
+        insert_and_fetch(
+            self._session,
+            self._tool_circuit_override_table,
+            {
+                "breaker_key": breaker_key,
+                "actor": actor,
+                "previous_state": previous_state,
+                "next_state": next_state,
+                "reason": reason,
+                "audit_span_id": audit_span_id,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        self._session.commit()
+        return self.get_tool_circuit_breaker(breaker_key) or {}
+
+    def list_tool_circuit_overrides(self, breaker_key: str) -> list[dict[str, Any]]:
+        rows = self._session.execute(
+            sa.select(self._tool_circuit_override_table)
+            .where(self._tool_circuit_override_table.c.breaker_key == breaker_key)
+            .order_by(self._tool_circuit_override_table.c.id.asc())
+        ).mappings().all()
+        return [dict(row) for row in rows]
 
     def create_tool_operation(
         self,

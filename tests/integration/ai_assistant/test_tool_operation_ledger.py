@@ -27,16 +27,24 @@ class ToolOperationLedgerRepositoryTest(unittest.TestCase):
                 release_columns = {
                     column["name"] for column in inspector.get_columns("ai_assistant_tool_operation_release")
                 }
+                breaker_columns = {
+                    column["name"] for column in inspector.get_columns("ai_assistant_tool_circuit_breaker")
+                }
             finally:
                 engine.dispose()
 
         self.assertIn("ai_assistant_tool_operation", table_names)
         self.assertIn("ai_assistant_tool_attempt", table_names)
         self.assertIn("ai_assistant_tool_operation_release", table_names)
+        self.assertIn("ai_assistant_tool_circuit_breaker", table_names)
+        self.assertIn("ai_assistant_tool_circuit_override", table_names)
         self.assertTrue(
             {"operation_id", "session_id", "run_id", "status", "output_payload", "retention_until"}.issubset(
                 operation_columns
             )
+        )
+        self.assertTrue(
+            {"breaker_key", "state", "failure_count", "cooldown_until", "actor"}.issubset(breaker_columns)
         )
         self.assertTrue({"operation_id", "attempt_id", "adapter_name", "status"}.issubset(attempt_columns))
         self.assertTrue(
@@ -410,6 +418,89 @@ class ToolOperationLedgerRepositoryTest(unittest.TestCase):
         self.assertEqual(len({row["attempt_id"] for row in attempts}), 2)
         self.assertEqual([row["adapter_name"] for row in attempts], ["primary", "fallback"])
         self.assertEqual([row["status"] for row in attempts], ["FAILED", "COMPLETED"])
+
+    def test_circuit_open_survives_tool_runner_restart(self) -> None:
+        from app.modules.ai_assistant.domain.tool_runtime import ToolRunner, ToolRunnerPolicy
+        from app.modules.ai_assistant.domain.tools import RiskLevel, ToolManifest, ToolRegistry
+        from app.modules.ai_assistant.infra.repository import AiAssistantRepository
+
+        calls: list[dict[str, object]] = []
+
+        def broken(payload: dict[str, object]) -> None:
+            calls.append(payload)
+            raise RuntimeError("backend unavailable")
+
+        manifest = ToolManifest(
+            name="breaker_tool",
+            description="durable breaker test tool",
+            input_schema={"type": "object"},
+            output_schema={"type": "object"},
+            timeout_ms=100,
+            risk_level=RiskLevel.READ,
+            read_resources=[],
+            write_resources=[],
+            policy_ref="test_read",
+        )
+        registry = ToolRegistry({"breaker_tool": (manifest, broken)})
+
+        with Mysql8TestDatabase("ai_assistant_tool_circuit_breaker") as database:
+            from app.modules.ai_assistant.infra.schema import ai_assistant_tables, register_ai_assistant_tables
+
+            database.create_all(tables=ai_assistant_tables(), register=register_ai_assistant_tables)
+            with database.session() as session:
+                first = ToolRunner(
+                    registry,
+                    policy=ToolRunnerPolicy(max_attempts=1, circuit_failure_threshold=1, circuit_open_seconds=60),
+                    operation_ledger=AiAssistantRepository(session),
+                ).run("breaker_tool", {"caseId": "breaker-1"})
+
+            with database.session() as restarted_session:
+                second = ToolRunner(
+                    registry,
+                    policy=ToolRunnerPolicy(max_attempts=1, circuit_failure_threshold=1, circuit_open_seconds=60),
+                    operation_ledger=AiAssistantRepository(restarted_session),
+                ).run("breaker_tool", {"caseId": "breaker-2"})
+
+        self.assertEqual(first.tool_result.output["error"]["code"], "TOOL_RUNTIME_ERROR")
+        self.assertEqual(second.tool_result.output["error"]["code"], "TOOL_CIRCUIT_OPEN")
+        self.assertEqual(len(calls), 1)
+
+    def test_circuit_operator_override_is_durably_audited(self) -> None:
+        from datetime import datetime, timedelta
+
+        from app.modules.ai_assistant.infra.repository import AiAssistantRepository
+
+        breaker_key = "default:override_tool:primary:READ:RETRYABLE"
+        with Mysql8TestDatabase("ai_assistant_tool_circuit_override") as database:
+            from app.modules.ai_assistant.infra.schema import ai_assistant_tables, register_ai_assistant_tables
+
+            database.create_all(tables=ai_assistant_tables(), register=register_ai_assistant_tables)
+            with database.session() as session:
+                repository = AiAssistantRepository(session)
+                repository.record_tool_circuit_failure(
+                    breaker_key=breaker_key,
+                    provider="default",
+                    tool_name="override_tool",
+                    adapter_name="primary",
+                    risk_class="READ",
+                    error_class="TOOL_RUNTIME_ERROR",
+                    threshold=1,
+                    cooldown_until=datetime.now() + timedelta(seconds=60),
+                    reason="test failure",
+                )
+                closed = repository.override_tool_circuit_breaker(
+                    breaker_key,
+                    actor="operator-1",
+                    next_state="CLOSED",
+                    reason="verified recovery",
+                    audit_span_id="span-override-1",
+                )
+                overrides = repository.list_tool_circuit_overrides(breaker_key)
+
+        self.assertEqual(closed["state"], "CLOSED")
+        self.assertEqual(overrides[0]["actor"], "operator-1")
+        self.assertEqual(overrides[0]["previous_state"], "OPEN")
+        self.assertEqual(overrides[0]["next_state"], "CLOSED")
 
 
 if __name__ == "__main__":

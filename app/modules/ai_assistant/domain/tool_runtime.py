@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from hashlib import sha256
 import json
 from random import random
+from threading import RLock
 from datetime import datetime, timedelta
 from time import perf_counter, time
 from typing import Any, Callable, Protocol
@@ -34,6 +35,14 @@ class ToolOperationLedger(Protocol):
     def update_tool_attempt(self, attempt_id: str, **values: Any) -> dict[str, Any]: ...
 
     def mark_tool_operation_unknown(self, operation_id: str, *, retention_until: datetime) -> dict[str, Any]: ...
+
+    def get_tool_circuit_breaker(self, breaker_key: str) -> dict[str, Any] | None: ...
+
+    def record_tool_circuit_failure(self, **values: Any) -> dict[str, Any]: ...
+
+    def close_tool_circuit_breaker(self, breaker_key: str) -> None: ...
+
+    def enter_tool_circuit_half_open(self, breaker_key: str) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -88,6 +97,7 @@ class ToolRunner:
         self._policy = policy or ToolRunnerPolicy()
         self._fallback_adapters = fallback_adapters or {}
         self._operation_ledger = operation_ledger
+        self._ledger_lock = RLock()
         self._sleep = sleep or _default_sleep
         self._jitter = jitter
         self._circuits: dict[str, _CircuitState] = {}
@@ -98,6 +108,7 @@ class ToolRunner:
         resolved_idempotency_key = idempotency_key or _stable_idempotency_key(tool_name, payload)
         events: list[dict[str, Any]] = []
         is_read_tool = self._is_read_tool(tool_name)
+        breaker_key = self._breaker_key(tool_name)
         operation_id, replayed_operation = self._prepare_side_effect_operation(
             tool_name=tool_name,
             payload=payload,
@@ -215,6 +226,31 @@ class ToolRunner:
                         error=error,
                         events=events,
                     )
+        with self._ledger_lock:
+            durable_breaker = self._operation_ledger.get_tool_circuit_breaker(breaker_key) if self._operation_ledger else None
+        if durable_breaker is not None and durable_breaker["state"] == "OPEN":
+            cooldown_until = durable_breaker.get("cooldown_until")
+            if cooldown_until is not None and cooldown_until > datetime.now():
+                error = _error_payload(
+                    code="TOOL_CIRCUIT_OPEN",
+                    message=f"Circuit is open for tool {tool_name}",
+                    error_type="circuit_open",
+                    retriable=True,
+                )
+                events.append({"type": "tool.circuit_open", "payload": {"toolName": tool_name, "error": error}})
+                return self._failed_result(
+                    tool_name=tool_name,
+                    payload=payload,
+                    idempotency_key=resolved_idempotency_key,
+                    attempts=0,
+                    duration_ms=_elapsed_ms(started),
+                    error=error,
+                    events=events,
+                    operation_id=operation_id,
+                )
+            if self._operation_ledger is not None:
+                with self._ledger_lock:
+                    self._operation_ledger.enter_tool_circuit_half_open(breaker_key)
         circuit = self._circuits.setdefault(tool_name, _CircuitState())
         if self._is_circuit_open(circuit):
             error = _error_payload(
@@ -300,6 +336,9 @@ class ToolRunner:
                 break
             else:
                 self._reset_circuit(circuit)
+                if self._operation_ledger is not None:
+                    with self._ledger_lock:
+                        self._operation_ledger.close_tool_circuit_breaker(breaker_key)
                 duration_ms = _elapsed_ms(started)
                 events.append(
                     {
@@ -348,6 +387,20 @@ class ToolRunner:
             retriable=True,
         )
         self._record_failure(circuit)
+        if self._operation_ledger is not None:
+            manifest = self._registry.get_manifest(tool_name)
+            with self._ledger_lock:
+                self._operation_ledger.record_tool_circuit_failure(
+                    breaker_key=breaker_key,
+                    provider="default",
+                    tool_name=tool_name,
+                    adapter_name="primary",
+                    risk_class=manifest.risk_level.value,
+                    error_class=str(error["code"]),
+                    threshold=max(1, self._policy.circuit_failure_threshold),
+                    cooldown_until=datetime.now() + timedelta(seconds=self._policy.circuit_open_seconds),
+                    reason=str(error["message"]),
+                )
         if error.get("code") == "TOOL_TIMEOUT" and not is_read_tool:
             self._ledger[resolved_idempotency_key] = _LedgerEntry(state="UNKNOWN", error=error)
             return self._failed_result(
@@ -501,6 +554,10 @@ class ToolRunner:
 
     def _is_read_cache_expired(self, entry: _LedgerEntry) -> bool:
         return entry.state == "COMPLETED" and time() - entry.cached_at >= max(0.0, self._policy.read_cache_seconds)
+
+    def _breaker_key(self, tool_name: str) -> str:
+        manifest = self._registry.get_manifest(tool_name)
+        return f"default:{tool_name}:primary:{manifest.risk_level.value}:RETRYABLE"
 
     def _backoff_seconds(self, failed_attempt: int) -> float:
         base_ms = self._policy.initial_backoff_ms * (self._policy.backoff_multiplier ** max(0, failed_attempt - 1))

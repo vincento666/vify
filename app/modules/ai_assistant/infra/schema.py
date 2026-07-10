@@ -221,6 +221,44 @@ def register_ai_assistant_tables(metadata: sa.MetaData | None = None) -> None:
             sa.Index("idx_ai_assistant_tool_operation_release_operation", "operation_id"),
         )
 
+    if "ai_assistant_tool_circuit_breaker" not in target.tables:
+        sa.Table(
+            "ai_assistant_tool_circuit_breaker",
+            target,
+            id_column(),
+            sa.Column("breaker_key", sa.String(300), nullable=False),
+            sa.Column("provider", sa.String(120), nullable=False),
+            sa.Column("tool_name", sa.String(120), nullable=False),
+            sa.Column("adapter_name", sa.String(120), nullable=False),
+            sa.Column("risk_class", sa.String(40), nullable=False),
+            sa.Column("error_class", sa.String(120), nullable=False),
+            sa.Column("state", sa.String(30), nullable=False, server_default="CLOSED"),
+            sa.Column("failure_count", sa.Integer(), nullable=False, server_default="0"),
+            sa.Column("opened_reason", sa.String(500), nullable=True),
+            sa.Column("opened_at", sa.DateTime(), nullable=True),
+            sa.Column("cooldown_until", sa.DateTime(), nullable=True),
+            sa.Column("last_attempt_id", sa.String(128), nullable=True),
+            sa.Column("actor", sa.String(160), nullable=True),
+            sa.Column("audit_span_id", sa.String(160), nullable=True),
+            *timestamps(),
+            sa.UniqueConstraint("breaker_key", name="idx_ai_assistant_tool_circuit_breaker_key"),
+        )
+
+    if "ai_assistant_tool_circuit_override" not in target.tables:
+        sa.Table(
+            "ai_assistant_tool_circuit_override",
+            target,
+            id_column(),
+            sa.Column("breaker_key", sa.String(300), nullable=False),
+            sa.Column("actor", sa.String(160), nullable=False),
+            sa.Column("previous_state", sa.String(30), nullable=False),
+            sa.Column("next_state", sa.String(30), nullable=False),
+            sa.Column("reason", sa.String(500), nullable=False),
+            sa.Column("audit_span_id", sa.String(160), nullable=True),
+            *timestamps(),
+            sa.Index("idx_ai_assistant_tool_circuit_override_key", "breaker_key"),
+        )
+
 
 def ai_assistant_tables() -> list[sa.Table]:
     register_ai_assistant_tables()
@@ -236,5 +274,7 @@ def ai_assistant_tables() -> list[sa.Table]:
         "ai_assistant_tool_operation",
         "ai_assistant_tool_attempt",
         "ai_assistant_tool_operation_release",
+        "ai_assistant_tool_circuit_breaker",
+        "ai_assistant_tool_circuit_override",
     ]
     return [Base.metadata.tables[name] for name in names]
