@@ -8,6 +8,7 @@ from random import random
 from datetime import datetime, timedelta
 from time import perf_counter, time
 from typing import Any, Callable, Protocol
+from uuid import uuid4
 
 from app.modules.ai_assistant.domain.tools import RiskLevel, ToolRegistry, ToolResult
 
@@ -231,7 +232,7 @@ class ToolRunner:
             attempts = attempt
             attempt_id = ""
             if operation_id and self._operation_ledger is not None:
-                attempt_id = f"{operation_id}:attempt:{attempt}"
+                attempt_id = f"{operation_id}:attempt:{uuid4().hex}"
                 self._operation_ledger.create_tool_attempt(
                     operation_id=operation_id,
                     attempt_id=attempt_id,
@@ -250,6 +251,12 @@ class ToolRunner:
             except Exception as exc:
                 error = _classify_error(exc)
                 last_error = error
+                if operation_id and attempt_id and self._operation_ledger is not None:
+                    self._operation_ledger.update_tool_attempt(
+                        attempt_id,
+                        status="FAILED",
+                        error_class=str(error["code"]),
+                    )
                 events.append(
                     {
                         "type": "tool.call_attempt_failed",
@@ -342,11 +349,33 @@ class ToolRunner:
                 operation_id=operation_id,
             )
         fallback = self._fallback_adapters.get(tool_name)
-        if fallback is not None:
+        if fallback is not None and bool(error.get("retriable")):
+            fallback_attempt_id = ""
+            fallback_payload = _payload_with_runtime(
+                payload,
+                resolved_idempotency_key,
+                attempts + 1,
+                operation_id=operation_id,
+            )
+            if operation_id and self._operation_ledger is not None:
+                fallback_attempt_id = f"{operation_id}:fallback:{uuid4().hex}"
+                self._operation_ledger.create_tool_attempt(
+                    operation_id=operation_id,
+                    attempt_id=fallback_attempt_id,
+                    adapter_name="fallback",
+                    status="DISPATCHED",
+                    request_hash=_request_hash(payload),
+                )
             try:
-                fallback_result = fallback(tool_name, payload, error)
+                fallback_result = fallback(tool_name, fallback_payload, error)
             except Exception as fallback_exc:
                 error = _classify_error(fallback_exc)
+                if fallback_attempt_id and self._operation_ledger is not None:
+                    self._operation_ledger.update_tool_attempt(
+                        fallback_attempt_id,
+                        status="FAILED",
+                        error_class=str(error["code"]),
+                    )
             else:
                 duration_ms = _elapsed_ms(started)
                 events.append(
@@ -368,9 +397,23 @@ class ToolRunner:
                         attempts=attempts,
                         idempotency_key=resolved_idempotency_key,
                         fallback=True,
-                    ),
+                    )
+                    | ({"operationId": operation_id} if operation_id else {}),
                     budget=_budget(attempts=attempts, duration_ms=duration_ms, retries=max(0, attempts - 1)),
+                    operation_id=operation_id,
                 )
+                if operation_id and self._operation_ledger is not None:
+                    if fallback_attempt_id:
+                        self._operation_ledger.update_tool_attempt(
+                            fallback_attempt_id,
+                            status="COMPLETED",
+                            response_hash=_response_hash(fallback_result.output),
+                        )
+                    self._operation_ledger.complete_tool_operation(
+                        operation_id,
+                        output_payload={"status": fallback_result.status, "output": fallback_result.output},
+                        response_hash=_response_hash(fallback_result.output),
+                    )
                 self._ledger[resolved_idempotency_key] = _LedgerEntry(state="COMPLETED", tool_result=fallback_result)
                 return result
 

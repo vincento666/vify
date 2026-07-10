@@ -224,11 +224,16 @@ class ToolOperationLedgerRepositoryTest(unittest.TestCase):
         from app.modules.ai_assistant.infra.repository import AiAssistantRepository
 
         calls: list[dict[str, object]] = []
+        fallback_calls: list[dict[str, object]] = []
 
         def slow(payload: dict[str, object]) -> ToolResult:
             calls.append(payload)
             time.sleep(0.05)
             return ToolResult(status="COMPLETED", output={"late": True})
+
+        def fallback(_tool_name: str, payload: dict[str, object], _error: dict[str, object]) -> ToolResult:
+            fallback_calls.append(payload)
+            return ToolResult(status="COMPLETED", output={"fallback": True})
 
         manifest = ToolManifest(
             name="slow_side_effect",
@@ -266,6 +271,7 @@ class ToolOperationLedgerRepositoryTest(unittest.TestCase):
                 first = ToolRunner(
                     registry,
                     policy=ToolRunnerPolicy(max_attempts=1),
+                    fallback_adapters={"slow_side_effect": fallback},
                     operation_ledger=repository,
                 ).run("slow_side_effect", payload, idempotency_key="unknown-key-1")
                 operation = repository.get_tool_operation(first.operation_id)
@@ -284,6 +290,7 @@ class ToolOperationLedgerRepositoryTest(unittest.TestCase):
         self.assertEqual(attempts[0]["status"], "UNKNOWN")
         self.assertEqual(second.tool_result.output["error"]["code"], "TOOL_IDEMPOTENCY_UNCERTAIN")
         self.assertEqual(len(calls), 1)
+        self.assertEqual(fallback_calls, [])
 
     def test_unknown_release_rejects_model_and_audits_operator_transition(self) -> None:
         from app.modules.ai_assistant.infra.repository import AiAssistantRepository
@@ -340,6 +347,69 @@ class ToolOperationLedgerRepositoryTest(unittest.TestCase):
         self.assertEqual(releases[0]["next_status"], "SUCCEEDED")
         self.assertEqual(releases[0]["evidence_ref"], "receipt:abc123")
         self.assertEqual(audit_export["releases"][0]["actor"], "operator-1")
+
+    def test_fallback_uses_same_operation_with_distinct_attempt(self) -> None:
+        from app.modules.ai_assistant.domain.tool_runtime import ToolRunner, ToolRunnerPolicy
+        from app.modules.ai_assistant.domain.tools import RiskLevel, ToolManifest, ToolRegistry, ToolResult
+        from app.modules.ai_assistant.infra.repository import AiAssistantRepository
+
+        def primary(_payload: dict[str, object]) -> ToolResult:
+            raise RuntimeError("primary unavailable")
+
+        def fallback(_tool_name: str, _payload: dict[str, object], _error: dict[str, object]) -> ToolResult:
+            return ToolResult(status="COMPLETED", output={"fallback": True})
+
+        manifest = ToolManifest(
+            name="fallback_side_effect",
+            description="fallback side-effect test tool",
+            input_schema={"type": "object"},
+            output_schema={"type": "object"},
+            timeout_ms=100,
+            risk_level=RiskLevel.BUSINESS_WRITE,
+            read_resources=[],
+            write_resources=["test:fallback"],
+            policy_ref="test_side_effect",
+        )
+        registry = ToolRegistry({"fallback_side_effect": (manifest, primary)})
+
+        with Mysql8TestDatabase("ai_assistant_tool_operation_fallback") as database:
+            from app.modules.ai_assistant.infra.schema import ai_assistant_tables, register_ai_assistant_tables
+
+            database.create_all(tables=ai_assistant_tables(), register=register_ai_assistant_tables)
+            with database.session() as session:
+                repository = AiAssistantRepository(session)
+                assistant_session = repository.create_session(title="Fallback side effect")
+                run = repository.create_run(
+                    session_id=int(assistant_session["id"]),
+                    user_message="Fallback once",
+                    idempotency_key="fallback-run-1",
+                )
+                result = ToolRunner(
+                    registry,
+                    policy=ToolRunnerPolicy(max_attempts=1),
+                    fallback_adapters={"fallback_side_effect": fallback},
+                    operation_ledger=repository,
+                ).run(
+                    "fallback_side_effect",
+                    {
+                        "_aiAssistantRuntime": {
+                            "sessionId": int(assistant_session["id"]),
+                            "runId": int(run["id"]),
+                            "planStepId": "fallback-step",
+                        }
+                    },
+                    idempotency_key="fallback-key-1",
+                )
+                operation = repository.get_tool_operation(result.operation_id)
+                attempts = repository.list_tool_attempts(result.operation_id)
+
+        self.assertTrue(result.tool_result.output["fallback"])
+        self.assertEqual(operation["status"], "COMPLETED")
+        self.assertEqual(len(attempts), 2)
+        self.assertEqual({row["operation_id"] for row in attempts}, {result.operation_id})
+        self.assertEqual(len({row["attempt_id"] for row in attempts}), 2)
+        self.assertEqual([row["adapter_name"] for row in attempts], ["primary", "fallback"])
+        self.assertEqual([row["status"] for row in attempts], ["FAILED", "COMPLETED"])
 
 
 if __name__ == "__main__":
