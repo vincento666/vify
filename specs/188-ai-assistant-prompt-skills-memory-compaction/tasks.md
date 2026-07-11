@@ -57,17 +57,17 @@ open tasks:
 
 ## 188.6 Three-Successful-Run Extraction
 
-- [ ] TDD preflight and observable RED.
-- [ ] Persist per-scope successful-run counter and extraction cursor.
-- [ ] Count only new COMPLETED runs across sessions.
-- [ ] Trigger configured model extractor for each next batch of three.
-- [ ] Merge result into today's capped block.
-- [ ] Advance cursor only after atomic file success.
-- [ ] Retry model/write failures without duplicate or lost batches.
-- [ ] Recover idempotently across pre-write, post-write, and pre-cursor-commit
+- [x] TDD preflight and observable RED.
+- [x] Persist per-scope successful-run counter and extraction cursor.
+- [x] Count only new COMPLETED runs across sessions.
+- [x] Trigger configured model extractor for each next batch of three.
+- [x] Merge result into today's capped block.
+- [x] Advance cursor only after atomic file success.
+- [x] Retry model/write failures without duplicate or lost batches.
+- [x] Recover idempotently across pre-write, post-write, and pre-cursor-commit
   crash windows using batch/input/target hashes.
-- [ ] Leave trailing one or two runs pending.
-- [ ] Save MySQL8/E2E evidence and pass Checker/Reviewer.
+- [x] Leave trailing one or two runs pending.
+- [x] Save MySQL8/E2E evidence and pass Checker/Reviewer.
 
 ## 188.7 Aggregate Acceptance
 

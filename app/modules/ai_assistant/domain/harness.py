@@ -95,12 +95,18 @@ class AiAssistantHarnessService:
         memory_store: MarkdownMemoryStore | None = None,
         memory_scope: ResolvedMemoryScope | None = None,
         memory_today: Callable[[], date] = date.today,
+        memory_completion_callback: Callable[[], None] | None = None,
     ) -> None:
         self._repository = repository
         self._tools = tool_registry or ToolRegistry.with_builtin_tools()
+        operation_ledger = (
+            cast(ToolOperationLedger, repository)
+            if isinstance(repository, AiAssistantRepository)
+            else None
+        )
         self._tool_runner = tool_runner or ToolRunner(
             self._tools,
-            operation_ledger=cast(ToolOperationLedger, repository),
+            operation_ledger=operation_ledger,
         )
         self._resource_locks = ResourceLockManager(repository)
         self._approval_policy = approval_policy or ApprovalPolicy(environment="test")
@@ -110,6 +116,7 @@ class AiAssistantHarnessService:
         self._memory_store = memory_store
         self._memory_scope = memory_scope
         self._memory_today = memory_today
+        self._memory_completion_callback = memory_completion_callback
 
     def create_session(self, title: str = "", context: dict[str, Any] | None = None) -> dict[str, Any]:
         return self._repository.create_session(title=title, context=context)
@@ -633,7 +640,7 @@ class AiAssistantHarnessService:
                 source="harness_final_answer",
             )
             self._repository.append_message(session_id, "assistant", final_answer, run_id=run_id)
-            completed = self._repository.complete_run(
+            completed = self._complete_run(
                 run_id,
                 {
                     "finalAnswer": final_answer,
@@ -859,7 +866,7 @@ class AiAssistantHarnessService:
             "sandboxDenied": False,
             "plan": plan,
         }
-        completed = self._repository.complete_run(run_id, response_payload)
+        completed = self._complete_run(run_id, response_payload)
         cancelled = self._cancelled_turn_result(run_id, [tool_call_payload])
         if cancelled is not None:
             return cancelled
@@ -1190,7 +1197,7 @@ class AiAssistantHarnessService:
             "model": {"provider": decision.provider, "model": decision.model, "usage": _merged_usage(decisions)},
             "plan": plan,
         }
-        completed = self._repository.complete_run(run_id, response_payload)
+        completed = self._complete_run(run_id, response_payload)
         cancelled_turn = self._cancelled_turn_result(run_id, recorded_tool_calls)
         if cancelled_turn is not None:
             return cancelled_turn
@@ -1261,7 +1268,7 @@ class AiAssistantHarnessService:
     ) -> HarnessTurnResult:
         response_payload = dict(result.run.get("response_payload") or {})
         response_payload["toolCalls"] = recorded_tool_calls
-        updated = self._repository.complete_run(
+        updated = self._complete_run(
             int(result.run["id"]),
             response_payload,
             status=str(result.run["status"]),
@@ -1296,7 +1303,7 @@ class AiAssistantHarnessService:
             level="error",
         )
         plan = self._mark_plan_blocked(run_id, session_id, reason, status="FAILED")
-        failed = self._repository.complete_run(
+        failed = self._complete_run(
             run_id,
             {
                 "finalAnswer": reason,
@@ -1523,7 +1530,7 @@ class AiAssistantHarnessService:
             "schedule": schedule,
             "plan": plan,
         }
-        completed = self._repository.complete_run(run_id, response_payload)
+        completed = self._complete_run(run_id, response_payload)
         cancelled = self._cancelled_turn_result(run_id, recorded_tool_calls)
         if cancelled is not None:
             return cancelled
@@ -2266,8 +2273,30 @@ class AiAssistantHarnessService:
         final_answer: str,
     ) -> None:
         # MEMORY.md is the only canonical durable memory. Extraction and writes
-        # begin in 188.6; completed runs must not mutate legacy context JSON.
+        # are scheduled by the centralized COMPLETED transition; this legacy
+        # summary hook must never mutate context JSON or schedule twice.
         return None
+
+    def _complete_run(
+        self,
+        run_id: int,
+        response_payload: dict[str, Any],
+        status: str = "COMPLETED",
+    ) -> dict[str, Any]:
+        previous = self._repository.get_run(run_id)
+        updated = self._repository.complete_run(
+            run_id,
+            response_payload,
+            status=status,
+        )
+        if (
+            status == "COMPLETED"
+            and (previous or {}).get("status") != "COMPLETED"
+            and updated.get("status") == "COMPLETED"
+            and self._memory_completion_callback is not None
+        ):
+            self._memory_completion_callback()
+        return updated
 
     def _read_memory_window(self) -> MemoryWindow:
         if self._memory_store is None or self._memory_scope is None:
@@ -2491,7 +2520,7 @@ class AiAssistantHarnessService:
             "sandboxDenied": True,
             "plan": plan,
         }
-        denied = self._repository.complete_run(run_id, response_payload, status="DENIED")
+        denied = self._complete_run(run_id, response_payload, status="DENIED")
         return HarnessTurnResult(
             run=denied,
             replayed=False,
@@ -2509,7 +2538,7 @@ class AiAssistantHarnessService:
             "sandboxDenied": False,
             "plan": plan,
         }
-        denied = self._repository.complete_run(run_id, response_payload, status="DENIED")
+        denied = self._complete_run(run_id, response_payload, status="DENIED")
         return HarnessTurnResult(
             run=denied,
             replayed=False,
@@ -2570,7 +2599,7 @@ class AiAssistantHarnessService:
             "pendingToolCallsAfterApproval": pending_tool_calls_after_approval or [],
             "plan": plan,
         }
-        waiting = self._repository.complete_run(run_id, response_payload, status="WAITING_APPROVAL")
+        waiting = self._complete_run(run_id, response_payload, status="WAITING_APPROVAL")
         return HarnessTurnResult(
             run=waiting,
             replayed=False,
@@ -2912,7 +2941,7 @@ class AiAssistantHarnessService:
             "pendingToolCallsAfterApproval": [],
             "plan": plan,
         }
-        completed = self._repository.complete_run(run_id, response_payload)
+        completed = self._complete_run(run_id, response_payload)
         if completed.get("status") != "COMPLETED":
             return _approval_payload(approval)
         self._append_persisted_context_budget_events(
@@ -3310,7 +3339,7 @@ class AiAssistantHarnessService:
         self._repository.append_message(session_id, "assistant", final_answer, run_id=run_id)
         plan = set_plan_final_result(_plan_payload_from_run(self._repository.get_run(run_id) or {}), final_answer)
         self._persist_plan_state(run_id, plan)
-        completed = self._repository.complete_run(
+        completed = self._complete_run(
             run_id,
             {
                 "finalAnswer": final_answer,
@@ -3399,7 +3428,7 @@ class AiAssistantHarnessService:
         self._repository.append_message(session_id, "assistant", final_answer, run_id=run_id)
         plan = set_plan_final_result(_plan_payload_from_run(self._repository.get_run(run_id) or {}), final_answer)
         self._persist_plan_state(run_id, plan)
-        completed = self._repository.complete_run(
+        completed = self._complete_run(
             run_id,
             {
                 "finalAnswer": final_answer,
@@ -3493,7 +3522,7 @@ class AiAssistantHarnessService:
         }
         if approval_id is not None:
             response_payload["approvalId"] = approval_id
-        failed = self._repository.complete_run(run_id, response_payload, status="FAILED")
+        failed = self._complete_run(run_id, response_payload, status="FAILED")
         self._append_task_updated(
             run_id=run_id,
             session_id=session_id,
@@ -3579,7 +3608,7 @@ class AiAssistantHarnessService:
         tool_calls = [_tool_call_payload(row) for row in self._repository.list_run_tool_calls(run_id)]
         final_answer = "审批已拒绝，相关工具未执行。"
         self._repository.append_message(session_id, "assistant", final_answer, run_id=run_id)
-        self._repository.complete_run(
+        self._complete_run(
             run_id,
             {
                 "finalAnswer": final_answer,

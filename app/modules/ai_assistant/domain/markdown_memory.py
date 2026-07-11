@@ -33,6 +33,10 @@ class MemorySecurityCapabilityError(RuntimeError):
     pass
 
 
+class MemoryConcurrentModificationError(RuntimeError):
+    pass
+
+
 @dataclass(frozen=True)
 class ResolvedMemoryScope:
     _workspace_segment: str
@@ -102,6 +106,13 @@ class MemoryWriteResult:
     content: str
     day_tokens: int
     dropped_facts: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class MemoryMergePlan:
+    result: MemoryWriteResult
+    base_hash: str
+    target_hash: str
 
 
 class MarkdownMemoryStore:
@@ -222,24 +233,95 @@ class MarkdownMemoryStore:
         try:
             with _scope_lock(scope_fd, self._resolver.lock_key(scope)):
                 existing = _read_memory_text(scope_fd)
-                blocks = _parse_canonical_memory(existing, today=today)
-                current = blocks.setdefault(today, [])
-                for fact in facts:
-                    normalized = " ".join(str(fact).removeprefix("-").strip().split())
-                    if normalized and normalized not in current:
-                        current.append(normalized)
-                dropped_facts = _cap_daily_facts(current)
-                content = _render_memory(blocks)
-                _atomic_write(scope_fd, content)
-                day_content = _daily_content(current)
-                measured = estimate_tokens(day_content)
-                return MemoryWriteResult(content, measured, dropped_facts)
+                result = _merge_memory_text(existing, facts=facts, today=today)
+                _atomic_write(scope_fd, result.content)
+                return result
+        finally:
+            os.close(scope_fd)
+
+    def preview_merge_today(
+        self,
+        scope: ResolvedMemoryScope,
+        *,
+        facts: list[str],
+        today: date,
+    ) -> MemoryMergePlan:
+        self._resolver.validate(scope)
+        scope_fd = _open_scope_directory_fd(
+            self._resolver.duplicate_root_fd(),
+            scope,
+            create=True,
+        )
+        try:
+            with _scope_lock(scope_fd, self._resolver.lock_key(scope)):
+                existing = _read_memory_text(scope_fd)
+                result = _merge_memory_text(existing, facts=facts, today=today)
+                return MemoryMergePlan(
+                    result=result,
+                    base_hash=_content_hash(existing),
+                    target_hash=_content_hash(result.content),
+                )
+        finally:
+            os.close(scope_fd)
+
+    def replace_planned(
+        self,
+        scope: ResolvedMemoryScope,
+        plan: MemoryMergePlan,
+    ) -> None:
+        self._resolver.validate(scope)
+        scope_fd = _open_scope_directory_fd(
+            self._resolver.duplicate_root_fd(),
+            scope,
+            create=True,
+        )
+        try:
+            with _scope_lock(scope_fd, self._resolver.lock_key(scope)):
+                current = _read_memory_text(scope_fd)
+                if _content_hash(current) != plan.base_hash:
+                    raise MemoryConcurrentModificationError("MEMORY.md changed after merge planning")
+                _atomic_write(scope_fd, plan.result.content)
+        finally:
+            os.close(scope_fd)
+
+    def content_hash(self, scope: ResolvedMemoryScope) -> str:
+        self._resolver.validate(scope)
+        try:
+            scope_fd = _open_scope_directory_fd(
+                self._resolver.duplicate_root_fd(),
+                scope,
+                create=False,
+            )
+        except FileNotFoundError:
+            return _content_hash("")
+        try:
+            return _content_hash(_read_memory_text(scope_fd))
         finally:
             os.close(scope_fd)
 
 
 def _scope_segment(kind: str, value: str) -> str:
     return sha256(f"{kind}\0{value.strip()}".encode()).hexdigest()[:24]
+
+
+def _content_hash(content: str) -> str:
+    return sha256(content.encode("utf-8")).hexdigest()
+
+
+def _merge_memory_text(existing: str, *, facts: list[str], today: date) -> MemoryWriteResult:
+    blocks = _parse_canonical_memory(existing, today=today)
+    current = blocks.setdefault(today, [])
+    for fact in facts:
+        normalized = " ".join(str(fact).removeprefix("-").strip().split())
+        if normalized and normalized not in current:
+            current.append(normalized)
+    dropped_facts = _cap_daily_facts(current)
+    content = _render_memory(blocks)
+    return MemoryWriteResult(
+        content=content,
+        day_tokens=estimate_tokens(_daily_content(current)),
+        dropped_facts=dropped_facts,
+    )
 
 
 def _valid_window_content(

@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from datetime import date, datetime
-from functools import lru_cache
+from functools import lru_cache, partial
 from pathlib import Path
 from threading import Lock
 from time import monotonic, sleep
@@ -28,6 +30,11 @@ from app.modules.ai_assistant.domain.markdown_memory import (
     MemoryScopeResolver,
     ResolvedMemoryScope,
 )
+from app.modules.ai_assistant.domain.memory_extraction import (
+    MemoryExtractionCoordinator,
+    MemoryExtractor,
+    create_model_memory_extractor,
+)
 from app.modules.ai_assistant.domain.session_runtime import RunControlConflict
 from app.modules.ai_assistant.domain.streaming_runtime import heartbeat_payload, last_sequence
 from app.modules.ai_assistant.infra.repository import AiAssistantRepository, IdempotencyConflict
@@ -47,9 +54,17 @@ _AUTONOMOUS_WORKER_EXECUTOR = ThreadPoolExecutor(
 )
 _AUTONOMOUS_WORKER_LOCK = Lock()
 _AUTONOMOUS_WORKER_IN_FLIGHT: set[int] = set()
+_MEMORY_EXTRACTION_EXECUTOR = ThreadPoolExecutor(
+    max_workers=2,
+    thread_name_prefix="ai-assistant-memory",
+)
+_MEMORY_EXTRACTION_LOCK = Lock()
+_MEMORY_EXTRACTION_IN_FLIGHT: dict[str, object] = {}
+_MEMORY_EXTRACTION_REQUESTED: set[str] = set()
 
 
 def get_ai_assistant_service(
+    http_request: Request,
     session: Session = Depends(get_session),
     settings: Settings = Depends(get_settings),
     request_context: RequestContext = Depends(get_request_context),
@@ -63,6 +78,25 @@ def get_ai_assistant_service(
         access_scope=access_scope,
         workspace_root=workspace_root,
     )
+    session_factory = sessionmaker(
+        bind=session.get_bind(),
+        autoflush=False,
+        autocommit=False,
+        expire_on_commit=False,
+    )
+    extractor = getattr(http_request.app.state, "ai_assistant_memory_extractor", None)
+    if extractor is None:
+        extractor = create_model_memory_extractor(settings)
+    completion_callback = None
+    if extractor is not None:
+        completion_callback = partial(
+            _schedule_memory_extraction,
+            session_factory=session_factory,
+            access_scope=access_scope,
+            store=memory_store,
+            memory_scope=memory_scope,
+            extractor=extractor,
+        )
     return AiAssistantHarnessService(
         AiAssistantRepository(
             session,
@@ -72,6 +106,7 @@ def get_ai_assistant_service(
         memory_store=memory_store,
         memory_scope=memory_scope,
         memory_today=_workspace_today,
+        memory_completion_callback=completion_callback,
     )
 
 
@@ -101,6 +136,71 @@ def _workspace_today() -> date:
     if not timezone_name:
         return date.today()
     return datetime.now(ZoneInfo(timezone_name)).date()
+
+
+def _schedule_memory_extraction(
+    *,
+    session_factory: sessionmaker[Session],
+    access_scope: AiAssistantAccessScope,
+    store: MarkdownMemoryStore,
+    memory_scope: ResolvedMemoryScope,
+    extractor: MemoryExtractor,
+) -> None:
+    scope_key = f"{access_scope.user_id}\0{access_scope.workspace_id}"
+    owner = object()
+    with _MEMORY_EXTRACTION_LOCK:
+        _MEMORY_EXTRACTION_REQUESTED.add(scope_key)
+        if scope_key in _MEMORY_EXTRACTION_IN_FLIGHT:
+            return
+        _MEMORY_EXTRACTION_IN_FLIGHT[scope_key] = owner
+    _MEMORY_EXTRACTION_EXECUTOR.submit(
+        _run_memory_extraction,
+        scope_key,
+        owner,
+        session_factory,
+        access_scope,
+        store,
+        memory_scope,
+        extractor,
+    )
+
+
+def _run_memory_extraction(
+    scope_key: str,
+    owner: object,
+    session_factory: sessionmaker[Session],
+    access_scope: AiAssistantAccessScope,
+    store: MarkdownMemoryStore,
+    memory_scope: ResolvedMemoryScope,
+    extractor: MemoryExtractor,
+) -> None:
+    @contextmanager
+    def repository_factory() -> Iterator[AiAssistantRepository]:
+        with session_factory() as session:
+            yield AiAssistantRepository(session, access_scope=access_scope)
+
+    try:
+        coordinator = MemoryExtractionCoordinator(
+            repository_factory=repository_factory,
+            store=store,
+            scope=memory_scope,
+            extractor=extractor,
+            today=_workspace_today,
+        )
+        while True:
+            with _MEMORY_EXTRACTION_LOCK:
+                _MEMORY_EXTRACTION_REQUESTED.discard(scope_key)
+            coordinator.drain()
+            with _MEMORY_EXTRACTION_LOCK:
+                if scope_key in _MEMORY_EXTRACTION_REQUESTED:
+                    continue
+                if _MEMORY_EXTRACTION_IN_FLIGHT.get(scope_key) is owner:
+                    _MEMORY_EXTRACTION_IN_FLIGHT.pop(scope_key, None)
+                return
+    finally:
+        with _MEMORY_EXTRACTION_LOCK:
+            if _MEMORY_EXTRACTION_IN_FLIGHT.get(scope_key) is owner:
+                _MEMORY_EXTRACTION_IN_FLIGHT.pop(scope_key, None)
 
 
 @router.post("/sessions")
@@ -538,6 +638,7 @@ def _worker_service_kwargs(service: AiAssistantHarnessService) -> dict[str, Any]
         "memory_store": getattr(service, "_memory_store", None),
         "memory_scope": getattr(service, "_memory_scope", None),
         "memory_today": getattr(service, "_memory_today", date.today),
+        "memory_completion_callback": getattr(service, "_memory_completion_callback", None),
     }
 
 

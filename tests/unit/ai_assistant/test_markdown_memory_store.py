@@ -34,6 +34,39 @@ def _merge_memory_in_process(
 
 
 class MarkdownMemoryStoreTest(unittest.TestCase):
+    def test_planned_replace_rejects_concurrent_memory_change(self) -> None:
+        from app.modules.ai_assistant.domain.markdown_memory import (
+            MarkdownMemoryStore,
+            MemoryConcurrentModificationError,
+            MemoryScopeResolver,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            resolver = MemoryScopeResolver(tmp)
+            store = MarkdownMemoryStore(resolver)
+            scope = resolver.resolve(
+                trusted_user_id="alice",
+                trusted_workspace_id="workspace-a",
+            )
+            plan = store.preview_merge_today(
+                scope,
+                facts=["planned fact"],
+                today=date(2026, 7, 11),
+            )
+            store.merge_today(
+                scope,
+                facts=["concurrent fact"],
+                today=date(2026, 7, 11),
+            )
+
+            with self.assertRaises(MemoryConcurrentModificationError):
+                store.replace_planned(scope, plan)
+
+            content = store.read_recent(scope, today=date(2026, 7, 11)).content
+
+        self.assertIn("concurrent fact", content)
+        self.assertNotIn("planned fact", content)
+
     def test_close_and_duplicate_root_fd_are_serialized(self) -> None:
         from app.modules.ai_assistant.domain.markdown_memory import MemoryScopeResolver
 

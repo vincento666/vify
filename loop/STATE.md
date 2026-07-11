@@ -4,54 +4,46 @@
 
 - date: 2026-07-11
 - mode: Closed Loop
-- active slice: 188.5 Session Scope And Prompt Cutover
+- active slice: 188.6 Three-Successful-Run Extraction
 - phase: COMPLETE
 - TDD method: tdd
 - branch: codex/spec-188-memory-md
-- base: 317fad92
+- base: 268768a7
 - merge target: codex/runtime-v2-production-upgrade
 - worktree: /Users/vincento/work/develop/hify-spec-188-memory-md
 - pre-slice dirty state: clean
 
 ## Prior Slice
 
-- 188.4 commit: 317fad92
+- 188.5 commit: 268768a7
 - Checker: ALL GREEN
 - Reviewer: PASS
-- focused: 20 passed, 6 subtests
-- regression: 8 passed
+- focused: 37 passed, 11 subtests
+- regression: 107 passed
 
-## Completed Tracers
+## Current Tracer
 
-- scoped session/run/API/background worker access;
-- scoped pending approvals;
-- migration backfill to server workspace identity without deleting historical
-  context JSON;
-- rolling 30-day MEMORY.md prompt/inspector projection;
-- later-session reload and cross-user E2E isolation.
+    three COMPLETED runs across two sessions in one scope produce exactly one
+    extracted MEMORY.md merge and durable cursor advance; two runs do not.
 
-## RED Evidence
+## Planned Vertical Cycles
 
-    artifacts/slices/188-ai-assistant-prompt-skills-memory-compaction/188.5/
-
-## Verification
-
-- focused: 37 passed, 11 subtests;
-- regression: 107 passed;
-- ruff: PASS;
-- diff check: PASS;
-- mypy: PASS; parent baseline had 8 errors, including four in imported chat
-  request typing; all eight were resolved without behavior change;
-- Browser/rem/frontend/live LLM: N/A by frozen backend contract.
+1. MySQL8 cursor schema and scoped completed-run batching;
+2. fake extractor and three-run cross-session trigger;
+3. failure retry and non-COMPLETED exclusion;
+4. file-hash crash recovery and multi-batch drain;
+5. API/E2E regressions, Checker, Reviewer.
 
 ## Next Action
 
-Commit 188.5, then open 188.6 Three-Successful-Run Extraction on the new base.
+Commit 188.6, then open 188.7 aggregate acceptance.
 
-## Independent Gates
+## Verification
 
-- Checker: ALL GREEN.
-- Reviewer round 1: FAIL; removed unauthorized destructive legacy JSON
-  migration, restored async completion/snapshot gates, and added actual
-  harness-to-model prompt capture.
-- Reviewer round 2: PASS; residual risk low.
+- focused unit/MySQL8/contract/E2E: 35 passed, 6 subtests;
+- kernel/security/ToolRunner/event regression: 24 passed;
+- broad AI Assistant suite: 193 passed, 15 subtests;
+- ruff, full mypy, diff check: PASS;
+- independent Checker: ALL GREEN;
+- independent Reviewer: PASS;
+- Browser/rem/frontend/live external model: N/A by contract.

@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from hashlib import sha256
-from typing import Any
+import json
+from typing import Any, Callable
+from uuid import uuid4
 
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
+from sqlalchemy.dialects.mysql import insert as mysql_insert
 
 from app.core.database import Base
 from app.core.db_write import insert_and_fetch
@@ -52,10 +55,350 @@ class AiAssistantRepository:
         self._tool_operation_release_table = Base.metadata.tables["ai_assistant_tool_operation_release"]
         self._tool_circuit_breaker_table = Base.metadata.tables["ai_assistant_tool_circuit_breaker"]
         self._tool_circuit_override_table = Base.metadata.tables["ai_assistant_tool_circuit_override"]
+        self._memory_cursor_table = Base.metadata.tables["ai_assistant_memory_cursor"]
+        self._memory_completion_table = Base.metadata.tables["ai_assistant_memory_completion"]
 
     @property
     def access_scope(self) -> AiAssistantAccessScope:
         return self._access_scope
+
+    def get_memory_extraction_cursor(self) -> dict[str, Any] | None:
+        row = self._session.execute(
+            sa.select(self._memory_cursor_table).where(
+                self._memory_cursor_table.c.user_id == self._access_scope.user_id,
+                self._memory_cursor_table.c.workspace_id == self._access_scope.workspace_id,
+            )
+        ).mappings().one_or_none()
+        return dict(row) if row else None
+
+    def claim_memory_extraction_batch(self, *, lease_seconds: int = 60) -> dict[str, Any] | None:
+        bind = self._session.get_bind()
+        engine = bind.engine if isinstance(bind, sa.engine.Connection) else bind
+        with engine.connect() as connection, Session(bind=connection) as lock_session:
+            pinned_repository = AiAssistantRepository(
+                lock_session,
+                access_scope=self._access_scope,
+            )
+            return pinned_repository._claim_memory_extraction_batch_locked(
+                lease_seconds=lease_seconds,
+            )
+
+    def _claim_memory_extraction_batch_locked(
+        self,
+        *,
+        lease_seconds: int,
+    ) -> dict[str, Any] | None:
+        lock_name = self._memory_extraction_lock_name()
+        if not self._try_get_mysql_lock(lock_name, timeout_seconds=5):
+            return None
+        try:
+            cursor = self.get_memory_extraction_cursor()
+            if cursor and cursor.get("pending_batch_key"):
+                lease_expires_at = cursor.get("lease_expires_at")
+                lease_active = isinstance(lease_expires_at, datetime) and lease_expires_at > datetime.now()
+                if cursor.get("status") != "FAILED" and lease_active:
+                    return None
+                self._session.execute(
+                    self._memory_cursor_table.update()
+                    .where(self._memory_cursor_table.c.id == cursor["id"])
+                    .values(
+                        claim_token=uuid4().hex,
+                        lease_expires_at=datetime.now() + timedelta(seconds=max(1, lease_seconds)),
+                        status="EXTRACTING",
+                        last_error=None,
+                        updated_at=datetime.now(),
+                    )
+                )
+                self._session.commit()
+                reclaimed = self.get_memory_extraction_cursor()
+                return _memory_batch_from_cursor(reclaimed or {})
+            last_completion_id = int((cursor or {}).get("last_processed_completion_id") or 0)
+            rows = self._session.execute(
+                sa.select(
+                    self._run_table,
+                    self._memory_completion_table.c.id.label("memory_completion_id"),
+                )
+                .join(
+                    self._memory_completion_table,
+                    self._memory_completion_table.c.run_id == self._run_table.c.id,
+                )
+                .where(
+                    self._run_table.c.user_id == self._access_scope.user_id,
+                    self._run_table.c.workspace_id == self._access_scope.workspace_id,
+                    self._memory_completion_table.c.user_id == self._access_scope.user_id,
+                    self._memory_completion_table.c.workspace_id == self._access_scope.workspace_id,
+                    self._run_table.c.status == "COMPLETED",
+                    self._memory_completion_table.c.id > last_completion_id,
+                    self._run_table.c.deleted.is_(False),
+                )
+                .order_by(self._memory_completion_table.c.id.asc())
+                .limit(3)
+            ).mappings().all()
+            if len(rows) < 3:
+                return None
+            run_ids = [int(row["id"]) for row in rows]
+            completion_ids = [int(row["memory_completion_id"]) for row in rows]
+            source_hash = sha256(
+                json.dumps(
+                    [
+                        {
+                            "id": int(row["id"]),
+                            "input": row.get("input_payload") or {},
+                            "response": row.get("response_payload") or {},
+                        }
+                        for row in rows
+                    ],
+                    ensure_ascii=True,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    default=str,
+                ).encode()
+            ).hexdigest()
+            batch_key = sha256(
+                f"{self._access_scope.user_id}\0{self._access_scope.workspace_id}\0{run_ids}\0{source_hash}".encode()
+            ).hexdigest()
+            now = datetime.now()
+            values = {
+                "pending_run_ids": run_ids,
+                "pending_completion_ids": completion_ids,
+                "pending_batch_key": batch_key,
+                "pending_source_hash": source_hash,
+                "pending_input_hash": None,
+                "pending_target_hash": None,
+                "claim_token": uuid4().hex,
+                "lease_expires_at": now + timedelta(seconds=max(1, lease_seconds)),
+                "status": "EXTRACTING",
+                "last_error": None,
+                "updated_at": now,
+            }
+            if cursor is None:
+                insert_and_fetch(
+                    self._session,
+                    self._memory_cursor_table,
+                    {
+                        "user_id": self._access_scope.user_id,
+                        "workspace_id": self._access_scope.workspace_id,
+                        "last_processed_run_id": 0,
+                        "last_processed_completion_id": 0,
+                        **values,
+                        "created_at": now,
+                    },
+                )
+            else:
+                self._session.execute(
+                    self._memory_cursor_table.update()
+                    .where(self._memory_cursor_table.c.id == cursor["id"])
+                    .values(**values)
+                )
+            self._session.commit()
+            claimed = self.get_memory_extraction_cursor()
+            return _memory_batch_from_cursor(claimed or {})
+        finally:
+            self._release_mysql_lock_checked(lock_name)
+
+    def get_memory_extraction_runs(self, run_ids: list[int]) -> list[dict[str, Any]]:
+        if not run_ids:
+            return []
+        rows = self._session.execute(
+            sa.select(self._run_table)
+            .where(
+                self._run_table.c.id.in_(run_ids),
+                self._run_table.c.user_id == self._access_scope.user_id,
+                self._run_table.c.workspace_id == self._access_scope.workspace_id,
+                self._run_table.c.status == "COMPLETED",
+                self._run_table.c.deleted.is_(False),
+            )
+        ).mappings().all()
+        by_id = {int(row["id"]): dict(row) for row in rows}
+        return [by_id[run_id] for run_id in run_ids if run_id in by_id]
+
+    def record_memory_extraction_target(
+        self,
+        *,
+        batch_key: str,
+        source_hash: str,
+        input_hash: str,
+        target_hash: str,
+        claim_token: str,
+        lease_seconds: int = 60,
+    ) -> dict[str, Any]:
+        self._session.execute(
+            self._memory_cursor_table.update()
+            .where(
+                self._memory_cursor_table.c.user_id == self._access_scope.user_id,
+                self._memory_cursor_table.c.workspace_id == self._access_scope.workspace_id,
+                self._memory_cursor_table.c.pending_batch_key == batch_key,
+                self._memory_cursor_table.c.pending_source_hash == source_hash,
+                self._memory_cursor_table.c.claim_token == claim_token,
+            )
+            .values(
+                pending_target_hash=target_hash,
+                pending_input_hash=input_hash,
+                lease_expires_at=datetime.now() + timedelta(seconds=max(1, lease_seconds)),
+                status="TARGET_READY",
+                last_error=None,
+                updated_at=datetime.now(),
+            )
+        )
+        self._session.commit()
+        cursor = self.get_memory_extraction_cursor()
+        if (
+            cursor is None
+            or cursor.get("pending_target_hash") != target_hash
+            or cursor.get("claim_token") != claim_token
+        ):
+            raise RuntimeError("memory extraction target claim changed")
+        return cursor
+
+    def commit_memory_extraction_plan(
+        self,
+        *,
+        batch_key: str,
+        source_hash: str,
+        input_hash: str,
+        target_hash: str,
+        claim_token: str,
+        write: Callable[[], None],
+        lease_seconds: int = 60,
+    ) -> dict[str, Any]:
+        bind = self._session.get_bind()
+        engine = bind.engine if isinstance(bind, sa.engine.Connection) else bind
+        with engine.connect() as connection, Session(bind=connection) as lock_session:
+            pinned_repository = AiAssistantRepository(
+                lock_session,
+                access_scope=self._access_scope,
+            )
+            return pinned_repository._commit_memory_extraction_plan_locked(
+                batch_key=batch_key,
+                source_hash=source_hash,
+                input_hash=input_hash,
+                target_hash=target_hash,
+                claim_token=claim_token,
+                write=write,
+                lease_seconds=lease_seconds,
+            )
+
+    def _commit_memory_extraction_plan_locked(
+        self,
+        *,
+        batch_key: str,
+        source_hash: str,
+        input_hash: str,
+        target_hash: str,
+        claim_token: str,
+        write: Callable[[], None],
+        lease_seconds: int,
+    ) -> dict[str, Any]:
+        lock_name = self._memory_extraction_lock_name()
+        if not self._try_get_mysql_lock(lock_name, timeout_seconds=5):
+            raise RuntimeError("memory extraction commit lock is contended")
+        try:
+            self.record_memory_extraction_target(
+                batch_key=batch_key,
+                source_hash=source_hash,
+                input_hash=input_hash,
+                target_hash=target_hash,
+                claim_token=claim_token,
+                lease_seconds=lease_seconds,
+            )
+            write()
+            return self.complete_memory_extraction_batch(
+                batch_key=batch_key,
+                target_hash=target_hash,
+                claim_token=claim_token,
+            )
+        finally:
+            self._release_mysql_lock_checked(lock_name)
+
+    def complete_memory_extraction_batch(
+        self,
+        *,
+        batch_key: str,
+        target_hash: str,
+        claim_token: str,
+    ) -> dict[str, Any]:
+        cursor = self.get_memory_extraction_cursor()
+        if cursor is None or cursor.get("pending_batch_key") != batch_key:
+            raise RuntimeError("memory extraction batch changed")
+        if cursor.get("pending_target_hash") != target_hash:
+            raise RuntimeError("memory extraction target hash changed")
+        if cursor.get("claim_token") != claim_token:
+            raise RuntimeError("memory extraction claim changed")
+        run_ids = [int(run_id) for run_id in cursor.get("pending_run_ids") or []]
+        completion_ids = [int(item) for item in cursor.get("pending_completion_ids") or []]
+        if not run_ids:
+            raise RuntimeError("memory extraction batch is empty")
+        if len(completion_ids) != len(run_ids):
+            raise RuntimeError("memory extraction completion ledger changed")
+        result = self._session.execute(
+            self._memory_cursor_table.update()
+            .where(
+                self._memory_cursor_table.c.id == cursor["id"],
+                self._memory_cursor_table.c.user_id == self._access_scope.user_id,
+                self._memory_cursor_table.c.workspace_id == self._access_scope.workspace_id,
+                self._memory_cursor_table.c.pending_batch_key == batch_key,
+                self._memory_cursor_table.c.pending_target_hash == target_hash,
+                self._memory_cursor_table.c.claim_token == claim_token,
+            )
+            .values(
+                last_processed_run_id=run_ids[-1],
+                last_processed_completion_id=max(completion_ids),
+                pending_run_ids=None,
+                pending_completion_ids=None,
+                pending_batch_key=None,
+                pending_source_hash=None,
+                pending_input_hash=None,
+                pending_target_hash=None,
+                claim_token=None,
+                lease_expires_at=None,
+                status="IDLE",
+                last_error=None,
+                updated_at=datetime.now(),
+            )
+        )
+        self._session.commit()
+        if not _rowcount(result):
+            raise RuntimeError("memory extraction claim changed before completion")
+        completed = self.get_memory_extraction_cursor()
+        if completed is None:
+            raise RuntimeError("memory extraction cursor disappeared")
+        return completed
+
+    def fail_memory_extraction_batch(self, *, batch_key: str, claim_token: str, error: str) -> None:
+        self._session.execute(
+            self._memory_cursor_table.update()
+            .where(
+                self._memory_cursor_table.c.user_id == self._access_scope.user_id,
+                self._memory_cursor_table.c.workspace_id == self._access_scope.workspace_id,
+                self._memory_cursor_table.c.pending_batch_key == batch_key,
+                self._memory_cursor_table.c.claim_token == claim_token,
+            )
+            .values(status="FAILED", last_error=str(error)[:1000], updated_at=datetime.now())
+        )
+        self._session.commit()
+
+    def reset_memory_extraction_target(self, *, batch_key: str, claim_token: str) -> None:
+        self._session.execute(
+            self._memory_cursor_table.update()
+            .where(
+                self._memory_cursor_table.c.user_id == self._access_scope.user_id,
+                self._memory_cursor_table.c.workspace_id == self._access_scope.workspace_id,
+                self._memory_cursor_table.c.pending_batch_key == batch_key,
+                self._memory_cursor_table.c.claim_token == claim_token,
+            )
+            .values(
+                pending_input_hash=None,
+                pending_target_hash=None,
+                updated_at=datetime.now(),
+            )
+        )
+        self._session.commit()
+
+    def _memory_extraction_lock_name(self) -> str:
+        digest = sha256(
+            f"{self._access_scope.user_id}\0{self._access_scope.workspace_id}".encode()
+        ).hexdigest()[:32]
+        return f"ai_assistant_memory:{digest}"
 
     def get_tool_circuit_breaker(self, breaker_key: str) -> dict[str, Any] | None:
         row = self._session.execute(
@@ -767,7 +1110,7 @@ class AiAssistantRepository:
     def complete_run(self, run_id: int, response_payload: dict[str, Any], status: str = "COMPLETED") -> dict[str, Any]:
         now = datetime.now()
         protected_terminal_statuses = tuple({"CANCELLED", "COMPLETED", "FAILED", "DENIED"} - {status})
-        self._session.execute(
+        result = self._session.execute(
             self._run_table.update()
             .where(
                 self._run_table.c.id == run_id,
@@ -783,6 +1126,19 @@ class AiAssistantRepository:
                 updated_at=now,
             )
         )
+        if status == "COMPLETED" and _rowcount(result):
+            self._session.execute(
+                mysql_insert(self._memory_completion_table)
+                .values(
+                    user_id=self._access_scope.user_id,
+                    workspace_id=self._access_scope.workspace_id,
+                    run_id=run_id,
+                    completed_at=now,
+                    created_at=now,
+                    updated_at=now,
+                )
+                .prefix_with("IGNORE")
+            )
         self._session.commit()
         updated = self.get_run(run_id)
         if updated is None:
@@ -1113,6 +1469,32 @@ class AiAssistantRepository:
         owner_tool_call_id: int | None,
         ttl_seconds: int,
     ) -> dict[str, Any]:
+        bind = self._session.get_bind()
+        engine = bind.engine if isinstance(bind, sa.engine.Connection) else bind
+        with engine.connect() as connection, Session(bind=connection) as lock_session:
+            pinned_repository = AiAssistantRepository(
+                lock_session,
+                access_scope=self._access_scope,
+            )
+            return pinned_repository._acquire_resource_lock_locked(
+                resource_key=resource_key,
+                mode=mode,
+                owner_session_id=owner_session_id,
+                owner_run_id=owner_run_id,
+                owner_tool_call_id=owner_tool_call_id,
+                ttl_seconds=ttl_seconds,
+            )
+
+    def _acquire_resource_lock_locked(
+        self,
+        *,
+        resource_key: str,
+        mode: str,
+        owner_session_id: int,
+        owner_run_id: int,
+        owner_tool_call_id: int | None,
+        ttl_seconds: int,
+    ) -> dict[str, Any]:
         now = datetime.now()
         requested_mode = mode.upper()
         mutex_name = _resource_lock_mutex_name(resource_key)
@@ -1180,7 +1562,7 @@ class AiAssistantRepository:
             self._session.rollback()
             raise
         finally:
-            self._release_mysql_lock(mutex_name)
+            self._release_mysql_lock_checked(mutex_name)
 
     def release_resource_lock(
         self,
@@ -1243,16 +1625,21 @@ class AiAssistantRepository:
             .values(status="EXPIRED", updated_at=now)
         )
 
-    def _try_get_mysql_lock(self, name: str) -> bool:
-        value = self._session.execute(sa.text("SELECT GET_LOCK(:name, 0)"), {"name": name}).scalar_one_or_none()
+    def _try_get_mysql_lock(self, name: str, *, timeout_seconds: int = 0) -> bool:
+        value = self._session.execute(
+            sa.text("SELECT GET_LOCK(:name, :timeout_seconds)"),
+            {"name": name, "timeout_seconds": max(0, timeout_seconds)},
+        ).scalar_one_or_none()
         return int(value or 0) == 1
 
-    def _release_mysql_lock(self, name: str) -> None:
-        try:
-            self._session.execute(sa.text("SELECT RELEASE_LOCK(:name)"), {"name": name})
-            self._session.commit()
-        except Exception:
-            self._session.rollback()
+    def _release_mysql_lock_checked(self, name: str) -> None:
+        value = self._session.execute(
+            sa.text("SELECT RELEASE_LOCK(:name)"),
+            {"name": name},
+        ).scalar_one_or_none()
+        self._session.commit()
+        if int(value or 0) != 1:
+            raise RuntimeError(f"failed to release MySQL lock: {name}")
 
     def _next_event_sequence(self, run_id: int) -> int:
         current = self._session.execute(
@@ -1281,3 +1668,15 @@ def _without_legacy_memory(context: dict[str, Any] | None) -> dict[str, Any]:
     sanitized = dict(context or {})
     sanitized.pop("aiAssistantMemory", None)
     return sanitized
+
+
+def _memory_batch_from_cursor(cursor: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "run_ids": [int(run_id) for run_id in cursor.get("pending_run_ids") or []],
+        "batch_key": str(cursor.get("pending_batch_key") or ""),
+        "source_hash": str(cursor.get("pending_source_hash") or ""),
+        "input_hash": cursor.get("pending_input_hash"),
+        "target_hash": cursor.get("pending_target_hash"),
+        "status": str(cursor.get("status") or ""),
+        "claim_token": str(cursor.get("claim_token") or ""),
+    }
