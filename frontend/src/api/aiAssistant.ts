@@ -307,6 +307,84 @@ export interface AiAssistantRunSnapshot {
   inspector: AiAssistantRunInspector
 }
 
+export type AiAssistantUsageCostState = 'complete' | 'partial' | 'unknown'
+
+export interface AiAssistantUsageTotals {
+  totalTokens: number
+  costUsd: string | null
+  costState: AiAssistantUsageCostState
+  unknownCostCount: number
+  unknownCostTokens: number
+  sessionCount: number
+  callCount: number
+}
+
+export interface AiAssistantUsageSummary {
+  today: AiAssistantUsageTotals
+  yesterday: AiAssistantUsageTotals
+  rolling30Days: AiAssistantUsageTotals
+  cumulative: AiAssistantUsageTotals
+}
+
+export interface AiAssistantUsageQuery {
+  from: string
+  to: string
+  timezone: string
+}
+
+export interface AiAssistantUsageDaily extends AiAssistantUsageTotals {
+  date: string
+}
+
+export interface AiAssistantUsageSession extends AiAssistantUsageTotals {
+  sessionId: number
+  title: string
+}
+
+export interface AiAssistantUsageCall {
+  id: number
+  runId: number
+  callId: string
+  callKind: string
+  provider: string
+  model: string
+  inputTokens: number | null
+  outputTokens: number | null
+  cacheReadTokens: number | null
+  cacheWriteTokens: number | null
+  reasoningTokens: number | null
+  totalTokens: number | null
+  costUsd: string | null
+  costSource: string
+  pricingVersion: string | null
+  startedAt: string
+  completedAt: string | null
+}
+
+export interface AiAssistantUsageSessionDetail extends AiAssistantUsageSession {
+  calls: AiAssistantUsageCall[]
+  sessionDeleted: boolean
+  limit: number
+  offset: number
+}
+
+export interface AiAssistantUsageNamedTotal extends AiAssistantUsageTotals {
+  name: string
+}
+
+export interface AiAssistantUsageDimensions {
+  providers: AiAssistantUsageNamedTotal[]
+  models: AiAssistantUsageNamedTotal[]
+  tokenTypes: {
+    input: number
+    output: number
+    cacheRead: number
+    cacheWrite: number
+    reasoning: number
+    total: number
+  }
+}
+
 export function createAiAssistantSession(payload: { title?: string; context?: Record<string, unknown> } = {}) {
   return post<AiAssistantSession>('/v1/ai-assistant/sessions', payload)
 }
@@ -374,4 +452,40 @@ export function denyAiAssistantApproval(approvalId: number, payload: AiAssistant
 
 export function listAiAssistantTools() {
   return get<AiAssistantListResult<AiAssistantToolManifest>>('/v1/ai-assistant/tools')
+}
+
+export function getAiAssistantUsageSummary(query?: Pick<AiAssistantUsageQuery, 'timezone'>) {
+  return get<AiAssistantUsageSummary>('/v1/ai-assistant/usage/summary', query)
+}
+
+export function getAiAssistantUsageDaily(query: AiAssistantUsageQuery) {
+  return get<AiAssistantListResult<AiAssistantUsageDaily> & { from: string; to: string }>(
+    '/v1/ai-assistant/usage/daily',
+    query,
+  )
+}
+
+export function getAiAssistantUsageSessions(
+  query: AiAssistantUsageQuery,
+  pagination: { limit: number; offset: number },
+) {
+  return get<AiAssistantListResult<AiAssistantUsageSession> & { limit: number; offset: number }>(
+    '/v1/ai-assistant/usage/sessions',
+    { ...query, ...pagination },
+  )
+}
+
+export function getAiAssistantUsageDimensions(query: AiAssistantUsageQuery) {
+  return get<AiAssistantUsageDimensions>('/v1/ai-assistant/usage/dimensions', query)
+}
+
+export function getAiAssistantUsageSession(
+  sessionId: number,
+  query: AiAssistantUsageQuery,
+  pagination: { limit: number; offset: number },
+) {
+  return get<AiAssistantUsageSessionDetail>(`/v1/ai-assistant/usage/sessions/${sessionId}`, {
+    ...query,
+    ...pagination,
+  })
 }

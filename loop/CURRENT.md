@@ -1,10 +1,10 @@
-# Current Loop Scope: Spec 190.4 Cost And Aggregate API
+# Current Loop Scope: Spec 190.5 Token/Cost Dashboard
 
 ## Status
 
     mode: Closed Loop
     active spec: 190-ai-assistant-observability-benchmark
-    active slice: 190.4 Versioned Cost And Aggregate API
+    active slice: 190.5 Token/Cost Dashboard
     phase: COMPLETE
     TDD method: tdd
 
@@ -12,30 +12,31 @@
 
     branch: codex/spec-188-memory-md
     path: /Users/vincento/work/develop/hify-spec-188-memory-md
-    base: 61f7e559
+    base: 0e5b835e
     merge target: codex/runtime-v2-production-upgrade
     dirty before slice: no
 
 ## Tracer
 
-    scoped immutable ledger rows
-      -> provider actual / versioned estimate / unknown
-      -> timezone-aware summary, daily, session, dimension, detail APIs
+    scoped aggregate APIs
+      -> Token / Cost view model
+      -> cards + heatmap + rankings + detail + distributions
+      -> repeatable Browser UAT
 
 ## Frozen Scope
 
-Allowed: AI Assistant domain/repository/router/schema, usage contract/unit/E2E tests,
-Spec 190 tasks, loop docs, and 190.4 evidence. No frontend or 190.5 work.
+Allowed: AI Assistant frontend route, entry action, typed API client, dashboard,
+frontend tests/UAT, Spec 190 tasks, loop docs, and 190.5 evidence. No backend,
+global admin/settings, benchmark, budget, alert, or governance work.
 
 ## Stop Conditions
 
-Stop if prices must be invented, historical rows must be recalculated, or a
-cross-user/admin/billing/budget surface is required.
+Stop if the dashboard needs a new global information architecture, arbitrary
+user/workspace selector, invented cost, or backend contract change.
 
 ## Result
 
-Focused 18 passed; AI Assistant broad 216 passed plus 21 subtests. Ruff, mypy,
-and diff-check passed. Checker ALL GREEN; Reviewer PASS with no P0/P1/P2.
-
-Residual risk: the bounded 366-branch daily SQL aggregate is not load-tested;
-carry this non-blocking performance check into 190.6 aggregate acceptance.
+Focused 15 passed; frontend broad 464 passed; rem and build passed. Browser UAT
+proved entry, populated/partial/unknown/loading/empty/error/recovery, 365-day
+heatmap, drilldown, and unified timezone. Checker ALL GREEN; Reviewer PASS with
+no P0/P1/P2; visual verdict 92/100 PASS.

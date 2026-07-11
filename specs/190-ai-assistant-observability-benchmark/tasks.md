@@ -54,16 +54,16 @@ compatibility but create no open work.
 
 ## 190.5 Token/Cost Dashboard
 
-- [ ] TDD preflight and observable frontend RED.
-- [ ] Add /ai-assistant/usage route and AI Assistant entry.
-- [ ] Add today, yesterday, 30-day, and cumulative cards.
-- [ ] Add recent-year daily Token/Cost heatmap.
-- [ ] Add default 30-day range filter and Token/Cost toggle.
-- [ ] Add session ranking/detail.
-- [ ] Add provider/model distribution and token-type composition.
-- [ ] Add loading, empty, partial-cost, unknown-price, and error states.
-- [ ] Run frontend tests, rem gate, and repeatable Browser UAT.
-- [ ] Save screenshots/DOM evidence and pass Checker/Reviewer.
+- [x] TDD preflight and observable frontend RED.
+- [x] Add /ai-assistant/usage route and AI Assistant entry.
+- [x] Add today, yesterday, 30-day, and cumulative cards.
+- [x] Add recent-year daily Token/Cost heatmap.
+- [x] Add default 30-day range filter and Token/Cost toggle.
+- [x] Add session ranking/detail.
+- [x] Add provider/model distribution and token-type composition.
+- [x] Add loading, empty, partial-cost, unknown-price, and error states.
+- [x] Run frontend tests, rem gate, and repeatable Browser UAT.
+- [x] Save screenshots/DOM evidence and pass Checker/Reviewer.
 
 ## 190.6 Aggregate Acceptance
 

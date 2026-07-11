@@ -53,6 +53,10 @@
           <h1>{{ sessionTitle }}</h1>
         </div>
         <div class="ai-console__actions">
+          <router-link class="ai-usage-link" to="/ai-assistant/usage" data-testid="ai-assistant-usage-entry">
+            <BarChartOutlined />
+            Token 用量
+          </router-link>
           <a-button
             data-testid="ai-assistant-clear-history"
             size="small"
@@ -761,6 +765,7 @@
 
 <script setup lang="ts">
 import {
+  BarChartOutlined,
   CheckCircleOutlined,
   ClearOutlined,
   CopyOutlined,
@@ -2007,7 +2012,18 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
 }
 
 .ai-console__actions {
+  gap: 0.35rem;
   flex: 0 0 auto;
+}
+
+.ai-usage-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 0.4rem;
+  color: var(--color-text-secondary, #4b5268);
+  background: var(--color-bg-subtle, #f4f5f7);
 }
 
 .ai-console__top h1 {

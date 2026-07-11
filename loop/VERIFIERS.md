@@ -1,25 +1,26 @@
-# Loop Verifiers: Spec 190.4
+# Loop Verifiers: Spec 190.5
 
 ## Focused
 
-    rtk uv run pytest tests/unit/ai_assistant/test_model_usage_cost.py tests/integration/ai_assistant/test_model_usage_repository.py tests/contract/test_ai_assistant_usage_api.py tests/e2e/test_ai_assistant_usage_e2e.py tests/contract/test_ai_assistant_model_usage_capture_api.py -q --tb=short
+    cd frontend && rtk npm run test:unit -- --run src/views/aiAssistant/aiAssistantUsageViewModel.test.ts src/views/aiAssistant/aiAssistantUsageDashboard.test.ts src/views/aiAssistant/aiAssistantUsageDashboard.behavior.test.ts src/router/ai-assistant-routes.test.ts src/api/aiAssistant.test.ts
 
 ## Required Proof
 
-- provider actual cost wins;
-- versioned configured estimate is fixed at write time;
-- missing price stays null with unknown counters;
-- summary/session/total/daily/dimensions/detail reconcile;
-- timezone date boundaries and range validation are correct;
-- every endpoint enforces trusted user/workspace/session scope;
-- existing envelope remains compatible.
+- route and AI Assistant Token 用量 entry;
+- four cards, recent-year heatmap, default 30-day detail range;
+- Token/Cost toggle, session ranking/detail, dimensions/composition;
+- loading, empty, partial, unknown, and error states;
+- no false zero price and no arbitrary scope selector;
+- repeatable Browser UAT screenshot and DOM evidence.
 
 ## Static
 
-    rtk uv run ruff check app/modules/ai_assistant tests/unit/ai_assistant/test_model_usage_cost.py tests/contract/test_ai_assistant_usage_api.py tests/e2e/test_ai_assistant_usage_e2e.py
-    rtk uv run mypy app/modules/ai_assistant
+    cd frontend && rtk npm run test:unit -- --run src/remScaleClosure.test.ts
+    cd frontend && rtk npm run build
+    cd frontend && rtk npm run dev -- --host 127.0.0.1 --port 5174
+    cd frontend && rtk node e2e/ai-assistant-usage-uat.mjs
     rtk git diff --check
 
 ## Broad
 
-    rtk uv run pytest tests/unit/ai_assistant tests/integration/ai_assistant tests/contract/test_ai_assistant_*.py -q --tb=short
+    cd frontend && rtk npm run test:unit

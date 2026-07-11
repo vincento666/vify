@@ -2,21 +2,21 @@
 
 - date: 2026-07-11
 - mode: Closed Loop
-- active slice: 190.4 Versioned Cost And Aggregate API
+- active slice: 190.5 Token/Cost Dashboard
 - phase: COMPLETE
 - branch: codex/spec-188-memory-md
-- base: 61f7e559
+- base: 0e5b835e
 - worktree: /Users/vincento/work/develop/hify-spec-188-memory-md
 
-Current tracer: provider actual wins; configured versioned estimate is immutable;
-missing price remains null and visible; scoped aggregates reconcile exactly.
+Current tracer: typed usage APIs feed a Token/Cost dashboard with explicit
+unknown/partial cost states and no cross-scope controls.
 
-Next: commit 190.4, then open 190.5 Token/Cost Dashboard.
+Next: commit 190.5, then run 190.6 aggregate acceptance.
 
 Verification:
-- focused cost/repository/API/E2E/model capture: 18 passed;
-- security/scope/model/event regression: 19 passed, 5 subtests;
-- AI Assistant broad: 216 passed, 21 subtests;
-- Ruff, mypy 35 source files, diff-check: PASS.
-- Checker: ALL GREEN; Reviewer: PASS, no P0/P1/P2.
-- residual: load-test bounded 366-day SQL CASE in 190.6.
+- focused route/API/view-model/component behavior: 15 passed;
+- frontend broad: 113 files, 464 passed;
+- rem gate and production build: PASS;
+- Browser UAT: populated/partial/unknown/loading/empty/error/recovery PASS;
+- screenshots and DOM evidence: artifacts/slices/190-ai-assistant-observability-benchmark/190.5/.
+- Checker: ALL GREEN; Reviewer: PASS, no P0/P1/P2; visual 92/100 PASS.
