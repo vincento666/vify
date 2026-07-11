@@ -251,6 +251,14 @@ class AiAssistantModelUsageCaptureApiTest(unittest.TestCase):
                 headers=headers,
                 json={"modelConfig": model_config},
             )
+            inspector_usage = client.get(
+                f"/api/v1/ai-assistant/runs/{started['runId']}/inspector",
+                headers=headers,
+            ).json()["data"]["usage"]
+            aggregate_usage = client.get(
+                "/api/v1/ai-assistant/usage/summary?timezone=UTC",
+                headers=headers,
+            ).json()["data"]["cumulative"]
 
         self.assertEqual(completed["status"], "COMPLETED")
         with self._factory() as session:
@@ -270,6 +278,10 @@ class AiAssistantModelUsageCaptureApiTest(unittest.TestCase):
         self.assertEqual(rows[0]["provider"], "openrouter")
         self.assertEqual(rows[0]["model"], "qwen/test-usage")
         self.assertGreater(rows[0]["total_tokens"], 0)
+        self.assertEqual(inspector_usage["totalTokens"], rows[0]["total_tokens"])
+        self.assertEqual(aggregate_usage["totalTokens"], rows[0]["total_tokens"])
+        self.assertEqual(aggregate_usage["sessionCount"], 1)
+        self.assertEqual(aggregate_usage["callCount"], 1)
 
     def _session_override(self) -> Generator[Session, None, None]:
         with self._factory() as session:

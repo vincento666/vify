@@ -67,8 +67,8 @@ compatibility but create no open work.
 
 ## 190.6 Aggregate Acceptance
 
-- [ ] Reconcile ledger, APIs, inspector, and dashboard.
-- [ ] Rerun backend, frontend, migration, isolation, and UAT gates.
-- [ ] Prove planner and memory-extractor usage capture.
-- [ ] Prove no benchmark/governance/alerts/budget/cross-user scope.
-- [ ] Save final Checker/Reviewer reports and residual risks.
+- [x] Reconcile ledger, APIs, inspector, and dashboard.
+- [x] Rerun backend, frontend, migration, isolation, and UAT gates.
+- [x] Prove planner and memory-extractor usage capture.
+- [x] Prove no benchmark/governance/alerts/budget/cross-user scope.
+- [x] Save final Checker/Reviewer reports and residual risks.

@@ -163,6 +163,7 @@ class AiAssistantModelUsageRepositoryTest(unittest.TestCase):
 
             with repository_factory() as repository:
                 rows = repository.list_model_usage_calls()
+                aggregate = repository.summarize_model_usage()
 
         self.assertEqual(result.status, "COMPLETED")
         self.assertEqual(malformed.status, "FAILED")
@@ -176,6 +177,10 @@ class AiAssistantModelUsageRepositoryTest(unittest.TestCase):
             self.assertEqual(row["model"], "qwen/memory-usage")
             self.assertEqual(row["total_tokens"], 25)
             self.assertEqual(str(row["provider_cost_usd"]), "0.0001250000")
+        self.assertEqual(aggregate["total_tokens"], 75)
+        self.assertEqual(str(aggregate["known_cost_usd"]), "0.0003750000")
+        self.assertEqual(aggregate["session_count"], 1)
+        self.assertEqual(aggregate["call_count"], 3)
 
     def test_pending_call_finalizes_once_and_remains_scoped_and_idempotent(self) -> None:
         from app.modules.ai_assistant.domain.access_scope import AiAssistantAccessScope

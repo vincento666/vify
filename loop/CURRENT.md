@@ -1,10 +1,10 @@
-# Current Loop Scope: Spec 190.5 Token/Cost Dashboard
+# Current Loop Scope: Spec 190.6 Aggregate Acceptance
 
 ## Status
 
     mode: Closed Loop
     active spec: 190-ai-assistant-observability-benchmark
-    active slice: 190.5 Token/Cost Dashboard
+    active slice: 190.6 Aggregate Acceptance
     phase: COMPLETE
     TDD method: tdd
 
@@ -12,31 +12,45 @@
 
     branch: codex/spec-188-memory-md
     path: /Users/vincento/work/develop/hify-spec-188-memory-md
-    base: 0e5b835e
+    base: 64afb8ce
     merge target: codex/runtime-v2-production-upgrade
     dirty before slice: no
 
 ## Tracer
 
-    scoped aggregate APIs
-      -> Token / Cost view model
-      -> cards + heatmap + rankings + detail + distributions
-      -> repeatable Browser UAT
+    planner + memory extractor calls
+      -> immutable scoped ledger
+      -> inspector + aggregate API reconciliation
+      -> dashboard typed projection + Browser UAT
 
 ## Frozen Scope
 
-Allowed: AI Assistant frontend route, entry action, typed API client, dashboard,
-frontend tests/UAT, Spec 190 tasks, loop docs, and 190.5 evidence. No backend,
-global admin/settings, benchmark, budget, alert, or governance work.
+Allowed: reconciliation assertions in existing AI Assistant usage tests, Spec 190
+tasks, loop docs, and 190.6 evidence. Product code changes require a new RED and
+scope review.
 
 ## Stop Conditions
 
-Stop if the dashboard needs a new global information architecture, arbitrary
-user/workspace selector, invented cost, or backend contract change.
+Stop if reconciliation exposes a product-contract mismatch that cannot be fixed
+without expanding pricing, billing, admin, benchmark, budget, or alert scope.
+
+## TDD
+
+N/A: acceptance-only slice. No new product behavior; added assertions must pass
+against the already accepted 190.3–190.5 implementation.
 
 ## Result
 
-Focused 15 passed; frontend broad 464 passed; rem and build passed. Browser UAT
-proved entry, populated/partial/unknown/loading/empty/error/recovery, 365-day
-heatmap, drilldown, and unified timezone. Checker ALL GREEN; Reviewer PASS with
-no P0/P1/P2; visual verdict 92/100 PASS.
+Planner ledger = inspector = cumulative API. Memory extractor 3 calls = 75
+tokens = $0.000375 = 1 session / 3 calls. Backend focused 13 and broad 216 +
+21 subtests passed; frontend 464, build, rem, and Browser UAT passed. No new
+benchmark/governance/alert/budget/billing/admin surface.
+
+## Residual Risks
+
+- Price estimates require exact provider/model entries in deployment env;
+  unconfigured models intentionally remain unknown.
+- The bounded 366-day SQL CASE aggregate has no production load threshold;
+  monitor query/index latency under real volume.
+- Browser UAT mocks the API; MySQL contract/E2E and typed-client tests provide
+  the real backend/frontend contract seam without a live-provider UAT.

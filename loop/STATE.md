@@ -2,21 +2,23 @@
 
 - date: 2026-07-11
 - mode: Closed Loop
-- active slice: 190.5 Token/Cost Dashboard
+- active slice: 190.6 Aggregate Acceptance
 - phase: COMPLETE
 - branch: codex/spec-188-memory-md
-- base: 0e5b835e
+- base: 64afb8ce
 - worktree: /Users/vincento/work/develop/hify-spec-188-memory-md
 
-Current tracer: typed usage APIs feed a Token/Cost dashboard with explicit
-unknown/partial cost states and no cross-scope controls.
+Current tracer: planner and memory-extractor rows reconcile through inspector,
+aggregate API, typed frontend projections, and Browser UAT.
 
-Next: commit 190.5, then run 190.6 aggregate acceptance.
+Next: commit 190.6 final acceptance. Spec 190 has no remaining task.
 
 Verification:
-- focused route/API/view-model/component behavior: 15 passed;
+- backend focused: 13 passed;
+- backend broad: 216 passed, 21 subtests;
 - frontend broad: 113 files, 464 passed;
-- rem gate and production build: PASS;
-- Browser UAT: populated/partial/unknown/loading/empty/error/recovery PASS;
-- screenshots and DOM evidence: artifacts/slices/190-ai-assistant-observability-benchmark/190.5/.
-- Checker: ALL GREEN; Reviewer: PASS, no P0/P1/P2; visual 92/100 PASS.
+- Ruff, mypy 35 files, rem, build, diff-check: PASS;
+- Browser UAT: cards=4, heatmap=365, calls=2, all states PASS;
+- reconciliation: planner ledger=inspector=API; memory=75 tokens/$0.000375;
+- scope scan: no benchmark/governance/alert/budget/billing/admin additions;
+- generated rollback files removed; worktree hygiene PASS.
