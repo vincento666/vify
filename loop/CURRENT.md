@@ -1,31 +1,31 @@
-# Current Loop Scope: Spec 188.7 Aggregate Acceptance
+# Current Loop Scope: Spec 190.3 Per-Call Usage Ledger
 
 ## Status
 
     mode: Closed Loop
-    active spec: 188-ai-assistant-prompt-skills-memory-compaction
-    active slice: 188.7 Aggregate Acceptance
+    active spec: 190-ai-assistant-observability-benchmark
+    active slice: 190.3 Per-Call Usage Ledger
     phase: COMPLETE
-    TDD method: tdd (acceptance replay; no production behavior planned)
+    TDD method: tdd
 
 ## Contract
 
-    specs/188-ai-assistant-prompt-skills-memory-compaction/spec.md
-    specs/188-ai-assistant-prompt-skills-memory-compaction/tasks.md
+    specs/190-ai-assistant-observability-benchmark/spec.md
+    specs/190-ai-assistant-observability-benchmark/plan.md
+    specs/190-ai-assistant-observability-benchmark/tasks.md
 
-Acceptance:
+Tracer:
 
-- replay the required 188.4-188.6 gates on the combined implementation;
-- prove the DB stores cursor metadata, never memory text;
-- prove the reader remains heading-based and no legacy JSON memory writes return;
-- prove frontend, customer-assistant, daily scheduler, and Spec 189 stayed out of scope;
-- record Checker, Reviewer, evidence, and residual risks.
+    one live planner call or memory-extractor call
+      -> one scoped idempotent ledger row
+      -> provider token dimensions preserved
+      -> cache/reasoning remain breakouts
 
 ## Worktree
 
     branch: codex/spec-188-memory-md
     path: /Users/vincento/work/develop/hify-spec-188-memory-md
-    base: 8f50a1bb
+    base: e40743e7
     merge target: codex/runtime-v2-production-upgrade
     dirty before slice: no
 
@@ -33,16 +33,19 @@ Acceptance:
 
 Allowed:
 
-    specs/188-ai-assistant-prompt-skills-memory-compaction/tasks.md
-    loop/CURRENT.md
-    loop/STATE.md
-    loop/VERIFIERS.md
-    artifacts/slices/188-ai-assistant-prompt-skills-memory-compaction/188.7/
+    app/modules/ai_assistant/
+    alembic/versions/0034_ai_assistant_model_usage.py
+    tests/unit/ai_assistant/test_model_usage.py
+    tests/integration/ai_assistant/test_model_usage_repository.py
+    tests/contract/test_ai_assistant_model_usage_capture_api.py
+    tests/integration/ai_assistant/test_memory_extraction_cursor.py
+    specs/190-ai-assistant-observability-benchmark/tasks.md
+    loop/
+    artifacts/slices/190-ai-assistant-observability-benchmark/190.3/
 
-Production or test edits require reopening the relevant implementation slice.
+No aggregate API, frontend, benchmark, governance, alert, or budget changes.
 
 ## Stop Conditions
 
-Stop and reopen implementation if any required gate fails, memory text appears
-in DB, fixed tail reads or legacy JSON writes return, or an excluded module was
-changed by Spec 188 commits.
+Stop for product input if provider token dimensions cannot be normalized without
+inventing values, or if trusted scope/session attribution is unavailable.

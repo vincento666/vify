@@ -333,6 +333,56 @@ def register_ai_assistant_tables(metadata: sa.MetaData | None = None) -> None:
             ),
         )
 
+    if "ai_assistant_model_usage" not in target.tables:
+        sa.Table(
+            "ai_assistant_model_usage",
+            target,
+            id_column(),
+            sa.Column("user_id", sa.String(120), nullable=False),
+            sa.Column("workspace_id", sa.String(128), nullable=False),
+            sa.Column("session_id", BIGINT, nullable=False),
+            sa.Column("run_id", BIGINT, nullable=False),
+            sa.Column("call_id", sa.String(160), nullable=False),
+            sa.Column("call_kind", sa.String(40), nullable=False),
+            sa.Column("provider", sa.String(120), nullable=False),
+            sa.Column("model", sa.String(240), nullable=False),
+            sa.Column("input_tokens", BIGINT, nullable=True),
+            sa.Column("output_tokens", BIGINT, nullable=True),
+            sa.Column("cache_read_tokens", BIGINT, nullable=True),
+            sa.Column("cache_write_tokens", BIGINT, nullable=True),
+            sa.Column("reasoning_tokens", BIGINT, nullable=True),
+            sa.Column("total_tokens", BIGINT, nullable=True),
+            sa.Column("usage_source", sa.String(30), nullable=False, server_default="pending"),
+            sa.Column("provider_cost_usd", sa.Numeric(20, 10), nullable=True),
+            sa.Column("estimated_cost_usd", sa.Numeric(20, 10), nullable=True),
+            sa.Column("effective_cost_usd", sa.Numeric(20, 10), nullable=True),
+            sa.Column("cost_source", sa.String(30), nullable=False, server_default="unknown"),
+            sa.Column("pricing_version", sa.String(120), nullable=True),
+            sa.Column("started_at", sa.DateTime(), nullable=False),
+            sa.Column("completed_at", sa.DateTime(), nullable=True),
+            *timestamps(),
+            sa.UniqueConstraint(
+                "user_id",
+                "workspace_id",
+                "run_id",
+                "call_id",
+                name="uq_ai_assistant_model_usage_call",
+            ),
+            sa.Index(
+                "idx_ai_assistant_model_usage_scope_time",
+                "user_id",
+                "workspace_id",
+                "started_at",
+            ),
+            sa.Index(
+                "idx_ai_assistant_model_usage_session",
+                "user_id",
+                "workspace_id",
+                "session_id",
+                "started_at",
+            ),
+        )
+
 
 def ai_assistant_tables() -> list[sa.Table]:
     register_ai_assistant_tables()
@@ -352,5 +402,6 @@ def ai_assistant_tables() -> list[sa.Table]:
         "ai_assistant_tool_circuit_override",
         "ai_assistant_memory_cursor",
         "ai_assistant_memory_completion",
+        "ai_assistant_model_usage",
     ]
     return [Base.metadata.tables[name] for name in names]

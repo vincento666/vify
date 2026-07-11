@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from hashlib import sha256
 import json
 from math import ceil
@@ -27,6 +27,7 @@ from app.modules.ai_assistant.domain.markdown_memory import (
     MemoryWindow,
     ResolvedMemoryScope,
 )
+from app.modules.ai_assistant.domain.model_usage import normalize_model_usage
 from app.modules.ai_assistant.domain.observability import build_observability_snapshot
 from app.modules.ai_assistant.domain.permissions import ApprovalMode, ApprovalPolicy, PermissionDecision
 from app.modules.ai_assistant.domain.policy_runtime import SessionPermissionPolicy
@@ -966,10 +967,28 @@ class AiAssistantHarnessService:
                 },
             )
 
-        decision = (
-            planner.plan_messages(messages, self._tools, on_stream_chunk=append_stream_chunk)
-            if messages is not None
-            else planner.plan(message, self._tools, on_stream_chunk=append_stream_chunk)
+        call_id = f"planner:{round_index}"
+        self._begin_model_usage(
+            session_id=session_id,
+            run_id=run_id,
+            call_id=call_id,
+            call_kind="planner",
+            provider=planner.provider,
+            model=planner.model,
+        )
+        try:
+            decision = (
+                planner.plan_messages(messages, self._tools, on_stream_chunk=append_stream_chunk)
+                if messages is not None
+                else planner.plan(message, self._tools, on_stream_chunk=append_stream_chunk)
+            )
+        except Exception:
+            self._fail_model_usage(run_id=run_id, call_id=call_id)
+            raise
+        self._finalize_model_usage(
+            run_id=run_id,
+            call_id=call_id,
+            usage=decision.usage,
         )
         self._repository.append_event(
             run_id=run_id,
@@ -1063,6 +1082,54 @@ class AiAssistantHarnessService:
             payload={"provider": decision.provider, "model": decision.model, "usage": decision.usage, "roundIndex": round_index},
         )
         return decision
+
+    def _begin_model_usage(
+        self,
+        *,
+        session_id: int,
+        run_id: int,
+        call_id: str,
+        call_kind: str,
+        provider: str,
+        model: str,
+    ) -> None:
+        recorder = getattr(self._repository, "begin_model_usage_call", None)
+        if not callable(recorder):
+            return
+        recorder(
+            session_id=session_id,
+            run_id=run_id,
+            call_id=call_id,
+            call_kind=call_kind,
+            provider=provider,
+            model=model,
+            started_at=datetime.now(),
+        )
+
+    def _finalize_model_usage(
+        self,
+        *,
+        run_id: int,
+        call_id: str,
+        usage: dict[str, Any],
+    ) -> None:
+        recorder = getattr(self._repository, "finalize_model_usage_call", None)
+        if callable(recorder):
+            recorder(
+                run_id=run_id,
+                call_id=call_id,
+                usage=normalize_model_usage(usage),
+                completed_at=datetime.now(),
+            )
+
+    def _fail_model_usage(self, *, run_id: int, call_id: str) -> None:
+        recorder = getattr(self._repository, "fail_model_usage_call", None)
+        if callable(recorder):
+            recorder(
+                run_id=run_id,
+                call_id=call_id,
+                completed_at=datetime.now(),
+            )
 
     def _run_live_react_loop(
         self,

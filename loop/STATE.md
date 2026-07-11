@@ -4,40 +4,28 @@
 
 - date: 2026-07-11
 - mode: Closed Loop
-- active slice: 188.7 Aggregate Acceptance
+- active slice: 190.3 Per-Call Usage Ledger
 - phase: COMPLETE
 - branch: codex/spec-188-memory-md
-- base: 8f50a1bb
+- base: e40743e7
 - merge target: codex/runtime-v2-production-upgrade
 - worktree: /Users/vincento/work/develop/hify-spec-188-memory-md
 - pre-slice dirty state: clean
 
-## Accepted Implementation Slices
-
-- 188.4: `317fad92`, Checker ALL GREEN, Reviewer PASS.
-- 188.5: `268768a7`, Checker ALL GREEN, Reviewer PASS.
-- 188.6: `8f50a1bb`, final Checker ALL GREEN, Reviewer PASS.
-
 ## Current Tracer
 
-    combined 188.4-188.6 implementation satisfies every Spec 188 acceptance
-    criterion without memory text in DB or excluded-module scope drift.
+    provider terminal usage normalizes without estimates or breakout double-count,
+    then persists once under trusted scope and model-call identity.
 
 ## Next Action
 
-Commit the docs-only aggregate acceptance, then begin Spec 190 Closed Loop.
+Commit 190.3, then open 190.4 versioned cost and aggregate API.
 
 ## Verification
 
-- aggregate 188.4-188.6 behavior: 51 passed, 11 subtests;
-- broad AI Assistant suite on combined implementation: 193 passed, 15 subtests;
-- Ruff, mypy 33 source files, diff-check: PASS;
-- DB/legacy-reader/excluded-module/daily-scheduler boundary scan: PASS.
+- focused normalization/migration/repository/planner/memory capture: 20 passed, 6 subtests;
+- live planner/streaming/harness regression: 23 passed;
+- Ruff, mypy 34 source files, diff-check: PASS.
+- broad AI Assistant suite: 206 passed, 21 subtests;
 - independent Checker: ALL GREEN;
-- independent Reviewer: PASS.
-
-## Residual Risks
-
-- secret filtering is heuristic and no live-model gate is required;
-- a process exit after run commit but before executor submit needs a later run or future daily scheduler to wake the durable ledger;
-- legacy JSON helper definitions remain but have no production caller, so the aggregate boundary scan must remain a gate.
+- independent Reviewer: PASS after generated rollback files were removed.

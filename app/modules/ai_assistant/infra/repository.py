@@ -7,6 +7,7 @@ from typing import Any, Callable
 from uuid import uuid4
 
 import sqlalchemy as sa
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 
@@ -16,6 +17,7 @@ from app.modules.ai_assistant.domain.access_scope import (
     AiAssistantAccessScope,
     local_ai_assistant_scope,
 )
+from app.modules.ai_assistant.domain.model_usage import NormalizedModelUsage
 from app.modules.ai_assistant.infra.schema import register_ai_assistant_tables
 
 
@@ -30,6 +32,11 @@ def _resource_lock_mutex_name(resource_key: str) -> str:
 
 def _rowcount(result: Any) -> int:
     return int(getattr(result, "rowcount", 0) or 0)
+
+
+def _mysql_error_code(exc: IntegrityError) -> int | None:
+    args = getattr(exc.orig, "args", ())
+    return int(args[0]) if args and isinstance(args[0], int) else None
 
 
 class AiAssistantRepository:
@@ -57,6 +64,7 @@ class AiAssistantRepository:
         self._tool_circuit_override_table = Base.metadata.tables["ai_assistant_tool_circuit_override"]
         self._memory_cursor_table = Base.metadata.tables["ai_assistant_memory_cursor"]
         self._memory_completion_table = Base.metadata.tables["ai_assistant_memory_completion"]
+        self._model_usage_table = Base.metadata.tables["ai_assistant_model_usage"]
 
     @property
     def access_scope(self) -> AiAssistantAccessScope:
@@ -70,6 +78,178 @@ class AiAssistantRepository:
             )
         ).mappings().one_or_none()
         return dict(row) if row else None
+
+    def begin_model_usage_call(
+        self,
+        *,
+        session_id: int,
+        run_id: int,
+        call_id: str,
+        call_kind: str,
+        provider: str,
+        model: str,
+        started_at: datetime | None = None,
+    ) -> dict[str, Any]:
+        run = self.get_run(run_id)
+        assistant_session = self.get_session(session_id)
+        if run is None or assistant_session is None or int(run["session_id"]) != session_id:
+            raise KeyError("model usage session/run is outside the current scope")
+        now = datetime.now()
+        values = {
+            "user_id": self._access_scope.user_id,
+            "workspace_id": self._access_scope.workspace_id,
+            "session_id": session_id,
+            "run_id": run_id,
+            "call_id": call_id,
+            "call_kind": call_kind,
+            "provider": provider,
+            "model": model,
+            "usage_source": "pending",
+            "cost_source": "unknown",
+            "started_at": started_at or now,
+            "created_at": now,
+            "updated_at": now,
+        }
+        try:
+            self._session.execute(
+                mysql_insert(self._model_usage_table).values(**values)
+            )
+            self._session.commit()
+        except IntegrityError as exc:
+            self._session.rollback()
+            if _mysql_error_code(exc) != 1062:
+                raise
+        row = self.get_model_usage_call(run_id=run_id, call_id=call_id)
+        if row is None:
+            raise RuntimeError("model usage call was not created")
+        expected_identity = {
+            "session_id": session_id,
+            "run_id": run_id,
+            "call_kind": call_kind,
+            "provider": provider,
+            "model": model,
+        }
+        if any(row[key] != value for key, value in expected_identity.items()):
+            raise IdempotencyConflict("model usage call identity changed")
+        return row
+
+    def finalize_model_usage_call(
+        self,
+        *,
+        run_id: int,
+        call_id: str,
+        usage: NormalizedModelUsage,
+        completed_at: datetime | None = None,
+    ) -> dict[str, Any]:
+        cost_source = "provider" if usage.provider_cost_usd is not None else "unknown"
+        now = datetime.now()
+        self._session.execute(
+            self._model_usage_table.update()
+            .where(
+                self._model_usage_table.c.user_id == self._access_scope.user_id,
+                self._model_usage_table.c.workspace_id == self._access_scope.workspace_id,
+                self._model_usage_table.c.run_id == run_id,
+                self._model_usage_table.c.call_id == call_id,
+                self._model_usage_table.c.usage_source == "pending",
+            )
+            .values(
+                **usage.as_record_values(),
+                effective_cost_usd=usage.provider_cost_usd,
+                cost_source=cost_source,
+                completed_at=completed_at or now,
+                updated_at=now,
+            )
+        )
+        self._session.commit()
+        row = self.get_model_usage_call(run_id=run_id, call_id=call_id)
+        if row is None:
+            raise KeyError("model usage call is outside the current scope")
+        return row
+
+    def fail_model_usage_call(
+        self,
+        *,
+        run_id: int,
+        call_id: str,
+        completed_at: datetime | None = None,
+    ) -> dict[str, Any]:
+        now = datetime.now()
+        self._session.execute(
+            self._model_usage_table.update()
+            .where(
+                self._model_usage_table.c.user_id == self._access_scope.user_id,
+                self._model_usage_table.c.workspace_id == self._access_scope.workspace_id,
+                self._model_usage_table.c.run_id == run_id,
+                self._model_usage_table.c.call_id == call_id,
+                self._model_usage_table.c.usage_source == "pending",
+            )
+            .values(
+                usage_source="unavailable",
+                completed_at=completed_at or now,
+                updated_at=now,
+            )
+        )
+        self._session.commit()
+        row = self.get_model_usage_call(run_id=run_id, call_id=call_id)
+        if row is None:
+            raise KeyError("model usage call is outside the current scope")
+        return row
+
+    def record_model_usage_call(
+        self,
+        *,
+        session_id: int,
+        run_id: int,
+        call_id: str,
+        call_kind: str,
+        provider: str,
+        model: str,
+        usage: NormalizedModelUsage,
+        started_at: datetime | None = None,
+        completed_at: datetime | None = None,
+    ) -> dict[str, Any]:
+        self.begin_model_usage_call(
+            session_id=session_id,
+            run_id=run_id,
+            call_id=call_id,
+            call_kind=call_kind,
+            provider=provider,
+            model=model,
+            started_at=started_at,
+        )
+        return self.finalize_model_usage_call(
+            run_id=run_id,
+            call_id=call_id,
+            usage=usage,
+            completed_at=completed_at,
+        )
+
+    def get_model_usage_call(self, *, run_id: int, call_id: str) -> dict[str, Any] | None:
+        row = self._session.execute(
+            sa.select(self._model_usage_table).where(
+                self._model_usage_table.c.user_id == self._access_scope.user_id,
+                self._model_usage_table.c.workspace_id == self._access_scope.workspace_id,
+                self._model_usage_table.c.run_id == run_id,
+                self._model_usage_table.c.call_id == call_id,
+            )
+        ).mappings().one_or_none()
+        return dict(row) if row else None
+
+    def list_model_usage_calls(self, *, session_id: int | None = None) -> list[dict[str, Any]]:
+        conditions = [
+            self._model_usage_table.c.user_id == self._access_scope.user_id,
+            self._model_usage_table.c.workspace_id == self._access_scope.workspace_id,
+        ]
+        if session_id is not None:
+            if self.get_session(session_id) is None:
+                return []
+            conditions.append(self._model_usage_table.c.session_id == session_id)
+        rows = self._session.execute(
+            sa.select(self._model_usage_table)
+            .where(*conditions)
+            .order_by(self._model_usage_table.c.started_at.asc(), self._model_usage_table.c.id.asc())
+        ).mappings().all()
+        return [dict(row) for row in rows]
 
     def claim_memory_extraction_batch(self, *, lease_seconds: int = 60) -> dict[str, Any] | None:
         bind = self._session.get_bind()

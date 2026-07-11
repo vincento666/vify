@@ -28,17 +28,17 @@ compatibility but create no open work.
 
 ## 190.3 Per-Call Usage Ledger
 
-- [ ] TDD preflight and observable RED.
-- [ ] Add Alembic migration and MySQL8 model-usage ledger.
-- [ ] Persist trusted user/workspace/session/run/call scope.
-- [ ] Normalize provider/model and token dimensions per call.
-- [ ] Keep unavailable optional dimensions null.
-- [ ] Finalize one streaming-call row from provider terminal usage.
-- [ ] Keep cache/reasoning as breakouts without total double-count.
-- [ ] Capture normal planner model calls.
-- [ ] Capture Spec 188 memory-extractor calls when available.
-- [ ] Prevent duplicate/replayed call double-counting.
-- [ ] Save migration/integration/contract evidence and pass Checker/Reviewer.
+- [x] TDD preflight and observable RED.
+- [x] Add Alembic migration and MySQL8 model-usage ledger.
+- [x] Persist trusted user/workspace/session/run/call scope.
+- [x] Normalize provider/model and token dimensions per call.
+- [x] Keep unavailable optional dimensions null.
+- [x] Finalize one streaming-call row from provider terminal usage.
+- [x] Keep cache/reasoning as breakouts without total double-count.
+- [x] Capture normal planner model calls.
+- [x] Capture Spec 188 memory-extractor calls when available.
+- [x] Prevent duplicate/replayed call double-counting.
+- [x] Save migration/integration/contract evidence and pass Checker/Reviewer.
 
 ## 190.4 Versioned Cost And Aggregate API
 

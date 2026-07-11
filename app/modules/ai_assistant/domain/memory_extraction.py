@@ -14,6 +14,7 @@ from app.modules.ai_assistant.domain.markdown_memory import (
     MemoryConcurrentModificationError,
     ResolvedMemoryScope,
 )
+from app.modules.ai_assistant.domain.model_usage import NormalizedModelUsage, normalize_model_usage
 from app.modules.ai_assistant.infra.repository import AiAssistantRepository
 from app.modules.chat.domain.llm_request import (
     ChatRequestMessage,
@@ -26,6 +27,20 @@ from app.modules.chat.domain.llm_request import (
 class MemoryExtractor(Protocol):
     def extract(self, runs: list[dict[str, Any]]) -> list[str]:
         ...
+
+
+@dataclass(frozen=True)
+class MemoryExtractionPayload:
+    facts: list[str]
+    usage: NormalizedModelUsage
+    provider: str
+    model: str
+
+
+class MemoryExtractionResponseError(RuntimeError):
+    def __init__(self, message: str, *, payload: MemoryExtractionPayload) -> None:
+        super().__init__(message)
+        self.payload = payload
 
 
 _SECRET_LIKE = re.compile(
@@ -55,7 +70,18 @@ class ModelMemoryExtractor:
         )
         self._builder = OpenAIChatRequestBuilder()
 
+    @property
+    def provider(self) -> str:
+        return self._config.provider
+
+    @property
+    def model(self) -> str:
+        return self._config.model
+
     def extract(self, runs: list[dict[str, Any]]) -> list[str]:
+        return self.extract_with_usage(runs).facts
+
+    def extract_with_usage(self, runs: list[dict[str, Any]]) -> MemoryExtractionPayload:
         transcript = [
             {
                 "runId": int(run["id"]),
@@ -85,13 +111,33 @@ class ModelMemoryExtractor:
             extra_params={"response_format": {"type": "json_object"}},
         )
         response = self._client.complete(payload)
-        content = _first_response_content(response)
-        parsed = json.loads(content)
-        facts = parsed.get("facts") if isinstance(parsed, dict) else None
-        if not isinstance(facts, list):
-            raise RuntimeError("memory extractor response must contain a facts list")
+        usage = normalize_model_usage(
+            response.get("usage") if isinstance(response.get("usage"), dict) else {}
+        )
+        base_payload = MemoryExtractionPayload(
+            facts=[],
+            usage=usage,
+            provider=self._config.provider,
+            model=self._config.model,
+        )
+        try:
+            content = _first_response_content(response)
+            parsed = json.loads(content)
+            facts = parsed.get("facts") if isinstance(parsed, dict) else None
+            if not isinstance(facts, list):
+                raise RuntimeError("memory extractor response must contain a facts list")
+        except Exception as exc:
+            raise MemoryExtractionResponseError(
+                "memory extractor response is invalid",
+                payload=base_payload,
+            ) from exc
         normalized = [" ".join(str(fact).split()) for fact in facts if str(fact).strip()]
-        return [fact for fact in normalized if not _SECRET_LIKE.search(fact)]
+        return MemoryExtractionPayload(
+            facts=[fact for fact in normalized if not _SECRET_LIKE.search(fact)],
+            usage=usage,
+            provider=self._config.provider,
+            model=self._config.model,
+        )
 
 
 def create_model_memory_extractor(settings: Settings) -> ModelMemoryExtractor | None:
@@ -170,7 +216,52 @@ class MemoryExtractionCoordinator:
                     )
             if len(runs) != 3:
                 raise RuntimeError("memory extraction batch no longer has three completed runs")
-            facts = self._extractor.extract(runs)
+            extract_with_usage = getattr(self._extractor, "extract_with_usage", None)
+            if callable(extract_with_usage):
+                last_run = runs[-1]
+                usage_call_id = f"memory:{batch_key}:{claim_token}"
+                with self._repository_factory() as repository:
+                    repository.begin_model_usage_call(
+                        session_id=int(last_run["session_id"]),
+                        run_id=int(last_run["id"]),
+                        call_id=usage_call_id,
+                        call_kind="memory_extractor",
+                        provider=str(getattr(self._extractor, "provider", "unknown")),
+                        model=str(getattr(self._extractor, "model", "unknown")),
+                    )
+                try:
+                    extracted = extract_with_usage(runs)
+                except MemoryExtractionResponseError as exc:
+                    with self._repository_factory() as repository:
+                        repository.finalize_model_usage_call(
+                            run_id=int(last_run["id"]),
+                            call_id=usage_call_id,
+                            usage=exc.payload.usage,
+                        )
+                    raise
+                except Exception:
+                    with self._repository_factory() as repository:
+                        repository.fail_model_usage_call(
+                            run_id=int(last_run["id"]),
+                            call_id=usage_call_id,
+                        )
+                    raise
+                if not isinstance(extracted, MemoryExtractionPayload):
+                    with self._repository_factory() as repository:
+                        repository.fail_model_usage_call(
+                            run_id=int(last_run["id"]),
+                            call_id=usage_call_id,
+                        )
+                    raise RuntimeError("usage-aware memory extractor returned an invalid payload")
+                facts = extracted.facts
+                with self._repository_factory() as repository:
+                    repository.finalize_model_usage_call(
+                        run_id=int(last_run["id"]),
+                        call_id=usage_call_id,
+                        usage=extracted.usage,
+                    )
+            else:
+                facts = self._extractor.extract(runs)
             plan = self._store.preview_merge_today(
                 self._scope,
                 facts=facts,
