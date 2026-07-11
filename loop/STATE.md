@@ -4,47 +4,54 @@
 
 - date: 2026-07-11
 - mode: Closed Loop
-- active slice: 188.4 Scope Isolation And Markdown Store
-- phase: complete; slice commit pending
+- active slice: 188.5 Session Scope And Prompt Cutover
+- phase: COMPLETE
 - TDD method: tdd
 - branch: codex/spec-188-memory-md
-- base: 1ee8dc5e
+- base: 317fad92
 - merge target: codex/runtime-v2-production-upgrade
 - worktree: /Users/vincento/work/develop/hify-spec-188-memory-md
 - pre-slice dirty state: clean
 
-## Contract Gate
+## Prior Slice
 
-- contract commit: 1ee8dc5e
+- 188.4 commit: 317fad92
 - Checker: ALL GREEN
-- contract Reviewer: PASS
-- slice Reviewer round1: BLOCK
-- tdd capability: AVAILABLE
-- isolated worktree: ready
+- Reviewer: PASS
+- focused: 20 passed, 6 subtests
+- regression: 8 passed
 
-## Current Behavior Target
+## Completed Tracers
 
-First tracer:
+- scoped session/run/API/background worker access;
+- scoped pending approvals;
+- migration backfill to server workspace identity without deleting historical
+  context JSON;
+- rolling 30-day MEMORY.md prompt/inspector projection;
+- later-session reload and cross-user E2E isolation.
 
-    one trusted user/workspace reads only valid MEMORY.md date blocks inside
-    the inclusive 30-day window
+## RED Evidence
 
-Following vertical cycles in 188.4:
+    artifacts/slices/188-ai-assistant-prompt-skills-memory-compaction/188.5/
 
-1. scope isolation and path/symlink rejection;
-2. malformed/future date handling;
-3. locked atomic merge/dedupe;
-4. full-day 100-token cap;
-5. concurrency/regression evidence.
+## Verification
+
+- focused: 37 passed, 11 subtests;
+- regression: 107 passed;
+- ruff: PASS;
+- diff check: PASS;
+- mypy: PASS; parent baseline had 8 errors, including four in imported chat
+  request typing; all eight were resolved without behavior change;
+- Browser/rem/frontend/live LLM: N/A by frozen backend contract.
 
 ## Next Action
 
-Checker round5 ALL GREEN. Reviewer round3 PASS. Focused: 20 passed plus
-6 subtests. Regression: 8 passed. Ruff, mypy, and diff check pass. Update tasks,
-review increment, then commit 188.4.
+Commit 188.5, then open 188.6 Three-Successful-Run Extraction on the new base.
 
-## Follow-Ups For 188.5
+## Independent Gates
 
-- serialize MemoryScopeResolver close/duplicate lifecycle before production host
-  wiring;
-- keep Unix fcntl/dirfd capability requirement explicit and fail closed.
+- Checker: ALL GREEN.
+- Reviewer round 1: FAIL; removed unauthorized destructive legacy JSON
+  migration, restored async completion/snapshot gates, and added actual
+  harness-to-model prompt capture.
+- Reviewer round 2: PASS; residual risk low.

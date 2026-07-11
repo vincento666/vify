@@ -34,6 +34,33 @@ def _merge_memory_in_process(
 
 
 class MarkdownMemoryStoreTest(unittest.TestCase):
+    def test_close_and_duplicate_root_fd_are_serialized(self) -> None:
+        from app.modules.ai_assistant.domain.markdown_memory import MemoryScopeResolver
+
+        with tempfile.TemporaryDirectory() as tmp:
+            resolver = MemoryScopeResolver(tmp)
+            barrier = Barrier(2)
+
+            def duplicate() -> int | str:
+                barrier.wait()
+                try:
+                    duplicated = resolver.duplicate_root_fd()
+                except RuntimeError:
+                    return "closed"
+                try:
+                    os.fstat(duplicated)
+                    return duplicated
+                finally:
+                    os.close(duplicated)
+
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                duplicate_future = executor.submit(duplicate)
+                barrier.wait()
+                resolver.close()
+                result = duplicate_future.result()
+
+        self.assertTrue(result == "closed" or isinstance(result, int))
+
     def test_scoped_reader_returns_only_the_inclusive_rolling_30_day_window(self) -> None:
         from app.modules.ai_assistant.domain.markdown_memory import (
             MarkdownMemoryStore,

@@ -92,8 +92,13 @@ class QwenLivePlanner:
             on_stream_chunk=on_stream_chunk,
         )
 
-    def initial_messages(self, user_message: str) -> list[ChatRequestMessage]:
-        return [
+    def initial_messages(
+        self,
+        user_message: str,
+        *,
+        memory_text: str = "",
+    ) -> list[ChatRequestMessage]:
+        messages = [
             ChatRequestMessage(
                 role="system",
                 content=(
@@ -111,8 +116,19 @@ class QwenLivePlanner:
                     "所有最终总结保持简洁、可回溯、说明已执行的读写/skill/tool/function call 结果。"
                 ),
             ),
-            ChatRequestMessage(role="user", content=user_message),
         ]
+        if memory_text.strip():
+            messages.append(
+                ChatRequestMessage(
+                    role="system",
+                    content=(
+                        "[working_memory:MEMORY.md rolling 30 days]\n"
+                        f"{memory_text.strip()}"
+                    ),
+                )
+            )
+        messages.append(ChatRequestMessage(role="user", content=user_message))
+        return messages
 
     def plan_messages(
         self,
@@ -177,7 +193,10 @@ class QwenLivePlanner:
             if on_stream_chunk:
                 on_stream_chunk(chunk, len(streamed_chunks))
 
-        return client.stream_complete(payload, on_delta=forward)  # type: ignore[attr-defined]
+        response = client.stream_complete(payload, on_delta=forward)
+        if not isinstance(response, dict):
+            raise RuntimeError("stream_complete must return a response object")
+        return response
 
 
 def create_qwen_live_planner(settings: Settings) -> QwenLivePlanner | None:

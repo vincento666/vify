@@ -9,6 +9,10 @@ from sqlalchemy.orm import Session
 
 from app.core.database import Base
 from app.core.db_write import insert_and_fetch
+from app.modules.ai_assistant.domain.access_scope import (
+    AiAssistantAccessScope,
+    local_ai_assistant_scope,
+)
 from app.modules.ai_assistant.infra.schema import register_ai_assistant_tables
 
 
@@ -26,9 +30,15 @@ def _rowcount(result: Any) -> int:
 
 
 class AiAssistantRepository:
-    def __init__(self, session: Session) -> None:
+    def __init__(
+        self,
+        session: Session,
+        *,
+        access_scope: AiAssistantAccessScope | None = None,
+    ) -> None:
         register_ai_assistant_tables()
         self._session = session
+        self._access_scope = access_scope or local_ai_assistant_scope()
         self._session_table = Base.metadata.tables["ai_assistant_session"]
         self._run_table = Base.metadata.tables["ai_assistant_run"]
         self._message_table = Base.metadata.tables["ai_assistant_message"]
@@ -42,6 +52,10 @@ class AiAssistantRepository:
         self._tool_operation_release_table = Base.metadata.tables["ai_assistant_tool_operation_release"]
         self._tool_circuit_breaker_table = Base.metadata.tables["ai_assistant_tool_circuit_breaker"]
         self._tool_circuit_override_table = Base.metadata.tables["ai_assistant_tool_circuit_override"]
+
+    @property
+    def access_scope(self) -> AiAssistantAccessScope:
+        return self._access_scope
 
     def get_tool_circuit_breaker(self, breaker_key: str) -> dict[str, Any] | None:
         row = self._session.execute(
@@ -475,9 +489,11 @@ class AiAssistantRepository:
             self._session,
             self._session_table,
             {
+                "user_id": self._access_scope.user_id,
+                "workspace_id": self._access_scope.workspace_id,
                 "title": title,
                 "status": "ACTIVE",
-                "context_json": context or {},
+                "context_json": _without_legacy_memory(context),
                 "deleted": False,
                 "created_at": now,
                 "updated_at": now,
@@ -489,7 +505,11 @@ class AiAssistantRepository:
     def list_sessions(self) -> list[dict[str, Any]]:
         rows = self._session.execute(
             sa.select(self._session_table)
-            .where(self._session_table.c.deleted.is_(False))
+            .where(
+                self._session_table.c.user_id == self._access_scope.user_id,
+                self._session_table.c.workspace_id == self._access_scope.workspace_id,
+                self._session_table.c.deleted.is_(False),
+            )
             .order_by(self._session_table.c.id.desc())
         ).mappings().all()
         return [dict(row) for row in rows]
@@ -498,6 +518,8 @@ class AiAssistantRepository:
         row = self._session.execute(
             sa.select(self._session_table).where(
                 self._session_table.c.id == session_id,
+                self._session_table.c.user_id == self._access_scope.user_id,
+                self._session_table.c.workspace_id == self._access_scope.workspace_id,
                 self._session_table.c.deleted.is_(False),
             )
         ).mappings().one_or_none()
@@ -507,8 +529,13 @@ class AiAssistantRepository:
         now = datetime.now()
         self._session.execute(
             self._session_table.update()
-            .where(self._session_table.c.id == session_id, self._session_table.c.deleted.is_(False))
-            .values(context_json=context, updated_at=now)
+            .where(
+                self._session_table.c.id == session_id,
+                self._session_table.c.user_id == self._access_scope.user_id,
+                self._session_table.c.workspace_id == self._access_scope.workspace_id,
+                self._session_table.c.deleted.is_(False),
+            )
+            .values(context_json=_without_legacy_memory(context), updated_at=now)
         )
         self._session.commit()
         updated = self.get_session(session_id)
@@ -535,7 +562,12 @@ class AiAssistantRepository:
             )
         self._session.execute(
             self._session_table.update()
-            .where(self._session_table.c.id == session_id, self._session_table.c.deleted.is_(False))
+            .where(
+                self._session_table.c.id == session_id,
+                self._session_table.c.user_id == self._access_scope.user_id,
+                self._session_table.c.workspace_id == self._access_scope.workspace_id,
+                self._session_table.c.deleted.is_(False),
+            )
             .values(status="ACTIVE", context_json={}, updated_at=now)
         )
         self._session.commit()
@@ -548,7 +580,12 @@ class AiAssistantRepository:
         now = datetime.now()
         self._session.execute(
             self._session_table.update()
-            .where(self._session_table.c.id == session_id, self._session_table.c.deleted.is_(False))
+            .where(
+                self._session_table.c.id == session_id,
+                self._session_table.c.user_id == self._access_scope.user_id,
+                self._session_table.c.workspace_id == self._access_scope.workspace_id,
+                self._session_table.c.deleted.is_(False),
+            )
             .values(deleted=True, updated_at=now)
         )
         self._session.commit()
@@ -578,6 +615,8 @@ class AiAssistantRepository:
         idempotency_key: str | None,
         request_hash: str | None = None,
     ) -> tuple[dict[str, Any], bool]:
+        if self.get_session(session_id) is None:
+            raise KeyError(f"AI Assistant session not found: {session_id}")
         resolved_hash = request_hash or user_message
         if idempotency_key:
             existing = self.get_run_by_idempotency(session_id, idempotency_key)
@@ -590,6 +629,8 @@ class AiAssistantRepository:
             self._session,
             self._run_table,
             {
+                "user_id": self._access_scope.user_id,
+                "workspace_id": self._access_scope.workspace_id,
                 "session_id": session_id,
                 "idempotency_key": idempotency_key,
                 "request_hash": resolved_hash,
@@ -611,6 +652,8 @@ class AiAssistantRepository:
             sa.select(self._run_table).where(
                 self._run_table.c.session_id == session_id,
                 self._run_table.c.idempotency_key == idempotency_key,
+                self._run_table.c.user_id == self._access_scope.user_id,
+                self._run_table.c.workspace_id == self._access_scope.workspace_id,
                 self._run_table.c.deleted.is_(False),
             )
         ).mappings().one_or_none()
@@ -620,6 +663,8 @@ class AiAssistantRepository:
         row = self._session.execute(
             sa.select(self._run_table).where(
                 self._run_table.c.id == run_id,
+                self._run_table.c.user_id == self._access_scope.user_id,
+                self._run_table.c.workspace_id == self._access_scope.workspace_id,
                 self._run_table.c.deleted.is_(False),
             )
         ).mappings().one_or_none()
@@ -635,7 +680,12 @@ class AiAssistantRepository:
             values["response_payload"] = {**response_payload, "plan": input_payload["plan"]}
         self._session.execute(
             self._run_table.update()
-            .where(self._run_table.c.id == run_id, self._run_table.c.deleted.is_(False))
+            .where(
+                self._run_table.c.id == run_id,
+                self._run_table.c.user_id == self._access_scope.user_id,
+                self._run_table.c.workspace_id == self._access_scope.workspace_id,
+                self._run_table.c.deleted.is_(False),
+            )
             .values(**values)
         )
         self._session.commit()
@@ -659,7 +709,12 @@ class AiAssistantRepository:
             values["completed_at"] = datetime.now()
         self._session.execute(
             self._run_table.update()
-            .where(self._run_table.c.id == run_id, self._run_table.c.deleted.is_(False))
+            .where(
+                self._run_table.c.id == run_id,
+                self._run_table.c.user_id == self._access_scope.user_id,
+                self._run_table.c.workspace_id == self._access_scope.workspace_id,
+                self._run_table.c.deleted.is_(False),
+            )
             .values(**values)
         )
         self._session.commit()
@@ -682,6 +737,8 @@ class AiAssistantRepository:
             .where(
                 self._run_table.c.id == run_id,
                 self._run_table.c.status == expected_status,
+                self._run_table.c.user_id == self._access_scope.user_id,
+                self._run_table.c.workspace_id == self._access_scope.workspace_id,
                 self._run_table.c.deleted.is_(False),
             )
             .values(status=next_status, input_payload=input_payload, updated_at=now)
@@ -699,6 +756,8 @@ class AiAssistantRepository:
             sa.select(self._run_table)
             .where(
                 self._run_table.c.session_id == session_id,
+                self._run_table.c.user_id == self._access_scope.user_id,
+                self._run_table.c.workspace_id == self._access_scope.workspace_id,
                 self._run_table.c.deleted.is_(False),
             )
             .order_by(self._run_table.c.id.desc())
@@ -712,6 +771,8 @@ class AiAssistantRepository:
             self._run_table.update()
             .where(
                 self._run_table.c.id == run_id,
+                self._run_table.c.user_id == self._access_scope.user_id,
+                self._run_table.c.workspace_id == self._access_scope.workspace_id,
                 self._run_table.c.deleted.is_(False),
                 self._run_table.c.status.not_in(protected_terminal_statuses),
             )
@@ -729,6 +790,12 @@ class AiAssistantRepository:
         return updated
 
     def append_message(self, session_id: int, role: str, content: str, run_id: int | None = None) -> dict[str, Any]:
+        if self.get_session(session_id) is None:
+            raise KeyError(f"AI Assistant session not found: {session_id}")
+        if run_id is not None:
+            run = self.get_run(run_id)
+            if run is None or int(run["session_id"]) != session_id:
+                raise KeyError(f"AI Assistant run not found for session: {run_id}")
         now = datetime.now()
         row = insert_and_fetch(
             self._session,
@@ -773,7 +840,9 @@ class AiAssistantRepository:
         correlation_ids: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         now = datetime.now()
-        self._lock_run_for_event_sequence(run_id)
+        locked_session_id = self._lock_run_for_event_sequence(run_id)
+        if locked_session_id != session_id:
+            raise KeyError(f"AI Assistant run not found for session: {run_id}")
         row = insert_and_fetch(
             self._session,
             self._event_table,
@@ -864,6 +933,8 @@ class AiAssistantRepository:
         risk_level: str,
         input_payload: dict[str, Any],
     ) -> dict[str, Any]:
+        if self.get_run(run_id) is None:
+            raise KeyError(f"AI Assistant run not found: {run_id}")
         now = datetime.now()
         row = insert_and_fetch(
             self._session,
@@ -889,9 +960,16 @@ class AiAssistantRepository:
     def list_pending_approvals(self) -> list[dict[str, Any]]:
         rows = self._session.execute(
             sa.select(self._approval_table)
+            .join(
+                self._run_table,
+                self._approval_table.c.run_id == self._run_table.c.id,
+            )
             .where(
                 self._approval_table.c.status == "PENDING",
                 self._approval_table.c.deleted.is_(False),
+                self._run_table.c.user_id == self._access_scope.user_id,
+                self._run_table.c.workspace_id == self._access_scope.workspace_id,
+                self._run_table.c.deleted.is_(False),
             )
             .order_by(self._approval_table.c.id.asc())
         ).mappings().all()
@@ -900,9 +978,16 @@ class AiAssistantRepository:
     def list_run_approvals(self, run_id: int) -> list[dict[str, Any]]:
         rows = self._session.execute(
             sa.select(self._approval_table)
+            .join(
+                self._run_table,
+                self._approval_table.c.run_id == self._run_table.c.id,
+            )
             .where(
                 self._approval_table.c.run_id == run_id,
                 self._approval_table.c.deleted.is_(False),
+                self._run_table.c.user_id == self._access_scope.user_id,
+                self._run_table.c.workspace_id == self._access_scope.workspace_id,
+                self._run_table.c.deleted.is_(False),
             )
             .order_by(self._approval_table.c.id.asc())
         ).mappings().all()
@@ -910,9 +995,17 @@ class AiAssistantRepository:
 
     def get_approval(self, approval_id: int) -> dict[str, Any] | None:
         row = self._session.execute(
-            sa.select(self._approval_table).where(
+            sa.select(self._approval_table)
+            .join(
+                self._run_table,
+                self._approval_table.c.run_id == self._run_table.c.id,
+            )
+            .where(
                 self._approval_table.c.id == approval_id,
                 self._approval_table.c.deleted.is_(False),
+                self._run_table.c.user_id == self._access_scope.user_id,
+                self._run_table.c.workspace_id == self._access_scope.workspace_id,
+                self._run_table.c.deleted.is_(False),
             )
         ).mappings().one_or_none()
         return dict(row) if row else None
@@ -924,6 +1017,13 @@ class AiAssistantRepository:
             .where(
                 self._approval_table.c.id == approval_id,
                 self._approval_table.c.deleted.is_(False),
+                self._approval_table.c.run_id.in_(
+                    sa.select(self._run_table.c.id).where(
+                        self._run_table.c.user_id == self._access_scope.user_id,
+                        self._run_table.c.workspace_id == self._access_scope.workspace_id,
+                        self._run_table.c.deleted.is_(False),
+                    )
+                ),
             )
             .values(
                 status=status,
@@ -1163,12 +1263,21 @@ class AiAssistantRepository:
         ).scalar_one_or_none()
         return int(current or 0) + 1
 
-    def _lock_run_for_event_sequence(self, run_id: int) -> None:
-        self._session.execute(
-            sa.select(self._run_table.c.id)
+    def _lock_run_for_event_sequence(self, run_id: int) -> int | None:
+        locked_session_id = self._session.execute(
+            sa.select(self._run_table.c.session_id)
             .where(
                 self._run_table.c.id == run_id,
+                self._run_table.c.user_id == self._access_scope.user_id,
+                self._run_table.c.workspace_id == self._access_scope.workspace_id,
                 self._run_table.c.deleted.is_(False),
             )
             .with_for_update()
         ).scalar_one_or_none()
+        return int(locked_session_id) if locked_session_id is not None else None
+
+
+def _without_legacy_memory(context: dict[str, Any] | None) -> dict[str, Any]:
+    sanitized = dict(context or {})
+    sanitized.pop("aiAssistantMemory", None)
+    return sanitized

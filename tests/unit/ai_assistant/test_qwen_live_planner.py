@@ -5,6 +5,83 @@ from app.modules.chat.domain.llm_request import FakeOpenAIChatClient
 
 
 class AiAssistantQwenLivePlannerTest(unittest.TestCase):
+    def test_harness_passes_scoped_memory_md_to_live_model_request(self) -> None:
+        from datetime import date
+        import tempfile
+
+        from app.modules.ai_assistant.domain.harness import AiAssistantHarnessService
+        from app.modules.ai_assistant.domain.live_model import LivePlannerConfig, QwenLivePlanner
+        from app.modules.ai_assistant.domain.markdown_memory import MarkdownMemoryStore, MemoryScopeResolver
+        from tests.support.ai_assistant_memory_repo import InMemoryAiAssistantRepository
+
+        fake_client = FakeOpenAIChatClient(
+            response_payload={
+                "choices": [{"message": {"role": "assistant", "content": "完成", "tool_calls": []}}],
+                "usage": {"prompt_tokens": 8, "completion_tokens": 1, "total_tokens": 9},
+            }
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            resolver = MemoryScopeResolver(tmp)
+            try:
+                scope = resolver.resolve(
+                    trusted_user_id="alice",
+                    trusted_workspace_id="workspace-a",
+                )
+                store = MarkdownMemoryStore(resolver)
+                store.merge_today(
+                    scope,
+                    facts=["Always keep migration data reversible."],
+                    today=date(2026, 7, 11),
+                )
+                service = AiAssistantHarnessService(
+                    InMemoryAiAssistantRepository(),  # type: ignore[arg-type]
+                    live_planner=QwenLivePlanner(
+                        LivePlannerConfig(
+                            base_url="https://openrouter.ai/api/v1",
+                            model="qwen/qwen3.6-27b",
+                            api_key_ref="env:OPENROUTER_API_KEY",
+                        ),
+                        client=fake_client,
+                    ),
+                    memory_store=store,
+                    memory_scope=scope,
+                    memory_today=lambda: date(2026, 7, 11),
+                )
+                session = service.create_session(title="Scoped memory prompt")
+                service.run_message(
+                    int(session["id"]),
+                    "继续",
+                    idempotency_key="scoped-memory-live",
+                    model_mode="live",
+                )
+            finally:
+                resolver.close()
+
+        messages = fake_client.captured_payload["messages"]
+        self.assertIn("working_memory:MEMORY.md", messages[1]["content"])
+        self.assertIn("Always keep migration data reversible.", messages[1]["content"])
+
+    def test_initial_messages_place_memory_md_before_user_message(self) -> None:
+        from app.modules.ai_assistant.domain.live_model import LivePlannerConfig, QwenLivePlanner
+
+        planner = QwenLivePlanner(
+            LivePlannerConfig(
+                base_url="https://openrouter.ai/api/v1",
+                model="qwen/qwen3.6-27b",
+                api_key_ref="env:OPENROUTER_API_KEY",
+            )
+        )
+
+        messages = planner.initial_messages(
+            "继续工作",
+            memory_text="## 2026-07-11\n- Prefer concise Chinese.\n",
+        )
+
+        self.assertEqual([message.role for message in messages], ["system", "system", "user"])
+        self.assertIn("working_memory:MEMORY.md", messages[1].content)
+        self.assertIn("Prefer concise Chinese.", messages[1].content)
+        self.assertEqual(messages[-1].content, "继续工作")
+
     def test_default_settings_target_openrouter_qwen_27b_without_key_leakage(self) -> None:
         settings = Settings(_env_file=None)
 

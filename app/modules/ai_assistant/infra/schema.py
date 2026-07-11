@@ -2,6 +2,7 @@ import sqlalchemy as sa
 
 from app.core.database import Base
 from app.core.schema import deleted_column, id_column, timestamps
+from app.modules.ai_assistant.domain.access_scope import local_ai_assistant_scope
 
 
 BIGINT = sa.BigInteger()
@@ -14,12 +15,25 @@ def register_ai_assistant_tables(metadata: sa.MetaData | None = None) -> None:
             "ai_assistant_session",
             target,
             id_column(),
+            sa.Column("user_id", sa.String(120), nullable=False, server_default="local-user"),
+            sa.Column(
+                "workspace_id",
+                sa.String(128),
+                nullable=False,
+                server_default=local_ai_assistant_scope().workspace_id,
+            ),
             sa.Column("title", sa.String(200), nullable=False, server_default=""),
             sa.Column("status", sa.String(30), nullable=False, server_default="ACTIVE"),
             sa.Column("context_json", sa.JSON(), nullable=True),
             deleted_column(),
             *timestamps(),
             sa.Index("idx_ai_assistant_session_status", "status"),
+            sa.Index(
+                "idx_ai_assistant_session_scope",
+                "user_id",
+                "workspace_id",
+                "deleted",
+            ),
         )
 
     if "ai_assistant_run" not in target.tables:
@@ -27,6 +41,13 @@ def register_ai_assistant_tables(metadata: sa.MetaData | None = None) -> None:
             "ai_assistant_run",
             target,
             id_column(),
+            sa.Column("user_id", sa.String(120), nullable=False, server_default="local-user"),
+            sa.Column(
+                "workspace_id",
+                sa.String(128),
+                nullable=False,
+                server_default=local_ai_assistant_scope().workspace_id,
+            ),
             sa.Column("session_id", BIGINT, nullable=False),
             sa.Column("idempotency_key", sa.String(160), nullable=True),
             sa.Column("request_hash", sa.String(128), nullable=False),
@@ -39,6 +60,13 @@ def register_ai_assistant_tables(metadata: sa.MetaData | None = None) -> None:
             *timestamps(),
             sa.UniqueConstraint("session_id", "idempotency_key", name="idx_ai_assistant_run_idempotency"),
             sa.Index("idx_ai_assistant_run_session", "session_id"),
+            sa.Index(
+                "idx_ai_assistant_run_scope",
+                "user_id",
+                "workspace_id",
+                "session_id",
+                "deleted",
+            ),
         )
 
     if "ai_assistant_message" not in target.tables:

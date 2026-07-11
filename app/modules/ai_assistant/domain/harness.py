@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from datetime import date
 from hashlib import sha256
 import json
 from math import ceil
@@ -9,7 +10,7 @@ import os
 from pathlib import Path
 import re
 from time import perf_counter
-from typing import Any
+from typing import Any, Callable, cast
 
 from app.modules.ai_assistant.domain.context_budget import (
     build_compaction_snapshot,
@@ -18,12 +19,13 @@ from app.modules.ai_assistant.domain.context_budget import (
 )
 from app.modules.ai_assistant.domain.live_model import LivePlannerConfig, LivePlannerDecision, QwenLivePlanner
 from app.modules.ai_assistant.domain.memory_context import (
-    active_working_memory_items,
     estimate_tokens as estimate_memory_tokens,
     load_instruction_memory,
-    memory_payload_from_context,
-    summary_from_context,
-    upsert_session_summary,
+)
+from app.modules.ai_assistant.domain.markdown_memory import (
+    MarkdownMemoryStore,
+    MemoryWindow,
+    ResolvedMemoryScope,
 )
 from app.modules.ai_assistant.domain.observability import build_observability_snapshot
 from app.modules.ai_assistant.domain.permissions import ApprovalMode, ApprovalPolicy, PermissionDecision
@@ -55,7 +57,7 @@ from app.modules.ai_assistant.domain.session_runtime import (
 )
 from app.modules.ai_assistant.domain.skills import SkillRuntime
 from app.modules.ai_assistant.domain.streaming_runtime import stream_fallback_payload, text_delta_payload
-from app.modules.ai_assistant.domain.tool_runtime import ToolRunner, ToolRunResult
+from app.modules.ai_assistant.domain.tool_runtime import ToolOperationLedger, ToolRunner, ToolRunResult
 from app.modules.ai_assistant.domain.trace_audit import build_trace_audit_export
 from app.modules.ai_assistant.domain.tools import RiskLevel, ToolManifest, ToolRegistry, ToolResult
 from app.modules.ai_assistant.infra.repository import AiAssistantRepository, IdempotencyConflict
@@ -90,15 +92,24 @@ class AiAssistantHarnessService:
         live_planner: QwenLivePlanner | None = None,
         tool_runner: ToolRunner | None = None,
         skill_runtime: SkillRuntime | None = None,
+        memory_store: MarkdownMemoryStore | None = None,
+        memory_scope: ResolvedMemoryScope | None = None,
+        memory_today: Callable[[], date] = date.today,
     ) -> None:
         self._repository = repository
         self._tools = tool_registry or ToolRegistry.with_builtin_tools()
-        self._tool_runner = tool_runner or ToolRunner(self._tools, operation_ledger=repository)
+        self._tool_runner = tool_runner or ToolRunner(
+            self._tools,
+            operation_ledger=cast(ToolOperationLedger, repository),
+        )
         self._resource_locks = ResourceLockManager(repository)
         self._approval_policy = approval_policy or ApprovalPolicy(environment="test")
         self._sandbox_policy = sandbox_policy or SandboxPolicy()
         self._live_planner = live_planner
         self._skill_runtime = skill_runtime or SkillRuntime()
+        self._memory_store = memory_store
+        self._memory_scope = memory_scope
+        self._memory_today = memory_today
 
     def create_session(self, title: str = "", context: dict[str, Any] | None = None) -> dict[str, Any]:
         return self._repository.create_session(title=title, context=context)
@@ -1059,7 +1070,10 @@ class AiAssistantHarnessService:
         planner = self._planner_for(model_config)
         if planner is None:
             raise RuntimeError("AI Assistant live planner is not configured")
-        messages = planner.initial_messages(message)
+        messages = planner.initial_messages(
+            message,
+            memory_text=self._read_memory_window().content,
+        )
         decisions: list[LivePlannerDecision] = []
         recorded_tool_calls: list[dict[str, Any]] = []
         seen_tool_keys: set[str] = set()
@@ -1177,9 +1191,9 @@ class AiAssistantHarnessService:
             "plan": plan,
         }
         completed = self._repository.complete_run(run_id, response_payload)
-        cancelled = self._cancelled_turn_result(run_id, recorded_tool_calls)
-        if cancelled is not None:
-            return cancelled
+        cancelled_turn = self._cancelled_turn_result(run_id, recorded_tool_calls)
+        if cancelled_turn is not None:
+            return cancelled_turn
         self._repository.append_event(
             run_id=run_id,
             session_id=session_id,
@@ -2130,9 +2144,10 @@ class AiAssistantHarnessService:
         workspace_root = Path(os.environ.get("HIFY_WORKSPACE_ROOT") or os.getcwd())
         workspace_start = _workspace_start_path_from_context(session_context, workspace_root)
         instruction_memory = load_instruction_memory(root_path=workspace_root, start_path=workspace_start)
-        memory = memory_payload_from_context(session_context)
-        active_memory = active_working_memory_items(session_context)
-        session_summary = summary_from_context(session_context)
+        memory_window = self._read_memory_window()
+        memory = self._memory_metadata_payload(memory_window)
+        active_memory = self._memory_compatibility_payload(memory_window)["workingMemory"]
+        session_summary: dict[str, Any] | None = None
         layers = _context_budget_layers(
             instruction_layers=instruction_memory.layers,
             session_summary=session_summary,
@@ -2147,12 +2162,12 @@ class AiAssistantHarnessService:
         compaction_snapshot = None
         if context_budget["droppedLayers"]:
             raw_content = "\n".join(str(layer.get("content") or "") for layer in layers)
-            summary = str((session_summary or {}).get("content") or message)
+            summary = message
             compaction_snapshot = build_compaction_snapshot(
                 raw_content=raw_content,
                 summary=summary,
-                source_message_ids=list((session_summary or {}).get("sourceMessageIds") or []),
-                source_event_ids=list((session_summary or {}).get("sourceEventIds") or []),
+                source_message_ids=[],
+                source_event_ids=[],
                 algorithm="deterministic-context-budget-v1",
             )
             context_budget["compactionSnapshot"] = compaction_snapshot
@@ -2250,22 +2265,54 @@ class AiAssistantHarnessService:
         user_message: str,
         final_answer: str,
     ) -> None:
-        session = self._repository.get_session(session_id)
-        if session is None:
-            return
-        context = dict(session.get("context_json") or {})
-        messages = self._repository.list_run_messages(run_id)
-        events = self._repository.list_run_events(run_id)
-        summary = _deterministic_session_summary(user_message=user_message, final_answer=final_answer)
-        updated = upsert_session_summary(
-            context,
-            content=summary,
-            source_message_ids=[int(message["id"]) for message in messages],
-            source_event_ids=[int(event["id"]) for event in events],
-            algorithm="deterministic-session-summary-v1",
-            token_estimate=estimate_memory_tokens(summary),
+        # MEMORY.md is the only canonical durable memory. Extraction and writes
+        # begin in 188.6; completed runs must not mutate legacy context JSON.
+        return None
+
+    def _read_memory_window(self) -> MemoryWindow:
+        if self._memory_store is None or self._memory_scope is None:
+            return MemoryWindow(content="", start_line=None)
+        return self._memory_store.read_recent(
+            self._memory_scope,
+            today=self._memory_today(),
+            days=30,
         )
-        self._repository.update_session_context(session_id, updated)
+
+    def _memory_metadata_payload(self, window: MemoryWindow) -> dict[str, Any]:
+        content = window.content
+        return {
+            "canonicalSource": "MEMORY.md",
+            "windowDays": 30,
+            "startLine": window.start_line,
+            "tokenEstimate": estimate_memory_tokens(content),
+            "hash": sha256(content.encode("utf-8")).hexdigest() if content else None,
+            "warnings": list(window.warnings),
+        }
+
+    def _memory_compatibility_payload(self, window: MemoryWindow | None = None) -> dict[str, Any]:
+        current = window or self._read_memory_window()
+        metadata = self._memory_metadata_payload(current)
+        if not current.content:
+            return metadata | {"sessionSummary": None, "workingMemory": []}
+        return metadata | {
+            "sessionSummary": {
+                "content": current.content,
+                "sourceMessageIds": [],
+                "sourceEventIds": [],
+                "algorithm": "memory-md-window-v1",
+                "tokenEstimate": metadata["tokenEstimate"],
+                "hash": metadata["hash"],
+                "updatedAt": None,
+            },
+            "workingMemory": [
+                {
+                    "key": "rolling_memory_md",
+                    "value": current.content,
+                    "source": "MEMORY.md",
+                    "status": "active",
+                }
+            ],
+        }
 
     def _session_context(self, session_id: int) -> dict[str, Any]:
         session = self._repository.get_session(session_id) or {}
@@ -2734,12 +2781,16 @@ class AiAssistantHarnessService:
             approvals=approvals,
         )
         input_payload = dict(run.get("input_payload") or {})
-        memory = _inspector_memory_payload(
-            run_input_payload=input_payload,
-            session_context=dict(
-                (self._repository.get_session(int(run["session_id"])) or {}).get("context_json") or {}
-            ),
-        )
+        memory = self._memory_compatibility_payload()
+        run_memory = input_payload.get("memory")
+        if isinstance(run_memory, dict) and isinstance(run_memory.get("instructionMemory"), list):
+            memory["instructionMemory"] = [
+                dict(item)
+                for item in run_memory["instructionMemory"]
+                if isinstance(item, dict)
+            ]
+        else:
+            memory["instructionMemory"] = []
         return {
             "run": _run_payload(run),
             "plan": _plan_payload_from_run(run),
@@ -4047,10 +4098,6 @@ def _compaction_summary(compaction_snapshot: dict[str, Any]) -> str:
     )
 
 
-def _deterministic_session_summary(*, user_message: str, final_answer: str) -> str:
-    return f"用户：{user_message}\n助手：{final_answer}"
-
-
 def _context_budget_from_events(events: list[dict[str, Any]]) -> dict[str, Any]:
     for event in reversed(events):
         if event.get("type") != "context.budget_estimated":
@@ -4082,16 +4129,6 @@ def _workspace_start_path_from_context(context: dict[str, Any], workspace_root: 
     except ValueError:
         return workspace_root
     return candidate
-
-
-def _inspector_memory_payload(*, run_input_payload: dict[str, Any], session_context: dict[str, Any]) -> dict[str, Any]:
-    memory = memory_payload_from_context(session_context)
-    run_memory = run_input_payload.get("memory")
-    if isinstance(run_memory, dict) and isinstance(run_memory.get("instructionMemory"), list):
-        memory["instructionMemory"] = [dict(item) for item in run_memory["instructionMemory"] if isinstance(item, dict)]
-    else:
-        memory.setdefault("instructionMemory", [])
-    return memory
 
 
 def _elapsed_duration_ms(started: float) -> int:

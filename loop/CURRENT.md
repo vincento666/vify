@@ -1,11 +1,11 @@
-# Current Loop Scope: Spec 188.4 MEMORY.md Store
+# Current Loop Scope: Spec 188.5 Session Scope And Prompt Cutover
 
 ## Status
 
     mode: Closed Loop
     active spec: 188-ai-assistant-prompt-skills-memory-compaction
-    active slice: 188.4 Scope Isolation And Markdown Store
-    phase: complete; slice commit pending
+    active slice: 188.5 Session Scope And Prompt Cutover
+    phase: COMPLETE
     TDD method: tdd
 
 ## Contract
@@ -16,17 +16,20 @@
 
 Behavior:
 
-- trusted user/workspace scope resolves one server-owned MEMORY.md;
-- arbitrary paths, traversal, and symlink escape are rejected;
-- reader locates strict date headings and reads only rolling 30-day content;
-- writer merges/deduplicates today's block, caps full day at 100 tokens, locks
-  scope, and atomically replaces the file.
+- persist trusted user/workspace scope on AI Assistant sessions;
+- filter list/get/delete/message/run/inspector access by current scope;
+- derive workspace identity from server-owned workspace root, never request
+  path;
+- inject own rolling MEMORY.md into prompt context;
+- stop legacy aiAssistantMemory writes and prompt reads;
+- preserve required public memory fields as MEMORY.md-derived read-only
+  projections.
 
 ## Worktree
 
     branch: codex/spec-188-memory-md
     path: /Users/vincento/work/develop/hify-spec-188-memory-md
-    base: 1ee8dc5e
+    base: 317fad92
     merge target: codex/runtime-v2-production-upgrade
     dirty before slice: no
 
@@ -34,31 +37,36 @@ Behavior:
 
 Allowed:
 
-    app/modules/ai_assistant/domain/markdown_memory.py
-    tests/unit/ai_assistant/test_markdown_memory_store.py
-    tests/unit/ai_assistant/test_memory_context.py
-    tests/unit/ai_assistant/test_file_workspace.py
+    app/modules/ai_assistant/domain/
+    app/modules/ai_assistant/infra/repository.py
+    app/modules/ai_assistant/infra/schema.py
+    app/modules/ai_assistant/web/router.py
+    app/modules/chat/domain/llm_request.py (typing-only static gate dependency)
+    alembic/versions/0032_ai_assistant_memory_scope.py
+    tests/unit/ai_assistant/
+    tests/integration/ai_assistant/
+    tests/contract/test_ai_assistant_memory_scope_api.py
+    tests/contract/test_ai_assistant_memory_context_api.py
+    tests/e2e/test_ai_assistant_memory_context_e2e.py
     specs/188-ai-assistant-prompt-skills-memory-compaction/tasks.md
     loop/CURRENT.md
     loop/STATE.md
     loop/VERIFIERS.md
-    artifacts/slices/188-ai-assistant-prompt-skills-memory-compaction/188.4/
+    artifacts/slices/188-ai-assistant-prompt-skills-memory-compaction/188.5/
 
-No harness/session DB/API/frontend/customer-assistant changes. Those start in
-later accepted slices.
-
-Next accepted slice after commit: 188.5 Session Scope And Prompt Cutover.
+No extractor cadence, token-cost ledger, frontend, customer-assistant, daily
+scheduler, or Spec 189 changes.
 
 ## Evidence
 
-    artifacts/slices/188-ai-assistant-prompt-skills-memory-compaction/188.4/
+    artifacts/slices/188-ai-assistant-prompt-skills-memory-compaction/188.5/
 
 ## Stop Conditions
 
 Stop and return to Open Loop/Waiting Human if:
 
-- trusted scope requires a caller-provided path;
-- implementation needs session schema/API/harness changes;
-- a new dependency is required;
-- public behavior outside 188.4 must change;
-- test failure cannot be reduced within frozen scope.
+- scope requires caller-provided workspace path;
+- compatibility requires public field removal;
+- memory content must be stored in DB;
+- implementation requires customer-assistant/frontend changes;
+- migration cannot preserve existing local rows safely.

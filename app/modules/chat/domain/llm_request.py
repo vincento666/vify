@@ -187,7 +187,8 @@ class ProviderBackedOpenAIChatClient:
                         if not isinstance(choice, dict):
                             continue
                         finish_reason = str(choice.get("finish_reason") or finish_reason)
-                        delta = choice.get("delta") if isinstance(choice.get("delta"), dict) else {}
+                        raw_delta = choice.get("delta")
+                        delta: dict[str, Any] = raw_delta if isinstance(raw_delta, dict) else {}
                         content = delta.get("content")
                         if isinstance(content, str) and content:
                             content_parts.append(content)
@@ -363,7 +364,8 @@ def _accumulate_tool_call_deltas(tool_calls: dict[int, dict[str, Any]], deltas: 
 
 def _complete_tool_call(tool_call: dict[str, Any]) -> dict[str, Any]:
     if not tool_call.get("id"):
-        function = tool_call.get("function") if isinstance(tool_call.get("function"), dict) else {}
+        raw_function = tool_call.get("function")
+        function: dict[str, Any] = raw_function if isinstance(raw_function, dict) else {}
         tool_call["id"] = f"call_{function.get('name') or 'tool'}"
     return tool_call
 

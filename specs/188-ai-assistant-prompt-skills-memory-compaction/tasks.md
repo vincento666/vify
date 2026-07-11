@@ -44,16 +44,16 @@ open tasks:
 
 ## 188.5 Session Scope And Prompt Cutover
 
-- [ ] TDD preflight and observable RED.
-- [ ] Persist and enforce user/workspace scope for sessions and runs.
-- [ ] Inject own rolling MEMORY.md into working-memory prompt layer.
-- [ ] Stop legacy JSON memory writes and prompt reads.
-- [ ] Preserve required public memory fields as MEMORY.md-derived read-only
+- [x] TDD preflight and observable RED.
+- [x] Persist and enforce user/workspace scope for sessions and runs.
+- [x] Inject own rolling MEMORY.md into working-memory prompt layer.
+- [x] Stop legacy JSON memory writes and prompt reads.
+- [x] Preserve required public memory fields as MEMORY.md-derived read-only
   projections.
-- [ ] Add MySQL8 contract and backend E2E isolation/reload proof.
-- [ ] Run kernel, security, inspector, event, scheduler, and ToolRunner
+- [x] Add MySQL8 contract and backend E2E isolation/reload proof.
+- [x] Run kernel, security, inspector, event, scheduler, and ToolRunner
   regressions.
-- [ ] Save evidence and pass Checker/Reviewer.
+- [x] Save evidence and pass Checker/Reviewer.
 
 ## 188.6 Three-Successful-Run Extraction
 

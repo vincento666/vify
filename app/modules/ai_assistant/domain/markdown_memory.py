@@ -51,6 +51,7 @@ class MemoryScopeResolver:
         )
         self._root_finalizer = weakref.finalize(self, os.close, self._root_fd)
         self._authority = object()
+        self._lifecycle_lock = threading.RLock()
 
     @property
     def root_path(self) -> Path:
@@ -79,12 +80,14 @@ class MemoryScopeResolver:
         return f"{self._root}:{scope._workspace_segment}/{scope._user_segment}"
 
     def duplicate_root_fd(self) -> int:
-        if not self._root_finalizer.alive:
-            raise RuntimeError("memory scope resolver is closed")
-        return os.dup(self._root_fd)
+        with self._lifecycle_lock:
+            if not self._root_finalizer.alive:
+                raise RuntimeError("memory scope resolver is closed")
+            return os.dup(self._root_fd)
 
     def close(self) -> None:
-        self._root_finalizer()
+        with self._lifecycle_lock:
+            self._root_finalizer()
 
 
 @dataclass(frozen=True)

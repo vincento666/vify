@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import json
+import os
 from concurrent.futures import ThreadPoolExecutor
+from datetime import date, datetime
+from functools import lru_cache
+from pathlib import Path
 from threading import Lock
 from time import monotonic, sleep
-from typing import Any
+from typing import Any, cast
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -12,9 +17,17 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import Settings, get_settings
 from app.core.database import get_session
+from app.core.host.context import RequestContext
+from app.core.host.dependencies import get_request_context
 from app.core.responses import success
+from app.modules.ai_assistant.domain.access_scope import AiAssistantAccessScope, access_scope_for_workspace
 from app.modules.ai_assistant.domain.harness import AiAssistantHarnessService
 from app.modules.ai_assistant.domain.live_model import LivePlannerConfig, create_qwen_live_planner
+from app.modules.ai_assistant.domain.markdown_memory import (
+    MarkdownMemoryStore,
+    MemoryScopeResolver,
+    ResolvedMemoryScope,
+)
 from app.modules.ai_assistant.domain.session_runtime import RunControlConflict
 from app.modules.ai_assistant.domain.streaming_runtime import heartbeat_payload, last_sequence
 from app.modules.ai_assistant.infra.repository import AiAssistantRepository, IdempotencyConflict
@@ -39,11 +52,55 @@ _AUTONOMOUS_WORKER_IN_FLIGHT: set[int] = set()
 def get_ai_assistant_service(
     session: Session = Depends(get_session),
     settings: Settings = Depends(get_settings),
+    request_context: RequestContext = Depends(get_request_context),
 ) -> AiAssistantHarnessService:
-    return AiAssistantHarnessService(
-        AiAssistantRepository(session),
-        live_planner=create_qwen_live_planner(settings),
+    workspace_root = os.environ.get("HIFY_WORKSPACE_ROOT") or os.getcwd()
+    access_scope = access_scope_for_workspace(
+        trusted_user_id=request_context.actor_id,
+        trusted_workspace_root=workspace_root,
     )
+    memory_store, memory_scope = _memory_runtime_for_scope(
+        access_scope=access_scope,
+        workspace_root=workspace_root,
+    )
+    return AiAssistantHarnessService(
+        AiAssistantRepository(
+            session,
+            access_scope=access_scope,
+        ),
+        live_planner=create_qwen_live_planner(settings),
+        memory_store=memory_store,
+        memory_scope=memory_scope,
+        memory_today=_workspace_today,
+    )
+
+
+def _memory_runtime_for_scope(
+    *,
+    access_scope: AiAssistantAccessScope,
+    workspace_root: str,
+) -> tuple[MarkdownMemoryStore, ResolvedMemoryScope]:
+    configured_root = os.environ.get("HIFY_AI_ASSISTANT_MEMORY_ROOT")
+    memory_root = Path(configured_root).expanduser() if configured_root else Path(workspace_root) / ".hify" / "memory"
+    resolver, store = _memory_store_for_root(str(memory_root.resolve()))
+    scope = resolver.resolve(
+        trusted_user_id=access_scope.user_id,
+        trusted_workspace_id=access_scope.workspace_id,
+    )
+    return store, scope
+
+
+@lru_cache(maxsize=32)
+def _memory_store_for_root(root_path: str) -> tuple[MemoryScopeResolver, MarkdownMemoryStore]:
+    resolver = MemoryScopeResolver(root_path)
+    return resolver, MarkdownMemoryStore(resolver)
+
+
+def _workspace_today() -> date:
+    timezone_name = os.environ.get("HIFY_WORKSPACE_TIMEZONE", "").strip()
+    if not timezone_name:
+        return date.today()
+    return datetime.now(ZoneInfo(timezone_name)).date()
 
 
 @router.post("/sessions")
@@ -235,6 +292,8 @@ def list_run_events(
     after_sequence: int = Query(default=0, alias="afterSequence"),
     service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
 ) -> dict[str, Any]:
+    if service.get_run(run_id) is None:
+        raise HTTPException(status_code=404, detail="AI Assistant run not found")
     events = [_event_payload(row) for row in service.list_run_events(run_id, after_sequence=after_sequence)]
     return success({"list": events, "total": len(events)})
 
@@ -412,12 +471,14 @@ def _schedule_autonomous_run_worker(
 
     try:
         session_factory = _worker_session_factory_from_service(service)
+        access_scope = _worker_access_scope_from_service(service)
         worker_service_kwargs = _worker_service_kwargs(service)
         delay_seconds = float(getattr(http_request.app.state, "ai_assistant_autonomous_worker_delay_seconds", 0.05))
         _AUTONOMOUS_WORKER_EXECUTOR.submit(
             _run_autonomous_worker,
             run_key,
             session_factory,
+            access_scope,
             worker_service_kwargs,
             model_config,
             delay_seconds,
@@ -432,6 +493,7 @@ def _schedule_autonomous_run_worker(
 def _run_autonomous_worker(
     run_id: int,
     session_factory: sessionmaker[Session],
+    access_scope: AiAssistantAccessScope,
     service_kwargs: dict[str, Any],
     model_config: LivePlannerConfig | None,
     delay_seconds: float,
@@ -440,7 +502,10 @@ def _run_autonomous_worker(
         if delay_seconds > 0:
             sleep(delay_seconds)
         with session_factory() as session:
-            service = AiAssistantHarnessService(AiAssistantRepository(session), **service_kwargs)
+            service = AiAssistantHarnessService(
+                AiAssistantRepository(session, access_scope=access_scope),
+                **service_kwargs,
+            )
             service.process_queued_run(run_id, model_config=model_config)
     finally:
         with _AUTONOMOUS_WORKER_LOCK:
@@ -456,6 +521,13 @@ def _worker_session_factory_from_service(
     return sessionmaker(bind=bind, autoflush=False, autocommit=False, expire_on_commit=False)
 
 
+def _worker_access_scope_from_service(
+    service: AiAssistantHarnessService,
+) -> AiAssistantAccessScope:
+    repository = cast(AiAssistantRepository, getattr(service, "_repository"))
+    return repository.access_scope
+
+
 def _worker_service_kwargs(service: AiAssistantHarnessService) -> dict[str, Any]:
     return {
         "tool_registry": getattr(service, "_tools", None),
@@ -463,6 +535,9 @@ def _worker_service_kwargs(service: AiAssistantHarnessService) -> dict[str, Any]
         "sandbox_policy": getattr(service, "_sandbox_policy", None),
         "live_planner": getattr(service, "_live_planner", None),
         "skill_runtime": getattr(service, "_skill_runtime", None),
+        "memory_store": getattr(service, "_memory_store", None),
+        "memory_scope": getattr(service, "_memory_scope", None),
+        "memory_today": getattr(service, "_memory_today", date.today),
     }
 
 
