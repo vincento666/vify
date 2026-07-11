@@ -1,33 +1,31 @@
-# Current Loop Scope: Spec 188.6 Three-Successful-Run Extraction
+# Current Loop Scope: Spec 188.7 Aggregate Acceptance
 
 ## Status
 
     mode: Closed Loop
     active spec: 188-ai-assistant-prompt-skills-memory-compaction
-    active slice: 188.6 Three-Successful-Run Extraction
+    active slice: 188.7 Aggregate Acceptance
     phase: COMPLETE
-    TDD method: tdd
+    TDD method: tdd (acceptance replay; no production behavior planned)
 
 ## Contract
 
     specs/188-ai-assistant-prompt-skills-memory-compaction/spec.md
-    specs/188-ai-assistant-prompt-skills-memory-compaction/plan.md
     specs/188-ai-assistant-prompt-skills-memory-compaction/tasks.md
 
-Behavior:
+Acceptance:
 
-- count only new COMPLETED runs across sessions in one user/workspace scope;
-- process oldest complete batches of three with a configured extractor;
-- atomically merge durable facts into today's MEMORY.md;
-- advance the cursor only after file replacement succeeds;
-- recover extraction/write/cursor crash windows idempotently;
-- leave a final one or two successful runs pending.
+- replay the required 188.4-188.6 gates on the combined implementation;
+- prove the DB stores cursor metadata, never memory text;
+- prove the reader remains heading-based and no legacy JSON memory writes return;
+- prove frontend, customer-assistant, daily scheduler, and Spec 189 stayed out of scope;
+- record Checker, Reviewer, evidence, and residual risks.
 
 ## Worktree
 
     branch: codex/spec-188-memory-md
     path: /Users/vincento/work/develop/hify-spec-188-memory-md
-    base: 268768a7
+    base: 8f50a1bb
     merge target: codex/runtime-v2-production-upgrade
     dirty before slice: no
 
@@ -35,32 +33,16 @@ Behavior:
 
 Allowed:
 
-    app/modules/ai_assistant/domain/memory_extraction.py
-    app/modules/ai_assistant/domain/markdown_memory.py
-    app/modules/ai_assistant/domain/harness.py
-    app/modules/ai_assistant/infra/repository.py
-    app/modules/ai_assistant/infra/schema.py
-    app/modules/ai_assistant/web/router.py
-    alembic/versions/0033_ai_assistant_memory_cursor.py
-    tests/unit/ai_assistant/
-    tests/integration/ai_assistant/
-    tests/contract/test_ai_assistant_memory_extraction_api.py
-    tests/e2e/test_ai_assistant_memory_extraction_e2e.py
     specs/188-ai-assistant-prompt-skills-memory-compaction/tasks.md
     loop/CURRENT.md
     loop/STATE.md
     loop/VERIFIERS.md
-    artifacts/slices/188-ai-assistant-prompt-skills-memory-compaction/188.6/
+    artifacts/slices/188-ai-assistant-prompt-skills-memory-compaction/188.7/
 
-No daily scheduler, trailing one/two flush, token-cost, frontend,
-customer-assistant, or Spec 189 changes.
+Production or test edits require reopening the relevant implementation slice.
 
 ## Stop Conditions
 
-Stop and return to Open Loop/Waiting Human if:
-
-- extraction requires storing memory text in DB;
-- a live external key becomes mandatory for deterministic gates;
-- daily scheduler or trailing one/two flush enters scope;
-- recovery requires weakening atomic file writes;
-- token-cost/frontend/customer-assistant scope is required.
+Stop and reopen implementation if any required gate fails, memory text appears
+in DB, fixed tail reads or legacy JSON writes return, or an excluded module was
+changed by Spec 188 commits.

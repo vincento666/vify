@@ -71,9 +71,9 @@ open tasks:
 
 ## 188.7 Aggregate Acceptance
 
-- [ ] Rerun all 188.4-188.6 required gates.
-- [ ] Prove DB stores no memory text.
-- [ ] Prove no fixed tail-N read and no new aiAssistantMemory writes.
-- [ ] Confirm frontend visual, customer-assistant, daily scheduler, and Spec 189
+- [x] Rerun all 188.4-188.6 required gates.
+- [x] Prove DB stores no memory text.
+- [x] Prove no fixed tail-N read and no new aiAssistantMemory writes.
+- [x] Confirm frontend visual, customer-assistant, daily scheduler, and Spec 189
   boundaries.
-- [ ] Save final evidence, Checker report, Reviewer report, and residual risks.
+- [x] Save final evidence, Checker report, Reviewer report, and residual risks.
