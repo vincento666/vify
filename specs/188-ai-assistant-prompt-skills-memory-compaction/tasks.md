@@ -31,15 +31,16 @@ open tasks:
 
 ## 188.4 Scope Isolation And Markdown Store
 
-- [ ] TDD preflight and observable RED.
-- [ ] Resolve trusted user/workspace scope; reject arbitrary paths and escape.
-- [ ] Create one canonical MEMORY.md per scope.
-- [ ] Locate rolling 30-day start line from strict date headings.
-- [ ] Read only bounded content from calculated line through EOF.
-- [ ] Merge/dedupe/compress today's block to at most 100 tokens.
-- [ ] Add per-scope lock and atomic replacement.
-- [ ] Cover malformed/future headings, concurrency, and isolation.
-- [ ] Save evidence and pass Checker/Reviewer.
+- [x] TDD preflight and observable RED.
+- [x] Resolve trusted user/workspace scope; reject arbitrary paths and escape.
+- [x] Create one canonical MEMORY.md per scope.
+- [x] Locate rolling 30-day start line from strict date headings.
+- [x] Read only bounded content from calculated line through EOF.
+- [x] Merge/dedupe/compress today's block to at most 100 tokens.
+- [x] Add per-scope lock and atomic replacement.
+- [x] Cover malformed/future headings, concurrency, and isolation.
+- [x] Save evidence and pass Checker/Reviewer under
+  artifacts/slices/188-ai-assistant-prompt-skills-memory-compaction/188.4/.
 
 ## 188.5 Session Scope And Prompt Cutover
 

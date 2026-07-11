@@ -1,50 +1,51 @@
-# Loop Verifiers
+# Loop Verifiers: Spec 188.4
 
-These commands verify the Spec 188/190 corrective contract revision. This unit
-changes documentation/state only; implementation TDD starts at 188.4.
+## RED / Focused Unit
 
-## Contract Content
+    rtk uv run pytest tests/unit/ai_assistant/test_markdown_memory_store.py -q
 
-    rtk rg -n "MEMORY.md|30 calendar days|100 tokens|three unprocessed|COMPLETED|batch.*hash|daily scheduler" specs/188-ai-assistant-prompt-skills-memory-compaction
-    rtk rg -n "model call|session|cumulative|provider|model|cache read|reasoning|pricing_version|unknown|heatmap|Token/Cost" specs/190-ai-assistant-observability-benchmark
-    rtk rg -n "Superseded|Not Implemented|Not Planned" specs/188-ai-assistant-prompt-skills-memory-compaction/tasks.md specs/190-ai-assistant-observability-benchmark/tasks.md
+Expected first RED:
 
-## Scope And Consistency
+    ModuleNotFoundError: app.modules.ai_assistant.domain.markdown_memory
 
-    rtk rg -n "\[ \]" specs/188-ai-assistant-prompt-skills-memory-compaction/tasks.md specs/190-ai-assistant-observability-benchmark/tasks.md
-    rtk git diff --name-only e2024c11 -- specs/188-ai-assistant-prompt-skills-memory-compaction specs/190-ai-assistant-observability-benchmark specs/README.md loop/CURRENT.md loop/STATE.md loop/VERIFIERS.md
+## Regression
+
+    rtk uv run pytest tests/unit/ai_assistant/test_memory_context.py tests/unit/ai_assistant/test_file_workspace.py -q
+
+## Static
+
+    rtk uv run ruff check app/modules/ai_assistant/domain/markdown_memory.py tests/unit/ai_assistant/test_markdown_memory_store.py
+    rtk uv run mypy app/modules/ai_assistant/domain/markdown_memory.py
     rtk git diff --check
 
-Expected:
+## Gate Applicability
 
-- unchecked tasks exist only in 188.4-188.7 and 190.3-190.6;
-- 188.2 and old 190 broad backlog are explicitly superseded/not planned, not
-  falsely marked implemented;
-- no source, schema, migration, tests, frontend, dependency, secret, or
-  customer-assistant file belongs to this contract revision;
-- Spec 188/190 and specs index describe the same execution order.
+- Unit: required.
+- Security/path/concurrency: required in focused unit suite.
+- MySQL8 Integration/Contract: N/A; 188.4 stores no DB state.
+- Backend E2E/API: N/A; harness/session integration starts at 188.5.
+- Browser UAT/rem/frontend: N/A; no user-visible frontend change.
+- Live LLM: N/A; extractor starts at 188.6.
 
 ## Checker
 
-Checker must verify:
+Verify:
 
-- user decisions are represented exactly;
-- goals, scope/non-goals, identity, API/UI contracts, acceptance, evidence,
-  capabilities, authority, and stop rules are complete;
-- MEMORY.md crash/idempotency and token aggregation semantics are testable;
-- each future code slice has a RED plan and applicable gate;
-- diff check passes.
+- TDD method and observable RED evidence;
+- strict scoped path cannot escape configured memory root;
+- rolling reader uses heading-derived byte/line boundary, not fixed tail-N;
+- future/malformed dates do not enter prompt content;
+- concurrent writes remain valid and today's full block is at most 100 tokens;
+- focused/regression/static checks and evidence pass.
 
 ## Reviewer
 
-Reviewer must verify:
+Audit:
 
-- historical completed work is preserved without making old pending tasks look
-  complete;
-- MEMORY.md remains the only memory content truth source;
-- isolation does not trust arbitrary client paths;
-- DB/file crash windows, concurrency, date bounds, token cap, pricing version,
-  unknown cost, streaming calls, and cache/reasoning totals are covered;
-- 190 does not expand into benchmark, governance, alerts, budget, billing, or
-  cross-user admin;
-- no unrelated dirty diff is staged or committed with this unit.
+- diff stays inside frozen scope;
+- public interface stays small;
+- no arbitrary caller path;
+- no second memory content store;
+- atomic replacement and lock cleanup are safe;
+- cap/dedup behavior is deterministic and testable;
+- no harness/schema/API/frontend/customer-assistant scope drift.

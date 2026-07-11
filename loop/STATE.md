@@ -3,65 +3,48 @@
 ## Current
 
 - date: 2026-07-11
-- mode: Contract Gate
-- active contracts: Spec 188 corrective MEMORY.md scope; Spec 190 token/cost
-  scope
-- current unit: contract revision
-- implementation: not started
-- next code slice after gate: 188.4
-- branch: codex/spec-222-14-5-idempotency-spec
-- base: e2024c11
+- mode: Closed Loop
+- active slice: 188.4 Scope Isolation And Markdown Store
+- phase: complete; slice commit pending
+- TDD method: tdd
+- branch: codex/spec-188-memory-md
+- base: 1ee8dc5e
 - merge target: codex/runtime-v2-production-upgrade
-- worktree: dirty with unrelated existing changes
-- oversight: human-on-the-loop; no new product decision currently missing
+- worktree: /Users/vincento/work/develop/hify-spec-188-memory-md
+- pre-slice dirty state: clean
 
-## Accepted Decisions
+## Contract Gate
 
-- Spec 189 will not be implemented.
-- MEMORY.md is the only durable memory source.
-- One MEMORY.md belongs to each trusted user/workspace scope.
-- Reader defaults to last 30 calendar days and locates the bounded start line
-  from strict date headings.
-- Each day's entire memory block is capped at 100 tokens.
-- Extraction runs after each three new COMPLETED runs across sessions.
-- Daily scheduled tail flush is future scope.
-- Spec 190 includes token/cost only.
-- Usage is raw per model call, aggregated by session, total, and common
-  dimensions.
-- Dashboard follows accepted reference: cards, daily heatmap, session detail,
-  provider/model and token-type views.
+- contract commit: 1ee8dc5e
+- Checker: ALL GREEN
+- contract Reviewer: PASS
+- slice Reviewer round1: BLOCK
+- tdd capability: AVAILABLE
+- isolated worktree: ready
 
-## Contract Evidence
+## Current Behavior Target
 
-- spec/plan/tasks rewritten for 188 and 190.
-- old 188.2 unchecked JSON-memory tasks moved to explicit superseded history.
-- old broad 190 unchecked backlog moved to explicit not-planned history.
-- specs/README.md natural order and directory index updated.
-- git diff --check passed after initial rewrite.
-- contract audit added crash-safe MEMORY.md cursor semantics and prevented
-  cache/reasoning token double-count.
-- independent Checker round2: ALL GREEN.
-- independent Reviewer round1: PASS, medium residual implementation risk, no
-  blocker.
+First tracer:
 
-## Current Gate
+    one trusted user/workspace reads only valid MEMORY.md date blocks inside
+    the inclusive 30-day window
 
-Contract content and independent review are complete. Closed Loop remains
-blocked until:
+Following vertical cycles in 188.4:
 
-1. contract files are selectively committed without unrelated dirty changes;
-2. implementation branch/worktree/base/merge target are frozen.
+1. scope isolation and path/symlink rejection;
+2. malformed/future date handling;
+3. locked atomic merge/dedupe;
+4. full-day 100-token cap;
+5. concurrency/regression evidence.
 
 ## Next Action
 
-Selectively commit contract scope, then enter 188.4 on isolated
-codex/spec-188-memory-md worktree.
+Checker round5 ALL GREEN. Reviewer round3 PASS. Focused: 20 passed plus
+6 subtests. Regression: 8 passed. Ruff, mypy, and diff check pass. Update tasks,
+review increment, then commit 188.4.
 
-## Residual Risks
+## Follow-Ups For 188.5
 
-- current RequestContext is the host identity seam; implementation must prove
-  production scope cannot be selected by an arbitrary memory path.
-- DB cursor and filesystem replacement cross a transaction boundary; accepted
-  batch/input/target hash recovery must be tested at each crash window.
-- provider cache/reasoning semantics differ; per-provider normalizers must avoid
-  total-token double-count.
+- serialize MemoryScopeResolver close/duplicate lifecycle before production host
+  wiring;
+- keep Unix fcntl/dirfd capability requirement explicit and fail closed.
