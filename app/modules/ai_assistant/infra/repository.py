@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import json
 from typing import Any, Callable
@@ -17,7 +17,10 @@ from app.modules.ai_assistant.domain.access_scope import (
     AiAssistantAccessScope,
     local_ai_assistant_scope,
 )
-from app.modules.ai_assistant.domain.model_usage import NormalizedModelUsage
+from app.modules.ai_assistant.domain.model_usage import (
+    NormalizedModelUsage,
+    resolve_configured_model_cost,
+)
 from app.modules.ai_assistant.infra.schema import register_ai_assistant_tables
 
 
@@ -37,6 +40,10 @@ def _rowcount(result: Any) -> int:
 def _mysql_error_code(exc: IntegrityError) -> int | None:
     args = getattr(exc.orig, "args", ())
     return int(args[0]) if args and isinstance(args[0], int) else None
+
+
+def _usage_utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class AiAssistantRepository:
@@ -94,7 +101,7 @@ class AiAssistantRepository:
         assistant_session = self.get_session(session_id)
         if run is None or assistant_session is None or int(run["session_id"]) != session_id:
             raise KeyError("model usage session/run is outside the current scope")
-        now = datetime.now()
+        now = _usage_utcnow()
         values = {
             "user_id": self._access_scope.user_id,
             "workspace_id": self._access_scope.workspace_id,
@@ -141,8 +148,15 @@ class AiAssistantRepository:
         usage: NormalizedModelUsage,
         completed_at: datetime | None = None,
     ) -> dict[str, Any]:
-        cost_source = "provider" if usage.provider_cost_usd is not None else "unknown"
-        now = datetime.now()
+        existing = self.get_model_usage_call(run_id=run_id, call_id=call_id)
+        if existing is None:
+            raise KeyError("model usage call is outside the current scope")
+        cost = resolve_configured_model_cost(
+            str(existing["provider"]),
+            str(existing["model"]),
+            usage,
+        )
+        now = _usage_utcnow()
         self._session.execute(
             self._model_usage_table.update()
             .where(
@@ -154,8 +168,11 @@ class AiAssistantRepository:
             )
             .values(
                 **usage.as_record_values(),
-                effective_cost_usd=usage.provider_cost_usd,
-                cost_source=cost_source,
+                provider_cost_usd=cost.provider_cost_usd,
+                estimated_cost_usd=cost.estimated_cost_usd,
+                effective_cost_usd=cost.effective_cost_usd,
+                cost_source=cost.cost_source,
+                pricing_version=cost.pricing_version,
                 completed_at=completed_at or now,
                 updated_at=now,
             )
@@ -173,7 +190,7 @@ class AiAssistantRepository:
         call_id: str,
         completed_at: datetime | None = None,
     ) -> dict[str, Any]:
-        now = datetime.now()
+        now = _usage_utcnow()
         self._session.execute(
             self._model_usage_table.update()
             .where(
@@ -235,21 +252,232 @@ class AiAssistantRepository:
         ).mappings().one_or_none()
         return dict(row) if row else None
 
-    def list_model_usage_calls(self, *, session_id: int | None = None) -> list[dict[str, Any]]:
+    def list_model_usage_calls(
+        self,
+        *,
+        session_id: int | None = None,
+        started_from: datetime | None = None,
+        started_before: datetime | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
         conditions = [
             self._model_usage_table.c.user_id == self._access_scope.user_id,
             self._model_usage_table.c.workspace_id == self._access_scope.workspace_id,
         ]
         if session_id is not None:
-            if self.get_session(session_id) is None:
+            if self.get_usage_session(session_id) is None:
                 return []
             conditions.append(self._model_usage_table.c.session_id == session_id)
-        rows = self._session.execute(
+        if started_from is not None:
+            conditions.append(self._model_usage_table.c.started_at >= started_from)
+        if started_before is not None:
+            conditions.append(self._model_usage_table.c.started_at < started_before)
+        query = (
             sa.select(self._model_usage_table)
             .where(*conditions)
             .order_by(self._model_usage_table.c.started_at.asc(), self._model_usage_table.c.id.asc())
-        ).mappings().all()
+            .offset(max(0, offset))
+        )
+        if limit is not None:
+            query = query.limit(max(1, min(limit, 1000)))
+        rows = self._session.execute(query).mappings().all()
         return [dict(row) for row in rows]
+
+    def summarize_model_usage(
+        self,
+        *,
+        started_from: datetime | None = None,
+        started_before: datetime | None = None,
+        session_id: int | None = None,
+    ) -> dict[str, Any]:
+        conditions = [
+            self._model_usage_table.c.user_id == self._access_scope.user_id,
+            self._model_usage_table.c.workspace_id == self._access_scope.workspace_id,
+        ]
+        if session_id is not None:
+            if self.get_usage_session(session_id) is None:
+                return {}
+            conditions.append(self._model_usage_table.c.session_id == session_id)
+        if started_from is not None:
+            conditions.append(self._model_usage_table.c.started_at >= started_from)
+        if started_before is not None:
+            conditions.append(self._model_usage_table.c.started_at < started_before)
+        unknown = self._model_usage_table.c.effective_cost_usd.is_(None)
+        row = self._session.execute(
+            sa.select(
+                sa.func.coalesce(sa.func.sum(self._model_usage_table.c.total_tokens), 0).label(
+                    "total_tokens"
+                ),
+                sa.func.coalesce(
+                    sa.func.sum(self._model_usage_table.c.effective_cost_usd),
+                    0,
+                ).label("known_cost_usd"),
+                sa.func.sum(sa.case((unknown, 1), else_=0)).label("unknown_cost_count"),
+                sa.func.coalesce(
+                    sa.func.sum(
+                        sa.case((unknown, self._model_usage_table.c.total_tokens), else_=0)
+                    ),
+                    0,
+                ).label("unknown_cost_tokens"),
+                sa.func.count(sa.distinct(self._model_usage_table.c.session_id)).label(
+                    "session_count"
+                ),
+                sa.func.count(self._model_usage_table.c.id).label("call_count"),
+            ).where(*conditions)
+        ).mappings().one()
+        return dict(row)
+
+    def group_model_usage(
+        self,
+        *,
+        group_by: str,
+        started_from: datetime | None = None,
+        started_before: datetime | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        dimensions = {
+            "session": self._model_usage_table.c.session_id,
+            "provider": self._model_usage_table.c.provider,
+            "model": self._model_usage_table.c.model,
+        }
+        dimension = dimensions.get(group_by)
+        if dimension is None:
+            raise ValueError("unsupported model usage dimension")
+        conditions = [
+            self._model_usage_table.c.user_id == self._access_scope.user_id,
+            self._model_usage_table.c.workspace_id == self._access_scope.workspace_id,
+        ]
+        if started_from is not None:
+            conditions.append(self._model_usage_table.c.started_at >= started_from)
+        if started_before is not None:
+            conditions.append(self._model_usage_table.c.started_at < started_before)
+        unknown = self._model_usage_table.c.effective_cost_usd.is_(None)
+        total_tokens = sa.func.coalesce(
+            sa.func.sum(self._model_usage_table.c.total_tokens),
+            0,
+        )
+        query = (
+            sa.select(
+                dimension.label("group_key"),
+                total_tokens.label("total_tokens"),
+                sa.func.coalesce(
+                    sa.func.sum(self._model_usage_table.c.effective_cost_usd),
+                    0,
+                ).label("known_cost_usd"),
+                sa.func.sum(sa.case((unknown, 1), else_=0)).label("unknown_cost_count"),
+                sa.func.coalesce(
+                    sa.func.sum(
+                        sa.case((unknown, self._model_usage_table.c.total_tokens), else_=0)
+                    ),
+                    0,
+                ).label("unknown_cost_tokens"),
+                sa.func.count(sa.distinct(self._model_usage_table.c.session_id)).label(
+                    "session_count"
+                ),
+                sa.func.count(self._model_usage_table.c.id).label("call_count"),
+            )
+            .where(*conditions)
+            .group_by(dimension)
+        )
+        if group_by == "session":
+            query = query.order_by(total_tokens.desc(), dimension.asc())
+        else:
+            query = query.order_by(dimension.asc())
+        query = query.offset(max(0, offset))
+        if limit is not None:
+            query = query.limit(max(1, min(limit, 1000)))
+        rows = self._session.execute(query).mappings().all()
+        total = self._session.execute(
+            sa.select(sa.func.count(sa.distinct(dimension))).where(*conditions)
+        ).scalar_one()
+        return {"list": [dict(row) for row in rows], "total": int(total or 0)}
+
+    def summarize_model_usage_token_types(
+        self,
+        *,
+        started_from: datetime | None = None,
+        started_before: datetime | None = None,
+    ) -> dict[str, int]:
+        conditions = [
+            self._model_usage_table.c.user_id == self._access_scope.user_id,
+            self._model_usage_table.c.workspace_id == self._access_scope.workspace_id,
+        ]
+        if started_from is not None:
+            conditions.append(self._model_usage_table.c.started_at >= started_from)
+        if started_before is not None:
+            conditions.append(self._model_usage_table.c.started_at < started_before)
+        columns = {
+            "input": self._model_usage_table.c.input_tokens,
+            "output": self._model_usage_table.c.output_tokens,
+            "cacheRead": self._model_usage_table.c.cache_read_tokens,
+            "cacheWrite": self._model_usage_table.c.cache_write_tokens,
+            "reasoning": self._model_usage_table.c.reasoning_tokens,
+            "total": self._model_usage_table.c.total_tokens,
+        }
+        row = self._session.execute(
+            sa.select(
+                *[
+                    sa.func.coalesce(sa.func.sum(column), 0).label(name)
+                    for name, column in columns.items()
+                ]
+            ).where(*conditions)
+        ).mappings().one()
+        return {name: int(row[name] or 0) for name in columns}
+
+    def summarize_model_usage_daily(
+        self,
+        *,
+        day_bounds: list[tuple[str, datetime, datetime]],
+    ) -> list[dict[str, Any]]:
+        if not day_bounds:
+            return []
+        if len(day_bounds) > 366:
+            raise ValueError("daily model usage range cannot exceed 366 days")
+        started_at = self._model_usage_table.c.started_at
+        day_key = sa.case(
+            *[
+                (sa.and_(started_at >= started_from, started_at < started_before), label)
+                for label, started_from, started_before in day_bounds
+            ],
+            else_=None,
+        )
+        conditions = [
+            self._model_usage_table.c.user_id == self._access_scope.user_id,
+            self._model_usage_table.c.workspace_id == self._access_scope.workspace_id,
+            started_at >= day_bounds[0][1],
+            started_at < day_bounds[-1][2],
+        ]
+        unknown = self._model_usage_table.c.effective_cost_usd.is_(None)
+        rows = self._session.execute(
+            sa.select(
+                day_key.label("day"),
+                sa.func.coalesce(
+                    sa.func.sum(self._model_usage_table.c.total_tokens),
+                    0,
+                ).label("total_tokens"),
+                sa.func.coalesce(
+                    sa.func.sum(self._model_usage_table.c.effective_cost_usd),
+                    0,
+                ).label("known_cost_usd"),
+                sa.func.sum(sa.case((unknown, 1), else_=0)).label("unknown_cost_count"),
+                sa.func.coalesce(
+                    sa.func.sum(
+                        sa.case((unknown, self._model_usage_table.c.total_tokens), else_=0)
+                    ),
+                    0,
+                ).label("unknown_cost_tokens"),
+                sa.func.count(sa.distinct(self._model_usage_table.c.session_id)).label(
+                    "session_count"
+                ),
+                sa.func.count(self._model_usage_table.c.id).label("call_count"),
+            )
+            .where(*conditions)
+            .group_by(day_key)
+            .order_by(day_key.asc())
+        ).mappings().all()
+        return [dict(row) for row in rows if row["day"] is not None]
 
     def claim_memory_extraction_batch(self, *, lease_seconds: int = 60) -> dict[str, Any] | None:
         bind = self._session.get_bind()
@@ -1047,6 +1275,32 @@ class AiAssistantRepository:
             )
         ).mappings().one_or_none()
         return dict(row) if row else None
+
+    def get_usage_session(self, session_id: int) -> dict[str, Any] | None:
+        row = self._session.execute(
+            sa.select(self._session_table).where(
+                self._session_table.c.id == session_id,
+                self._session_table.c.user_id == self._access_scope.user_id,
+                self._session_table.c.workspace_id == self._access_scope.workspace_id,
+            )
+        ).mappings().one_or_none()
+        return dict(row) if row else None
+
+    def list_usage_sessions(self, *, session_ids: list[int] | None = None) -> list[dict[str, Any]]:
+        if session_ids is not None and not session_ids:
+            return []
+        conditions = [
+            self._session_table.c.user_id == self._access_scope.user_id,
+            self._session_table.c.workspace_id == self._access_scope.workspace_id,
+        ]
+        if session_ids is not None:
+            conditions.append(self._session_table.c.id.in_(session_ids))
+        rows = self._session.execute(
+            sa.select(self._session_table)
+            .where(*conditions)
+            .order_by(self._session_table.c.id.desc())
+        ).mappings().all()
+        return [dict(row) for row in rows]
 
     def update_session_context(self, session_id: int, context: dict[str, Any]) -> dict[str, Any]:
         now = datetime.now()

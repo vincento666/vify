@@ -378,13 +378,15 @@ def _usage(response: dict[str, Any]) -> dict[str, Any]:
         return {}
     normalized = normalize_model_usage(usage)
     payload: dict[str, Any] = {
-        "inputTokens": normalized.input_tokens,
-        "outputTokens": normalized.output_tokens,
         "totalTokens": normalized.total_tokens,
-        "prompt_tokens": normalized.input_tokens,
-        "completion_tokens": normalized.output_tokens,
         "total_tokens": normalized.total_tokens,
     }
+    if normalized.input_tokens is not None:
+        payload["inputTokens"] = normalized.input_tokens
+        payload["prompt_tokens"] = normalized.input_tokens
+    if normalized.output_tokens is not None:
+        payload["outputTokens"] = normalized.output_tokens
+        payload["completion_tokens"] = normalized.output_tokens
     for key, value in {
         "cacheReadTokens": normalized.cache_read_tokens,
         "cacheWriteTokens": normalized.cache_write_tokens,

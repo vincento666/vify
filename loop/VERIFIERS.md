@@ -1,21 +1,25 @@
-# Loop Verifiers: Spec 190.3
+# Loop Verifiers: Spec 190.4
 
 ## Focused
 
-    rtk uv run pytest tests/unit/ai_assistant/test_model_usage.py tests/integration/ai_assistant/test_model_usage_repository.py tests/contract/test_ai_assistant_model_usage_capture_api.py tests/integration/ai_assistant/test_memory_extraction_cursor.py -q --tb=short
-
-## Static
-
-    rtk uv run ruff check app/modules/ai_assistant tests/unit/ai_assistant/test_model_usage.py tests/integration/ai_assistant/test_model_usage_repository.py tests/contract/test_ai_assistant_model_usage_capture_api.py alembic/versions/0034_ai_assistant_model_usage.py
-    rtk uv run mypy app/modules/ai_assistant
-    rtk git diff --check
+    rtk uv run pytest tests/unit/ai_assistant/test_model_usage_cost.py tests/integration/ai_assistant/test_model_usage_repository.py tests/contract/test_ai_assistant_usage_api.py tests/e2e/test_ai_assistant_usage_e2e.py tests/contract/test_ai_assistant_model_usage_capture_api.py -q --tb=short
 
 ## Required Proof
 
-- one scoped row per call; replay is idempotent;
-- pending streaming row finalizes once;
-- optional token breakouts stay null when unavailable;
-- cache/reasoning never inflate total;
-- normal planner and memory extractor both record usage;
-- enclosing run failure does not remove recorded provider usage;
-- migration and persistence use MySQL8.
+- provider actual cost wins;
+- versioned configured estimate is fixed at write time;
+- missing price stays null with unknown counters;
+- summary/session/total/daily/dimensions/detail reconcile;
+- timezone date boundaries and range validation are correct;
+- every endpoint enforces trusted user/workspace/session scope;
+- existing envelope remains compatible.
+
+## Static
+
+    rtk uv run ruff check app/modules/ai_assistant tests/unit/ai_assistant/test_model_usage_cost.py tests/contract/test_ai_assistant_usage_api.py tests/e2e/test_ai_assistant_usage_e2e.py
+    rtk uv run mypy app/modules/ai_assistant
+    rtk git diff --check
+
+## Broad
+
+    rtk uv run pytest tests/unit/ai_assistant tests/integration/ai_assistant tests/contract/test_ai_assistant_*.py -q --tb=short

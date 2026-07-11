@@ -1,51 +1,41 @@
-# Current Loop Scope: Spec 190.3 Per-Call Usage Ledger
+# Current Loop Scope: Spec 190.4 Cost And Aggregate API
 
 ## Status
 
     mode: Closed Loop
     active spec: 190-ai-assistant-observability-benchmark
-    active slice: 190.3 Per-Call Usage Ledger
+    active slice: 190.4 Versioned Cost And Aggregate API
     phase: COMPLETE
     TDD method: tdd
-
-## Contract
-
-    specs/190-ai-assistant-observability-benchmark/spec.md
-    specs/190-ai-assistant-observability-benchmark/plan.md
-    specs/190-ai-assistant-observability-benchmark/tasks.md
-
-Tracer:
-
-    one live planner call or memory-extractor call
-      -> one scoped idempotent ledger row
-      -> provider token dimensions preserved
-      -> cache/reasoning remain breakouts
 
 ## Worktree
 
     branch: codex/spec-188-memory-md
     path: /Users/vincento/work/develop/hify-spec-188-memory-md
-    base: e40743e7
+    base: 61f7e559
     merge target: codex/runtime-v2-production-upgrade
     dirty before slice: no
 
+## Tracer
+
+    scoped immutable ledger rows
+      -> provider actual / versioned estimate / unknown
+      -> timezone-aware summary, daily, session, dimension, detail APIs
+
 ## Frozen Scope
 
-Allowed:
-
-    app/modules/ai_assistant/
-    alembic/versions/0034_ai_assistant_model_usage.py
-    tests/unit/ai_assistant/test_model_usage.py
-    tests/integration/ai_assistant/test_model_usage_repository.py
-    tests/contract/test_ai_assistant_model_usage_capture_api.py
-    tests/integration/ai_assistant/test_memory_extraction_cursor.py
-    specs/190-ai-assistant-observability-benchmark/tasks.md
-    loop/
-    artifacts/slices/190-ai-assistant-observability-benchmark/190.3/
-
-No aggregate API, frontend, benchmark, governance, alert, or budget changes.
+Allowed: AI Assistant domain/repository/router/schema, usage contract/unit/E2E tests,
+Spec 190 tasks, loop docs, and 190.4 evidence. No frontend or 190.5 work.
 
 ## Stop Conditions
 
-Stop for product input if provider token dimensions cannot be normalized without
-inventing values, or if trusted scope/session attribution is unavailable.
+Stop if prices must be invented, historical rows must be recalculated, or a
+cross-user/admin/billing/budget surface is required.
+
+## Result
+
+Focused 18 passed; AI Assistant broad 216 passed plus 21 subtests. Ruff, mypy,
+and diff-check passed. Checker ALL GREEN; Reviewer PASS with no P0/P1/P2.
+
+Residual risk: the bounded 366-branch daily SQL aggregate is not load-tested;
+carry this non-blocking performance check into 190.6 aggregate acceptance.

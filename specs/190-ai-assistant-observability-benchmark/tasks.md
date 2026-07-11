@@ -42,15 +42,15 @@ compatibility but create no open work.
 
 ## 190.4 Versioned Cost And Aggregate API
 
-- [ ] TDD preflight and observable RED.
-- [ ] Implement fixed-decimal provider actual cost.
-- [ ] Implement versioned price-table estimate.
-- [ ] Represent unknown price as null with explicit counters.
-- [ ] Preserve historical pricing version and cost.
-- [ ] Add scoped summary, daily, sessions, dimensions, and detail endpoints.
-- [ ] Add timezone-correct buckets and range validation.
-- [ ] Reconcile per-call, session, period, and cumulative totals.
-- [ ] Save API/E2E evidence and pass Checker/Reviewer.
+- [x] TDD preflight and observable RED.
+- [x] Implement fixed-decimal provider actual cost.
+- [x] Implement versioned price-table estimate.
+- [x] Represent unknown price as null with explicit counters.
+- [x] Preserve historical pricing version and cost.
+- [x] Add scoped summary, daily, sessions, dimensions, and detail endpoints.
+- [x] Add timezone-correct buckets and range validation.
+- [x] Reconcile per-call, session, period, and cumulative totals.
+- [x] Save API/E2E evidence and pass Checker/Reviewer.
 
 ## 190.5 Token/Cost Dashboard
 

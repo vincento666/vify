@@ -1,31 +1,22 @@
 # Loop State
 
-## Current
-
 - date: 2026-07-11
 - mode: Closed Loop
-- active slice: 190.3 Per-Call Usage Ledger
+- active slice: 190.4 Versioned Cost And Aggregate API
 - phase: COMPLETE
 - branch: codex/spec-188-memory-md
-- base: e40743e7
-- merge target: codex/runtime-v2-production-upgrade
+- base: 61f7e559
 - worktree: /Users/vincento/work/develop/hify-spec-188-memory-md
-- pre-slice dirty state: clean
 
-## Current Tracer
+Current tracer: provider actual wins; configured versioned estimate is immutable;
+missing price remains null and visible; scoped aggregates reconcile exactly.
 
-    provider terminal usage normalizes without estimates or breakout double-count,
-    then persists once under trusted scope and model-call identity.
+Next: commit 190.4, then open 190.5 Token/Cost Dashboard.
 
-## Next Action
-
-Commit 190.3, then open 190.4 versioned cost and aggregate API.
-
-## Verification
-
-- focused normalization/migration/repository/planner/memory capture: 20 passed, 6 subtests;
-- live planner/streaming/harness regression: 23 passed;
-- Ruff, mypy 34 source files, diff-check: PASS.
-- broad AI Assistant suite: 206 passed, 21 subtests;
-- independent Checker: ALL GREEN;
-- independent Reviewer: PASS after generated rollback files were removed.
+Verification:
+- focused cost/repository/API/E2E/model capture: 18 passed;
+- security/scope/model/event regression: 19 passed, 5 subtests;
+- AI Assistant broad: 216 passed, 21 subtests;
+- Ruff, mypy 35 source files, diff-check: PASS.
+- Checker: ALL GREEN; Reviewer: PASS, no P0/P1/P2.
+- residual: load-test bounded 366-day SQL CASE in 190.6.

@@ -5,7 +5,7 @@ import os
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from functools import lru_cache, partial
 from pathlib import Path
 from threading import Lock
@@ -37,6 +37,13 @@ from app.modules.ai_assistant.domain.memory_extraction import (
 )
 from app.modules.ai_assistant.domain.session_runtime import RunControlConflict
 from app.modules.ai_assistant.domain.streaming_runtime import heartbeat_payload, last_sequence
+from app.modules.ai_assistant.domain.usage_reporting import (
+    rows_in_local_range,
+    usage_session_detail,
+    usage_totals_from_aggregate,
+    usage_utc_bounds,
+    validate_usage_range,
+)
 from app.modules.ai_assistant.infra.repository import AiAssistantRepository, IdempotencyConflict
 from app.modules.ai_assistant.web.schemas import (
     ApprovalDecisionRequest,
@@ -217,6 +224,225 @@ def create_session(
 def list_sessions(service: AiAssistantHarnessService = Depends(get_ai_assistant_service)) -> dict[str, Any]:
     sessions = [_session_payload(row) for row in service.list_sessions()]
     return success({"list": sessions, "total": len(sessions)})
+
+
+@router.get("/usage/summary")
+def get_usage_summary(
+    from_date: date | None = Query(default=None, alias="from"),
+    to_date: date | None = Query(default=None, alias="to"),
+    timezone_name: str | None = Query(default=None, alias="timezone"),
+    service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
+) -> dict[str, Any]:
+    zone, today, _, _ = _usage_query_context(
+        from_date,
+        to_date,
+        timezone_name,
+        default_days=30,
+    )
+    def period(start: date | None, end: date | None) -> dict[str, Any]:
+        if start is None or end is None:
+            return usage_totals_from_aggregate(service.summarize_model_usage())
+        started_from, started_before = usage_utc_bounds(
+            timezone_name=zone,
+            start=start,
+            end=end,
+        )
+        return usage_totals_from_aggregate(
+            service.summarize_model_usage(
+                started_from=started_from,
+                started_before=started_before,
+            )
+        )
+
+    return success(
+        {
+            "today": period(today, today),
+            "yesterday": period(today - timedelta(days=1), today - timedelta(days=1)),
+            "rolling30Days": period(today - timedelta(days=29), today),
+            "cumulative": period(None, None),
+        }
+    )
+
+
+@router.get("/usage/daily")
+def get_usage_daily(
+    from_date: date | None = Query(default=None, alias="from"),
+    to_date: date | None = Query(default=None, alias="to"),
+    timezone_name: str | None = Query(default=None, alias="timezone"),
+    service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
+) -> dict[str, Any]:
+    zone, _, start, end = _usage_query_context(
+        from_date,
+        to_date,
+        timezone_name,
+        default_days=365,
+    )
+    day_bounds = []
+    day = start
+    while day <= end:
+        started_from, started_before = usage_utc_bounds(
+            timezone_name=zone,
+            start=day,
+            end=day,
+        )
+        day_bounds.append((day.isoformat(), started_from, started_before))
+        day += timedelta(days=1)
+    items = [
+        {"date": str(row["day"]), **usage_totals_from_aggregate(row)}
+        for row in service.summarize_model_usage_daily(day_bounds=day_bounds)
+    ]
+    return success({"list": items, "total": len(items), "from": start.isoformat(), "to": end.isoformat()})
+
+
+@router.get("/usage/sessions")
+def get_usage_sessions(
+    from_date: date | None = Query(default=None, alias="from"),
+    to_date: date | None = Query(default=None, alias="to"),
+    timezone_name: str | None = Query(default=None, alias="timezone"),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
+) -> dict[str, Any]:
+    zone, _, start, end = _usage_query_context(from_date, to_date, timezone_name, default_days=30)
+    started_from, started_before = usage_utc_bounds(timezone_name=zone, start=start, end=end)
+    grouped = service.group_model_usage(
+        group_by="session",
+        started_from=started_from,
+        started_before=started_before,
+        limit=limit,
+        offset=offset,
+    )
+    session_ids = [int(row["group_key"]) for row in grouped["list"]]
+    titles = {
+        int(row["id"]): (
+            f"{row['title']}（已删除）" if row.get("deleted") else str(row["title"])
+        )
+        for row in service.list_usage_sessions(session_ids=session_ids)
+    }
+    items = [
+        {
+            "sessionId": int(row["group_key"]),
+            "title": titles.get(int(row["group_key"]), ""),
+            **usage_totals_from_aggregate(row),
+        }
+        for row in grouped["list"]
+    ]
+    return success(
+        {"list": items, "total": grouped["total"], "limit": limit, "offset": offset}
+    )
+
+
+@router.get("/usage/dimensions")
+def get_usage_dimensions(
+    from_date: date | None = Query(default=None, alias="from"),
+    to_date: date | None = Query(default=None, alias="to"),
+    timezone_name: str | None = Query(default=None, alias="timezone"),
+    service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
+) -> dict[str, Any]:
+    zone, _, start, end = _usage_query_context(from_date, to_date, timezone_name, default_days=30)
+    started_from, started_before = usage_utc_bounds(timezone_name=zone, start=start, end=end)
+    providers = service.group_model_usage(
+        group_by="provider",
+        started_from=started_from,
+        started_before=started_before,
+    )["list"]
+    models = service.group_model_usage(
+        group_by="model",
+        started_from=started_from,
+        started_before=started_before,
+    )["list"]
+    token_types = service.summarize_model_usage_token_types(
+        started_from=started_from,
+        started_before=started_before,
+    )
+    return success(
+        {
+            "providers": [
+                {"name": str(row["group_key"]), **usage_totals_from_aggregate(row)}
+                for row in providers
+            ],
+            "models": [
+                {"name": str(row["group_key"]), **usage_totals_from_aggregate(row)}
+                for row in models
+            ],
+            "tokenTypes": token_types,
+        }
+    )
+
+
+@router.get("/usage/sessions/{session_id}")
+def get_usage_session_detail(
+    session_id: int,
+    from_date: date | None = Query(default=None, alias="from"),
+    to_date: date | None = Query(default=None, alias="to"),
+    timezone_name: str | None = Query(default=None, alias="timezone"),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
+) -> dict[str, Any]:
+    assistant_session = service.get_usage_session(session_id)
+    if assistant_session is None:
+        raise HTTPException(status_code=404, detail="AI Assistant session not found")
+    zone, _, start, end = _usage_query_context(from_date, to_date, timezone_name, default_days=30)
+    started_from, started_before = usage_utc_bounds(timezone_name=zone, start=start, end=end)
+    rows = rows_in_local_range(
+        service.list_model_usage_calls(
+            session_id=session_id,
+            started_from=started_from,
+            started_before=started_before,
+            limit=limit,
+            offset=offset,
+        ),
+        timezone_name=zone,
+        start=start,
+        end=end,
+    )
+    detail = usage_session_detail(
+            rows,
+            session_id=session_id,
+            title=(
+                f"{assistant_session['title']}（已删除）"
+                if assistant_session.get("deleted")
+                else str(assistant_session["title"])
+            ),
+        )
+    detail.update(
+        usage_totals_from_aggregate(
+            service.summarize_model_usage(
+                session_id=session_id,
+                started_from=started_from,
+                started_before=started_before,
+            )
+        )
+    )
+    detail.update({"limit": limit, "offset": offset})
+    detail["sessionDeleted"] = bool(assistant_session.get("deleted"))
+    return success(detail)
+
+
+def _usage_query_context(
+    from_date: date | None,
+    to_date: date | None,
+    timezone_name: str | None,
+    *,
+    default_days: int,
+) -> tuple[str, date, date, date]:
+    zone_name = (timezone_name or os.environ.get("HIFY_WORKSPACE_TIMEZONE") or "UTC").strip()
+    try:
+        zone = ZoneInfo(zone_name)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid usage timezone") from exc
+    today = datetime.now(zone).date()
+    try:
+        start, end = validate_usage_range(
+            from_date,
+            to_date,
+            today=today,
+            default_days=default_days,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return zone_name, today, start, end
 
 
 @router.get("/sessions/{session_id}")

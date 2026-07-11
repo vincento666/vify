@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from hashlib import sha256
 import json
 from math import ceil
@@ -127,6 +127,27 @@ class AiAssistantHarnessService:
 
     def get_session(self, session_id: int) -> dict[str, Any] | None:
         return self._repository.get_session(session_id)
+
+    def get_usage_session(self, session_id: int) -> dict[str, Any] | None:
+        return self._repository.get_usage_session(session_id)
+
+    def list_usage_sessions(self, *, session_ids: list[int] | None = None) -> list[dict[str, Any]]:
+        return self._repository.list_usage_sessions(session_ids=session_ids)
+
+    def list_model_usage_calls(self, **filters: Any) -> list[dict[str, Any]]:
+        return self._repository.list_model_usage_calls(**filters)
+
+    def summarize_model_usage(self, **filters: Any) -> dict[str, Any]:
+        return self._repository.summarize_model_usage(**filters)
+
+    def group_model_usage(self, **filters: Any) -> dict[str, Any]:
+        return self._repository.group_model_usage(**filters)
+
+    def summarize_model_usage_token_types(self, **filters: Any) -> dict[str, int]:
+        return self._repository.summarize_model_usage_token_types(**filters)
+
+    def summarize_model_usage_daily(self, **filters: Any) -> list[dict[str, Any]]:
+        return self._repository.summarize_model_usage_daily(**filters)
 
     def clear_session_history(self, session_id: int) -> bool:
         return self._repository.clear_session_history(session_id)
@@ -1103,7 +1124,7 @@ class AiAssistantHarnessService:
             call_kind=call_kind,
             provider=provider,
             model=model,
-            started_at=datetime.now(),
+            started_at=datetime.now(timezone.utc).replace(tzinfo=None),
         )
 
     def _finalize_model_usage(
@@ -1119,7 +1140,7 @@ class AiAssistantHarnessService:
                 run_id=run_id,
                 call_id=call_id,
                 usage=normalize_model_usage(usage),
-                completed_at=datetime.now(),
+                completed_at=datetime.now(timezone.utc).replace(tzinfo=None),
             )
 
     def _fail_model_usage(self, *, run_id: int, call_id: str) -> None:
@@ -1128,7 +1149,7 @@ class AiAssistantHarnessService:
             recorder(
                 run_id=run_id,
                 call_id=call_id,
-                completed_at=datetime.now(),
+                completed_at=datetime.now(timezone.utc).replace(tzinfo=None),
             )
 
     def _run_live_react_loop(
