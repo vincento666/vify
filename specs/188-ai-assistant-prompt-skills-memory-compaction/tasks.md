@@ -1,92 +1,78 @@
-# Tasks 188: AI Assistant Prompt Skills Memory Compaction
+# Tasks 188: AI Assistant Workspace MEMORY.md
 
-## 188.0 Documentation Sign-Off
+## Historical Completed Work
 
-- [x] Create `188-ai-assistant-prompt-skills-memory-compaction`.
-- [x] Record that 184 originally reserved Phase 5 as spec id 186 and that this
-      repository now uses 188 as the requested collision-free id.
-- [x] Limit this spec to PRD Phase 5 prompt, skills, memory, and compaction.
-- [x] Declare backend-first scope with no frontend visual changes.
-- [x] Declare MySQL8-only persistence and test evidence.
-- [x] Declare deterministic/no live LLM behavior by default.
-- [x] Declare OpenRouter qwen3.5-9b as optional, env-gated, skipped by
-      default, and credential-free in repo artifacts.
-- [x] Declare read-only skill registry scope with no dynamic skill execution.
-- [x] Declare working memory persistence via existing AI Assistant storage or
-      JSON context first.
-- [x] Declare compaction summary persistence and deterministic generation.
-- [x] Declare that customer-assistant dirty files are out of scope.
-- [x] Save planning evidence under
-      `artifacts/slices/188-ai-assistant-prompt-skills-memory-compaction/188.0/`.
+- [x] 188.0 documentation sign-off.
+- [x] 188.1 domain prompt tracer: prompt layers, read-only skills, memory-item
+  rendering, and compaction-summary layer.
+- [x] 188.3 historical aggregate acceptance, limited to behavior implemented at
+  that time.
 
-## 188.1 Domain Prompt Tracer
+## Superseded Work — Not Implemented
 
-- [x] RED: unit tests fail because `PromptMemoryItem` and `SkillRegistry` do
-      not exist.
-- [x] Add read-only `SkillRegistry` and `SkillManifest`.
-- [x] Add deterministic memory item prompt rendering.
-- [x] Add optional project instructions and compaction summary layers.
-- [x] Preserve 184 default prompt layer order when optional inputs are absent.
-- [x] Run focused unit, ruff, mypy, AI Assistant kernel regression, and MySQL8
-      boundary scan.
-- [x] Save evidence under
-      `artifacts/slices/188-ai-assistant-prompt-skills-memory-compaction/188.1/`.
+188.2 JSON working-memory and deterministic-compaction persistence is cancelled
+by the accepted MEMORY.md-only contract. These are historical requirements, not
+open tasks:
 
-## 188.2 Prompt, Skills, Memory, And Compaction Backend Persistence MVP
+- persist durable memory in context_json or a memory DB table;
+- make deterministic compaction summary a second durable memory source;
+- feed legacy aiAssistantMemory into future prompt memory.
 
-- [ ] RED: unit tests fail for required prompt layer order beyond the 188.1
-      domain tracer.
-- [ ] RED: unit tests fail for read-only skill registry listing and deterministic
-      skill activation in harness context.
-- [ ] RED: MySQL8 integration tests fail for working memory persistence and
-      reload.
-- [ ] RED: MySQL8 integration tests fail for compaction summary persistence and
-      reload.
-- [ ] RED: contract tests fail for safe prompt layer, skill, memory, and
-      compaction metadata in API/event/inspector payloads.
-- [ ] RED: backend E2E fails because a later run does not yet receive persisted
-      memory and compaction context.
-- [ ] Extend prompt layer model and assembler order for persisted context:
-      `base`, `project_instructions`, `skills`, `working_memory`,
-      `compaction_summary`, `tools`, `run_state`, `user_message`.
-- [ ] Implement read-only skill manifest model.
-- [ ] Implement deterministic `SkillRegistry` listing and activation.
-- [ ] Implement working memory item model.
-- [ ] Persist working memory through existing AI Assistant JSON context if it
-      satisfies MySQL8 replay requirements.
-- [ ] Add an explicit `ai_assistant` memory schema only if JSON context is
-      insufficient and evidence justifies it.
-- [ ] Implement deterministic compaction summary model and generator.
-- [ ] Persist compaction summary through existing AI Assistant storage where
-      possible.
-- [ ] Integrate project instructions, skills, memory, and compaction with the
-      harness prompt path.
-- [ ] Emit or expose safe prompt/memory metadata without hidden reasoning.
-- [ ] Add optional `GET /api/v1/ai-assistant/skills` only if contract tests need
-      a direct registry endpoint.
-- [ ] Preserve scheduler, approval, sandbox, and proposed-action behavior.
-- [ ] Keep default tests deterministic and credential-free.
-- [ ] Keep optional OpenRouter checks env-gated and skipped by default.
-- [ ] Run focused prompt/skills/memory unit, integration, contract, and E2E
-      gates.
-- [ ] Save evidence under
-      `artifacts/slices/188-ai-assistant-prompt-skills-memory-compaction/188.2/`.
+## Contract Revision
 
-## 188.3 Aggregate Backend Acceptance
+- [x] Freeze one MEMORY.md per trusted user/workspace scope.
+- [x] Freeze 30-day heading-based bounded reader; no fixed tail-N read.
+- [x] Freeze full-day 100-token cap.
+- [x] Freeze model extraction every three unprocessed COMPLETED runs across
+  sessions.
+- [x] Freeze cursor DB as operational metadata only.
+- [x] Freeze daily scheduler and Spec 189 as out of scope.
+- [x] Freeze Spec 190 to token/cost only.
 
-- [x] Covered by final 184-190 aggregate gates under
-      `artifacts/slices/190-ai-assistant-observability-benchmark/190.2/`.
-- [x] Rerun 188.1 focused behavior through aggregate AI Assistant unit,
-      contract, and regression gates.
-- [x] Keep 188.2 as later durable persistence hardening outside this MVP
-      tracer.
-- [x] Rerun relevant 184 AI Assistant backend regressions for prompt, tool
-      registry, security, inspector, and event replay.
-- [x] Rerun relevant 187 scheduler regressions for planned tool calls and
-      scheduler metadata.
-- [x] Preserve MySQL8-only boundary evidence from 188.1.
-- [x] Run lint/type gates used by the existing AI Assistant backend.
-- [x] Confirm no frontend visual files changed by this backend-first slice.
-- [x] Confirm no committed `app/modules/customer_assistant/**` changes belong
-      to this slice.
-- [x] Record browser UAT and remScaleClosure at the final 190.2 aggregate level.
+## 188.4 Scope Isolation And Markdown Store
+
+- [ ] TDD preflight and observable RED.
+- [ ] Resolve trusted user/workspace scope; reject arbitrary paths and escape.
+- [ ] Create one canonical MEMORY.md per scope.
+- [ ] Locate rolling 30-day start line from strict date headings.
+- [ ] Read only bounded content from calculated line through EOF.
+- [ ] Merge/dedupe/compress today's block to at most 100 tokens.
+- [ ] Add per-scope lock and atomic replacement.
+- [ ] Cover malformed/future headings, concurrency, and isolation.
+- [ ] Save evidence and pass Checker/Reviewer.
+
+## 188.5 Session Scope And Prompt Cutover
+
+- [ ] TDD preflight and observable RED.
+- [ ] Persist and enforce user/workspace scope for sessions and runs.
+- [ ] Inject own rolling MEMORY.md into working-memory prompt layer.
+- [ ] Stop legacy JSON memory writes and prompt reads.
+- [ ] Preserve required public memory fields as MEMORY.md-derived read-only
+  projections.
+- [ ] Add MySQL8 contract and backend E2E isolation/reload proof.
+- [ ] Run kernel, security, inspector, event, scheduler, and ToolRunner
+  regressions.
+- [ ] Save evidence and pass Checker/Reviewer.
+
+## 188.6 Three-Successful-Run Extraction
+
+- [ ] TDD preflight and observable RED.
+- [ ] Persist per-scope successful-run counter and extraction cursor.
+- [ ] Count only new COMPLETED runs across sessions.
+- [ ] Trigger configured model extractor for each next batch of three.
+- [ ] Merge result into today's capped block.
+- [ ] Advance cursor only after atomic file success.
+- [ ] Retry model/write failures without duplicate or lost batches.
+- [ ] Recover idempotently across pre-write, post-write, and pre-cursor-commit
+  crash windows using batch/input/target hashes.
+- [ ] Leave trailing one or two runs pending.
+- [ ] Save MySQL8/E2E evidence and pass Checker/Reviewer.
+
+## 188.7 Aggregate Acceptance
+
+- [ ] Rerun all 188.4-188.6 required gates.
+- [ ] Prove DB stores no memory text.
+- [ ] Prove no fixed tail-N read and no new aiAssistantMemory writes.
+- [ ] Confirm frontend visual, customer-assistant, daily scheduler, and Spec 189
+  boundaries.
+- [ ] Save final evidence, Checker report, Reviewer report, and residual risks.

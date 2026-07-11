@@ -1,293 +1,161 @@
-# Spec 188: AI Assistant Prompt Skills Memory Compaction
+# Spec 188: AI Assistant Workspace MEMORY.md
 
 ## Status
 
-Slice `188.0` documentation sign-off is complete. Slice `188.1` domain prompt
-tracer is complete for deterministic prompt layering, read-only skill manifests,
-working-memory prompt items, and compaction summary injection. Durable memory
-persistence, API metadata, and backend E2E memory replay remain pending in a
-later backend slice.
+Slices 188.0, 188.1, and 188.3 remain historical completed work. The pending
+188.2 JSON working-memory and deterministic-compaction proposal is superseded
+by this contract and will not be implemented.
 
-## Numbering Note
-
-Spec 184 now records PRD Phase 4 through Phase 7 as specs 187 through 190.
-After `187-ai-assistant-tool-scheduler-rwmutex` was committed, this Phase 5
-spec uses the next collision-free id:
-
-```text
-188-ai-assistant-prompt-skills-memory-compaction
-```
+Current implementation starts at 188.4. MEMORY.md is the only canonical durable
+memory source.
 
 ## Goal
 
-Add a narrow backend-first PRD Phase 5 MVP for the existing `ai_assistant`
-harness:
+Give each isolated AI Assistant user/workspace one durable MEMORY.md:
 
-```text
-session/project context
-  -> layered prompt assembler
-  -> read-only skill registry
-  -> persisted working memory items
-  -> deterministic compaction summary
-  -> deterministic harness execution by default
-```
+    completed runs
+      -> every three unprocessed successful runs
+      -> model extracts durable facts
+      -> merge into today's dated block, at most 100 tokens
+      -> later runs read the rolling 30-day window
 
-This spec makes prompt context explicit and replayable without requiring live
-LLM calls, frontend visual changes, or credentials.
+Memory must stay isolated by user and workspace, remain human-readable, and
+avoid replaying the entire file.
 
-## Existing Boundary From 184 And 187
+## Scope Identity And File Ownership
 
-Spec 184 delivered the first reusable AI Assistant harness with deterministic
-one-turn execution, a minimal layered `PromptAssembler`, typed tool manifests,
-event persistence, approval/proposed-action boundaries, and a frontend product
-shell.
+One logical scope is:
 
-Spec 187 added deterministic planned tool scheduling, resource-lock metadata,
-read-only batching, and write serialization for backend tool calls.
-
-This spec extends the prompt context path only. It must preserve:
-
-- existing `/api/v1/ai-assistant/...` response envelopes;
-- MySQL8-backed persistence and replay behavior;
-- deterministic default tests with fake/local handlers;
-- scheduler, approval, sandbox, and proposed-action boundaries from 184 and
-  187;
-- no customer-assistant file changes.
-
-## Product Boundary
-
-In scope:
-
-- extend `PromptAssembler` with stable layer ordering;
-- add project/session instruction context as a prompt layer;
-- add a read-only skill registry with typed skill manifests;
-- expose active skill metadata to prompt assembly;
-- persist working memory items through existing `ai_assistant` storage where
-  possible, preferring JSON context before adding new tables;
-- persist and replay a compaction summary;
-- emit or expose safe prompt/memory metadata for contract tests;
-- deterministic compaction and deterministic model/tool choice by default;
-- optional OpenRouter live LLM probe only when explicitly enabled by
-  environment variables;
-- MySQL8-only integration and contract evidence.
-
-Out of scope:
-
-- frontend visual, CSS, Vue, route, or remScaleClosure changes;
-- dynamic skill installation or execution of arbitrary skill code;
-- recursive filesystem `AGENTS.md` discovery;
-- exposing hidden chain-of-thought;
-- real memory embedding, RAG, pgvector, or Weaviate;
-- live LLM as a required gate;
-- credentials, committed provider keys, or local secret files;
-- SQLite or PostgreSQL persistence paths;
-- customer-assistant runtime or dirty file edits;
-- Phase 6 customer-assistant subagent bridge;
-- Phase 7 benchmark, replay, cost accounting, and governance platform.
-
-## Functional Requirements
-
-### Layered Prompt Assembler
-
-Prompt assembly must produce a stable ordered list of layers and a deterministic
-text representation. The exact prose may evolve, but the layer names and order
-are the contract:
-
-```text
-base
-project_instructions
-skills
-working_memory
-compaction_summary
-tools
-run_state
-user_message
-```
+    (user_id, workspace_id)
 
 Requirements:
 
-- each layer must be represented as structured metadata with `name` and
-  `content`;
-- empty optional layers must still be deterministic, either omitted by a
-  documented rule or included with empty content consistently;
-- tests must assert layer presence, order, and selected layer content rather
-  than brittle whole-prompt snapshots;
-- no hidden reasoning or private chain-of-thought may be emitted in prompt
-  metadata, events, or API payloads;
-- prompt metadata may include safe hashes, layer names, token estimates, or
-  short safe excerpts when needed for replay and debugging.
+- user_id comes from trusted host identity; workspace_id comes from a
+  server-owned workspace resolver;
+- callers cannot submit an arbitrary memory path or select another scope;
+- each resolved scope owns exactly one canonical file named MEMORY.md;
+- the path resolver must keep the file beneath its configured memory root and
+  reject traversal, symlink escape, or scope mismatch;
+- all session, run, memory, and usage access must be filtered by the same
+  scope;
+- the current Hify host adapter may map user_id from RequestContext.actor_id;
+  it must add or resolve a stable workspace identity without treating a raw
+  client path as authoritative.
 
-### Read-Only Skill Registry
+## Canonical MEMORY.md Contract
 
-The skill registry is prompt context, not dynamic code execution.
+Minimum format:
 
-Skill manifests must include:
+    # Memory
 
-```text
-name
-description
-version
-instruction
-tags
-risk_level
-tool_policy_refs
-enabled_by_default
-```
+    ## 2026-07-11
+    - Durable fact or preference.
 
-Requirements:
+Rules:
 
-- registry contents are read-only at runtime for this MVP;
-- a session may activate a deterministic subset of registered skills through
-  existing context or a backend-only request shape;
-- unknown skill names are ignored with a visible validation reason or rejected
-  through a typed API error, but the behavior must be deterministic;
-- skill instructions are included in the prompt only through the `skills`
-  layer;
-- no file writes, package installs, subprocesses, or arbitrary skill scripts
-  are allowed.
+- date headings use exactly ## YYYY-MM-DD;
+- date headings are unique and ordered oldest to newest;
+- dates use the configured workspace timezone;
+- all content under one date heading, excluding the heading, totals at most
+  100 tokens after each write;
+- the same tokenizer or documented deterministic estimator is used for the
+  daily cap and tests;
+- writes merge, deduplicate, and compress today's full block before enforcing
+  the cap; the limit is not per append;
+- entries contain durable preferences, decisions, stable facts, and unresolved
+  long-lived constraints only;
+- secrets, credentials, hidden reasoning, raw logs, transient status, and
+  unnecessary personal data are forbidden;
+- writes use a per-scope lock plus atomic temp-file replacement; partial or
+  interleaved writes are not allowed.
 
-### Working Memory Items
+MEMORY.md is the only memory truth source. DB rows may store extraction cursor,
+successful-run count, file revision/hash, timestamps, and errors, but never
+duplicate memory content.
 
-Working memory items are short durable facts used by later runs in the same
-session. MVP fields:
+## Rolling Reader
 
-```text
-id
-session_id
-key
-value
-source
-priority
-status
-created_at
-updated_at
-```
+Default prompt window is 30 calendar days, inclusive of today.
 
-Requirements:
+Reader algorithm:
 
-- implementation should first reuse existing `ai_assistant` storage if it can
-  satisfy persistence and replay, especially `ai_assistant_session.context_json`
-  or run/event JSON payloads;
-- if an explicit memory table is required, it must live under the
-  `ai_assistant` schema, use the existing SQLAlchemy/MySQL8 conventions, and be
-  covered by MySQL8 integration tests;
-- memory item writes must be deterministic and local to the AI Assistant
-  harness;
-- memory must not mutate customer business records;
-- memory payloads must be included in replayable prompt context without
-  relying on SQLite JSON behavior.
+1. Scan structured headings matching ^## YYYY-MM-DD$ with ripgrep, grep, or an
+   equivalent bounded line scanner.
+2. Find the first valid heading whose date is at least today minus 29 days.
+3. Determine its line number and read only from that line through EOF.
+4. Parse valid dated blocks from that bounded range; ignore future dates and
+   report malformed headings safely.
+5. Return empty memory when no valid heading is inside the window.
 
-### Compaction Summary
+Fixed tail-N reads and unconditional full-file prompt reads are forbidden.
+Scanning headings may inspect line metadata; prompt content reads must start at
+the calculated line boundary.
 
-Compaction stores a short deterministic summary of prior session context so
-longer conversations can keep relevant context without replaying everything.
+## Extraction Cadence
 
-MVP fields:
+- only runs ending in COMPLETED count;
+- FAILED, CANCELLED, DENIED, interrupted, or duplicate-replay runs do not count;
+- the counter is per user/workspace and spans sessions;
+- when three unprocessed successful runs exist, process the oldest next batch
+  of three exactly once;
+- one coordinator pass drains complete batches sequentially; only a final batch
+  of one or two remains pending;
+- extraction uses a configured model to select durable incremental memory;
+- merge output with today's existing block, deduplicate, compress, and enforce
+  the full-day 100-token cap;
+- advance the durable cursor only after atomic MEMORY.md replacement succeeds;
+- each batch has a unique scope/source-run key plus durable input and target
+  file hashes; after a crash, matching target hash completes the cursor without
+  reapplying memory, while matching input hash safely retries the pending write;
+- extraction failure must not change the user run from COMPLETED, must not
+  advance the cursor, and must remain retryable and observable;
+- fewer than three trailing successful runs remain pending.
 
-```text
-session_id
-summary
-source_message_ids
-source_event_ids
-memory_item_keys
-algorithm
-token_estimate
-updated_at
-```
+A future daily scheduler may flush a trailing batch of one or two runs. That
+scheduler is explicitly out of scope here.
 
-Requirements:
+## Prompt And Compatibility Boundary
 
-- the default compactor must be deterministic and local;
-- the compactor may be extractive or rule-based for the MVP;
-- compaction must produce the same summary for the same persisted inputs;
-- compaction summary must appear only in the `compaction_summary` prompt layer;
-- no live LLM is required to create compaction summaries;
-- optional live compaction through OpenRouter is allowed only behind explicit
-  environment flags and skipped by default.
+- each new run reads only its own user/workspace rolling MEMORY.md window;
+- memory enters the existing working-memory prompt layer; no second compaction
+  store is introduced;
+- stop writing context_json.aiAssistantMemory as durable memory;
+- legacy aiAssistantMemory payloads must not feed canonical prompt memory after
+  cutover;
+- existing public inspector/API memory fields may remain as read-only
+  projections derived from MEMORY.md during compatibility migration;
+- removing those public fields requires a separate approved contract.
 
-## API Surface
+Existing scheduler, approval, sandbox, durable ToolRunner, event, and response
+envelope behavior must remain compatible.
 
-Existing AI Assistant endpoints remain authoritative and must preserve the
-`{code, message, data}` envelope.
+## Out Of Scope
 
-Allowed backend additions:
-
-```text
-GET /api/v1/ai-assistant/skills
-```
-
-Allowed payload extensions under existing endpoints:
-
-- session creation context may seed project instructions, active skill names,
-  working memory items, and compaction summary;
-- message requests may include deterministic prompt context only if needed for
-  backend tests;
-- run result, events, or inspector payloads may expose safe prompt layer,
-  skill, memory, and compaction metadata.
-
-No frontend route or visual surface is required by this spec.
-
-## Event Contract Additions
-
-Reuse the 184 event envelope. Implementation may add visible structured events:
-
-```text
-prompt.assembled
-memory.item_upserted
-memory.compaction_updated
-```
-
-Event payloads must be safe for UI display and replay. They may include layer
-names, selected skill names, memory item keys, compaction algorithm, and token
-estimates. They must not expose hidden reasoning.
-
-## MySQL8 Boundary
-
-All persistence tests for this spec must use the existing MySQL8 test harness.
-SQLite and PostgreSQL are not acceptable RED or GREEN evidence.
-
-Required evidence:
-
-- focused unit tests for prompt layer order and skill registry behavior;
-- MySQL8 integration tests for memory and compaction persistence;
-- contract tests for safe prompt/memory metadata in API/event/inspector
-  payloads;
-- backend E2E proving a later run receives persisted memory and compaction
-  context;
-- boundary or scan evidence that new tests did not introduce SQLite fixtures.
-
-## LLM Boundary
-
-Default behavior must be deterministic and must not call a live LLM.
-
-Optional OpenRouter real LLM probes are allowed only when all of the following
-are true:
-
-- an explicit opt-in flag such as `AI_ASSISTANT_LIVE_LLM=1` is set;
-- credentials are read only from environment variables such as
-  `OPENROUTER_API_KEY`;
-- the model name is read from environment or defaults to OpenRouter
-  qwen3.5-9b;
-- tests are skipped by default when the opt-in flag or credentials are absent;
-- skipped/live evidence is saved separately from required GREEN gates.
-
-No credentials or provider secrets may be committed.
+- Spec 189 active customer-assistant spawn bridge;
+- dynamic skills or prompt-skill expansion;
+- a second JSON/DB memory store;
+- vector memory, memory search UI, manual memory editor, or cross-workspace
+  memory;
+- daily scheduled extraction;
+- frontend visual changes.
 
 ## Acceptance Criteria
 
-- RED evidence exists before implementation for prompt layer ordering, skill
-  registry listing/activation, memory persistence, compaction persistence, and
-  API/event metadata.
-- Prompt assembly exposes the required layer order deterministically.
-- Read-only skill manifests can be listed and included in the prompt by
-  deterministic activation rules.
-- Working memory survives a MySQL8-backed session reload and appears in a later
-  run's prompt metadata.
-- Compaction summary survives a MySQL8-backed session reload and appears in the
-  `compaction_summary` prompt layer.
-- Existing scheduler, approval, sandbox, and proposed-action behavior is not
-  weakened.
-- Default tests run without live LLM calls or credentials.
-- Optional OpenRouter checks are env-gated and skipped by default.
-- No frontend visual files are modified.
-- No `app/modules/customer_assistant/**` files are modified.
+- RED proves cross-user and cross-workspace reads/writes are rejected.
+- RED proves reader calculates the rolling start line from structured date
+  headings and does not use fixed tail-N reads.
+- MEMORY.md survives process/session reload and supplies only the last 30 days
+  to a later run.
+- Three completed runs across sessions trigger one idempotent extraction;
+  non-completed runs do not count.
+- Retry after extraction/write failure neither loses nor duplicates a batch.
+- Crash recovery is idempotent before replacement, after replacement, and
+  before cursor completion.
+- Concurrent writers cannot corrupt or exceed today's 100-token block.
+- DB inspection proves only operational cursor metadata is stored.
+- Legacy JSON memory is no longer written or used as prompt truth; preserved
+  public fields, if retained, are derived from MEMORY.md.
+- Required tests use MySQL8 for cursor/scope persistence; no SQLite substitute.
+- Default deterministic tests use a fake extractor; optional live-model proof
+  is separately env-gated and never exposes credentials.
+- No customer-assistant or frontend visual files change.

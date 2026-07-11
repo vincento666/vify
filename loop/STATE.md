@@ -2,177 +2,66 @@
 
 ## Current
 
-- active spec: `222-ai-assistant-general-harness-mvp`
-- current slice: `222.14.5 Durable Idempotency And Circuit Breaker Spec`
-- frozen scope: docs-only durable ToolRunner idempotency/circuit breaker spec
-- current checklist item: commit slice
-- current status: `222.14.5 complete, Checker PASS, Reviewer PASS, commit pending`
-- human decision: continue docs-only corrective slice after live gate
-- worktree: `/Users/vincento/work/develop/hify`
-- branch: `codex/spec-222-14-5-idempotency-spec`
-- base: `23665afd`
-- merge target: `codex/runtime-v2-production-upgrade`
-- evidence root: `artifacts/slices/222-ai-assistant-general-harness-mvp/222.14.5/`
-- waiting human: none
+- date: 2026-07-11
+- mode: Contract Gate
+- active contracts: Spec 188 corrective MEMORY.md scope; Spec 190 token/cost
+  scope
+- current unit: contract revision
+- implementation: not started
+- next code slice after gate: 188.4
+- branch: codex/spec-222-14-5-idempotency-spec
+- base: e2024c11
+- merge target: codex/runtime-v2-production-upgrade
+- worktree: dirty with unrelated existing changes
+- oversight: human-on-the-loop; no new product decision currently missing
 
-## Evidence So Far
+## Accepted Decisions
 
-Replay gates passed before this loop:
+- Spec 189 will not be implemented.
+- MEMORY.md is the only durable memory source.
+- One MEMORY.md belongs to each trusted user/workspace scope.
+- Reader defaults to last 30 calendar days and locates the bounded start line
+  from strict date headings.
+- Each day's entire memory block is capped at 100 tokens.
+- Extraction runs after each three new COMPLETED runs across sessions.
+- Daily scheduled tail flush is future scope.
+- Spec 190 includes token/cost only.
+- Usage is raw per model call, aggregated by session, total, and common
+  dimensions.
+- Dashboard follows accepted reference: cards, daily heatmap, session detail,
+  provider/model and token-type views.
 
-```text
-222 backend smoke: 19 passed
-222 frontend smoke: 28 passed
-runtime unit: 248 passed, 2 skipped
-runtime contract: 53 passed
-runtime integration: 431 passed, 1 skipped
-runtime ops frontend: 12 passed
-rem gate: 1 passed
-protected-path diff: empty
-diff check: clean
-```
+## Contract Evidence
 
-222.13 evidence produced in this loop:
+- spec/plan/tasks rewritten for 188 and 190.
+- old 188.2 unchecked JSON-memory tasks moved to explicit superseded history.
+- old broad 190 unchecked backlog moved to explicit not-planned history.
+- specs/README.md natural order and directory index updated.
+- git diff --check passed after initial rewrite.
+- contract audit added crash-safe MEMORY.md cursor semantics and prevented
+  cache/reasoning token double-count.
+- independent Checker round2: ALL GREEN.
+- independent Reviewer round1: PASS, medium residual implementation risk, no
+  blocker.
 
-```text
-RED: red-unit.txt, red-contract.txt, red-e2e.txt, red-budget.txt
-Green: unit.txt, contract.txt, e2e.txt, frontend.txt, frontend-rem.txt
-Static: ruff.txt, py_compile.txt, diff-check.txt
-Audit/UAT: audit-export.json, uat-api-evidence.json, browser-uat.md,
-browser-uat-dom.json, screenshots/browser-uat-self-correction.png
-Review: checker-round1.md PASS, reviewer-round1.md PASS
-```
+## Current Gate
 
-222.14.4 evidence produced in this loop:
+Contract content and independent review are complete. Closed Loop remains
+blocked until:
 
-```text
-Live gate: live-gate.txt PASS, 2 passed in 38.93s
-Summary: live-gate.md
-Audit: audit-export.json redacted summary
-UAT: browser-uat.md documents live API UAT path
-Review: checker-round1.md PASS, reviewer-round1.md PASS
-```
-
-222.14.5 evidence produced in this loop:
-
-```text
-Docs: specs/224-ai-assistant-durable-toolrunner-idempotency/spec.md
-Plan: specs/224-ai-assistant-durable-toolrunner-idempotency/plan.md
-Tasks: specs/224-ai-assistant-durable-toolrunner-idempotency/tasks.md
-Index: specs/README.md
-Review: checker-round1.md PASS, reviewer-round1.md PASS
-```
-
-222.14.3 evidence produced in this loop:
-
-```text
-RED: red-async-worker.txt
-Green: contract-autonomous.txt, duplicate-claim.txt, contract.txt, e2e.txt
-Static: ruff.txt, py_compile.txt, diff-check.txt
-UAT: browser-uat.md documents API UAT for backend-only slice
-Review: checker-round1.md PASS, reviewer-round1.md PASS
-```
-
-222.14 contract scope:
-
-```text
-222.14.1 Event Sequence Concurrency Safety
-222.14.2 Aggregate Eval Runtime Evidence
-222.14.3 Backend Autonomous Worker MVP
-222.14.4 Live Gate Rerun
-222.14.5 Durable Idempotency And Circuit Breaker Spec
-Evidence: preflight.md, checker-round1.md PASS, reviewer-round1.md PASS
-```
-
-222.14.1 evidence produced in this loop:
-
-```text
-RED: red-concurrency.txt
-Green: integration.txt, contract.txt, e2e.txt
-Static: ruff.txt, py_compile.txt, diff-check.txt
-Review: checker-round1.md PASS, reviewer-round1.md PASS
-```
-
-222.14.2 evidence produced in this loop:
-
-```text
-RED: red.txt
-Green: unit.txt, eval.txt
-Static: ruff.txt, py_compile.txt, diff-check.txt
-Fixture: runtime-evidence-fixture.json
-Review: checker-round1.md PASS, reviewer-round1.md PASS
-```
-
-## Spec 222 Closed-Loop Preflight Stop
-
-- date: `2026-07-07`
-- requested target: unfinished Spec 222 slices, starting with `222.13`
-- requested base: current latest `main` HEAD
-- status: `waiting-human`
-- stop reason: no local or remote `main` / `master` branch exists in this repo.
-- remote default branch: `origin/codex/spec-010-openrouter-acceptance` at `6a22a30a`
-- current Spec 222 context branch: `codex/runtime-v2-production-upgrade` at `a57cb783`
-- evidence: `origin/codex/spec-010-openrouter-acceptance` does not contain
-  `specs/222-ai-assistant-general-harness-mvp` or `loop/CURRENT.md` for Spec 222.
-- gate: branch/base/merge target is ambiguous, so implementation did not start.
-
-Recommended options:
-
-1. Use `codex/runtime-v2-production-upgrade` as the base for Spec 222 continuation.
-2. Provide the exact branch/ref that should be treated as "main latest HEAD".
-
-## Attempts
-
-- 2026-07-07 Closed Loop start:
-  - read universal loop protocol, `AGENTS.md`, `loop/README.md`, stale
-    `loop/CURRENT.md`, stale `loop/STATE.md`, stale `loop/VERIFIERS.md`, and
-    replay contract;
-  - found local loop pointer still referenced spec 222;
-  - updated loop state to runtime 213-221 closure scope;
-  - first audit finding: `runtime_lab_sop_runtime_invocation_mode` default is
-    still `sync`, contradicting async-default target.
-
-- 2026-07-07 spec 213 async-default replay fix:
-  - RED captured:
-    `artifacts/slices/213-runtime-async-default-invocation-gateway/213.async-default-replay/red.txt`;
-  - changed Runtime Lab SOP default invocation mode from `sync` to `async`;
-  - aligned `ChatflowSopRuntimeAdapter` constructor default to `async`;
-  - focused unit passed:
-    `artifacts/slices/213-runtime-async-default-invocation-gateway/213.async-default-replay/unit.txt`;
-  - focused integration passed:
-    `artifacts/slices/213-runtime-async-default-invocation-gateway/213.async-default-replay/integration.txt`;
-  - 222 backend smoke passed: 19 passed;
-  - 222 frontend smoke passed: 28 passed;
-  - protected-path diff stayed empty;
-  - `git diff --check` clean.
-
-- 2026-07-07 runtime target gap audit:
-  - DAG multi-path focused gate passed: 15 passed;
-  - SOP light ledger focused gate passed: 13 passed, 20 subtests;
-  - job scheduler / DB pool focused gate passed: 20 passed;
-  - event / cancel / backpressure focused gate passed: 14 passed;
-  - Runtime Ops backend focused gate passed: 4 passed;
-  - Runtime Ops frontend focused gate passed: 12 passed;
-  - rem gate passed: 1 passed;
-  - capacity / chaos focused gate passed: 13 passed;
-  - audit recorded in
-    `artifacts/slices/runtime-v2-closure-replay/target-gap-audit.md`.
-
-- 2026-07-07 merge gate preflight:
-  - replay branch clean: `codex/runtime-v2-closure-replay`;
-  - target branch: `codex/runtime-v2-production-upgrade`;
-  - replay head `5bd83e57` is not contained in target branch yet;
-  - spec 222 protected-path diff from `d6fc969c..HEAD`: empty;
-  - target branch worktree is dirty:
-    `AGENTS.md`, `loop/README.md`, `.ai-assistant/`;
-  - merge stopped before write because target branch is not clean.
+1. contract files are selectively committed without unrelated dirty changes;
+2. implementation branch/worktree/base/merge target are frozen.
 
 ## Next Action
 
-Finish 222.14.1 Checker and Reviewer, then commit the slice on
-`codex/spec-222-14-1-event-sequence`. Next implementation slice is
-`222.14.2 Aggregate Eval Runtime Evidence`.
+Selectively commit contract scope, then enter 188.4 on isolated
+codex/spec-188-memory-md worktree.
 
-## Reviewer Findings
+## Residual Risks
 
-No open blocker found in focused target gap audit. Merge gate is blocked only by
-dirty target-branch state.
+- current RequestContext is the host identity seam; implementation must prove
+  production scope cannot be selected by an arbitrary memory path.
+- DB cursor and filesystem replacement cross a transaction boundary; accepted
+  batch/input/target hash recovery must be tested at each crash window.
+- provider cache/reasoning semantics differ; per-provider normalizers must avoid
+  total-token double-count.

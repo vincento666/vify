@@ -1,48 +1,50 @@
 # Loop Verifiers
 
-These commands verify Spec 222 slice `222.14.5`.
+These commands verify the Spec 188/190 corrective contract revision. This unit
+changes documentation/state only; implementation TDD starts at 188.4.
 
-## RED
+## Contract Content
 
-```bash
-/opt/homebrew/bin/rtk rg -n "operation_id|UNKNOWN|fallback|side-effect|read tools|circuit breaker|release authority" specs/224-ai-assistant-durable-toolrunner-idempotency
-```
+    rtk rg -n "MEMORY.md|30 calendar days|100 tokens|three unprocessed|COMPLETED|batch.*hash|daily scheduler" specs/188-ai-assistant-prompt-skills-memory-compaction
+    rtk rg -n "model call|session|cumulative|provider|model|cache read|reasoning|pricing_version|unknown|heatmap|Token/Cost" specs/190-ai-assistant-observability-benchmark
+    rtk rg -n "Superseded|Not Implemented|Not Planned" specs/188-ai-assistant-prompt-skills-memory-compaction/tasks.md specs/190-ai-assistant-observability-benchmark/tasks.md
 
-Expected RED before implementation:
+## Scope And Consistency
 
-```text
-This is a docs-only slice; missing required semantic answers fail the docs checker.
-```
+    rtk rg -n "\[ \]" specs/188-ai-assistant-prompt-skills-memory-compaction/tasks.md specs/190-ai-assistant-observability-benchmark/tasks.md
+    rtk git diff --name-only e2024c11 -- specs/188-ai-assistant-prompt-skills-memory-compaction specs/190-ai-assistant-observability-benchmark specs/README.md loop/CURRENT.md loop/STATE.md loop/VERIFIERS.md
+    rtk git diff --check
 
-## Focused Gates
+Expected:
 
-```bash
-/opt/homebrew/bin/rtk rg -n "operation_id|UNKNOWN|release authority|fallback|read tools|side-effect tools|Session/run|Durable Circuit Breaker" specs/224-ai-assistant-durable-toolrunner-idempotency/spec.md
-/opt/homebrew/bin/rtk rg -n "224\\.1|224\\.2|224\\.3|224\\.4|224\\.5|224\\.6|224\\.7|224\\.8" specs/224-ai-assistant-durable-toolrunner-idempotency/tasks.md
-```
+- unchecked tasks exist only in 188.4-188.7 and 190.3-190.6;
+- 188.2 and old 190 broad backlog are explicitly superseded/not planned, not
+  falsely marked implemented;
+- no source, schema, migration, tests, frontend, dependency, secret, or
+  customer-assistant file belongs to this contract revision;
+- Spec 188/190 and specs index describe the same execution order.
 
-## Static And Diff
-
-```bash
-/opt/homebrew/bin/rtk git diff --check
-```
-
-## Checker And Reviewer
+## Checker
 
 Checker must verify:
 
-```text
-Spec 224 exists with spec/plan/tasks.
-Spec answers key generation, UNKNOWN retention, release authority, fallback operation_id policy, and durable breaker state.
-Tasks are implementable slices with RED tests.
-No implementation code was changed.
-```
+- user decisions are represented exactly;
+- goals, scope/non-goals, identity, API/UI contracts, acceptance, evidence,
+  capabilities, authority, and stop rules are complete;
+- MEMORY.md crash/idempotency and token aggregation semantics are testable;
+- each future code slice has a RED plan and applicable gate;
+- diff check passes.
+
+## Reviewer
 
 Reviewer must verify:
 
-```text
-Diff scope is limited to docs/spec/loop state.
-The new spec separates MVP and production boundaries.
-It does not mix durable idempotency with sandbox, HA, multi-tenant infra, or business adapter work.
-No code, schema, dependency, or secret was introduced.
-```
+- historical completed work is preserved without making old pending tasks look
+  complete;
+- MEMORY.md remains the only memory content truth source;
+- isolation does not trust arbitrary client paths;
+- DB/file crash windows, concurrency, date bounds, token cap, pricing version,
+  unknown cost, streaming calls, and cache/reasoning totals are covered;
+- 190 does not expand into benchmark, governance, alerts, budget, billing, or
+  cross-user admin;
+- no unrelated dirty diff is staged or committed with this unit.

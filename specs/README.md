@@ -33,6 +33,7 @@ defined in `docs/testing/acceptance-gates.md` before the next slice starts.
 | 20 | 212-221 | Chatflow/Workflow production runtime upgrade per `docs/chatflow-workflow-production-upgrade.md` |
 | 21 | 222 | Generic AI Assistant harness MVP, live LLM real-case UAT, and corrective runtime hardening |
 | 22 | 224 | Durable AI Assistant ToolRunner idempotency ledger and circuit breaker semantics |
+| 23 | 188.4-188.5, 190.3, 188.6-188.7, then 190.4-190.6 | Replace legacy AI Assistant memory with scoped MEMORY.md, add model-call accounting before extraction, then ship aggregates and dashboard |
 
 ## Directory Index
 
@@ -109,6 +110,8 @@ defined in `docs/testing/acceptance-gates.md` before the next slice starts.
 | 068-restricted-react-worker-runtime-standardization | Standardized bounded ReAct worker runtime with tool policy and events |
 | 069-customer-assistant-two-stage-react-runtime-mvp | Smooth opt-in Two-Stage ReAct runtime for customer assistant |
 | 070-realtime-control-and-scale-out-transport | Late-stage realtime control and scale-out transport decision/spike |
+| 188-ai-assistant-prompt-skills-memory-compaction | Scoped per-user/workspace MEMORY.md with 30-day bounded reads and three-successful-run model extraction |
+| 190-ai-assistant-observability-benchmark | Per-model-call token/cost ledger, scoped aggregates, and AI Assistant usage dashboard; no benchmark expansion |
 | 194-workflow-chatflow-productionization-phase1 | Productionize current text Workflow/Chatflow core nodes through runtime v2, unified error routing, API/Tool governance, validation, version snapshots, and UAT evidence |
 | 212-runtime-baseline-lock-and-regression-gate | Lock baseline & regression gate per upgrade doc §4 |
 | 213-runtime-async-default-invocation-gateway | Async-first runtime invocation gateway §5 |
