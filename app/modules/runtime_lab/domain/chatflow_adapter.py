@@ -1,3 +1,4 @@
+import hashlib
 import re
 import time
 from collections.abc import Mapping
@@ -16,10 +17,6 @@ from app.modules.runtime_lab.domain.sop_adapter import (
 )
 from app.modules.workflow.domain.service import WorkflowService
 from app.modules.workflow.web.schemas import WorkflowResumeRequest, WorkflowRunRequest
-
-
-CHATFLOW_SOP_V2_BRIDGE_WAIT_SECONDS = 3.0
-CHATFLOW_SOP_V2_BRIDGE_POLL_SECONDS = 0.05
 
 
 class ChatflowSopRuntimeAdapter:
@@ -196,9 +193,42 @@ class ChatflowSopRuntimeAdapter:
         run_id = _int(meta.get("runId"))
         event_id = _optional_int(meta.get("eventId"))
         resume_mode = str(meta.get("resumeMode") or "event")
+        latest: Mapping[str, Any] = {}
         try:
+            if (
+                _runtime_version_is_v2(meta.get("runtimeVersion"))
+                and self._runtime_invocation_gateway is not None
+                and self._runtime_invocation_gateway.supports_async_resume
+                and run_id > 0
+            ):
+                if self._runtime_v2_service is not None:
+                    latest = self._runtime_v2_result(run_id)
+                    if _v2_runtime_still_starting(latest):
+                        return _async_pending_result_from_checkpoint(request, chatflow_id, meta, latest)
+                    if _v2_runtime_terminal(latest):
+                        if _v2_runtime_failed(latest):
+                            return _v2_retryable_result_from_checkpoint(
+                                request,
+                                chatflow_id,
+                                meta,
+                                latest,
+                                reason=_v2_failure_reason(latest),
+                            )
+                        return self._result_from_run(request, chatflow_id, latest, runtime_version=2)
+                try:
+                    invocation = self._runtime_invocation_gateway.resume_and_stream_ref(
+                        owner_id=chatflow_id,
+                        run_id=run_id,
+                        resume_data=_resume_data(request),
+                        idempotency_key=str(request.metadata.get("idempotencyKey") or _v2_idempotency_key(request)),
+                    )
+                except BizError as exc:
+                    return _v2_retryable_result_from_checkpoint(request, chatflow_id, meta, latest, reason=str(exc))
+                except Exception as exc:
+                    return _v2_retryable_result_from_checkpoint(request, chatflow_id, meta, latest, reason=str(exc))
+                return _async_pending_result(request, chatflow_id, invocation)
             if _runtime_version_is_v2(meta.get("runtimeVersion")) and self._runtime_invocation_gateway is not None and run_id > 0:
-                latest: Mapping[str, Any] = {}
+                latest = {}
                 if self._runtime_v2_service is not None:
                     latest = self._runtime_v2_result(run_id)
                     if _v2_runtime_still_starting(latest):
@@ -285,17 +315,18 @@ class ChatflowSopRuntimeAdapter:
         *,
         previous_checkpoint: SopCheckpoint,
     ) -> dict[str, Any]:
+        """Compatibility path for callers without a configured resume worker."""
         current = dict(run)
         if self._runtime_v2_service is None or _v2_bridge_settled(current, previous_checkpoint):
             return current
-        deadline = time.monotonic() + CHATFLOW_SOP_V2_BRIDGE_WAIT_SECONDS
+        deadline = time.monotonic() + 3.0
         while time.monotonic() < deadline:
             latest = self._runtime_v2_result(run_id)
             if latest:
                 current = _v2_runtime_result_run(latest, fallback=current)
             if _v2_bridge_settled(current, previous_checkpoint):
                 return current
-            time.sleep(CHATFLOW_SOP_V2_BRIDGE_POLL_SECONDS)
+            time.sleep(0.05)
         return current
 
     def _result_from_run(
@@ -935,9 +966,10 @@ def _async_pending_result(
     raw_refs = invocation.get("runtimeRefs")
     runtime_refs = dict(raw_refs) if isinstance(raw_refs, Mapping) else _runtime_refs(invocation)
     runtime_status = str(invocation.get("status") or "RUNNING").upper() or "RUNNING"
+    checkpoint_collected = dict(request.checkpoint.collected) if request.checkpoint is not None else {}
     collected = _sanitize_collected(
         request.sop_id,
-        {**request.collected, **_business_values_from_message(request.message)},
+        {**checkpoint_collected, **request.collected, **_business_values_from_message(request.message)},
     )
     pending_prompt = "Chatflow SOP 正在后台执行，请稍候。"
     checkpoint = _checkpoint(
@@ -1200,7 +1232,7 @@ def _v2_idempotency_key(request: SopExecutionRequest) -> str:
             str(request.runtime_task_id or ""),
             request.sop_id,
             checkpoint_id,
-            str(abs(hash(request.message))),
+            hashlib.sha256(request.message.encode("utf-8")).hexdigest(),
         ]
     )
 

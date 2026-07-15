@@ -73,6 +73,34 @@ class WorkflowRunGatewayApiTest(unittest.TestCase):
         self.assertEqual(data["output"], {"final": "legacy gateway"})
         self.assertIn("debugUrl", data)
 
+    def test_failed_workflow_result_adds_structured_failure_without_changing_envelope(self) -> None:
+        with TestClient(app) as client:
+            workflow = _create_failing_workflow(client)
+            started = client.post(
+                f"/api/v1/workflows/{workflow['id']}/runs",
+                json={"input": {"sys.query": "fail"}, "idempotencyKey": f"workflow-failure-{time.time_ns()}"},
+            )
+            self.assertEqual(started.status_code, 200, started.text)
+            start_data = started.json()["data"]
+            terminal = _wait_for_result(client, str(start_data["resultRef"]))
+            events = client.get(str(start_data["eventsRef"])).json()["data"]["list"]
+
+        expected_failure = {
+            "code": "WORKFLOW_NODE_FAILED",
+            "kind": "node_failure",
+            "message": "A workflow node failed.",
+            "runId": start_data["runId"],
+            "nodeKey": "code_1",
+            "nodeType": "CODE",
+            "retryable": False,
+        }
+        self.assertEqual(started.json()["code"], 200)
+        self.assertEqual(terminal["status"], "FAILED")
+        self.assertEqual(terminal["errorCode"], "WORKFLOW_NODE_FAILED")
+        self.assertEqual(terminal["failure"], expected_failure)
+        failed_event = next(event for event in events if event["type"] == "workflow_run_failed")
+        self.assertEqual(failed_event["payload"]["failure"], expected_failure)
+
 
 def _wait_for_result(client: TestClient, result_ref: str, timeout: float = 5.0) -> dict[str, object]:
     deadline = time.monotonic() + timeout
@@ -121,6 +149,37 @@ def _create_workflow(client: TestClient, *, message: str) -> dict[str, object]:
             "edges": [
                 {"sourceNodeKey": "start", "targetNodeKey": "message_1", "condition": None},
                 {"sourceNodeKey": "message_1", "targetNodeKey": "end", "condition": None},
+            ],
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["data"]
+
+
+def _create_failing_workflow(client: TestClient) -> dict[str, object]:
+    response = client.post(
+        "/api/v1/workflows",
+        json={
+            "name": f"Workflow Failure Projection {datetime.now().timestamp()}",
+            "description": "runtime v2 structured terminal failure fixture",
+            "nodes": [
+                {"nodeKey": "start", "type": "START", "name": "Start", "config": {}},
+                {
+                    "nodeKey": "code_1",
+                    "type": "CODE",
+                    "name": "Failing code",
+                    "config": {"language": "python", "code": "result = 1 / 0"},
+                },
+                {
+                    "nodeKey": "end",
+                    "type": "END",
+                    "name": "End",
+                    "config": {"outputVariable": "final", "output": "{{code_1.result}}"},
+                },
+            ],
+            "edges": [
+                {"sourceNodeKey": "start", "targetNodeKey": "code_1", "condition": None},
+                {"sourceNodeKey": "code_1", "targetNodeKey": "end", "condition": None},
             ],
         },
     )

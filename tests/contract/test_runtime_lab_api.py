@@ -73,7 +73,8 @@ class RuntimeLabApiContractTest(unittest.TestCase):
         self.assertEqual(decision["finalDecision"]["reasonCode"], "USER_REQUEST")
         self.assertEqual(handoff_data["activeTask"]["id"], started_data["activeTask"]["id"])
         self.assertEqual(handoff_data["activeTask"]["sopId"], "refund_ticket")
-        self.assertEqual(handoff_data["activeTask"]["currentStep"], started_data["activeTask"]["currentStep"])
+        self.assertNotIn("currentStep", started_data["activeTask"])
+        self.assertNotIn("currentStep", handoff_data["activeTask"])
         self.assertEqual(handoff_data["suspendedTasks"], [])
 
         event_list = events.json()["data"]["list"]

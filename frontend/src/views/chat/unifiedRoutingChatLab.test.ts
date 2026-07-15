@@ -11,6 +11,8 @@ import {
   buildRuntimeLabRouteOutcome,
   buildRuntimeLabTraceCards,
   buildRuntimeLabTranscriptRow,
+  applyRuntimeLabSopStreamFrame,
+  finalizeRuntimeLabSopStreamRow,
   formatRuntimeLabElapsed,
   formatRuntimeLabUsage,
   getAirlineSopScenario,
@@ -65,6 +67,27 @@ describe('unified routing chat lab model', () => {
     expect(row.routeAction).toBe('COMPLETE_TASK')
     expect(row.taskSummary).toBe('suspended: invoice_apply')
     expect(row.resumePrompt).toContain('继续发票申请')
+  })
+
+  it('merges provider chunks before terminal child output without replaying a final response', () => {
+    const pending = { id: 'pending-1', role: 'assistant' as const, content: '', pending: true }
+    const withFirstChunk = applyRuntimeLabSopStreamFrame(pending, {
+      type: 'delta', source: 'provider', sequence: 4, delta: '正在核验',
+    })
+    const completed = applyRuntimeLabSopStreamFrame(withFirstChunk, {
+      type: 'done', source: 'runtime_v2', sequence: 5,
+      event: {
+        type: 'workflow_run_interrupted',
+        payload: { output: { interrupt: { question: '请确认是否继续办理。' } } },
+      },
+    })
+
+    expect(withFirstChunk.content).toBe('正在核验')
+    expect(withFirstChunk.pending).toBe(false)
+    expect(completed.content).toBe('正在核验\n\n请确认是否继续办理。')
+    expect(finalizeRuntimeLabSopStreamRow({ ...pending }, '请提供手机号。')).toMatchObject({
+      content: '请提供手机号。', pending: false,
+    })
   })
 
   it('summarizes runtime config bindings and arbitrator state for display', () => {

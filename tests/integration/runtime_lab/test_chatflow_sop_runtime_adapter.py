@@ -25,6 +25,14 @@ from app.modules.workflow.domain.runtime_invocation_gateway import RuntimeInvoca
 from app.modules.workflow.domain.runtime_v2 import ChatflowRuntimeV2Service
 from app.modules.workflow.infra.chatflow_state_repository import ChatflowStateRepository
 from app.modules.workflow.infra.repository import WorkflowRepository
+from app.modules.workflow.infra.runtime_job_repository import RuntimeJobRepository
+from app.modules.workflow.domain.runtime_job_worker import RuntimeJobWorker
+from app.modules.workflow.runtime_job_worker import build_runtime_job_worker, fail_runtime_job
+from app.modules.runtime_lab.web.router import (
+    _runtime_lab_background_enqueue,
+    _runtime_lab_background_resume_enqueue,
+    _runtime_lab_child_stream_frame,
+)
 
 
 class ChatflowSopRuntimeAdapterIntegrationTest(unittest.TestCase):
@@ -89,6 +97,201 @@ class ChatflowSopRuntimeAdapterIntegrationTest(unittest.TestCase):
         self.assertEqual(completed.current_step, "completed")
         self.assertEqual(completed.collected["order_no"], "TK-100")
         self.assertEqual(completed.collected["phone"], "13800138000")
+
+    def test_v2_runtime_lab_resume_is_durable_job_and_worker_executes_it(self) -> None:
+        stamp = time.time_ns()
+        with TestClient(app) as client:
+            chatflow = _create_chatflow_sop_fixture(client, stamp)
+            session = get_session_factory()()
+            repository = WorkflowRepository(session)
+            state_repository = ChatflowStateRepository(session)
+            workflow_service = WorkflowService(
+                repository,
+                flow_type="CHATFLOW",
+                chatflow_state_repository=state_repository,
+            )
+            runtime_v2_service = ChatflowRuntimeV2Service(repository, state_repository)
+            adapter = ChatflowSopRuntimeAdapter(
+                workflow_service,
+                sop_chatflow_ids={"refund_ticket": int(cast(int | str, chatflow["id"]))},
+                runtime_v2_service=runtime_v2_service,
+                runtime_invocation_gateway=RuntimeInvocationGateway(
+                    runtime_v2_service,
+                    enqueue_background_run=_runtime_lab_background_enqueue(session, sop_llm_mode="mock"),
+                    enqueue_background_resume=_runtime_lab_background_resume_enqueue(session, sop_llm_mode="mock"),
+                ),
+            )
+
+            started = adapter.start_sop(_request(message="我要退票", stamp=stamp))
+            run_id = int(started.checkpoint.scoped_variables["__chatflow"]["runId"])
+            start_job = RuntimeJobRepository(session).get_by_run(run_id)
+            assert start_job is not None
+            first_drain = build_runtime_job_worker(
+                session,
+                owner="chatflow",
+                worker_id=f"runtime-lab-resume-start-{stamp}",
+            ).run_once(job_id=int(start_job["id"]))
+            self.assertEqual(first_drain["status"], "COMPLETED")
+            self.assertEqual(runtime_v2_service.get_result(run_id)["status"], "INTERRUPTED")
+
+            resumed = adapter.continue_sop(
+                _request(
+                    message="订单号：TK-100，手机号 13800138000",
+                    checkpoint=started.checkpoint,
+                    stamp=stamp,
+                    metadata={"idempotencyKey": "resume-first"},
+                )
+            )
+            repeated_resume = adapter.continue_sop(
+                _request(
+                    message="订单号：TK-999，手机号 13900139000",
+                    checkpoint=started.checkpoint,
+                    stamp=stamp,
+                    metadata={"idempotencyKey": "resume-second"},
+                )
+            )
+            resume_jobs = [
+                job
+                for job in RuntimeJobRepository(session).list_active_for_queue_gate()
+                if int(job["run_id"]) == run_id and str(job["job_type"]).startswith("runtime_v2_resume:")
+            ]
+            resume_job = next(
+                job
+                for job in resume_jobs
+            )
+            payload = dict(resume_job["payload"] or {})
+
+            self.assertEqual(resumed.status, SopExecutionStatus.WAITING)
+            self.assertEqual(resumed.current_step, "runtime_running")
+            self.assertEqual(repeated_resume.status, SopExecutionStatus.WAITING)
+            self.assertEqual(len(resume_jobs), 1)
+            self.assertEqual(payload["resumeData"]["collected"]["phone"], "13800138000")
+            self.assertTrue(str(payload["idempotencyKey"]))
+            self.assertEqual(
+                str(resume_job["job_type"]),
+                f"runtime_v2_resume:{payload['checkpointId']}",
+            )
+
+            second_drain = build_runtime_job_worker(
+                session,
+                owner="chatflow",
+                worker_id=f"runtime-lab-resume-worker-{stamp}",
+            ).run_once(job_id=int(resume_job["id"]))
+            result = runtime_v2_service.get_result(run_id)
+            events = runtime_v2_service.list_events(run_id)["list"]
+
+        self.assertEqual(second_drain["status"], "COMPLETED")
+        self.assertEqual(result["status"], "INTERRUPTED")
+        self.assertEqual(result["output"]["interrupt"]["nodeKey"], "confirm_1")
+        self.assertIn("workflow_run_resumed", [event["type"] for event in events])
+
+    def test_v2_resume_failure_emits_error_and_explicit_retry_requeues_then_succeeds(self) -> None:
+        stamp = time.time_ns()
+        with TestClient(app) as client:
+            chatflow = _create_chatflow_sop_fixture(client, stamp)
+            session = get_session_factory()()
+            repository = WorkflowRepository(session)
+            state_repository = ChatflowStateRepository(session)
+            workflow_service = WorkflowService(
+                repository,
+                flow_type="CHATFLOW",
+                chatflow_state_repository=state_repository,
+            )
+            runtime_v2_service = ChatflowRuntimeV2Service(repository, state_repository)
+            adapter = ChatflowSopRuntimeAdapter(
+                workflow_service,
+                sop_chatflow_ids={"refund_ticket": int(cast(int | str, chatflow["id"]))},
+                runtime_v2_service=runtime_v2_service,
+                runtime_invocation_gateway=RuntimeInvocationGateway(
+                    runtime_v2_service,
+                    enqueue_background_run=_runtime_lab_background_enqueue(session, sop_llm_mode="mock"),
+                    enqueue_background_resume=_runtime_lab_background_resume_enqueue(session, sop_llm_mode="mock"),
+                ),
+            )
+            started = adapter.start_sop(_request(message="我要退票", stamp=stamp))
+            run_id = int(started.checkpoint.scoped_variables["__chatflow"]["runId"])
+            start_job = RuntimeJobRepository(session).get_by_run(run_id)
+            assert start_job is not None
+            build_runtime_job_worker(
+                session,
+                owner="chatflow",
+                worker_id=f"runtime-lab-failure-start-{stamp}",
+            ).run_once(job_id=int(start_job["id"]))
+
+            adapter.continue_sop(
+                _request(
+                    message="订单号：TK-100，手机号 13800138000",
+                    checkpoint=started.checkpoint,
+                    stamp=stamp,
+                    metadata={"idempotencyKey": "resume-first-failure"},
+                )
+            )
+            resume_job = next(
+                job
+                for job in RuntimeJobRepository(session).list_active_for_queue_gate()
+                if int(job["run_id"]) == run_id and str(job["job_type"]).startswith("runtime_v2_resume:")
+            )
+            checkpoint_id = int(dict(resume_job["payload"] or {})["checkpointId"])
+
+            def fail_resume(_job: dict[str, Any]) -> None:
+                raise RuntimeError("provider unavailable")
+
+            failing_worker = RuntimeJobWorker(
+                job_repository=RuntimeJobRepository(session),
+                complete_run=lambda _run_id: None,
+                complete_job=fail_resume,
+                worker_id=f"runtime-lab-failure-worker-{stamp}",
+                on_terminal_failure=lambda job, error: fail_runtime_job(
+                    session,
+                    int(job["run_id"]),
+                    job=job,
+                    error=error,
+                ),
+            )
+            failure_attempts = [failing_worker.run_once(job_id=int(resume_job["id"])) for _ in range(3)]
+            failed_event = next(
+                event
+                for event in runtime_v2_service.list_events(run_id)["list"]
+                if event["type"] == "workflow_run_resume_failed"
+            )
+            frame = _runtime_lab_child_stream_frame(
+                session_id=1,
+                run_id=run_id,
+                sequence=int(failed_event["sequence"]),
+                event=failed_event,
+                result={"status": "WAITING"},
+            )
+
+            retried = adapter.continue_sop(
+                _request(
+                    message="订单号：TK-100，手机号 13800138000",
+                    checkpoint=started.checkpoint,
+                    stamp=stamp,
+                    metadata={"idempotencyKey": "resume-explicit-retry"},
+                )
+            )
+            requeued_job = RuntimeJobRepository(session).get_by_run(
+                run_id,
+                job_type=f"runtime_v2_resume:{checkpoint_id}",
+            )
+            assert requeued_job is not None
+            recovered = build_runtime_job_worker(
+                session,
+                owner="chatflow",
+                worker_id=f"runtime-lab-recovery-worker-{stamp}",
+            ).run_once(job_id=int(requeued_job["id"]))
+            result = runtime_v2_service.get_result(run_id)
+
+        self.assertEqual([attempt["status"] for attempt in failure_attempts], ["QUEUED", "QUEUED", "FAILED"])
+        self.assertEqual(frame["type"], "error")
+        self.assertEqual(frame["error"], "provider unavailable")
+        self.assertEqual(retried.status, SopExecutionStatus.WAITING)
+        self.assertEqual(requeued_job["status"], "QUEUED")
+        self.assertEqual(requeued_job["attempt_count"], 0)
+        self.assertEqual(requeued_job["payload"]["idempotencyKey"], "resume-explicit-retry")
+        self.assertEqual(recovered["status"], "COMPLETED")
+        self.assertEqual(result["status"], "INTERRUPTED")
+        self.assertEqual(result["output"]["interrupt"]["nodeKey"], "confirm_1")
 
     def test_unknown_sop_returns_missing_chatflow_binding_failure(self) -> None:
         with TestClient(app) as client:

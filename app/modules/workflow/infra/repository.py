@@ -309,6 +309,19 @@ class WorkflowRepository:
         ).mappings().one_or_none()
         return dict(row) if row else None
 
+    def lock_running_run_for_event(self, run_id: int) -> dict[str, Any] | None:
+        """Atomically fence a live event against a terminal run transition."""
+        row = self._session.execute(
+            sa.select(self._workflow_run)
+            .where(
+                self._workflow_run.c.id == run_id,
+                self._workflow_run.c.deleted.is_(False),
+                self._workflow_run.c.status == "RUNNING",
+            )
+            .with_for_update()
+        ).mappings().one_or_none()
+        return dict(row) if row else None
+
     def list_runtime_runs(
         self,
         *,

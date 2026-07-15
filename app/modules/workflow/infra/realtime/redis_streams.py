@@ -112,17 +112,17 @@ class RedisRuntimeEventStreamBus:
 
     def _read_available(self, *, run_id: int, after_sequence: int, count: int) -> list[dict[str, Any]]:
         rows = self._redis.xrange(self._stream_key(run_id), min="-", max="+")
-        events: list[dict[str, Any]] = []
+        events_by_sequence: dict[int, dict[str, Any]] = {}
         for _entry_id, fields in rows:
             raw_event = fields.get("event") if isinstance(fields, dict) else None
             if not raw_event:
                 continue
             event = json.loads(raw_event)
-            if int(event.get("sequence") or 0) > int(after_sequence):
-                events.append(event)
-            if len(events) >= count:
-                break
-        return events
+            sequence = int(event.get("sequence") or 0)
+            if sequence > int(after_sequence):
+                events_by_sequence.setdefault(sequence, event)
+        events = [events_by_sequence[sequence] for sequence in sorted(events_by_sequence)]
+        return events[:count]
 
     def _stream_key(self, run_id: int) -> str:
         return f"{self._stream_prefix}:{int(run_id)}"

@@ -6,7 +6,7 @@ import time
 from typing import Any
 
 import sqlalchemy as sa
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from app.core.database import Base
@@ -35,36 +35,91 @@ class RuntimeJobRepository:
     ) -> dict[str, Any]:
         existing = self.get_by_run(run_id, job_type=job_type)
         if existing is not None:
+            if (
+                str(existing.get("status") or "").upper() == "FAILED"
+                and str(job_type).startswith("runtime_v2_resume:")
+            ):
+                return self._requeue_failed_resume_job(int(existing["id"]), payload)
             return existing
         now = datetime.now()
-        row = insert_and_fetch(
-            self._session,
-            self._job,
-            {
-                "run_id": run_id,
-                "owner_type": owner_type.upper(),
-                "owner_id": owner_id,
-                "job_type": job_type,
-                "status": "QUEUED",
-                "priority": priority,
-                "attempt_count": 0,
-                "max_attempts": max_attempts,
-                "lease_owner": "",
-                "lease_token": "",
-                "lease_expires_at": None,
-                "last_heartbeat_at": None,
-                "available_at": available_at,
-                "started_at": None,
-                "finished_at": None,
-                "last_error": None,
-                "payload": payload or {},
-                "deleted": False,
-                "created_at": now,
-                "updated_at": now,
-            },
+        try:
+            row = insert_and_fetch(
+                self._session,
+                self._job,
+                {
+                    "run_id": run_id,
+                    "owner_type": owner_type.upper(),
+                    "owner_id": owner_id,
+                    "job_type": job_type,
+                    "status": "QUEUED",
+                    "priority": priority,
+                    "attempt_count": 0,
+                    "max_attempts": max_attempts,
+                    "lease_owner": "",
+                    "lease_token": "",
+                    "lease_expires_at": None,
+                    "last_heartbeat_at": None,
+                    "available_at": available_at,
+                    "started_at": None,
+                    "finished_at": None,
+                    "last_error": None,
+                    "payload": payload or {},
+                    "deleted": False,
+                    "created_at": now,
+                    "updated_at": now,
+                },
+            )
+            self._session.commit()
+            return row
+        except IntegrityError:
+            self._session.rollback()
+            existing = self.get_by_run(run_id, job_type=job_type)
+            if existing is not None:
+                if (
+                    str(existing.get("status") or "").upper() == "FAILED"
+                    and str(job_type).startswith("runtime_v2_resume:")
+                ):
+                    return self._requeue_failed_resume_job(int(existing["id"]), payload)
+                return existing
+            raise
+
+    def _requeue_failed_resume_job(
+        self,
+        job_id: int,
+        payload: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """Atomically make a user-requested V2 resume retry eligible for a fresh attempt budget."""
+        now = datetime.now()
+        result = self._session.execute(
+            self._job.update()
+            .where(
+                self._job.c.id == job_id,
+                self._job.c.status == "FAILED",
+                self._job.c.deleted.is_(False),
+            )
+            .values(
+                status="QUEUED",
+                attempt_count=0,
+                lease_owner="",
+                lease_token="",
+                lease_expires_at=None,
+                last_heartbeat_at=None,
+                available_at=None,
+                started_at=None,
+                finished_at=None,
+                last_error=None,
+                payload=payload or {},
+                updated_at=now,
+            )
         )
+        if result.rowcount != 1:
+            self._session.rollback()
+            existing = self.get(job_id)
+            if existing is None:
+                raise RuntimeError(f"Runtime resume job {job_id} not found")
+            return existing
         self._session.commit()
-        return row
+        return self._required(job_id)
 
     def get(self, job_id: int) -> dict[str, Any] | None:
         row = self._session.execute(

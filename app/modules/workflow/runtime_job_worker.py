@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 import socket
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.modules.agent.infra.repository import AgentRepository
 from app.modules.knowledge.api.facade import KnowledgeFacade
@@ -41,9 +42,22 @@ def build_workflow_runtime_job_worker(
             run_id,
             event_stream_bus=event_stream_bus,
         ),
+        complete_job=lambda job: complete_workflow_runtime_job(
+            session,
+            int(job["run_id"]),
+            event_stream_bus=event_stream_bus,
+        ),
         worker_id=worker_id or default_runtime_job_worker_id(),
         lease_seconds=lease_seconds,
         owner_types=("WORKFLOW",),
+        heartbeat_job=_runtime_job_heartbeat(session),
+        on_terminal_failure=lambda job, error: fail_runtime_job(
+            session,
+            int(job["run_id"]),
+            job=job,
+            error=error,
+            event_stream_bus=event_stream_bus,
+        ),
     )
 
 
@@ -61,9 +75,23 @@ def build_chatflow_runtime_job_worker(
             run_id,
             event_stream_bus=event_stream_bus,
         ),
+        complete_job=lambda job: complete_chatflow_runtime_job(
+            session,
+            int(job["run_id"]),
+            job=job,
+            event_stream_bus=event_stream_bus,
+        ),
         worker_id=worker_id or default_runtime_job_worker_id("chatflow-runtime-worker"),
         lease_seconds=lease_seconds,
         owner_types=("CHATFLOW",),
+        heartbeat_job=_runtime_job_heartbeat(session),
+        on_terminal_failure=lambda job, error: fail_runtime_job(
+            session,
+            int(job["run_id"]),
+            job=job,
+            error=error,
+            event_stream_bus=event_stream_bus,
+        ),
     )
 
 
@@ -99,22 +127,55 @@ def build_runtime_job_worker(
             run_id,
             event_stream_bus=event_stream_bus,
         ),
+        complete_job=lambda job: complete_runtime_job(
+            session,
+            int(job["run_id"]),
+            job=job,
+            event_stream_bus=event_stream_bus,
+        ),
         worker_id=worker_id or default_runtime_job_worker_id("runtime-worker-both"),
         lease_seconds=lease_seconds,
         owner_types=("CHATFLOW", "WORKFLOW"),
+        heartbeat_job=_runtime_job_heartbeat(session),
+        on_terminal_failure=lambda job, error: fail_runtime_job(
+            session,
+            int(job["run_id"]),
+            job=job,
+            error=error,
+            event_stream_bus=event_stream_bus,
+        ),
     )
+
+
+def _runtime_job_heartbeat(session: Session) -> Callable[[int, str, str, int], None]:
+    heartbeat_session_factory = sessionmaker(bind=session.get_bind(), expire_on_commit=False)
+
+    def heartbeat(job_id: int, worker_id: str, lease_token: str, lease_seconds: int) -> None:
+        heartbeat_session = heartbeat_session_factory()
+        try:
+            RuntimeJobRepository(heartbeat_session).heartbeat(
+                job_id,
+                worker_id=worker_id,
+                lease_token=lease_token,
+                lease_seconds=lease_seconds,
+            )
+        finally:
+            heartbeat_session.close()
+
+    return heartbeat
 
 
 def complete_runtime_job(
     session: Session,
     run_id: int,
     *,
+    job: dict[str, object] | None = None,
     event_stream_bus: RuntimeEventStreamBus | None = None,
 ) -> None:
-    job = RuntimeJobRepository(session).get_by_run(run_id)
+    job = job or RuntimeJobRepository(session).get_by_run(run_id)
     owner_type = str((job or {}).get("owner_type") or "").upper()
     if owner_type == "CHATFLOW":
-        complete_chatflow_runtime_job(session, run_id, event_stream_bus=event_stream_bus)
+        complete_chatflow_runtime_job(session, run_id, job=job, event_stream_bus=event_stream_bus)
         return
     if owner_type == "WORKFLOW":
         complete_workflow_runtime_job(session, run_id, event_stream_bus=event_stream_bus)
@@ -122,16 +183,69 @@ def complete_runtime_job(
     raise RuntimeError(f"Unsupported runtime job owner for run {run_id}: {owner_type or '<missing>'}")
 
 
+def fail_runtime_job(
+    session: Session,
+    run_id: int,
+    *,
+    job: dict[str, object] | None = None,
+    error: str,
+    event_stream_bus: RuntimeEventStreamBus | None = None,
+) -> None:
+    """Expose terminal resume-job exhaustion to the RuntimeLab stream without consuming its checkpoint."""
+    job = job or RuntimeJobRepository(session).get_by_run(run_id)
+    if str((job or {}).get("owner_type") or "").upper() != "CHATFLOW" or not _is_runtime_v2_resume_job(job):
+        return
+    raw_job_id = (job or {}).get("id")
+    raw_attempt_count = (job or {}).get("attempt_count")
+    if (
+        isinstance(raw_job_id, bool)
+        or isinstance(raw_attempt_count, bool)
+        or not isinstance(raw_job_id, (int, str))
+        or not isinstance(raw_attempt_count, (int, str))
+    ):
+        return
+    try:
+        job_id = int(raw_job_id)
+        attempt_count = int(raw_attempt_count)
+    except ValueError:
+        return
+    current_job = RuntimeJobRepository(session).get(job_id)
+    if (
+        current_job is None
+        or str(current_job.get("status") or "").upper() != "FAILED"
+        or int(current_job.get("attempt_count") or 0) != attempt_count
+    ):
+        return
+    raw_checkpoint_id = _runtime_job_payload(job).get("checkpointId")
+    if isinstance(raw_checkpoint_id, bool) or not isinstance(raw_checkpoint_id, (int, str)):
+        return
+    try:
+        checkpoint_id = int(raw_checkpoint_id)
+    except ValueError:
+        return
+    ChatflowRuntimeV2Service(
+        WorkflowRepository(session),
+        ChatflowStateRepository(session, event_stream_bus=event_stream_bus),
+    ).record_resume_job_failure(
+        run_id,
+        checkpoint_id,
+        error,
+        job_id=job_id,
+        attempt_count=attempt_count,
+    )
+
+
 def complete_chatflow_runtime_job(
     session: Session,
     run_id: int,
     *,
+    job: dict[str, object] | None = None,
     event_stream_bus: RuntimeEventStreamBus | None = None,
 ) -> None:
-    job = RuntimeJobRepository(session).get_by_run(run_id)
+    job = job or RuntimeJobRepository(session).get_by_run(run_id)
     uses_live_llm = _chatflow_job_uses_live_llm(job)
     llm_service = _runtime_v2_llm_service(session, flow_type="CHATFLOW")
-    ChatflowRuntimeV2Service(
+    runtime_v2_service = ChatflowRuntimeV2Service(
         WorkflowRepository(session),
         ChatflowStateRepository(session, event_stream_bus=event_stream_bus),
         publish_repository=WorkflowPublishRepository(session),
@@ -140,7 +254,21 @@ def complete_chatflow_runtime_job(
         agent_invoker_resolver=llm_service.runtime_v2_agent_invoker,
         mcp_tool_executor=llm_service.runtime_v2_mcp_tool_executor(),
         api_tool_executor=llm_service.runtime_v2_api_tool_executor(),
-    ).complete_run(run_id)
+    )
+    if _is_runtime_v2_resume_job(job):
+        payload = _runtime_job_payload(job)
+        raw_resume_data = payload.get("resumeData")
+        resume_data = dict(raw_resume_data) if isinstance(raw_resume_data, dict) else {}
+        raw_checkpoint_id = payload.get("checkpointId")
+        checkpoint_id = int(raw_checkpoint_id) if isinstance(raw_checkpoint_id, (int, str)) else None
+        runtime_v2_service.resume_run(
+            run_id,
+            resume_data,
+            str(payload.get("idempotencyKey") or "") or None,
+            checkpoint_id,
+        )
+        return
+    runtime_v2_service.complete_run(run_id)
 
 
 def complete_workflow_runtime_job(
@@ -175,7 +303,15 @@ def _runtime_v2_llm_service(session: Session, *, flow_type: str) -> WorkflowServ
 
 
 def _chatflow_job_uses_live_llm(job: dict[str, object] | None) -> bool:
-    payload = job.get("payload") if isinstance(job, dict) else {}
-    payload = payload if isinstance(payload, dict) else {}
+    payload = _runtime_job_payload(job)
     mode = str(payload.get("sopLlmMode") or payload.get("sop_llm_mode") or "live").strip().lower()
     return mode not in {"mock", "fake", "deterministic", "off", "none"}
+
+
+def _is_runtime_v2_resume_job(job: dict[str, object] | None) -> bool:
+    return str((job or {}).get("job_type") or "").startswith("runtime_v2_resume:")
+
+
+def _runtime_job_payload(job: dict[str, object] | None) -> dict[str, object]:
+    payload = job.get("payload") if isinstance(job, dict) else {}
+    return payload if isinstance(payload, dict) else {}

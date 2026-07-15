@@ -184,3 +184,4 @@ class RuntimeLabWebFactoryTest(unittest.TestCase):
         adapter = service._adapter
         self.assertEqual(adapter._runtime_invocation_mode, "async")
         self.assertIsNotNone(adapter._runtime_invocation_gateway._enqueue_background_run)
+        self.assertTrue(adapter._runtime_invocation_gateway.supports_async_resume)
