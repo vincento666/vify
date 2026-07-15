@@ -22,7 +22,9 @@ export type CanvasResponsiveLayout = {
 }
 
 const RIGHT_ANCHORED_REM = 90
-const RIGHT_SHELVED_REM = 62
+// A full resource rail + full config panel + usable toolbar needs more than
+// the old 62rem reserve; shelf the panel before the toolbar is squeezed away.
+const RIGHT_SHELVED_REM = 78
 const STAGE_SHELVED_REM = 54
 const LEFT_RAIL_REM = 46
 

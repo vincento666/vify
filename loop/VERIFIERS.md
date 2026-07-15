@@ -1,50 +1,40 @@
-# Loop Verifiers
+# Loop Verifiers: Spec 225
 
-These commands verify the Spec 188/190 corrective contract revision. This unit
-changes documentation/state only; implementation TDD starts at 188.4.
+## Before Every Code Slice
 
-## Contract Content
-
-    rtk rg -n "MEMORY.md|30 calendar days|100 tokens|three unprocessed|COMPLETED|batch.*hash|daily scheduler" specs/188-ai-assistant-prompt-skills-memory-compaction
-    rtk rg -n "model call|session|cumulative|provider|model|cache read|reasoning|pricing_version|unknown|heatmap|Token/Cost" specs/190-ai-assistant-observability-benchmark
-    rtk rg -n "Superseded|Not Implemented|Not Planned" specs/188-ai-assistant-prompt-skills-memory-compaction/tasks.md specs/190-ai-assistant-observability-benchmark/tasks.md
-
-## Scope And Consistency
-
-    rtk rg -n "\[ \]" specs/188-ai-assistant-prompt-skills-memory-compaction/tasks.md specs/190-ai-assistant-observability-benchmark/tasks.md
-    rtk git diff --name-only e2024c11 -- specs/188-ai-assistant-prompt-skills-memory-compaction specs/190-ai-assistant-observability-benchmark specs/README.md loop/CURRENT.md loop/STATE.md loop/VERIFIERS.md
+    rtk loop/hooks/skill-preflight.sh --required tdd
+    rtk git status --short
     rtk git diff --check
 
-Expected:
+## Focused Unit / Rem
 
-- unchecked tasks exist only in 188.4-188.7 and 190.3-190.6;
-- 188.2 and old 190 broad backlog are explicitly superseded/not planned, not
-  falsely marked implemented;
-- no source, schema, migration, tests, frontend, dependency, secret, or
-  customer-assistant file belongs to this contract revision;
-- Spec 188/190 and specs index describe the same execution order.
+    rtk npm run test:unit -- src/views/workflow/variableCatalog.test.ts src/views/workflow/nodeTestFixtures.test.ts src/views/workflow/workflowCanvasResponsiveLayout.test.ts src/views/workflow/workflowCanvasResponsiveProgressiveCollapse.test.ts
+    rtk npm run test:unit -- src/utils/remGovernance.test.ts src/views/workflow/workflowCanvasRemGovernance.test.ts
 
-## Checker
+## Browser / E2E
 
-Checker must verify:
+- Run new focused Spec 225 list-entry, browser geometry, drag, icon, control-rail, and all-node scripts against
+  the isolated frontend (`HIFY_E2E_BASE_URL=http://127.0.0.1:15175` for this
+  contract session).
+- Use the Codex in-app browser for Browser UAT. Save screenshots and logs under
+  `artifacts/slices/225-workflow-chatflow-control-hardening/`.
+- Workflow and Chatflow lifecycle evidence must cover configuration, save,
+  debug, publish, and invoke.
 
-- user decisions are represented exactly;
-- goals, scope/non-goals, identity, API/UI contracts, acceptance, evidence,
-  capabilities, authority, and stop rules are complete;
-- MEMORY.md crash/idempotency and token aggregation semantics are testable;
-- each future code slice has a RED plan and applicable gate;
-- diff check passes.
+## Live Gate
 
-## Reviewer
+- The user authorized the configured `qwen/qwen3.5-9b` model only under a USD
+  0.10 total cap. Plan at most 15 calls; Intent <=16 output tokens, LLM/Agent
+  <=32. Verify a conservative model-pricing upper bound before calling it.
+  Stop at the first provider error and do not retry automatically.
+- Use redacted prompts/outputs and clean temporary fixtures afterward.
+- If provider capability becomes absent, record `ENV-BLOCKED-LIVE-MODEL`; do
+  not call a mock path and label it live.
 
-Reviewer must verify:
+## Final
 
-- historical completed work is preserved without making old pending tasks look
-  complete;
-- MEMORY.md remains the only memory content truth source;
-- isolation does not trust arbitrary client paths;
-- DB/file crash windows, concurrency, date bounds, token cap, pricing version,
-  unknown cost, streaming calls, and cache/reasoning totals are covered;
-- 190 does not expand into benchmark, governance, alerts, budget, billing, or
-  cross-user admin;
-- no unrelated dirty diff is staged or committed with this unit.
+    rtk npm run build
+    rtk git diff --check
+
+Record any unchanged out-of-scope build failure verbatim; do not fix or hide it
+under this contract.

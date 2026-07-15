@@ -157,6 +157,35 @@ class RuntimeV2ProviderBackedLlmBindingTest(unittest.TestCase):
         self.assertEqual(terminal["output"]["answer"], "RUNTIME_V2_DIRECT_MODEL_OK")
         self.assertEqual(fake_client.captured_payload["model"], "runtime-v2-direct-node-model")
 
+    def test_chatflow_runs_v2_uses_node_model_config_for_llm_intent(self) -> None:
+        model_config_id = _seed_live_model_config(model_id="runtime-v2-intent-model")
+        fake_client = FakeOpenAIChatClient(response_payload=_assistant_payload("refund"))
+
+        with patch("app.modules.workflow.domain.service.ProviderBackedOpenAIChatClient", lambda _config: fake_client):
+            with TestClient(app) as client:
+                chatflow = _create_llm_intent_chatflow(client, model_config_id=model_config_id)
+                started = client.post(
+                    f"/api/v1/chatflows/{chatflow['id']}/runs",
+                    json={
+                        "input": {
+                            "sys.query": "opaque intent marker",
+                            "sys.conversation_id": f"runtime-v2-intent-{time.time_ns()}",
+                            "sys.user_id": "runtime-v2-user",
+                            "sys.channel": "web",
+                        }
+                    },
+                ).json()["data"]
+                terminal = _wait_for_result(client, started["resultRef"], "SUCCEEDED")
+                nodes = client.get(started["nodesRef"]).json()["data"]["list"]
+
+        self.assertEqual(terminal["output"]["final"], "LLM_INTENT_REFUND")
+        self.assertEqual(fake_client.captured_payload["model"], "runtime-v2-intent-model")
+        self.assertEqual(fake_client.captured_payload["max_tokens"], 16)
+        intent_node = next(node for node in nodes if node["nodeKey"] == "intent")
+        self.assertEqual(intent_node["outputs"]["intent"], "refund")
+        self.assertEqual(intent_node["outputs"]["reason"], "matched by llm classifier")
+        self.assertEqual(intent_node["outputs"]["__usage"]["totalTokens"], 18)
+
 
 def _seed_live_agent(model_id: str, extra_params: dict[str, Any] | None = None, cleanup: bool = True) -> int:
     model_config_id = _seed_live_model_config(model_id, extra_params, cleanup=cleanup)
@@ -309,6 +338,59 @@ def _create_llm_chatflow(client: TestClient, llm_config: dict[str, Any] | None =
             "edges": [
                 {"sourceNodeKey": "start", "targetNodeKey": "llm", "condition": None},
                 {"sourceNodeKey": "llm", "targetNodeKey": "end", "condition": None},
+            ],
+        },
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["data"]
+
+
+def _create_llm_intent_chatflow(client: TestClient, *, model_config_id: int) -> dict[str, Any]:
+    response = client.post(
+        "/api/v1/chatflows",
+        json={
+            "name": f"Runtime V2 Provider Intent Chatflow {time.time_ns()}",
+            "description": "",
+            "nodes": [
+                {"nodeKey": "start", "type": "START", "name": "Start", "config": {}},
+                {
+                    "nodeKey": "intent",
+                    "type": "INTENT_RECOGNITION",
+                    "name": "Provider Intent",
+                    "config": {
+                        "inputSource": "{{start.sys.query}}",
+                        "outputVariable": "intent",
+                        "classifierMode": "llm",
+                        "modelConfigId": model_config_id,
+                        "maxTokens": 16,
+                        "defaultIntent": "default",
+                        "intents": [
+                            {
+                                "key": "refund",
+                                "name": "Refund",
+                                "description": "a refund request",
+                                "examples": ["return"],
+                            }
+                        ],
+                    },
+                },
+                {
+                    "nodeKey": "refund_end",
+                    "type": "END",
+                    "name": "Refund",
+                    "config": {"outputVariable": "final", "output": "LLM_INTENT_REFUND"},
+                },
+                {
+                    "nodeKey": "default_end",
+                    "type": "END",
+                    "name": "Default",
+                    "config": {"outputVariable": "final", "output": "FAKE_INTENT_DEFAULT"},
+                },
+            ],
+            "edges": [
+                {"sourceNodeKey": "start", "targetNodeKey": "intent", "condition": None},
+                {"sourceNodeKey": "intent", "targetNodeKey": "refund_end", "condition": "refund"},
+                {"sourceNodeKey": "intent", "targetNodeKey": "default_end", "condition": None},
             ],
         },
     )

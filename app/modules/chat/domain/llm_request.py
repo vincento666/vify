@@ -74,11 +74,7 @@ class ProviderBackedOpenAIChatClient:
         if self._config.base_url.startswith("mock://"):
             return _mock_provider_response(payload)
 
-        headers = {
-            "Authorization": f"Bearer {self._api_key()}",
-            "Content-Type": "application/json",
-            "X-Title": "Hify",
-        }
+        headers = self._headers()
         response = self._post_with_retry(headers, payload)
         if response.status_code >= 400:
             raise RuntimeError(f"LLM request failed: HTTP {response.status_code} {response.text}")
@@ -99,11 +95,7 @@ class ProviderBackedOpenAIChatClient:
                 on_delta(content)
             return response
 
-        headers = {
-            "Authorization": f"Bearer {self._api_key()}",
-            "Content-Type": "application/json",
-            "X-Title": "Hify",
-        }
+        headers = self._headers()
         stream_payload = {
             **payload,
             "stream": True,
@@ -119,6 +111,16 @@ class ProviderBackedOpenAIChatClient:
         if ref.startswith("env:"):
             return os.getenv(ref.removeprefix("env:"), "")
         return ""
+
+    def _headers(self) -> dict[str, str]:
+        api_key = self._api_key().strip()
+        if not api_key:
+            raise RuntimeError("LLM provider API key is not configured")
+        return {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "X-Title": "Hify",
+        }
 
     def _post_with_retry(self, headers: dict[str, str], payload: dict[str, Any]) -> httpx.Response:
         last_error: httpx.TransportError | None = None

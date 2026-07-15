@@ -1,96 +1,61 @@
-# Current Loop Scope: Spec 188/190 Corrective Contracts
+# Current Loop Scope: Spec 225 Workflow/Chatflow Control Hardening
 
 ## Status
 
-    mode: Contract Gate
-    current unit: 188/190 contract revision
-    implementation: not started
-    next implementation slice: 188.4 Scope Isolation And Markdown Store
+    mode: Closed Loop
+    current unit: 225.5 Live Intent binding and Runtime V2 parity
+    implementation: 225.5 Runtime V2 Intent/model-binding, provider
+    credential-readiness, and Runtime V2 terminal-output projection pass; the
+    user-authorized 15-call live matrix is complete with clean fixtures
 
-Spec 189 is cancelled by user decision.
+## Active Contract
 
-## Active Contracts
-
-Primary:
-
-    specs/188-ai-assistant-prompt-skills-memory-compaction/spec.md
-    specs/188-ai-assistant-prompt-skills-memory-compaction/plan.md
-    specs/188-ai-assistant-prompt-skills-memory-compaction/tasks.md
-
-Follow-on:
-
-    specs/190-ai-assistant-observability-benchmark/spec.md
-    specs/190-ai-assistant-observability-benchmark/plan.md
-    specs/190-ai-assistant-observability-benchmark/tasks.md
-
-## Frozen Outcome
-
-Spec 188:
-
-- one canonical MEMORY.md per trusted user/workspace;
-- rolling 30-day heading-based bounded read;
-- each dated day's full block at most 100 tokens;
-- model extraction after each batch of three new COMPLETED runs across sessions;
-- DB stores cursor/recovery metadata only, never memory text;
-- no daily scheduler in this wave.
-
-Spec 190:
-
-- one scoped immutable ledger row per model call;
-- session, cumulative, date, provider, model, and token-type aggregation;
-- provider actual cost, then versioned estimate, then explicit unknown;
-- Token/Cost dashboard with cards, heatmap, filters, session details, and
-  distributions;
-- no benchmark, governance, alerts, budget enforcement, billing, or cross-user
-  admin expansion.
-
-## Contract Evidence
-
-    artifacts/slices/188-ai-assistant-prompt-skills-memory-compaction/contract-revision/
-
-Required before Closed Loop:
-
-- contract consistency verifier passes;
-- independent Checker result exists;
-- independent Reviewer finds no blocker;
-- contract-only changes are isolated from unrelated dirty files;
-- implementation branch/worktree/base/merge target are recorded.
+    specs/225-workflow-chatflow-control-hardening/spec.md
+    specs/225-workflow-chatflow-control-hardening/plan.md
+    specs/225-workflow-chatflow-control-hardening/tasks.md
+    artifacts/slices/225-workflow-chatflow-control-hardening/contract/contract.md
 
 ## Branch Preflight
 
-    worktree: /Users/vincento/work/develop/hify
-    branch: codex/spec-222-14-5-idempotency-spec
-    contract base: e2024c11
-    merge target: codex/runtime-v2-production-upgrade
-    dirty: yes; unrelated loop/host changes exist
+    worktree: /private/tmp/hify-workflow-chatflow-control-hardening
+    branch: codex/workflow-chatflow-control-hardening
+    base: 1ee8dc5e
+    merge target: not selected
+    dirty at contract start: no tracked changes
 
-Do not begin implementation in this mixed dirty worktree. After contract review,
-selectively commit only contract-scope files, then create an isolated
-codex/spec-188-memory-md implementation branch/worktree from that commit.
+## Frozen Scope
 
-## Contract-Revision Scope
+- `frontend/src/views/workflow/` Workflow/Chatflow list and shared canvas/control code;
+- `app/modules/workflow/domain/runtime_v2.py` and focused runtime tests for the
+  LLM Intent completer wiring;
+- provider credential-readiness reporting/client preflight and focused
+  provider/chat tests, limited to the live-gate defect found in Browser UAT;
+- focused frontend tests and Workflow/Chatflow E2E scripts;
+- Spec 225 docs, loop state, and Spec 225 evidence.
 
-Allowed:
-
-    specs/188-ai-assistant-prompt-skills-memory-compaction/
-    specs/190-ai-assistant-observability-benchmark/
-    specs/README.md
-    loop/CURRENT.md
-    loop/STATE.md
-    loop/VERIFIERS.md
-    artifacts/slices/188-ai-assistant-prompt-skills-memory-compaction/contract-revision/
-
-No source, schema, migration, test, frontend, dependency, secret, or
-customer-assistant changes are authorized in this unit.
+Excluded: API/schema/dependency work, broader runtime behavior, broader list
+redesign, and the dirty original worktree.
 
 ## Stop Conditions
 
-Stop and remain in Open Loop/Waiting Human if:
+- The repair needs a public contract, runtime, schema, dependency, or product
+  information-architecture change.
+- A new UI fixture cannot clean up its own test data on failure.
+- The same RED persists through two focused implementation attempts.
+- The user-authorized 15 planned model calls, 16-token Intent / 32-token
+  LLM+Agent limits, or the USD 0.10 cap would be exceeded; stop before
+  requesting more.
+- Canonical async Runtime V2 cannot execute the focused completer regression or
+  the Intent selector cannot persist its binding after two TDD attempts.
+- Required browser, provider, or verification evidence is unavailable.
+- Do not exceed the user-approved 15 planned live completions or USD 0.10 cap.
 
-- trusted workspace identity requires arbitrary client paths;
-- user/workspace isolation cannot be enforced through the host boundary;
-- compatibility requires removing a public API field;
-- memory needs a second durable content store;
-- cost semantics require billing, budget, or governance decisions;
-- global settings/admin information architecture becomes necessary;
-- branch/base/merge target remains ambiguous after contract review.
+## Next Action
+
+The provider is configured externally and connection discovery passes. The
+Workflow and Chatflow draft and published Runtime V2 paths complete
+successfully. The user explicitly increased the live call limit from 12 to 15
+after the Chatflow terminal-output projection repair; all 15 compact calls
+completed without retry or provider error, and temporary fixtures are clean.
+Credentials remain external and are never written into this worktree. All
+evidence remains under `artifacts/slices/225-workflow-chatflow-control-hardening/`.

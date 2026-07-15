@@ -162,6 +162,28 @@ describe('runtime v2 canvas debug projection', () => {
     expect(summarizeWorkflowRunDebug(cancelled).statusLabel).toBe('CANCELLED')
   })
 
+  it('projects terminal Runtime V2 output into the chatflow trial result', () => {
+    const started = createRuntimeV2DebugDetail({
+      runId: 803,
+      ownerType: 'CHATFLOW',
+      ownerId: 34,
+      status: 'RUNNING',
+    })
+
+    const completed = applyRuntimeV2EventsToDebugDetail(started, [
+      {
+        id: 8,
+        runId: 803,
+        sequence: 8,
+        type: 'workflow_run_completed',
+        payload: { output: { final: 'live reply' } },
+      },
+    ])
+
+    expect(completed.status).toBe('SUCCEEDED')
+    expect(completed.output).toEqual({ final: 'live reply' })
+  })
+
   it('observes runtime v2 SSE by default and recovers durable events after disconnect without duplicates', async () => {
     let detail = createRuntimeV2DebugDetail({
       runId: 701,

@@ -7,6 +7,23 @@ from app.modules.chat.domain.llm_request import ProviderBackedOpenAIChatClient, 
 
 
 class ProviderBackedOpenAIChatClientTest(unittest.TestCase):
+    def test_rejects_missing_api_key_before_opening_transport(self) -> None:
+        client_factory = _HttpClientFactory([])
+        llm_client = ProviderBackedOpenAIChatClient(
+            ProviderChatConfig(
+                provider_type="OPENAI",
+                base_url="https://openrouter.ai/api/v1",
+                auth_config={},
+            ),
+            retry_sleep=0,
+        )
+
+        with patch("app.modules.chat.domain.llm_request.httpx.Client", client_factory):
+            with self.assertRaisesRegex(RuntimeError, "LLM provider API key is not configured"):
+                llm_client.complete({"model": "model", "messages": []})
+
+        self.assertEqual(client_factory.post_count, 0)
+
     def test_retries_transient_transport_errors_before_returning_response(self) -> None:
         client_factory = _HttpClientFactory(
             [

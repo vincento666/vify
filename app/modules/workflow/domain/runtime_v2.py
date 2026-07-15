@@ -78,7 +78,7 @@ _SUPPORTED_CORE_NODE_TYPES = {
 _RUNTIME_V2_CANCELLABLE_STATUSES = {"RUNNING", "INTERRUPTED"}
 _RUNTIME_V2_TERMINAL_STATUSES = {"SUCCEEDED", "FAILED", "CANCELLED"}
 _RUNTIME_V2_ERROR_POLICY_NODE_TYPES = {"LLM", "API_CALL", "TOOL_CALL", "CODE", "EXECUTE_WORKFLOW", "AGENT_CALL"}
-_RUNTIME_V2_EXTERNAL_CALL_NODE_TYPES = {"LLM", "API_CALL", "TOOL_CALL", "KNOWLEDGE"}
+_RUNTIME_V2_EXTERNAL_CALL_NODE_TYPES = {"LLM", "INTENT_RECOGNITION", "API_CALL", "TOOL_CALL", "KNOWLEDGE"}
 _RUNTIME_V2_PRESTART_WAVE_NODE_TYPES = {
     "LLM",
     "KNOWLEDGE",
@@ -1197,7 +1197,17 @@ class ChatflowRuntimeV2Service:
             elif node_type == "CONDITION":
                 output = ConditionNodeExecutor().execute(node, context)
             elif node_type == "INTENT_RECOGNITION":
-                output = IntentRecognitionNodeExecutor().execute(node, context)
+                config = dict(node.get("config") or {})
+                if _is_llm_intent_config(config):
+                    output = self._execute_governed_external_node(
+                        node=node,
+                        node_run_id=node_run_id,
+                        operation=lambda: IntentRecognitionNodeExecutor(
+                            self._llm_completer_for(chatflow_id)
+                        ).execute(node, context),
+                    )
+                else:
+                    output = IntentRecognitionNodeExecutor().execute(node, context)
             elif node_type == "INFORMATION_COLLECTION":
                 output = InformationCollectionNodeExecutor().execute(node, context)
             elif node_type == "LLM":
@@ -2617,6 +2627,10 @@ def _requires_llm_information_collection(config: dict[str, Any]) -> bool:
     return extractor_mode in {"llm", "model", "ai"}
 
 
+def _is_llm_intent_config(config: Mapping[str, Any]) -> bool:
+    return str(config.get("classifierMode") or config.get("classifier_mode") or "").lower() == "llm"
+
+
 def _runtime_v2_api_call_unsupported_reason(config: dict[str, Any]) -> str:
     resource_id = str(config.get("resourceId") or config.get("resource_id") or "").strip()
     if not resource_id:
@@ -2960,6 +2974,8 @@ def _runtime_cancel_phase(
 
 def _runtime_external_call_type(node_type: str) -> str:
     normalized = str(node_type or "").upper()
+    if normalized == "INTENT_RECOGNITION":
+        return "LLM"
     if normalized == "API_CALL":
         return "API"
     if normalized == "TOOL_CALL":
@@ -2971,7 +2987,7 @@ def _runtime_external_call_type(node_type: str) -> str:
 
 def _runtime_external_provider_key(node_type: str, config: Mapping[str, Any]) -> str:
     normalized = str(node_type or "").upper()
-    if normalized == "LLM":
+    if normalized in {"LLM", "INTENT_RECOGNITION"}:
         return "llm:" + str(config.get("modelConfigId") or config.get("model_config_id") or config.get("model") or "default")
     if normalized == "API_CALL":
         return "api:" + str(config.get("resourceId") or config.get("resource_id") or config.get("url") or config.get("endpoint") or "direct")

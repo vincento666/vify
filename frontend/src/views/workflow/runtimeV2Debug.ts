@@ -226,6 +226,11 @@ function applyRuntimeV2EventToDebugDetail(
     error: error || detail.error || '',
   }
 
+  if (String(event.type || '') === 'workflow_run_completed') {
+    const output = runtimeEventOutputs(event)
+    if (output) next = { ...next, output }
+  }
+
   if (nodeKey && status) {
     next = upsertRuntimeNode(next, {
       id: event.payload?.nodeRunId,

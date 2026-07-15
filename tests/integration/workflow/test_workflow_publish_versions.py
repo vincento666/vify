@@ -150,6 +150,14 @@ class WorkflowPublishVersionsTest(unittest.TestCase):
         self.assertEqual(publish_response.status_code, 400, publish_response.text)
         self.assertIn("modelConfigId", publish_response.json()["message"])
 
+    def test_publish_rejects_llm_intent_node_with_disabled_model_config(self) -> None:
+        with TestClient(app) as client:
+            workflow = self._create_llm_intent_workflow(client, model_config_id=999999999)
+            publish_response = client.post(f"/api/v1/workflows/{workflow['id']}/publish")
+
+        self.assertEqual(publish_response.status_code, 400, publish_response.text)
+        self.assertIn("modelConfigId", publish_response.json()["message"])
+
     def _create_workflow(self, client: TestClient, output: str) -> dict:
         response = client.post(
             "/api/v1/workflows",
@@ -265,6 +273,38 @@ class WorkflowPublishVersionsTest(unittest.TestCase):
                 "edges": [
                     {"sourceNodeKey": "start", "targetNodeKey": "llm_1", "condition": None},
                     {"sourceNodeKey": "llm_1", "targetNodeKey": "end", "condition": None},
+                ],
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        return response.json()["data"]
+
+    def _create_llm_intent_workflow(self, client: TestClient, model_config_id: int) -> dict:
+        response = client.post(
+            "/api/v1/workflows",
+            json={
+                "name": f"Publish Intent Model {time.time_ns()}",
+                "description": "",
+                "nodes": [
+                    {"nodeKey": "start", "type": "START", "name": "Start", "config": {}},
+                    {
+                        "nodeKey": "intent_1",
+                        "type": "INTENT_RECOGNITION",
+                        "name": "Intent",
+                        "config": {
+                            "inputSource": "{{start.sys.query}}",
+                            "outputVariable": "intent",
+                            "classifierMode": "llm",
+                            "modelConfigId": model_config_id,
+                            "defaultIntent": "default",
+                            "intents": [{"key": "default", "name": "Default", "description": "fallback", "examples": []}],
+                        },
+                    },
+                    {"nodeKey": "end", "type": "END", "name": "End", "config": {"outputVariable": "final", "output": "{{intent_1.intent}}"}},
+                ],
+                "edges": [
+                    {"sourceNodeKey": "start", "targetNodeKey": "intent_1", "condition": None},
+                    {"sourceNodeKey": "intent_1", "targetNodeKey": "end", "condition": None},
                 ],
             },
         )

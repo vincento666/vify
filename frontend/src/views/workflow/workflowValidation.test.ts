@@ -17,6 +17,17 @@ describe('workflow graph validation', () => {
     expect(validateWorkflowGraph(connectWorkflowNodes(graph, 'start', 'end')).valid).toBe(true)
   })
 
+  it('accepts a reachable END node whose key is not the default end key', () => {
+    const connected = connectWorkflowNodes(createDefaultWorkflowGraph(), 'start', 'end')
+    const graph = {
+      ...connected,
+      nodes: connected.nodes.map((node) => (node.nodeKey === 'end' ? { ...node, nodeKey: 'success_end' } : node)),
+      edges: connected.edges.map((edge) => (edge.targetNodeKey === 'end' ? { ...edge, targetNodeKey: 'success_end' } : edge)),
+    }
+
+    expect(validateWorkflowGraph(graph)).toEqual({ valid: true, errors: [] })
+  })
+
   it('rejects disconnected non-fixed nodes before test run or publish', () => {
     let graph = createDefaultWorkflowGraph()
     graph = addWorkflowNode(graph, 'LLM', { x: 320, y: 240 })
@@ -37,6 +48,21 @@ describe('workflow graph validation', () => {
     graph = connectWorkflowNodes(graph, 'llm_1', 'end')
 
     expect(validateWorkflowGraph(graph).errors).toContain('大模型节点 llm_1 需要选择模型')
+  })
+
+  it('requires LLM-mode Intent nodes to select a concrete model before running', () => {
+    let graph = createDefaultWorkflowGraph()
+    graph = addWorkflowNode(graph, 'INTENT_RECOGNITION', { x: 320, y: 240 })
+    graph = {
+      ...graph,
+      nodes: graph.nodes.map((node) => node.nodeKey === 'intent_recognition_1'
+        ? { ...node, config: { ...node.config, classifierMode: 'llm' } }
+        : node),
+    }
+    graph = connectWorkflowNodes(graph, 'start', 'intent_recognition_1')
+    graph = connectWorkflowNodes(graph, 'intent_recognition_1', 'end')
+
+    expect(validateWorkflowGraph(graph).errors).toContain('意图识别节点 intent_recognition_1 需要选择模型')
   })
 
   it('requires API call governance before run or publish', () => {

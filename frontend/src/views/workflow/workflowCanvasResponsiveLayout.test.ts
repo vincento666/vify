@@ -32,6 +32,14 @@ describe('workflow canvas responsive layout policy', () => {
       debugDockMode: 'locked',
     })
 
+    expect(resolveCanvasResponsiveLayout({ viewportWidth: 77, rem: 1 })).toMatchObject({
+      phase: 'right-shelved',
+      className: 'canvas-layout-right-shelved',
+      rightPanelMode: 'peek',
+      stageMode: 'fit',
+      debugDockMode: 'locked',
+    })
+
     expect(resolveCanvasResponsiveLayout({ viewportWidth: 58, rem: 1 })).toMatchObject({
       phase: 'right-shelved',
       className: 'canvas-layout-right-shelved',

@@ -19,6 +19,7 @@ export function mergeWorkflowValidationErrors(...groups: string[][]) {
 }
 
 function hasPathToEnd(graph: WorkflowCanvasGraph) {
+  const endNodeKeys = new Set(graph.nodes.filter((node) => node.type === 'END').map((node) => node.nodeKey))
   const adjacency = new Map<string, string[]>()
   for (const edge of graph.edges) {
     const next = adjacency.get(edge.sourceNodeKey) || []
@@ -30,7 +31,7 @@ function hasPathToEnd(graph: WorkflowCanvasGraph) {
   const stack = ['start']
   while (stack.length > 0) {
     const current = stack.pop()!
-    if (current === 'end') return true
+    if (endNodeKeys.has(current)) return true
     if (seen.has(current)) continue
     seen.add(current)
     stack.push(...(adjacency.get(current) || []))
@@ -279,17 +280,18 @@ function validateFanOut(graph: WorkflowCanvasGraph, errors: string[]) {
 export function validateWorkflowGraph(graph: WorkflowCanvasGraph): WorkflowValidationResult {
   const errors: string[] = []
   const nodeKeys = new Set(graph.nodes.map((node) => node.nodeKey))
+  const hasEndNode = graph.nodes.some((node) => node.type === 'END')
   const reachable = reachableNodeKeys(graph)
 
   if (!nodeKeys.has('start')) errors.push('START node is required')
-  if (!nodeKeys.has('end')) errors.push('END node is required')
+  if (!hasEndNode) errors.push('END node is required')
 
-  if (nodeKeys.has('start') && nodeKeys.has('end') && !hasPathToEnd(graph) && !hasReachableSideEffectTerminal(graph)) {
+  if (nodeKeys.has('start') && hasEndNode && !hasPathToEnd(graph) && !hasReachableSideEffectTerminal(graph)) {
     errors.push('START must connect to END through at least one path')
   }
 
   for (const node of graph.nodes) {
-    if (node.nodeKey === 'start' || node.nodeKey === 'end') continue
+    if (node.type === 'START' || node.type === 'END') continue
     const connected = graph.edges.some(
       (edge) => edge.sourceNodeKey === node.nodeKey || edge.targetNodeKey === node.nodeKey,
     )
@@ -297,6 +299,14 @@ export function validateWorkflowGraph(graph: WorkflowCanvasGraph): WorkflowValid
     else if (!reachable.has(node.nodeKey)) errors.push(`Node ${node.nodeKey} is not reachable from START`)
     if (node.type === 'LLM' && !node.config.modelConfigId && !node.config.model) {
       errors.push(`大模型节点 ${node.nodeKey} 需要选择模型`)
+    }
+    if (
+      node.type === 'INTENT_RECOGNITION'
+      && String(node.config.classifierMode || node.config.classifier_mode || '').toLowerCase() === 'llm'
+      && !node.config.modelConfigId
+      && !node.config.model_config_id
+    ) {
+      errors.push(`意图识别节点 ${node.nodeKey} 需要选择模型`)
     }
     if (node.type === 'API_CALL') validateApiGovernance(node.nodeKey, node.config, errors)
     if (node.type === 'TOOL_CALL') validateToolGovernance(node.nodeKey, node.config, errors)

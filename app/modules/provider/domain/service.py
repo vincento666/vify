@@ -1,3 +1,4 @@
+import os
 from typing import Any
 
 from app.core.errors import BizError, ErrorCode
@@ -110,9 +111,21 @@ class ProviderService:
             baseUrl=str(row["base_url"]),
             description=str(row["description"] or ""),
             enabled=bool(row["enabled"]),
-            authConfigured=bool(row["auth_config"]),
+            authConfigured=_has_usable_api_key(row["auth_config"]),
             createdAt=format_datetime(row["created_at"]),
             updatedAt=format_datetime(row["updated_at"]),
             models=models,
             health=health,
         )
+
+
+def _has_usable_api_key(auth_config: Any) -> bool:
+    if not isinstance(auth_config, dict):
+        return False
+    direct = str(auth_config.get("api_key") or auth_config.get("apiKey") or "").strip()
+    if direct:
+        return True
+    ref = str(auth_config.get("api_key_ref") or auth_config.get("apiKeyRef") or "").strip()
+    if not ref.startswith("env:"):
+        return False
+    return bool(os.getenv(ref.removeprefix("env:"), "").strip())

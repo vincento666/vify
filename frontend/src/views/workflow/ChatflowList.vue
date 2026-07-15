@@ -13,7 +13,7 @@
       </a-button>
     </div>
 
-    <a-table v-if="chatflows.length" :data-source="chatflows" :loading="loading" class="workflow-table" row-key="id" :pagination="false" size="middle">
+    <a-table v-if="chatflows.length" :data-source="chatflows" :loading="loading" class="workflow-table" row-key="id" :pagination="false" size="middle" :custom-row="chatflowRow">
       <a-table-column data-index="name" title="名称" :width="workflowTableColumnWidths.name">
         <template #default="{ record: row }">
           <div class="wf-name">
@@ -35,9 +35,7 @@
       </a-table-column>
       <a-table-column title="操作" :width="workflowTableColumnWidths.actions" fixed="right">
         <template #default="{ record: row }">
-          <div class="action-buttons">
-            <a-button size="small" @click="$router.push({ name: 'HifyChatflowsCanvas', params: { id: row.id } })">查看</a-button>
-            <a-button size="small" type="primary" ghost @click="$router.push({ name: 'HifyChatflowsCanvas', params: { id: row.id } })">画布</a-button>
+          <div class="action-buttons" @click.stop>
             <a-popconfirm title="确认删除这个对话流？" ok-text="确认" cancel-text="取消" @confirm="handleDelete(row.id)">
               <a-button size="small" danger>删除</a-button>
             </a-popconfirm>
@@ -56,12 +54,14 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { MessageOutlined, PlusOutlined } from '@ant-design/icons-vue'
 
 import { deleteChatflow, listChatflows, type WorkflowListItem } from '@/api/workflow'
 import WorkflowModuleTabs from './WorkflowModuleTabs.vue'
 
+const router = useRouter()
 const chatflows = ref<WorkflowListItem[]>([])
 const loading = ref(false)
 
@@ -70,7 +70,7 @@ const workflowTableColumnWidths = {
   description: '16.25rem',
   status: '6.875rem',
   updatedAt: '11.25rem',
-  actions: '14.375rem',
+  actions: '5rem',
 }
 
 async function loadChatflows() {
@@ -87,6 +87,12 @@ async function handleDelete(id: number) {
   await deleteChatflow(id)
   message.success('已删除')
   await loadChatflows()
+}
+
+function chatflowRow(row: WorkflowListItem) {
+  return {
+    onClick: () => router.push({ name: 'HifyChatflowsCanvas', params: { id: row.id } }),
+  }
 }
 
 function statusLabel(status: string) {
@@ -142,6 +148,10 @@ onMounted(loadChatflows)
 
 .workflow-table {
   width: 100%;
+}
+
+.workflow-table :deep(.ant-table-tbody > tr) {
+  cursor: pointer;
 }
 
 .wf-name {

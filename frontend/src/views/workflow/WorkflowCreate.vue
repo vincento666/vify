@@ -68,6 +68,7 @@
       class="canvas-workbench"
       :class="{ 'resource-collapsed': resourcePanelCollapsed || canvasTab !== 'compose' }"
       data-testid="workflow-canvas"
+      @scroll.passive="scheduleCanvasToolbarPosition"
     >
       <button
         v-if="canvasTab === 'compose' && resourcePanelCollapsed"
@@ -293,7 +294,7 @@
 
         <div class="open-surface-grid">
           <section class="open-surface-section">
-            <div class="section-title"><span>⌄</span> Open API</div>
+            <div class="section-title"><ChevronDownIcon class="section-title-chevron" aria-hidden="true" /> Open API</div>
             <dl class="ops-field-list">
               <div>
                 <dt>Method</dt>
@@ -308,7 +309,7 @@
           </section>
 
           <section v-if="isChatflowMode" class="open-surface-section channel-shell-section" data-testid="chatflow-channel-shells">
-            <div class="section-title"><span>⌄</span> 渠道</div>
+            <div class="section-title"><ChevronDownIcon class="section-title-chevron" aria-hidden="true" /> 渠道</div>
             <p v-if="chatflowChannelsLoading" class="resource-empty-state">正在加载渠道...</p>
             <div v-else class="channel-shell-grid">
               <article
@@ -801,7 +802,7 @@
         </section>
 
         <section
-          v-if="selectedNode.type === 'LLM'"
+          v-if="canSelectNodeModel"
           class="config-section"
           :class="{ collapsed: isConfigSectionCollapsed('模型'), 'picker-open': modelPickerOpen }"
           data-testid="llm-model-section"
@@ -814,7 +815,7 @@
               :aria-controls="configSectionContentId('模型')"
               @click="toggleConfigSection('模型')"
             >
-              <span class="section-chevron" aria-hidden="true">›</span>
+              <ChevronRightIcon class="section-chevron" aria-hidden="true" />
               <strong>模型</strong>
             </button>
             <button type="button" class="section-icon-button" aria-label="模型设置" @click.stop="toggleModelParameterPanel">
@@ -962,7 +963,7 @@
               :aria-controls="configSectionContentId('技能')"
               @click="toggleConfigSection('技能')"
             >
-              <span class="section-chevron" aria-hidden="true">›</span>
+              <ChevronRightIcon class="section-chevron" aria-hidden="true" />
               <strong>技能</strong>
             </button>
             <button type="button" class="section-icon-button" aria-label="添加资源" @click.stop="resourcePickerOpen = !resourcePickerOpen">
@@ -1110,7 +1111,7 @@
               :aria-controls="configSectionContentId(section.title)"
               @click="toggleConfigSection(section.title)"
             >
-              <span class="section-chevron" aria-hidden="true">›</span>
+              <ChevronRightIcon class="section-chevron" aria-hidden="true" />
               <strong>{{ section.title }}</strong>
             </button>
             <label
@@ -1285,9 +1286,22 @@
                 :key="`${branchIndex}-${branch.key}`"
                 class="condition-branch-card"
                 data-testid="condition-branch-card"
+                :class="{ 'is-dragging': conditionBranchDragSourceIndex === branchIndex }"
+                @dragover.prevent
+                @drop="dropConditionBranch(branchIndex, $event)"
               >
                 <div class="condition-branch-header">
-                  <span class="condition-drag-handle" aria-hidden="true">⋮⋮</span>
+                  <button
+                    type="button"
+                    class="condition-drag-handle"
+                    data-testid="condition-drag-handle"
+                    aria-label="拖拽条件分支排序"
+                    draggable="true"
+                    @dragstart="startConditionBranchDrag(branchIndex, $event)"
+                    @dragend="endConditionBranchDrag"
+                  >
+                    <GripVerticalIcon aria-hidden="true" />
+                  </button>
                   <span class="condition-branch-kind">{{ conditionBranchKindLabel(branchIndex) }}</span>
                   <span class="condition-branch-priority">优先级 {{ branchIndex + 1 }}</span>
                   <button
@@ -1390,7 +1404,7 @@
                           <span class="variable-source-copy">
                             <strong>{{ group.title }}</strong>
                           </span>
-                          <span v-if="group.items.length > 0" class="variable-source-arrow" data-testid="variable-source-arrow" aria-hidden="true">›</span>
+                          <ChevronRightIcon v-if="group.items.length > 0" class="variable-source-arrow" data-testid="variable-source-arrow" aria-hidden="true" />
                         </button>
                       </div>
                       <div
@@ -1498,7 +1512,7 @@
                           <span class="variable-source-copy">
                             <strong>{{ group.title }}</strong>
                           </span>
-                          <span v-if="group.items.length > 0" class="variable-source-arrow" data-testid="variable-source-arrow" aria-hidden="true">›</span>
+                          <ChevronRightIcon v-if="group.items.length > 0" class="variable-source-arrow" data-testid="variable-source-arrow" aria-hidden="true" />
                         </button>
                       </div>
                       <div
@@ -1696,12 +1710,13 @@
                 <button
                   type="button"
                   class="intent-drag-handle"
+                  data-testid="intent-drag-handle"
                   aria-label="拖拽意图排序"
                   draggable="true"
                   @dragstart="startIntentRowDrag(index, $event)"
                   @dragend="endIntentRowDrag"
                 >
-                  ⋮⋮
+                  <GripVerticalIcon aria-hidden="true" />
                 </button>
                 <div class="intent-row-fields">
                   <a-input
@@ -1922,7 +1937,7 @@
                         <span class="variable-source-copy">
                           <strong>{{ group.title }}</strong>
                         </span>
-                        <span v-if="group.items.length > 0" class="variable-source-arrow" data-testid="variable-source-arrow" aria-hidden="true">›</span>
+                        <ChevronRightIcon v-if="group.items.length > 0" class="variable-source-arrow" data-testid="variable-source-arrow" aria-hidden="true" />
                       </button>
                     </div>
                     <div
@@ -2084,7 +2099,7 @@
                         <span class="variable-source-copy">
                           <strong>{{ group.title }}</strong>
                         </span>
-                        <span v-if="group.items.length > 0" class="variable-source-arrow" data-testid="variable-source-arrow" aria-hidden="true">›</span>
+                        <ChevronRightIcon v-if="group.items.length > 0" class="variable-source-arrow" data-testid="variable-source-arrow" aria-hidden="true" />
                       </button>
                     </div>
                     <div
@@ -2373,7 +2388,7 @@
                         <span class="variable-source-copy">
                           <strong>{{ group.title }}</strong>
                         </span>
-                        <span v-if="group.items.length > 0" class="variable-source-arrow" data-testid="variable-source-arrow" aria-hidden="true">›</span>
+                        <ChevronRightIcon v-if="group.items.length > 0" class="variable-source-arrow" data-testid="variable-source-arrow" aria-hidden="true" />
                       </button>
                     </div>
                     <div
@@ -2518,12 +2533,27 @@
                 </header>
                 <div class="aggregation-group-variable-list">
                   <div
-                    v-for="(variable, variableIndex) in group.variables"
-                    :key="`${groupIndex}-${variableIndex}-${variable.valueMode}`"
-                    class="aggregation-group-variable-row"
-                    data-testid="aggregation-group-variable-row"
-                  >
-                    <span class="aggregation-row-handle" aria-hidden="true">⋮⋮</span>
+                  v-for="(variable, variableIndex) in group.variables"
+                  :key="`${groupIndex}-${variableIndex}-${variable.valueMode}`"
+                  class="aggregation-group-variable-row"
+                  data-testid="aggregation-group-variable-row"
+                  :class="{ 'is-dragging': isAggregationGroupVariableDragging(groupIndex, variableIndex) }"
+                  @dragover.prevent
+                  @drop="dropAggregationGroupVariable(groupIndex, variableIndex, $event)"
+                >
+                    <button
+                      v-if="!isAggregationTrailingCandidate(group, variableIndex)"
+                      type="button"
+                      class="aggregation-row-handle"
+                      data-testid="aggregation-drag-handle"
+                      aria-label="拖拽聚合变量排序"
+                      draggable="true"
+                      @dragstart="startAggregationGroupVariableDrag(groupIndex, variableIndex, $event)"
+                      @dragend="endAggregationGroupVariableDrag"
+                    >
+                      <GripVerticalIcon aria-hidden="true" />
+                    </button>
+                    <span v-else class="aggregation-row-handle-spacer" aria-hidden="true"></span>
                     <div class="input-value-cell">
                       <div class="variable-value-combo structured-value-control" data-testid="structured-value-control">
                         <div class="variable-value-main">
@@ -2586,7 +2616,7 @@
                             <span class="variable-source-copy">
                               <strong>{{ sourceGroup.title }}</strong>
                             </span>
-                            <span v-if="sourceGroup.items.length > 0" class="variable-source-arrow" data-testid="variable-source-arrow" aria-hidden="true">›</span>
+                            <ChevronRightIcon v-if="sourceGroup.items.length > 0" class="variable-source-arrow" data-testid="variable-source-arrow" aria-hidden="true" />
                           </button>
                         </div>
                         <div
@@ -2706,7 +2736,7 @@
                         <span class="variable-source-copy">
                           <strong>{{ group.title }}</strong>
                         </span>
-                        <span v-if="group.items.length > 0" class="variable-source-arrow" data-testid="variable-source-arrow" aria-hidden="true">›</span>
+                        <ChevronRightIcon v-if="group.items.length > 0" class="variable-source-arrow" data-testid="variable-source-arrow" aria-hidden="true" />
                       </button>
                     </div>
                     <div
@@ -2792,7 +2822,7 @@
                         <span class="variable-source-copy">
                           <strong>{{ group.title }}</strong>
                         </span>
-                        <span v-if="group.items.length > 0" class="variable-source-arrow" aria-hidden="true">›</span>
+                        <ChevronRightIcon v-if="group.items.length > 0" class="variable-source-arrow" aria-hidden="true" />
                       </button>
                     </div>
                     <div
@@ -2877,7 +2907,7 @@
                         <span class="variable-source-copy">
                           <strong>{{ group.title }}</strong>
                         </span>
-                        <span v-if="group.items.length > 0" class="variable-source-arrow" data-testid="variable-source-arrow" aria-hidden="true">›</span>
+                        <ChevronRightIcon v-if="group.items.length > 0" class="variable-source-arrow" data-testid="variable-source-arrow" aria-hidden="true" />
                       </button>
                     </div>
                     <div
@@ -3881,7 +3911,7 @@
         </div>
       </div>
 
-      <div class="canvas-toolbar" data-testid="canvas-bottom-toolbar">
+      <div class="canvas-toolbar" :style="canvasToolbarStyle" data-testid="canvas-bottom-toolbar">
         <button type="button" aria-label="缩小显示比例" :disabled="canvasZoom <= CANVAS_ZOOM_MIN" @click="decreaseCanvasZoom">
           <LucideMinus aria-hidden="true" />
         </button>
@@ -3943,7 +3973,7 @@
     >
       <div class="publish-dialog-body" data-testid="workflow-publish-dialog">
         <section class="publish-dialog-section">
-          <div class="section-title"><span>⌄</span> 发布检查</div>
+          <div class="section-title"><ChevronDownIcon class="section-title-chevron" aria-hidden="true" /> 发布检查</div>
           <dl class="ops-field-list">
             <div>
               <dt>画布校验</dt>
@@ -3964,7 +3994,7 @@
         </section>
 
         <section class="publish-dialog-section">
-          <div class="section-title"><span>⌄</span> 版本信息</div>
+          <div class="section-title"><ChevronDownIcon class="section-title-chevron" aria-hidden="true" /> 版本信息</div>
           <label class="publish-version-field">
             <span>版本名称</span>
             <input :value="nextPublishVersionName" readonly />
@@ -3976,7 +4006,7 @@
         </section>
 
         <section class="publish-dialog-section version-list" data-testid="workflow-version-list">
-          <div class="section-title"><span>⌄</span> 版本</div>
+          <div class="section-title"><ChevronDownIcon class="section-title-chevron" aria-hidden="true" /> 版本</div>
           <p v-if="workflowVersionsLoading" class="resource-empty-state">正在加载版本...</p>
           <p v-else-if="!workflowVersionRows.length" class="resource-empty-state">暂无发布版本</p>
           <template v-else>
@@ -4063,6 +4093,7 @@ import {
   CircleCheck as Finished,
   Copy as CopyIcon,
   Cpu,
+  GripVertical as GripVerticalIcon,
   Hand as HandIcon,
   LayoutDashboard as LayoutDashboardIcon,
   MessageCircle as ChatDotRound,
@@ -4408,6 +4439,14 @@ const canvasViewportWidth = ref(typeof window === 'undefined' ? 1600 : window.in
 const responsiveCanvasLayout = computed(() =>
   resolveCanvasResponsiveLayout({ viewportWidth: canvasViewportWidth.value, rem: rootRemSize() }),
 )
+const canvasToolbarPositionLeft = ref<number | null>(null)
+const isClippedCanvasLayout = computed(() =>
+  ['stage-shelved', 'left-rail'].includes(responsiveCanvasLayout.value.phase),
+)
+const canvasToolbarStyle = computed(() => {
+  if (canvasToolbarPositionLeft.value === null) return undefined
+  return { left: `${canvasToolbarPositionLeft.value}px` }
+})
 const selectedNodeKey = ref('')
 const selectedEdgeId = ref('')
 const hoveredEdgeId = ref('')
@@ -4458,6 +4497,8 @@ const variableAssignmentTargetSearch = ref('')
 const activeConditionVariableTarget = ref('')
 const activeConditionVariableGroupKey = ref('')
 const conditionVariableSearch = ref('')
+const conditionBranchDragSourceIndex = ref<number | null>(null)
+const aggregationGroupVariableDragSource = ref<{ groupIndex: number; variableIndex: number } | null>(null)
 const intentDragSourceIndex = ref<number | null>(null)
 const variableFlyoutPlacement = ref<'left' | 'right'>('left')
 const collapsedConfigSections = ref<Set<string>>(new Set())
@@ -4543,6 +4584,8 @@ let requestedCanvasZoom = 1
 let programmaticZoomSerial = 0
 let canvasLayoutRefitTimer = 0
 let canvasLayoutSettledRefitTimer = 0
+let canvasToolbarPositionFrame = 0
+let canvasToolbarPositionSettledTimer = 0
 
 const nodePaletteGroups = computed<Array<{ title: string; items: PaletteEntry[] }>>(() =>
   buildNodePaletteGroups(isChatflowMode.value ? 'chatflow' : 'workflow'),
@@ -4708,6 +4751,11 @@ const flowTitleDisplay = computed(() =>
 
 const selectedNode = computed(() => graph.value.nodes.find((node) => node.nodeKey === selectedNodeKey.value))
 const selectedSchema = computed(() => selectedNode.value ? getNodeConfigSchema(selectedNode.value.type) : null)
+const canSelectNodeModel = computed(() => {
+  if (selectedNode.value?.type === 'LLM') return true
+  if (selectedNode.value?.type !== 'INTENT_RECOGNITION') return false
+  return String(selectedNode.value.config.classifierMode || '').toLowerCase() === 'llm'
+})
 const nodeCardMenuKey = ref('')
 let nodeCardMenuCloseTimer: ReturnType<typeof window.setTimeout> | null = null
 const nodeTitleEditing = ref(false)
@@ -5439,6 +5487,8 @@ async function toggleDebugDock() {
   debugDockOpen.value = !debugDockOpen.value
   paletteOpen.value = false
   edgeInsertPaletteId.value = ''
+  await nextTick()
+  refreshCanvasToolbarPosition()
   if (!debugDockOpen.value) return
   debugTraceDetailMode.value = 'flame'
   if (!lastTestRunId.value) return
@@ -5796,6 +5846,104 @@ function rootRemSize() {
 function refreshCanvasResponsiveLayout() {
   if (typeof window === 'undefined') return
   canvasViewportWidth.value = window.innerWidth
+  scheduleCanvasToolbarPosition()
+}
+
+type CanvasToolbarInterval = {
+  left: number
+  right: number
+}
+
+function viewportCanvasToolbarInterval(element: Element | null): CanvasToolbarInterval | null {
+  if (!element || typeof window === 'undefined') return null
+  const rect = element.getBoundingClientRect()
+  const left = Math.max(0, rect.left)
+  const right = Math.min(window.innerWidth, rect.right)
+  return right > left ? { left, right } : null
+}
+
+function reserveCanvasToolbarInterval(
+  interval: CanvasToolbarInterval,
+  obstruction: CanvasToolbarInterval | null,
+): CanvasToolbarInterval {
+  if (!obstruction || obstruction.right <= interval.left || obstruction.left >= interval.right) return interval
+  if (obstruction.left <= interval.left + 1) {
+    return { left: Math.min(interval.right, Math.max(interval.left, obstruction.right)), right: interval.right }
+  }
+  if (obstruction.right >= interval.right - 1) {
+    return { left: interval.left, right: Math.max(interval.left, Math.min(interval.right, obstruction.left)) }
+  }
+  const intervalCenter = (interval.left + interval.right) / 2
+  const obstructionCenter = (obstruction.left + obstruction.right) / 2
+  return obstructionCenter <= intervalCenter
+    ? { left: Math.min(interval.right, Math.max(interval.left, obstruction.right)), right: interval.right }
+    : { left: interval.left, right: Math.max(interval.left, Math.min(interval.right, obstruction.left)) }
+}
+
+function verticallyOverlapsCanvasToolbar(element: Element, toolbar: Element) {
+  const elementRect = element.getBoundingClientRect()
+  const toolbarRect = toolbar.getBoundingClientRect()
+  return elementRect.top < toolbarRect.bottom && elementRect.bottom > toolbarRect.top
+}
+
+function refreshCanvasToolbarPosition() {
+  if (typeof window === 'undefined' || canvasTab.value !== 'compose') {
+    canvasToolbarPositionLeft.value = null
+    return
+  }
+
+  const stage = canvasStageRef.value
+  const stageInterval = viewportCanvasToolbarInterval(stage)
+  const toolbar = document.querySelector('[data-testid="canvas-bottom-toolbar"]')
+  if (!stage || !stageInterval || !toolbar) {
+    canvasToolbarPositionLeft.value = null
+    return
+  }
+
+  const debugDockInterval = viewportCanvasToolbarInterval(document.querySelector('[data-testid="workflow-debug-dock"]'))
+  const workbenchInterval = viewportCanvasToolbarInterval(document.querySelector('[data-testid="workflow-canvas"]'))
+  let availableInterval = debugDockInterval && workbenchInterval && debugDockInterval.right > workbenchInterval.left
+    ? { left: workbenchInterval.left, right: debugDockInterval.right }
+    : reserveCanvasToolbarInterval(
+      stageInterval,
+      viewportCanvasToolbarInterval(document.querySelector('[data-testid="canvas-resource-panel"]')),
+    )
+  if (!debugDockInterval) {
+    for (const selector of ['[data-testid="node-config-panel"]', '[data-testid="node-test-drawer"]', '[data-testid="test-run-panel"]']) {
+      const panel = document.querySelector(selector)
+      if (!panel || !verticallyOverlapsCanvasToolbar(panel, toolbar)) continue
+      availableInterval = reserveCanvasToolbarInterval(availableInterval, viewportCanvasToolbarInterval(panel))
+    }
+  }
+
+  const toolbarWidth = toolbar.getBoundingClientRect().width
+  if (availableInterval.right - availableInterval.left < toolbarWidth) {
+    canvasToolbarPositionLeft.value = null
+    return
+  }
+  const halfWidth = toolbarWidth / 2
+  const preferredCenter = (availableInterval.left + availableInterval.right) / 2
+  const visibleCenter = Math.min(
+    availableInterval.right - halfWidth,
+    Math.max(availableInterval.left + halfWidth, preferredCenter),
+  )
+  canvasToolbarPositionLeft.value = isClippedCanvasLayout.value
+    ? visibleCenter
+    : visibleCenter - stage.getBoundingClientRect().left
+}
+
+function scheduleCanvasToolbarPosition() {
+  if (typeof window === 'undefined') return
+  if (canvasToolbarPositionFrame) window.cancelAnimationFrame(canvasToolbarPositionFrame)
+  window.clearTimeout(canvasToolbarPositionSettledTimer)
+  canvasToolbarPositionFrame = window.requestAnimationFrame(() => {
+    canvasToolbarPositionFrame = 0
+    refreshCanvasToolbarPosition()
+  })
+  canvasToolbarPositionSettledTimer = window.setTimeout(() => {
+    canvasToolbarPositionSettledTimer = 0
+    refreshCanvasToolbarPosition()
+  }, 220)
 }
 
 function rectSnapshot(element: Element): ViewportRect {
@@ -6530,11 +6678,13 @@ function endIntentRowDrag() {
 }
 
 function dropIntentRow(targetIndex: number, event: DragEvent) {
-  const rawSource = event.dataTransfer?.getData('text/plain')
-  const sourceIndex = Number(rawSource || intentDragSourceIndex.value)
+  const rawSource = event.dataTransfer?.getData('text/plain') ?? ''
+  const sourceIndex = rawSource.trim() === ''
+    ? intentDragSourceIndex.value
+    : Number(rawSource)
   intentDragSourceIndex.value = null
   const rows = intentRows()
-  if (!Number.isInteger(sourceIndex) || sourceIndex < 0 || sourceIndex >= rows.length || sourceIndex === targetIndex) return
+  if (sourceIndex === null || !Number.isInteger(sourceIndex) || sourceIndex < 0 || sourceIndex >= rows.length || sourceIndex === targetIndex) return
   const nextRows = [...rows]
   const [moved] = nextRows.splice(sourceIndex, 1)
   nextRows.splice(targetIndex, 0, moved)
@@ -7025,6 +7175,57 @@ function persistAggregationGroups(groups: AggregationGroup[]) {
   })
 }
 
+function isAggregationTrailingCandidate(group: AggregationGroup, variableIndex: number) {
+  const variable = group.variables[variableIndex]
+  return variableIndex === group.variables.length - 1
+    && variable?.valueMode !== 'reference'
+    && String(variable?.value ?? '').trim() === ''
+}
+
+function isAggregationGroupVariableDragging(groupIndex: number, variableIndex: number) {
+  const source = aggregationGroupVariableDragSource.value
+  return source?.groupIndex === groupIndex && source.variableIndex === variableIndex
+}
+
+function startAggregationGroupVariableDrag(groupIndex: number, variableIndex: number, event: DragEvent) {
+  const source = { groupIndex, variableIndex }
+  aggregationGroupVariableDragSource.value = source
+  const payload = JSON.stringify(source)
+  event.dataTransfer?.setData('text/plain', payload)
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
+}
+
+function endAggregationGroupVariableDrag() {
+  aggregationGroupVariableDragSource.value = null
+}
+
+function parseAggregationGroupVariableDragSource(event: DragEvent) {
+  const raw = event.dataTransfer?.getData('text/plain') || ''
+  try {
+    const parsed = JSON.parse(raw) as Partial<{ groupIndex: number; variableIndex: number }>
+    if (Number.isInteger(parsed.groupIndex) && Number.isInteger(parsed.variableIndex)) {
+      return { groupIndex: Number(parsed.groupIndex), variableIndex: Number(parsed.variableIndex) }
+    }
+  } catch {
+    // Native drag data can be unavailable in some browsers; use the active handle.
+  }
+  return aggregationGroupVariableDragSource.value
+}
+
+function dropAggregationGroupVariable(groupIndex: number, targetIndex: number, event: DragEvent) {
+  const source = parseAggregationGroupVariableDragSource(event)
+  aggregationGroupVariableDragSource.value = null
+  if (!source || source.groupIndex !== groupIndex || source.variableIndex === targetIndex) return
+  const groups = aggregationGroupRows()
+  const group = groups[groupIndex]
+  if (!group || source.variableIndex < 0 || source.variableIndex >= group.variables.length) return
+  if (isAggregationTrailingCandidate(group, source.variableIndex) || isAggregationTrailingCandidate(group, targetIndex)) return
+  const variables = [...group.variables]
+  const [moved] = variables.splice(source.variableIndex, 1)
+  variables.splice(targetIndex, 0, moved)
+  persistAggregationGroups(groups.map((item, index) => index === groupIndex ? { ...item, variables } : item))
+}
+
 function addAggregationGroup() {
   const groups = aggregationGroupRows()
   persistAggregationGroups([
@@ -7443,6 +7644,30 @@ function nextConditionRowValue(condition: ConditionRow, field: keyof ConditionRo
 
 function persistConditionBranches(branches: ConditionBranch[]) {
   updateSelectedNode({ config: { conditionBranches: branches } })
+}
+
+function startConditionBranchDrag(index: number, event: DragEvent) {
+  conditionBranchDragSourceIndex.value = index
+  event.dataTransfer?.setData('text/plain', String(index))
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
+}
+
+function endConditionBranchDrag() {
+  conditionBranchDragSourceIndex.value = null
+}
+
+function dropConditionBranch(targetIndex: number, event: DragEvent) {
+  const rawSource = event.dataTransfer?.getData('text/plain') ?? ''
+  const sourceIndex = rawSource.trim() === ''
+    ? conditionBranchDragSourceIndex.value
+    : Number(rawSource)
+  conditionBranchDragSourceIndex.value = null
+  const branches = conditionBranches()
+  if (sourceIndex === null || !Number.isInteger(sourceIndex) || sourceIndex < 0 || sourceIndex >= branches.length || sourceIndex === targetIndex) return
+  const nextBranches = [...branches]
+  const [moved] = nextBranches.splice(sourceIndex, 1)
+  nextBranches.splice(targetIndex, 0, moved)
+  persistConditionBranches(nextBranches)
 }
 
 function conditionHandleId(key: string) {
@@ -9408,8 +9633,22 @@ watch(
   () => canvasTab.value,
   requestCanvasLayoutRefit,
 )
+watch(
+  () => [
+    canvasTab.value,
+    resourcePanelCollapsed.value,
+    selectedNodeKey.value,
+    nodeTestDrawerOpen.value,
+    testPanelOpen.value,
+    debugDockOpen.value,
+    responsiveCanvasLayout.value.phase,
+  ],
+  scheduleCanvasToolbarPosition,
+  { flush: 'post' },
+)
 onMounted(() => {
   refreshCanvasResponsiveLayout()
+  void nextTick(scheduleCanvasToolbarPosition)
   window.addEventListener('resize', refreshCanvasResponsiveLayout)
   window.addEventListener('keydown', handleGlobalVariableKeydown)
   document.addEventListener('pointerdown', handleGlobalVariablePointerDown, true)
@@ -9422,6 +9661,8 @@ onMounted(() => {
 onUnmounted(() => {
   window.clearTimeout(canvasLayoutRefitTimer)
   window.clearTimeout(canvasLayoutSettledRefitTimer)
+  window.clearTimeout(canvasToolbarPositionSettledTimer)
+  if (canvasToolbarPositionFrame) window.cancelAnimationFrame(canvasToolbarPositionFrame)
   window.removeEventListener('resize', refreshCanvasResponsiveLayout)
   window.removeEventListener('keydown', handleGlobalVariableKeydown)
   document.removeEventListener('pointerdown', handleGlobalVariablePointerDown, true)
@@ -12704,6 +12945,14 @@ onUnmounted(() => {
   color: #6f778a;
 }
 
+.section-title > .section-title-chevron {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+  color: #6f778a;
+  stroke-width: 1.8;
+}
+
 .config-section-title-row {
   justify-content: space-between;
 }
@@ -12733,11 +12982,11 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
   width: 1rem;
   height: 1rem;
   color: #6f778a;
-  font-size: 1rem;
-  line-height: 1;
+  stroke-width: 1.8;
   transform: rotate(90deg);
   transition: transform 0.16s ease;
 }
@@ -12758,6 +13007,18 @@ onUnmounted(() => {
 
 .config-field:last-child {
   margin-bottom: 0;
+}
+
+/* One field rail: standalone selectors/numbers never size themselves to a
+   placeholder while structured rows keep their deliberate column widths. */
+.config-field > :deep(.ant-select),
+.config-field > :deep(.ant-input-number),
+.llm-resource-fields :deep(.ant-select),
+.llm-resource-fields :deep(.ant-input-number),
+.end-output-format-row :deep(.ant-select),
+.output-format-row :deep(.ant-select) {
+  width: 100%;
+  min-width: 0;
 }
 
 .field-label-row {
@@ -13004,10 +13265,11 @@ onUnmounted(() => {
 }
 
 .variable-source-arrow {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
   color: #8a93a8;
-  font-size: 1rem;
-  font-weight: 700;
-  line-height: 1;
+  stroke-width: 2;
 }
 
 .coze-variable-source-item.active,
@@ -13718,18 +13980,49 @@ onUnmounted(() => {
 
 .condition-branch-header {
   display: grid;
-  grid-template-columns: 1rem auto auto minmax(0, 1fr) 2rem;
+  grid-template-columns: 1.5rem auto auto minmax(0, 1fr) 2rem;
   gap: 0.5rem;
   align-items: center;
   margin-bottom: 0.625rem;
 }
 
 .condition-drag-handle {
+  width: 1.5rem;
+  height: 1.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0.0625rem solid transparent;
+  border-radius: 0.375rem;
+  background: transparent;
   color: #a2aabd;
-  font-size: 1rem;
-  font-weight: 800;
-  letter-spacing: 0;
-  transform: rotate(90deg);
+  cursor: grab;
+}
+
+.condition-drag-handle:hover,
+.condition-drag-handle:focus-visible {
+  border-color: #d9def2;
+  background: #f5f7ff;
+  color: #5b5ef6;
+  outline: none;
+}
+
+.condition-drag-handle:active {
+  cursor: grabbing;
+}
+
+.condition-drag-handle svg,
+.intent-drag-handle svg,
+.aggregation-row-handle svg {
+  width: 1rem;
+  height: 1rem;
+  stroke-width: 2;
+}
+
+.condition-branch-card.is-dragging,
+.aggregation-group-variable-row.is-dragging {
+  opacity: 0.58;
 }
 
 .condition-branch-kind {
@@ -14050,7 +14343,17 @@ onUnmounted(() => {
 
 .collection-field-header,
 .collection-field-row {
-  grid-template-columns: minmax(4.25rem, 0.8fr) 4.75rem 2.75rem minmax(5rem, 1fr) minmax(6.5rem, 1.15fr) 2rem;
+  grid-template-columns: minmax(0, 1fr) 4.75rem 2.75rem 2rem;
+}
+
+.collection-field-header span:nth-child(4),
+.collection-field-header span:nth-child(5) {
+  display: none;
+}
+
+.collection-field-row > :nth-child(4),
+.collection-field-row > .collection-target-cell {
+  grid-column: 1 / -1;
 }
 
 .intent-row-header,
@@ -14127,8 +14430,21 @@ onUnmounted(() => {
 .collection-target-cell {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr);
+  grid-template-columns: 3.5rem 9rem minmax(0, 1fr);
   gap: 0.375rem;
+  align-items: center;
+}
+
+.collection-target-cell::before {
+  color: #8b93a7;
+  content: '写入';
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.collection-target-cell :deep(.ant-select) {
+  width: 100%;
+  min-width: 0;
 }
 
 .secondary-empty {
@@ -14372,10 +14688,34 @@ onUnmounted(() => {
 }
 
 .aggregation-row-handle {
+  width: 1.25rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0.0625rem solid transparent;
+  border-radius: 0.375rem;
+  background: transparent;
   color: #9aa3b8;
-  font-size: 0.9375rem;
-  line-height: 1;
-  text-align: center;
+  cursor: grab;
+}
+
+.aggregation-row-handle:hover,
+.aggregation-row-handle:focus-visible {
+  border-color: #d9def2;
+  background: #f5f7ff;
+  color: #5b5ef6;
+  outline: none;
+}
+
+.aggregation-row-handle:active {
+  cursor: grabbing;
+}
+
+.aggregation-row-handle-spacer {
+  width: 1.25rem;
+  height: 2rem;
 }
 
 .aggregation-add-group {
@@ -15825,6 +16165,50 @@ onUnmounted(() => {
 
 .workflow-canvas-page.has-node-test-drawer:not(.has-right-panel) .canvas-workbench.resource-collapsed .canvas-toolbar {
   left: calc((100% - var(--workflow-node-test-panel-width) - var(--workflow-node-test-panel-gap) - var(--debug-dock-gap)) / 2);
+}
+
+/* Keep chrome within the remaining stage as each responsive panel phase consumes width. */
+.workflow-canvas-page.canvas-layout-right-anchored.has-right-panel .canvas-toolbar {
+  gap: 0.375rem;
+  padding: 0 0.5rem;
+}
+
+.workflow-canvas-page.canvas-layout-right-anchored.has-right-panel .canvas-toolbar .toolbar-add-node,
+.workflow-canvas-page.canvas-layout-right-anchored.has-right-panel .canvas-toolbar .toolbar-run {
+  width: 2rem;
+  min-width: 2rem;
+  gap: 0;
+  padding: 0;
+}
+
+.workflow-canvas-page.canvas-layout-right-anchored.has-right-panel .canvas-toolbar .toolbar-add-node span,
+.workflow-canvas-page.canvas-layout-right-anchored.has-right-panel .canvas-toolbar .toolbar-run span {
+  display: none;
+}
+
+/* The actual visible stage can shift when the fixed-width canvas is scrolled. */
+.workflow-canvas-page.canvas-layout-stage-shelved .canvas-toolbar,
+.workflow-canvas-page.canvas-layout-left-rail .canvas-toolbar {
+  position: fixed;
+  gap: 0.375rem;
+  padding: 0 0.5rem;
+}
+
+.workflow-canvas-page.canvas-layout-stage-shelved .canvas-toolbar .toolbar-add-node,
+.workflow-canvas-page.canvas-layout-stage-shelved .canvas-toolbar .toolbar-run,
+.workflow-canvas-page.canvas-layout-left-rail .canvas-toolbar .toolbar-add-node,
+.workflow-canvas-page.canvas-layout-left-rail .canvas-toolbar .toolbar-run {
+  width: 2rem;
+  min-width: 2rem;
+  gap: 0;
+  padding: 0;
+}
+
+.workflow-canvas-page.canvas-layout-stage-shelved .canvas-toolbar .toolbar-add-node span,
+.workflow-canvas-page.canvas-layout-stage-shelved .canvas-toolbar .toolbar-run span,
+.workflow-canvas-page.canvas-layout-left-rail .canvas-toolbar .toolbar-add-node span,
+.workflow-canvas-page.canvas-layout-left-rail .canvas-toolbar .toolbar-run span {
+  display: none;
 }
 
 .canvas-toolbar button {

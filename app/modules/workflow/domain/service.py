@@ -434,8 +434,14 @@ class WorkflowService:
             config = node.get("config") if isinstance(node.get("config"), Mapping) else {}
             if node_type == "EXECUTE_WORKFLOW":
                 errors.extend(self._execute_workflow_readiness_errors(workflow_id, node_key, config))
-            elif node_type == "LLM":
-                errors.extend(self._llm_model_readiness_errors(node_key, config))
+            elif node_type == "LLM" or _is_llm_intent_config(config, node_type):
+                errors.extend(
+                    self._llm_model_readiness_errors(
+                        node_key,
+                        config,
+                        require_model_config=node_type == "INTENT_RECOGNITION",
+                    )
+                )
             elif node_type == "AGENT_CALL":
                 errors.extend(self._agent_readiness_errors(node_key, config))
         return errors
@@ -462,11 +468,19 @@ class WorkflowService:
             return [f"{node_key} target workflow must have an active published version"]
         return []
 
-    def _llm_model_readiness_errors(self, node_key: str, config: Mapping[str, Any]) -> list[str]:
+    def _llm_model_readiness_errors(
+        self,
+        node_key: str,
+        config: Mapping[str, Any],
+        *,
+        require_model_config: bool = False,
+    ) -> list[str]:
         if self._model_facade is None:
             return []
         raw_model_config_id = config.get("modelConfigId") or config.get("model_config_id")
         model_config_id = _optional_positive_int(raw_model_config_id)
+        if require_model_config and model_config_id is None:
+            return [f"{node_key} modelConfigId is required"]
         if raw_model_config_id not in (None, "") and model_config_id is not None:
             try:
                 self._model_facade.get_enabled_model_config(model_config_id)
@@ -949,7 +963,11 @@ class WorkflowService:
 
     def _node_config_llm_completer(self, workflow_id: int) -> WorkflowLlmCompleter | None:
         nodes = self._repository.list_nodes(workflow_id)
-        if not any(node["type"] == "LLM" and _has_node_model_config(node.get("config")) for node in nodes):
+        if not any(
+            (node["type"] == "LLM" or _is_llm_intent_node(node))
+            and _has_node_model_config(node.get("config"))
+            for node in nodes
+        ):
             return None
         if self._model_facade is None:
             return None
@@ -1590,6 +1608,10 @@ def _is_llm_intent_node(node: dict[str, Any]) -> bool:
     if not isinstance(config, dict):
         return False
     return str(config.get("classifierMode") or "").lower() == "llm"
+
+
+def _is_llm_intent_config(config: Mapping[str, Any], node_type: str) -> bool:
+    return node_type == "INTENT_RECOGNITION" and str(config.get("classifierMode") or config.get("classifier_mode") or "").lower() == "llm"
 
 
 def _is_llm_information_collection_node(node: dict[str, Any]) -> bool:

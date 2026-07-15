@@ -7,6 +7,26 @@ from app.main import app
 
 
 class ProviderCrudContractTest(unittest.TestCase):
+    def test_blank_api_key_is_not_reported_as_configured(self) -> None:
+        provider_name = f"Blank auth provider {time.time_ns()}"
+
+        with TestClient(app) as client:
+            create_response = client.post(
+                "/api/v1/providers",
+                json={
+                    "name": provider_name,
+                    "type": "OPENAI_COMPATIBLE",
+                    "baseUrl": "https://api.example.com/v1",
+                    "authConfig": {"api_key": ""},
+                },
+            )
+            self.assertEqual(create_response.status_code, 200)
+            created = create_response.json()["data"]
+            self.assertFalse(created["authConfigured"])
+
+            delete_response = client.delete(f"/api/v1/providers/{created['id']}")
+            self.assertEqual(delete_response.status_code, 200)
+
     def test_create_list_update_delete_provider(self) -> None:
         provider_name = f"Provider {time.time_ns()}"
 
