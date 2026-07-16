@@ -35,7 +35,7 @@ class RuntimeInvocationRefs:
     def from_envelope(cls, envelope: dict[str, object]) -> "RuntimeInvocationRefs":
         """Parse from the gateway's envelope dict (lossless if six keys present)."""
         return cls(
-            runId=int(envelope["runId"]),  # type: ignore[arg-type]
+            runId=int(str(envelope["runId"])),
             statusRef=str(envelope["statusRef"]),
             eventsRef=str(envelope["eventsRef"]),
             eventStreamRef=str(envelope["eventStreamRef"]),
@@ -65,6 +65,13 @@ class RuntimeV2InvocationService(Protocol):
     ) -> dict[str, Any]:
         ...
 
+    def prepare_resume(
+        self,
+        run_id: int,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        ...
+
     def get_result(self, run_id: int) -> dict[str, Any]:
         ...
 
@@ -78,9 +85,15 @@ class RuntimeInvocationGateway:
         service: RuntimeV2InvocationService,
         *,
         enqueue_background_run: Callable[[int, int], dict[str, Any] | None] | None = None,
+        enqueue_background_resume: Callable[[int, int, int, dict[str, Any], str | None], dict[str, Any] | None] | None = None,
     ) -> None:
         self._service = service
         self._enqueue_background_run = enqueue_background_run
+        self._enqueue_background_resume = enqueue_background_resume
+
+    @property
+    def supports_async_resume(self) -> bool:
+        return self._enqueue_background_resume is not None
 
     def start_only(
         self,
@@ -158,11 +171,37 @@ class RuntimeInvocationGateway:
             mode="sync",
         )
 
+    def resume_and_stream_ref(
+        self,
+        *,
+        owner_id: int,
+        run_id: int,
+        resume_data: dict[str, Any],
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        if self._enqueue_background_resume is None:
+            raise RuntimeError("Runtime v2 async resume requires a configured background worker queue")
+        prepared = self._service.prepare_resume(run_id, idempotency_key)
+        invocation = _unified_invocation(
+            prepared,
+            result=None,
+            events={"list": [], "total": 0},
+            mode="async-durable",
+        )
+        invocation["streamRef"] = invocation["runtimeRefs"]["eventStreamRef"]
+        if not bool(prepared.get("idempotentReplay")):
+            checkpoint_id = int(prepared["checkpointId"])
+            job = self._enqueue_background_resume(owner_id, run_id, checkpoint_id, dict(resume_data), idempotency_key)
+            if job is not None:
+                invocation["backgroundJob"] = job
+        return invocation
+
     # Compatibility aliases for callers that mirror external API naming.
     startOnly = start_only
     startAndWait = start_and_wait
     startAndStreamRef = start_and_stream_ref
     resumeAndWait = resume_and_wait
+    resumeAndStreamRef = resume_and_stream_ref
 
 
 def _unified_invocation(

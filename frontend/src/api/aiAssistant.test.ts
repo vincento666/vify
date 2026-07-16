@@ -150,7 +150,7 @@ describe('ai assistant frontend API client', () => {
   it('allows deterministic runtime mode without live provider config', async () => {
     const { buildAiAssistantMessagePayload } = await import('./aiAssistant')
     const runtimeConfig = {
-      modelMode: 'deterministic',
+      modelMode: 'deterministic' as const,
       modelName: 'qwen/qwen3.6-27b',
       baseUrl: 'https://openrouter.ai/api/v1',
       apiKey: '',
@@ -165,6 +165,44 @@ describe('ai assistant frontend API client', () => {
       planningStrategy: 'auto_lightweight',
       approvalMode: 'smart_approval',
       modelMode: 'deterministic',
+    })
+  })
+
+  it('uses scoped usage aggregate endpoints without caller-supplied scope', async () => {
+    requestMocks.get.mockResolvedValue({})
+    const {
+      getAiAssistantUsageDaily,
+      getAiAssistantUsageDimensions,
+      getAiAssistantUsageSession,
+      getAiAssistantUsageSessions,
+      getAiAssistantUsageSummary,
+    } = await import('./aiAssistant')
+    const query = { from: '2026-06-12', to: '2026-07-11', timezone: 'Asia/Shanghai' }
+
+    await getAiAssistantUsageSummary({ timezone: 'Asia/Shanghai' })
+    await getAiAssistantUsageDaily({ from: '2025-07-12', to: '2026-07-11', timezone: 'Asia/Shanghai' })
+    await getAiAssistantUsageSessions(query, { limit: 25, offset: 0 })
+    await getAiAssistantUsageDimensions(query)
+    await getAiAssistantUsageSession(9, query, { limit: 100, offset: 0 })
+
+    expect(requestMocks.get).toHaveBeenNthCalledWith(1, '/v1/ai-assistant/usage/summary', {
+      timezone: 'Asia/Shanghai',
+    })
+    expect(requestMocks.get).toHaveBeenNthCalledWith(2, '/v1/ai-assistant/usage/daily', {
+      from: '2025-07-12',
+      to: '2026-07-11',
+      timezone: 'Asia/Shanghai',
+    })
+    expect(requestMocks.get).toHaveBeenNthCalledWith(3, '/v1/ai-assistant/usage/sessions', {
+      ...query,
+      limit: 25,
+      offset: 0,
+    })
+    expect(requestMocks.get).toHaveBeenNthCalledWith(4, '/v1/ai-assistant/usage/dimensions', query)
+    expect(requestMocks.get).toHaveBeenNthCalledWith(5, '/v1/ai-assistant/usage/sessions/9', {
+      ...query,
+      limit: 100,
+      offset: 0,
     })
   })
 })

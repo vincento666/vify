@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import time
-from concurrent.futures import Future, ThreadPoolExecutor, as_completed
-from collections.abc import Callable, Mapping
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from threading import Event
 from typing import Any
+
+from sqlalchemy.orm import sessionmaker
 
 from app.core.errors import BizError, ErrorCode
 from app.modules.knowledge.api.facade import KnowledgeFacade
@@ -89,6 +92,9 @@ _RUNTIME_V2_PRESTART_WAVE_NODE_TYPES = {
 }
 _RUNTIME_V2_PARALLEL_WAVE_NODE_TYPES = {
     "API_CALL",
+    "LLM",
+    "KNOWLEDGE",
+    "TOOL_CALL",
 }
 _RUNTIME_V2_SIDE_EFFECT_PROTECTION: dict[str, tuple[str, str]] = {
     "MESSAGE": ("message_send", "idempotency_key"),
@@ -524,13 +530,26 @@ class ChatflowRuntimeV2Service:
         except Exception as exc:
             if not self._run_has_status(run_id, "RUNNING"):
                 return
+            failure = _runtime_v2_terminal_failure(
+                run_id=run_id,
+                error=exc,
+                node_runs=self._repository.list_node_runs(run_id),
+            )
             self._repository.finish_run(run_id, "FAILED", output={}, error=str(exc))
+            if self._use_chatflow_session:
+                self._state_repository.update_session_status(
+                    chatflow_id=chatflow_id,
+                    session_id=session_id,
+                    status="failed",
+                    current_run_id=run_id,
+                    variables=context.scopes_snapshot(),
+                )
             self._append_event(
                 session_id=session_id,
                 chatflow_id=chatflow_id,
                 run_id=run_id,
                 event_type="workflow_run_failed",
-                payload={"error": str(exc)},
+                payload={"error": str(exc), "failure": failure},
             )
             return
         if not self._run_has_status(run_id, "RUNNING"):
@@ -573,18 +592,28 @@ class ChatflowRuntimeV2Service:
         run_id: int,
         resume_data: dict[str, Any],
         idempotency_key: str | None = None,
+        checkpoint_id: int | None = None,
     ) -> dict[str, Any]:
         run = self._run_or_404(run_id)
         chatflow_id = int(run["workflow_id"])
-        if idempotency_key and self._state_repository.find_resume_event_by_idempotency_key(
+        previous_resume = (
+            self._state_repository.find_resume_event_by_idempotency_key(
+                chatflow_id,
+                run_id,
+                idempotency_key,
+            )
+            if idempotency_key
+            else None
+        )
+        if previous_resume is not None and not self._resume_event_is_retryable(previous_resume):
+            return self.get_result(run_id)
+        checkpoint = self._state_repository.claim_waiting_checkpoint(
             chatflow_id,
             run_id,
-            idempotency_key,
-        ):
-            return self.get_result(run_id)
-        checkpoint = self._state_repository.get_waiting_checkpoint(chatflow_id, run_id)
+            checkpoint_id,
+        )
         if checkpoint is None:
-            raise BizError(ErrorCode.NOT_FOUND, "Runtime v2 checkpoint not found")
+            raise BizError(ErrorCode.NOT_FOUND, "Runtime v2 checkpoint is unavailable for resume")
         session_id = str(checkpoint["session_id"])
         pending_node_key = str(checkpoint["pending_node_key"])
         context = ExecutionContext()
@@ -622,7 +651,7 @@ class ChatflowRuntimeV2Service:
                 edges=runtime_definition.get("edges") if runtime_definition else None,
             )
         except _RuntimeV2Interrupt as interrupted:
-            self._state_repository.mark_checkpoint_completed(int(checkpoint["id"]))
+            self._state_repository.mark_claimed_checkpoint_completed(int(checkpoint["id"]))
             self._repository.finish_run(run_id, "INTERRUPTED", output=interrupted.output)
             self._state_repository.update_session_status(
                 chatflow_id=chatflow_id,
@@ -640,7 +669,10 @@ class ChatflowRuntimeV2Service:
                 payload={"output": interrupted.output},
             )
             return self.get_result(run_id)
-        self._state_repository.mark_checkpoint_completed(int(checkpoint["id"]))
+        except Exception:
+            self._state_repository.release_checkpoint_claim(int(checkpoint["id"]))
+            raise
+        self._state_repository.mark_claimed_checkpoint_completed(int(checkpoint["id"]))
         node_runs = self._repository.list_node_runs(run_id)
         output = _resolve_final_output(self._owner_type, output, node_runs)
         self._repository.finish_run(run_id, "SUCCEEDED", output=output)
@@ -659,6 +691,84 @@ class ChatflowRuntimeV2Service:
             payload={"output": output},
         )
         return self.get_result(run_id)
+
+    def prepare_resume(
+        self,
+        run_id: int,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        """Validate a durable resume request without executing the run inline."""
+        run = self._run_or_404(run_id)
+        chatflow_id = int(run["workflow_id"])
+        previous_resume = (
+            self._state_repository.find_resume_event_by_idempotency_key(
+                chatflow_id,
+                run_id,
+                idempotency_key,
+            )
+            if idempotency_key
+            else None
+        )
+        if previous_resume is not None and not self._resume_event_is_retryable(previous_resume):
+            result = self.get_result(run_id)
+            result["idempotentReplay"] = True
+            return result
+        checkpoint = self._state_repository.get_waiting_checkpoint(chatflow_id, run_id)
+        if checkpoint is None:
+            raise BizError(ErrorCode.NOT_FOUND, "Runtime v2 checkpoint not found")
+        return {
+            "runId": run_id,
+            "checkpointId": int(checkpoint["id"]),
+            "sessionId": str(checkpoint["session_id"]),
+            "status": str(run["status"]),
+            "statusRef": f"/api/v1/runtime-runs/{run_id}",
+            "eventsRef": f"/api/v1/runtime-runs/{run_id}/events",
+            "eventStreamRef": f"/api/v1/runtime-runs/{run_id}/events/stream?afterSequence=0",
+            "nodesRef": f"/api/v1/runtime-runs/{run_id}/nodes",
+            "resultRef": f"/api/v1/runtime-runs/{run_id}/result",
+        }
+
+    def record_resume_job_failure(
+        self,
+        run_id: int,
+        checkpoint_id: int,
+        error: str,
+        *,
+        job_id: int,
+        attempt_count: int,
+    ) -> None:
+        """Publish an exhausted async-resume failure while preserving the waiting checkpoint for retry."""
+        run = self._run_or_404(run_id)
+        chatflow_id = int(run["workflow_id"])
+        checkpoint = self._state_repository.get_checkpoint(checkpoint_id)
+        if (
+            checkpoint is None
+            or int(checkpoint.get("chatflow_id") or 0) != chatflow_id
+            or int(checkpoint.get("run_id") or 0) != run_id
+            or str(checkpoint.get("status") or "").lower() != "waiting"
+        ):
+            return
+        self._append_event(
+            session_id=str(checkpoint["session_id"]),
+            chatflow_id=chatflow_id,
+            run_id=run_id,
+            event_type="workflow_run_resume_failed",
+            node_key=str(checkpoint.get("pending_node_key") or ""),
+            payload={
+                "error": error,
+                "checkpointId": checkpoint_id,
+                "jobId": job_id,
+                "attemptCount": attempt_count,
+            },
+            checkpoint_id=checkpoint_id,
+        )
+
+    def _resume_event_is_retryable(self, event: dict[str, Any]) -> bool:
+        checkpoint_id = event.get("checkpoint_id")
+        if checkpoint_id is None:
+            return False
+        checkpoint = self._state_repository.get_checkpoint(int(checkpoint_id))
+        return checkpoint is not None and str(checkpoint.get("status") or "").lower() == "waiting"
 
     def cancel_run(
         self,
@@ -856,6 +966,13 @@ class ChatflowRuntimeV2Service:
         events = self._state_repository.list_events(chatflow_id, run_id)
         output = dict(run.get("output") or {})
         waiting_nodes = _runtime_waiting_nodes(run, node_runs, checkpoint)
+        failure = _runtime_v2_recorded_terminal_failure(events)
+        if failure is None and str(run.get("status") or "").upper() == "FAILED":
+            failure = _runtime_v2_terminal_failure(
+                run_id=run_id,
+                error=str(run.get("error") or ""),
+                node_runs=node_runs,
+            )
         refs = {
             "statusRef": f"/api/v1/runtime-runs/{run_id}",
             "eventsRef": f"/api/v1/runtime-runs/{run_id}/events",
@@ -882,6 +999,9 @@ class ChatflowRuntimeV2Service:
             **refs,
             "runtimeRefs": {"runId": run_id, **refs},
         }
+        if failure is not None:
+            result["failure"] = failure
+            result["errorCode"] = str(failure["code"])
         if self._use_chatflow_session and owner_type == "CHATFLOW":
             session = self._state_repository.get_session(chatflow_id, session_id)
             if session is not None:
@@ -902,6 +1022,26 @@ class ChatflowRuntimeV2Service:
             for event in self._state_repository.list_events(int(run["workflow_id"]), run_id)
             if int(event["sequence"]) > after_sequence
         ]
+        return {"list": events, "total": len(events)}
+
+    def list_events_fresh(self, run_id: int, after_sequence: int = 0) -> dict[str, Any]:
+        """Read a durable event backlog outside a long-lived SSE session snapshot."""
+        repository_session = getattr(self._repository, "_session", None)
+        bind = repository_session.get_bind() if repository_session is not None else None
+        if bind is None:
+            return self.list_events(run_id, after_sequence=after_sequence)
+        engine = getattr(bind, "engine", bind)
+        factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+        with factory() as event_session:
+            repository = WorkflowRepository(event_session)
+            run = repository.get_run(run_id)
+            if run is None:
+                raise BizError(ErrorCode.NOT_FOUND, "Runtime v2 run not found")
+            events = [
+                _format_runtime_event(event)
+                for event in ChatflowStateRepository(event_session).list_events(int(run["workflow_id"]), run_id)
+                if int(event["sequence"]) > after_sequence
+            ]
         return {"list": events, "total": len(events)}
 
     def list_nodes(self, run_id: int) -> dict[str, Any]:
@@ -957,7 +1097,10 @@ class ChatflowRuntimeV2Service:
             prestarted: dict[str, tuple[int, float]] = {}
             wave_node_types = {str(node["type"]).upper() for _, node, _ in wave_items}
             prestart_wave = len(wave_items) > 1 and wave_node_types.issubset(_RUNTIME_V2_PRESTART_WAVE_NODE_TYPES)
-            parallel_wave = prestart_wave and wave_node_types.issubset(_RUNTIME_V2_PARALLEL_WAVE_NODE_TYPES)
+            parallel_wave = prestart_wave and all(
+                self._parallel_wave_node_is_eligible(node)
+                for _current, node, _selection_state in wave_items
+            )
             if parallel_wave:
                 parallel_wave_index += 1
                 wave_key = f"wave-{run_id}-{parallel_wave_index}"
@@ -1035,8 +1178,12 @@ class ChatflowRuntimeV2Service:
         wave_results: list[tuple[str, dict[str, Any], dict[str, Any], str]] = []
         wave_errors: list[Exception] = []
         futures: dict[Future[dict[str, Any]], tuple[str, dict[str, Any], ExecutionContext, int, float]] = {}
+        self._prepare_parallel_wave_dependencies(chatflow_id, wave_items)
         api_resource_rows = self._preload_parallel_api_resource_rows(wave_items)
-        with ThreadPoolExecutor(max_workers=max(1, len(wave_items))) as executor:
+        wave_cancelled = Event()
+        abandon_workers = False
+        executor = ThreadPoolExecutor(max_workers=max(1, len(wave_items)))
+        try:
             for current, node, _selection_state in wave_items:
                 self._raise_if_run_cancelled(run_id=run_id, chatflow_id=chatflow_id, session_id=session_id)
                 node_run_id, node_started_at = prestarted[current]
@@ -1044,44 +1191,114 @@ class ChatflowRuntimeV2Service:
                 future = executor.submit(
                     self._execute_parallel_node_operation,
                     chatflow_id,
+                    run_id,
+                    session_id,
                     node,
                     node_context,
                     node_run_id,
                     api_resource_rows,
+                    wave_cancelled,
                 )
                 futures[future] = (current, node, node_context, node_run_id, node_started_at)
-            for future in as_completed(futures):
-                current, node, _node_context, node_run_id, node_started_at = futures[future]
-                node_type = str(node["type"]).upper()
-                try:
-                    node_output = future.result()
-                    node_output = self._complete_prestarted_node_success(
+            pending = set(futures)
+            while pending:
+                timeout_seconds = _next_parallel_wave_timeout_seconds(pending, futures)
+                completed, pending = wait(pending, timeout=timeout_seconds, return_when=FIRST_COMPLETED)
+                if not completed:
+                    timed_out = _expired_parallel_wave_nodes(futures, pending)
+                    if not timed_out:
+                        continue
+                    abandon_workers = True
+                    wave_cancelled.set()
+                    current, node, _node_context, node_run_id, node_started_at = timed_out[0]
+                    timeout_error = _RuntimeV2NodeTimeout(
+                        node_key=current,
+                        timeout_ms=_runtime_v2_node_timeout_ms(node),
+                    )
+                    self._mark_parallel_node_timed_out(
                         chatflow_id=chatflow_id,
                         run_id=run_id,
                         session_id=session_id,
                         node=node,
                         node_run_id=node_run_id,
                         started_at=node_started_at,
-                        output=node_output,
+                        error=timeout_error,
                     )
-                except Exception as exc:
+                    for peer_future in pending:
+                        peer_future.cancel()
+                        peer_current, peer_node, _peer_context, peer_node_run_id, _peer_started_at = futures[peer_future]
+                        if peer_current == current:
+                            continue
+                        self._cancel_node_run_if_active(
+                            chatflow_id=chatflow_id,
+                            run_id=run_id,
+                            session_id=session_id,
+                            node_run={
+                                "id": peer_node_run_id,
+                                "node_key": peer_current,
+                                "node_type": str(peer_node["type"]).upper(),
+                                "status": "RUNNING",
+                            },
+                            reason=str(timeout_error),
+                        )
+                    wave_errors.append(timeout_error)
+                    return wave_results, wave_errors
+                for future in completed:
+                    current, node, _node_context, node_run_id, node_started_at = futures[future]
+                    node_type = str(node["type"]).upper()
                     try:
-                        handled_output = self._complete_prestarted_node_error(
+                        node_output = future.result()
+                        node_output = self._complete_prestarted_node_success(
                             chatflow_id=chatflow_id,
                             run_id=run_id,
                             session_id=session_id,
                             node=node,
                             node_run_id=node_run_id,
                             started_at=node_started_at,
-                            exc=exc,
+                            output=node_output,
                         )
-                    except Exception as completed_exc:
-                        wave_errors.append(completed_exc)
+                    except Exception as exc:
+                        try:
+                            handled_output = self._complete_prestarted_node_error(
+                                chatflow_id=chatflow_id,
+                                run_id=run_id,
+                                session_id=session_id,
+                                node=node,
+                                node_run_id=node_run_id,
+                                started_at=node_started_at,
+                                exc=exc,
+                            )
+                        except Exception as completed_exc:
+                            wave_errors.append(completed_exc)
+                            continue
+                        wave_results.append((current, handled_output, node, node_type))
                         continue
-                    wave_results.append((current, handled_output, node, node_type))
-                    continue
-                wave_results.append((current, node_output, node, node_type))
+                    wave_results.append((current, node_output, node, node_type))
+        finally:
+            executor.shutdown(wait=not abandon_workers, cancel_futures=abandon_workers)
         return wave_results, wave_errors
+
+    def _prepare_parallel_wave_dependencies(
+        self,
+        chatflow_id: int,
+        wave_items: list[tuple[str, dict[str, Any], dict[str, Any] | None]],
+    ) -> None:
+        if any(str(node.get("type") or "").upper() == "LLM" for _current, node, _state in wave_items):
+            self._llm_completer_for(chatflow_id)
+
+    def _parallel_wave_node_is_eligible(self, node: Mapping[str, Any]) -> bool:
+        node_type = str(node.get("type") or "").upper()
+        if node_type not in _RUNTIME_V2_PARALLEL_WAVE_NODE_TYPES:
+            return False
+        if node_type != "TOOL_CALL":
+            return True
+        config = dict(node.get("config") or {})
+        if not _runtime_v2_parallel_safe_tool_config(config):
+            return False
+        resource_type = _runtime_v2_tool_resource_type(config)
+        return resource_type == "MCP_TOOL" and callable(
+            getattr(self._mcp_tool_executor, "execute_tool_call_idempotent", None)
+        )
 
     def _preload_parallel_api_resource_rows(
         self,
@@ -1218,7 +1435,18 @@ class ChatflowRuntimeV2Service:
                         self._llm_completer_for(chatflow_id),
                         self._knowledge_facade,
                         self._mcp_tool_executor,
-                    ).execute(node, context),
+                    ).execute(
+                        node,
+                        context,
+                        on_delta=self._runtime_v2_llm_delta_callback(
+                            chatflow_id=chatflow_id,
+                            run_id=run_id,
+                            session_id=session_id,
+                            node_key=node_key,
+                            node_run_id=node_run_id,
+                        ),
+                        cancellation_check=lambda: self._run_has_status(run_id, "CANCELLED"),
+                    ),
                 )
             elif node_type == "KNOWLEDGE":
                 if self._knowledge_facade is None:
@@ -1248,12 +1476,22 @@ class ChatflowRuntimeV2Service:
                         {"nodeKey": node_key, "nodeType": node_type, "reason": reason}
                     )
                     raise ValueError(error["message"])
+                tool_node = node
+                if self._parallel_wave_node_is_eligible(node):
+                    protection = _runtime_v2_side_effect_protection(
+                        run_id=run_id,
+                        node_run_id=node_run_id,
+                        node_key=node_key,
+                        node_type=node_type,
+                    )
+                    tool_node = _node_with_parallel_tool_idempotency(node, protection["idempotencyKey"])
                 output = self._execute_governed_external_node(
-                    node=node,
+                    node=tool_node,
                     node_run_id=node_run_id,
-                    operation=lambda: ToolCallNodeExecutor(self._mcp_tool_executor, self._api_tool_executor).execute(
-                        node, context
-                    ),
+                    operation=lambda: ToolCallNodeExecutor(
+                        self._mcp_tool_executor,
+                        self._api_tool_executor,
+                    ).execute(tool_node, context),
                 )
                 output = _with_runtime_v2_execution_evidence_defaults(output)
             elif node_type == "EXECUTE_WORKFLOW":
@@ -1310,6 +1548,13 @@ class ChatflowRuntimeV2Service:
                 variable_scopes=context.scopes_snapshot(),
             ) from interrupted
         except Exception as exc:
+            if self._run_has_status(run_id, "CANCELLED"):
+                self._raise_if_run_cancelled(
+                    run_id=run_id,
+                    chatflow_id=chatflow_id,
+                    session_id=session_id,
+                    node_run_id=node_run_id,
+                )
             if isinstance(exc, ExternalCallGovernanceError):
                 payload = {**exc.event_payload, "nodeType": node_type, "nodeRunId": node_run_id}
                 self._append_event(
@@ -1415,10 +1660,13 @@ class ChatflowRuntimeV2Service:
     def _execute_parallel_node_operation(
         self,
         chatflow_id: int,
+        run_id: int,
+        session_id: str,
         node: dict[str, Any],
         context: ExecutionContext,
         node_run_id: int,
         api_resource_rows: dict[str, dict[str, Any]],
+        wave_cancelled: Event | None = None,
     ) -> dict[str, Any]:
         node_key = str(node["node_key"])
         node_type = str(node["type"]).upper()
@@ -1430,7 +1678,20 @@ class ChatflowRuntimeV2Service:
                     self._llm_completer_for(chatflow_id),
                     self._knowledge_facade,
                     self._mcp_tool_executor,
-                ).execute(node, context),
+                ).execute(
+                    node,
+                    context,
+                    on_delta=self._runtime_v2_llm_delta_callback(
+                        chatflow_id=chatflow_id,
+                        run_id=run_id,
+                        session_id=session_id,
+                        node_key=node_key,
+                        node_run_id=node_run_id,
+                        cancellation_check=wave_cancelled.is_set if wave_cancelled is not None else None,
+                    ),
+                    cancellation_check=lambda: bool(wave_cancelled and wave_cancelled.is_set())
+                    or self._run_has_status(run_id, "CANCELLED"),
+                ),
             )
         if node_type == "KNOWLEDGE":
             if self._knowledge_facade is None:
@@ -1438,7 +1699,7 @@ class ChatflowRuntimeV2Service:
             return self._execute_governed_external_node(
                 node=node,
                 node_run_id=node_run_id,
-                operation=lambda: KnowledgeNodeExecutor(self._knowledge_facade).execute(node, context),
+                operation=lambda: self._execute_parallel_knowledge_output(node, context),
             )
         if node_type == "API_CALL":
             reason = _runtime_v2_api_call_unsupported_reason(dict(node.get("config") or {}))
@@ -1464,17 +1725,72 @@ class ChatflowRuntimeV2Service:
                     {"nodeKey": node_key, "nodeType": node_type, "reason": reason}
                 )
                 raise ValueError(error["message"])
+            protection = _runtime_v2_side_effect_protection(
+                run_id=run_id,
+                node_run_id=node_run_id,
+                node_key=node_key,
+                node_type=node_type,
+            )
+            parallel_node = _node_with_parallel_tool_idempotency(node, protection["idempotencyKey"])
             output = self._execute_governed_external_node(
-                node=node,
+                node=parallel_node,
                 node_run_id=node_run_id,
                 operation=lambda: ToolCallNodeExecutor(self._mcp_tool_executor, self._api_tool_executor).execute(
-                    node, context
+                    parallel_node, context
                 ),
             )
             return _with_runtime_v2_execution_evidence_defaults(output)
         if node_type == "AGENT_CALL":
             return AgentCallNodeExecutor(self._agent_invoker_for(chatflow_id)).execute(node, context)
         raise ValueError(f"Runtime v2 node is not eligible for parallel wave execution: {node_type}")
+
+    def _execute_parallel_knowledge_output(
+        self,
+        node: dict[str, Any],
+        context: ExecutionContext,
+    ) -> dict[str, Any]:
+        knowledge_facade = self._knowledge_facade
+        repository = getattr(knowledge_facade, "_repository", None)
+        repository_session = getattr(repository, "_session", None)
+        bind = repository_session.get_bind() if repository_session is not None else None
+        if bind is None:
+            return KnowledgeNodeExecutor(knowledge_facade).execute(node, context)
+        engine = getattr(bind, "engine", bind)
+        factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+        with factory() as knowledge_session:
+            return KnowledgeNodeExecutor(KnowledgeFacade(knowledge_session)).execute(node, context)
+
+    def _mark_parallel_node_timed_out(
+        self,
+        *,
+        chatflow_id: int,
+        run_id: int,
+        session_id: str,
+        node: Mapping[str, Any],
+        node_run_id: int,
+        started_at: float,
+        error: Exception,
+    ) -> None:
+        node_key = str(node["node_key"])
+        node_type = str(node["type"]).upper()
+        elapsed_ms = max(0, int((time.perf_counter() - started_at) * 1000))
+        self._repository.finish_node_run(node_run_id, "FAILED", {}, error=str(error), elapsed_ms=elapsed_ms)
+        self._append_event(
+            session_id=session_id,
+            chatflow_id=chatflow_id,
+            run_id=run_id,
+            event_type="workflow_node_failed",
+            node_key=node_key,
+            payload={"nodeType": node_type, "nodeRunId": node_run_id, "error": str(error)},
+        )
+        self._append_event(
+            session_id=session_id,
+            chatflow_id=chatflow_id,
+            run_id=run_id,
+            event_type="node_status_changed",
+            node_key=node_key,
+            payload={"nodeType": node_type, "nodeRunId": node_run_id, "status": "FAILED"},
+        )
 
     def _complete_prestarted_node_success(
         self,
@@ -1898,6 +2214,87 @@ class ChatflowRuntimeV2Service:
             checkpoint_id=checkpoint_id,
         )
 
+    def _runtime_v2_llm_delta_callback(
+        self,
+        *,
+        chatflow_id: int,
+        run_id: int,
+        session_id: str,
+        node_key: str,
+        node_run_id: int,
+        cancellation_check: Callable[[], bool] | None = None,
+    ) -> Callable[[str], None]:
+        def emit(content: str) -> None:
+            if not content or (cancellation_check is not None and cancellation_check()):
+                return
+            self._append_live_llm_delta(
+                chatflow_id=chatflow_id,
+                run_id=run_id,
+                session_id=session_id,
+                node_key=node_key,
+                node_run_id=node_run_id,
+                content=content,
+            )
+
+        return emit
+
+    def _append_live_llm_delta(
+        self,
+        *,
+        chatflow_id: int,
+        run_id: int,
+        session_id: str,
+        node_key: str,
+        node_run_id: int,
+        content: str,
+    ) -> None:
+        repository_session = getattr(self._repository, "_session", None)
+        bind = repository_session.get_bind() if repository_session is not None else None
+        if bind is None:
+            self._append_event(
+                session_id=session_id,
+                chatflow_id=chatflow_id,
+                run_id=run_id,
+                event_type="llm_delta",
+                node_key=node_key,
+                payload={
+                    "nodeType": "LLM",
+                    "nodeRunId": node_run_id,
+                    "content": content,
+                    "streamSource": "provider",
+                },
+            )
+            return
+        engine = getattr(bind, "engine", bind)
+        factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+        event_stream_bus = getattr(self._state_repository, "_event_stream_bus", None)
+        with factory() as event_session:
+            event_repository = WorkflowRepository(event_session)
+            run = event_repository.lock_running_run_for_event(run_id)
+            if run is None:
+                return
+            event_payload = {
+                **_runtime_event_debug_metadata(dict(run.get("input") or {})),
+                "nodeType": "LLM",
+                "nodeRunId": node_run_id,
+                "content": content,
+                "streamSource": "provider",
+                "ownerType": self._owner_type,
+            }
+            ChatflowStateRepository(event_session, event_stream_bus=event_stream_bus).append_event(
+                session_id=session_id,
+                chatflow_id=chatflow_id,
+                run_id=run_id,
+                event_type="llm_delta",
+                node_key=node_key,
+                payload=_runtime_event_payload(
+                    level="L1",
+                    source=f"{self._owner_type.lower()}_runtime_v2",
+                    actor="system",
+                    **event_payload,
+                ),
+            )
+
     def _run_or_404(self, run_id: int) -> dict[str, Any]:
         run = self._repository.get_run(run_id)
         if run is None:
@@ -1921,6 +2318,16 @@ class ChatflowRuntimeV2Service:
         return self._agent_invoker_cache[chatflow_id]
 
     def _run_has_status(self, run_id: int, status: str) -> bool:
+        repository_session = getattr(self._repository, "_session", None)
+        bind = repository_session.get_bind() if repository_session is not None else None
+        if bind is not None:
+            engine = getattr(bind, "engine", bind)
+            factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+            with factory() as status_session:
+                run = WorkflowRepository(status_session).get_run(run_id)
+                if run is None:
+                    raise BizError(ErrorCode.NOT_FOUND, "Runtime v2 run not found")
+                return str(run["status"]).upper() == status.upper()
         self._repository.session.rollback()
         self._repository.session.expire_all()
         run = self._run_or_404(run_id)
@@ -2090,6 +2497,13 @@ class _RuntimeV2Interrupt(Exception):
         self.node_key = node_key
         self.output = output
         self.variable_scopes = variable_scopes
+
+
+class _RuntimeV2NodeTimeout(TimeoutError):
+    def __init__(self, *, node_key: str, timeout_ms: int) -> None:
+        self.node_key = node_key
+        self.timeout_ms = timeout_ms
+        super().__init__(f"Runtime v2 node timed out: {node_key} after {timeout_ms}ms")
 
 
 class _RuntimeV2Cancelled(Exception):
@@ -2667,6 +3081,55 @@ def _runtime_v2_tool_call_unsupported_reason(config: dict[str, Any]) -> str:
     return ""
 
 
+def _runtime_v2_parallel_safe_tool_config(config: Mapping[str, Any]) -> bool:
+    raw = config.get("parallelSafe") if "parallelSafe" in config else config.get("parallel_safe")
+    if isinstance(raw, bool):
+        return raw
+    return str(raw or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _runtime_v2_tool_resource_type(config: Mapping[str, Any]) -> str:
+    return str(config.get("resourceType") or config.get("resource_type") or config.get("type") or "MCP_TOOL").strip().upper().replace("-", "_")
+
+
+def _node_with_parallel_tool_idempotency(node: Mapping[str, Any], idempotency_key: str) -> dict[str, Any]:
+    config = dict(node.get("config") or {})
+    config["_runtimeParallelToolIdempotencyKey"] = idempotency_key
+    return {**dict(node), "config": config}
+
+
+def _runtime_v2_node_timeout_ms(node: Mapping[str, Any]) -> int:
+    return external_call_policy_from_config(dict(node.get("config") or {})).timeout_ms
+
+
+def _next_parallel_wave_timeout_seconds(
+    pending: set[Future[dict[str, Any]]],
+    futures: Mapping[Future[dict[str, Any]], tuple[str, dict[str, Any], ExecutionContext, int, float]],
+) -> float:
+    now = time.perf_counter()
+    return max(
+        0.0,
+        min(
+            started_at + (_runtime_v2_node_timeout_ms(node) / 1000) - now
+            for future in pending
+            for _current, node, _context, _node_run_id, started_at in (futures[future],)
+        ),
+    )
+
+
+def _expired_parallel_wave_nodes(
+    futures: Mapping[Future[dict[str, Any]], tuple[str, dict[str, Any], ExecutionContext, int, float]],
+    pending: set[Future[dict[str, Any]]],
+) -> list[tuple[str, dict[str, Any], ExecutionContext, int, float]]:
+    now = time.perf_counter()
+    expired = [
+        futures[future]
+        for future in pending
+        if now >= futures[future][4] + (_runtime_v2_node_timeout_ms(futures[future][1]) / 1000)
+    ]
+    return sorted(expired, key=lambda item: item[0])
+
+
 def _runtime_v2_allows_error_branching(node_type: str, config: dict[str, Any]) -> bool:
     return node_type in _RUNTIME_V2_ERROR_POLICY_NODE_TYPES and _runtime_v2_error_behavior(config) == "branch"
 
@@ -2954,6 +3417,57 @@ def _runtime_non_negative_int(value: Any, default: int = 0) -> int:
 
 def _runtime_result_retryable(run: Mapping[str, Any]) -> bool:
     return str(run.get("status") or "").upper() == "FAILED"
+
+
+def _runtime_v2_terminal_failure(
+    *,
+    run_id: int,
+    error: BaseException | str,
+    node_runs: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    failed_node = next(
+        (row for row in reversed(node_runs) if str(row.get("status") or "").upper() == "FAILED"),
+        {},
+    )
+    error_text = str(error or failed_node.get("error") or "")
+    is_timeout = isinstance(error, TimeoutError) or _runtime_v2_timeout_text(error_text)
+    if is_timeout:
+        return {
+            "code": "WORKFLOW_NODE_TIMEOUT",
+            "kind": "timeout",
+            "message": "A workflow node timed out.",
+            "runId": run_id,
+            "nodeKey": str(failed_node.get("node_key") or ""),
+            "nodeType": str(failed_node.get("node_type") or "").upper(),
+            "retryable": False,
+        }
+    return {
+        "code": "WORKFLOW_NODE_FAILED",
+        "kind": "node_failure",
+        "message": "A workflow node failed.",
+        "runId": run_id,
+        "nodeKey": str(failed_node.get("node_key") or ""),
+        "nodeType": str(failed_node.get("node_type") or "").upper(),
+        "retryable": False,
+    }
+
+
+def _runtime_v2_recorded_terminal_failure(
+    events: Sequence[Mapping[str, Any]],
+) -> dict[str, Any] | None:
+    for event in reversed(events):
+        if str(event.get("event_type") or "") != "workflow_run_failed":
+            continue
+        payload = event.get("payload")
+        failure = payload.get("failure") if isinstance(payload, Mapping) else None
+        if isinstance(failure, Mapping):
+            return dict(failure)
+    return None
+
+
+def _runtime_v2_timeout_text(error_text: str) -> bool:
+    normalized = error_text.lower()
+    return "timed out" in normalized or "timeout" in normalized
 
 
 def _runtime_cancel_phase(

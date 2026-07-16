@@ -1,4 +1,5 @@
 import unittest
+from threading import Event
 
 from app.modules.workflow.domain.runtime_job_worker import RuntimeJobWorker
 
@@ -41,6 +42,25 @@ class RuntimeJobWorkerTest(unittest.TestCase):
         self.assertEqual(result["status"], "FAILED")
         self.assertEqual(repository.failed_error, "worker boom")
 
+    def test_run_once_projects_terminal_failure_after_retry_budget_is_exhausted(self) -> None:
+        repository = _FakeJobRepository({"id": 81, "run_id": 121, "status": "QUEUED"})
+        projected: list[tuple[int, str]] = []
+
+        def fail(_run_id: int) -> None:
+            raise RuntimeError("provider unavailable")
+
+        worker = RuntimeJobWorker(
+            job_repository=repository,
+            complete_run=fail,
+            worker_id="worker-a",
+            on_terminal_failure=lambda job, error: projected.append((int(job["run_id"]), error)),
+        )
+
+        result = worker.run_once()
+
+        self.assertEqual(result["status"], "FAILED")
+        self.assertEqual(projected, [(121, "provider unavailable")])
+
     def test_run_once_reports_idle_when_no_job_is_claimed(self) -> None:
         repository = _FakeJobRepository(None)
         worker = RuntimeJobWorker(job_repository=repository, complete_run=lambda _run_id: None, worker_id="worker-a")
@@ -81,6 +101,31 @@ class RuntimeJobWorkerTest(unittest.TestCase):
         self.assertEqual(result["jobId"], 10)
         self.assertEqual(result["runId"], 14)
         self.assertEqual(result["status"], "CANCELLED")
+
+    def test_run_once_renews_lease_while_completion_is_running(self) -> None:
+        repository = _FakeJobRepository({"id": 11, "run_id": 15, "status": "QUEUED", "lease_token": "lease-11"})
+        heartbeat_seen = Event()
+        heartbeats: list[tuple[int, str, str, int]] = []
+
+        def heartbeat(job_id: int, worker_id: str, lease_token: str, lease_seconds: int) -> None:
+            heartbeats.append((job_id, worker_id, lease_token, lease_seconds))
+            heartbeat_seen.set()
+
+        def complete(_run_id: int) -> None:
+            self.assertTrue(heartbeat_seen.wait(timeout=0.5))
+
+        worker = RuntimeJobWorker(
+            job_repository=repository,
+            complete_run=complete,
+            worker_id="worker-a",
+            lease_seconds=1,
+            heartbeat_job=heartbeat,
+        )
+
+        result = worker.run_once()
+
+        self.assertEqual(result["status"], "COMPLETED")
+        self.assertEqual(heartbeats, [(11, "worker-a", "lease-11", 1)])
 
 
 class _FakeJobRepository:
@@ -142,7 +187,13 @@ class _FakeJobRepository:
         lease_token: str | None = None,
     ) -> dict[str, object]:
         self.failed_error = error
-        return {"id": job_id, "status": "FAILED", "lease_owner": worker_id, "last_error": error}
+        return {
+            "id": job_id,
+            "run_id": int((self._job or {}).get("run_id") or 0),
+            "status": "FAILED",
+            "lease_owner": worker_id,
+            "last_error": error,
+        }
 
 
 if __name__ == "__main__":

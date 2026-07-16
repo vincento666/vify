@@ -1,12 +1,20 @@
 import unittest
+import hashlib
 from typing import Any
 
 from app.core.errors import BizError, ErrorCode
-from app.modules.runtime_lab.domain.chatflow_adapter import ChatflowSopRuntimeAdapter
+from app.modules.runtime_lab.domain.chatflow_adapter import ChatflowSopRuntimeAdapter, _v2_idempotency_key
 from app.modules.runtime_lab.domain.sop_adapter import SopExecutionRequest, SopExecutionStatus
 
 
 class ChatflowSopRuntimeAdapterGatewayTest(unittest.TestCase):
+    def test_v2_idempotency_key_uses_process_stable_message_digest(self) -> None:
+        request = _request(message="手机号 13800138000")
+
+        key = _v2_idempotency_key(request)
+
+        self.assertTrue(key.endswith(hashlib.sha256(request.message.encode("utf-8")).hexdigest()))
+
     def test_start_sop_v2_defaults_to_runtime_invocation_gateway_stream_ref(self) -> None:
         gateway = _FakeRuntimeInvocationGateway()
         adapter = ChatflowSopRuntimeAdapter(
@@ -28,7 +36,7 @@ class ChatflowSopRuntimeAdapterGatewayTest(unittest.TestCase):
         self.assertEqual(meta["runtimeStatus"], "RUNNING")
         self.assertEqual(meta["runtimeRefs"]["eventStreamRef"], "/api/v1/runtime-runs/501/events/stream?afterSequence=0")
 
-    def test_continue_sop_v2_uses_runtime_invocation_gateway_resume_and_wait(self) -> None:
+    def test_continue_sop_v2_queues_runtime_invocation_gateway_resume_without_waiting(self) -> None:
         gateway = _FakeRuntimeInvocationGateway()
         adapter = ChatflowSopRuntimeAdapter(
             _FakeWorkflowService(),
@@ -39,11 +47,11 @@ class ChatflowSopRuntimeAdapterGatewayTest(unittest.TestCase):
         started = adapter.start_sop(_request(message="我要退票"))
         continued = adapter.continue_sop(_request(message="手机号 13800138000", checkpoint=started.checkpoint))
 
-        self.assertEqual(gateway.calls[-1][0], "resume_and_wait")
+        self.assertEqual(gateway.calls[-1][0], "resume_and_stream_ref")
         self.assertEqual(gateway.calls[-1][1], 501)
         self.assertEqual(gateway.calls[-1][2]["collected"]["phone"], "13800138000")
-        self.assertEqual(continued.status, SopExecutionStatus.COMPLETED)
-        self.assertEqual(continued.current_step, "completed")
+        self.assertEqual(continued.status, SopExecutionStatus.WAITING)
+        self.assertEqual(continued.current_step, "runtime_running")
         self.assertEqual(continued.collected["phone"], "13800138000")
 
     def test_continue_sop_accepts_string_v2_runtime_version_from_task_refs(self) -> None:
@@ -58,9 +66,9 @@ class ChatflowSopRuntimeAdapterGatewayTest(unittest.TestCase):
         started.checkpoint.scoped_variables["__chatflow"]["runtimeVersion"] = "v2"
         continued = adapter.continue_sop(_request(message="手机号 13800138000", checkpoint=started.checkpoint))
 
-        self.assertEqual(gateway.calls[-1][0], "resume_and_wait")
+        self.assertEqual(gateway.calls[-1][0], "resume_and_stream_ref")
         self.assertEqual(gateway.calls[-1][1], 501)
-        self.assertEqual(continued.status, SopExecutionStatus.COMPLETED)
+        self.assertEqual(continued.status, SopExecutionStatus.WAITING)
 
     def test_start_sop_async_mode_returns_runtime_refs_without_waiting_for_completion(self) -> None:
         gateway = _FakeRuntimeInvocationGateway()
@@ -166,7 +174,7 @@ class ChatflowSopRuntimeAdapterGatewayTest(unittest.TestCase):
         continued = adapter.continue_sop(_request(message="订单号 CA123456，手机号 13800138000", checkpoint=started.checkpoint))
 
         self.assertEqual(continued.status, SopExecutionStatus.WAITING)
-        self.assertEqual(continued.current_step, "collect")
+        self.assertEqual(continued.current_step, "runtime_running")
         self.assertEqual(continued.collected["phone"], "13800138000")
         self.assertEqual(continued.collected["order_no"], "CA123456")
         meta = continued.checkpoint.scoped_variables["__chatflow"]
@@ -234,7 +242,7 @@ class ChatflowSopRuntimeAdapterGatewayTest(unittest.TestCase):
         )
 
         self.assertEqual(continued.status, SopExecutionStatus.WAITING)
-        self.assertEqual(continued.current_step, "confirm")
+        self.assertEqual(continued.current_step, "runtime_running")
         self.assertEqual(continued.collected["passenger_count"], "十六")
         meta = continued.checkpoint.scoped_variables["__chatflow"]
         self.assertEqual(meta["runtimeVersion"], 2)
@@ -246,6 +254,7 @@ class _FakeRuntimeInvocationGateway:
         self.calls: list[tuple[Any, ...]] = []
         self.resume_error: BizError | None = None
         self.resume_invocation: dict[str, Any] | None = None
+        self.supports_async_resume = True
 
     def start_and_wait(
         self,
@@ -304,32 +313,31 @@ class _FakeRuntimeInvocationGateway:
             "result": None,
         }
 
-    def resume_and_wait(
+    def resume_and_stream_ref(
         self,
         *,
+        owner_id: int,
         run_id: int,
         resume_data: dict[str, Any],
         idempotency_key: str | None = None,
     ) -> dict[str, Any]:
-        self.calls.append(("resume_and_wait", run_id, resume_data, idempotency_key))
+        self.calls.append(("resume_and_stream_ref", run_id, resume_data, idempotency_key, owner_id))
         if self.resume_error is not None:
             raise self.resume_error
         if self.resume_invocation is not None:
             return dict(self.resume_invocation)
-        return _invocation(
-            status="SUCCEEDED",
-            output={"final": "phone=13800138000", "collected": {"phone": "13800138000"}},
-            events=[
-                {
-                    "id": 2,
-                    "sequence": 2,
-                    "type": "workflow_run_completed",
-                    "runId": run_id,
-                    "payload": {"status": "SUCCEEDED"},
-                    "observability": {},
-                }
-            ],
-        )
+        refs = _runtime_refs()
+        return {
+            "runId": run_id,
+            "sessionId": "session-501",
+            "status": "RUNNING",
+            "runtimeVersion": 2,
+            "runtimeMode": "async-durable",
+            "runtimeRefs": refs,
+            "streamRef": refs["eventStreamRef"],
+            "result": None,
+            "events": {"list": [], "total": 0},
+        }
 
 
 class _FakeRuntimeV2Service:

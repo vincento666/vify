@@ -149,6 +149,8 @@ class ChatflowStateRepository:
         node_key: str,
         payload: dict[str, Any] | None,
     ) -> tuple[str, dict[str, Any], bool]:
+        if event_type == "llm_delta" and str((payload or {}).get("streamSource") or "") == "provider":
+            return event_type, dict(payload or {}), True
         if event_type not in _HIGH_FREQUENCY_EVENT_TYPES:
             return event_type, dict(payload or {}), True
         attempted = self._compacted_attempt_count(run_id=run_id, event_type=event_type, node_key=node_key)
@@ -439,6 +441,72 @@ class ChatflowStateRepository:
             .order_by(self._checkpoint_table.c.id.desc())
         ).mappings().first()
         return dict(row) if row else None
+
+    def get_checkpoint(self, checkpoint_id: int) -> dict[str, Any] | None:
+        row = self._session.execute(
+            sa.select(self._checkpoint_table).where(
+                self._checkpoint_table.c.id == checkpoint_id,
+                self._checkpoint_table.c.deleted.is_(False),
+            )
+        ).mappings().one_or_none()
+        return dict(row) if row else None
+
+    def claim_waiting_checkpoint(
+        self,
+        chatflow_id: int,
+        run_id: int,
+        checkpoint_id: int | None = None,
+    ) -> dict[str, Any] | None:
+        """Atomically transition one durable checkpoint into a worker-owned resume state."""
+        selected_checkpoint_id = checkpoint_id
+        if selected_checkpoint_id is None:
+            checkpoint = self.get_waiting_checkpoint(chatflow_id, run_id)
+            if checkpoint is None:
+                return None
+            selected_checkpoint_id = int(checkpoint["id"])
+        result = self._session.execute(
+            self._checkpoint_table.update()
+            .where(
+                self._checkpoint_table.c.id == selected_checkpoint_id,
+                self._checkpoint_table.c.chatflow_id == chatflow_id,
+                self._checkpoint_table.c.run_id == run_id,
+                self._checkpoint_table.c.status == "waiting",
+                self._checkpoint_table.c.deleted.is_(False),
+            )
+            .values(status="resuming", updated_at=datetime.now())
+        )
+        if getattr(result, "rowcount", None) != 1:
+            self._session.rollback()
+            return None
+        self._session.commit()
+        return self.get_checkpoint(selected_checkpoint_id)
+
+    def release_checkpoint_claim(self, checkpoint_id: int) -> None:
+        self._session.execute(
+            self._checkpoint_table.update()
+            .where(
+                self._checkpoint_table.c.id == checkpoint_id,
+                self._checkpoint_table.c.status == "resuming",
+                self._checkpoint_table.c.deleted.is_(False),
+            )
+            .values(status="waiting", updated_at=datetime.now())
+        )
+        self._session.commit()
+
+    def mark_claimed_checkpoint_completed(self, checkpoint_id: int) -> None:
+        result = self._session.execute(
+            self._checkpoint_table.update()
+            .where(
+                self._checkpoint_table.c.id == checkpoint_id,
+                self._checkpoint_table.c.status == "resuming",
+                self._checkpoint_table.c.deleted.is_(False),
+            )
+            .values(status="completed", updated_at=datetime.now())
+        )
+        if getattr(result, "rowcount", None) != 1:
+            self._session.rollback()
+            raise RuntimeError(f"Chatflow checkpoint {checkpoint_id} is no longer claimed")
+        self._session.commit()
 
     def mark_checkpoint_completed(self, checkpoint_id: int) -> None:
         self._session.execute(

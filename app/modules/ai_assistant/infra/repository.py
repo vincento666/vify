@@ -1,14 +1,26 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
-from typing import Any
+import json
+from typing import Any, Callable
+from uuid import uuid4
 
 import sqlalchemy as sa
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy.dialects.mysql import insert as mysql_insert
 
 from app.core.database import Base
 from app.core.db_write import insert_and_fetch
+from app.modules.ai_assistant.domain.access_scope import (
+    AiAssistantAccessScope,
+    local_ai_assistant_scope,
+)
+from app.modules.ai_assistant.domain.model_usage import (
+    NormalizedModelUsage,
+    resolve_configured_model_cost,
+)
 from app.modules.ai_assistant.infra.schema import register_ai_assistant_tables
 
 
@@ -25,10 +37,25 @@ def _rowcount(result: Any) -> int:
     return int(getattr(result, "rowcount", 0) or 0)
 
 
+def _mysql_error_code(exc: IntegrityError) -> int | None:
+    args = getattr(exc.orig, "args", ())
+    return int(args[0]) if args and isinstance(args[0], int) else None
+
+
+def _usage_utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 class AiAssistantRepository:
-    def __init__(self, session: Session) -> None:
+    def __init__(
+        self,
+        session: Session,
+        *,
+        access_scope: AiAssistantAccessScope | None = None,
+    ) -> None:
         register_ai_assistant_tables()
         self._session = session
+        self._access_scope = access_scope or local_ai_assistant_scope()
         self._session_table = Base.metadata.tables["ai_assistant_session"]
         self._run_table = Base.metadata.tables["ai_assistant_run"]
         self._message_table = Base.metadata.tables["ai_assistant_message"]
@@ -42,6 +69,744 @@ class AiAssistantRepository:
         self._tool_operation_release_table = Base.metadata.tables["ai_assistant_tool_operation_release"]
         self._tool_circuit_breaker_table = Base.metadata.tables["ai_assistant_tool_circuit_breaker"]
         self._tool_circuit_override_table = Base.metadata.tables["ai_assistant_tool_circuit_override"]
+        self._memory_cursor_table = Base.metadata.tables["ai_assistant_memory_cursor"]
+        self._memory_completion_table = Base.metadata.tables["ai_assistant_memory_completion"]
+        self._model_usage_table = Base.metadata.tables["ai_assistant_model_usage"]
+
+    @property
+    def access_scope(self) -> AiAssistantAccessScope:
+        return self._access_scope
+
+    def get_memory_extraction_cursor(self) -> dict[str, Any] | None:
+        row = self._session.execute(
+            sa.select(self._memory_cursor_table).where(
+                self._memory_cursor_table.c.user_id == self._access_scope.user_id,
+                self._memory_cursor_table.c.workspace_id == self._access_scope.workspace_id,
+            )
+        ).mappings().one_or_none()
+        return dict(row) if row else None
+
+    def begin_model_usage_call(
+        self,
+        *,
+        session_id: int,
+        run_id: int,
+        call_id: str,
+        call_kind: str,
+        provider: str,
+        model: str,
+        started_at: datetime | None = None,
+    ) -> dict[str, Any]:
+        run = self.get_run(run_id)
+        assistant_session = self.get_session(session_id)
+        if run is None or assistant_session is None or int(run["session_id"]) != session_id:
+            raise KeyError("model usage session/run is outside the current scope")
+        now = _usage_utcnow()
+        values = {
+            "user_id": self._access_scope.user_id,
+            "workspace_id": self._access_scope.workspace_id,
+            "session_id": session_id,
+            "run_id": run_id,
+            "call_id": call_id,
+            "call_kind": call_kind,
+            "provider": provider,
+            "model": model,
+            "usage_source": "pending",
+            "cost_source": "unknown",
+            "started_at": started_at or now,
+            "created_at": now,
+            "updated_at": now,
+        }
+        try:
+            self._session.execute(
+                mysql_insert(self._model_usage_table).values(**values)
+            )
+            self._session.commit()
+        except IntegrityError as exc:
+            self._session.rollback()
+            if _mysql_error_code(exc) != 1062:
+                raise
+        row = self.get_model_usage_call(run_id=run_id, call_id=call_id)
+        if row is None:
+            raise RuntimeError("model usage call was not created")
+        expected_identity = {
+            "session_id": session_id,
+            "run_id": run_id,
+            "call_kind": call_kind,
+            "provider": provider,
+            "model": model,
+        }
+        if any(row[key] != value for key, value in expected_identity.items()):
+            raise IdempotencyConflict("model usage call identity changed")
+        return row
+
+    def finalize_model_usage_call(
+        self,
+        *,
+        run_id: int,
+        call_id: str,
+        usage: NormalizedModelUsage,
+        completed_at: datetime | None = None,
+    ) -> dict[str, Any]:
+        existing = self.get_model_usage_call(run_id=run_id, call_id=call_id)
+        if existing is None:
+            raise KeyError("model usage call is outside the current scope")
+        cost = resolve_configured_model_cost(
+            str(existing["provider"]),
+            str(existing["model"]),
+            usage,
+        )
+        now = _usage_utcnow()
+        self._session.execute(
+            self._model_usage_table.update()
+            .where(
+                self._model_usage_table.c.user_id == self._access_scope.user_id,
+                self._model_usage_table.c.workspace_id == self._access_scope.workspace_id,
+                self._model_usage_table.c.run_id == run_id,
+                self._model_usage_table.c.call_id == call_id,
+                self._model_usage_table.c.usage_source == "pending",
+            )
+            .values(
+                **usage.as_record_values(),
+                provider_cost_usd=cost.provider_cost_usd,
+                estimated_cost_usd=cost.estimated_cost_usd,
+                effective_cost_usd=cost.effective_cost_usd,
+                cost_source=cost.cost_source,
+                pricing_version=cost.pricing_version,
+                completed_at=completed_at or now,
+                updated_at=now,
+            )
+        )
+        self._session.commit()
+        row = self.get_model_usage_call(run_id=run_id, call_id=call_id)
+        if row is None:
+            raise KeyError("model usage call is outside the current scope")
+        return row
+
+    def fail_model_usage_call(
+        self,
+        *,
+        run_id: int,
+        call_id: str,
+        completed_at: datetime | None = None,
+    ) -> dict[str, Any]:
+        now = _usage_utcnow()
+        self._session.execute(
+            self._model_usage_table.update()
+            .where(
+                self._model_usage_table.c.user_id == self._access_scope.user_id,
+                self._model_usage_table.c.workspace_id == self._access_scope.workspace_id,
+                self._model_usage_table.c.run_id == run_id,
+                self._model_usage_table.c.call_id == call_id,
+                self._model_usage_table.c.usage_source == "pending",
+            )
+            .values(
+                usage_source="unavailable",
+                completed_at=completed_at or now,
+                updated_at=now,
+            )
+        )
+        self._session.commit()
+        row = self.get_model_usage_call(run_id=run_id, call_id=call_id)
+        if row is None:
+            raise KeyError("model usage call is outside the current scope")
+        return row
+
+    def record_model_usage_call(
+        self,
+        *,
+        session_id: int,
+        run_id: int,
+        call_id: str,
+        call_kind: str,
+        provider: str,
+        model: str,
+        usage: NormalizedModelUsage,
+        started_at: datetime | None = None,
+        completed_at: datetime | None = None,
+    ) -> dict[str, Any]:
+        self.begin_model_usage_call(
+            session_id=session_id,
+            run_id=run_id,
+            call_id=call_id,
+            call_kind=call_kind,
+            provider=provider,
+            model=model,
+            started_at=started_at,
+        )
+        return self.finalize_model_usage_call(
+            run_id=run_id,
+            call_id=call_id,
+            usage=usage,
+            completed_at=completed_at,
+        )
+
+    def get_model_usage_call(self, *, run_id: int, call_id: str) -> dict[str, Any] | None:
+        row = self._session.execute(
+            sa.select(self._model_usage_table).where(
+                self._model_usage_table.c.user_id == self._access_scope.user_id,
+                self._model_usage_table.c.workspace_id == self._access_scope.workspace_id,
+                self._model_usage_table.c.run_id == run_id,
+                self._model_usage_table.c.call_id == call_id,
+            )
+        ).mappings().one_or_none()
+        return dict(row) if row else None
+
+    def list_model_usage_calls(
+        self,
+        *,
+        session_id: int | None = None,
+        started_from: datetime | None = None,
+        started_before: datetime | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        conditions = [
+            self._model_usage_table.c.user_id == self._access_scope.user_id,
+            self._model_usage_table.c.workspace_id == self._access_scope.workspace_id,
+        ]
+        if session_id is not None:
+            if self.get_usage_session(session_id) is None:
+                return []
+            conditions.append(self._model_usage_table.c.session_id == session_id)
+        if started_from is not None:
+            conditions.append(self._model_usage_table.c.started_at >= started_from)
+        if started_before is not None:
+            conditions.append(self._model_usage_table.c.started_at < started_before)
+        query = (
+            sa.select(self._model_usage_table)
+            .where(*conditions)
+            .order_by(self._model_usage_table.c.started_at.asc(), self._model_usage_table.c.id.asc())
+            .offset(max(0, offset))
+        )
+        if limit is not None:
+            query = query.limit(max(1, min(limit, 1000)))
+        rows = self._session.execute(query).mappings().all()
+        return [dict(row) for row in rows]
+
+    def summarize_model_usage(
+        self,
+        *,
+        started_from: datetime | None = None,
+        started_before: datetime | None = None,
+        session_id: int | None = None,
+    ) -> dict[str, Any]:
+        conditions = [
+            self._model_usage_table.c.user_id == self._access_scope.user_id,
+            self._model_usage_table.c.workspace_id == self._access_scope.workspace_id,
+        ]
+        if session_id is not None:
+            if self.get_usage_session(session_id) is None:
+                return {}
+            conditions.append(self._model_usage_table.c.session_id == session_id)
+        if started_from is not None:
+            conditions.append(self._model_usage_table.c.started_at >= started_from)
+        if started_before is not None:
+            conditions.append(self._model_usage_table.c.started_at < started_before)
+        unknown = self._model_usage_table.c.effective_cost_usd.is_(None)
+        row = self._session.execute(
+            sa.select(
+                sa.func.coalesce(sa.func.sum(self._model_usage_table.c.total_tokens), 0).label(
+                    "total_tokens"
+                ),
+                sa.func.coalesce(
+                    sa.func.sum(self._model_usage_table.c.effective_cost_usd),
+                    0,
+                ).label("known_cost_usd"),
+                sa.func.sum(sa.case((unknown, 1), else_=0)).label("unknown_cost_count"),
+                sa.func.coalesce(
+                    sa.func.sum(
+                        sa.case((unknown, self._model_usage_table.c.total_tokens), else_=0)
+                    ),
+                    0,
+                ).label("unknown_cost_tokens"),
+                sa.func.count(sa.distinct(self._model_usage_table.c.session_id)).label(
+                    "session_count"
+                ),
+                sa.func.count(self._model_usage_table.c.id).label("call_count"),
+            ).where(*conditions)
+        ).mappings().one()
+        return dict(row)
+
+    def group_model_usage(
+        self,
+        *,
+        group_by: str,
+        started_from: datetime | None = None,
+        started_before: datetime | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        dimensions = {
+            "session": self._model_usage_table.c.session_id,
+            "provider": self._model_usage_table.c.provider,
+            "model": self._model_usage_table.c.model,
+        }
+        dimension = dimensions.get(group_by)
+        if dimension is None:
+            raise ValueError("unsupported model usage dimension")
+        conditions = [
+            self._model_usage_table.c.user_id == self._access_scope.user_id,
+            self._model_usage_table.c.workspace_id == self._access_scope.workspace_id,
+        ]
+        if started_from is not None:
+            conditions.append(self._model_usage_table.c.started_at >= started_from)
+        if started_before is not None:
+            conditions.append(self._model_usage_table.c.started_at < started_before)
+        unknown = self._model_usage_table.c.effective_cost_usd.is_(None)
+        total_tokens = sa.func.coalesce(
+            sa.func.sum(self._model_usage_table.c.total_tokens),
+            0,
+        )
+        query = (
+            sa.select(
+                dimension.label("group_key"),
+                total_tokens.label("total_tokens"),
+                sa.func.coalesce(
+                    sa.func.sum(self._model_usage_table.c.effective_cost_usd),
+                    0,
+                ).label("known_cost_usd"),
+                sa.func.sum(sa.case((unknown, 1), else_=0)).label("unknown_cost_count"),
+                sa.func.coalesce(
+                    sa.func.sum(
+                        sa.case((unknown, self._model_usage_table.c.total_tokens), else_=0)
+                    ),
+                    0,
+                ).label("unknown_cost_tokens"),
+                sa.func.count(sa.distinct(self._model_usage_table.c.session_id)).label(
+                    "session_count"
+                ),
+                sa.func.count(self._model_usage_table.c.id).label("call_count"),
+            )
+            .where(*conditions)
+            .group_by(dimension)
+        )
+        if group_by == "session":
+            query = query.order_by(total_tokens.desc(), dimension.asc())
+        else:
+            query = query.order_by(dimension.asc())
+        query = query.offset(max(0, offset))
+        if limit is not None:
+            query = query.limit(max(1, min(limit, 1000)))
+        rows = self._session.execute(query).mappings().all()
+        total = self._session.execute(
+            sa.select(sa.func.count(sa.distinct(dimension))).where(*conditions)
+        ).scalar_one()
+        return {"list": [dict(row) for row in rows], "total": int(total or 0)}
+
+    def summarize_model_usage_token_types(
+        self,
+        *,
+        started_from: datetime | None = None,
+        started_before: datetime | None = None,
+    ) -> dict[str, int]:
+        conditions = [
+            self._model_usage_table.c.user_id == self._access_scope.user_id,
+            self._model_usage_table.c.workspace_id == self._access_scope.workspace_id,
+        ]
+        if started_from is not None:
+            conditions.append(self._model_usage_table.c.started_at >= started_from)
+        if started_before is not None:
+            conditions.append(self._model_usage_table.c.started_at < started_before)
+        columns = {
+            "input": self._model_usage_table.c.input_tokens,
+            "output": self._model_usage_table.c.output_tokens,
+            "cacheRead": self._model_usage_table.c.cache_read_tokens,
+            "cacheWrite": self._model_usage_table.c.cache_write_tokens,
+            "reasoning": self._model_usage_table.c.reasoning_tokens,
+            "total": self._model_usage_table.c.total_tokens,
+        }
+        row = self._session.execute(
+            sa.select(
+                *[
+                    sa.func.coalesce(sa.func.sum(column), 0).label(name)
+                    for name, column in columns.items()
+                ]
+            ).where(*conditions)
+        ).mappings().one()
+        return {name: int(row[name] or 0) for name in columns}
+
+    def summarize_model_usage_daily(
+        self,
+        *,
+        day_bounds: list[tuple[str, datetime, datetime]],
+    ) -> list[dict[str, Any]]:
+        if not day_bounds:
+            return []
+        if len(day_bounds) > 366:
+            raise ValueError("daily model usage range cannot exceed 366 days")
+        started_at = self._model_usage_table.c.started_at
+        day_key = sa.case(
+            *[
+                (sa.and_(started_at >= started_from, started_at < started_before), label)
+                for label, started_from, started_before in day_bounds
+            ],
+            else_=None,
+        )
+        conditions = [
+            self._model_usage_table.c.user_id == self._access_scope.user_id,
+            self._model_usage_table.c.workspace_id == self._access_scope.workspace_id,
+            started_at >= day_bounds[0][1],
+            started_at < day_bounds[-1][2],
+        ]
+        unknown = self._model_usage_table.c.effective_cost_usd.is_(None)
+        rows = self._session.execute(
+            sa.select(
+                day_key.label("day"),
+                sa.func.coalesce(
+                    sa.func.sum(self._model_usage_table.c.total_tokens),
+                    0,
+                ).label("total_tokens"),
+                sa.func.coalesce(
+                    sa.func.sum(self._model_usage_table.c.effective_cost_usd),
+                    0,
+                ).label("known_cost_usd"),
+                sa.func.sum(sa.case((unknown, 1), else_=0)).label("unknown_cost_count"),
+                sa.func.coalesce(
+                    sa.func.sum(
+                        sa.case((unknown, self._model_usage_table.c.total_tokens), else_=0)
+                    ),
+                    0,
+                ).label("unknown_cost_tokens"),
+                sa.func.count(sa.distinct(self._model_usage_table.c.session_id)).label(
+                    "session_count"
+                ),
+                sa.func.count(self._model_usage_table.c.id).label("call_count"),
+            )
+            .where(*conditions)
+            .group_by(day_key)
+            .order_by(day_key.asc())
+        ).mappings().all()
+        return [dict(row) for row in rows if row["day"] is not None]
+
+    def claim_memory_extraction_batch(self, *, lease_seconds: int = 60) -> dict[str, Any] | None:
+        bind = self._session.get_bind()
+        engine = bind.engine if isinstance(bind, sa.engine.Connection) else bind
+        with engine.connect() as connection, Session(bind=connection) as lock_session:
+            pinned_repository = AiAssistantRepository(
+                lock_session,
+                access_scope=self._access_scope,
+            )
+            return pinned_repository._claim_memory_extraction_batch_locked(
+                lease_seconds=lease_seconds,
+            )
+
+    def _claim_memory_extraction_batch_locked(
+        self,
+        *,
+        lease_seconds: int,
+    ) -> dict[str, Any] | None:
+        lock_name = self._memory_extraction_lock_name()
+        if not self._try_get_mysql_lock(lock_name, timeout_seconds=5):
+            return None
+        try:
+            cursor = self.get_memory_extraction_cursor()
+            if cursor and cursor.get("pending_batch_key"):
+                lease_expires_at = cursor.get("lease_expires_at")
+                lease_active = isinstance(lease_expires_at, datetime) and lease_expires_at > datetime.now()
+                if cursor.get("status") != "FAILED" and lease_active:
+                    return None
+                self._session.execute(
+                    self._memory_cursor_table.update()
+                    .where(self._memory_cursor_table.c.id == cursor["id"])
+                    .values(
+                        claim_token=uuid4().hex,
+                        lease_expires_at=datetime.now() + timedelta(seconds=max(1, lease_seconds)),
+                        status="EXTRACTING",
+                        last_error=None,
+                        updated_at=datetime.now(),
+                    )
+                )
+                self._session.commit()
+                reclaimed = self.get_memory_extraction_cursor()
+                return _memory_batch_from_cursor(reclaimed or {})
+            last_completion_id = int((cursor or {}).get("last_processed_completion_id") or 0)
+            rows = self._session.execute(
+                sa.select(
+                    self._run_table,
+                    self._memory_completion_table.c.id.label("memory_completion_id"),
+                )
+                .join(
+                    self._memory_completion_table,
+                    self._memory_completion_table.c.run_id == self._run_table.c.id,
+                )
+                .where(
+                    self._run_table.c.user_id == self._access_scope.user_id,
+                    self._run_table.c.workspace_id == self._access_scope.workspace_id,
+                    self._memory_completion_table.c.user_id == self._access_scope.user_id,
+                    self._memory_completion_table.c.workspace_id == self._access_scope.workspace_id,
+                    self._run_table.c.status == "COMPLETED",
+                    self._memory_completion_table.c.id > last_completion_id,
+                    self._run_table.c.deleted.is_(False),
+                )
+                .order_by(self._memory_completion_table.c.id.asc())
+                .limit(3)
+            ).mappings().all()
+            if len(rows) < 3:
+                return None
+            run_ids = [int(row["id"]) for row in rows]
+            completion_ids = [int(row["memory_completion_id"]) for row in rows]
+            source_hash = sha256(
+                json.dumps(
+                    [
+                        {
+                            "id": int(row["id"]),
+                            "input": row.get("input_payload") or {},
+                            "response": row.get("response_payload") or {},
+                        }
+                        for row in rows
+                    ],
+                    ensure_ascii=True,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    default=str,
+                ).encode()
+            ).hexdigest()
+            batch_key = sha256(
+                f"{self._access_scope.user_id}\0{self._access_scope.workspace_id}\0{run_ids}\0{source_hash}".encode()
+            ).hexdigest()
+            now = datetime.now()
+            values = {
+                "pending_run_ids": run_ids,
+                "pending_completion_ids": completion_ids,
+                "pending_batch_key": batch_key,
+                "pending_source_hash": source_hash,
+                "pending_input_hash": None,
+                "pending_target_hash": None,
+                "claim_token": uuid4().hex,
+                "lease_expires_at": now + timedelta(seconds=max(1, lease_seconds)),
+                "status": "EXTRACTING",
+                "last_error": None,
+                "updated_at": now,
+            }
+            if cursor is None:
+                insert_and_fetch(
+                    self._session,
+                    self._memory_cursor_table,
+                    {
+                        "user_id": self._access_scope.user_id,
+                        "workspace_id": self._access_scope.workspace_id,
+                        "last_processed_run_id": 0,
+                        "last_processed_completion_id": 0,
+                        **values,
+                        "created_at": now,
+                    },
+                )
+            else:
+                self._session.execute(
+                    self._memory_cursor_table.update()
+                    .where(self._memory_cursor_table.c.id == cursor["id"])
+                    .values(**values)
+                )
+            self._session.commit()
+            claimed = self.get_memory_extraction_cursor()
+            return _memory_batch_from_cursor(claimed or {})
+        finally:
+            self._release_mysql_lock_checked(lock_name)
+
+    def get_memory_extraction_runs(self, run_ids: list[int]) -> list[dict[str, Any]]:
+        if not run_ids:
+            return []
+        rows = self._session.execute(
+            sa.select(self._run_table)
+            .where(
+                self._run_table.c.id.in_(run_ids),
+                self._run_table.c.user_id == self._access_scope.user_id,
+                self._run_table.c.workspace_id == self._access_scope.workspace_id,
+                self._run_table.c.status == "COMPLETED",
+                self._run_table.c.deleted.is_(False),
+            )
+        ).mappings().all()
+        by_id = {int(row["id"]): dict(row) for row in rows}
+        return [by_id[run_id] for run_id in run_ids if run_id in by_id]
+
+    def record_memory_extraction_target(
+        self,
+        *,
+        batch_key: str,
+        source_hash: str,
+        input_hash: str,
+        target_hash: str,
+        claim_token: str,
+        lease_seconds: int = 60,
+    ) -> dict[str, Any]:
+        self._session.execute(
+            self._memory_cursor_table.update()
+            .where(
+                self._memory_cursor_table.c.user_id == self._access_scope.user_id,
+                self._memory_cursor_table.c.workspace_id == self._access_scope.workspace_id,
+                self._memory_cursor_table.c.pending_batch_key == batch_key,
+                self._memory_cursor_table.c.pending_source_hash == source_hash,
+                self._memory_cursor_table.c.claim_token == claim_token,
+            )
+            .values(
+                pending_target_hash=target_hash,
+                pending_input_hash=input_hash,
+                lease_expires_at=datetime.now() + timedelta(seconds=max(1, lease_seconds)),
+                status="TARGET_READY",
+                last_error=None,
+                updated_at=datetime.now(),
+            )
+        )
+        self._session.commit()
+        cursor = self.get_memory_extraction_cursor()
+        if (
+            cursor is None
+            or cursor.get("pending_target_hash") != target_hash
+            or cursor.get("claim_token") != claim_token
+        ):
+            raise RuntimeError("memory extraction target claim changed")
+        return cursor
+
+    def commit_memory_extraction_plan(
+        self,
+        *,
+        batch_key: str,
+        source_hash: str,
+        input_hash: str,
+        target_hash: str,
+        claim_token: str,
+        write: Callable[[], None],
+        lease_seconds: int = 60,
+    ) -> dict[str, Any]:
+        bind = self._session.get_bind()
+        engine = bind.engine if isinstance(bind, sa.engine.Connection) else bind
+        with engine.connect() as connection, Session(bind=connection) as lock_session:
+            pinned_repository = AiAssistantRepository(
+                lock_session,
+                access_scope=self._access_scope,
+            )
+            return pinned_repository._commit_memory_extraction_plan_locked(
+                batch_key=batch_key,
+                source_hash=source_hash,
+                input_hash=input_hash,
+                target_hash=target_hash,
+                claim_token=claim_token,
+                write=write,
+                lease_seconds=lease_seconds,
+            )
+
+    def _commit_memory_extraction_plan_locked(
+        self,
+        *,
+        batch_key: str,
+        source_hash: str,
+        input_hash: str,
+        target_hash: str,
+        claim_token: str,
+        write: Callable[[], None],
+        lease_seconds: int,
+    ) -> dict[str, Any]:
+        lock_name = self._memory_extraction_lock_name()
+        if not self._try_get_mysql_lock(lock_name, timeout_seconds=5):
+            raise RuntimeError("memory extraction commit lock is contended")
+        try:
+            self.record_memory_extraction_target(
+                batch_key=batch_key,
+                source_hash=source_hash,
+                input_hash=input_hash,
+                target_hash=target_hash,
+                claim_token=claim_token,
+                lease_seconds=lease_seconds,
+            )
+            write()
+            return self.complete_memory_extraction_batch(
+                batch_key=batch_key,
+                target_hash=target_hash,
+                claim_token=claim_token,
+            )
+        finally:
+            self._release_mysql_lock_checked(lock_name)
+
+    def complete_memory_extraction_batch(
+        self,
+        *,
+        batch_key: str,
+        target_hash: str,
+        claim_token: str,
+    ) -> dict[str, Any]:
+        cursor = self.get_memory_extraction_cursor()
+        if cursor is None or cursor.get("pending_batch_key") != batch_key:
+            raise RuntimeError("memory extraction batch changed")
+        if cursor.get("pending_target_hash") != target_hash:
+            raise RuntimeError("memory extraction target hash changed")
+        if cursor.get("claim_token") != claim_token:
+            raise RuntimeError("memory extraction claim changed")
+        run_ids = [int(run_id) for run_id in cursor.get("pending_run_ids") or []]
+        completion_ids = [int(item) for item in cursor.get("pending_completion_ids") or []]
+        if not run_ids:
+            raise RuntimeError("memory extraction batch is empty")
+        if len(completion_ids) != len(run_ids):
+            raise RuntimeError("memory extraction completion ledger changed")
+        result = self._session.execute(
+            self._memory_cursor_table.update()
+            .where(
+                self._memory_cursor_table.c.id == cursor["id"],
+                self._memory_cursor_table.c.user_id == self._access_scope.user_id,
+                self._memory_cursor_table.c.workspace_id == self._access_scope.workspace_id,
+                self._memory_cursor_table.c.pending_batch_key == batch_key,
+                self._memory_cursor_table.c.pending_target_hash == target_hash,
+                self._memory_cursor_table.c.claim_token == claim_token,
+            )
+            .values(
+                last_processed_run_id=run_ids[-1],
+                last_processed_completion_id=max(completion_ids),
+                pending_run_ids=None,
+                pending_completion_ids=None,
+                pending_batch_key=None,
+                pending_source_hash=None,
+                pending_input_hash=None,
+                pending_target_hash=None,
+                claim_token=None,
+                lease_expires_at=None,
+                status="IDLE",
+                last_error=None,
+                updated_at=datetime.now(),
+            )
+        )
+        self._session.commit()
+        if not _rowcount(result):
+            raise RuntimeError("memory extraction claim changed before completion")
+        completed = self.get_memory_extraction_cursor()
+        if completed is None:
+            raise RuntimeError("memory extraction cursor disappeared")
+        return completed
+
+    def fail_memory_extraction_batch(self, *, batch_key: str, claim_token: str, error: str) -> None:
+        self._session.execute(
+            self._memory_cursor_table.update()
+            .where(
+                self._memory_cursor_table.c.user_id == self._access_scope.user_id,
+                self._memory_cursor_table.c.workspace_id == self._access_scope.workspace_id,
+                self._memory_cursor_table.c.pending_batch_key == batch_key,
+                self._memory_cursor_table.c.claim_token == claim_token,
+            )
+            .values(status="FAILED", last_error=str(error)[:1000], updated_at=datetime.now())
+        )
+        self._session.commit()
+
+    def reset_memory_extraction_target(self, *, batch_key: str, claim_token: str) -> None:
+        self._session.execute(
+            self._memory_cursor_table.update()
+            .where(
+                self._memory_cursor_table.c.user_id == self._access_scope.user_id,
+                self._memory_cursor_table.c.workspace_id == self._access_scope.workspace_id,
+                self._memory_cursor_table.c.pending_batch_key == batch_key,
+                self._memory_cursor_table.c.claim_token == claim_token,
+            )
+            .values(
+                pending_input_hash=None,
+                pending_target_hash=None,
+                updated_at=datetime.now(),
+            )
+        )
+        self._session.commit()
+
+    def _memory_extraction_lock_name(self) -> str:
+        digest = sha256(
+            f"{self._access_scope.user_id}\0{self._access_scope.workspace_id}".encode()
+        ).hexdigest()[:32]
+        return f"ai_assistant_memory:{digest}"
 
     def get_tool_circuit_breaker(self, breaker_key: str) -> dict[str, Any] | None:
         row = self._session.execute(
@@ -475,9 +1240,11 @@ class AiAssistantRepository:
             self._session,
             self._session_table,
             {
+                "user_id": self._access_scope.user_id,
+                "workspace_id": self._access_scope.workspace_id,
                 "title": title,
                 "status": "ACTIVE",
-                "context_json": context or {},
+                "context_json": _without_legacy_memory(context),
                 "deleted": False,
                 "created_at": now,
                 "updated_at": now,
@@ -489,7 +1256,11 @@ class AiAssistantRepository:
     def list_sessions(self) -> list[dict[str, Any]]:
         rows = self._session.execute(
             sa.select(self._session_table)
-            .where(self._session_table.c.deleted.is_(False))
+            .where(
+                self._session_table.c.user_id == self._access_scope.user_id,
+                self._session_table.c.workspace_id == self._access_scope.workspace_id,
+                self._session_table.c.deleted.is_(False),
+            )
             .order_by(self._session_table.c.id.desc())
         ).mappings().all()
         return [dict(row) for row in rows]
@@ -498,17 +1269,50 @@ class AiAssistantRepository:
         row = self._session.execute(
             sa.select(self._session_table).where(
                 self._session_table.c.id == session_id,
+                self._session_table.c.user_id == self._access_scope.user_id,
+                self._session_table.c.workspace_id == self._access_scope.workspace_id,
                 self._session_table.c.deleted.is_(False),
             )
         ).mappings().one_or_none()
         return dict(row) if row else None
 
+    def get_usage_session(self, session_id: int) -> dict[str, Any] | None:
+        row = self._session.execute(
+            sa.select(self._session_table).where(
+                self._session_table.c.id == session_id,
+                self._session_table.c.user_id == self._access_scope.user_id,
+                self._session_table.c.workspace_id == self._access_scope.workspace_id,
+            )
+        ).mappings().one_or_none()
+        return dict(row) if row else None
+
+    def list_usage_sessions(self, *, session_ids: list[int] | None = None) -> list[dict[str, Any]]:
+        if session_ids is not None and not session_ids:
+            return []
+        conditions = [
+            self._session_table.c.user_id == self._access_scope.user_id,
+            self._session_table.c.workspace_id == self._access_scope.workspace_id,
+        ]
+        if session_ids is not None:
+            conditions.append(self._session_table.c.id.in_(session_ids))
+        rows = self._session.execute(
+            sa.select(self._session_table)
+            .where(*conditions)
+            .order_by(self._session_table.c.id.desc())
+        ).mappings().all()
+        return [dict(row) for row in rows]
+
     def update_session_context(self, session_id: int, context: dict[str, Any]) -> dict[str, Any]:
         now = datetime.now()
         self._session.execute(
             self._session_table.update()
-            .where(self._session_table.c.id == session_id, self._session_table.c.deleted.is_(False))
-            .values(context_json=context, updated_at=now)
+            .where(
+                self._session_table.c.id == session_id,
+                self._session_table.c.user_id == self._access_scope.user_id,
+                self._session_table.c.workspace_id == self._access_scope.workspace_id,
+                self._session_table.c.deleted.is_(False),
+            )
+            .values(context_json=_without_legacy_memory(context), updated_at=now)
         )
         self._session.commit()
         updated = self.get_session(session_id)
@@ -535,7 +1339,12 @@ class AiAssistantRepository:
             )
         self._session.execute(
             self._session_table.update()
-            .where(self._session_table.c.id == session_id, self._session_table.c.deleted.is_(False))
+            .where(
+                self._session_table.c.id == session_id,
+                self._session_table.c.user_id == self._access_scope.user_id,
+                self._session_table.c.workspace_id == self._access_scope.workspace_id,
+                self._session_table.c.deleted.is_(False),
+            )
             .values(status="ACTIVE", context_json={}, updated_at=now)
         )
         self._session.commit()
@@ -548,7 +1357,12 @@ class AiAssistantRepository:
         now = datetime.now()
         self._session.execute(
             self._session_table.update()
-            .where(self._session_table.c.id == session_id, self._session_table.c.deleted.is_(False))
+            .where(
+                self._session_table.c.id == session_id,
+                self._session_table.c.user_id == self._access_scope.user_id,
+                self._session_table.c.workspace_id == self._access_scope.workspace_id,
+                self._session_table.c.deleted.is_(False),
+            )
             .values(deleted=True, updated_at=now)
         )
         self._session.commit()
@@ -578,6 +1392,8 @@ class AiAssistantRepository:
         idempotency_key: str | None,
         request_hash: str | None = None,
     ) -> tuple[dict[str, Any], bool]:
+        if self.get_session(session_id) is None:
+            raise KeyError(f"AI Assistant session not found: {session_id}")
         resolved_hash = request_hash or user_message
         if idempotency_key:
             existing = self.get_run_by_idempotency(session_id, idempotency_key)
@@ -590,6 +1406,8 @@ class AiAssistantRepository:
             self._session,
             self._run_table,
             {
+                "user_id": self._access_scope.user_id,
+                "workspace_id": self._access_scope.workspace_id,
                 "session_id": session_id,
                 "idempotency_key": idempotency_key,
                 "request_hash": resolved_hash,
@@ -611,6 +1429,8 @@ class AiAssistantRepository:
             sa.select(self._run_table).where(
                 self._run_table.c.session_id == session_id,
                 self._run_table.c.idempotency_key == idempotency_key,
+                self._run_table.c.user_id == self._access_scope.user_id,
+                self._run_table.c.workspace_id == self._access_scope.workspace_id,
                 self._run_table.c.deleted.is_(False),
             )
         ).mappings().one_or_none()
@@ -620,6 +1440,8 @@ class AiAssistantRepository:
         row = self._session.execute(
             sa.select(self._run_table).where(
                 self._run_table.c.id == run_id,
+                self._run_table.c.user_id == self._access_scope.user_id,
+                self._run_table.c.workspace_id == self._access_scope.workspace_id,
                 self._run_table.c.deleted.is_(False),
             )
         ).mappings().one_or_none()
@@ -635,7 +1457,12 @@ class AiAssistantRepository:
             values["response_payload"] = {**response_payload, "plan": input_payload["plan"]}
         self._session.execute(
             self._run_table.update()
-            .where(self._run_table.c.id == run_id, self._run_table.c.deleted.is_(False))
+            .where(
+                self._run_table.c.id == run_id,
+                self._run_table.c.user_id == self._access_scope.user_id,
+                self._run_table.c.workspace_id == self._access_scope.workspace_id,
+                self._run_table.c.deleted.is_(False),
+            )
             .values(**values)
         )
         self._session.commit()
@@ -659,7 +1486,12 @@ class AiAssistantRepository:
             values["completed_at"] = datetime.now()
         self._session.execute(
             self._run_table.update()
-            .where(self._run_table.c.id == run_id, self._run_table.c.deleted.is_(False))
+            .where(
+                self._run_table.c.id == run_id,
+                self._run_table.c.user_id == self._access_scope.user_id,
+                self._run_table.c.workspace_id == self._access_scope.workspace_id,
+                self._run_table.c.deleted.is_(False),
+            )
             .values(**values)
         )
         self._session.commit()
@@ -682,6 +1514,8 @@ class AiAssistantRepository:
             .where(
                 self._run_table.c.id == run_id,
                 self._run_table.c.status == expected_status,
+                self._run_table.c.user_id == self._access_scope.user_id,
+                self._run_table.c.workspace_id == self._access_scope.workspace_id,
                 self._run_table.c.deleted.is_(False),
             )
             .values(status=next_status, input_payload=input_payload, updated_at=now)
@@ -699,6 +1533,8 @@ class AiAssistantRepository:
             sa.select(self._run_table)
             .where(
                 self._run_table.c.session_id == session_id,
+                self._run_table.c.user_id == self._access_scope.user_id,
+                self._run_table.c.workspace_id == self._access_scope.workspace_id,
                 self._run_table.c.deleted.is_(False),
             )
             .order_by(self._run_table.c.id.desc())
@@ -708,10 +1544,12 @@ class AiAssistantRepository:
     def complete_run(self, run_id: int, response_payload: dict[str, Any], status: str = "COMPLETED") -> dict[str, Any]:
         now = datetime.now()
         protected_terminal_statuses = tuple({"CANCELLED", "COMPLETED", "FAILED", "DENIED"} - {status})
-        self._session.execute(
+        result = self._session.execute(
             self._run_table.update()
             .where(
                 self._run_table.c.id == run_id,
+                self._run_table.c.user_id == self._access_scope.user_id,
+                self._run_table.c.workspace_id == self._access_scope.workspace_id,
                 self._run_table.c.deleted.is_(False),
                 self._run_table.c.status.not_in(protected_terminal_statuses),
             )
@@ -722,6 +1560,19 @@ class AiAssistantRepository:
                 updated_at=now,
             )
         )
+        if status == "COMPLETED" and _rowcount(result):
+            self._session.execute(
+                mysql_insert(self._memory_completion_table)
+                .values(
+                    user_id=self._access_scope.user_id,
+                    workspace_id=self._access_scope.workspace_id,
+                    run_id=run_id,
+                    completed_at=now,
+                    created_at=now,
+                    updated_at=now,
+                )
+                .prefix_with("IGNORE")
+            )
         self._session.commit()
         updated = self.get_run(run_id)
         if updated is None:
@@ -729,6 +1580,12 @@ class AiAssistantRepository:
         return updated
 
     def append_message(self, session_id: int, role: str, content: str, run_id: int | None = None) -> dict[str, Any]:
+        if self.get_session(session_id) is None:
+            raise KeyError(f"AI Assistant session not found: {session_id}")
+        if run_id is not None:
+            run = self.get_run(run_id)
+            if run is None or int(run["session_id"]) != session_id:
+                raise KeyError(f"AI Assistant run not found for session: {run_id}")
         now = datetime.now()
         row = insert_and_fetch(
             self._session,
@@ -773,7 +1630,9 @@ class AiAssistantRepository:
         correlation_ids: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         now = datetime.now()
-        self._lock_run_for_event_sequence(run_id)
+        locked_session_id = self._lock_run_for_event_sequence(run_id)
+        if locked_session_id != session_id:
+            raise KeyError(f"AI Assistant run not found for session: {run_id}")
         row = insert_and_fetch(
             self._session,
             self._event_table,
@@ -864,6 +1723,8 @@ class AiAssistantRepository:
         risk_level: str,
         input_payload: dict[str, Any],
     ) -> dict[str, Any]:
+        if self.get_run(run_id) is None:
+            raise KeyError(f"AI Assistant run not found: {run_id}")
         now = datetime.now()
         row = insert_and_fetch(
             self._session,
@@ -889,9 +1750,16 @@ class AiAssistantRepository:
     def list_pending_approvals(self) -> list[dict[str, Any]]:
         rows = self._session.execute(
             sa.select(self._approval_table)
+            .join(
+                self._run_table,
+                self._approval_table.c.run_id == self._run_table.c.id,
+            )
             .where(
                 self._approval_table.c.status == "PENDING",
                 self._approval_table.c.deleted.is_(False),
+                self._run_table.c.user_id == self._access_scope.user_id,
+                self._run_table.c.workspace_id == self._access_scope.workspace_id,
+                self._run_table.c.deleted.is_(False),
             )
             .order_by(self._approval_table.c.id.asc())
         ).mappings().all()
@@ -900,9 +1768,16 @@ class AiAssistantRepository:
     def list_run_approvals(self, run_id: int) -> list[dict[str, Any]]:
         rows = self._session.execute(
             sa.select(self._approval_table)
+            .join(
+                self._run_table,
+                self._approval_table.c.run_id == self._run_table.c.id,
+            )
             .where(
                 self._approval_table.c.run_id == run_id,
                 self._approval_table.c.deleted.is_(False),
+                self._run_table.c.user_id == self._access_scope.user_id,
+                self._run_table.c.workspace_id == self._access_scope.workspace_id,
+                self._run_table.c.deleted.is_(False),
             )
             .order_by(self._approval_table.c.id.asc())
         ).mappings().all()
@@ -910,9 +1785,17 @@ class AiAssistantRepository:
 
     def get_approval(self, approval_id: int) -> dict[str, Any] | None:
         row = self._session.execute(
-            sa.select(self._approval_table).where(
+            sa.select(self._approval_table)
+            .join(
+                self._run_table,
+                self._approval_table.c.run_id == self._run_table.c.id,
+            )
+            .where(
                 self._approval_table.c.id == approval_id,
                 self._approval_table.c.deleted.is_(False),
+                self._run_table.c.user_id == self._access_scope.user_id,
+                self._run_table.c.workspace_id == self._access_scope.workspace_id,
+                self._run_table.c.deleted.is_(False),
             )
         ).mappings().one_or_none()
         return dict(row) if row else None
@@ -924,6 +1807,13 @@ class AiAssistantRepository:
             .where(
                 self._approval_table.c.id == approval_id,
                 self._approval_table.c.deleted.is_(False),
+                self._approval_table.c.run_id.in_(
+                    sa.select(self._run_table.c.id).where(
+                        self._run_table.c.user_id == self._access_scope.user_id,
+                        self._run_table.c.workspace_id == self._access_scope.workspace_id,
+                        self._run_table.c.deleted.is_(False),
+                    )
+                ),
             )
             .values(
                 status=status,
@@ -1013,6 +1903,32 @@ class AiAssistantRepository:
         owner_tool_call_id: int | None,
         ttl_seconds: int,
     ) -> dict[str, Any]:
+        bind = self._session.get_bind()
+        engine = bind.engine if isinstance(bind, sa.engine.Connection) else bind
+        with engine.connect() as connection, Session(bind=connection) as lock_session:
+            pinned_repository = AiAssistantRepository(
+                lock_session,
+                access_scope=self._access_scope,
+            )
+            return pinned_repository._acquire_resource_lock_locked(
+                resource_key=resource_key,
+                mode=mode,
+                owner_session_id=owner_session_id,
+                owner_run_id=owner_run_id,
+                owner_tool_call_id=owner_tool_call_id,
+                ttl_seconds=ttl_seconds,
+            )
+
+    def _acquire_resource_lock_locked(
+        self,
+        *,
+        resource_key: str,
+        mode: str,
+        owner_session_id: int,
+        owner_run_id: int,
+        owner_tool_call_id: int | None,
+        ttl_seconds: int,
+    ) -> dict[str, Any]:
         now = datetime.now()
         requested_mode = mode.upper()
         mutex_name = _resource_lock_mutex_name(resource_key)
@@ -1080,7 +1996,7 @@ class AiAssistantRepository:
             self._session.rollback()
             raise
         finally:
-            self._release_mysql_lock(mutex_name)
+            self._release_mysql_lock_checked(mutex_name)
 
     def release_resource_lock(
         self,
@@ -1143,16 +2059,21 @@ class AiAssistantRepository:
             .values(status="EXPIRED", updated_at=now)
         )
 
-    def _try_get_mysql_lock(self, name: str) -> bool:
-        value = self._session.execute(sa.text("SELECT GET_LOCK(:name, 0)"), {"name": name}).scalar_one_or_none()
+    def _try_get_mysql_lock(self, name: str, *, timeout_seconds: int = 0) -> bool:
+        value = self._session.execute(
+            sa.text("SELECT GET_LOCK(:name, :timeout_seconds)"),
+            {"name": name, "timeout_seconds": max(0, timeout_seconds)},
+        ).scalar_one_or_none()
         return int(value or 0) == 1
 
-    def _release_mysql_lock(self, name: str) -> None:
-        try:
-            self._session.execute(sa.text("SELECT RELEASE_LOCK(:name)"), {"name": name})
-            self._session.commit()
-        except Exception:
-            self._session.rollback()
+    def _release_mysql_lock_checked(self, name: str) -> None:
+        value = self._session.execute(
+            sa.text("SELECT RELEASE_LOCK(:name)"),
+            {"name": name},
+        ).scalar_one_or_none()
+        self._session.commit()
+        if int(value or 0) != 1:
+            raise RuntimeError(f"failed to release MySQL lock: {name}")
 
     def _next_event_sequence(self, run_id: int) -> int:
         current = self._session.execute(
@@ -1163,12 +2084,33 @@ class AiAssistantRepository:
         ).scalar_one_or_none()
         return int(current or 0) + 1
 
-    def _lock_run_for_event_sequence(self, run_id: int) -> None:
-        self._session.execute(
-            sa.select(self._run_table.c.id)
+    def _lock_run_for_event_sequence(self, run_id: int) -> int | None:
+        locked_session_id = self._session.execute(
+            sa.select(self._run_table.c.session_id)
             .where(
                 self._run_table.c.id == run_id,
+                self._run_table.c.user_id == self._access_scope.user_id,
+                self._run_table.c.workspace_id == self._access_scope.workspace_id,
                 self._run_table.c.deleted.is_(False),
             )
             .with_for_update()
         ).scalar_one_or_none()
+        return int(locked_session_id) if locked_session_id is not None else None
+
+
+def _without_legacy_memory(context: dict[str, Any] | None) -> dict[str, Any]:
+    sanitized = dict(context or {})
+    sanitized.pop("aiAssistantMemory", None)
+    return sanitized
+
+
+def _memory_batch_from_cursor(cursor: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "run_ids": [int(run_id) for run_id in cursor.get("pending_run_ids") or []],
+        "batch_key": str(cursor.get("pending_batch_key") or ""),
+        "source_hash": str(cursor.get("pending_source_hash") or ""),
+        "input_hash": cursor.get("pending_input_hash"),
+        "target_hash": cursor.get("pending_target_hash"),
+        "status": str(cursor.get("status") or ""),
+        "claim_token": str(cursor.get("claim_token") or ""),
+    }

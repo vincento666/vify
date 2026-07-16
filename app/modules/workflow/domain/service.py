@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable, Mapping
+from contextlib import suppress
 from datetime import datetime
 from time import perf_counter
 from time import time_ns
@@ -1096,8 +1098,29 @@ class _NodeConfigWorkflowLlmCompleter:
         self._parser = parser
         self._llm_client_factory = llm_client_factory
         self._last_call_debug: dict[str, Any] = {}
+        self._cancellation_check: Callable[[], bool] | None = None
+
+    def set_cancellation_check(self, cancellation_check: Callable[[], bool]) -> None:
+        self._cancellation_check = cancellation_check
 
     def complete_prompt(self, prompt: str, options: dict[str, Any] | None = None) -> str:
+        return self._complete_prompt(prompt, options, on_delta=None)
+
+    def stream_prompt(
+        self,
+        prompt: str,
+        options: dict[str, Any] | None,
+        on_delta: Callable[[str], None],
+    ) -> str:
+        return self._complete_prompt(prompt, options, on_delta=on_delta)
+
+    def _complete_prompt(
+        self,
+        prompt: str,
+        options: dict[str, Any] | None,
+        *,
+        on_delta: Callable[[str], None] | None,
+    ) -> str:
         options = options or {}
         model_config = self._active_model_config(options)
         payload = self._request_builder.build(
@@ -1108,7 +1131,11 @@ class _NodeConfigWorkflowLlmCompleter:
             extra_params=self._extra_params(options, model_config),
         )
         started_at = perf_counter()
-        response, fallback_debug = self._complete_with_fallback(payload, model_config)
+        response, fallback_debug = (
+            self._stream_with_fallback(payload, model_config, on_delta)
+            if on_delta is not None
+            else self._complete_with_fallback(payload, model_config)
+        )
         elapsed_ms = int((perf_counter() - started_at) * 1000)
         result = self._parser.parse_chat_response(response)
         self._last_call_debug = {
@@ -1232,6 +1259,37 @@ class _NodeConfigWorkflowLlmCompleter:
             )
         )
 
+    def _stream_with_fallback(
+        self,
+        payload: dict[str, Any],
+        model_config: ModelConfigDto,
+        on_delta: Callable[[str], None],
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        if self._fallback_model(model_config):
+            # A fallback run must remain atomic: do not emit primary chunks that
+            # cannot be retracted if the fallback model becomes the final answer.
+            return self._complete_with_fallback(payload, model_config)
+        client = self._llm_client(model_config)
+        stream_complete_async = getattr(client, "stream_complete_async", None)
+        stream_complete = getattr(client, "stream_complete", None)
+        try:
+            if callable(stream_complete_async):
+                response = _run_async_provider_stream(
+                    stream_complete_async,
+                    payload,
+                    on_delta,
+                    cancellation_check=self._cancellation_check,
+                )
+            elif callable(stream_complete):
+                response = stream_complete(payload, on_delta=on_delta)
+            else:
+                return client.complete(payload), {}
+        except Exception as exc:
+            raise WorkflowExecutionError(f"LLM provider request failed: {_provider_request_error_message(exc)}") from exc
+        if not isinstance(response, dict):
+            raise WorkflowExecutionError("LLM provider stream response is not a JSON object")
+        return response, {}
+
     def _complete_with_fallback(self, payload: dict[str, Any], model_config: ModelConfigDto) -> tuple[dict[str, Any], dict[str, Any]]:
         client = self._llm_client(model_config)
         request_model = str(payload.get("model") or model_config.model_id)
@@ -1292,8 +1350,29 @@ class _AgentBackedWorkflowLlmCompleter:
         self._parser = parser
         self._llm_client_factory = llm_client_factory
         self._last_call_debug: dict[str, Any] = {}
+        self._cancellation_check: Callable[[], bool] | None = None
+
+    def set_cancellation_check(self, cancellation_check: Callable[[], bool]) -> None:
+        self._cancellation_check = cancellation_check
 
     def complete_prompt(self, prompt: str, options: dict[str, Any] | None = None) -> str:
+        return self._complete_prompt(prompt, options, on_delta=None)
+
+    def stream_prompt(
+        self,
+        prompt: str,
+        options: dict[str, Any] | None,
+        on_delta: Callable[[str], None],
+    ) -> str:
+        return self._complete_prompt(prompt, options, on_delta=on_delta)
+
+    def _complete_prompt(
+        self,
+        prompt: str,
+        options: dict[str, Any] | None,
+        *,
+        on_delta: Callable[[str], None] | None,
+    ) -> str:
         options = options or {}
         model_config = self._active_model_config(options)
         payload = self._request_builder.build(
@@ -1304,7 +1383,11 @@ class _AgentBackedWorkflowLlmCompleter:
             extra_params=self._extra_params(options, model_config),
         )
         started_at = perf_counter()
-        response, fallback_debug = self._complete_with_fallback(payload, model_config)
+        response, fallback_debug = (
+            self._stream_with_fallback(payload, model_config, on_delta)
+            if on_delta is not None
+            else self._complete_with_fallback(payload, model_config)
+        )
         elapsed_ms = int((perf_counter() - started_at) * 1000)
         result = self._parser.parse_chat_response(response)
         self._last_call_debug = {
@@ -1435,6 +1518,37 @@ class _AgentBackedWorkflowLlmCompleter:
             )
         )
 
+    def _stream_with_fallback(
+        self,
+        payload: dict[str, Any],
+        model_config: ModelConfigDto,
+        on_delta: Callable[[str], None],
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        if self._fallback_model(model_config):
+            # A fallback run must remain atomic: do not emit primary chunks that
+            # cannot be retracted if the fallback model becomes the final answer.
+            return self._complete_with_fallback(payload, model_config)
+        client = self._llm_client(model_config)
+        stream_complete_async = getattr(client, "stream_complete_async", None)
+        stream_complete = getattr(client, "stream_complete", None)
+        try:
+            if callable(stream_complete_async):
+                response = _run_async_provider_stream(
+                    stream_complete_async,
+                    payload,
+                    on_delta,
+                    cancellation_check=self._cancellation_check,
+                )
+            elif callable(stream_complete):
+                response = stream_complete(payload, on_delta=on_delta)
+            else:
+                return client.complete(payload), {}
+        except Exception as exc:
+            raise WorkflowExecutionError(f"LLM provider request failed: {_provider_request_error_message(exc)}") from exc
+        if not isinstance(response, dict):
+            raise WorkflowExecutionError("LLM provider stream response is not a JSON object")
+        return response, {}
+
     def _complete_with_fallback(self, payload: dict[str, Any], model_config: ModelConfigDto) -> tuple[dict[str, Any], dict[str, Any]]:
         client = self._llm_client(model_config)
         request_model = str(payload.get("model") or model_config.model_id)
@@ -1511,6 +1625,51 @@ def _llm_tool_call_evidence(result: ToolExecutionResult) -> dict[str, Any]:
         "arguments": _redact_llm_payload(result.arguments),
         "evidence": evidence,
     }
+
+
+def _run_async_provider_stream(
+    stream_complete_async: Callable[..., Any],
+    payload: dict[str, Any],
+    on_delta: Callable[[str], None],
+    *,
+    cancellation_check: Callable[[], bool] | None = None,
+) -> Any:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(
+            _await_async_provider_stream(
+                stream_complete_async,
+                payload,
+                on_delta,
+                cancellation_check=cancellation_check,
+            )
+        )
+    raise WorkflowExecutionError("Async provider stream cannot run inside an active event loop")
+
+
+async def _await_async_provider_stream(
+    stream_complete_async: Callable[..., Any],
+    payload: dict[str, Any],
+    on_delta: Callable[[str], None],
+    *,
+    cancellation_check: Callable[[], bool] | None,
+) -> Any:
+    stream_task = asyncio.create_task(stream_complete_async(payload, on_delta=on_delta))
+    try:
+        while not stream_task.done():
+            if cancellation_check is not None and cancellation_check():
+                stream_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await stream_task
+                raise WorkflowExecutionError("LLM provider stream cancelled")
+            await asyncio.wait({stream_task}, timeout=0.05)
+        return await stream_task
+    finally:
+        if not stream_task.done():
+            stream_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await stream_task
 
 
 def _provider_request_error_message(exc: Exception) -> str:

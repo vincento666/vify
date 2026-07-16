@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 import ast
 import json
 import re
@@ -147,7 +147,14 @@ class LlmNodeExecutor:
         self._knowledge_facade = knowledge_facade
         self._mcp_tool_executor = mcp_tool_executor
 
-    def execute(self, node: dict[str, Any], context: ExecutionContext) -> dict[str, Any]:
+    def execute(
+        self,
+        node: dict[str, Any],
+        context: ExecutionContext,
+        *,
+        on_delta: Callable[[str], None] | None = None,
+        cancellation_check: Callable[[], bool] | None = None,
+    ) -> dict[str, Any]:
         config = _config(node)
         output_variable = str(config.get("outputVariable") or "answer")
         local_inputs = _node_inputs(config, context)
@@ -161,14 +168,24 @@ class LlmNodeExecutor:
         tool_resources = _callable_tool_resources(config)
         if tool_resources and _tool_choice_mode(config) != "disabled":
             return self._execute_with_tools(node, config, prompt, output_variable, llm_options)
+        live_provider_stream = False
         if self._completer is not None:
-            answer = self._completer.complete_prompt(prompt, llm_options)
+            set_cancellation_check = getattr(self._completer, "set_cancellation_check", None)
+            if cancellation_check is not None and callable(set_cancellation_check):
+                set_cancellation_check(cancellation_check)
+            stream_prompt = getattr(self._completer, "stream_prompt", None)
+            if on_delta is not None and callable(stream_prompt):
+                answer = str(stream_prompt(prompt, llm_options, on_delta))
+                live_provider_stream = True
+            else:
+                answer = self._completer.complete_prompt(prompt, llm_options)
             return self._output_with_stream_events(
                 config,
                 str(node["node_key"]),
                 output_variable,
                 answer,
                 _debug_extra_from_completer(self._completer),
+                live_provider_stream=live_provider_stream,
             )
         return self._output_with_stream_events(config, str(node["node_key"]), output_variable, f"LLM mock: {prompt}")
 
@@ -224,12 +241,19 @@ class LlmNodeExecutor:
         output_variable: str,
         answer: str,
         extra: dict[str, Any] | None = None,
+        *,
+        live_provider_stream: bool = False,
     ) -> dict[str, Any]:
         values = {output_variable: answer, **(extra or {})}
         output = _declared_output_or_all(values, config)
         for key, value in (extra or {}).items():
             output.setdefault(key, value)
-        output["events"] = _llm_stream_events(config, node_key, answer)
+        output["events"] = _llm_stream_events(
+            config,
+            node_key,
+            answer,
+            include_delta=not live_provider_stream,
+        )
         usage = output.get("__usage")
         if isinstance(usage, Mapping):
             output["events"].append(_node_usage_event(node_key, usage))
@@ -365,16 +389,38 @@ class ToolCallNodeExecutor:
         error_message = ""
         elapsed_ms = 0
         attempts = 0
-        for attempt_index in range(policy.retry_count + 1):
-            attempts = attempt_index + 1
+        receipt: dict[str, str] | None = None
+        parallel_idempotency_key = _parallel_tool_idempotency_key(config)
+        if parallel_idempotency_key:
+            invoke_idempotent = getattr(self._mcp_tool_executor, "execute_tool_call_idempotent", None)
+            if not callable(invoke_idempotent):
+                raise WorkflowExecutionError("TOOL_CALL parallel-safe adapter does not support idempotent receipt dispatch")
             started_at = perf_counter()
-            result = self._mcp_tool_executor.execute_tool_call(server_ids, tool_name, arguments)
+            dispatched = invoke_idempotent(
+                server_ids,
+                tool_name,
+                arguments,
+                idempotency_key=parallel_idempotency_key,
+            )
+            try:
+                result, raw_receipt = dispatched
+            except (TypeError, ValueError) as exc:
+                raise WorkflowExecutionError("TOOL_CALL parallel-safe adapter returned an invalid dispatch result") from exc
+            receipt = _parallel_tool_receipt(raw_receipt)
+            attempts = 1
             elapsed_ms = result.elapsed_ms or int((perf_counter() - started_at) * 1000)
             error_message = _tool_result_error(result, elapsed_ms, policy.timeout_ms, tool_name)
-            if not error_message:
-                break
-            if attempt_index >= policy.retry_count:
-                break
+        else:
+            for attempt_index in range(policy.retry_count + 1):
+                attempts = attempt_index + 1
+                started_at = perf_counter()
+                result = self._mcp_tool_executor.execute_tool_call(server_ids, tool_name, arguments)
+                elapsed_ms = result.elapsed_ms or int((perf_counter() - started_at) * 1000)
+                error_message = _tool_result_error(result, elapsed_ms, policy.timeout_ms, tool_name)
+                if not error_message:
+                    break
+                if attempt_index >= policy.retry_count:
+                    break
         assert result is not None
         success = not error_message
         evidence = {
@@ -390,6 +436,9 @@ class ToolCallNodeExecutor:
             "retryCount": policy.retry_count,
             "attempts": attempts,
         }
+        if parallel_idempotency_key:
+            evidence["idempotencyKey"] = parallel_idempotency_key
+            evidence["receipt"] = receipt
         if not success:
             output = {
                 "result": "",
@@ -1765,10 +1814,16 @@ def _render_local_template(template: str, values: Mapping[str, Any]) -> str:
     return _LOCAL_TEMPLATE_PATTERN.sub(replace, template)
 
 
-def _llm_stream_events(config: dict[str, Any], node_key: str, content: str) -> list[dict[str, Any]]:
+def _llm_stream_events(
+    config: dict[str, Any],
+    node_key: str,
+    content: str,
+    *,
+    include_delta: bool = True,
+) -> list[dict[str, Any]]:
     stream_output = str(config.get("streamOutput") or "inherit").lower()
     events: list[dict[str, Any]] = []
-    if stream_output in {"enabled", "true", "1", "inherit"}:
+    if include_delta and stream_output in {"enabled", "true", "1", "inherit"}:
         events.append({"type": "llm_delta", "nodeKey": node_key, "content": content})
     events.append({"type": "message_done", "nodeKey": node_key, "content": content})
     return events
@@ -1896,6 +1951,23 @@ def _normalized_assignment_number(value: float) -> int | float:
 
 def _normalized_resource_type(value: Any) -> str:
     return str(value or "").strip().upper().replace("-", "_")
+
+
+def _parallel_tool_idempotency_key(config: Mapping[str, Any]) -> str:
+    return str(config.get("_runtimeParallelToolIdempotencyKey") or "").strip()
+
+
+def _parallel_tool_receipt(value: Any) -> dict[str, str]:
+    if not isinstance(value, Mapping):
+        raise WorkflowExecutionError("TOOL_CALL parallel-safe adapter must return a receipt")
+    operation_id = str(value.get("operationId") or value.get("operation_id") or "").strip()
+    if not operation_id:
+        raise WorkflowExecutionError("TOOL_CALL parallel-safe adapter receipt requires operationId")
+    receipt = {"operationId": operation_id}
+    status = str(value.get("status") or "").strip()
+    if status:
+        receipt["status"] = status
+    return receipt
 
 
 def _tool_server_ids(config: dict[str, Any]) -> list[int]:

@@ -794,7 +794,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { RouteLocationRaw } from 'vue-router'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
@@ -824,6 +824,7 @@ import type {
   RuntimeLabChatflowTrace,
   RuntimeLabConfig,
   RuntimeLabEvent,
+  RuntimeLabMessagePayload,
   RuntimeLabTraceNode,
   RuntimeLabTask,
   RuntimeLabTemporaryModelTestResult,
@@ -840,6 +841,8 @@ import {
   buildRuntimeLabRouteOutcome,
   buildRuntimeLabTraceCards,
   buildRuntimeLabTranscriptRow,
+  applyRuntimeLabSopStreamFrame,
+  finalizeRuntimeLabSopStreamRow,
   defaultTemporaryModelSettings,
   buildUserTranscriptRow,
   formatRuntimeLabElapsed,
@@ -847,6 +850,7 @@ import {
   runtimeLabPendingDelayMs,
   buildRuntimeLabLocalSettings,
 } from './unifiedRoutingChatLab'
+import { openRuntimeLabSopMessageStream } from './runtimeLabSopEventStream'
 import type {
   RuntimeLabDebugDetail,
   RuntimeLabDebugStep,
@@ -855,6 +859,7 @@ import type {
   RuntimeLabTraceCard,
   RuntimeLabTranscriptRow,
 } from './unifiedRoutingChatLab'
+import type { RuntimeLabSopMessageStream } from './runtimeLabSopEventStream'
 
 const router = useRouter()
 const showIntentSamples = ref(true)
@@ -884,6 +889,7 @@ const events = ref<RuntimeLabEvent[]>([])
 const latestTurn = ref<RuntimeLabTurn | null>(null)
 const debugPanel = ref<RuntimeLabDebugDetail | null>(null)
 const messagesEl = ref<HTMLElement>()
+let activeSopStream: RuntimeLabSopMessageStream | null = null
 
 const boundScenarios = computed(() => buildRuntimeLabBoundScenarios(runtimeConfig.value))
 const boundScenarioIds = computed(() => boundScenarios.value.map((scenario) => scenario.id))
@@ -927,6 +933,11 @@ onMounted(() => {
   void loadModelOptions()
 })
 
+onBeforeUnmount(() => {
+  activeSopStream?.close()
+  activeSopStream = null
+})
+
 function openOrdinaryChat() {
   router.push({ name: 'HifyChat' })
 }
@@ -960,6 +971,8 @@ function clearScenarios() {
 }
 
 async function createFreshSession() {
+  activeSopStream?.close()
+  activeSopStream = null
   creatingSession.value = true
   try {
     const session = await createRuntimeLabSession()
@@ -1182,21 +1195,79 @@ async function sendMessage(content: string) {
   })
   await scrollToBottom()
 
+  const payload: RuntimeLabMessagePayload = {
+    message: content,
+    idempotencyKey: uid('front-turn'),
+    enabledSopIds: [...enabledScenarioIds.value],
+    routeSettings: buildRuntimeLabRouteSettingsPayload(routeSettings.value),
+  }
+  let receivedLiveStreamFrame = false
   try {
-    const turn = await postRuntimeLabMessage(currentSessionId, {
-      message: content,
-      idempotencyKey: uid('front-turn'),
-      enabledSopIds: [...enabledScenarioIds.value],
-      routeSettings: buildRuntimeLabRouteSettingsPayload(routeSettings.value),
+    let streamTurn: RuntimeLabTurn | null = null
+    const stream = openRuntimeLabSopMessageStream(currentSessionId, payload, {
+      onFrame: (frame) => {
+        receivedLiveStreamFrame = true
+        const turn = runtimeLabTurnFromStreamFrame(frame.payload)
+        if (frame.source === 'runtime_lab' && turn) {
+          streamTurn = turn
+          latestTurn.value = turn
+        }
+        const current = transcript.value.find((row) => row.id === pendingId)
+        if (current) replacePendingAssistant(pendingId, applyRuntimeLabSopStreamFrame(current, frame))
+        void scrollToBottom()
+      },
     })
-    latestTurn.value = turn
-    const turnElapsedMs = Date.now() - pendingStartedAt
-    await waitForPendingAnimation(pendingStartedAt)
-    const assistantRow = buildRuntimeLabTranscriptRow(turn, turnElapsedMs)
+    activeSopStream = stream
+    const terminal = await stream.done
+    if (activeSopStream === stream) activeSopStream = null
+    if (terminal === 'closed') return
+    if (terminal === 'error') {
+      const current = transcript.value.find((row) => row.id === pendingId)
+      if (current) {
+        replacePendingAssistant(pendingId, finalizeRuntimeLabSopStreamRow(current, 'Runtime V2 执行失败'))
+      }
+      return
+    }
+    const completedTurn = streamTurn as RuntimeLabTurn | null
+    if (!completedTurn) throw new Error('RuntimeLab stream returned no route payload')
+    latestTurn.value = completedTurn
+    const current = transcript.value.find((row) => row.id === pendingId)
+    const assistantRow = finalizeRuntimeLabSopStreamRow(
+      {
+        ...buildRuntimeLabTranscriptRow(completedTurn, Date.now() - pendingStartedAt),
+        id: pendingId,
+        content: current?.content || '',
+        pending: current?.pending,
+      },
+      completedTurn.reply,
+    )
     replacePendingAssistant(pendingId, assistantRow)
-    await refreshLedger(currentSessionId, turn)
+    await refreshLedger(currentSessionId, completedTurn)
     enrichAssistantDebugFromTrace(assistantRow.id)
   } catch (error) {
+    activeSopStream?.close()
+    activeSopStream = null
+    if (receivedLiveStreamFrame) {
+      const current = transcript.value.find((row) => row.id === pendingId)
+      if (current) {
+        replacePendingAssistant(
+          pendingId,
+          finalizeRuntimeLabSopStreamRow(current, '实时连接中断；运行仍可能继续。请重试以恢复订阅。'),
+        )
+      }
+      return
+    }
+    try {
+      const turn = await postRuntimeLabMessage(currentSessionId, payload)
+      latestTurn.value = turn
+      const assistantRow = buildRuntimeLabTranscriptRow(turn, Date.now() - pendingStartedAt)
+      replacePendingAssistant(pendingId, assistantRow)
+      await refreshLedger(currentSessionId, turn)
+      enrichAssistantDebugFromTrace(assistantRow.id)
+      return
+    } catch (fallbackError) {
+      error = fallbackError
+    }
     await waitForPendingAnimation(pendingStartedAt)
     replacePendingAssistant(pendingId, {
       id: uid('assistant-error'),
@@ -1209,6 +1280,15 @@ async function sendMessage(content: string) {
     sending.value = false
     await scrollToBottom()
   }
+}
+
+function runtimeLabTurnFromStreamFrame(payload: unknown): RuntimeLabTurn | null {
+  if (!payload || typeof payload !== 'object') return null
+  const candidate = payload as Record<string, unknown>
+  if (typeof candidate.reply !== 'string' || !candidate.routeDecision || typeof candidate.routeDecision !== 'object') {
+    return null
+  }
+  return candidate as unknown as RuntimeLabTurn
 }
 
 async function ensureSession() {

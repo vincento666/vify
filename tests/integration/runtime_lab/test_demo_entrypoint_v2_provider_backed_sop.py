@@ -31,6 +31,43 @@ def _assistant_payload(content: str) -> dict[str, Any]:
     }
 
 
+class _AsyncOnlyOpenAIClient:
+    def __init__(self, content: str, chunks: list[str]) -> None:
+        self._content = content
+        self._chunks = list(chunks)
+        self.async_stream_calls = 0
+        self.captured_payload: dict[str, Any] = {}
+
+    async def stream_complete_async(self, payload: dict[str, Any], on_delta: Any = None) -> dict[str, Any]:
+        self.async_stream_calls += 1
+        self.captured_payload = dict(payload)
+        for chunk in self._chunks:
+            if on_delta is not None:
+                on_delta(chunk)
+        return _assistant_payload(self._content)
+
+
+class _CompleteOnlyOpenAIClient:
+    def __init__(self, content: str) -> None:
+        self._content = content
+        self.complete_calls = 0
+
+    def complete(self, _payload: dict[str, Any]) -> dict[str, Any]:
+        self.complete_calls += 1
+        return _assistant_payload(self._content)
+
+
+class _AsyncPartialFailureOpenAIClient:
+    def __init__(self) -> None:
+        self.async_stream_calls = 0
+
+    async def stream_complete_async(self, _payload: dict[str, Any], on_delta: Any = None) -> dict[str, Any]:
+        self.async_stream_calls += 1
+        if on_delta is not None:
+            on_delta("partial-")
+        raise RuntimeError("provider stream reset after visible delta")
+
+
 class DemoEntrypointRuntimeV2ProviderBackedSopTest(unittest.TestCase):
     def setUp(self) -> None:
         _cleanup_seeded_entrypoint_agents()
@@ -130,6 +167,116 @@ class DemoEntrypointRuntimeV2ProviderBackedSopTest(unittest.TestCase):
         self.assertNotIn("LLM mock:", result.customer_reply_draft)
         self.assertEqual(fake_client.captured_payload["model"], "runtime-v2-entry-model")
 
+    def test_customer_assistant_chatflow_sop_v2_consumes_async_provider_deltas_before_node_completion(self) -> None:
+        agent_name = f"{TEST_AGENT_NAME_PREFIX} CustomerAssistant Async {time.time_ns()}"
+        _seed_live_agent(agent_name)
+        fake_client = _AsyncOnlyOpenAIClient("CUSTOMER_ASSISTANT_ASYNC_PROVIDER_OK", ["CUSTOMER_", "ASSISTANT_"])
+
+        with (
+            patch.object(customer_assistant_router, "CUSTOMER_ASSISTANT_LLM_AGENT_NAME", agent_name),
+            patch("app.modules.workflow.domain.service.ProviderBackedOpenAIChatClient", lambda _config: fake_client),
+            TestClient(app) as client,
+        ):
+            chatflow = _create_llm_chatflow(client)
+            with get_session_factory()() as session:
+                adapter = customer_assistant_router._customer_assistant_sop_adapter(
+                    session,
+                    {"refund_ticket": int(chatflow["id"])},
+                )
+                result = ChatflowSopWorker(adapter).run(
+                    TaskItem(
+                        id=13303,
+                        session_id=135,
+                        task_key="refund_ticket",
+                        task_type="sop",
+                        business_key="refund_ticket",
+                        short_id="T13303",
+                        status=TaskStatus.PENDING,
+                        worker_type="chatflow_sop",
+                        worker_ref="refund_ticket",
+                        checkpoint={},
+                        input_snapshot={},
+                    ),
+                    "我要退票",
+                )
+                refs = dict(result.evidence["runtimeRefs"])
+                drained = _drain_runtime_job(session, int(refs["runId"]))
+            events_response = client.get(str(refs["eventsRef"]))
+            result_response = client.get(str(refs["resultRef"]))
+
+        self.assertEqual(result.status, TaskStatus.WAITING)
+        self.assertEqual(drained["status"], "COMPLETED")
+        self.assertEqual(fake_client.async_stream_calls, 1)
+        self.assertEqual(fake_client.captured_payload["model"], "runtime-v2-entry-model")
+        self.assertEqual(events_response.status_code, 200, events_response.text)
+        event_types = [event["type"] for event in events_response.json()["data"]["list"]]
+        self.assertLess(event_types.index("llm_delta"), event_types.index("workflow_node_completed"))
+        self.assertEqual(result_response.json()["data"]["output"]["final"], "CUSTOMER_ASSISTANT_ASYNC_PROVIDER_OK")
+
+    def test_customer_assistant_chatflow_sop_v2_non_stream_provider_keeps_final_only_fallback(self) -> None:
+        agent_name = f"{TEST_AGENT_NAME_PREFIX} CustomerAssistant NonStream {time.time_ns()}"
+        _seed_live_agent(agent_name)
+        fake_client = _CompleteOnlyOpenAIClient("CUSTOMER_ASSISTANT_NON_STREAM_OK")
+
+        with (
+            patch.object(customer_assistant_router, "CUSTOMER_ASSISTANT_LLM_AGENT_NAME", agent_name),
+            patch("app.modules.workflow.domain.service.ProviderBackedOpenAIChatClient", lambda _config: fake_client),
+            TestClient(app) as client,
+        ):
+            chatflow = _create_llm_chatflow(client)
+            with get_session_factory()() as session:
+                adapter = customer_assistant_router._customer_assistant_sop_adapter(
+                    session,
+                    {"refund_ticket": int(chatflow["id"])},
+                )
+                result = ChatflowSopWorker(adapter).run(
+                    _customer_assistant_task(task_id=13304, session_id=136),
+                    "我要退票",
+                )
+                refs = dict(result.evidence["runtimeRefs"])
+                drained = _drain_runtime_job(session, int(refs["runId"]))
+            events_response = client.get(str(refs["eventsRef"]))
+            result_response = client.get(str(refs["resultRef"]))
+
+        self.assertEqual(result.status, TaskStatus.WAITING)
+        self.assertEqual(drained["status"], "COMPLETED")
+        self.assertEqual(fake_client.complete_calls, 1)
+        event_types = [event["type"] for event in events_response.json()["data"]["list"]]
+        self.assertNotIn("llm_delta", event_types)
+        self.assertEqual(result_response.json()["data"]["output"]["final"], "CUSTOMER_ASSISTANT_NON_STREAM_OK")
+
+    def test_customer_assistant_chatflow_sop_v2_does_not_duplicate_visible_delta_after_partial_failure(self) -> None:
+        agent_name = f"{TEST_AGENT_NAME_PREFIX} CustomerAssistant PartialFailure {time.time_ns()}"
+        _seed_live_agent(agent_name)
+        fake_client = _AsyncPartialFailureOpenAIClient()
+
+        with (
+            patch.object(customer_assistant_router, "CUSTOMER_ASSISTANT_LLM_AGENT_NAME", agent_name),
+            patch("app.modules.workflow.domain.service.ProviderBackedOpenAIChatClient", lambda _config: fake_client),
+            TestClient(app) as client,
+        ):
+            chatflow = _create_llm_chatflow(client)
+            with get_session_factory()() as session:
+                adapter = customer_assistant_router._customer_assistant_sop_adapter(
+                    session,
+                    {"refund_ticket": int(chatflow["id"])},
+                )
+                result = ChatflowSopWorker(adapter).run(
+                    _customer_assistant_task(task_id=13305, session_id=137),
+                    "我要退票",
+                )
+                refs = dict(result.evidence["runtimeRefs"])
+                drained = _drain_runtime_job(session, int(refs["runId"]))
+            events_response = client.get(str(refs["eventsRef"]))
+            result_response = client.get(str(refs["resultRef"]))
+
+        self.assertEqual(result.status, TaskStatus.WAITING)
+        self.assertEqual(drained["status"], "COMPLETED")
+        self.assertEqual(fake_client.async_stream_calls, 1)
+        events = events_response.json()["data"]["list"]
+        self.assertEqual([event["type"] for event in events].count("llm_delta"), 1)
+        self.assertEqual(result_response.json()["data"]["status"], "FAILED")
+
     def test_customer_assistant_chatflow_sop_v2_mock_mode_does_not_use_provider_agent(self) -> None:
         agent_name = f"{TEST_AGENT_NAME_PREFIX} CustomerAssistant Mock {time.time_ns()}"
         _seed_live_agent(agent_name)
@@ -186,6 +333,22 @@ def _drain_runtime_job(session: Any, run_id: int) -> dict[str, object]:
         owner="chatflow",
         worker_id=f"provider-backed-entrypoint-test-{run_id}",
     ).run_once(job_id=int(job["id"]))
+
+
+def _customer_assistant_task(*, task_id: int, session_id: int) -> TaskItem:
+    return TaskItem(
+        id=task_id,
+        session_id=session_id,
+        task_key="refund_ticket",
+        task_type="sop",
+        business_key="refund_ticket",
+        short_id=f"T{task_id}",
+        status=TaskStatus.PENDING,
+        worker_type="chatflow_sop",
+        worker_ref="refund_ticket",
+        checkpoint={},
+        input_snapshot={},
+    )
 
 
 def _seed_live_agent(agent_name: str) -> int:

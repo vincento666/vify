@@ -31,48 +31,49 @@ open tasks:
 
 ## 188.4 Scope Isolation And Markdown Store
 
-- [ ] TDD preflight and observable RED.
-- [ ] Resolve trusted user/workspace scope; reject arbitrary paths and escape.
-- [ ] Create one canonical MEMORY.md per scope.
-- [ ] Locate rolling 30-day start line from strict date headings.
-- [ ] Read only bounded content from calculated line through EOF.
-- [ ] Merge/dedupe/compress today's block to at most 100 tokens.
-- [ ] Add per-scope lock and atomic replacement.
-- [ ] Cover malformed/future headings, concurrency, and isolation.
-- [ ] Save evidence and pass Checker/Reviewer.
+- [x] TDD preflight and observable RED.
+- [x] Resolve trusted user/workspace scope; reject arbitrary paths and escape.
+- [x] Create one canonical MEMORY.md per scope.
+- [x] Locate rolling 30-day start line from strict date headings.
+- [x] Read only bounded content from calculated line through EOF.
+- [x] Merge/dedupe/compress today's block to at most 100 tokens.
+- [x] Add per-scope lock and atomic replacement.
+- [x] Cover malformed/future headings, concurrency, and isolation.
+- [x] Save evidence and pass Checker/Reviewer under
+  artifacts/slices/188-ai-assistant-prompt-skills-memory-compaction/188.4/.
 
 ## 188.5 Session Scope And Prompt Cutover
 
-- [ ] TDD preflight and observable RED.
-- [ ] Persist and enforce user/workspace scope for sessions and runs.
-- [ ] Inject own rolling MEMORY.md into working-memory prompt layer.
-- [ ] Stop legacy JSON memory writes and prompt reads.
-- [ ] Preserve required public memory fields as MEMORY.md-derived read-only
+- [x] TDD preflight and observable RED.
+- [x] Persist and enforce user/workspace scope for sessions and runs.
+- [x] Inject own rolling MEMORY.md into working-memory prompt layer.
+- [x] Stop legacy JSON memory writes and prompt reads.
+- [x] Preserve required public memory fields as MEMORY.md-derived read-only
   projections.
-- [ ] Add MySQL8 contract and backend E2E isolation/reload proof.
-- [ ] Run kernel, security, inspector, event, scheduler, and ToolRunner
+- [x] Add MySQL8 contract and backend E2E isolation/reload proof.
+- [x] Run kernel, security, inspector, event, scheduler, and ToolRunner
   regressions.
-- [ ] Save evidence and pass Checker/Reviewer.
+- [x] Save evidence and pass Checker/Reviewer.
 
 ## 188.6 Three-Successful-Run Extraction
 
-- [ ] TDD preflight and observable RED.
-- [ ] Persist per-scope successful-run counter and extraction cursor.
-- [ ] Count only new COMPLETED runs across sessions.
-- [ ] Trigger configured model extractor for each next batch of three.
-- [ ] Merge result into today's capped block.
-- [ ] Advance cursor only after atomic file success.
-- [ ] Retry model/write failures without duplicate or lost batches.
-- [ ] Recover idempotently across pre-write, post-write, and pre-cursor-commit
+- [x] TDD preflight and observable RED.
+- [x] Persist per-scope successful-run counter and extraction cursor.
+- [x] Count only new COMPLETED runs across sessions.
+- [x] Trigger configured model extractor for each next batch of three.
+- [x] Merge result into today's capped block.
+- [x] Advance cursor only after atomic file success.
+- [x] Retry model/write failures without duplicate or lost batches.
+- [x] Recover idempotently across pre-write, post-write, and pre-cursor-commit
   crash windows using batch/input/target hashes.
-- [ ] Leave trailing one or two runs pending.
-- [ ] Save MySQL8/E2E evidence and pass Checker/Reviewer.
+- [x] Leave trailing one or two runs pending.
+- [x] Save MySQL8/E2E evidence and pass Checker/Reviewer.
 
 ## 188.7 Aggregate Acceptance
 
-- [ ] Rerun all 188.4-188.6 required gates.
-- [ ] Prove DB stores no memory text.
-- [ ] Prove no fixed tail-N read and no new aiAssistantMemory writes.
-- [ ] Confirm frontend visual, customer-assistant, daily scheduler, and Spec 189
+- [x] Rerun all 188.4-188.6 required gates.
+- [x] Prove DB stores no memory text.
+- [x] Prove no fixed tail-N read and no new aiAssistantMemory writes.
+- [x] Confirm frontend visual, customer-assistant, daily scheduler, and Spec 189
   boundaries.
-- [ ] Save final evidence, Checker report, Reviewer report, and residual risks.
+- [x] Save final evidence, Checker report, Reviewer report, and residual risks.

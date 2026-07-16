@@ -1371,16 +1371,16 @@ class RuntimeLabService:
         if task is None:
             return None
         current_step = self._resolved_current_step(task)
-        if not current_step:
-            return None
         scoped_variables: dict[str, Any] = {}
         chatflow_meta = _chatflow_meta_from_task(task)
+        if not current_step and not chatflow_meta:
+            return None
         if chatflow_meta:
             scoped_variables["__chatflow"] = chatflow_meta
         return SopCheckpoint(
             sop_runtime_id=f"runtime-lab:{int(task['id'])}:task-ref",
-            current_node_id=current_step,
-            current_step=current_step,
+            current_node_id=current_step or "runtime_terminal",
+            current_step=current_step or "runtime_terminal",
             pending_prompt="",
             collected={},
             scoped_variables=scoped_variables,

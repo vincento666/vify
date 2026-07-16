@@ -1,61 +1,43 @@
-# Current Loop Scope: Spec 225 Workflow/Chatflow Control Hardening
+# Current Loop Scope: Unified Runtime V2 and Workflow/Chatflow Branch
 
 ## Status
 
     mode: Closed Loop
-    current unit: 225.5 Live Intent binding and Runtime V2 parity
-    implementation: 225.5 Runtime V2 Intent/model-binding, provider
-    credential-readiness, and Runtime V2 terminal-output projection pass; the
-    user-authorized 15-call live matrix is complete with clean fixtures
+    operation: full-history branch integration and regression verification
+    source branch: codex/runtime-v2-production-upgrade (9 commits)
+    integration branch: codex/unify-runtime-v2-spec-222
 
-## Active Contract
+No new product slice is open in this integration. The merge must retain both
+independent Spec-225 records; their numeric collision is documented by their
+stable directory names rather than by renaming either historical directory.
 
-    specs/225-workflow-chatflow-control-hardening/spec.md
-    specs/225-workflow-chatflow-control-hardening/plan.md
-    specs/225-workflow-chatflow-control-hardening/tasks.md
-    artifacts/slices/225-workflow-chatflow-control-hardening/contract/contract.md
+## Preserved Contract Records
 
-## Branch Preflight
+- `specs/225-workflow-chatflow-control-hardening/` records Workflow/Chatflow
+  control hardening: browser geometry, structured-row reorder, panel controls,
+  lifecycle/variable scope, Runtime V2 Intent binding, and the bounded live
+  provider matrix. Its evidence remains under
+  `artifacts/slices/225-workflow-chatflow-control-hardening/`.
+- `specs/225-runtime-lab-sop-live-stream/` records the RuntimeLab SOP bridge:
+  genuine Provider deltas over Runtime V2, Customer Assistant compatibility,
+  in-process parallel LLM/Knowledge/safe-Tool waves, timeout/failure fencing,
+  and Redis/outbox read-side sequence recovery. Its evidence remains under
+  `artifacts/slices/225-runtime-lab-sop-live-stream/`.
+- AI Assistant memory and model-usage work is included with Alembic revisions
+  `0032_ai_assistant_memory_scope`, `0033_ai_assistant_memory_cursor`, and
+  `0034_ai_assistant_model_usage`.
 
-    worktree: /private/tmp/hify-workflow-chatflow-control-hardening
-    branch: codex/workflow-chatflow-control-hardening
-    base: 1ee8dc5e
-    merge target: not selected
-    dirty at contract start: no tracked changes
+## Integration Boundaries
 
-## Frozen Scope
-
-- `frontend/src/views/workflow/` Workflow/Chatflow list and shared canvas/control code;
-- `app/modules/workflow/domain/runtime_v2.py` and focused runtime tests for the
-  LLM Intent completer wiring;
-- provider credential-readiness reporting/client preflight and focused
-  provider/chat tests, limited to the live-gate defect found in Browser UAT;
-- focused frontend tests and Workflow/Chatflow E2E scripts;
-- Spec 225 docs, loop state, and Spec 225 evidence.
-
-Excluded: API/schema/dependency work, broader runtime behavior, broader list
-redesign, and the dirty original worktree.
-
-## Stop Conditions
-
-- The repair needs a public contract, runtime, schema, dependency, or product
-  information-architecture change.
-- A new UI fixture cannot clean up its own test data on failure.
-- The same RED persists through two focused implementation attempts.
-- The user-authorized 15 planned model calls, 16-token Intent / 32-token
-  LLM+Agent limits, or the USD 0.10 cap would be exceeded; stop before
-  requesting more.
-- Canonical async Runtime V2 cannot execute the focused completer regression or
-  the Intent selector cannot persist its binding after two TDD attempts.
-- Required browser, provider, or verification evidence is unavailable.
-- Do not exceed the user-approved 15 planned live completions or USD 0.10 cap.
+- The integration imports the authorized commits and migrations; it does not
+  apply migrations to a deployed database.
+- No credentials, live-provider calls, or external spend are needed for this
+  merge verification.
+- The original worktree's uncommitted changes are outside this merge commit and
+  must be stashed and restored only after the clean integration is verified.
 
 ## Next Action
 
-The provider is configured externally and connection discovery passes. The
-Workflow and Chatflow draft and published Runtime V2 paths complete
-successfully. The user explicitly increased the live call limit from 12 to 15
-after the Chatflow terminal-output projection repair; all 15 compact calls
-completed without retry or provider error, and temporary fixtures are clean.
-Credentials remain external and are never written into this worktree. All
-evidence remains under `artifacts/slices/225-workflow-chatflow-control-hardening/`.
+Run combined backend/frontend/migration regression gates, inspect the merge
+diff, commit the integration, then fast-forward the original worktree and
+restore its uncommitted changes.

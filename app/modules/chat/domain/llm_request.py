@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
+import hashlib
 import json
 import os
 import re
+from threading import BoundedSemaphore, Lock
 from time import sleep
 from typing import Any, Callable
 
@@ -26,6 +29,41 @@ class ProviderChatConfig:
     provider_type: str
     base_url: str
     auth_config: dict[str, Any]
+
+
+_ASYNC_STREAM_LIMITERS: dict[tuple[str, str, str, int], BoundedSemaphore] = {}
+_ASYNC_STREAM_LIMITERS_LOCK = Lock()
+
+
+def _shared_async_stream_limiter(
+    config: ProviderChatConfig,
+    *,
+    max_concurrent_streams: int,
+) -> BoundedSemaphore:
+    auth_identity = str(
+        config.auth_config.get("api_key_ref")
+        or config.auth_config.get("apiKeyRef")
+        or config.auth_config.get("api_key")
+        or config.auth_config.get("apiKey")
+        or ""
+    )
+    key = (
+        str(config.provider_type or "").upper(),
+        str(config.base_url or "").rstrip("/"),
+        hashlib.sha256(auth_identity.encode()).hexdigest(),
+        max(1, max_concurrent_streams),
+    )
+    with _ASYNC_STREAM_LIMITERS_LOCK:
+        limiter = _ASYNC_STREAM_LIMITERS.get(key)
+        if limiter is None:
+            limiter = BoundedSemaphore(max_concurrent_streams)
+            _ASYNC_STREAM_LIMITERS[key] = limiter
+        return limiter
+
+
+async def _acquire_async_stream_limiter(limiter: BoundedSemaphore) -> None:
+    while not limiter.acquire(blocking=False):
+        await asyncio.sleep(0.01)
 
 
 class OpenAIChatRequestBuilder:
@@ -64,11 +102,16 @@ class ProviderBackedOpenAIChatClient:
         timeout: float = 60.0,
         max_attempts: int = 3,
         retry_sleep: float = 0.5,
+        max_concurrent_streams: int = 4,
     ) -> None:
         self._config = config
         self._timeout = timeout
         self._max_attempts = max(1, max_attempts)
         self._retry_sleep = max(0.0, retry_sleep)
+        self._async_stream_limiter = _shared_async_stream_limiter(
+            config,
+            max_concurrent_streams=max(1, max_concurrent_streams),
+        )
 
     def complete(self, payload: dict[str, Any]) -> dict[str, Any]:
         if self._config.base_url.startswith("mock://"):
@@ -102,6 +145,30 @@ class ProviderBackedOpenAIChatClient:
             "stream_options": {"include_usage": True},
         }
         return self._stream_with_retry(headers, stream_payload, on_delta)
+
+    async def stream_complete_async(
+        self,
+        payload: dict[str, Any],
+        on_delta: Callable[[str], None] | None = None,
+    ) -> dict[str, Any]:
+        """Consume a provider SSE stream without blocking the caller's event loop."""
+        if self._config.base_url.startswith("mock://"):
+            return self.stream_complete(payload, on_delta=on_delta)
+        headers = {
+            "Authorization": f"Bearer {self._api_key()}",
+            "Content-Type": "application/json",
+            "X-Title": "Hify",
+        }
+        stream_payload = {
+            **payload,
+            "stream": True,
+            "stream_options": {"include_usage": True},
+        }
+        await _acquire_async_stream_limiter(self._async_stream_limiter)
+        try:
+            return await self._async_stream_with_retry(headers, stream_payload, on_delta)
+        finally:
+            self._async_stream_limiter.release()
 
     def _api_key(self) -> str:
         direct = str(self._config.auth_config.get("api_key") or self._config.auth_config.get("apiKey") or "")
@@ -148,11 +215,19 @@ class ProviderBackedOpenAIChatClient:
     ) -> dict[str, Any]:
         last_error: httpx.TransportError | None = None
         for attempt in range(1, self._max_attempts + 1):
+            emitted_visible_delta = False
+
+            def deliver_delta(content: str) -> None:
+                nonlocal emitted_visible_delta
+                emitted_visible_delta = True
+                if on_delta is not None:
+                    on_delta(content)
+
             try:
-                return self._stream_once(headers, payload, on_delta)
+                return self._stream_once(headers, payload, deliver_delta)
             except httpx.TransportError as exc:
                 last_error = exc
-                if attempt >= self._max_attempts:
+                if emitted_visible_delta or attempt >= self._max_attempts:
                     raise
                 if self._retry_sleep:
                     sleep(self._retry_sleep)
@@ -189,7 +264,92 @@ class ProviderBackedOpenAIChatClient:
                         if not isinstance(choice, dict):
                             continue
                         finish_reason = str(choice.get("finish_reason") or finish_reason)
-                        delta = choice.get("delta") if isinstance(choice.get("delta"), dict) else {}
+                        raw_delta = choice.get("delta")
+                        delta: dict[str, Any] = raw_delta if isinstance(raw_delta, dict) else {}
+                        content = delta.get("content")
+                        if isinstance(content, str) and content:
+                            content_parts.append(content)
+                            if on_delta:
+                                on_delta(content)
+                        reasoning = _delta_reasoning_text(delta)
+                        if reasoning:
+                            reasoning_parts.append(reasoning)
+                        _accumulate_tool_call_deltas(tool_calls, delta.get("tool_calls"))
+        message: dict[str, Any] = {
+            "role": "assistant",
+            "content": "".join(content_parts) or None,
+        }
+        if reasoning_parts:
+            reasoning = "".join(reasoning_parts)
+            message["reasoning"] = reasoning
+            message["reasoning_details"] = [{"type": "reasoning.text", "text": reasoning}]
+        if tool_calls:
+            message["tool_calls"] = [_complete_tool_call(tool_calls[index]) for index in sorted(tool_calls)]
+        return {
+            "choices": [{"message": message, "finish_reason": finish_reason}],
+            "usage": usage,
+        }
+
+    async def _async_stream_with_retry(
+        self,
+        headers: dict[str, str],
+        payload: dict[str, Any],
+        on_delta: Callable[[str], None] | None,
+    ) -> dict[str, Any]:
+        last_error: httpx.TransportError | None = None
+        for attempt in range(1, self._max_attempts + 1):
+            emitted_visible_delta = False
+
+            def deliver_delta(content: str) -> None:
+                nonlocal emitted_visible_delta
+                emitted_visible_delta = True
+                if on_delta is not None:
+                    on_delta(content)
+
+            try:
+                return await self._async_stream_once(headers, payload, deliver_delta)
+            except httpx.TransportError as exc:
+                last_error = exc
+                if emitted_visible_delta or attempt >= self._max_attempts:
+                    raise
+                if self._retry_sleep:
+                    await asyncio.sleep(self._retry_sleep)
+        raise last_error or RuntimeError("LLM async stream failed before a response was returned")
+
+    async def _async_stream_once(
+        self,
+        headers: dict[str, str],
+        payload: dict[str, Any],
+        on_delta: Callable[[str], None] | None,
+    ) -> dict[str, Any]:
+        content_parts: list[str] = []
+        reasoning_parts: list[str] = []
+        tool_calls: dict[int, dict[str, Any]] = {}
+        usage: dict[str, Any] = {}
+        finish_reason = "stop"
+        async with httpx.AsyncClient(timeout=self._timeout, trust_env=True) as client:
+            async with client.stream(
+                "POST",
+                f"{self._config.base_url.rstrip('/')}/chat/completions",
+                headers=headers,
+                json=payload,
+            ) as response:
+                if response.status_code >= 400:
+                    body = (await response.aread()).decode()
+                    raise RuntimeError(f"LLM request failed: HTTP {response.status_code} {body}")
+                async for line in response.aiter_lines():
+                    event = _stream_json_event(line)
+                    if event is None:
+                        continue
+                    event_usage = event.get("usage")
+                    if isinstance(event_usage, dict):
+                        usage = event_usage
+                    for choice in event.get("choices") or []:
+                        if not isinstance(choice, dict):
+                            continue
+                        finish_reason = str(choice.get("finish_reason") or finish_reason)
+                        raw_delta = choice.get("delta")
+                        delta: dict[str, Any] = raw_delta if isinstance(raw_delta, dict) else {}
                         content = delta.get("content")
                         if isinstance(content, str) and content:
                             content_parts.append(content)
@@ -365,7 +525,8 @@ def _accumulate_tool_call_deltas(tool_calls: dict[int, dict[str, Any]], deltas: 
 
 def _complete_tool_call(tool_call: dict[str, Any]) -> dict[str, Any]:
     if not tool_call.get("id"):
-        function = tool_call.get("function") if isinstance(tool_call.get("function"), dict) else {}
+        raw_function = tool_call.get("function")
+        function: dict[str, Any] = raw_function if isinstance(raw_function, dict) else {}
         tool_call["id"] = f"call_{function.get('name') or 'tool'}"
     return tool_call
 

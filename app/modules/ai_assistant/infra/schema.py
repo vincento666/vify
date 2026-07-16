@@ -2,6 +2,7 @@ import sqlalchemy as sa
 
 from app.core.database import Base
 from app.core.schema import deleted_column, id_column, timestamps
+from app.modules.ai_assistant.domain.access_scope import local_ai_assistant_scope
 
 
 BIGINT = sa.BigInteger()
@@ -14,12 +15,25 @@ def register_ai_assistant_tables(metadata: sa.MetaData | None = None) -> None:
             "ai_assistant_session",
             target,
             id_column(),
+            sa.Column("user_id", sa.String(120), nullable=False, server_default="local-user"),
+            sa.Column(
+                "workspace_id",
+                sa.String(128),
+                nullable=False,
+                server_default=local_ai_assistant_scope().workspace_id,
+            ),
             sa.Column("title", sa.String(200), nullable=False, server_default=""),
             sa.Column("status", sa.String(30), nullable=False, server_default="ACTIVE"),
             sa.Column("context_json", sa.JSON(), nullable=True),
             deleted_column(),
             *timestamps(),
             sa.Index("idx_ai_assistant_session_status", "status"),
+            sa.Index(
+                "idx_ai_assistant_session_scope",
+                "user_id",
+                "workspace_id",
+                "deleted",
+            ),
         )
 
     if "ai_assistant_run" not in target.tables:
@@ -27,6 +41,13 @@ def register_ai_assistant_tables(metadata: sa.MetaData | None = None) -> None:
             "ai_assistant_run",
             target,
             id_column(),
+            sa.Column("user_id", sa.String(120), nullable=False, server_default="local-user"),
+            sa.Column(
+                "workspace_id",
+                sa.String(128),
+                nullable=False,
+                server_default=local_ai_assistant_scope().workspace_id,
+            ),
             sa.Column("session_id", BIGINT, nullable=False),
             sa.Column("idempotency_key", sa.String(160), nullable=True),
             sa.Column("request_hash", sa.String(128), nullable=False),
@@ -39,6 +60,13 @@ def register_ai_assistant_tables(metadata: sa.MetaData | None = None) -> None:
             *timestamps(),
             sa.UniqueConstraint("session_id", "idempotency_key", name="idx_ai_assistant_run_idempotency"),
             sa.Index("idx_ai_assistant_run_session", "session_id"),
+            sa.Index(
+                "idx_ai_assistant_run_scope",
+                "user_id",
+                "workspace_id",
+                "session_id",
+                "deleted",
+            ),
         )
 
     if "ai_assistant_message" not in target.tables:
@@ -259,6 +287,102 @@ def register_ai_assistant_tables(metadata: sa.MetaData | None = None) -> None:
             sa.Index("idx_ai_assistant_tool_circuit_override_key", "breaker_key"),
         )
 
+    if "ai_assistant_memory_cursor" not in target.tables:
+        sa.Table(
+            "ai_assistant_memory_cursor",
+            target,
+            id_column(),
+            sa.Column("user_id", sa.String(120), nullable=False),
+            sa.Column("workspace_id", sa.String(128), nullable=False),
+            sa.Column("last_processed_run_id", BIGINT, nullable=False, server_default="0"),
+            sa.Column("last_processed_completion_id", BIGINT, nullable=False, server_default="0"),
+            sa.Column("pending_completion_ids", sa.JSON(), nullable=True),
+            sa.Column("pending_run_ids", sa.JSON(), nullable=True),
+            sa.Column("pending_batch_key", sa.String(128), nullable=True),
+            sa.Column("pending_source_hash", sa.String(128), nullable=True),
+            sa.Column("pending_input_hash", sa.String(128), nullable=True),
+            sa.Column("pending_target_hash", sa.String(128), nullable=True),
+            sa.Column("claim_token", sa.String(128), nullable=True),
+            sa.Column("lease_expires_at", sa.DateTime(), nullable=True),
+            sa.Column("status", sa.String(30), nullable=False, server_default="IDLE"),
+            sa.Column("last_error", sa.String(1000), nullable=True),
+            *timestamps(),
+            sa.UniqueConstraint(
+                "user_id",
+                "workspace_id",
+                name="idx_ai_assistant_memory_cursor_scope",
+            ),
+        )
+
+    if "ai_assistant_memory_completion" not in target.tables:
+        sa.Table(
+            "ai_assistant_memory_completion",
+            target,
+            id_column(),
+            sa.Column("user_id", sa.String(120), nullable=False),
+            sa.Column("workspace_id", sa.String(128), nullable=False),
+            sa.Column("run_id", BIGINT, nullable=False),
+            sa.Column("completed_at", sa.DateTime(), nullable=False),
+            *timestamps(),
+            sa.UniqueConstraint("run_id", name="idx_ai_assistant_memory_completion_run"),
+            sa.Index(
+                "idx_ai_assistant_memory_completion_scope",
+                "user_id",
+                "workspace_id",
+                "id",
+            ),
+        )
+
+    if "ai_assistant_model_usage" not in target.tables:
+        sa.Table(
+            "ai_assistant_model_usage",
+            target,
+            id_column(),
+            sa.Column("user_id", sa.String(120), nullable=False),
+            sa.Column("workspace_id", sa.String(128), nullable=False),
+            sa.Column("session_id", BIGINT, nullable=False),
+            sa.Column("run_id", BIGINT, nullable=False),
+            sa.Column("call_id", sa.String(160), nullable=False),
+            sa.Column("call_kind", sa.String(40), nullable=False),
+            sa.Column("provider", sa.String(120), nullable=False),
+            sa.Column("model", sa.String(240), nullable=False),
+            sa.Column("input_tokens", BIGINT, nullable=True),
+            sa.Column("output_tokens", BIGINT, nullable=True),
+            sa.Column("cache_read_tokens", BIGINT, nullable=True),
+            sa.Column("cache_write_tokens", BIGINT, nullable=True),
+            sa.Column("reasoning_tokens", BIGINT, nullable=True),
+            sa.Column("total_tokens", BIGINT, nullable=True),
+            sa.Column("usage_source", sa.String(30), nullable=False, server_default="pending"),
+            sa.Column("provider_cost_usd", sa.Numeric(20, 10), nullable=True),
+            sa.Column("estimated_cost_usd", sa.Numeric(20, 10), nullable=True),
+            sa.Column("effective_cost_usd", sa.Numeric(20, 10), nullable=True),
+            sa.Column("cost_source", sa.String(30), nullable=False, server_default="unknown"),
+            sa.Column("pricing_version", sa.String(120), nullable=True),
+            sa.Column("started_at", sa.DateTime(), nullable=False),
+            sa.Column("completed_at", sa.DateTime(), nullable=True),
+            *timestamps(),
+            sa.UniqueConstraint(
+                "user_id",
+                "workspace_id",
+                "run_id",
+                "call_id",
+                name="uq_ai_assistant_model_usage_call",
+            ),
+            sa.Index(
+                "idx_ai_assistant_model_usage_scope_time",
+                "user_id",
+                "workspace_id",
+                "started_at",
+            ),
+            sa.Index(
+                "idx_ai_assistant_model_usage_session",
+                "user_id",
+                "workspace_id",
+                "session_id",
+                "started_at",
+            ),
+        )
+
 
 def ai_assistant_tables() -> list[sa.Table]:
     register_ai_assistant_tables()
@@ -276,5 +400,8 @@ def ai_assistant_tables() -> list[sa.Table]:
         "ai_assistant_tool_operation_release",
         "ai_assistant_tool_circuit_breaker",
         "ai_assistant_tool_circuit_override",
+        "ai_assistant_memory_cursor",
+        "ai_assistant_memory_completion",
+        "ai_assistant_model_usage",
     ]
     return [Base.metadata.tables[name] for name in names]

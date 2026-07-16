@@ -1,40 +1,32 @@
-# Loop Verifiers: Spec 225
+# Loop Verifiers: Unified Runtime V2 and Workflow/Chatflow Integration
 
-## Before Every Code Slice
+## Merge Safety
 
-    rtk loop/hooks/skill-preflight.sh --required tdd
     rtk git status --short
     rtk git diff --check
+    rtk git diff --cached --check
 
-## Focused Unit / Rem
+## Runtime V2, SSE, and Customer Assistant
 
-    rtk npm run test:unit -- src/views/workflow/variableCatalog.test.ts src/views/workflow/nodeTestFixtures.test.ts src/views/workflow/workflowCanvasResponsiveLayout.test.ts src/views/workflow/workflowCanvasResponsiveProgressiveCollapse.test.ts
-    rtk npm run test:unit -- src/utils/remGovernance.test.ts src/views/workflow/workflowCanvasRemGovernance.test.ts
+    rtk uv run pytest tests/integration/workflow/test_runtime_v2_parallel_waves.py tests/integration/workflow/test_runtime_v2_redis_streams.py tests/contract/runtime/test_sse_reconnect.py -q --tb=short
+    rtk uv run pytest tests/integration/workflow/test_runtime_v2_provider_backed_llm.py tests/unit/chat/test_llm_request_client.py tests/contract/test_runtime_lab_sop_live_stream_api.py tests/e2e/customer_assistant/test_customer_assistant_chatflow_sop_live_stream.py -q --tb=short
+    rtk uv run pytest tests/unit/runtime_lab/test_chatflow_sop_runtime_adapter_gateway.py tests/unit/workflow/test_runtime_invocation_gateway.py tests/unit/workflow/test_runtime_job_worker.py tests/integration/runtime_lab/test_chatflow_sop_runtime_adapter.py -q --tb=short
 
-## Browser / E2E
+## AI Assistant Memory, Usage, and Migrations
 
-- Run new focused Spec 225 list-entry, browser geometry, drag, icon, control-rail, and all-node scripts against
-  the isolated frontend (`HIFY_E2E_BASE_URL=http://127.0.0.1:15175` for this
-  contract session).
-- Use the Codex in-app browser for Browser UAT. Save screenshots and logs under
-  `artifacts/slices/225-workflow-chatflow-control-hardening/`.
-- Workflow and Chatflow lifecycle evidence must cover configuration, save,
-  debug, publish, and invoke.
+    rtk uv run pytest tests/unit/ai_assistant/test_markdown_memory_store.py tests/unit/ai_assistant/test_memory_extraction.py tests/unit/ai_assistant/test_model_usage.py tests/unit/ai_assistant/test_model_usage_cost.py tests/integration/ai_assistant/test_memory_extraction_cursor.py tests/integration/ai_assistant/test_memory_scope_persistence.py tests/integration/ai_assistant/test_model_usage_repository.py tests/contract/test_ai_assistant_memory_context_api.py tests/contract/test_ai_assistant_memory_extraction_api.py tests/contract/test_ai_assistant_memory_scope_api.py tests/contract/test_ai_assistant_model_usage_capture_api.py tests/contract/test_ai_assistant_usage_api.py -q --tb=short
 
-## Live Gate
+## Workflow/Chatflow Controls and Frontend
 
-- The user authorized the configured `qwen/qwen3.5-9b` model only under a USD
-  0.10 total cap. Plan at most 15 calls; Intent <=16 output tokens, LLM/Agent
-  <=32. Verify a conservative model-pricing upper bound before calling it.
-  Stop at the first provider error and do not retry automatically.
-- Use redacted prompts/outputs and clean temporary fixtures afterward.
-- If provider capability becomes absent, record `ENV-BLOCKED-LIVE-MODEL`; do
-  not call a mock path and label it live.
+    rtk npm run test:unit -- src/views/workflow/variableCatalog.test.ts src/views/workflow/nodeTestFixtures.test.ts src/views/workflow/workflowCanvasResponsiveLayout.test.ts src/views/workflow/workflowCanvasResponsiveProgressiveCollapse.test.ts src/utils/remGovernance.test.ts src/views/workflow/workflowCanvasRemGovernance.test.ts
+    rtk npm run test:unit -- --run src/views/chat/runtimeLabSopEventStream.test.ts src/views/chat/unifiedRoutingChatLab.test.ts src/api/runtimeLab.test.ts src/views/aiAssistant/aiAssistantUsageDashboard.behavior.test.ts
+    rtk npm run build
+
+Run frontend commands from `frontend/`. Browser and live-provider UAT are
+historical evidence only for this merge: no new provider credentials or spend
+are authorized or needed.
 
 ## Final
 
-    rtk npm run build
+    rtk uv run ruff check app/modules/ai_assistant app/modules/runtime_lab app/modules/workflow
     rtk git diff --check
-
-Record any unchanged out-of-scope build failure verbatim; do not fix or hide it
-under this contract.

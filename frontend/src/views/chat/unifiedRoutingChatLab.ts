@@ -8,6 +8,7 @@ import type {
   RuntimeLabUsage,
   RuntimeLabTemporaryModelPayload,
 } from '@/api/runtimeLab'
+import type { RuntimeLabSopStreamFrame } from './runtimeLabSopEventStream'
 
 export interface AirlineSopScenario {
   id: string
@@ -341,6 +342,67 @@ export function buildRuntimeLabTranscriptRow(turn: RuntimeLabTurn, elapsedMs = 0
     taskSummary: summarizeTasks(turn.activeTask, turn.suspendedTasks),
     resumePrompt: typeof turn.resumeOffer?.prompt === 'string' ? turn.resumeOffer.prompt : undefined,
   }
+}
+
+export function applyRuntimeLabSopStreamFrame(
+  row: RuntimeLabTranscriptRow,
+  frame: RuntimeLabSopStreamFrame,
+): RuntimeLabTranscriptRow {
+  const providerDelta = frame.source === 'provider' ? String(frame.delta || '') : ''
+  if (providerDelta) {
+    return {
+      ...row,
+      content: `${row.content}${providerDelta}`,
+      pending: false,
+    }
+  }
+  if (frame.type === 'error') {
+    return {
+      ...row,
+      content: frame.error || row.content || 'Runtime V2 执行失败',
+      pending: false,
+      routeAction: 'ERROR',
+    }
+  }
+  if (frame.type !== 'done') return row
+  const terminalText = runtimeLabTerminalText(frame)
+  if (!terminalText) return { ...row, pending: false }
+  return {
+    ...row,
+    content: appendRuntimeLabStreamText(row.content, terminalText),
+    pending: false,
+  }
+}
+
+export function finalizeRuntimeLabSopStreamRow(
+  row: RuntimeLabTranscriptRow,
+  fallbackContent: string,
+): RuntimeLabTranscriptRow {
+  return {
+    ...row,
+    content: row.content || fallbackContent,
+    pending: false,
+  }
+}
+
+function runtimeLabTerminalText(frame: RuntimeLabSopStreamFrame): string {
+  const payload = frame.event?.payload
+  const output = payload && typeof payload.output === 'object' && payload.output !== null
+    ? payload.output as Record<string, unknown>
+    : {}
+  const interrupt = output.interrupt
+  if (interrupt && typeof interrupt === 'object' && typeof (interrupt as Record<string, unknown>).question === 'string') {
+    return (interrupt as Record<string, string>).question
+  }
+  if (typeof output.final === 'string') return output.final
+  if (typeof output.prompt === 'string') return output.prompt
+  return ''
+}
+
+function appendRuntimeLabStreamText(content: string, next: string): string {
+  if (!content) return next
+  if (content.includes(next)) return content
+  return `${content}\n\n${next}`
 }
 
 export function summarizeTasks(activeTask: RuntimeLabTask | null, suspendedTasks: RuntimeLabTask[]) {

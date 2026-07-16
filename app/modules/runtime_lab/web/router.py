@@ -1,14 +1,17 @@
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime
 import hashlib
 import json
 from json import JSONDecodeError
 import re
+import time
 from time import perf_counter
 from typing import Any, Mapping
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
+from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import Settings, get_settings
 from app.core.database import Base, get_session
@@ -59,6 +62,8 @@ from app.modules.workflow.domain.service import WorkflowService
 from app.modules.workflow.infra.chatflow_state_repository import ChatflowStateRepository
 from app.modules.workflow.infra.repository import WorkflowRepository
 from app.modules.workflow.infra.runtime_job_repository import RuntimeJobRepository
+from app.modules.workflow.infra.realtime.redis_streams import RuntimeEventStreamBus
+from app.modules.workflow.web.router import get_runtime_event_stream_bus, runtime_v2_stream_events
 
 router = APIRouter(prefix="/api/v1/runtime-lab", tags=["runtime-lab"])
 
@@ -78,7 +83,10 @@ class RuntimeLabRouteClassifierModel:
     top_p: float | None = None
 
 
-def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeLabService:
+def get_runtime_lab_service(
+    session: Session = Depends(get_session),
+    event_stream_bus: RuntimeEventStreamBus | None = Depends(get_runtime_event_stream_bus),
+) -> RuntimeLabService:
     settings = get_settings()
     effective_policy = RuntimePolicyResolver(RuntimePolicyRepository(session), settings).resolve()
     policy_snapshot = effective_policy["policySnapshot"]
@@ -105,7 +113,7 @@ def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeL
             policy_thresholds=policy_thresholds,
         )
     workflow_repository = WorkflowRepository(session)
-    chatflow_state_repository = ChatflowStateRepository(session)
+    chatflow_state_repository = ChatflowStateRepository(session, event_stream_bus=event_stream_bus)
     workflow_service = WorkflowService(
         workflow_repository,
         flow_type="CHATFLOW",
@@ -139,6 +147,12 @@ def get_runtime_lab_service(session: Session = Depends(get_session)) -> RuntimeL
         runtime_invocation_gateway=RuntimeInvocationGateway(
             runtime_v2_service,
             enqueue_background_run=_runtime_lab_background_enqueue(
+                session,
+                sop_llm_mode=settings.runtime_lab_sop_llm_mode,
+            )
+            if _runtime_invocation_uses_background(settings.runtime_lab_sop_runtime_invocation_mode)
+            else None,
+            enqueue_background_resume=_runtime_lab_background_resume_enqueue(
                 session,
                 sop_llm_mode=settings.runtime_lab_sop_llm_mode,
             )
@@ -190,6 +204,59 @@ def post_message(
     return _post_runtime_lab_message(session_id, request, service, session, settings)
 
 
+@router.post("/sessions/{session_id}/messages:stream")
+def post_message_stream(
+    session_id: int,
+    request: RuntimeLabMessageRequest,
+    after_sequence: int = Query(default=0, alias="afterSequence", ge=0),
+    heartbeat_ms: int = Query(default=250, alias="heartbeatMs", ge=100, le=30000),
+    test_limit: int | None = Query(default=None, alias="_testLimit", ge=1, le=1000),
+    test_heartbeat_limit: int | None = Query(
+        default=None,
+        alias="_testHeartbeatLimit",
+        ge=1,
+        le=1000,
+    ),
+    service: RuntimeLabService = Depends(get_runtime_lab_service),
+    session: Session = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+    event_stream_bus: RuntimeEventStreamBus | None = Depends(get_runtime_event_stream_bus),
+) -> StreamingResponse:
+    pre_command_cursor = _runtime_lab_active_child_cursor(session, session_id)
+    response, replayed = _post_runtime_lab_message_with_metadata(session_id, request, service, session, settings)
+    payload = response.get("data")
+    if not isinstance(payload, Mapping):
+        payload = {}
+    run_id = _runtime_lab_stream_run_id(payload)
+    stream_after_sequence = _runtime_lab_stream_after_sequence(
+        requested_after_sequence=after_sequence,
+        pre_command_cursor=pre_command_cursor,
+        run_id=run_id,
+        replayed=replayed,
+    )
+    read_child_events = (
+        _runtime_lab_child_event_reader(session, event_stream_bus) if run_id is not None else None
+    )
+    read_child_result = _runtime_lab_child_result_reader(session) if run_id is not None else None
+    read_resume_job = _runtime_lab_resume_job_reader(session) if run_id is not None else None
+    session.close()
+    return StreamingResponse(
+        _iter_runtime_lab_sop_sse(
+            session_id=session_id,
+            payload=dict(payload),
+            run_id=run_id,
+            after_sequence=stream_after_sequence,
+            heartbeat_ms=heartbeat_ms,
+            test_limit=test_limit,
+            test_heartbeat_limit=test_heartbeat_limit,
+            read_child_events=read_child_events,
+            read_child_result=read_child_result,
+            read_resume_job=read_resume_job,
+        ),
+        media_type="text/event-stream",
+    )
+
+
 def _post_runtime_lab_message(
     session_id: int,
     request: RuntimeLabMessageRequest,
@@ -197,6 +264,17 @@ def _post_runtime_lab_message(
     session: Session,
     settings: Settings,
 ) -> dict[str, Any]:
+    response, _replayed = _post_runtime_lab_message_with_metadata(session_id, request, service, session, settings)
+    return response
+
+
+def _post_runtime_lab_message_with_metadata(
+    session_id: int,
+    request: RuntimeLabMessageRequest,
+    service: RuntimeLabService,
+    session: Session,
+    settings: Settings,
+) -> tuple[dict[str, Any], bool]:
     effective_policy = RuntimePolicyResolver(RuntimePolicyRepository(session), settings).resolve()
     route_settings_signature = _runtime_lab_route_settings_signature(request.route_settings)
     result = service.handle_command(
@@ -216,7 +294,319 @@ def _post_runtime_lab_message(
             command_payload=result.payload,
             effective_policy=effective_policy,
         )
-    return success(result.payload)
+    return success(result.payload), result.replayed
+
+
+RuntimeLabChildEventReader = Callable[[int, int, int], list[dict[str, Any]]]
+RuntimeLabChildResultReader = Callable[[int], dict[str, Any]]
+RuntimeLabResumeJobReader = Callable[[int], dict[str, Any] | None]
+
+
+def _runtime_lab_active_child_cursor(session: Session, session_id: int) -> tuple[int, int] | None:
+    task = RuntimeLabRepository(session).get_active_task(session_id)
+    if task is None:
+        return None
+    raw_run_id = task.get("chatflow_run_id")
+    if isinstance(raw_run_id, bool) or not isinstance(raw_run_id, (int, str)):
+        return None
+    try:
+        run_id = int(raw_run_id)
+    except ValueError:
+        return None
+    run = WorkflowRepository(session).get_run(run_id)
+    if run is None:
+        return None
+    events = ChatflowStateRepository(session).list_events(int(run["workflow_id"]), run_id)
+    return run_id, max((_runtime_lab_event_sequence(event) for event in events), default=0)
+
+
+def _runtime_lab_stream_after_sequence(
+    *,
+    requested_after_sequence: int,
+    pre_command_cursor: tuple[int, int] | None,
+    run_id: int | None,
+    replayed: bool,
+) -> int:
+    if replayed or pre_command_cursor is None or run_id != pre_command_cursor[0]:
+        return requested_after_sequence
+    return max(requested_after_sequence, pre_command_cursor[1])
+
+
+def _runtime_lab_stream_run_id(payload: Mapping[str, Any]) -> int | None:
+    raw_run_id = payload.get("runId")
+    if raw_run_id is None:
+        active_task = payload.get("activeTask")
+        if isinstance(active_task, Mapping):
+            chatflow_session = active_task.get("chatflowSession")
+            if isinstance(chatflow_session, Mapping):
+                raw_run_id = chatflow_session.get("runId")
+    if isinstance(raw_run_id, bool) or not isinstance(raw_run_id, (int, str)):
+        return None
+    try:
+        run_id = int(raw_run_id)
+    except ValueError:
+        return None
+    return run_id if run_id > 0 else None
+
+
+def _runtime_lab_child_event_reader(
+    session: Session,
+    event_stream_bus: RuntimeEventStreamBus | None,
+) -> RuntimeLabChildEventReader:
+    bind = session.get_bind()
+    if bind is None:
+        raise RuntimeError("RuntimeLab child stream requires a database bind")
+    factory = sessionmaker(bind=bind, autoflush=False, autocommit=False, expire_on_commit=False)
+
+    def read(run_id: int, after_sequence: int, count: int) -> list[dict[str, Any]]:
+        with factory() as stream_session:
+            runtime_service = ChatflowRuntimeV2Service(
+                WorkflowRepository(stream_session),
+                ChatflowStateRepository(stream_session),
+            )
+            rows = runtime_v2_stream_events(
+                runtime_service,
+                event_stream_bus=event_stream_bus,
+                run_id=run_id,
+                after_sequence=after_sequence,
+                heartbeat_ms=250,
+                count=count,
+            )
+        return [dict(row) for row in rows if isinstance(row, Mapping)]
+
+    return read
+
+
+def _runtime_lab_child_result_reader(session: Session) -> RuntimeLabChildResultReader:
+    bind = session.get_bind()
+    if bind is None:
+        raise RuntimeError("RuntimeLab child stream requires a database bind")
+    factory = sessionmaker(bind=bind, autoflush=False, autocommit=False, expire_on_commit=False)
+
+    def read(run_id: int) -> dict[str, Any]:
+        with factory() as stream_session:
+            runtime_service = ChatflowRuntimeV2Service(
+                WorkflowRepository(stream_session),
+                ChatflowStateRepository(stream_session),
+            )
+            return runtime_service.get_result(run_id)
+
+    return read
+
+
+def _runtime_lab_resume_job_reader(session: Session) -> RuntimeLabResumeJobReader:
+    bind = session.get_bind()
+    if bind is None:
+        raise RuntimeError("RuntimeLab child stream requires a database bind")
+    factory = sessionmaker(bind=bind, autoflush=False, autocommit=False, expire_on_commit=False)
+
+    def read(job_id: int) -> dict[str, Any] | None:
+        with factory() as stream_session:
+            return RuntimeJobRepository(stream_session).get(job_id)
+
+    return read
+
+
+def _iter_runtime_lab_sop_sse(
+    *,
+    session_id: int,
+    payload: dict[str, Any],
+    run_id: int | None,
+    after_sequence: int,
+    heartbeat_ms: int,
+    test_limit: int | None,
+    test_heartbeat_limit: int | None,
+    read_child_events: RuntimeLabChildEventReader | None,
+    read_child_result: RuntimeLabChildResultReader | None,
+    read_resume_job: RuntimeLabResumeJobReader | None = None,
+) -> Iterable[str]:
+    yield _runtime_lab_sse_data(
+        {
+            "type": "delta",
+            "source": "runtime_lab",
+            "sessionId": session_id,
+            "runId": run_id,
+            "payload": payload,
+        }
+    )
+    if run_id is None or read_child_events is None:
+        yield _runtime_lab_sse_data(
+            {
+                "type": "done",
+                "source": "runtime_lab",
+                "sessionId": session_id,
+                "runId": run_id,
+                "result": payload,
+            }
+        )
+        return
+
+    last_sequence = after_sequence
+    emitted = 0
+    heartbeats = 0
+    while True:
+        rows = read_child_events(run_id, last_sequence, test_limit or 100)
+        if rows:
+            for row in rows:
+                sequence = _runtime_lab_event_sequence(row)
+                if sequence <= last_sequence:
+                    continue
+                last_sequence = sequence
+                if _runtime_lab_stale_resume_failure(row, read_resume_job):
+                    continue
+                frame = _runtime_lab_child_stream_frame(
+                    session_id=session_id,
+                    run_id=run_id,
+                    sequence=sequence,
+                    event=row,
+                    result=payload,
+                    runtime_result=(
+                        read_child_result(run_id)
+                        if _runtime_lab_terminal_stream_type(str(row.get("type") or row.get("eventType") or ""))
+                        and read_child_result is not None
+                        else None
+                    ),
+                )
+                yield _runtime_lab_sse_data(frame)
+                emitted += 1
+                if frame["type"] in {"done", "error"}:
+                    return
+                if test_limit is not None and emitted >= test_limit:
+                    return
+            continue
+        yield ": heartbeat\n\n"
+        heartbeats += 1
+        if test_heartbeat_limit is not None and heartbeats >= test_heartbeat_limit:
+            return
+        time.sleep(heartbeat_ms / 1000)
+
+
+def _runtime_lab_child_stream_frame(
+    *,
+    session_id: int,
+    run_id: int,
+    sequence: int,
+    event: Mapping[str, Any],
+    result: dict[str, Any],
+    runtime_result: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    event_type = str(event.get("type") or event.get("eventType") or "")
+    event_payload = dict(event.get("payload") or {})
+    terminal_type = _runtime_lab_terminal_stream_type(event_type)
+    frame: dict[str, Any] = {
+        "type": terminal_type or "delta",
+        "source": "provider" if event_type == "llm_delta" and event_payload.get("streamSource") == "provider" else "runtime_v2",
+        "sessionId": session_id,
+        "runId": run_id,
+        "sequence": sequence,
+        "event": {
+            "type": event_type,
+            "nodeKey": event.get("nodeKey") or event.get("node_key"),
+            "payload": event_payload,
+        },
+    }
+    if frame["source"] == "provider":
+        frame["delta"] = str(event_payload.get("content") or "")
+    if terminal_type == "done":
+        frame["result"] = _runtime_lab_terminal_projection(result, event, runtime_result)
+    elif terminal_type == "error":
+        frame["error"] = str((event.get("payload") or {}).get("error") or "Runtime V2 child run failed")
+        failure = event_payload.get("failure")
+        if not isinstance(failure, Mapping) and isinstance(runtime_result, Mapping):
+            failure = runtime_result.get("failure")
+        if isinstance(failure, Mapping):
+            frame["failure"] = dict(failure)
+    return frame
+
+
+def _runtime_lab_stale_resume_failure(
+    event: Mapping[str, Any],
+    read_resume_job: RuntimeLabResumeJobReader | None,
+) -> bool:
+    if str(event.get("type") or event.get("eventType") or "") != "workflow_run_resume_failed":
+        return False
+    if read_resume_job is None:
+        return False
+    payload = _mapping_or_empty(event.get("payload"))
+    raw_job_id = payload.get("jobId")
+    raw_attempt_count = payload.get("attemptCount")
+    if (
+        isinstance(raw_job_id, bool)
+        or isinstance(raw_attempt_count, bool)
+        or not isinstance(raw_job_id, (int, str))
+        or not isinstance(raw_attempt_count, (int, str))
+    ):
+        return False
+    try:
+        job_id = int(raw_job_id)
+        attempt_count = int(raw_attempt_count)
+    except ValueError:
+        return False
+    job = read_resume_job(job_id)
+    return (
+        job is None
+        or str(job.get("status") or "").upper() != "FAILED"
+        or int(job.get("attempt_count") or 0) != attempt_count
+    )
+
+
+def _runtime_lab_terminal_projection(
+    initial_result: Mapping[str, Any],
+    event: Mapping[str, Any],
+    runtime_result: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    projected = dict(initial_result)
+    durable_result = _mapping_or_empty(runtime_result)
+    if durable_result:
+        projected["runtimeResult"] = durable_result
+        projected["status"] = str(durable_result.get("status") or projected.get("status") or "")
+    output = _mapping_or_empty(durable_result.get("output"))
+    if not output:
+        event_payload = _mapping_or_empty(event.get("payload"))
+        output = _mapping_or_empty(event_payload.get("output"))
+    reply = _runtime_lab_terminal_reply(output)
+    if reply:
+        projected["reply"] = reply
+        projected["answer"] = reply
+    return projected
+
+
+def _runtime_lab_terminal_reply(output: Mapping[str, Any]) -> str:
+    interrupt = _mapping_or_empty(output.get("interrupt"))
+    for value in (
+        interrupt.get("question"),
+        interrupt.get("prompt"),
+        output.get("final"),
+        output.get("answer"),
+        output.get("content"),
+        output.get("message"),
+    ):
+        if value is not None and str(value).strip():
+            return str(value)
+    return ""
+
+
+def _mapping_or_empty(value: object) -> Mapping[str, Any]:
+    return value if isinstance(value, Mapping) else {}
+
+
+def _runtime_lab_terminal_stream_type(event_type: str) -> str | None:
+    if event_type in {"workflow_run_completed", "workflow_run_interrupted"}:
+        return "done"
+    if event_type in {"workflow_run_failed", "workflow_run_cancelled", "workflow_run_resume_failed"}:
+        return "error"
+    return None
+
+
+def _runtime_lab_event_sequence(event: Mapping[str, Any]) -> int:
+    try:
+        return int(event.get("sequence") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _runtime_lab_sse_data(payload: Mapping[str, Any]) -> str:
+    return f"data: {json.dumps(dict(payload), ensure_ascii=False)}\n\n"
 
 
 @router.post("/route-model/connectivity")
@@ -357,7 +747,9 @@ def _runtime_lab_sop_uses_live_llm(settings: Settings) -> bool:
     return mode not in {"mock", "fake", "deterministic", "off", "none"}
 
 
-def _runtime_lab_background_enqueue(session: Session, *, sop_llm_mode: str):
+def _runtime_lab_background_enqueue(
+    session: Session, *, sop_llm_mode: str
+) -> Callable[[int, int], dict[str, Any]]:
     def enqueue(owner_id: int, run_id: int) -> dict[str, Any]:
         job = RuntimeJobRepository(session).enqueue(
             run_id=run_id,
@@ -369,6 +761,39 @@ def _runtime_lab_background_enqueue(session: Session, *, sop_llm_mode: str):
                 "ownerId": owner_id,
                 "idempotencyKey": "",
                 "idempotencyLayer": "run",
+                "source": "runtime_lab_sop_adapter",
+                "sopLlmMode": sop_llm_mode,
+            },
+        )
+        return {"jobId": int(job["id"]), "status": str(job["status"])}
+
+    return enqueue
+
+
+def _runtime_lab_background_resume_enqueue(
+    session: Session, *, sop_llm_mode: str
+) -> Callable[[int, int, int, dict[str, Any], str | None], dict[str, Any]]:
+    def enqueue(
+        owner_id: int,
+        run_id: int,
+        checkpoint_id: int,
+        resume_data: dict[str, Any],
+        idempotency_key: str | None,
+    ) -> dict[str, Any]:
+        resume_key = str(idempotency_key or f"run-{run_id}-resume")
+        job = RuntimeJobRepository(session).enqueue(
+            run_id=run_id,
+            owner_type="CHATFLOW",
+            owner_id=owner_id,
+            job_type=f"runtime_v2_resume:{checkpoint_id}",
+            payload={
+                "runId": run_id,
+                "ownerType": "CHATFLOW",
+                "ownerId": owner_id,
+                "idempotencyKey": resume_key,
+                "idempotencyLayer": "resume",
+                "checkpointId": checkpoint_id,
+                "resumeData": dict(resume_data),
                 "source": "runtime_lab_sop_adapter",
                 "sopLlmMode": sop_llm_mode,
             },

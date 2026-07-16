@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import threading
 from typing import Any, Protocol
 
 
@@ -36,6 +37,15 @@ class RuntimeJobRepositoryProtocol(Protocol):
         retry_backoff_seconds: tuple[int, ...] = (5, 30, 120),
     ) -> dict[str, Any]: ...
 
+    def heartbeat(
+        self,
+        job_id: int,
+        *,
+        worker_id: str,
+        lease_seconds: int = 30,
+        lease_token: str | None = None,
+    ) -> dict[str, Any]: ...
+
 
 class RuntimeJobWorker:
     def __init__(
@@ -43,15 +53,21 @@ class RuntimeJobWorker:
         *,
         job_repository: RuntimeJobRepositoryProtocol,
         complete_run: Callable[[int], None],
+        complete_job: Callable[[dict[str, Any]], None] | None = None,
         worker_id: str,
         lease_seconds: int = 300,
         owner_types: tuple[str, ...] | None = None,
+        heartbeat_job: Callable[[int, str, str, int], None] | None = None,
+        on_terminal_failure: Callable[[dict[str, Any], str], None] | None = None,
     ) -> None:
         self._job_repository = job_repository
         self._complete_run = complete_run
+        self._complete_job = complete_job
         self._worker_id = worker_id
         self._lease_seconds = lease_seconds
         self._owner_types = _normalize_owner_types(owner_types)
+        self._heartbeat_job = heartbeat_job
+        self._on_terminal_failure = on_terminal_failure
 
     def run_once(self, job_id: int | None = None) -> dict[str, Any]:
         job = (
@@ -72,8 +88,21 @@ class RuntimeJobWorker:
             return {"claimed": False, "status": "IDLE"}
         claimed_job_id = int(job["id"])
         lease_token = str(job.get("lease_token") or "")
+        stop_heartbeat = threading.Event()
+        heartbeat_thread: threading.Thread | None = None
+        if self._heartbeat_job is not None:
+            heartbeat_thread = threading.Thread(
+                target=self._renew_lease_until_complete,
+                args=(stop_heartbeat, claimed_job_id, lease_token),
+                daemon=True,
+                name=f"runtime-job-heartbeat-{claimed_job_id}",
+            )
+            heartbeat_thread.start()
         try:
-            self._complete_run(int(job["run_id"]))
+            if self._complete_job is not None:
+                self._complete_job(job)
+            else:
+                self._complete_run(int(job["run_id"]))
         except Exception as exc:
             failed = self._job_repository.fail(
                 claimed_job_id,
@@ -81,6 +110,8 @@ class RuntimeJobWorker:
                 lease_token=lease_token,
                 error=str(exc),
             )
+            if str(failed.get("status") or "").upper() == "FAILED" and self._on_terminal_failure is not None:
+                self._on_terminal_failure(failed, str(exc))
             return {
                 "claimed": True,
                 "jobId": claimed_job_id,
@@ -88,6 +119,10 @@ class RuntimeJobWorker:
                 "status": failed["status"],
                 "error": str(exc),
             }
+        finally:
+            stop_heartbeat.set()
+            if heartbeat_thread is not None:
+                heartbeat_thread.join(timeout=1)
         try:
             completed = self._job_repository.complete(
                 claimed_job_id,
@@ -110,6 +145,15 @@ class RuntimeJobWorker:
             "runId": int(job["run_id"]),
             "status": completed["status"],
         }
+
+    def _renew_lease_until_complete(self, stop: threading.Event, job_id: int, lease_token: str) -> None:
+        interval_seconds = max(0.05, min(30.0, float(self._lease_seconds) / 3))
+        while not stop.wait(interval_seconds):
+            try:
+                assert self._heartbeat_job is not None
+                self._heartbeat_job(job_id, self._worker_id, lease_token, self._lease_seconds)
+            except Exception:
+                return
 
 
 def _normalize_owner_types(owner_types: tuple[str, ...] | None) -> tuple[str, ...] | None:

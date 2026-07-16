@@ -28,47 +28,47 @@ compatibility but create no open work.
 
 ## 190.3 Per-Call Usage Ledger
 
-- [ ] TDD preflight and observable RED.
-- [ ] Add Alembic migration and MySQL8 model-usage ledger.
-- [ ] Persist trusted user/workspace/session/run/call scope.
-- [ ] Normalize provider/model and token dimensions per call.
-- [ ] Keep unavailable optional dimensions null.
-- [ ] Finalize one streaming-call row from provider terminal usage.
-- [ ] Keep cache/reasoning as breakouts without total double-count.
-- [ ] Capture normal planner model calls.
-- [ ] Capture Spec 188 memory-extractor calls when available.
-- [ ] Prevent duplicate/replayed call double-counting.
-- [ ] Save migration/integration/contract evidence and pass Checker/Reviewer.
+- [x] TDD preflight and observable RED.
+- [x] Add Alembic migration and MySQL8 model-usage ledger.
+- [x] Persist trusted user/workspace/session/run/call scope.
+- [x] Normalize provider/model and token dimensions per call.
+- [x] Keep unavailable optional dimensions null.
+- [x] Finalize one streaming-call row from provider terminal usage.
+- [x] Keep cache/reasoning as breakouts without total double-count.
+- [x] Capture normal planner model calls.
+- [x] Capture Spec 188 memory-extractor calls when available.
+- [x] Prevent duplicate/replayed call double-counting.
+- [x] Save migration/integration/contract evidence and pass Checker/Reviewer.
 
 ## 190.4 Versioned Cost And Aggregate API
 
-- [ ] TDD preflight and observable RED.
-- [ ] Implement fixed-decimal provider actual cost.
-- [ ] Implement versioned price-table estimate.
-- [ ] Represent unknown price as null with explicit counters.
-- [ ] Preserve historical pricing version and cost.
-- [ ] Add scoped summary, daily, sessions, dimensions, and detail endpoints.
-- [ ] Add timezone-correct buckets and range validation.
-- [ ] Reconcile per-call, session, period, and cumulative totals.
-- [ ] Save API/E2E evidence and pass Checker/Reviewer.
+- [x] TDD preflight and observable RED.
+- [x] Implement fixed-decimal provider actual cost.
+- [x] Implement versioned price-table estimate.
+- [x] Represent unknown price as null with explicit counters.
+- [x] Preserve historical pricing version and cost.
+- [x] Add scoped summary, daily, sessions, dimensions, and detail endpoints.
+- [x] Add timezone-correct buckets and range validation.
+- [x] Reconcile per-call, session, period, and cumulative totals.
+- [x] Save API/E2E evidence and pass Checker/Reviewer.
 
 ## 190.5 Token/Cost Dashboard
 
-- [ ] TDD preflight and observable frontend RED.
-- [ ] Add /ai-assistant/usage route and AI Assistant entry.
-- [ ] Add today, yesterday, 30-day, and cumulative cards.
-- [ ] Add recent-year daily Token/Cost heatmap.
-- [ ] Add default 30-day range filter and Token/Cost toggle.
-- [ ] Add session ranking/detail.
-- [ ] Add provider/model distribution and token-type composition.
-- [ ] Add loading, empty, partial-cost, unknown-price, and error states.
-- [ ] Run frontend tests, rem gate, and repeatable Browser UAT.
-- [ ] Save screenshots/DOM evidence and pass Checker/Reviewer.
+- [x] TDD preflight and observable frontend RED.
+- [x] Add /ai-assistant/usage route and AI Assistant entry.
+- [x] Add today, yesterday, 30-day, and cumulative cards.
+- [x] Add recent-year daily Token/Cost heatmap.
+- [x] Add default 30-day range filter and Token/Cost toggle.
+- [x] Add session ranking/detail.
+- [x] Add provider/model distribution and token-type composition.
+- [x] Add loading, empty, partial-cost, unknown-price, and error states.
+- [x] Run frontend tests, rem gate, and repeatable Browser UAT.
+- [x] Save screenshots/DOM evidence and pass Checker/Reviewer.
 
 ## 190.6 Aggregate Acceptance
 
-- [ ] Reconcile ledger, APIs, inspector, and dashboard.
-- [ ] Rerun backend, frontend, migration, isolation, and UAT gates.
-- [ ] Prove planner and memory-extractor usage capture.
-- [ ] Prove no benchmark/governance/alerts/budget/cross-user scope.
-- [ ] Save final Checker/Reviewer reports and residual risks.
+- [x] Reconcile ledger, APIs, inspector, and dashboard.
+- [x] Rerun backend, frontend, migration, isolation, and UAT gates.
+- [x] Prove planner and memory-extractor usage capture.
+- [x] Prove no benchmark/governance/alerts/budget/cross-user scope.
+- [x] Save final Checker/Reviewer reports and residual risks.

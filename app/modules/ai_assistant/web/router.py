@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 import json
+import os
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
+from datetime import date, datetime, timedelta
+from functools import lru_cache, partial
+from pathlib import Path
 from threading import Lock
 from time import monotonic, sleep
-from typing import Any
+from typing import Any, cast
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -12,11 +19,31 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import Settings, get_settings
 from app.core.database import get_session
+from app.core.host.context import RequestContext
+from app.core.host.dependencies import get_request_context
 from app.core.responses import success
+from app.modules.ai_assistant.domain.access_scope import AiAssistantAccessScope, access_scope_for_workspace
 from app.modules.ai_assistant.domain.harness import AiAssistantHarnessService
 from app.modules.ai_assistant.domain.live_model import LivePlannerConfig, create_qwen_live_planner
+from app.modules.ai_assistant.domain.markdown_memory import (
+    MarkdownMemoryStore,
+    MemoryScopeResolver,
+    ResolvedMemoryScope,
+)
+from app.modules.ai_assistant.domain.memory_extraction import (
+    MemoryExtractionCoordinator,
+    MemoryExtractor,
+    create_model_memory_extractor,
+)
 from app.modules.ai_assistant.domain.session_runtime import RunControlConflict
 from app.modules.ai_assistant.domain.streaming_runtime import heartbeat_payload, last_sequence
+from app.modules.ai_assistant.domain.usage_reporting import (
+    rows_in_local_range,
+    usage_session_detail,
+    usage_totals_from_aggregate,
+    usage_utc_bounds,
+    validate_usage_range,
+)
 from app.modules.ai_assistant.infra.repository import AiAssistantRepository, IdempotencyConflict
 from app.modules.ai_assistant.web.schemas import (
     ApprovalDecisionRequest,
@@ -34,16 +61,153 @@ _AUTONOMOUS_WORKER_EXECUTOR = ThreadPoolExecutor(
 )
 _AUTONOMOUS_WORKER_LOCK = Lock()
 _AUTONOMOUS_WORKER_IN_FLIGHT: set[int] = set()
+_MEMORY_EXTRACTION_EXECUTOR = ThreadPoolExecutor(
+    max_workers=2,
+    thread_name_prefix="ai-assistant-memory",
+)
+_MEMORY_EXTRACTION_LOCK = Lock()
+_MEMORY_EXTRACTION_IN_FLIGHT: dict[str, object] = {}
+_MEMORY_EXTRACTION_REQUESTED: set[str] = set()
 
 
 def get_ai_assistant_service(
+    http_request: Request,
     session: Session = Depends(get_session),
     settings: Settings = Depends(get_settings),
+    request_context: RequestContext = Depends(get_request_context),
 ) -> AiAssistantHarnessService:
-    return AiAssistantHarnessService(
-        AiAssistantRepository(session),
-        live_planner=create_qwen_live_planner(settings),
+    workspace_root = os.environ.get("HIFY_WORKSPACE_ROOT") or os.getcwd()
+    access_scope = access_scope_for_workspace(
+        trusted_user_id=request_context.actor_id,
+        trusted_workspace_root=workspace_root,
     )
+    memory_store, memory_scope = _memory_runtime_for_scope(
+        access_scope=access_scope,
+        workspace_root=workspace_root,
+    )
+    session_factory = sessionmaker(
+        bind=session.get_bind(),
+        autoflush=False,
+        autocommit=False,
+        expire_on_commit=False,
+    )
+    extractor = getattr(http_request.app.state, "ai_assistant_memory_extractor", None)
+    if extractor is None:
+        extractor = create_model_memory_extractor(settings)
+    completion_callback = None
+    if extractor is not None:
+        completion_callback = partial(
+            _schedule_memory_extraction,
+            session_factory=session_factory,
+            access_scope=access_scope,
+            store=memory_store,
+            memory_scope=memory_scope,
+            extractor=extractor,
+        )
+    return AiAssistantHarnessService(
+        AiAssistantRepository(
+            session,
+            access_scope=access_scope,
+        ),
+        live_planner=create_qwen_live_planner(settings),
+        memory_store=memory_store,
+        memory_scope=memory_scope,
+        memory_today=_workspace_today,
+        memory_completion_callback=completion_callback,
+    )
+
+
+def _memory_runtime_for_scope(
+    *,
+    access_scope: AiAssistantAccessScope,
+    workspace_root: str,
+) -> tuple[MarkdownMemoryStore, ResolvedMemoryScope]:
+    configured_root = os.environ.get("HIFY_AI_ASSISTANT_MEMORY_ROOT")
+    memory_root = Path(configured_root).expanduser() if configured_root else Path(workspace_root) / ".hify" / "memory"
+    resolver, store = _memory_store_for_root(str(memory_root.resolve()))
+    scope = resolver.resolve(
+        trusted_user_id=access_scope.user_id,
+        trusted_workspace_id=access_scope.workspace_id,
+    )
+    return store, scope
+
+
+@lru_cache(maxsize=32)
+def _memory_store_for_root(root_path: str) -> tuple[MemoryScopeResolver, MarkdownMemoryStore]:
+    resolver = MemoryScopeResolver(root_path)
+    return resolver, MarkdownMemoryStore(resolver)
+
+
+def _workspace_today() -> date:
+    timezone_name = os.environ.get("HIFY_WORKSPACE_TIMEZONE", "").strip()
+    if not timezone_name:
+        return date.today()
+    return datetime.now(ZoneInfo(timezone_name)).date()
+
+
+def _schedule_memory_extraction(
+    *,
+    session_factory: sessionmaker[Session],
+    access_scope: AiAssistantAccessScope,
+    store: MarkdownMemoryStore,
+    memory_scope: ResolvedMemoryScope,
+    extractor: MemoryExtractor,
+) -> None:
+    scope_key = f"{access_scope.user_id}\0{access_scope.workspace_id}"
+    owner = object()
+    with _MEMORY_EXTRACTION_LOCK:
+        _MEMORY_EXTRACTION_REQUESTED.add(scope_key)
+        if scope_key in _MEMORY_EXTRACTION_IN_FLIGHT:
+            return
+        _MEMORY_EXTRACTION_IN_FLIGHT[scope_key] = owner
+    _MEMORY_EXTRACTION_EXECUTOR.submit(
+        _run_memory_extraction,
+        scope_key,
+        owner,
+        session_factory,
+        access_scope,
+        store,
+        memory_scope,
+        extractor,
+    )
+
+
+def _run_memory_extraction(
+    scope_key: str,
+    owner: object,
+    session_factory: sessionmaker[Session],
+    access_scope: AiAssistantAccessScope,
+    store: MarkdownMemoryStore,
+    memory_scope: ResolvedMemoryScope,
+    extractor: MemoryExtractor,
+) -> None:
+    @contextmanager
+    def repository_factory() -> Iterator[AiAssistantRepository]:
+        with session_factory() as session:
+            yield AiAssistantRepository(session, access_scope=access_scope)
+
+    try:
+        coordinator = MemoryExtractionCoordinator(
+            repository_factory=repository_factory,
+            store=store,
+            scope=memory_scope,
+            extractor=extractor,
+            today=_workspace_today,
+        )
+        while True:
+            with _MEMORY_EXTRACTION_LOCK:
+                _MEMORY_EXTRACTION_REQUESTED.discard(scope_key)
+            coordinator.drain()
+            with _MEMORY_EXTRACTION_LOCK:
+                if scope_key in _MEMORY_EXTRACTION_REQUESTED:
+                    continue
+                if _MEMORY_EXTRACTION_IN_FLIGHT.get(scope_key) is owner:
+                    _MEMORY_EXTRACTION_IN_FLIGHT.pop(scope_key, None)
+                return
+    finally:
+        with _MEMORY_EXTRACTION_LOCK:
+            if _MEMORY_EXTRACTION_IN_FLIGHT.get(scope_key) is owner:
+                _MEMORY_EXTRACTION_IN_FLIGHT.pop(scope_key, None)
 
 
 @router.post("/sessions")
@@ -60,6 +224,225 @@ def create_session(
 def list_sessions(service: AiAssistantHarnessService = Depends(get_ai_assistant_service)) -> dict[str, Any]:
     sessions = [_session_payload(row) for row in service.list_sessions()]
     return success({"list": sessions, "total": len(sessions)})
+
+
+@router.get("/usage/summary")
+def get_usage_summary(
+    from_date: date | None = Query(default=None, alias="from"),
+    to_date: date | None = Query(default=None, alias="to"),
+    timezone_name: str | None = Query(default=None, alias="timezone"),
+    service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
+) -> dict[str, Any]:
+    zone, today, _, _ = _usage_query_context(
+        from_date,
+        to_date,
+        timezone_name,
+        default_days=30,
+    )
+    def period(start: date | None, end: date | None) -> dict[str, Any]:
+        if start is None or end is None:
+            return usage_totals_from_aggregate(service.summarize_model_usage())
+        started_from, started_before = usage_utc_bounds(
+            timezone_name=zone,
+            start=start,
+            end=end,
+        )
+        return usage_totals_from_aggregate(
+            service.summarize_model_usage(
+                started_from=started_from,
+                started_before=started_before,
+            )
+        )
+
+    return success(
+        {
+            "today": period(today, today),
+            "yesterday": period(today - timedelta(days=1), today - timedelta(days=1)),
+            "rolling30Days": period(today - timedelta(days=29), today),
+            "cumulative": period(None, None),
+        }
+    )
+
+
+@router.get("/usage/daily")
+def get_usage_daily(
+    from_date: date | None = Query(default=None, alias="from"),
+    to_date: date | None = Query(default=None, alias="to"),
+    timezone_name: str | None = Query(default=None, alias="timezone"),
+    service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
+) -> dict[str, Any]:
+    zone, _, start, end = _usage_query_context(
+        from_date,
+        to_date,
+        timezone_name,
+        default_days=365,
+    )
+    day_bounds = []
+    day = start
+    while day <= end:
+        started_from, started_before = usage_utc_bounds(
+            timezone_name=zone,
+            start=day,
+            end=day,
+        )
+        day_bounds.append((day.isoformat(), started_from, started_before))
+        day += timedelta(days=1)
+    items = [
+        {"date": str(row["day"]), **usage_totals_from_aggregate(row)}
+        for row in service.summarize_model_usage_daily(day_bounds=day_bounds)
+    ]
+    return success({"list": items, "total": len(items), "from": start.isoformat(), "to": end.isoformat()})
+
+
+@router.get("/usage/sessions")
+def get_usage_sessions(
+    from_date: date | None = Query(default=None, alias="from"),
+    to_date: date | None = Query(default=None, alias="to"),
+    timezone_name: str | None = Query(default=None, alias="timezone"),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
+) -> dict[str, Any]:
+    zone, _, start, end = _usage_query_context(from_date, to_date, timezone_name, default_days=30)
+    started_from, started_before = usage_utc_bounds(timezone_name=zone, start=start, end=end)
+    grouped = service.group_model_usage(
+        group_by="session",
+        started_from=started_from,
+        started_before=started_before,
+        limit=limit,
+        offset=offset,
+    )
+    session_ids = [int(row["group_key"]) for row in grouped["list"]]
+    titles = {
+        int(row["id"]): (
+            f"{row['title']}（已删除）" if row.get("deleted") else str(row["title"])
+        )
+        for row in service.list_usage_sessions(session_ids=session_ids)
+    }
+    items = [
+        {
+            "sessionId": int(row["group_key"]),
+            "title": titles.get(int(row["group_key"]), ""),
+            **usage_totals_from_aggregate(row),
+        }
+        for row in grouped["list"]
+    ]
+    return success(
+        {"list": items, "total": grouped["total"], "limit": limit, "offset": offset}
+    )
+
+
+@router.get("/usage/dimensions")
+def get_usage_dimensions(
+    from_date: date | None = Query(default=None, alias="from"),
+    to_date: date | None = Query(default=None, alias="to"),
+    timezone_name: str | None = Query(default=None, alias="timezone"),
+    service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
+) -> dict[str, Any]:
+    zone, _, start, end = _usage_query_context(from_date, to_date, timezone_name, default_days=30)
+    started_from, started_before = usage_utc_bounds(timezone_name=zone, start=start, end=end)
+    providers = service.group_model_usage(
+        group_by="provider",
+        started_from=started_from,
+        started_before=started_before,
+    )["list"]
+    models = service.group_model_usage(
+        group_by="model",
+        started_from=started_from,
+        started_before=started_before,
+    )["list"]
+    token_types = service.summarize_model_usage_token_types(
+        started_from=started_from,
+        started_before=started_before,
+    )
+    return success(
+        {
+            "providers": [
+                {"name": str(row["group_key"]), **usage_totals_from_aggregate(row)}
+                for row in providers
+            ],
+            "models": [
+                {"name": str(row["group_key"]), **usage_totals_from_aggregate(row)}
+                for row in models
+            ],
+            "tokenTypes": token_types,
+        }
+    )
+
+
+@router.get("/usage/sessions/{session_id}")
+def get_usage_session_detail(
+    session_id: int,
+    from_date: date | None = Query(default=None, alias="from"),
+    to_date: date | None = Query(default=None, alias="to"),
+    timezone_name: str | None = Query(default=None, alias="timezone"),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
+) -> dict[str, Any]:
+    assistant_session = service.get_usage_session(session_id)
+    if assistant_session is None:
+        raise HTTPException(status_code=404, detail="AI Assistant session not found")
+    zone, _, start, end = _usage_query_context(from_date, to_date, timezone_name, default_days=30)
+    started_from, started_before = usage_utc_bounds(timezone_name=zone, start=start, end=end)
+    rows = rows_in_local_range(
+        service.list_model_usage_calls(
+            session_id=session_id,
+            started_from=started_from,
+            started_before=started_before,
+            limit=limit,
+            offset=offset,
+        ),
+        timezone_name=zone,
+        start=start,
+        end=end,
+    )
+    detail = usage_session_detail(
+            rows,
+            session_id=session_id,
+            title=(
+                f"{assistant_session['title']}（已删除）"
+                if assistant_session.get("deleted")
+                else str(assistant_session["title"])
+            ),
+        )
+    detail.update(
+        usage_totals_from_aggregate(
+            service.summarize_model_usage(
+                session_id=session_id,
+                started_from=started_from,
+                started_before=started_before,
+            )
+        )
+    )
+    detail.update({"limit": limit, "offset": offset})
+    detail["sessionDeleted"] = bool(assistant_session.get("deleted"))
+    return success(detail)
+
+
+def _usage_query_context(
+    from_date: date | None,
+    to_date: date | None,
+    timezone_name: str | None,
+    *,
+    default_days: int,
+) -> tuple[str, date, date, date]:
+    zone_name = (timezone_name or os.environ.get("HIFY_WORKSPACE_TIMEZONE") or "UTC").strip()
+    try:
+        zone = ZoneInfo(zone_name)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid usage timezone") from exc
+    today = datetime.now(zone).date()
+    try:
+        start, end = validate_usage_range(
+            from_date,
+            to_date,
+            today=today,
+            default_days=default_days,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return zone_name, today, start, end
 
 
 @router.get("/sessions/{session_id}")
@@ -235,6 +618,8 @@ def list_run_events(
     after_sequence: int = Query(default=0, alias="afterSequence"),
     service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
 ) -> dict[str, Any]:
+    if service.get_run(run_id) is None:
+        raise HTTPException(status_code=404, detail="AI Assistant run not found")
     events = [_event_payload(row) for row in service.list_run_events(run_id, after_sequence=after_sequence)]
     return success({"list": events, "total": len(events)})
 
@@ -412,12 +797,14 @@ def _schedule_autonomous_run_worker(
 
     try:
         session_factory = _worker_session_factory_from_service(service)
+        access_scope = _worker_access_scope_from_service(service)
         worker_service_kwargs = _worker_service_kwargs(service)
         delay_seconds = float(getattr(http_request.app.state, "ai_assistant_autonomous_worker_delay_seconds", 0.05))
         _AUTONOMOUS_WORKER_EXECUTOR.submit(
             _run_autonomous_worker,
             run_key,
             session_factory,
+            access_scope,
             worker_service_kwargs,
             model_config,
             delay_seconds,
@@ -432,6 +819,7 @@ def _schedule_autonomous_run_worker(
 def _run_autonomous_worker(
     run_id: int,
     session_factory: sessionmaker[Session],
+    access_scope: AiAssistantAccessScope,
     service_kwargs: dict[str, Any],
     model_config: LivePlannerConfig | None,
     delay_seconds: float,
@@ -440,7 +828,10 @@ def _run_autonomous_worker(
         if delay_seconds > 0:
             sleep(delay_seconds)
         with session_factory() as session:
-            service = AiAssistantHarnessService(AiAssistantRepository(session), **service_kwargs)
+            service = AiAssistantHarnessService(
+                AiAssistantRepository(session, access_scope=access_scope),
+                **service_kwargs,
+            )
             service.process_queued_run(run_id, model_config=model_config)
     finally:
         with _AUTONOMOUS_WORKER_LOCK:
@@ -456,6 +847,13 @@ def _worker_session_factory_from_service(
     return sessionmaker(bind=bind, autoflush=False, autocommit=False, expire_on_commit=False)
 
 
+def _worker_access_scope_from_service(
+    service: AiAssistantHarnessService,
+) -> AiAssistantAccessScope:
+    repository = cast(AiAssistantRepository, getattr(service, "_repository"))
+    return repository.access_scope
+
+
 def _worker_service_kwargs(service: AiAssistantHarnessService) -> dict[str, Any]:
     return {
         "tool_registry": getattr(service, "_tools", None),
@@ -463,6 +861,10 @@ def _worker_service_kwargs(service: AiAssistantHarnessService) -> dict[str, Any]
         "sandbox_policy": getattr(service, "_sandbox_policy", None),
         "live_planner": getattr(service, "_live_planner", None),
         "skill_runtime": getattr(service, "_skill_runtime", None),
+        "memory_store": getattr(service, "_memory_store", None),
+        "memory_scope": getattr(service, "_memory_scope", None),
+        "memory_today": getattr(service, "_memory_today", date.today),
+        "memory_completion_callback": getattr(service, "_memory_completion_callback", None),
     }
 
 

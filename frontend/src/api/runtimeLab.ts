@@ -75,6 +75,13 @@ export interface RuntimeLabTurn {
   events?: RuntimeLabEvent[]
 }
 
+export interface RuntimeLabMessagePayload {
+  message: string
+  idempotencyKey?: string
+  enabledSopIds?: string[]
+  routeSettings?: RuntimeLabRouteSettingsPayload
+}
+
 export interface RuntimeLabListResult<T> {
   list: T[]
   total: number
@@ -277,12 +284,7 @@ export const createRuntimeLabSession = () =>
 
 export const postRuntimeLabMessage = (
   sessionId: number,
-  payload: {
-    message: string
-    idempotencyKey?: string
-    enabledSopIds?: string[]
-    routeSettings?: RuntimeLabRouteSettingsPayload
-  },
+  payload: RuntimeLabMessagePayload,
 ) => post<RuntimeLabTurn>(`/v1/runtime-lab/sessions/${sessionId}/messages`, payload)
 
 export const listRuntimeLabTasks = (sessionId: number) =>

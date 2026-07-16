@@ -1,4 +1,6 @@
+import asyncio
 import time
+import threading
 import unittest
 from datetime import datetime
 from typing import Any
@@ -132,6 +134,144 @@ class RuntimeV2ProviderBackedLlmBindingTest(unittest.TestCase):
         llm_node = next(node for node in nodes if node["nodeKey"] == "llm")
         self.assertEqual(llm_node["outputs"]["__debug"]["llm"]["model"], "runtime-v2-test-response-model")
         self.assertEqual(llm_node["outputs"]["__usage"]["totalTokens"], 18)
+
+    def test_chatflow_v2_persists_provider_delta_before_llm_node_completion(self) -> None:
+        model_config_id = _seed_live_model_config(model_id="runtime-v2-streaming-model")
+        fake_client = _BlockingStreamingOpenAIClient(
+            response_payload=_assistant_payload("first second"),
+            chunks=["first ", "second"],
+        )
+
+        with patch("app.modules.workflow.domain.service.ProviderBackedOpenAIChatClient", lambda _config: fake_client):
+            with TestClient(app) as client:
+                chatflow = _create_llm_chatflow(client, llm_config={"modelConfigId": model_config_id})
+                started = client.post(
+                    f"/api/v1/chatflows/{chatflow['id']}/runs",
+                    json={"input": {"sys.query": "stream this"}},
+                ).json()["data"]
+
+                self.assertTrue(fake_client.first_delta_sent.wait(timeout=3), "provider delta was not forwarded live")
+                live_events = client.get(started["eventsRef"]).json()["data"]["list"]
+                live_result = client.get(started["resultRef"]).json()["data"]
+                fake_client.release_completion.set()
+                terminal = _wait_for_result(client, started["resultRef"], "SUCCEEDED")
+                terminal_events = client.get(started["eventsRef"]).json()["data"]["list"]
+
+        live_deltas = [event for event in live_events if event["type"] == "llm_delta"]
+        self.assertEqual([event["payload"]["content"] for event in live_deltas], ["first "])
+        self.assertEqual(live_deltas[0]["payload"]["streamSource"], "provider")
+        self.assertFalse(
+            any(event["type"] == "workflow_node_completed" and event["nodeId"] == "llm" for event in live_events)
+        )
+        self.assertEqual(live_result["status"], "RUNNING")
+        all_deltas = [event for event in terminal_events if event["type"] == "llm_delta"]
+        self.assertEqual([event["payload"]["content"] for event in all_deltas], ["first ", "second"])
+        self.assertEqual(terminal["output"]["answer"], "first second")
+        self.assertLess(
+            max(event["sequence"] for event in all_deltas),
+            next(
+                event["sequence"]
+                for event in terminal_events
+                if event["type"] == "workflow_node_completed" and event["nodeId"] == "llm"
+            ),
+        )
+
+    def test_chatflow_v2_consumes_async_provider_stream_before_node_completion(self) -> None:
+        model_config_id = _seed_live_model_config(model_id="runtime-v2-async-streaming-model")
+        fake_client = _AsyncBlockingStreamingOpenAIClient(
+            response_payload=_assistant_payload("first second"),
+            chunks=["first ", "second"],
+        )
+
+        with patch("app.modules.workflow.domain.service.ProviderBackedOpenAIChatClient", lambda _config: fake_client):
+            with TestClient(app) as client:
+                chatflow = _create_llm_chatflow(client, llm_config={"modelConfigId": model_config_id})
+                started = client.post(
+                    f"/api/v1/chatflows/{chatflow['id']}/runs",
+                    json={"input": {"sys.query": "async stream this"}},
+                ).json()["data"]
+
+                self.assertTrue(fake_client.first_delta_sent.wait(timeout=3), "async provider delta was not forwarded live")
+                live_events = client.get(started["eventsRef"]).json()["data"]["list"]
+                fake_client.release_completion.set()
+                terminal = _wait_for_result(client, started["resultRef"], "SUCCEEDED")
+
+        self.assertEqual(fake_client.async_stream_calls, 1)
+        self.assertEqual([event["payload"]["content"] for event in live_events if event["type"] == "llm_delta"], ["first "])
+        self.assertEqual(terminal["output"]["answer"], "first second")
+
+    def test_chatflow_v2_cancellation_stops_inflight_async_provider_stream(self) -> None:
+        model_config_id = _seed_live_model_config(model_id="runtime-v2-cancellable-streaming-model")
+        fake_client = _CancellableAsyncStreamingOpenAIClient()
+
+        with patch("app.modules.workflow.domain.service.ProviderBackedOpenAIChatClient", lambda _config: fake_client):
+            with TestClient(app) as client:
+                chatflow = _create_llm_chatflow(client, llm_config={"modelConfigId": model_config_id})
+                started = client.post(
+                    f"/api/v1/chatflows/{chatflow['id']}/runs",
+                    json={"input": {"sys.query": "cancel async stream"}},
+                ).json()["data"]
+                try:
+                    self.assertTrue(fake_client.first_delta_sent.wait(timeout=3), "async provider did not begin")
+                    cancelled = client.post(f"/api/v1/runtime-runs/{started['runId']}/cancel")
+                    self.assertEqual(cancelled.status_code, 200, cancelled.text)
+                    self.assertEqual(cancelled.json()["data"]["status"], "CANCELLED")
+                    self.assertTrue(fake_client.cancelled.wait(timeout=1), "provider stream was not cancelled")
+                    terminal = _wait_for_result(client, started["resultRef"], "CANCELLED")
+                    events = client.get(started["eventsRef"]).json()["data"]["list"]
+                finally:
+                    fake_client.release.set()
+
+        self.assertEqual(fake_client.async_stream_calls, 1)
+        self.assertTrue(fake_client.closed.is_set())
+        self.assertEqual(terminal["status"], "CANCELLED")
+        self.assertEqual([event["type"] for event in events].count("llm_delta"), 1)
+        self.assertNotIn("workflow_node_completed", [event["type"] for event in events])
+
+    def test_chatflow_v2_cancellation_closes_real_provider_async_http_stream(self) -> None:
+        model_config_id = _seed_live_model_config(model_id="runtime-v2-real-transport-cancellation-model")
+        response = _CancellableAsyncHttpStreamResponse()
+        http_client = _CancellableAsyncHttpClientFactory(response)
+
+        with patch("app.modules.chat.domain.llm_request.httpx.AsyncClient", http_client):
+            with TestClient(app) as client:
+                chatflow = _create_llm_chatflow(client, llm_config={"modelConfigId": model_config_id})
+                started = client.post(
+                    f"/api/v1/chatflows/{chatflow['id']}/runs",
+                    json={"input": {"sys.query": "cancel real async provider stream"}},
+                ).json()["data"]
+                try:
+                    self.assertTrue(response.first_delta_sent.wait(timeout=3), "real provider did not emit a delta")
+                    cancelled = client.post(f"/api/v1/runtime-runs/{started['runId']}/cancel")
+                    self.assertEqual(cancelled.status_code, 200, cancelled.text)
+                    self.assertTrue(response.closed.wait(timeout=1), "real provider HTTP stream was not closed")
+                    terminal = _wait_for_result(client, started["resultRef"], "CANCELLED")
+                    events = client.get(started["eventsRef"]).json()["data"]["list"]
+                finally:
+                    response.release.set()
+
+        self.assertEqual(http_client.stream_count, 1)
+        self.assertEqual(terminal["status"], "CANCELLED")
+        self.assertEqual([event["type"] for event in events].count("llm_delta"), 1)
+        self.assertNotIn("workflow_node_completed", [event["type"] for event in events])
+
+    def test_chatflow_v2_non_stream_provider_does_not_synthesize_token_delta(self) -> None:
+        model_config_id = _seed_live_model_config(model_id="runtime-v2-non-streaming-model")
+        fake_client = _NonStreamingOpenAIClient(_assistant_payload("final only"))
+
+        with patch("app.modules.workflow.domain.service.ProviderBackedOpenAIChatClient", lambda _config: fake_client):
+            with TestClient(app) as client:
+                chatflow = _create_llm_chatflow(client, llm_config={"modelConfigId": model_config_id})
+                started = client.post(
+                    f"/api/v1/chatflows/{chatflow['id']}/runs",
+                    json={"input": {"sys.query": "non-stream this"}},
+                ).json()["data"]
+                terminal = _wait_for_result(client, started["resultRef"], "SUCCEEDED")
+                events = client.get(started["eventsRef"]).json()["data"]["list"]
+
+        self.assertEqual(terminal["output"]["answer"], "final only")
+        self.assertFalse([event for event in events if event["type"] == "llm_delta"])
+        self.assertEqual(fake_client.captured_payload["model"], "runtime-v2-non-streaming-model")
 
     def test_chatflow_runs_v2_prefers_node_model_config_over_default_live_agent(self) -> None:
         model_config_id = _seed_live_model_config(model_id="runtime-v2-direct-node-model")
@@ -418,6 +558,130 @@ class _FallbackOpenAIChatClient(FakeOpenAIChatClient):
         if payload.get("model") == "runtime-v2-primary-model":
             raise httpx.ConnectError("runtime-v2 primary unavailable")
         return _assistant_payload("RUNTIME_V2_FALLBACK_OK")
+
+
+class _BlockingStreamingOpenAIClient(FakeOpenAIChatClient):
+    def __init__(self, *, response_payload: dict[str, Any], chunks: list[str]) -> None:
+        super().__init__(response_payload=response_payload)
+        self._chunks = chunks
+        self.first_delta_sent = threading.Event()
+        self.release_completion = threading.Event()
+
+    def stream_complete(self, payload: dict[str, Any], on_delta=None) -> dict[str, Any]:
+        self.captured_payload = payload
+        self.captured_payloads.append(payload)
+        first, *rest = self._chunks
+        if on_delta is not None:
+            on_delta(first)
+        self.first_delta_sent.set()
+        if not self.release_completion.wait(timeout=3):
+            raise AssertionError("test did not release streaming provider completion")
+        if on_delta is not None:
+            for chunk in rest:
+                on_delta(chunk)
+        if self._response_payload is None:
+            raise AssertionError("streaming provider response payload is required")
+        return self._response_payload
+
+
+class _AsyncBlockingStreamingOpenAIClient:
+    def __init__(self, *, response_payload: dict[str, Any], chunks: list[str]) -> None:
+        self._response_payload = response_payload
+        self._chunks = chunks
+        self.first_delta_sent = threading.Event()
+        self.release_completion = threading.Event()
+        self.async_stream_calls = 0
+
+    def complete(self, _payload: dict[str, Any]) -> dict[str, Any]:
+        raise AssertionError("Runtime V2 must use the async provider stream")
+
+    async def stream_complete_async(self, _payload: dict[str, Any], on_delta=None) -> dict[str, Any]:
+        self.async_stream_calls += 1
+        first, *rest = self._chunks
+        if on_delta is not None:
+            on_delta(first)
+        self.first_delta_sent.set()
+        if not await asyncio.to_thread(self.release_completion.wait, 3):
+            raise AssertionError("test did not release async streaming provider completion")
+        if on_delta is not None:
+            for chunk in rest:
+                on_delta(chunk)
+        return self._response_payload
+
+
+class _CancellableAsyncStreamingOpenAIClient:
+    def __init__(self) -> None:
+        self.first_delta_sent = threading.Event()
+        self.release = threading.Event()
+        self.cancelled = threading.Event()
+        self.closed = threading.Event()
+        self.async_stream_calls = 0
+
+    async def stream_complete_async(self, _payload: dict[str, Any], on_delta=None) -> dict[str, Any]:
+        self.async_stream_calls += 1
+        if on_delta is not None:
+            on_delta("first ")
+        self.first_delta_sent.set()
+        try:
+            await asyncio.to_thread(self.release.wait, 3)
+        except asyncio.CancelledError:
+            self.cancelled.set()
+            raise
+        finally:
+            self.closed.set()
+        return _assistant_payload("should not complete")
+
+
+class _CancellableAsyncHttpClientFactory:
+    def __init__(self, response: "_CancellableAsyncHttpStreamResponse") -> None:
+        self._response = response
+        self.stream_count = 0
+
+    def __call__(self, **_kwargs: object) -> "_CancellableAsyncHttpClientFactory":
+        return self
+
+    async def __aenter__(self) -> "_CancellableAsyncHttpClientFactory":
+        return self
+
+    async def __aexit__(self, *_args: object) -> None:
+        return None
+
+    def stream(self, *_args: object, **_kwargs: object) -> "_CancellableAsyncHttpStreamResponse":
+        self.stream_count += 1
+        return self._response
+
+
+class _CancellableAsyncHttpStreamResponse:
+    def __init__(self) -> None:
+        self.first_delta_sent = threading.Event()
+        self.release = threading.Event()
+        self.closed = threading.Event()
+        self.status_code = 200
+
+    async def __aenter__(self) -> "_CancellableAsyncHttpStreamResponse":
+        return self
+
+    async def __aexit__(self, *_args: object) -> None:
+        self.closed.set()
+
+    async def aiter_lines(self):
+        yield 'data: {"choices":[{"delta":{"content":"first "}}]}'
+        self.first_delta_sent.set()
+        await asyncio.to_thread(self.release.wait, 3)
+        yield "data: [DONE]"
+
+    async def aread(self) -> bytes:
+        return b""
+
+
+class _NonStreamingOpenAIClient:
+    def __init__(self, response_payload: dict[str, Any]) -> None:
+        self._response_payload = response_payload
+        self.captured_payload: dict[str, Any] = {}
+
+    def complete(self, payload: dict[str, Any]) -> dict[str, Any]:
+        self.captured_payload = payload
+        return self._response_payload
 
 
 if __name__ == "__main__":

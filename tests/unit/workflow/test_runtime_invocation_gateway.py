@@ -69,6 +69,30 @@ class RuntimeInvocationGatewayTest(unittest.TestCase):
         self.assertEqual(result["status"], "SUCCEEDED")
         self.assertEqual(result["result"]["output"], {"final": "resumed"})
 
+    def test_resume_and_stream_ref_prepares_and_enqueues_without_executing_run(self) -> None:
+        service = _FakeRuntimeV2Service()
+        enqueued: list[tuple[int, int, int, dict[str, object], str | None]] = []
+        gateway = RuntimeInvocationGateway(
+            service,
+            enqueue_background_resume=lambda owner_id, run_id, checkpoint_id, resume_data, idempotency_key: (
+                enqueued.append((owner_id, run_id, checkpoint_id, resume_data, idempotency_key))
+                or {"jobId": 902, "status": "QUEUED"}
+            ),
+        )
+
+        result = gateway.resume_and_stream_ref(
+            owner_id=42,
+            run_id=101,
+            resume_data={"answer": "yes"},
+            idempotency_key="resume-stream",
+        )
+
+        self.assertEqual(service.calls, [("prepare_resume", 101, "resume-stream")])
+        self.assertEqual(enqueued, [(42, 101, 501, {"answer": "yes"}, "resume-stream")])
+        self.assertEqual(result["status"], "INTERRUPTED")
+        self.assertEqual(result["streamRef"], "/api/v1/runtime-runs/101/events/stream?afterSequence=0")
+        self.assertEqual(result["backgroundJob"], {"jobId": 902, "status": "QUEUED"})
+
 
 class _FakeRuntimeV2Service:
     def __init__(self) -> None:
@@ -111,6 +135,19 @@ class _FakeRuntimeV2Service:
         self._status = "SUCCEEDED"
         self._output = {"final": "resumed"}
         return self.get_result(run_id)
+
+    def prepare_resume(self, run_id: int, idempotency_key: str | None = None) -> dict[str, object]:
+        self.calls.append(("prepare_resume", run_id, idempotency_key))
+        return {
+            "runId": run_id,
+            "checkpointId": 501,
+            "status": "INTERRUPTED",
+            "statusRef": f"/api/v1/runtime-runs/{run_id}",
+            "eventsRef": f"/api/v1/runtime-runs/{run_id}/events",
+            "eventStreamRef": f"/api/v1/runtime-runs/{run_id}/events/stream?afterSequence=0",
+            "nodesRef": f"/api/v1/runtime-runs/{run_id}/nodes",
+            "resultRef": f"/api/v1/runtime-runs/{run_id}/result",
+        }
 
     def get_result(self, run_id: int) -> dict[str, object]:
         return {

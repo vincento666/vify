@@ -62,6 +62,12 @@ const router = createRouter({
       component: () => import('@/views/aiAssistant/AiAssistantShell.vue'),
     },
     {
+      path: '/ai-assistant/usage',
+      name: 'HifyAiAssistantUsage',
+      meta: { aiAssistant: true },
+      component: () => import('@/views/aiAssistant/AiAssistantUsageDashboard.vue'),
+    },
+    {
       path: '/knowledge',
       name: 'HifyKnowledge',
       component: () => import('@/views/knowledge/KnowledgeList.vue'),

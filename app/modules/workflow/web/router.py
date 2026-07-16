@@ -1334,6 +1334,10 @@ def _chatflow_message_response(
         "transport": start.get("transport") or {},
         "error": str(result.get("error") or ""),
     }
+    failure = result.get("failure")
+    if isinstance(failure, Mapping):
+        response["failure"] = dict(failure)
+        response["errorCode"] = str(failure.get("code") or "")
     if start.get("versionId") is not None:
         response["versionId"] = start.get("versionId")
         response["version"] = start.get("version")
@@ -1414,7 +1418,7 @@ def _iter_runtime_v2_sse(
     emitted = 0
     heartbeats = 0
     while True:
-        rows = _runtime_v2_stream_events(
+        rows = runtime_v2_stream_events(
             service,
             event_stream_bus=event_stream_bus,
             run_id=run_id,
@@ -1437,7 +1441,7 @@ def _iter_runtime_v2_sse(
         time.sleep(heartbeat_ms / 1000)
 
 
-def _runtime_v2_stream_events(
+def runtime_v2_stream_events(
     service: ChatflowRuntimeV2Service,
     *,
     event_stream_bus: RuntimeEventStreamBus | None,
@@ -1454,11 +1458,16 @@ def _runtime_v2_stream_events(
                 count=count,
                 block_ms=0,
             )
-            if rows:
-                return rows
         except Exception:
-            pass
-    rows = list(service.list_events(run_id, after_sequence=after_sequence)["list"])
+            rows = []
+        if rows:
+            return _reconcile_runtime_v2_live_rows(
+                service,
+                run_id=run_id,
+                after_sequence=after_sequence,
+                rows=rows,
+            )
+    rows = _runtime_v2_durable_stream_rows(service, run_id=run_id, after_sequence=after_sequence)
     if rows:
         return rows
     if event_stream_bus is not None:
@@ -1469,11 +1478,68 @@ def _runtime_v2_stream_events(
                 count=count,
                 block_ms=heartbeat_ms,
             )
-            if rows:
-                return rows
         except Exception:
-            pass
-    return list(service.list_events(run_id, after_sequence=after_sequence)["list"])
+            rows = []
+        if rows:
+            return _reconcile_runtime_v2_live_rows(
+                service,
+                run_id=run_id,
+                after_sequence=after_sequence,
+                rows=rows,
+            )
+    return _runtime_v2_durable_stream_rows(service, run_id=run_id, after_sequence=after_sequence)
+
+
+def _reconcile_runtime_v2_live_rows(
+    service: ChatflowRuntimeV2Service,
+    *,
+    run_id: int,
+    after_sequence: int,
+    rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    ordered = _ordered_runtime_v2_stream_rows(rows)
+    if not _runtime_v2_stream_has_sequence_gap(ordered, after_sequence=after_sequence):
+        return ordered
+    durable_rows = _runtime_v2_durable_stream_rows(
+        service,
+        run_id=run_id,
+        after_sequence=after_sequence,
+        fresh=True,
+    )
+    return durable_rows or ordered
+
+
+def _runtime_v2_durable_stream_rows(
+    service: ChatflowRuntimeV2Service,
+    *,
+    run_id: int,
+    after_sequence: int,
+    fresh: bool = False,
+) -> list[dict[str, Any]]:
+    if fresh:
+        fresh_reader = getattr(service, "list_events_fresh", None)
+        if callable(fresh_reader):
+            return _ordered_runtime_v2_stream_rows(list(fresh_reader(run_id, after_sequence=after_sequence)["list"]))
+    return _ordered_runtime_v2_stream_rows(list(service.list_events(run_id, after_sequence=after_sequence)["list"]))
+
+
+def _ordered_runtime_v2_stream_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    rows_by_sequence: dict[int, dict[str, Any]] = {}
+    for row in rows:
+        rows_by_sequence.setdefault(int(row["sequence"]), row)
+    return [rows_by_sequence[sequence] for sequence in sorted(rows_by_sequence)]
+
+
+def _runtime_v2_stream_has_sequence_gap(rows: list[dict[str, Any]], *, after_sequence: int) -> bool:
+    expected_sequence = after_sequence + 1
+    for row in rows:
+        if int(row["sequence"]) != expected_sequence:
+            return True
+        expected_sequence += 1
+    return False
+
+
+_runtime_v2_stream_events = runtime_v2_stream_events
 
 
 def _attach_runtime_v2_transport(

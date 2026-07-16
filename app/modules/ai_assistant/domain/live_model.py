@@ -6,6 +6,7 @@ import os
 from typing import Any, Callable, Protocol
 
 from app.core.config import Settings
+from app.modules.ai_assistant.domain.model_usage import normalize_model_usage
 from app.modules.ai_assistant.domain.tools import ToolRegistry
 from app.modules.chat.domain.llm_request import (
     ChatRequestMessage,
@@ -33,7 +34,7 @@ class LivePlannerDecision:
     thought_summary: str
     stream_chunks: list[str]
     tool_calls: list[dict[str, Any]]
-    usage: dict[str, int]
+    usage: dict[str, Any]
     model: str
     provider: str = "openrouter"
     streaming: bool = False
@@ -76,6 +77,10 @@ class QwenLivePlanner:
     def model(self) -> str:
         return self._config.model
 
+    @property
+    def provider(self) -> str:
+        return self._config.provider
+
     def with_config(self, config: LivePlannerConfig) -> QwenLivePlanner:
         reusable_client = None if isinstance(self._client, ProviderBackedOpenAIChatClient) else self._client
         return QwenLivePlanner(config, client=reusable_client, builder=self._builder)
@@ -92,8 +97,13 @@ class QwenLivePlanner:
             on_stream_chunk=on_stream_chunk,
         )
 
-    def initial_messages(self, user_message: str) -> list[ChatRequestMessage]:
-        return [
+    def initial_messages(
+        self,
+        user_message: str,
+        *,
+        memory_text: str = "",
+    ) -> list[ChatRequestMessage]:
+        messages = [
             ChatRequestMessage(
                 role="system",
                 content=(
@@ -111,8 +121,19 @@ class QwenLivePlanner:
                     "所有最终总结保持简洁、可回溯、说明已执行的读写/skill/tool/function call 结果。"
                 ),
             ),
-            ChatRequestMessage(role="user", content=user_message),
         ]
+        if memory_text.strip():
+            messages.append(
+                ChatRequestMessage(
+                    role="system",
+                    content=(
+                        "[working_memory:MEMORY.md rolling 30 days]\n"
+                        f"{memory_text.strip()}"
+                    ),
+                )
+            )
+        messages.append(ChatRequestMessage(role="user", content=user_message))
+        return messages
 
     def plan_messages(
         self,
@@ -177,7 +198,10 @@ class QwenLivePlanner:
             if on_stream_chunk:
                 on_stream_chunk(chunk, len(streamed_chunks))
 
-        return client.stream_complete(payload, on_delta=forward)  # type: ignore[attr-defined]
+        response = client.stream_complete(payload, on_delta=forward)
+        if not isinstance(response, dict):
+            raise RuntimeError("stream_complete must return a response object")
+        return response
 
 
 def create_qwen_live_planner(settings: Settings) -> QwenLivePlanner | None:
@@ -348,18 +372,29 @@ def _has_text_signal(value: str) -> bool:
     return bool(any(char.isalnum() or char == "_" or "\u4e00" <= char <= "\u9fff" for char in value))
 
 
-def _usage(response: dict[str, Any]) -> dict[str, int]:
+def _usage(response: dict[str, Any]) -> dict[str, Any]:
     usage = response.get("usage")
     if not isinstance(usage, dict):
-        return {"inputTokens": 0, "outputTokens": 0, "totalTokens": 0}
-    input_tokens = int(usage.get("prompt_tokens") or usage.get("input_tokens") or 0)
-    output_tokens = int(usage.get("completion_tokens") or usage.get("output_tokens") or 0)
-    total_tokens = int(usage.get("total_tokens") or input_tokens + output_tokens)
-    return {
-        "inputTokens": input_tokens,
-        "outputTokens": output_tokens,
-        "totalTokens": total_tokens,
-        "prompt_tokens": input_tokens,
-        "completion_tokens": output_tokens,
-        "total_tokens": total_tokens,
+        return {}
+    normalized = normalize_model_usage(usage)
+    payload: dict[str, Any] = {
+        "totalTokens": normalized.total_tokens,
+        "total_tokens": normalized.total_tokens,
     }
+    if normalized.input_tokens is not None:
+        payload["inputTokens"] = normalized.input_tokens
+        payload["prompt_tokens"] = normalized.input_tokens
+    if normalized.output_tokens is not None:
+        payload["outputTokens"] = normalized.output_tokens
+        payload["completion_tokens"] = normalized.output_tokens
+    for key, value in {
+        "cacheReadTokens": normalized.cache_read_tokens,
+        "cacheWriteTokens": normalized.cache_write_tokens,
+        "reasoningTokens": normalized.reasoning_tokens,
+        "providerCostUsd": (
+            str(normalized.provider_cost_usd) if normalized.provider_cost_usd is not None else None
+        ),
+    }.items():
+        if value is not None:
+            payload[key] = value
+    return payload
