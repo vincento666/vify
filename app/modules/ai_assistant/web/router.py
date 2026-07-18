@@ -154,13 +154,23 @@ def get_ai_assistant_service(
             memory_scope=memory_scope,
             extractor=extractor,
         )
+    child_execution_adapter_factory = getattr(
+        http_request.app.state,
+        "child_execution_adapter_factory",
+        None,
+    )
+    child_execution_adapter = (
+        child_execution_adapter_factory(session, request_context)
+        if child_execution_adapter_factory is not None
+        else None
+    )
     return AiAssistantHarnessService(
         AiAssistantRepository(
             session,
             access_scope=access_scope,
         ),
         tool_registry=ToolRegistry.with_builtin_tools(
-            child_execution_adapter=getattr(http_request.app.state, "child_execution_adapter", None),
+            child_execution_adapter=child_execution_adapter,
         ),
         approval_policy=ApprovalPolicy(environment=settings.deployment_environment),
         live_planner=create_qwen_live_planner(settings),
@@ -830,6 +840,7 @@ def get_run_result(
 @router.post("/runs/{run_id}/worker/process")
 def process_run_worker(
     run_id: int,
+    http_request: Request,
     request: ProcessAiAssistantRunWorkerRequest | None = None,
     service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
     session: Session = Depends(get_session),
@@ -851,6 +862,11 @@ def process_run_worker(
         build_ai_assistant_runtime_job_worker(
             session,
             worker_id=f"api-compat-ai-assistant-{run_id}",
+            child_execution_adapter_factory=getattr(
+                http_request.app.state,
+                "child_execution_adapter_factory",
+                None,
+            ),
         ).run_once(job_id=int(job["id"]))
     run = service.get_run(run_id)
     if run is None:

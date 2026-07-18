@@ -1,0 +1,30 @@
+Slice: 226.6 stable activity and real child lifecycle
+Date: 2026-07-18
+State: GREEN candidate
+
+Exact foundation/provider/runtime verifier:
+20 passed
+
+Final affected AI Assistant regression:
+286 passed, 3 skipped, 21 subtests passed
+
+Final affected Customer Assistant regression after tenant+org hardening:
+156 passed, 1 skipped, 14 subtests passed
+
+Frontend activity/timeline/shell/API unit regression:
+49 passed
+
+Frontend production build:
+PASS
+
+Ruff and git diff check:
+All checks passed
+
+Live provider calls:
+0
+
+Browser UAT and rem gate:
+N/A for this non-visual foundation slice; mandatory in 226.7.
+
+Production migration/deploy:
+Not executed; no schema change and not authorized.

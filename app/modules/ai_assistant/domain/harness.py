@@ -12,6 +12,7 @@ import re
 from time import perf_counter
 from typing import Any, Callable, cast
 
+from app.modules.agent_execution import tool_activity_correlation_ids
 from app.modules.agent_harness import (
     AgentHarness,
     HarnessDecision,
@@ -1085,6 +1086,11 @@ class AiAssistantHarnessService:
         if lock_result is not None:
             return lock_result
         started_step = self._mark_plan_step_started(run_id, tool_name)
+        tool_activity_correlation = tool_activity_correlation_ids(
+            run_id=run_id,
+            tool_name=tool_name,
+            step=started_step,
+        )
         self._repository.append_event(
             run_id=run_id,
             session_id=session_id,
@@ -1106,6 +1112,7 @@ class AiAssistantHarnessService:
             visible_title="工具开始",
             visible_summary=f"{_tool_label(tool_name)} 已开始执行。",
             payload={"toolName": tool_name, "input": payload},
+            correlation_ids=tool_activity_correlation,
         )
         dispatch_result = self._dispatch_tool(
             run_id=run_id,
@@ -1125,6 +1132,13 @@ class AiAssistantHarnessService:
             visible_title="工具输出",
             visible_summary=_tool_result_visible_summary(tool_result.output),
             payload={"toolName": tool_name, "output": tool_result.output},
+            correlation_ids=tool_activity_correlation,
+        )
+        self._append_subagent_execution_event(
+            run_id=run_id,
+            session_id=session_id,
+            output=tool_result.output,
+            parent_activity_id=str(tool_activity_correlation["activityId"]),
         )
         tool_call = self._repository.record_tool_call(
             run_id=run_id,
@@ -1155,6 +1169,7 @@ class AiAssistantHarnessService:
                 tool_name=tool_name,
                 tool_call_payload=tool_call_payload,
                 tool_call_id=int(tool_call["id"]),
+                activity_correlation=tool_activity_correlation,
             )
             return self._recover_or_finalize_failed_tool_observation(
                 run_id=run_id,
@@ -1172,6 +1187,7 @@ class AiAssistantHarnessService:
             visible_summary=f"{_tool_label(tool_name)} 已完成。",
             payload={"toolName": tool_name, "status": tool_result.status},
             tool_call_id=int(tool_call["id"]),
+            correlation_ids=tool_activity_correlation,
         )
         final_answer = _tool_execution_answer([tool_call_payload])
         completed_step = self._mark_plan_step_completed(run_id, tool_name, final_answer)
@@ -1944,6 +1960,7 @@ class AiAssistantHarnessService:
     ) -> list[dict[str, Any]] | HarnessTurnResult:
         acquired_locks_by_index: list[list[ResourceLockAcquireResult]] = []
         sandbox_runtimes_by_index: list[SessionSandboxRuntime] = []
+        activity_correlations_by_index: list[dict[str, Any]] = []
         for index, item in enumerate(batch.items):
             manifest, gate_result, sandbox_runtime = self._evaluate_tool_security(
                 run_id=run_id,
@@ -1970,6 +1987,13 @@ class AiAssistantHarnessService:
             acquired_locks_by_index.append(acquired_locks)
             sandbox_runtimes_by_index.append(sandbox_runtime)
             started_step = self._mark_plan_step_started(run_id, item.tool_name)
+            activity_correlation = tool_activity_correlation_ids(
+                run_id=run_id,
+                tool_name=item.tool_name,
+                step=started_step,
+                scheduler=batch.item_metadata[index],
+            )
+            activity_correlations_by_index.append(activity_correlation)
             self._repository.append_event(
                 run_id=run_id,
                 session_id=session_id,
@@ -1995,7 +2019,7 @@ class AiAssistantHarnessService:
                     "input": item.tool_input,
                     "scheduler": batch.item_metadata[index],
                 },
-                correlation_ids={"scheduler": batch.item_metadata[index]},
+                correlation_ids=activity_correlation,
             )
         with ThreadPoolExecutor(max_workers=max(1, len(batch.items))) as executor:
             futures = [
@@ -2016,6 +2040,7 @@ class AiAssistantHarnessService:
         first_failed_tool: tuple[str, dict[str, Any]] | None = None
         for index, (item, dispatch_result) in enumerate(zip(batch.items, dispatch_results, strict=True)):
             scheduler_metadata = batch.item_metadata[index]
+            activity_correlation = activity_correlations_by_index[index]
             self._annotate_tool_result_with_locks(dispatch_result, acquired_locks_by_index[index])
             tool_result = dispatch_result["tool_result"]
             self._repository.append_event(
@@ -2025,7 +2050,13 @@ class AiAssistantHarnessService:
                 visible_title="工具输出",
                 visible_summary=_tool_result_visible_summary(tool_result.output),
                 payload={"toolName": item.tool_name, "output": tool_result.output, "scheduler": scheduler_metadata},
-                correlation_ids={"scheduler": scheduler_metadata},
+                correlation_ids=activity_correlation,
+            )
+            self._append_subagent_execution_event(
+                run_id=run_id,
+                session_id=session_id,
+                output=tool_result.output,
+                parent_activity_id=str(activity_correlation["activityId"]),
             )
             tool_call = self._repository.record_tool_call(
                 run_id=run_id,
@@ -2062,6 +2093,7 @@ class AiAssistantHarnessService:
                     tool_call_payload=tool_call_payload,
                     tool_call_id=int(tool_call["id"]),
                     scheduler_metadata=scheduler_metadata,
+                    activity_correlation=activity_correlation,
                 )
                 recorded.append(tool_call_payload)
                 if first_failed_tool is None:
@@ -2075,7 +2107,7 @@ class AiAssistantHarnessService:
                 visible_summary=f"{_tool_label(item.tool_name)} 已完成。",
                 payload={"toolName": item.tool_name, "status": tool_result.status, "scheduler": scheduler_metadata},
                 tool_call_id=int(tool_call["id"]),
-                correlation_ids={"scheduler": scheduler_metadata},
+                correlation_ids=activity_correlation,
             )
             completed_step = self._mark_plan_step_completed(run_id, item.tool_name)
             self._repository.append_event(
@@ -2148,6 +2180,12 @@ class AiAssistantHarnessService:
         if lock_result is not None:
             return lock_result
         started_step = self._mark_plan_step_started(run_id, tool_name)
+        tool_activity_correlation = tool_activity_correlation_ids(
+            run_id=run_id,
+            tool_name=tool_name,
+            step=started_step,
+            scheduler=scheduler_metadata,
+        )
         self._repository.append_event(
             run_id=run_id,
             session_id=session_id,
@@ -2169,7 +2207,7 @@ class AiAssistantHarnessService:
             visible_title="工具开始",
             visible_summary=f"{_tool_label(tool_name)} 已开始执行。",
             payload={"toolName": tool_name, "input": payload, "scheduler": scheduler_metadata},
-            correlation_ids={"scheduler": scheduler_metadata},
+            correlation_ids=tool_activity_correlation,
         )
         dispatch_result = self._dispatch_tool(
             run_id=run_id,
@@ -2189,7 +2227,13 @@ class AiAssistantHarnessService:
             visible_title="工具输出",
             visible_summary=_tool_result_visible_summary(tool_result.output),
             payload={"toolName": tool_name, "output": tool_result.output, "scheduler": scheduler_metadata},
-            correlation_ids={"scheduler": scheduler_metadata},
+            correlation_ids=tool_activity_correlation,
+        )
+        self._append_subagent_execution_event(
+            run_id=run_id,
+            session_id=session_id,
+            output=tool_result.output,
+            parent_activity_id=str(tool_activity_correlation["activityId"]),
         )
         tool_call = self._repository.record_tool_call(
             run_id=run_id,
@@ -2226,6 +2270,7 @@ class AiAssistantHarnessService:
                 tool_call_payload=tool_call_payload,
                 tool_call_id=int(tool_call["id"]),
                 scheduler_metadata=scheduler_metadata,
+                activity_correlation=tool_activity_correlation,
             )
             if failed_observation_mode == "replan":
                 self._append_failed_observation_forwarded_for_replan(
@@ -2252,7 +2297,7 @@ class AiAssistantHarnessService:
             visible_summary=f"{_tool_label(tool_name)} 已完成。",
             payload={"toolName": tool_name, "status": tool_result.status, "scheduler": scheduler_metadata},
             tool_call_id=int(tool_call["id"]),
-            correlation_ids={"scheduler": scheduler_metadata},
+            correlation_ids=tool_activity_correlation,
         )
         completed_step = self._mark_plan_step_completed(run_id, tool_name)
         self._repository.append_event(
@@ -3939,6 +3984,7 @@ class AiAssistantHarnessService:
         tool_call_id: int,
         scheduler_metadata: dict[str, Any] | None = None,
         approval_resumed: bool = False,
+        activity_correlation: dict[str, Any] | None = None,
     ) -> None:
         payload: dict[str, Any] = {
             "toolName": tool_name,
@@ -3949,6 +3995,9 @@ class AiAssistantHarnessService:
             payload["scheduler"] = scheduler_metadata
         if approval_resumed:
             payload["approvalResumed"] = True
+        correlation_ids = dict(activity_correlation or {})
+        if scheduler_metadata and "scheduler" not in correlation_ids:
+            correlation_ids["scheduler"] = scheduler_metadata
         self._repository.append_event(
             run_id=run_id,
             session_id=session_id,
@@ -3958,7 +4007,77 @@ class AiAssistantHarnessService:
             payload=payload,
             status="FAILED",
             tool_call_id=tool_call_id,
-            correlation_ids={"scheduler": scheduler_metadata} if scheduler_metadata else None,
+            correlation_ids=correlation_ids or None,
+        )
+
+    def _append_subagent_execution_event(
+        self,
+        *,
+        run_id: int,
+        session_id: int,
+        output: dict[str, Any],
+        parent_activity_id: str,
+    ) -> None:
+        execution_id = str(output.get("executionId") or output.get("subAgentRunId") or "").strip()
+        status = str(output.get("status") or "").strip().lower()
+        status_ref = str(output.get("statusRef") or "").strip()
+        event_stream_ref = str(output.get("eventStreamRef") or "").strip()
+        result_ref = str(output.get("resultRef") or "").strip()
+        if (
+            not execution_id
+            or status not in {
+                "queued",
+                "running",
+                "waiting_approval",
+                "completed",
+                "failed",
+                "cancelled",
+            }
+            or not status_ref
+            or not event_stream_ref
+            or not result_ref
+        ):
+            return
+        event_suffix = {
+            "queued": "started",
+            "running": "started",
+            "waiting_approval": "waiting",
+            "completed": "completed",
+            "failed": "failed",
+            "cancelled": "cancelled",
+        }[status]
+        display_name = str(output.get("displayName") or output.get("agentType") or "子智能体").strip()
+        current_summary = str(output.get("currentSummary") or "").strip()
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type=f"subagent.execution_{event_suffix}",
+            visible_title=display_name,
+            visible_summary=current_summary or f"{display_name}状态：{status}",
+            payload={
+                "executionId": execution_id,
+                "parentExecutionId": f"ai-assistant-run-{run_id}",
+                "agentType": str(output.get("agentType") or ""),
+                "displayName": display_name,
+                "status": status,
+                "currentSummary": current_summary,
+                "startedAt": output.get("startedAt"),
+                "completedAt": output.get("completedAt"),
+                "statusRef": status_ref,
+                "eventStreamRef": event_stream_ref,
+                "resultRef": result_ref,
+                "scope": dict(output.get("scope") or {}),
+                "audit": dict(output.get("audit") or {}),
+                "runtimeRefs": dict(output.get("runtimeRefs") or output.get("workerAsyncRefs") or {}),
+                "cancellation": dict(output.get("cancellation") or {}),
+            },
+            status=status.upper(),
+            correlation_ids={
+                "activityId": f"subagent:{execution_id}",
+                "activityKind": "subagent",
+                "subagentExecutionId": execution_id,
+                "parentActivityId": parent_activity_id,
+            },
         )
 
     def deny(
@@ -4108,6 +4227,11 @@ class AiAssistantHarnessService:
                 "scheduler": {},
             }
         started_step = self._mark_plan_step_started(run_id, tool_name)
+        tool_activity_correlation = tool_activity_correlation_ids(
+            run_id=run_id,
+            tool_name=tool_name,
+            step=started_step,
+        )
         self._repository.append_event(
             run_id=run_id,
             session_id=session_id,
@@ -4129,6 +4253,7 @@ class AiAssistantHarnessService:
             visible_title="工具开始",
             visible_summary=f"{_tool_label(tool_name)} 已开始执行。",
             payload={"toolName": tool_name, "input": payload, "approvalResumed": True},
+            correlation_ids=tool_activity_correlation,
         )
         dispatch_result = self._dispatch_tool(
             run_id=run_id,
@@ -4148,6 +4273,13 @@ class AiAssistantHarnessService:
             visible_title="工具输出",
             visible_summary=_tool_result_visible_summary(tool_result.output),
             payload={"toolName": tool_name, "output": tool_result.output, "approvalResumed": True},
+            correlation_ids=tool_activity_correlation,
+        )
+        self._append_subagent_execution_event(
+            run_id=run_id,
+            session_id=session_id,
+            output=tool_result.output,
+            parent_activity_id=str(tool_activity_correlation["activityId"]),
         )
         tool_call = self._repository.record_tool_call(
             run_id=run_id,
@@ -4187,6 +4319,7 @@ class AiAssistantHarnessService:
                 },
                 status="FAILED",
                 tool_call_id=int(tool_call["id"]),
+                correlation_ids=tool_activity_correlation,
             )
             self._append_task_updated(
                 run_id=run_id,
@@ -4203,6 +4336,7 @@ class AiAssistantHarnessService:
             visible_summary=f"{_tool_label(tool_name)} 已完成。",
             payload={"toolName": tool_name, "status": tool_result.status, "approvalResumed": True},
             tool_call_id=int(tool_call["id"]),
+            correlation_ids=tool_activity_correlation,
         )
         completed_step = self._mark_plan_step_completed(run_id, tool_name)
         self._repository.append_event(

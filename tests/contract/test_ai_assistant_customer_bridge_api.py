@@ -36,14 +36,14 @@ class AiAssistantCustomerBridgeApiContractTest(unittest.TestCase):
         app.dependency_overrides.pop(get_settings, None)
         self._engine.dispose()
 
-    def test_link_only_child_reference_adapter_is_not_registered_without_scope_authorization(
+    def test_persisted_child_execution_adapter_is_registered_by_composition_root(
         self,
     ) -> None:
         with TestClient(app) as client:
             tools = client.get("/api/v1/ai-assistant/tools")
 
         self.assertEqual(tools.status_code, 200, tools.text)
-        self.assertNotIn(
+        self.assertIn(
             "customer_assistant_subagent_bridge",
             [tool["name"] for tool in tools.json()["data"]["list"]],
         )

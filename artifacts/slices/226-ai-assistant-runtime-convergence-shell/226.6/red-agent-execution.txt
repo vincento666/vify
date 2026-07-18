@@ -1,0 +1,19 @@
+Slice: 226.6 public Agent Execution contract
+Date: 2026-07-18
+
+RED command:
+rtk uv run pytest -q tests/contract/agent_execution/test_public_lifecycle.py
+
+Observable RED:
+- AgentExecutionStatus and SubagentExecutionRef were absent from the public
+  module;
+- after the initial DTO existed, AgentExecutionCapabilities,
+  SubagentExecutionProvider, provider operations, and lifecycle transition
+  errors were still absent.
+
+Required behavior:
+- one product-neutral provider Interface exposes spawn/attach/observe/cancel
+  with explicit capability flags;
+- terminal lifecycle state cannot regress without explicit reopen;
+- provider, child identity, scope, audit, status/event/result refs and
+  capabilities remain in one immutable SubagentExecutionRef.

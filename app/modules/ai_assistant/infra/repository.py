@@ -13,6 +13,7 @@ from sqlalchemy.dialects.mysql import insert as mysql_insert
 
 from app.core.database import Base
 from app.core.db_write import insert_and_fetch
+from app.modules.agent_execution import build_activity_correlation_ids
 from app.modules.ai_assistant.domain.access_scope import (
     AiAssistantAccessScope,
     local_ai_assistant_scope,
@@ -1786,7 +1787,14 @@ class AiAssistantRepository:
                 "visible_title": visible_title,
                 "visible_summary": visible_summary,
                 "payload": payload or {},
-                "correlation_ids": correlation_ids or {},
+                "correlation_ids": build_activity_correlation_ids(
+                    run_id=run_id,
+                    event_type=event_type,
+                    payload=payload,
+                    task_id=task_id,
+                    tool_call_id=tool_call_id,
+                    provided=correlation_ids,
+                ),
                 "deleted": False,
                 "created_at": now,
                 "updated_at": now,

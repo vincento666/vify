@@ -14,6 +14,9 @@ from app.modules.ai_assistant.web.router import router as ai_assistant_router
 from app.modules.audit.web.router import router as audit_router
 from app.modules.chat.web.router import router as chat_router
 from app.modules.customer_assistant.web.router import router as customer_assistant_router
+from app.modules.customer_assistant.harness_adapter import (
+    create_customer_assistant_execution_adapter,
+)
 from app.modules.evaluation.web.router import case_router as eval_case_router
 from app.modules.evaluation.web.router import evaluator_router
 from app.modules.evaluation.web.router import experiment_router
@@ -61,6 +64,7 @@ def should_check_database_schema_on_startup(current_settings: object) -> bool:
 
 
 app = FastAPI(title=settings.app_name, version="0.0.1", lifespan=lifespan)
+app.state.child_execution_adapter_factory = create_customer_assistant_execution_adapter
 register_exception_handlers(app)
 app.include_router(health_router)
 app.include_router(runtime_router)

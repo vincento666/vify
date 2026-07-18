@@ -11,7 +11,7 @@ import subprocess
 from time import perf_counter
 from typing import Any, Callable
 
-from app.modules.agent_execution import ChildExecutionReferenceAdapter
+from app.modules.agent_execution import SubagentExecutionProvider
 from app.modules.ai_assistant.domain import file_workspace
 
 
@@ -53,7 +53,7 @@ class ToolRegistry:
     def with_builtin_tools(
         cls,
         *,
-        child_execution_adapter: ChildExecutionReferenceAdapter | None = None,
+        child_execution_adapter: SubagentExecutionProvider | None = None,
     ) -> ToolRegistry:
         echo_manifest = ToolManifest(
             name="echo_context",
@@ -175,10 +175,10 @@ def _blocked_write(_payload: dict[str, Any]) -> ToolResult:
     return ToolResult(status="BLOCKED", output={"status": "BLOCKED"})
 
 
-def _child_execution_manifest(adapter: ChildExecutionReferenceAdapter) -> ToolManifest:
+def _child_execution_manifest(adapter: SubagentExecutionProvider) -> ToolManifest:
     return ToolManifest(
-        name=adapter.tool_name,
-        description=adapter.description,
+        name=f"{adapter.provider}_subagent_bridge",
+        description=f"附加并读取已持久化的{adapter.display_name}子任务生命周期。",
         input_schema={
             "type": "object",
             "properties": {
@@ -192,40 +192,85 @@ def _child_execution_manifest(adapter: ChildExecutionReferenceAdapter) -> ToolMa
             "type": "object",
             "properties": {
                 "agentType": {"type": "string"},
+                "provider": {"type": "string"},
+                "executionId": {"type": "string"},
+                "parentExecutionId": {"type": ["string", "null"]},
+                "childRunId": {"type": "string"},
                 "subAgentRunId": {"type": "string"},
+                "status": {"type": "string"},
+                "statusRef": {"type": "string"},
                 "eventStreamRef": {"type": "string"},
                 "resultRef": {"type": "string"},
+                "scope": {"type": "object"},
+                "audit": {"type": "object"},
+                "capabilities": {"type": "object"},
+                "runtimeRefs": {"type": "object"},
                 "workerAsyncRefs": {"type": "object"},
                 "cancellation": {"type": "object"},
             },
-            "required": ["agentType", "subAgentRunId", "eventStreamRef", "resultRef"],
+            "required": [
+                "agentType",
+                "executionId",
+                "status",
+                "statusRef",
+                "eventStreamRef",
+                "resultRef",
+            ],
         },
         timeout_ms=1000,
         risk_level=RiskLevel.READ,
-        read_resources=adapter.read_resources,
+        read_resources=[
+            f"{adapter.provider}:session:{{sessionId}}",
+            f"{adapter.provider}:run:{{runId}}",
+        ],
         write_resources=[],
         policy_ref="ai_assistant_child_execution_bridge_read_only",
     )
 
 
 def _child_execution_bridge(
-    adapter: ChildExecutionReferenceAdapter,
+    adapter: SubagentExecutionProvider,
     payload: dict[str, Any],
 ) -> ToolResult:
     session_id = int(payload.get("sessionId") or 0)
     run_id = int(payload.get("runId") or 0)
-    reference = adapter.resolve(session_id=session_id, run_id=run_id)
+    runtime = payload.get("_aiAssistantRuntime")
+    runtime_payload = runtime if isinstance(runtime, dict) else {}
+    parent_run_id = int(runtime_payload.get("runId") or 0)
+    reference = adapter.attach(
+        parent_execution_id=f"ai-assistant-run-{parent_run_id}",
+        session_id=session_id,
+        run_id=run_id,
+    )
     return ToolResult(
         status="COMPLETED",
         output={
             "agentType": reference.agent_type,
-            "status": "linked",
+            "provider": reference.provider,
+            "parentExecutionId": reference.parent_execution_id,
+            "childRunId": reference.child_run_id,
+            "displayName": reference.display_name,
+            "status": reference.status.value,
             "sessionId": session_id,
             "runId": run_id,
-            "subAgentRunId": reference.child_run_id,
+            "executionId": reference.execution_id,
+            "subAgentRunId": reference.execution_id,
+            "currentSummary": reference.current_summary,
+            "startedAt": reference.started_at,
+            "completedAt": reference.completed_at,
+            "statusRef": reference.status_ref,
             "eventStreamRef": reference.event_stream_ref,
             "resultRef": reference.result_ref,
-            "workerAsyncRefs": reference.worker_async_refs,
+            "scope": reference.scope,
+            "audit": reference.audit,
+            "runtimeRefs": reference.runtime_refs,
+            "workerAsyncRefs": reference.runtime_refs,
+            "capabilities": {
+                "spawn": reference.capabilities.spawn,
+                "attach": reference.capabilities.attach,
+                "observe": reference.capabilities.observe,
+                "cancel": reference.capabilities.cancel,
+            },
             "cancellation": reference.cancellation,
             "message": str(payload.get("message") or ""),
         },

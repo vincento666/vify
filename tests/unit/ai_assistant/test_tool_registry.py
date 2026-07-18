@@ -23,11 +23,37 @@ class AiAssistantToolRegistryTest(unittest.TestCase):
         self.assertEqual(result.output["context"]["tenant"], "demo")
 
     def test_customer_assistant_bridge_tool_is_read_only_and_returns_refs(self) -> None:
+        from app.modules.agent_execution import (
+            AgentExecutionCapabilities,
+            AgentExecutionStatus,
+            SubagentExecutionRef,
+        )
         from app.modules.ai_assistant.domain.tools import RiskLevel, ToolRegistry
-        from app.modules.customer_assistant.harness_adapter import CustomerAssistantExecutionAdapter
 
         registry = ToolRegistry.with_builtin_tools(
-            child_execution_adapter=CustomerAssistantExecutionAdapter(),
+            child_execution_adapter=_PersistedSubagentAdapter(
+                SubagentExecutionRef(
+                    execution_id="customer-assistant-run-34",
+                    provider="customer_assistant",
+                    child_run_id="34",
+                    agent_type="customer_assistant",
+                    display_name="客服助手",
+                    status=AgentExecutionStatus.RUNNING,
+                    current_summary="正在处理客服任务",
+                    status_ref="/api/v1/customer-assistant/runs/34",
+                    event_stream_ref="/api/v1/customer-assistant/sessions/12/events/stream",
+                    result_ref="/api/v1/customer-assistant/runs/34",
+                    capabilities=AgentExecutionCapabilities(
+                        spawn=False,
+                        attach=True,
+                        observe=True,
+                        cancel=False,
+                    ),
+                    scope={"tenantId": "tenant-a"},
+                    audit={"runId": 34},
+                    cancellation={"supported": False},
+                )
+            ),
         )
         manifest = registry.get_manifest("customer_assistant_subagent_bridge")
 
@@ -42,6 +68,8 @@ class AiAssistantToolRegistryTest(unittest.TestCase):
 
         self.assertEqual(result.status, "COMPLETED")
         self.assertEqual(result.output["agentType"], "customer_assistant")
+        self.assertEqual(result.output["status"], "running")
+        self.assertEqual(result.output["executionId"], "customer-assistant-run-34")
         self.assertEqual(result.output["subAgentRunId"], "customer-assistant-run-34")
         self.assertIn("/api/v1/customer-assistant/runs/34", result.output["resultRef"])
         self.assertFalse(result.output["cancellation"]["supported"])
@@ -95,6 +123,41 @@ class AiAssistantToolRegistryTest(unittest.TestCase):
         self.assertEqual(result.output["exitCode"], 0)
         self.assertIn("PASS controlled shell", result.output["stdout"])
         self.assertEqual(result.output["stderr"], "")
+
+
+class _PersistedSubagentAdapter:
+    def __init__(self, execution: object) -> None:
+        self._execution = execution
+
+    @property
+    def provider(self) -> str:
+        return "customer_assistant"
+
+    @property
+    def display_name(self) -> str:
+        return "客服助手"
+
+    @property
+    def capabilities(self) -> object:
+        return self._execution.capabilities
+
+    def spawn(self, *, parent_execution_id: str, input_payload: dict[str, object]) -> object:
+        raise NotImplementedError
+
+    def attach(
+        self,
+        *,
+        parent_execution_id: str,
+        session_id: int,
+        run_id: int,
+    ) -> object:
+        return self._execution
+
+    def observe(self, *, execution_id: str) -> object:
+        return self._execution
+
+    def cancel(self, *, execution_id: str, actor_id: str) -> object:
+        raise NotImplementedError
 
 
 if __name__ == "__main__":

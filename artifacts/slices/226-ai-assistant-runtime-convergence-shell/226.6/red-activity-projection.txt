@@ -1,0 +1,21 @@
+Slice: 226.6 stable RunActivity projection
+Date: 2026-07-18
+
+TDD preflight:
+rtk zsh loop/hooks/skill-preflight.sh --required tdd
+AVAILABLE tdd /Users/vincento/.agents/skills/tdd/SKILL.md
+
+RED command:
+cd frontend
+rtk npm run test:unit -- src/views/aiAssistant/aiAssistantActivity.test.ts
+
+Observable RED:
+- initial collection failed because ./aiAssistantActivity did not exist;
+- after the projection existed, the legacy-event contract still failed:
+  an event without correlationIds.activityId produced tool:2:41 instead of [].
+
+Required behavior:
+- appending lifecycle events must not change activity identity;
+- duplicate and reordered events must be idempotent and terminal-monotonic;
+- link-only child refs and legacy events without stable correlation must not
+  enter the RunActivity state machine.

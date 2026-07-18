@@ -1,6 +1,6 @@
 # Tasks — Spec 226
 
-Status: `226.5 complete / 226.6 ready`
+Status: `226.6 complete / 226.7 ready`
 
 Evidence root:
 `artifacts/slices/226-ai-assistant-runtime-convergence-shell/<slice>/`
@@ -101,18 +101,18 @@ Evidence for this contract round is the repository diff and final Contract Gate 
 
 ## 226.6 P2 Foundation — Stable Activity And Real Child Lifecycle
 
-- [ ] TDD preflight。
-- [ ] RED：sequence-range 变化导致 activity ID/override 丢失。
-- [ ] RED：duplicate/reordered event 导致重复或回退状态。
-- [ ] RED：link-only bridge 被错误投影为 running subagent。
-- [ ] 定义公共 Agent Execution Interface 与 dependency contract。
-- [ ] AI Assistant / Customer Assistant 两个 Adapter 通过同一 Interface。
-- [ ] 为 phase/step/tool/skill/approval/subagent 写稳定 correlation ID。
-- [ ] 实现纯 `RunActivity` projection 与 raw event detail refs。
-- [ ] 实现一层真实 `SubagentExecutionRef` adapter/lifecycle。
-- [ ] child lifecycle 有 scope、audit、status/result refs。
-- [ ] Unit / Contract / Integration evidence；UI N/A（foundation only）。
-- [ ] Checker / Reviewer / slice commit。
+- [x] TDD preflight。
+- [x] RED：sequence-range 变化导致 activity ID/override 丢失。
+- [x] RED：duplicate/reordered event 导致重复或回退状态。
+- [x] RED：link-only bridge 被错误投影为 running subagent。
+- [x] 定义公共 Agent Execution Interface 与 dependency contract。
+- [x] AI Assistant / Customer Assistant 两个 Adapter 通过同一 Interface。
+- [x] 为 phase/step/tool/skill/approval/subagent 写稳定 correlation ID。
+- [x] 实现纯 `RunActivity` projection 与 raw event detail refs。
+- [x] 实现一层真实 `SubagentExecutionRef` adapter/lifecycle。
+- [x] child lifecycle 有 scope、audit、status/result refs。
+- [x] Unit / Contract / Integration evidence；UI N/A（foundation only）。
+- [x] Checker / Reviewer / slice commit。
 
 ## 226.7 P2 — Hify Light Activity Shell
 

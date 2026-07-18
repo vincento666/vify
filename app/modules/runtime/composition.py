@@ -6,6 +6,9 @@ from app.modules.ai_assistant.runtime_job_worker import (
     fail_ai_assistant_runtime_job,
     register_ai_assistant_runtime_job_handler,
 )
+from app.modules.customer_assistant.harness_adapter import (
+    create_customer_assistant_execution_adapter,
+)
 from app.modules.runtime.domain.runtime_job_registry import RuntimeJobHandlerRegistry
 from app.modules.runtime.domain.runtime_job_worker import RuntimeJobWorker
 from app.modules.runtime.runtime_job_worker import build_registered_runtime_job_worker
@@ -33,7 +36,11 @@ def build_runtime_job_worker(
         event_stream_bus=event_stream_bus,
     )
     if "AI_ASSISTANT" in owner_types:
-        register_ai_assistant_runtime_job_handler(registry, session)
+        register_ai_assistant_runtime_job_handler(
+            registry,
+            session,
+            child_execution_adapter_factory=create_customer_assistant_execution_adapter,
+        )
     return build_registered_runtime_job_worker(
         session,
         registry=registry,

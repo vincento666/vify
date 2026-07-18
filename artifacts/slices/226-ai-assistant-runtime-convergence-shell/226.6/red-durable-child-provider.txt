@@ -1,0 +1,24 @@
+Slice: 226.6 durable child-provider composition and scope
+Date: 2026-07-18
+
+RED commands:
+rtk uv run pytest -q \
+  tests/integration/runtime_jobs/test_ai_assistant_runtime_job_handler.py::test_ai_assistant_runtime_job_handler_uses_composed_subagent_adapter
+
+rtk uv run pytest -q \
+  tests/integration/customer_assistant/test_harness_adapter.py::test_adapter_rejects_cross_org_reference_within_tenant
+
+Observable RED:
+- standalone worker builder rejected child_execution_adapter_factory, proving
+  HTTP-only composition was insufficient;
+- after the seam existed, a non-local durable worker lost the persisted org
+  and could not attach the authorized Customer child;
+- same-tenant, cross-org attach did not raise before the shared owner gate was
+  hardened.
+
+Required behavior:
+- HTTP compatibility path and standalone worker compose the same provider
+  without AI Assistant importing Customer Assistant;
+- worker restores tenant/user/workspace from the durable run and restores org
+  only from the verified principal snapshot;
+- Customer session owner gate rejects cross-tenant and cross-org child refs.

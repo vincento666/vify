@@ -14,6 +14,10 @@ from app.modules.customer_assistant.harness_adapter import (
     sub_agent_run_public_id,
     unsupported_cancellation,
 )
+from app.modules.customer_assistant.domain.access import (
+    ensure_customer_assistant_session_owner,
+    is_local_request_context as _is_local_request_context,
+)
 from app.modules.customer_assistant.domain.action_executor import MockActionExecutorRegistry
 from app.modules.customer_assistant.domain.actor import DEFAULT_CUSTOMER_ASSISTANT_ACTOR, CustomerAssistantActor
 from app.modules.customer_assistant.domain.controller import DeterministicTaskRecognitionController
@@ -1673,14 +1677,7 @@ class CustomerAssistantService:
         self._ensure_session_owner(session)
 
     def _ensure_session_owner(self, session: dict[str, Any]) -> None:
-        if self._request_context is None or _is_local_request_context(self._request_context):
-            return
-        context = dict(session.get("context_json") or {})
-        host_context = context.get("hostContext")
-        if not isinstance(host_context, dict):
-            raise BizError(ErrorCode.FORBIDDEN, "Customer assistant session belongs to another tenant")
-        if str(host_context.get("tenantId") or "") != self._request_context.tenant_id:
-            raise BizError(ErrorCode.FORBIDDEN, "Customer assistant session belongs to another tenant")
+        ensure_customer_assistant_session_owner(session, self._request_context)
 
     def _append_message_gateway_events(
         self,
@@ -2275,19 +2272,6 @@ def _operator_actor(request_context: RequestContext | None) -> str:
     if request_context is None or _is_local_request_context(request_context):
         return "operator"
     return str(request_context.actor_id or "operator").strip() or "operator"
-
-
-def _is_local_request_context(request_context: RequestContext) -> bool:
-    return (
-        request_context.source == "local"
-        and request_context.actor_id == "local-user"
-        and request_context.actor_name in {"local-user", "Local User"}
-        and request_context.tenant_id == "local"
-        and request_context.org_id == "local"
-        and not request_context.roles
-        and not request_context.permissions
-        and not request_context.request_id
-    )
 
 
 def _format_demo_story(row: dict[str, Any], repository: CustomerAssistantRepository) -> dict[str, Any]:
