@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from app.core.database import get_session_factory
 from app.main import app
 from app.modules.audit.infra.repository import AuditRepository
-from app.modules.workflow.infra.runtime_job_repository import RuntimeJobRepository
+from app.modules.runtime.infra.runtime_job_repository import RuntimeJobRepository
 from app.modules.workflow.web.router import get_chatflow_runtime_v2_service
 
 

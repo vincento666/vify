@@ -22,5 +22,16 @@ def test_runtime_job_worker_script_exposes_owner_selection() -> None:
     assert "--owner" in result.stdout
     assert "workflow" in result.stdout
     assert "chatflow" in result.stdout
+    assert "ai-assistant" in result.stdout
     assert "both" in result.stdout
+    assert "all" in result.stdout
     assert "--job-id" in result.stdout
+
+
+def test_runtime_job_worker_script_uses_application_composition_not_product_builders() -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    source = (repo_root / "scripts" / "runtime_job_worker.py").read_text(encoding="utf-8")
+
+    assert "from app.modules.runtime.composition import build_runtime_job_worker" in source
+    assert "app.modules.ai_assistant" not in source
+    assert "app.modules.workflow.runtime_job_worker" not in source

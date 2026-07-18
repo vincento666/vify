@@ -16,7 +16,7 @@ from app.modules.customer_assistant.domain.models import TaskItem, TaskStatus
 from app.modules.customer_assistant.domain.workers import ChatflowSopWorker
 from app.modules.customer_assistant.web import router as customer_assistant_router
 from app.modules.runtime_lab.web import router as runtime_lab_router
-from app.modules.workflow.infra.runtime_job_repository import RuntimeJobRepository
+from app.modules.runtime.infra.runtime_job_repository import RuntimeJobRepository
 from app.modules.workflow.runtime_job_worker import build_runtime_job_worker
 
 

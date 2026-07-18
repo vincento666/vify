@@ -7,8 +7,8 @@ import time
 
 from app.core.config import get_settings
 from app.core.database import get_session_factory, initialise_database
+from app.modules.runtime.composition import build_runtime_job_worker
 from app.modules.workflow.infra.realtime.redis_streams import RedisRuntimeEventStreamBus, RuntimeEventStreamBus
-from app.modules.workflow.runtime_job_worker import build_runtime_job_worker, default_runtime_job_worker_id
 
 
 def main() -> None:
@@ -16,7 +16,7 @@ def main() -> None:
     parser.add_argument("--once", action="store_true", help="Claim and run at most one job.")
     parser.add_argument(
         "--owner",
-        choices=("workflow", "chatflow", "both"),
+        choices=("workflow", "chatflow", "ai-assistant", "both", "all"),
         default="workflow",
         help="Runtime job owner type to claim.",
     )
@@ -27,7 +27,6 @@ def main() -> None:
     args = parser.parse_args()
 
     initialise_database()
-    worker_id = args.worker_id or default_runtime_job_worker_id()
     session_factory = get_session_factory()
     event_stream_bus = _runtime_event_stream_bus()
 
@@ -36,7 +35,7 @@ def main() -> None:
             worker = build_runtime_job_worker(
                 session,
                 owner=args.owner,
-                worker_id=worker_id,
+                worker_id=args.worker_id,
                 lease_seconds=args.lease_seconds,
                 event_stream_bus=event_stream_bus,
             )

@@ -484,7 +484,12 @@ def register_runtime_job_tables(metadata: sa.MetaData) -> None:
         sa.Column("payload", sa.JSON(), nullable=True),
         deleted_column(),
         *timestamps(),
-        sa.UniqueConstraint("run_id", "job_type", name="idx_runtime_jobs_run_type"),
+        sa.UniqueConstraint(
+            "owner_type",
+            "run_id",
+            "job_type",
+            name="idx_runtime_jobs_owner_run_type",
+        ),
         sa.Index("idx_runtime_jobs_run_id", "run_id"),
         sa.Index("idx_runtime_jobs_status_available", "status", "available_at"),
         sa.Index("idx_runtime_jobs_lease_expiry", "status", "lease_expires_at"),

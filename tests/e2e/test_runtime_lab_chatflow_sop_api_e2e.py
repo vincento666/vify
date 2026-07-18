@@ -20,7 +20,7 @@ from app.modules.workflow.domain.runtime_v2 import ChatflowRuntimeV2Service
 from app.modules.workflow.domain.service import WorkflowService
 from app.modules.workflow.infra.chatflow_state_repository import ChatflowStateRepository
 from app.modules.workflow.infra.repository import WorkflowRepository
-from app.modules.workflow.infra.runtime_job_repository import RuntimeJobRepository
+from app.modules.runtime.infra.runtime_job_repository import RuntimeJobRepository
 from app.modules.workflow.runtime_job_worker import build_runtime_job_worker
 
 

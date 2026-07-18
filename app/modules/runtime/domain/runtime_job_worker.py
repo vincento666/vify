@@ -52,7 +52,7 @@ class RuntimeJobWorker:
         self,
         *,
         job_repository: RuntimeJobRepositoryProtocol,
-        complete_run: Callable[[int], None],
+        complete_run: Callable[[int], None] | None = None,
         complete_job: Callable[[dict[str, Any]], None] | None = None,
         worker_id: str,
         lease_seconds: int = 300,
@@ -60,6 +60,8 @@ class RuntimeJobWorker:
         heartbeat_job: Callable[[int, str, str, int], None] | None = None,
         on_terminal_failure: Callable[[dict[str, Any], str], None] | None = None,
     ) -> None:
+        if complete_run is None and complete_job is None:
+            raise ValueError("RuntimeJobWorker requires a run or job handler")
         self._job_repository = job_repository
         self._complete_run = complete_run
         self._complete_job = complete_job
@@ -102,6 +104,7 @@ class RuntimeJobWorker:
             if self._complete_job is not None:
                 self._complete_job(job)
             else:
+                assert self._complete_run is not None
                 self._complete_run(int(job["run_id"]))
         except Exception as exc:
             failed = self._job_repository.fail(

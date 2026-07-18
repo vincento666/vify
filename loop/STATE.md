@@ -7,8 +7,8 @@
 - state: `READY`
 - contract: `specs/226-ai-assistant-runtime-convergence-shell/tasks.md`
 - ADR: `docs/adr/0005-ai-assistant-runtime-job-substrate.md`
-- active unit: `226.3`
-- implementation: 226.1/226.2 shared Agent Harness and both product Adapters green
+- active unit: `226.4`
+- implementation: 226.1-226.3 shared Harness, product Adapters, and neutral runtime job core green
 - external provider calls: 0
 - production/deploy/git delivery actions: none
 
@@ -63,12 +63,12 @@
 - Base: `e0c5eb356dcdad2945ebc1304c7c34b830ddcc0c`
 - Merge target: `not-authorized`
 - Contract 前已有多组变更；均保留。
-- 226.1 已 selective commit；226.2 进入 selective Slice Commit Gate。
+- 226.1/226.2 已 selective commit；226.3 进入 selective Slice Commit Gate。
 - 本合同没有 push、merge、deploy、provider call 或 migration apply。
 - Contract docs 不构成 Unit/Integration/E2E/Browser UAT PASS。
 
 ## Next Action
 
-226.2 Builder GREEN，Checker `ALL GREEN`，Reviewer `PASS`。完成 selective
-Slice Commit Gate 后，下一步执行 226.3 TDD preflight，并取得 runtime job
-owner collision、模块归属和 standalone handler RED。
+226.3 Builder GREEN，Checker `ALL GREEN`，Reviewer `PASS`。完成 selective
+Slice Commit Gate 后，下一步执行 226.4 TDD preflight，并取得 trusted
+principal、server-derived actor、policy fail-closed 和 secret-free payload RED。

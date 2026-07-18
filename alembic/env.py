@@ -14,6 +14,10 @@ from app.core.database_url_policy import assert_mysql8_connection, assert_mysql8
 from app.core.schema import register_baseline_tables
 
 config = context.config
+MYSQL_EXCLUDED_VECTOR_TABLES = {
+    "document_embedding",
+    "knowledge_faq_embedding",
+}
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -48,6 +52,23 @@ def _ensure_mysql_version_table(connection: object) -> None:
         connection.execute(sa.text("ALTER TABLE alembic_version MODIFY version_num VARCHAR(255) NOT NULL"))  # type: ignore[attr-defined]
 
 
+def _include_object(dialect_name: str):
+    def include(
+        _object: object,
+        name: str | None,
+        type_: str,
+        _reflected: bool,
+        _compare_to: object | None,
+    ) -> bool:
+        return not (
+            dialect_name == "mysql"
+            and type_ == "table"
+            and name in MYSQL_EXCLUDED_VECTOR_TABLES
+        )
+
+    return include
+
+
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
@@ -55,6 +76,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=_include_object(sa.engine.make_url(url).get_backend_name()),
     )
 
     with context.begin_transaction():
@@ -71,7 +93,11 @@ def run_migrations_online() -> None:
     with connectable.connect() as connection:
         assert_mysql8_connection(connection)
         _ensure_mysql_version_table(connection)
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            include_object=_include_object(connection.dialect.name),
+        )
 
         with context.begin_transaction():
             context.run_migrations()

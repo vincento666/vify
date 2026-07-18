@@ -1,14 +1,18 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-import socket
-
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
 from app.modules.agent.infra.repository import AgentRepository
 from app.modules.knowledge.api.facade import KnowledgeFacade
 from app.modules.mcp.api.facade import McpFacade
-from app.modules.workflow.domain.runtime_job_worker import RuntimeJobWorker
+from app.modules.runtime.domain.runtime_job_registry import RuntimeJobHandlerRegistry
+from app.modules.runtime.domain.runtime_job_worker import RuntimeJobWorker
+from app.modules.runtime.infra.runtime_job_repository import RuntimeJobRepository
+from app.modules.runtime.runtime_job_worker import (
+    build_registered_runtime_job_worker,
+    default_runtime_job_worker_id,
+    runtime_job_heartbeat,
+)
 from app.modules.workflow.domain.runtime_v2 import (
     ChatflowRuntimeV2Service,
     WorkflowRuntimeV2Service,
@@ -19,13 +23,8 @@ from app.modules.workflow.infra.chatflow_state_repository import ChatflowStateRe
 from app.modules.workflow.infra.publish_repository import WorkflowPublishRepository
 from app.modules.workflow.infra.realtime.redis_streams import RuntimeEventStreamBus
 from app.modules.workflow.infra.repository import WorkflowRepository
-from app.modules.workflow.infra.runtime_job_repository import RuntimeJobRepository
 from app.modules.workflow.domain.api_resource_service import ApiResourceService
 from app.modules.provider.api.facade import ProviderModelFacade
-
-
-def default_runtime_job_worker_id(prefix: str = "runtime-worker") -> str:
-    return f"{prefix}-{socket.gethostname()}"
 
 
 def build_workflow_runtime_job_worker(
@@ -50,7 +49,7 @@ def build_workflow_runtime_job_worker(
         worker_id=worker_id or default_runtime_job_worker_id(),
         lease_seconds=lease_seconds,
         owner_types=("WORKFLOW",),
-        heartbeat_job=_runtime_job_heartbeat(session),
+        heartbeat_job=runtime_job_heartbeat(session),
         on_terminal_failure=lambda job, error: fail_runtime_job(
             session,
             int(job["run_id"]),
@@ -84,7 +83,7 @@ def build_chatflow_runtime_job_worker(
         worker_id=worker_id or default_runtime_job_worker_id("chatflow-runtime-worker"),
         lease_seconds=lease_seconds,
         owner_types=("CHATFLOW",),
-        heartbeat_job=_runtime_job_heartbeat(session),
+        heartbeat_job=runtime_job_heartbeat(session),
         on_terminal_failure=lambda job, error: fail_runtime_job(
             session,
             int(job["run_id"]),
@@ -120,23 +119,19 @@ def build_runtime_job_worker(
         )
     if normalized_owner != "both":
         raise ValueError(f"Unsupported runtime job owner: {owner}")
-    return RuntimeJobWorker(
-        job_repository=RuntimeJobRepository(session),
-        complete_run=lambda run_id: complete_runtime_job(
-            session,
-            run_id,
-            event_stream_bus=event_stream_bus,
-        ),
-        complete_job=lambda job: complete_runtime_job(
-            session,
-            int(job["run_id"]),
-            job=job,
-            event_stream_bus=event_stream_bus,
-        ),
-        worker_id=worker_id or default_runtime_job_worker_id("runtime-worker-both"),
-        lease_seconds=lease_seconds,
+    registry = RuntimeJobHandlerRegistry()
+    register_workflow_runtime_job_handlers(
+        registry,
+        session,
         owner_types=("CHATFLOW", "WORKFLOW"),
-        heartbeat_job=_runtime_job_heartbeat(session),
+        event_stream_bus=event_stream_bus,
+    )
+    return build_registered_runtime_job_worker(
+        session,
+        registry=registry,
+        worker_id=worker_id or default_runtime_job_worker_id("runtime-worker-both"),
+        worker_id_prefix="runtime-worker-both",
+        lease_seconds=lease_seconds,
         on_terminal_failure=lambda job, error: fail_runtime_job(
             session,
             int(job["run_id"]),
@@ -147,22 +142,33 @@ def build_runtime_job_worker(
     )
 
 
-def _runtime_job_heartbeat(session: Session) -> Callable[[int, str, str, int], None]:
-    heartbeat_session_factory = sessionmaker(bind=session.get_bind(), expire_on_commit=False)
-
-    def heartbeat(job_id: int, worker_id: str, lease_token: str, lease_seconds: int) -> None:
-        heartbeat_session = heartbeat_session_factory()
-        try:
-            RuntimeJobRepository(heartbeat_session).heartbeat(
-                job_id,
-                worker_id=worker_id,
-                lease_token=lease_token,
-                lease_seconds=lease_seconds,
-            )
-        finally:
-            heartbeat_session.close()
-
-    return heartbeat
+def register_workflow_runtime_job_handlers(
+    registry: RuntimeJobHandlerRegistry,
+    session: Session,
+    *,
+    owner_types: tuple[str, ...],
+    event_stream_bus: RuntimeEventStreamBus | None = None,
+) -> None:
+    normalized_owners = {owner_type.strip().upper() for owner_type in owner_types}
+    if "CHATFLOW" in normalized_owners:
+        registry.register(
+            "CHATFLOW",
+            lambda job: complete_chatflow_runtime_job(
+                session,
+                int(job["run_id"]),
+                job=job,
+                event_stream_bus=event_stream_bus,
+            ),
+        )
+    if "WORKFLOW" in normalized_owners:
+        registry.register(
+            "WORKFLOW",
+            lambda job: complete_workflow_runtime_job(
+                session,
+                int(job["run_id"]),
+                event_stream_bus=event_stream_bus,
+            ),
+        )
 
 
 def complete_runtime_job(

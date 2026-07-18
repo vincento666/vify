@@ -12,7 +12,7 @@ from app.main import app
 from app.modules.customer_assistant.domain.models import TaskItem, TaskStatus
 from app.modules.customer_assistant.domain.workers import ChatflowSopWorker
 from app.modules.customer_assistant.web.router import build_customer_assistant_service, _customer_assistant_sop_adapter
-from app.modules.workflow.infra.runtime_job_repository import RuntimeJobRepository
+from app.modules.runtime.infra.runtime_job_repository import RuntimeJobRepository
 
 
 class CustomerAssistantWorkerDefaultAsyncRefsTest(unittest.TestCase):

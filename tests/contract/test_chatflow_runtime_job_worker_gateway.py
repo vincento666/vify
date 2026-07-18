@@ -11,7 +11,7 @@ from app.core.database import Base, get_session_factory
 from app.main import app
 from app.modules.workflow import runtime_job_worker as runtime_job_worker_module
 from app.modules.workflow.infra.realtime.redis_streams import InMemoryRuntimeEventStreamBus
-from app.modules.workflow.infra.runtime_job_repository import RuntimeJobRepository
+from app.modules.runtime.infra.runtime_job_repository import RuntimeJobRepository
 
 
 class ChatflowRuntimeJobWorkerGatewayTest(unittest.TestCase):

@@ -19,7 +19,7 @@ from app.modules.customer_assistant.domain.workers import StubQaWorker
 from app.modules.customer_assistant.web.router import _customer_assistant_sop_adapter
 from app.modules.customer_assistant.infra.repository import CustomerAssistantRepository
 from app.modules.workflow.runtime_job_worker import build_runtime_job_worker
-from app.modules.workflow.infra.runtime_job_repository import RuntimeJobRepository
+from app.modules.runtime.infra.runtime_job_repository import RuntimeJobRepository
 
 
 class ChatflowSopWorkerV2AdapterTest(unittest.TestCase):

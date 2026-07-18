@@ -5,7 +5,7 @@
     mode: Closed Loop
     contract: specs/226-ai-assistant-runtime-convergence-shell/tasks.md
     decision: docs/adr/0005-ai-assistant-runtime-job-substrate.md
-    active unit: 226.3
+    active unit: 226.4
     state: READY
     branch: codex/spec-226-agent-harness-convergence
 
@@ -63,11 +63,12 @@ durable `runtime_jobs` 的领域中立执行底座，补齐可信身份与 HA，
 
 ## Next Action
 
-执行 `tdd` preflight，取得 runtime job owner collision、runtime core 归属
-`workflow`、standalone registry 缺 AI Assistant handler 的可观察 RED。
+执行 `tdd` preflight，取得 production header 伪造 principal、body actor 成为
+审计真相、managed deny 被 approval mode 绕过、job payload secret 泄漏的
+可观察 RED。
 
 ## Previous Closed State
 
-226.1/226.2 已分别通过 Builder、Checker、Reviewer 和 selective Slice Commit
-Gate；历史 Runtime V2/Workflow、Spec-225、Spec 188/190 与 Spec 224 的行为和
-证据继续由各自 spec、artifact 与 git 历史承载，不再复制到 CURRENT。
+226.1/226.2/226.3 已分别通过 Builder、Checker、Reviewer 和 selective Slice
+Commit Gate；历史 Runtime V2/Workflow、Spec-225、Spec 188/190 与 Spec 224
+的行为和证据继续由各自 spec、artifact 与 git 历史承载，不再复制到 CURRENT。

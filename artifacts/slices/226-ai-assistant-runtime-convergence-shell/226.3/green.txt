@@ -1,0 +1,26 @@
+Slice: 226.3 domain-neutral Runtime Job core
+Date: 2026-07-18
+State: GREEN candidate
+
+Runtime job Unit / Contract / Integration:
+30 passed
+
+Workflow/Chatflow gateways and runtime defaults:
+13 passed
+
+Owner migration upgrade/downgrade and disposable-head Alembic check:
+2 passed
+
+AI Assistant standalone handler real MySQL execution:
+1 passed
+
+Alembic heads:
+0035_runtime_job_owner_identity (head)
+
+Ruff and git diff check:
+All checks passed
+
+Configured local database alembic check:
+ENV-BLOCKED because that local database is not migrated to 0035. No migration
+apply to the user's configured database was authorized. The disposable database
+upgrade/downgrade/check contract is the applicable migration evidence.

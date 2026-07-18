@@ -90,6 +90,20 @@ Then run a worker process that claims both Workflow and Chatflow runtime jobs:
 uv run python scripts/runtime_job_worker.py --owner both --worker-id runtime-v2-worker-1
 ```
 
+The standalone entry resolves handlers through the runtime composition registry.
+Owner filters are:
+
+- `workflow`: Workflow jobs only.
+- `chatflow`: Chatflow jobs only.
+- `ai-assistant`: AI Assistant jobs only.
+- `both`: compatibility filter for Workflow and Chatflow.
+- `all`: all registered Workflow, Chatflow, and AI Assistant handlers.
+
+The AI Assistant handler and owner filter are available at the Spec 226.3
+foundation boundary. Durable enqueue from `messages/async`, takeover/cancel
+fencing, and removal of the API in-process worker remain the separate 226.5 HA
+gate; do not treat handler registration alone as that gate passing.
+
 Operational controls:
 
 - `--once` claims and runs at most one job, then exits.

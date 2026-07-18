@@ -25,8 +25,8 @@ from app.modules.workflow.domain.runtime_invocation_gateway import RuntimeInvoca
 from app.modules.workflow.domain.runtime_v2 import ChatflowRuntimeV2Service
 from app.modules.workflow.infra.chatflow_state_repository import ChatflowStateRepository
 from app.modules.workflow.infra.repository import WorkflowRepository
-from app.modules.workflow.infra.runtime_job_repository import RuntimeJobRepository
-from app.modules.workflow.domain.runtime_job_worker import RuntimeJobWorker
+from app.modules.runtime.domain.runtime_job_worker import RuntimeJobWorker
+from app.modules.runtime.infra.runtime_job_repository import RuntimeJobRepository
 from app.modules.workflow.runtime_job_worker import build_runtime_job_worker, fail_runtime_job
 from app.modules.runtime_lab.web.router import (
     _runtime_lab_background_enqueue,

@@ -4,7 +4,7 @@ from threading import Barrier
 import sqlalchemy as sa
 
 from app.core.schema import register_baseline_tables
-from app.modules.workflow.infra.runtime_job_repository import RuntimeJobRepository
+from app.modules.runtime.infra.runtime_job_repository import RuntimeJobRepository
 from tests.support.mysql import Mysql8TestDatabase
 
 

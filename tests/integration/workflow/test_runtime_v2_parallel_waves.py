@@ -14,11 +14,11 @@ from app.main import app
 from app.modules.knowledge.api.facade import KnowledgeSearchResult
 from app.modules.mcp.domain.client import McpCallResult
 from app.modules.workflow.domain.runtime_v2 import WorkflowRuntimeV2Service
-from app.modules.workflow.domain.runtime_job_worker import RuntimeJobWorker
+from app.modules.runtime.domain.runtime_job_worker import RuntimeJobWorker
 from app.modules.workflow.infra.chatflow_state_repository import ChatflowStateRepository
 from app.modules.workflow.infra.publish_repository import WorkflowPublishRepository
 from app.modules.workflow.infra.repository import WorkflowRepository
-from app.modules.workflow.infra.runtime_job_repository import RuntimeJobRepository
+from app.modules.runtime.infra.runtime_job_repository import RuntimeJobRepository
 
 
 class RuntimeV2ParallelWavesTest(unittest.TestCase):

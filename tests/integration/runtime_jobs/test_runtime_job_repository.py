@@ -4,11 +4,39 @@ from datetime import datetime, timedelta
 import sqlalchemy as sa
 
 from app.core.schema import register_baseline_tables
-from app.modules.workflow.infra.runtime_job_repository import RuntimeJobRepository
+from app.modules.runtime.infra.runtime_job_repository import RuntimeJobRepository
 from tests.support.mysql import mysql8_session
 
 
 class RuntimeJobRepositoryTest(unittest.TestCase):
+    def test_same_run_and_job_type_can_exist_for_different_owner_types(self) -> None:
+        with mysql8_session("runtime_jobs_owner_identity", register=register_baseline_tables) as session:
+            repository = RuntimeJobRepository(session)
+
+            workflow = repository.enqueue(
+                run_id=101,
+                owner_type="WORKFLOW",
+                owner_id=201,
+                job_type="runtime_v2_completion",
+            )
+            assistant = repository.enqueue(
+                run_id=101,
+                owner_type="AI_ASSISTANT",
+                owner_id=301,
+                job_type="runtime_v2_completion",
+            )
+
+            self.assertNotEqual(workflow["id"], assistant["id"])
+            self.assertEqual(assistant["owner_type"], "AI_ASSISTANT")
+            self.assertEqual(
+                repository.get_by_run(
+                    101,
+                    owner_type="AI_ASSISTANT",
+                    job_type="runtime_v2_completion",
+                )["id"],
+                assistant["id"],
+            )
+
     def test_claim_heartbeat_complete_and_expired_lease_takeover(self) -> None:
         with mysql8_session("runtime_jobs", register=register_baseline_tables) as session:
             repository = RuntimeJobRepository(session)

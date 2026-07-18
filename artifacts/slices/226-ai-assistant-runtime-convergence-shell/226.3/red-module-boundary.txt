@@ -1,0 +1,12 @@
+Slice: 226.3 product-neutral runtime job core
+Date: 2026-07-18
+
+Command:
+rtk uv run pytest tests/contract/runtime_jobs/test_runtime_module_boundary.py::test_runtime_job_core_is_owned_by_product_neutral_runtime_module -q --tb=short
+
+Observed RED:
+ModuleNotFoundError: No module named 'app.modules.runtime.infra'
+
+Meaning:
+The durable repository and worker state machine were still owned by the
+Workflow product Module instead of the product-neutral Runtime Module.

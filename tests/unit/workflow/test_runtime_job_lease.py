@@ -1,6 +1,8 @@
 import importlib
 import unittest
 
+import sqlalchemy as sa
+
 from app.core.database import Base
 from app.core.schema import register_baseline_tables
 
@@ -30,11 +32,20 @@ class RuntimeJobLeaseTest(unittest.TestCase):
             "attempt_count",
             "max_attempts",
         }
+        unique_constraints = {
+            constraint.name: tuple(column.name for column in constraint.columns)
+            for constraint in table.constraints
+            if isinstance(constraint, sa.UniqueConstraint)
+        }
 
         self.assertTrue(required_columns.issubset(set(table.c.keys())))
+        self.assertEqual(
+            unique_constraints["idx_runtime_jobs_owner_run_type"],
+            ("owner_type", "run_id", "job_type"),
+        )
 
     def test_runtime_job_repository_supports_claim_heartbeat_terminal_and_cancel_paths(self) -> None:
-        module = importlib.import_module("app.modules.workflow.infra.runtime_job_repository")
+        module = importlib.import_module("app.modules.runtime.infra.runtime_job_repository")
         repository_class = getattr(module, "RuntimeJobRepository")
         required_methods = {
             "enqueue",

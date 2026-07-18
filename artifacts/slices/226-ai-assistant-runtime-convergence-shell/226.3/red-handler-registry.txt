@@ -1,0 +1,13 @@
+Slice: 226.3 standalone handler registry
+Date: 2026-07-18
+
+Commands:
+rtk uv run pytest tests/contract/runtime_jobs/test_runtime_module_boundary.py::test_runtime_job_handler_registry_dispatches_by_owner_type tests/unit/workflow/test_runtime_job_worker_script.py -q --tb=short
+
+Observed RED:
+ModuleNotFoundError: No module named 'app.modules.runtime.domain.runtime_job_registry'
+AssertionError: 'ai-assistant' not in runtime_job_worker.py --help
+
+Meaning:
+There was no product-neutral fail-closed handler registry and the standalone
+entry could not select an AI Assistant owner.

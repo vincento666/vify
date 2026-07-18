@@ -18,7 +18,7 @@ from app.core.db_write import insert_and_get_id
 from app.core.schema import register_baseline_tables
 from app.main import app
 from app.modules.customer_assistant.infra.schema import register_customer_assistant_tables
-from app.modules.workflow.infra.runtime_job_repository import RuntimeJobRepository
+from app.modules.runtime.infra.runtime_job_repository import RuntimeJobRepository
 from app.modules.workflow.runtime_job_worker import build_runtime_job_worker
 from tests.support.mysql import mysql8_unittest_database
 

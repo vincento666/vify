@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.core.database import get_session_factory
 from app.main import app
-from app.modules.workflow.infra.runtime_job_repository import RuntimeJobRepository
+from app.modules.runtime.infra.runtime_job_repository import RuntimeJobRepository
 
 
 class RuntimeV2IdempotencyLayersContractTest(unittest.TestCase):

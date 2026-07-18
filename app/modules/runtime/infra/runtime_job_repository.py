@@ -33,7 +33,12 @@ class RuntimeJobRepository:
         max_attempts: int = 3,
         available_at: datetime | None = None,
     ) -> dict[str, Any]:
-        existing = self.get_by_run(run_id, job_type=job_type)
+        normalized_owner_type = owner_type.upper()
+        existing = self.get_by_run(
+            run_id,
+            owner_type=normalized_owner_type,
+            job_type=job_type,
+        )
         if existing is not None:
             if (
                 str(existing.get("status") or "").upper() == "FAILED"
@@ -48,7 +53,7 @@ class RuntimeJobRepository:
                 self._job,
                 {
                     "run_id": run_id,
-                    "owner_type": owner_type.upper(),
+                    "owner_type": normalized_owner_type,
                     "owner_id": owner_id,
                     "job_type": job_type,
                     "status": "QUEUED",
@@ -73,7 +78,11 @@ class RuntimeJobRepository:
             return row
         except IntegrityError:
             self._session.rollback()
-            existing = self.get_by_run(run_id, job_type=job_type)
+            existing = self.get_by_run(
+                run_id,
+                owner_type=normalized_owner_type,
+                job_type=job_type,
+            )
             if existing is not None:
                 if (
                     str(existing.get("status") or "").upper() == "FAILED"
@@ -130,14 +139,24 @@ class RuntimeJobRepository:
         ).mappings().one_or_none()
         return dict(row) if row else None
 
-    def get_by_run(self, run_id: int, *, job_type: str = "runtime_v2_completion") -> dict[str, Any] | None:
+    def get_by_run(
+        self,
+        run_id: int,
+        *,
+        owner_type: str | None = None,
+        job_type: str = "runtime_v2_completion",
+    ) -> dict[str, Any] | None:
+        conditions = [
+            self._job.c.run_id == run_id,
+            self._job.c.job_type == job_type,
+            self._job.c.deleted.is_(False),
+        ]
+        normalized_owner_type = str(owner_type or "").strip().upper()
+        if normalized_owner_type:
+            conditions.append(self._job.c.owner_type == normalized_owner_type)
         row = self._session.execute(
             sa.select(self._job)
-            .where(
-                self._job.c.run_id == run_id,
-                self._job.c.job_type == job_type,
-                self._job.c.deleted.is_(False),
-            )
+            .where(*conditions)
             .order_by(self._job.c.id.desc())
         ).mappings().first()
         return dict(row) if row else None

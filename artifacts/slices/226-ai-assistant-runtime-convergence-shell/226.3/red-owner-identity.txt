@@ -1,0 +1,13 @@
+Slice: 226.3 owner-aware runtime job identity
+Date: 2026-07-18
+
+Command:
+rtk uv run pytest tests/integration/runtime_jobs/test_runtime_job_repository.py::RuntimeJobRepositoryTest::test_same_run_and_job_type_can_exist_for_different_owner_types -q --tb=short
+
+Observed RED:
+AssertionError: 1 == 1
+
+Meaning:
+Enqueueing WORKFLOW and AI_ASSISTANT jobs with the same numeric run id and job
+type returned the same row because repository lookup and the unique key ignored
+owner_type.

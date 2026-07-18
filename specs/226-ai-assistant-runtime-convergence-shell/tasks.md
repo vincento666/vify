@@ -1,6 +1,6 @@
 # Tasks — Spec 226
 
-Status: `226.2 complete / 226.3 ready`
+Status: `226.3 complete / 226.4 ready`
 
 Evidence root:
 `artifacts/slices/226-ai-assistant-runtime-convergence-shell/<slice>/`
@@ -58,16 +58,16 @@ Evidence for this contract round is the repository diff and final Contract Gate 
 
 ## 226.3 P0 — Domain-neutral Runtime Job Core
 
-- [ ] TDD preflight：`loop/hooks/skill-preflight.sh --required tdd`。
-- [ ] RED：不同 owner 相同 run id/job type 当前冲突。
-- [ ] RED：runtime job core 当前位于/import `workflow`。
-- [ ] RED：standalone registry 缺 `AI_ASSISTANT` handler。
-- [ ] Alembic migration：unique key 至少含 `owner_type`，upgrade/downgrade 和单一 head。
-- [ ] 提升 repository、worker state machine、registry、composition 到 runtime module。
-- [ ] Workflow/Chatflow adapters 注册 handler，公开行为不变。
-- [ ] 更新 standalone CLI owner/filter 与 operations 文档。
-- [ ] Unit / Contract / Integration / E2E / Docs evidence。
-- [ ] Checker / Reviewer / slice commit。
+- [x] TDD preflight：`loop/hooks/skill-preflight.sh --required tdd`。
+- [x] RED：不同 owner 相同 run id/job type 当前冲突。
+- [x] RED：runtime job core 当前位于/import `workflow`。
+- [x] RED：standalone registry 缺 `AI_ASSISTANT` handler。
+- [x] Alembic migration：unique key 至少含 `owner_type`，upgrade/downgrade 和单一 head。
+- [x] 提升 repository、worker state machine、registry、composition 到 runtime module。
+- [x] Workflow/Chatflow adapters 注册 handler，公开行为不变。
+- [x] 更新 standalone CLI owner/filter 与 operations 文档。
+- [x] Unit / Contract / Integration / E2E / Docs evidence。
+- [x] Checker / Reviewer / selective slice commit。
 
 ## 226.4 P0 — Trusted Principal, Scope, Permission And Audit
 

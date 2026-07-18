@@ -45,7 +45,7 @@ from app.modules.workflow.infra.realtime.redis_streams import (
     RuntimeEventStreamBus,
 )
 from app.modules.workflow.infra.repository import WorkflowRepository
-from app.modules.workflow.infra.runtime_job_repository import RuntimeJobRepository, format_runtime_ops_job
+from app.modules.runtime.infra.runtime_job_repository import RuntimeJobRepository, format_runtime_ops_job
 from app.modules.workflow.runtime_job_worker import (
     build_chatflow_runtime_job_worker,
     build_workflow_runtime_job_worker,

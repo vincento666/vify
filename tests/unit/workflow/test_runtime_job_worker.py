@@ -1,7 +1,7 @@
 import unittest
 from threading import Event
 
-from app.modules.workflow.domain.runtime_job_worker import RuntimeJobWorker
+from app.modules.runtime.domain.runtime_job_worker import RuntimeJobWorker
 
 
 class RuntimeJobWorkerTest(unittest.TestCase):
