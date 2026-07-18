@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timezone
 from hashlib import sha256
 import json
@@ -21,6 +21,10 @@ from app.modules.agent_harness import (
     HarnessToolAuthorization,
     HarnessToolBatchResult,
     HarnessToolCall,
+)
+from app.modules.ai_assistant.domain.access_scope import (
+    AiAssistantAccessScope,
+    local_ai_assistant_scope,
 )
 from app.modules.ai_assistant.domain.context_budget import (
     build_compaction_snapshot,
@@ -293,6 +297,8 @@ class AiAssistantHarnessService:
         memory_today: Callable[[], date] = date.today,
         memory_completion_callback: Callable[[], None] | None = None,
         agent_harness: AgentHarness | None = None,
+        principal_snapshot: dict[str, Any] | None = None,
+        access_scope: AiAssistantAccessScope | None = None,
     ) -> None:
         self._repository = repository
         self._tools = tool_registry or ToolRegistry.with_builtin_tools()
@@ -315,6 +321,9 @@ class AiAssistantHarnessService:
         self._memory_today = memory_today
         self._memory_completion_callback = memory_completion_callback
         self._agent_harness = agent_harness or AgentHarness()
+        self._principal_snapshot = dict(principal_snapshot or {})
+        repository_scope = getattr(repository, "access_scope", None)
+        self._access_scope = access_scope or repository_scope or local_ai_assistant_scope()
 
     def create_session(self, title: str = "", context: dict[str, Any] | None = None) -> dict[str, Any]:
         return self._repository.create_session(title=title, context=context)
@@ -481,6 +490,10 @@ class AiAssistantHarnessService:
                 "compactionSnapshot": context_state.get("compactionSnapshot"),
                 "aiAssistantBudget": budget_payload,
                 "modelBudgetPolicy": model_budget_policy_payload,
+                "executionScope": _execution_scope_snapshot(
+                    self._access_scope,
+                    self._principal_snapshot,
+                ),
             },
         )
         self._repository.append_message(session_id, "user", message, run_id=run_id)
@@ -610,15 +623,7 @@ class AiAssistantHarnessService:
             model_config=execution_model_config,
         )
         completed_status = str(result.run.get("status") or "COMPLETED")
-        self._repository.append_event(
-            run_id=run_id,
-            session_id=session_id,
-            event_type="run.worker_heartbeat",
-            visible_title="Worker 心跳",
-            visible_summary="SessionRuntime worker 已完成一次处理心跳。",
-            payload={"worker": worker, "checkpoint": _runtime_checkpoint_from_run(result.run)},
-        )
-        self._save_runtime_checkpoint(
+        checkpointed = self._save_runtime_checkpoint(
             run_id=run_id,
             session_id=session_id,
             status=completed_status,
@@ -629,7 +634,15 @@ class AiAssistantHarnessService:
             visible_title="运行检查点已保存",
             visible_summary="SessionRuntime 已保存运行恢复检查点。",
         )
-        return result
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="run.worker_heartbeat",
+            visible_title="Worker 心跳",
+            visible_summary="SessionRuntime worker 已持久化本次处理检查点。",
+            payload={"worker": worker, "checkpoint": _runtime_checkpoint_from_run(checkpointed)},
+        )
+        return replace(result, run=checkpointed)
 
     def _claim_queued_runtime_checkpoint(
         self,
@@ -675,16 +688,56 @@ class AiAssistantHarnessService:
         )
         return claimed
 
-    def pause_run(self, run_id: int, actor_id: str = "") -> dict[str, Any]:
-        return self._control_run(run_id, action="pause", actor_id=actor_id)
+    def pause_run(
+        self,
+        run_id: int,
+        actor_id: str = "",
+        *,
+        actor_audit: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return self._control_run(
+            run_id,
+            action="pause",
+            actor_id=actor_id,
+            actor_audit=actor_audit,
+        )
 
-    def resume_run(self, run_id: int, actor_id: str = "") -> dict[str, Any]:
-        return self._control_run(run_id, action="resume", actor_id=actor_id)
+    def resume_run(
+        self,
+        run_id: int,
+        actor_id: str = "",
+        *,
+        actor_audit: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return self._control_run(
+            run_id,
+            action="resume",
+            actor_id=actor_id,
+            actor_audit=actor_audit,
+        )
 
-    def cancel_run(self, run_id: int, actor_id: str = "") -> dict[str, Any]:
-        return self._control_run(run_id, action="cancel", actor_id=actor_id)
+    def cancel_run(
+        self,
+        run_id: int,
+        actor_id: str = "",
+        *,
+        actor_audit: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return self._control_run(
+            run_id,
+            action="cancel",
+            actor_id=actor_id,
+            actor_audit=actor_audit,
+        )
 
-    def _control_run(self, run_id: int, *, action: str, actor_id: str) -> dict[str, Any]:
+    def _control_run(
+        self,
+        run_id: int,
+        *,
+        action: str,
+        actor_id: str,
+        actor_audit: dict[str, Any] | None,
+    ) -> dict[str, Any]:
         run = self._repository.get_run(run_id)
         if run is None:
             raise KeyError(f"AI Assistant run not found: {run_id}")
@@ -741,7 +794,11 @@ class AiAssistantHarnessService:
             event_type=_control_event_type(action),
             visible_title=_control_event_title(action),
             visible_summary=_control_event_summary(action),
-            payload={"control": transitioned["control"], "checkpoint": checkpoint},
+            payload={
+                "control": transitioned["control"],
+                "checkpoint": checkpoint,
+                **_actor_event_payload(actor_id, actor_audit),
+            },
             status=status,
         )
         self._repository.append_event(
@@ -3109,7 +3166,13 @@ class AiAssistantHarnessService:
     def list_pending_approvals(self) -> list[dict[str, Any]]:
         return [_approval_payload(row) for row in self._repository.list_pending_approvals()]
 
-    def approve(self, approval_id: int, actor_id: str) -> dict[str, Any]:
+    def approve(
+        self,
+        approval_id: int,
+        actor_id: str,
+        *,
+        actor_audit: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         current = self._repository.get_approval(approval_id)
         if current is None:
             raise KeyError(f"AI Assistant approval not found: {approval_id}")
@@ -3129,7 +3192,11 @@ class AiAssistantHarnessService:
             event_type="approval.granted",
             visible_title="审批通过",
             visible_summary=f"{actor_id} 已批准 {_tool_label(str(approval['tool_name']))}。",
-            payload={"approvalId": approval_id, "actorId": actor_id},
+            payload={
+                "approvalId": approval_id,
+                "actorId": actor_id,
+                **_actor_event_payload(actor_id, actor_audit),
+            },
         )
         message = str((run.get("input_payload") or {}).get("message") or "")
         tool_name = str(approval["tool_name"])
@@ -3827,7 +3894,14 @@ class AiAssistantHarnessService:
             correlation_ids={"scheduler": scheduler_metadata} if scheduler_metadata else None,
         )
 
-    def deny(self, approval_id: int, actor_id: str, reason: str = "") -> dict[str, Any]:
+    def deny(
+        self,
+        approval_id: int,
+        actor_id: str,
+        reason: str = "",
+        *,
+        actor_audit: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         current = self._repository.get_approval(approval_id)
         if current is None:
             raise KeyError(f"AI Assistant approval not found: {approval_id}")
@@ -3847,7 +3921,12 @@ class AiAssistantHarnessService:
             event_type="approval.denied",
             visible_title="审批拒绝",
             visible_summary=f"{actor_id} 已拒绝 {_tool_label(str(approval['tool_name']))}。",
-            payload={"approvalId": approval_id, "actorId": actor_id, "reason": reason},
+            payload={
+                "approvalId": approval_id,
+                "actorId": actor_id,
+                "reason": reason,
+                **_actor_event_payload(actor_id, actor_audit),
+            },
             status="DENIED",
         )
         tool_calls = [_tool_call_payload(row) for row in self._repository.list_run_tool_calls(run_id)]
@@ -5113,6 +5192,27 @@ def _runtime_checkpoint_from_run(run: dict[str, Any]) -> dict[str, Any]:
     return dict(checkpoint) if isinstance(checkpoint, dict) else {}
 
 
+def _execution_scope_snapshot(
+    access_scope: AiAssistantAccessScope,
+    principal_snapshot: dict[str, Any],
+) -> dict[str, Any]:
+    principal = dict(principal_snapshot)
+    if not principal:
+        principal = {
+            "actorId": access_scope.user_id,
+            "tenantId": access_scope.tenant_id,
+            "source": "durable-scope",
+        }
+    return {
+        "schemaVersion": "ai-assistant.scope/1",
+        "tenantId": access_scope.tenant_id,
+        "userId": access_scope.user_id,
+        "workspaceId": access_scope.workspace_id,
+        "principal": principal,
+        "permissionPolicyRef": "ai-assistant-host-policy/v1",
+    }
+
+
 def _runtime_phase_for_status(status: str) -> str:
     return {
         "QUEUED": "queued",
@@ -5124,6 +5224,18 @@ def _runtime_phase_for_status(status: str) -> str:
         "FAILED": "failed",
         "DENIED": "denied",
     }.get(status, status.lower())
+
+
+def _actor_event_payload(
+    actor_id: str,
+    actor_audit: dict[str, Any] | None,
+) -> dict[str, Any]:
+    audit = dict(actor_audit or {})
+    legacy_field = str(audit.pop("legacyActorIdField", "absent"))
+    return {
+        "actorAudit": audit or {"actorId": actor_id},
+        "legacyActorIdField": legacy_field,
+    }
 
 
 def _control_event_type(action: str) -> str:

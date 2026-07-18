@@ -140,6 +140,34 @@ class AiAssistantMemoryScopeApiContractTest(unittest.TestCase):
             with self.subTest(suffix=suffix):
                 self.assertEqual(response.status_code, 404)
 
+    def test_same_actor_and_workspace_are_isolated_between_tenants(self) -> None:
+        tenant_a = {
+            "X-Hify-Actor-Id": "shared-actor",
+            "X-Hify-Tenant-Id": "tenant-a",
+        }
+        tenant_b = {
+            "X-Hify-Actor-Id": "shared-actor",
+            "X-Hify-Tenant-Id": "tenant-b",
+        }
+        with TestClient(app) as client:
+            created = client.post(
+                "/api/v1/ai-assistant/sessions",
+                headers=tenant_a,
+                json={"title": "Tenant A"},
+            )
+            tenant_a_sessions = client.get(
+                "/api/v1/ai-assistant/sessions",
+                headers=tenant_a,
+            ).json()["data"]
+            tenant_b_sessions = client.get(
+                "/api/v1/ai-assistant/sessions",
+                headers=tenant_b,
+            ).json()["data"]
+
+        self.assertEqual(created.status_code, 200)
+        self.assertEqual(tenant_a_sessions["total"], 1)
+        self.assertEqual(tenant_b_sessions["total"], 0)
+
     def test_autonomous_worker_preserves_request_scope(self) -> None:
         app.state.ai_assistant_autonomous_worker_delay_seconds = 0
         alice_headers = {"X-Hify-Actor-Id": "alice"}

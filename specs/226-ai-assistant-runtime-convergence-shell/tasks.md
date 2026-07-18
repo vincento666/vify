@@ -1,6 +1,6 @@
 # Tasks — Spec 226
 
-Status: `226.3 complete / 226.4 ready`
+Status: `226.4 complete / 226.5 ready`
 
 Evidence root:
 `artifacts/slices/226-ai-assistant-runtime-convergence-shell/<slice>/`
@@ -71,17 +71,17 @@ Evidence for this contract round is the repository diff and final Contract Gate 
 
 ## 226.4 P0 — Trusted Principal, Scope, Permission And Audit
 
-- [ ] TDD preflight。
-- [ ] RED：production 任意 header 伪造 actor/tenant/workspace 被接受。
-- [ ] RED：body `actorId` 成为 approval/control audit actor。
-- [ ] RED：production `always_approve` 绕过 managed deny/sandbox。
-- [ ] RED：worker job payload 包含 raw credential/secret 或错误 scope。
-- [ ] 实现 production/local-dev/test principal resolvers。
-- [ ] control/approval 使用 server principal，兼容字段按合同 deprecate。
-- [ ] scope authorization 覆盖 run/job/event/approval/operation/memory/child。
-- [ ] policy fail-closed、secret ref、完整 audit。
-- [ ] Unit / Contract / Integration / Security evidence。
-- [ ] Checker / Reviewer / slice commit。
+- [x] TDD preflight。
+- [x] RED：production 任意 header 伪造 actor/tenant/workspace 被接受。
+- [x] RED：body `actorId` 成为 approval/control audit actor。
+- [x] RED：production `always_approve` 绕过 managed deny/sandbox。
+- [x] RED：worker job payload 包含 raw credential/secret 或错误 scope。
+- [x] 实现 production/local-dev/test principal resolvers。
+- [x] control/approval 使用 server principal，兼容字段按合同 deprecate。
+- [x] scope authorization 覆盖 run/job/event/approval/operation/memory/child。
+- [x] policy fail-closed、secret ref、完整 audit。
+- [x] Unit / Contract / Integration / Security evidence。
+- [x] Checker / Reviewer / slice commit。
 
 ## 226.5 P0 — Durable AI Assistant Standalone Worker And HA
 

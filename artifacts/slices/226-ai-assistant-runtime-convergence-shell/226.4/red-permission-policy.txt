@@ -1,0 +1,14 @@
+Slice: 226.4 production permission policy
+Date: 2026-07-18
+
+Commands:
+rtk uv run pytest tests/unit/ai_assistant/test_permission_policy.py tests/contract/test_ai_assistant_security_api.py -q --tb=short
+
+Observed RED:
+A production service accepted always_approve for a business-write tool, and a
+trusted principal without AI Assistant product permissions reached protected
+routes.
+
+Meaning:
+Deployment environment and host authorization were not wired into the product
+composition boundary, so approval mode could weaken the managed policy.

@@ -1,0 +1,30 @@
+Slice: 226.4 trusted principal, scope, permission, and audit
+Date: 2026-07-18
+State: GREEN candidate
+
+Exact security verifier:
+7 passed
+
+Migration, owner identity, secret-free payload, and standalone scope:
+8 passed
+
+Resource-lock and security contracts:
+19 passed
+
+Session runtime contract:
+8 passed
+
+Full affected AI Assistant regression:
+233 passed, 21 subtests passed
+
+Alembic heads:
+0036_ai_assistant_tenant_scope (head)
+
+Ruff and git diff check:
+All checks passed
+
+Live provider calls:
+0
+
+Production migration/deploy:
+Not executed; not authorized.

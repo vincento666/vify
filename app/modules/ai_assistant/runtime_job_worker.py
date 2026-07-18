@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.modules.ai_assistant.domain.harness import AiAssistantHarnessService
 from app.modules.ai_assistant.domain.live_model import create_qwen_live_planner
+from app.modules.ai_assistant.domain.permissions import ApprovalPolicy
 from app.modules.ai_assistant.infra.repository import AiAssistantRepository
 from app.modules.runtime.domain.runtime_job_registry import RuntimeJobHandlerRegistry
 from app.modules.runtime.domain.runtime_job_worker import RuntimeJobWorker
@@ -34,14 +37,27 @@ def register_ai_assistant_runtime_job_handler(
 ) -> None:
     registry.register(
         "AI_ASSISTANT",
-        lambda job: complete_ai_assistant_runtime_job(session, int(job["run_id"])),
+        lambda job: complete_ai_assistant_runtime_job(session, job),
     )
 
 
-def complete_ai_assistant_runtime_job(session: Session, run_id: int) -> None:
+def complete_ai_assistant_runtime_job(
+    session: Session,
+    job: dict[str, Any],
+) -> None:
+    run_id = int(job["run_id"])
+    access_scope = AiAssistantRepository.access_scope_for_durable_run(
+        session,
+        run_id,
+        expected_session_id=int(job["owner_id"]),
+    )
+    if access_scope is None:
+        raise RuntimeError(f"AI Assistant run {run_id} does not match the claimed job scope")
+    settings = get_settings()
     service = AiAssistantHarnessService(
-        AiAssistantRepository(session),
-        live_planner=create_qwen_live_planner(get_settings()),
+        AiAssistantRepository(session, access_scope=access_scope),
+        live_planner=create_qwen_live_planner(settings),
+        approval_policy=ApprovalPolicy(environment=settings.deployment_environment),
     )
     result = service.process_queued_run(run_id)
     if result is None:

@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.core.database import get_session
+from app.core.host.context import RequestContext
+from app.core.host.dependencies import get_request_context
 from app.main import app
 from tests.support.mysql import mysql8_unittest_database
 
@@ -89,6 +91,7 @@ class AiAssistantSecurityApiContractTest(unittest.TestCase):
 
     def test_denied_approval_records_decision_and_does_not_execute(self) -> None:
         with TestClient(app) as client:
+            client.headers.update({"X-Hify-Actor-Id": "operator-1"})
             session_id = client.post("/api/v1/ai-assistant/sessions", json={"title": "Security"}).json()["data"]["id"]
             message = client.post(
                 f"/api/v1/ai-assistant/sessions/{session_id}/messages",
@@ -119,8 +122,153 @@ class AiAssistantSecurityApiContractTest(unittest.TestCase):
         self.assertIn("approval.denied", [event["type"] for event in events])
         self.assertNotIn("tool.call_completed", [event["type"] for event in events])
 
+    def test_approval_audit_actor_comes_from_server_context_not_request_body(self) -> None:
+        headers = {
+            "X-Hify-Actor-Id": "trusted-operator",
+            "X-Hify-Tenant-Id": "trusted-tenant",
+            "X-Hify-Source": "trusted-auth-adapter",
+            "X-Request-Id": "approval-audit-request",
+        }
+        with TestClient(app) as client:
+            session_id = client.post(
+                "/api/v1/ai-assistant/sessions",
+                json={"title": "Security"},
+                headers=headers,
+            ).json()["data"]["id"]
+            client.post(
+                f"/api/v1/ai-assistant/sessions/{session_id}/messages",
+                json={
+                    "message": "update customer profile",
+                    "idempotencyKey": "server-derived-actor",
+                    "approvalMode": "ask_each_time",
+                    "toolName": "update_customer_profile",
+                    "toolInput": {"customerId": "C-actor"},
+                },
+                headers=headers,
+            )
+            approval_id = client.get(
+                "/api/v1/ai-assistant/approvals",
+                headers=headers,
+            ).json()["data"]["list"][0]["id"]
+            approved = client.post(
+                f"/api/v1/ai-assistant/approvals/{approval_id}/approve",
+                json={"actorId": "spoofed-body-actor"},
+                headers=headers,
+            )
+            events = client.get(
+                f"/api/v1/ai-assistant/runs/{approved.json()['data']['runId']}/events",
+                headers=headers,
+            ).json()["data"]["list"]
+
+        self.assertEqual(approved.status_code, 200, approved.text)
+        self.assertEqual(approved.json()["data"]["decidedBy"], "trusted-operator")
+        approval_event = next(event for event in events if event["type"] == "approval.granted")
+        self.assertEqual(approval_event["payload"]["actorAudit"]["actorId"], "trusted-operator")
+        self.assertEqual(approval_event["payload"]["actorAudit"]["tenantId"], "trusted-tenant")
+        self.assertEqual(
+            approval_event["payload"]["actorAudit"]["requestId"],
+            "approval-audit-request",
+        )
+        self.assertEqual(
+            approval_event["payload"]["legacyActorIdField"],
+            "ignored_mismatch",
+        )
+
+    def test_production_service_wires_fail_closed_approval_policy(self) -> None:
+        script = Path(self._workspace_dir.name) / "tmp" / "production-policy.mjs"
+        script.parent.mkdir(parents=True, exist_ok=True)
+        script.write_text("console.log('must not run')\n", encoding="utf-8")
+        app.dependency_overrides[get_settings] = lambda: Settings(
+            _env_file=None,
+            deployment_environment="production",
+            host_identity_mode="trusted_state",
+        )
+        app.dependency_overrides[get_request_context] = lambda: RequestContext(
+            actor_id="trusted-production-user",
+            tenant_id="trusted-production-tenant",
+            org_id="trusted-production-org",
+            permissions=("ai_assistant:operate",),
+            source="trusted-auth-adapter",
+        )
+
+        try:
+            with TestClient(app) as client:
+                session_id = client.post(
+                    "/api/v1/ai-assistant/sessions",
+                    json={"title": "Production Security"},
+                ).json()["data"]["id"]
+                message = client.post(
+                    f"/api/v1/ai-assistant/sessions/{session_id}/messages",
+                    json={
+                        "message": "run controlled shell",
+                        "idempotencyKey": "production-policy-deny",
+                        "approvalMode": "always_approve",
+                        "toolName": "run_shell",
+                        "toolInput": {"command": "node tmp/production-policy.mjs"},
+                    },
+                )
+        finally:
+            app.dependency_overrides.pop(get_request_context, None)
+
+        self.assertEqual(message.status_code, 200, message.text)
+        self.assertEqual(message.json()["data"]["status"], "DENIED")
+
+    def test_production_principal_without_ai_assistant_permission_is_forbidden(
+        self,
+    ) -> None:
+        app.dependency_overrides[get_settings] = lambda: Settings(
+            _env_file=None,
+            deployment_environment="production",
+            host_identity_mode="trusted_state",
+        )
+        app.dependency_overrides[get_request_context] = lambda: RequestContext(
+            actor_id="authenticated-without-product-access",
+            tenant_id="trusted-production-tenant",
+            org_id="trusted-production-org",
+            source="trusted-auth-adapter",
+        )
+
+        try:
+            with TestClient(app) as client:
+                response = client.post(
+                    "/api/v1/ai-assistant/sessions",
+                    json={"title": "Must be forbidden"},
+                )
+        finally:
+            app.dependency_overrides.pop(get_request_context, None)
+
+        self.assertEqual(response.status_code, 403, response.text)
+
+    def test_production_read_permission_cannot_mutate_sessions(self) -> None:
+        app.dependency_overrides[get_settings] = lambda: Settings(
+            _env_file=None,
+            deployment_environment="production",
+            host_identity_mode="trusted_state",
+        )
+        app.dependency_overrides[get_request_context] = lambda: RequestContext(
+            actor_id="read-only-user",
+            tenant_id="trusted-production-tenant",
+            org_id="trusted-production-org",
+            permissions=("ai_assistant:read",),
+            source="trusted-auth-adapter",
+        )
+
+        try:
+            with TestClient(app) as client:
+                tools = client.get("/api/v1/ai-assistant/tools")
+                create = client.post(
+                    "/api/v1/ai-assistant/sessions",
+                    json={"title": "Read only"},
+                )
+        finally:
+            app.dependency_overrides.pop(get_request_context, None)
+
+        self.assertEqual(tools.status_code, 200, tools.text)
+        self.assertEqual(create.status_code, 403, create.text)
+
     def test_approved_approval_resumes_tool_execution_and_completes_run(self) -> None:
         with TestClient(app) as client:
+            client.headers.update({"X-Hify-Actor-Id": "operator-2"})
             session_id = client.post("/api/v1/ai-assistant/sessions", json={"title": "Security"}).json()["data"]["id"]
             message = client.post(
                 f"/api/v1/ai-assistant/sessions/{session_id}/messages",

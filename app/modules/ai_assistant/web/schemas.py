@@ -48,7 +48,7 @@ class ProcessAiAssistantRunWorkerRequest(BaseModel):
 
 
 class ApprovalDecisionRequest(BaseModel):
-    actor_id: str = Field(alias="actorId")
+    actor_id: str = Field(default="", alias="actorId")
     reason: str = ""
 
     model_config = {"populate_by_name": True}

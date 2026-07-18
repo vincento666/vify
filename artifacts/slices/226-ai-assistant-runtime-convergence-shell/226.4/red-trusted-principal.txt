@@ -1,0 +1,13 @@
+Slice: 226.4 trusted principal
+Date: 2026-07-18
+
+Command:
+rtk uv run pytest tests/contract/ai_assistant/test_trusted_principal.py -q --tb=short
+
+Observed RED:
+The production test expected 401, but arbitrary X-Hify actor, tenant, and
+permission headers were accepted as the request principal.
+
+Meaning:
+The host dependency had no explicit production identity adapter and treated
+unverified compatibility headers as authentication truth.

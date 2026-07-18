@@ -7,8 +7,8 @@
 - state: `READY`
 - contract: `specs/226-ai-assistant-runtime-convergence-shell/tasks.md`
 - ADR: `docs/adr/0005-ai-assistant-runtime-job-substrate.md`
-- active unit: `226.4`
-- implementation: 226.1-226.3 shared Harness, product Adapters, and neutral runtime job core green
+- active unit: `226.5`
+- implementation: 226.1-226.4 shared Harness, product Adapters, neutral runtime job core, and trusted scoped security green
 - external provider calls: 0
 - production/deploy/git delivery actions: none
 
@@ -18,7 +18,8 @@
   worker，但实现归属 `workflow`。
 - AI Assistant 仍有 router-level executor/in-flight 状态；前端仍调用
   `/worker/process`。
-- RequestContext 默认从未验证 header 读取，approval/control actor 来自 body。
+- Production principal 只接受 trusted request state；local-header mode 是显式
+  开发兼容 Adapter，approval/control actor 来自 server principal。
 - AI Assistant SSE 生成器复用 request service/session。
 - 当前“已处理”分组 identity 随 sequence range 变化，粒度不是稳定 phase/step。
 - Customer Assistant 有真实 subagent lifecycle；AI Assistant 默认 bridge 只返回
@@ -63,12 +64,13 @@
 - Base: `e0c5eb356dcdad2945ebc1304c7c34b830ddcc0c`
 - Merge target: `not-authorized`
 - Contract 前已有多组变更；均保留。
-- 226.1/226.2 已 selective commit；226.3 进入 selective Slice Commit Gate。
+- 226.1-226.4 已 selective commit。
 - 本合同没有 push、merge、deploy、provider call 或 migration apply。
 - Contract docs 不构成 Unit/Integration/E2E/Browser UAT PASS。
 
 ## Next Action
 
-226.3 Builder GREEN，Checker `ALL GREEN`，Reviewer `PASS`。完成 selective
-Slice Commit Gate 后，下一步执行 226.4 TDD preflight，并取得 trusted
-principal、server-derived actor、policy fail-closed 和 secret-free payload RED。
+226.4 Builder GREEN，Checker `ALL GREEN`，Reviewer `PASS`，安全审查无未关闭
+Critical/High。下一步执行 226.5 TDD preflight，并取得 API 退出后 durable
+completion、双 worker takeover/late-write fencing、SSE 短 session 与
+cancel/pause/lease loss 停止写入的 RED。

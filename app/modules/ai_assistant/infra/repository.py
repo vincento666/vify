@@ -77,9 +77,54 @@ class AiAssistantRepository:
     def access_scope(self) -> AiAssistantAccessScope:
         return self._access_scope
 
+    def _scoped_run_ids(self) -> sa.Select:
+        return sa.select(self._run_table.c.id).where(
+            self._run_table.c.tenant_id == self._access_scope.tenant_id,
+            self._run_table.c.user_id == self._access_scope.user_id,
+            self._run_table.c.workspace_id == self._access_scope.workspace_id,
+            self._run_table.c.deleted.is_(False),
+        )
+
+    def _scoped_operation_ids(self) -> sa.Select:
+        return sa.select(self._tool_operation_table.c.operation_id).where(
+            self._tool_operation_table.c.run_id.in_(self._scoped_run_ids()),
+            self._tool_operation_table.c.deleted.is_(False),
+        )
+
+    @classmethod
+    def access_scope_for_durable_run(
+        cls,
+        session: Session,
+        run_id: int,
+        *,
+        expected_session_id: int,
+    ) -> AiAssistantAccessScope | None:
+        """Bootstrap a scoped repository from a claimed job's durable run identity."""
+        register_ai_assistant_tables()
+        run_table = Base.metadata.tables["ai_assistant_run"]
+        row = session.execute(
+            sa.select(
+                run_table.c.tenant_id,
+                run_table.c.user_id,
+                run_table.c.workspace_id,
+                run_table.c.session_id,
+            ).where(
+                run_table.c.id == run_id,
+                run_table.c.deleted.is_(False),
+            )
+        ).mappings().one_or_none()
+        if row is None or int(row["session_id"]) != expected_session_id:
+            return None
+        return AiAssistantAccessScope(
+            tenant_id=str(row["tenant_id"]),
+            user_id=str(row["user_id"]),
+            workspace_id=str(row["workspace_id"]),
+        )
+
     def get_memory_extraction_cursor(self) -> dict[str, Any] | None:
         row = self._session.execute(
             sa.select(self._memory_cursor_table).where(
+                self._memory_cursor_table.c.tenant_id == self._access_scope.tenant_id,
                 self._memory_cursor_table.c.user_id == self._access_scope.user_id,
                 self._memory_cursor_table.c.workspace_id == self._access_scope.workspace_id,
             )
@@ -103,6 +148,7 @@ class AiAssistantRepository:
             raise KeyError("model usage session/run is outside the current scope")
         now = _usage_utcnow()
         values = {
+            "tenant_id": self._access_scope.tenant_id,
             "user_id": self._access_scope.user_id,
             "workspace_id": self._access_scope.workspace_id,
             "session_id": session_id,
@@ -160,6 +206,7 @@ class AiAssistantRepository:
         self._session.execute(
             self._model_usage_table.update()
             .where(
+                self._model_usage_table.c.tenant_id == self._access_scope.tenant_id,
                 self._model_usage_table.c.user_id == self._access_scope.user_id,
                 self._model_usage_table.c.workspace_id == self._access_scope.workspace_id,
                 self._model_usage_table.c.run_id == run_id,
@@ -194,6 +241,7 @@ class AiAssistantRepository:
         self._session.execute(
             self._model_usage_table.update()
             .where(
+                self._model_usage_table.c.tenant_id == self._access_scope.tenant_id,
                 self._model_usage_table.c.user_id == self._access_scope.user_id,
                 self._model_usage_table.c.workspace_id == self._access_scope.workspace_id,
                 self._model_usage_table.c.run_id == run_id,
@@ -244,6 +292,7 @@ class AiAssistantRepository:
     def get_model_usage_call(self, *, run_id: int, call_id: str) -> dict[str, Any] | None:
         row = self._session.execute(
             sa.select(self._model_usage_table).where(
+                self._model_usage_table.c.tenant_id == self._access_scope.tenant_id,
                 self._model_usage_table.c.user_id == self._access_scope.user_id,
                 self._model_usage_table.c.workspace_id == self._access_scope.workspace_id,
                 self._model_usage_table.c.run_id == run_id,
@@ -262,6 +311,7 @@ class AiAssistantRepository:
         offset: int = 0,
     ) -> list[dict[str, Any]]:
         conditions = [
+            self._model_usage_table.c.tenant_id == self._access_scope.tenant_id,
             self._model_usage_table.c.user_id == self._access_scope.user_id,
             self._model_usage_table.c.workspace_id == self._access_scope.workspace_id,
         ]
@@ -292,6 +342,7 @@ class AiAssistantRepository:
         session_id: int | None = None,
     ) -> dict[str, Any]:
         conditions = [
+            self._model_usage_table.c.tenant_id == self._access_scope.tenant_id,
             self._model_usage_table.c.user_id == self._access_scope.user_id,
             self._model_usage_table.c.workspace_id == self._access_scope.workspace_id,
         ]
@@ -346,6 +397,7 @@ class AiAssistantRepository:
         if dimension is None:
             raise ValueError("unsupported model usage dimension")
         conditions = [
+            self._model_usage_table.c.tenant_id == self._access_scope.tenant_id,
             self._model_usage_table.c.user_id == self._access_scope.user_id,
             self._model_usage_table.c.workspace_id == self._access_scope.workspace_id,
         ]
@@ -401,6 +453,7 @@ class AiAssistantRepository:
         started_before: datetime | None = None,
     ) -> dict[str, int]:
         conditions = [
+            self._model_usage_table.c.tenant_id == self._access_scope.tenant_id,
             self._model_usage_table.c.user_id == self._access_scope.user_id,
             self._model_usage_table.c.workspace_id == self._access_scope.workspace_id,
         ]
@@ -444,6 +497,7 @@ class AiAssistantRepository:
             else_=None,
         )
         conditions = [
+            self._model_usage_table.c.tenant_id == self._access_scope.tenant_id,
             self._model_usage_table.c.user_id == self._access_scope.user_id,
             self._model_usage_table.c.workspace_id == self._access_scope.workspace_id,
             started_at >= day_bounds[0][1],
@@ -531,8 +585,10 @@ class AiAssistantRepository:
                     self._memory_completion_table.c.run_id == self._run_table.c.id,
                 )
                 .where(
+                    self._run_table.c.tenant_id == self._access_scope.tenant_id,
                     self._run_table.c.user_id == self._access_scope.user_id,
                     self._run_table.c.workspace_id == self._access_scope.workspace_id,
+                    self._memory_completion_table.c.tenant_id == self._access_scope.tenant_id,
                     self._memory_completion_table.c.user_id == self._access_scope.user_id,
                     self._memory_completion_table.c.workspace_id == self._access_scope.workspace_id,
                     self._run_table.c.status == "COMPLETED",
@@ -563,7 +619,10 @@ class AiAssistantRepository:
                 ).encode()
             ).hexdigest()
             batch_key = sha256(
-                f"{self._access_scope.user_id}\0{self._access_scope.workspace_id}\0{run_ids}\0{source_hash}".encode()
+                (
+                    f"{self._access_scope.tenant_id}\0{self._access_scope.user_id}"
+                    f"\0{self._access_scope.workspace_id}\0{run_ids}\0{source_hash}"
+                ).encode()
             ).hexdigest()
             now = datetime.now()
             values = {
@@ -584,6 +643,7 @@ class AiAssistantRepository:
                     self._session,
                     self._memory_cursor_table,
                     {
+                        "tenant_id": self._access_scope.tenant_id,
                         "user_id": self._access_scope.user_id,
                         "workspace_id": self._access_scope.workspace_id,
                         "last_processed_run_id": 0,
@@ -611,6 +671,7 @@ class AiAssistantRepository:
             sa.select(self._run_table)
             .where(
                 self._run_table.c.id.in_(run_ids),
+                self._run_table.c.tenant_id == self._access_scope.tenant_id,
                 self._run_table.c.user_id == self._access_scope.user_id,
                 self._run_table.c.workspace_id == self._access_scope.workspace_id,
                 self._run_table.c.status == "COMPLETED",
@@ -633,6 +694,7 @@ class AiAssistantRepository:
         self._session.execute(
             self._memory_cursor_table.update()
             .where(
+                self._memory_cursor_table.c.tenant_id == self._access_scope.tenant_id,
                 self._memory_cursor_table.c.user_id == self._access_scope.user_id,
                 self._memory_cursor_table.c.workspace_id == self._access_scope.workspace_id,
                 self._memory_cursor_table.c.pending_batch_key == batch_key,
@@ -742,6 +804,7 @@ class AiAssistantRepository:
             self._memory_cursor_table.update()
             .where(
                 self._memory_cursor_table.c.id == cursor["id"],
+                self._memory_cursor_table.c.tenant_id == self._access_scope.tenant_id,
                 self._memory_cursor_table.c.user_id == self._access_scope.user_id,
                 self._memory_cursor_table.c.workspace_id == self._access_scope.workspace_id,
                 self._memory_cursor_table.c.pending_batch_key == batch_key,
@@ -776,6 +839,7 @@ class AiAssistantRepository:
         self._session.execute(
             self._memory_cursor_table.update()
             .where(
+                self._memory_cursor_table.c.tenant_id == self._access_scope.tenant_id,
                 self._memory_cursor_table.c.user_id == self._access_scope.user_id,
                 self._memory_cursor_table.c.workspace_id == self._access_scope.workspace_id,
                 self._memory_cursor_table.c.pending_batch_key == batch_key,
@@ -789,6 +853,7 @@ class AiAssistantRepository:
         self._session.execute(
             self._memory_cursor_table.update()
             .where(
+                self._memory_cursor_table.c.tenant_id == self._access_scope.tenant_id,
                 self._memory_cursor_table.c.user_id == self._access_scope.user_id,
                 self._memory_cursor_table.c.workspace_id == self._access_scope.workspace_id,
                 self._memory_cursor_table.c.pending_batch_key == batch_key,
@@ -804,7 +869,10 @@ class AiAssistantRepository:
 
     def _memory_extraction_lock_name(self) -> str:
         digest = sha256(
-            f"{self._access_scope.user_id}\0{self._access_scope.workspace_id}".encode()
+            (
+                f"{self._access_scope.tenant_id}\0{self._access_scope.user_id}"
+                f"\0{self._access_scope.workspace_id}"
+            ).encode()
         ).hexdigest()[:32]
         return f"ai_assistant_memory:{digest}"
 
@@ -958,6 +1026,9 @@ class AiAssistantRepository:
         idempotency_key: str | None,
         request_hash: str,
     ) -> dict[str, Any]:
+        run = self.get_run(run_id)
+        if run is None or int(run["session_id"]) != session_id:
+            raise KeyError(f"AI Assistant run not found for tool operation: {run_id}")
         now = datetime.now()
         row = insert_and_fetch(
             self._session,
@@ -1005,6 +1076,7 @@ class AiAssistantRepository:
         row = self._session.execute(
             sa.select(self._tool_operation_table).where(
                 self._tool_operation_table.c.operation_id == operation_id,
+                self._tool_operation_table.c.run_id.in_(self._scoped_run_ids()),
                 self._tool_operation_table.c.deleted.is_(False),
             )
         ).mappings().one_or_none()
@@ -1013,7 +1085,11 @@ class AiAssistantRepository:
     def list_run_tool_operations(self, run_id: int) -> list[dict[str, Any]]:
         rows = self._session.execute(
             sa.select(self._tool_operation_table)
-            .where(self._tool_operation_table.c.run_id == run_id, self._tool_operation_table.c.deleted.is_(False))
+            .where(
+                self._tool_operation_table.c.run_id == run_id,
+                self._tool_operation_table.c.run_id.in_(self._scoped_run_ids()),
+                self._tool_operation_table.c.deleted.is_(False),
+            )
             .order_by(self._tool_operation_table.c.id.asc())
         ).mappings().all()
         return [dict(row) for row in rows]
@@ -1030,6 +1106,7 @@ class AiAssistantRepository:
             .where(
                 self._tool_operation_table.c.operation_id == operation_id,
                 self._tool_operation_table.c.status == expected_status,
+                self._tool_operation_table.c.run_id.in_(self._scoped_run_ids()),
                 self._tool_operation_table.c.deleted.is_(False),
             )
             .values(status=next_status, updated_at=datetime.now())
@@ -1051,6 +1128,7 @@ class AiAssistantRepository:
             self._tool_operation_table.update()
             .where(
                 self._tool_operation_table.c.operation_id == operation_id,
+                self._tool_operation_table.c.run_id.in_(self._scoped_run_ids()),
                 self._tool_operation_table.c.deleted.is_(False),
             )
             .values(
@@ -1072,6 +1150,7 @@ class AiAssistantRepository:
             self._tool_operation_table.update()
             .where(
                 self._tool_operation_table.c.operation_id == operation_id,
+                self._tool_operation_table.c.run_id.in_(self._scoped_run_ids()),
                 self._tool_operation_table.c.deleted.is_(False),
             )
             .values(status="UNKNOWN", retention_until=retention_until, updated_at=datetime.now())
@@ -1107,6 +1186,7 @@ class AiAssistantRepository:
             .where(
                 self._tool_operation_table.c.operation_id == operation_id,
                 self._tool_operation_table.c.status == "UNKNOWN",
+                self._tool_operation_table.c.run_id.in_(self._scoped_run_ids()),
                 self._tool_operation_table.c.deleted.is_(False),
             )
             .values(status=next_status, completed_at=now, updated_at=now)
@@ -1136,6 +1216,8 @@ class AiAssistantRepository:
         return released
 
     def list_tool_operation_releases(self, operation_id: str) -> list[dict[str, Any]]:
+        if self.get_tool_operation(operation_id) is None:
+            return []
         rows = self._session.execute(
             sa.select(self._tool_operation_release_table)
             .where(self._tool_operation_release_table.c.operation_id == operation_id)
@@ -1162,6 +1244,8 @@ class AiAssistantRepository:
         status: str,
         request_hash: str,
     ) -> dict[str, Any]:
+        if self.get_tool_operation(operation_id) is None:
+            raise KeyError(f"AI Assistant tool operation not found for attempt: {operation_id}")
         now = datetime.now()
         row = insert_and_fetch(
             self._session,
@@ -1189,6 +1273,7 @@ class AiAssistantRepository:
             sa.select(self._tool_attempt_table)
             .where(
                 self._tool_attempt_table.c.operation_id == operation_id,
+                self._tool_attempt_table.c.operation_id.in_(self._scoped_operation_ids()),
                 self._tool_attempt_table.c.deleted.is_(False),
             )
             .order_by(self._tool_attempt_table.c.id.asc())
@@ -1199,6 +1284,7 @@ class AiAssistantRepository:
         row = self._session.execute(
             sa.select(self._tool_attempt_table).where(
                 self._tool_attempt_table.c.attempt_id == attempt_id,
+                self._tool_attempt_table.c.operation_id.in_(self._scoped_operation_ids()),
                 self._tool_attempt_table.c.deleted.is_(False),
             )
         ).mappings().one_or_none()
@@ -1224,6 +1310,7 @@ class AiAssistantRepository:
             self._tool_attempt_table.update()
             .where(
                 self._tool_attempt_table.c.attempt_id == attempt_id,
+                self._tool_attempt_table.c.operation_id.in_(self._scoped_operation_ids()),
                 self._tool_attempt_table.c.deleted.is_(False),
             )
             .values(**values)
@@ -1240,6 +1327,7 @@ class AiAssistantRepository:
             self._session,
             self._session_table,
             {
+                "tenant_id": self._access_scope.tenant_id,
                 "user_id": self._access_scope.user_id,
                 "workspace_id": self._access_scope.workspace_id,
                 "title": title,
@@ -1257,6 +1345,7 @@ class AiAssistantRepository:
         rows = self._session.execute(
             sa.select(self._session_table)
             .where(
+                self._session_table.c.tenant_id == self._access_scope.tenant_id,
                 self._session_table.c.user_id == self._access_scope.user_id,
                 self._session_table.c.workspace_id == self._access_scope.workspace_id,
                 self._session_table.c.deleted.is_(False),
@@ -1269,6 +1358,7 @@ class AiAssistantRepository:
         row = self._session.execute(
             sa.select(self._session_table).where(
                 self._session_table.c.id == session_id,
+                self._session_table.c.tenant_id == self._access_scope.tenant_id,
                 self._session_table.c.user_id == self._access_scope.user_id,
                 self._session_table.c.workspace_id == self._access_scope.workspace_id,
                 self._session_table.c.deleted.is_(False),
@@ -1280,6 +1370,7 @@ class AiAssistantRepository:
         row = self._session.execute(
             sa.select(self._session_table).where(
                 self._session_table.c.id == session_id,
+                self._session_table.c.tenant_id == self._access_scope.tenant_id,
                 self._session_table.c.user_id == self._access_scope.user_id,
                 self._session_table.c.workspace_id == self._access_scope.workspace_id,
             )
@@ -1290,6 +1381,7 @@ class AiAssistantRepository:
         if session_ids is not None and not session_ids:
             return []
         conditions = [
+            self._session_table.c.tenant_id == self._access_scope.tenant_id,
             self._session_table.c.user_id == self._access_scope.user_id,
             self._session_table.c.workspace_id == self._access_scope.workspace_id,
         ]
@@ -1308,6 +1400,7 @@ class AiAssistantRepository:
             self._session_table.update()
             .where(
                 self._session_table.c.id == session_id,
+                self._session_table.c.tenant_id == self._access_scope.tenant_id,
                 self._session_table.c.user_id == self._access_scope.user_id,
                 self._session_table.c.workspace_id == self._access_scope.workspace_id,
                 self._session_table.c.deleted.is_(False),
@@ -1341,6 +1434,7 @@ class AiAssistantRepository:
             self._session_table.update()
             .where(
                 self._session_table.c.id == session_id,
+                self._session_table.c.tenant_id == self._access_scope.tenant_id,
                 self._session_table.c.user_id == self._access_scope.user_id,
                 self._session_table.c.workspace_id == self._access_scope.workspace_id,
                 self._session_table.c.deleted.is_(False),
@@ -1359,6 +1453,7 @@ class AiAssistantRepository:
             self._session_table.update()
             .where(
                 self._session_table.c.id == session_id,
+                self._session_table.c.tenant_id == self._access_scope.tenant_id,
                 self._session_table.c.user_id == self._access_scope.user_id,
                 self._session_table.c.workspace_id == self._access_scope.workspace_id,
                 self._session_table.c.deleted.is_(False),
@@ -1406,6 +1501,7 @@ class AiAssistantRepository:
             self._session,
             self._run_table,
             {
+                "tenant_id": self._access_scope.tenant_id,
                 "user_id": self._access_scope.user_id,
                 "workspace_id": self._access_scope.workspace_id,
                 "session_id": session_id,
@@ -1429,6 +1525,7 @@ class AiAssistantRepository:
             sa.select(self._run_table).where(
                 self._run_table.c.session_id == session_id,
                 self._run_table.c.idempotency_key == idempotency_key,
+                self._run_table.c.tenant_id == self._access_scope.tenant_id,
                 self._run_table.c.user_id == self._access_scope.user_id,
                 self._run_table.c.workspace_id == self._access_scope.workspace_id,
                 self._run_table.c.deleted.is_(False),
@@ -1440,6 +1537,7 @@ class AiAssistantRepository:
         row = self._session.execute(
             sa.select(self._run_table).where(
                 self._run_table.c.id == run_id,
+                self._run_table.c.tenant_id == self._access_scope.tenant_id,
                 self._run_table.c.user_id == self._access_scope.user_id,
                 self._run_table.c.workspace_id == self._access_scope.workspace_id,
                 self._run_table.c.deleted.is_(False),
@@ -1459,6 +1557,7 @@ class AiAssistantRepository:
             self._run_table.update()
             .where(
                 self._run_table.c.id == run_id,
+                self._run_table.c.tenant_id == self._access_scope.tenant_id,
                 self._run_table.c.user_id == self._access_scope.user_id,
                 self._run_table.c.workspace_id == self._access_scope.workspace_id,
                 self._run_table.c.deleted.is_(False),
@@ -1488,6 +1587,7 @@ class AiAssistantRepository:
             self._run_table.update()
             .where(
                 self._run_table.c.id == run_id,
+                self._run_table.c.tenant_id == self._access_scope.tenant_id,
                 self._run_table.c.user_id == self._access_scope.user_id,
                 self._run_table.c.workspace_id == self._access_scope.workspace_id,
                 self._run_table.c.deleted.is_(False),
@@ -1514,6 +1614,7 @@ class AiAssistantRepository:
             .where(
                 self._run_table.c.id == run_id,
                 self._run_table.c.status == expected_status,
+                self._run_table.c.tenant_id == self._access_scope.tenant_id,
                 self._run_table.c.user_id == self._access_scope.user_id,
                 self._run_table.c.workspace_id == self._access_scope.workspace_id,
                 self._run_table.c.deleted.is_(False),
@@ -1533,6 +1634,7 @@ class AiAssistantRepository:
             sa.select(self._run_table)
             .where(
                 self._run_table.c.session_id == session_id,
+                self._run_table.c.tenant_id == self._access_scope.tenant_id,
                 self._run_table.c.user_id == self._access_scope.user_id,
                 self._run_table.c.workspace_id == self._access_scope.workspace_id,
                 self._run_table.c.deleted.is_(False),
@@ -1548,6 +1650,7 @@ class AiAssistantRepository:
             self._run_table.update()
             .where(
                 self._run_table.c.id == run_id,
+                self._run_table.c.tenant_id == self._access_scope.tenant_id,
                 self._run_table.c.user_id == self._access_scope.user_id,
                 self._run_table.c.workspace_id == self._access_scope.workspace_id,
                 self._run_table.c.deleted.is_(False),
@@ -1564,6 +1667,7 @@ class AiAssistantRepository:
             self._session.execute(
                 mysql_insert(self._memory_completion_table)
                 .values(
+                    tenant_id=self._access_scope.tenant_id,
                     user_id=self._access_scope.user_id,
                     workspace_id=self._access_scope.workspace_id,
                     run_id=run_id,
@@ -1608,6 +1712,7 @@ class AiAssistantRepository:
             sa.select(self._message_table)
             .where(
                 self._message_table.c.run_id == run_id,
+                self._message_table.c.run_id.in_(self._scoped_run_ids()),
                 self._message_table.c.deleted.is_(False),
             )
             .order_by(self._message_table.c.id.asc())
@@ -1662,6 +1767,7 @@ class AiAssistantRepository:
             self._session.rollback()
         where = [
             self._event_table.c.run_id == run_id,
+            self._event_table.c.run_id.in_(self._scoped_run_ids()),
             self._event_table.c.deleted.is_(False),
         ]
         if after_sequence > 0:
@@ -1684,6 +1790,9 @@ class AiAssistantRepository:
         status: str,
         duration_ms: int,
     ) -> dict[str, Any]:
+        run = self.get_run(run_id)
+        if run is None or int(run["session_id"]) != session_id:
+            raise KeyError(f"AI Assistant run not found for tool call: {run_id}")
         now = datetime.now()
         row = insert_and_fetch(
             self._session,
@@ -1709,7 +1818,11 @@ class AiAssistantRepository:
     def list_run_tool_calls(self, run_id: int) -> list[dict[str, Any]]:
         rows = self._session.execute(
             sa.select(self._tool_call_table)
-            .where(self._tool_call_table.c.run_id == run_id, self._tool_call_table.c.deleted.is_(False))
+            .where(
+                self._tool_call_table.c.run_id == run_id,
+                self._tool_call_table.c.run_id.in_(self._scoped_run_ids()),
+                self._tool_call_table.c.deleted.is_(False),
+            )
             .order_by(self._tool_call_table.c.id.asc())
         ).mappings().all()
         return [dict(row) for row in rows]
@@ -1723,7 +1836,8 @@ class AiAssistantRepository:
         risk_level: str,
         input_payload: dict[str, Any],
     ) -> dict[str, Any]:
-        if self.get_run(run_id) is None:
+        run = self.get_run(run_id)
+        if run is None or int(run["session_id"]) != session_id:
             raise KeyError(f"AI Assistant run not found: {run_id}")
         now = datetime.now()
         row = insert_and_fetch(
@@ -1757,6 +1871,7 @@ class AiAssistantRepository:
             .where(
                 self._approval_table.c.status == "PENDING",
                 self._approval_table.c.deleted.is_(False),
+                self._run_table.c.tenant_id == self._access_scope.tenant_id,
                 self._run_table.c.user_id == self._access_scope.user_id,
                 self._run_table.c.workspace_id == self._access_scope.workspace_id,
                 self._run_table.c.deleted.is_(False),
@@ -1775,6 +1890,7 @@ class AiAssistantRepository:
             .where(
                 self._approval_table.c.run_id == run_id,
                 self._approval_table.c.deleted.is_(False),
+                self._run_table.c.tenant_id == self._access_scope.tenant_id,
                 self._run_table.c.user_id == self._access_scope.user_id,
                 self._run_table.c.workspace_id == self._access_scope.workspace_id,
                 self._run_table.c.deleted.is_(False),
@@ -1793,6 +1909,7 @@ class AiAssistantRepository:
             .where(
                 self._approval_table.c.id == approval_id,
                 self._approval_table.c.deleted.is_(False),
+                self._run_table.c.tenant_id == self._access_scope.tenant_id,
                 self._run_table.c.user_id == self._access_scope.user_id,
                 self._run_table.c.workspace_id == self._access_scope.workspace_id,
                 self._run_table.c.deleted.is_(False),
@@ -1809,6 +1926,7 @@ class AiAssistantRepository:
                 self._approval_table.c.deleted.is_(False),
                 self._approval_table.c.run_id.in_(
                     sa.select(self._run_table.c.id).where(
+                        self._run_table.c.tenant_id == self._access_scope.tenant_id,
                         self._run_table.c.user_id == self._access_scope.user_id,
                         self._run_table.c.workspace_id == self._access_scope.workspace_id,
                         self._run_table.c.deleted.is_(False),
@@ -1835,6 +1953,7 @@ class AiAssistantRepository:
             self._approval_table.update()
             .where(
                 self._approval_table.c.run_id == run_id,
+                self._approval_table.c.run_id.in_(self._scoped_run_ids()),
                 self._approval_table.c.status == "PENDING",
                 self._approval_table.c.deleted.is_(False),
             )
@@ -1855,6 +1974,7 @@ class AiAssistantRepository:
             self._proposed_action_table.update()
             .where(
                 self._proposed_action_table.c.run_id == run_id,
+                self._proposed_action_table.c.run_id.in_(self._scoped_run_ids()),
                 self._proposed_action_table.c.status == "PENDING",
                 self._proposed_action_table.c.deleted.is_(False),
             )
@@ -1873,6 +1993,16 @@ class AiAssistantRepository:
         title: str,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
+        run = self.get_run(run_id)
+        approval = self.get_approval(approval_id)
+        if (
+            run is None
+            or int(run["session_id"]) != session_id
+            or approval is None
+            or int(approval["run_id"]) != run_id
+            or int(approval["session_id"]) != session_id
+        ):
+            raise KeyError(f"AI Assistant proposed action scope is invalid: {run_id}")
         now = datetime.now()
         row = insert_and_fetch(
             self._session,
@@ -2089,6 +2219,7 @@ class AiAssistantRepository:
             sa.select(self._run_table.c.session_id)
             .where(
                 self._run_table.c.id == run_id,
+                self._run_table.c.tenant_id == self._access_scope.tenant_id,
                 self._run_table.c.user_id == self._access_scope.user_id,
                 self._run_table.c.workspace_id == self._access_scope.workspace_id,
                 self._run_table.c.deleted.is_(False),

@@ -1,0 +1,13 @@
+Slice: 226.4 server-derived approval and control actor
+Date: 2026-07-18
+
+Commands:
+rtk uv run pytest tests/contract/test_ai_assistant_session_runtime_api.py tests/integration/ai_assistant/test_approval_actor_audit.py -q --tb=short
+
+Observed RED:
+Approval and run-control events persisted the request body actorId. A body value
+such as "operator" won over the server RequestContext principal.
+
+Meaning:
+An API caller could forge the audit actor independently of authenticated host
+identity.

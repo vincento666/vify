@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.database import Base
 from app.core.db_write import insert_and_fetch
 from app.core.schema import register_baseline_tables
+from app.modules.runtime.domain.job_payload import validate_durable_job_payload
 
 register_baseline_tables()
 
@@ -33,6 +34,7 @@ class RuntimeJobRepository:
         max_attempts: int = 3,
         available_at: datetime | None = None,
     ) -> dict[str, Any]:
+        validated_payload = validate_durable_job_payload(payload or {})
         normalized_owner_type = owner_type.upper()
         existing = self.get_by_run(
             run_id,
@@ -44,7 +46,7 @@ class RuntimeJobRepository:
                 str(existing.get("status") or "").upper() == "FAILED"
                 and str(job_type).startswith("runtime_v2_resume:")
             ):
-                return self._requeue_failed_resume_job(int(existing["id"]), payload)
+                return self._requeue_failed_resume_job(int(existing["id"]), validated_payload)
             return existing
         now = datetime.now()
         try:
@@ -68,7 +70,7 @@ class RuntimeJobRepository:
                     "started_at": None,
                     "finished_at": None,
                     "last_error": None,
-                    "payload": payload or {},
+                    "payload": validated_payload,
                     "deleted": False,
                     "created_at": now,
                     "updated_at": now,
@@ -88,7 +90,7 @@ class RuntimeJobRepository:
                     str(existing.get("status") or "").upper() == "FAILED"
                     and str(job_type).startswith("runtime_v2_resume:")
                 ):
-                    return self._requeue_failed_resume_job(int(existing["id"]), payload)
+                    return self._requeue_failed_resume_job(int(existing["id"]), validated_payload)
                 return existing
             raise
 

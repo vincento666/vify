@@ -35,6 +35,7 @@ from app.modules.ai_assistant.domain.memory_extraction import (
     MemoryExtractor,
     create_model_memory_extractor,
 )
+from app.modules.ai_assistant.domain.permissions import ApprovalPolicy
 from app.modules.ai_assistant.domain.session_runtime import RunControlConflict
 from app.modules.ai_assistant.domain.streaming_runtime import heartbeat_payload, last_sequence
 from app.modules.ai_assistant.domain.tools import ToolRegistry
@@ -69,16 +70,64 @@ _MEMORY_EXTRACTION_EXECUTOR = ThreadPoolExecutor(
 _MEMORY_EXTRACTION_LOCK = Lock()
 _MEMORY_EXTRACTION_IN_FLIGHT: dict[str, object] = {}
 _MEMORY_EXTRACTION_REQUESTED: set[str] = set()
+AI_ASSISTANT_READ_PERMISSION = "ai_assistant:read"
+AI_ASSISTANT_OPERATE_PERMISSION = "ai_assistant:operate"
+
+
+def require_ai_assistant_read(
+    request_context: RequestContext = Depends(get_request_context),
+    settings: Settings = Depends(get_settings),
+) -> RequestContext:
+    _ensure_ai_assistant_permission(
+        request_context,
+        settings,
+        AI_ASSISTANT_READ_PERMISSION,
+    )
+    return request_context
+
+
+def require_ai_assistant_operate(
+    request_context: RequestContext = Depends(get_request_context),
+    settings: Settings = Depends(get_settings),
+) -> RequestContext:
+    _ensure_ai_assistant_permission(
+        request_context,
+        settings,
+        AI_ASSISTANT_OPERATE_PERMISSION,
+    )
+    return request_context
+
+
+def _ensure_ai_assistant_permission(
+    request_context: RequestContext,
+    settings: Settings,
+    required_permission: str,
+) -> None:
+    if settings.host_identity_mode == "local_headers":
+        return
+    granted = set(request_context.permissions)
+    if (
+        required_permission == AI_ASSISTANT_READ_PERMISSION
+        and AI_ASSISTANT_OPERATE_PERMISSION in granted
+    ):
+        return
+    if required_permission in granted or granted.intersection({"ai_assistant:*", "*"}):
+        return
+    raise HTTPException(
+        status_code=403,
+        detail=f"Missing permission {required_permission}",
+    )
 
 
 def get_ai_assistant_service(
     http_request: Request,
     session: Session = Depends(get_session),
     settings: Settings = Depends(get_settings),
-    request_context: RequestContext = Depends(get_request_context),
+    request_context: RequestContext = Depends(require_ai_assistant_read),
 ) -> AiAssistantHarnessService:
     workspace_root = os.environ.get("HIFY_WORKSPACE_ROOT") or os.getcwd()
     access_scope = access_scope_for_workspace(
+        trusted_tenant_id=request_context.tenant_id,
         trusted_user_id=request_context.actor_id,
         trusted_workspace_root=workspace_root,
     )
@@ -113,11 +162,14 @@ def get_ai_assistant_service(
         tool_registry=ToolRegistry.with_builtin_tools(
             child_execution_adapter=getattr(http_request.app.state, "child_execution_adapter", None),
         ),
+        approval_policy=ApprovalPolicy(environment=settings.deployment_environment),
         live_planner=create_qwen_live_planner(settings),
         memory_store=memory_store,
         memory_scope=memory_scope,
         memory_today=_workspace_today,
         memory_completion_callback=completion_callback,
+        principal_snapshot=request_context.audit_metadata(),
+        access_scope=access_scope,
     )
 
 
@@ -130,6 +182,7 @@ def _memory_runtime_for_scope(
     memory_root = Path(configured_root).expanduser() if configured_root else Path(workspace_root) / ".hify" / "memory"
     resolver, store = _memory_store_for_root(str(memory_root.resolve()))
     scope = resolver.resolve(
+        trusted_tenant_id=access_scope.tenant_id,
         trusted_user_id=access_scope.user_id,
         trusted_workspace_id=access_scope.workspace_id,
     )
@@ -157,7 +210,10 @@ def _schedule_memory_extraction(
     memory_scope: ResolvedMemoryScope,
     extractor: MemoryExtractor,
 ) -> None:
-    scope_key = f"{access_scope.user_id}\0{access_scope.workspace_id}"
+    scope_key = (
+        f"{access_scope.tenant_id}\0{access_scope.user_id}"
+        f"\0{access_scope.workspace_id}"
+    )
     owner = object()
     with _MEMORY_EXTRACTION_LOCK:
         _MEMORY_EXTRACTION_REQUESTED.add(scope_key)
@@ -218,6 +274,7 @@ def _run_memory_extraction(
 def create_session(
     request: CreateAiAssistantSessionRequest | None = None,
     service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
+    _access: RequestContext = Depends(require_ai_assistant_operate),
 ) -> dict[str, Any]:
     payload = request or CreateAiAssistantSessionRequest()
     created = service.create_session(title=payload.title, context=payload.context)
@@ -464,6 +521,7 @@ def get_ai_assistant_session(
 def clear_session_history(
     session_id: int,
     service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
+    _access: RequestContext = Depends(require_ai_assistant_operate),
 ) -> dict[str, Any]:
     if not service.clear_session_history(session_id):
         raise HTTPException(status_code=404, detail="AI 助手会话不存在")
@@ -474,6 +532,7 @@ def clear_session_history(
 def delete_session(
     session_id: int,
     service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
+    _access: RequestContext = Depends(require_ai_assistant_operate),
 ) -> dict[str, Any]:
     if not service.delete_session(session_id):
         raise HTTPException(status_code=404, detail="AI 助手会话不存在")
@@ -497,6 +556,7 @@ def send_message(
     request: SendAiAssistantMessageRequest,
     service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
     settings: Settings = Depends(get_settings),
+    _access: RequestContext = Depends(require_ai_assistant_operate),
 ) -> dict[str, Any]:
     if service.get_session(session_id) is None:
         raise HTTPException(status_code=404, detail="AI 助手会话不存在")
@@ -530,6 +590,7 @@ def start_message(
     request: SendAiAssistantMessageRequest,
     service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
     settings: Settings = Depends(get_settings),
+    _access: RequestContext = Depends(require_ai_assistant_operate),
 ) -> dict[str, Any]:
     if service.get_session(session_id) is None:
         raise HTTPException(status_code=404, detail="AI 助手会话不存在")
@@ -718,6 +779,7 @@ def process_run_worker(
     request: ProcessAiAssistantRunWorkerRequest | None = None,
     service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
     settings: Settings = Depends(get_settings),
+    _access: RequestContext = Depends(require_ai_assistant_operate),
 ) -> dict[str, Any]:
     if service.get_run(run_id) is None:
         raise HTTPException(status_code=404, detail="AI Assistant run not found")
@@ -736,9 +798,15 @@ def pause_run(
     run_id: int,
     request: ApprovalDecisionRequest,
     service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
+    request_context: RequestContext = Depends(require_ai_assistant_operate),
 ) -> dict[str, Any]:
+    actor_audit = _action_actor_audit(request_context, request.actor_id)
     try:
-        run = service.pause_run(run_id, request.actor_id)
+        run = service.pause_run(
+            run_id,
+            str(actor_audit["actorId"]),
+            actor_audit=actor_audit,
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="AI Assistant run not found") from exc
     except RunControlConflict as exc:
@@ -752,9 +820,15 @@ def resume_run(
     http_request: Request,
     request: ApprovalDecisionRequest,
     service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
+    request_context: RequestContext = Depends(require_ai_assistant_operate),
 ) -> dict[str, Any]:
+    actor_audit = _action_actor_audit(request_context, request.actor_id)
     try:
-        run = service.resume_run(run_id, request.actor_id)
+        run = service.resume_run(
+            run_id,
+            str(actor_audit["actorId"]),
+            actor_audit=actor_audit,
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="AI Assistant run not found") from exc
     except RunControlConflict as exc:
@@ -774,9 +848,15 @@ def cancel_run(
     run_id: int,
     request: ApprovalDecisionRequest,
     service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
+    request_context: RequestContext = Depends(require_ai_assistant_operate),
 ) -> dict[str, Any]:
+    actor_audit = _action_actor_audit(request_context, request.actor_id)
     try:
-        run = service.cancel_run(run_id, request.actor_id)
+        run = service.cancel_run(
+            run_id,
+            str(actor_audit["actorId"]),
+            actor_audit=actor_audit,
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="AI Assistant run not found") from exc
     except RunControlConflict as exc:
@@ -869,6 +949,8 @@ def _worker_service_kwargs(service: AiAssistantHarnessService) -> dict[str, Any]
         "memory_scope": getattr(service, "_memory_scope", None),
         "memory_today": getattr(service, "_memory_today", date.today),
         "memory_completion_callback": getattr(service, "_memory_completion_callback", None),
+        "principal_snapshot": getattr(service, "_principal_snapshot", None),
+        "access_scope": getattr(service, "_access_scope", None),
     }
 
 
@@ -889,9 +971,17 @@ def approve(
     approval_id: int,
     request: ApprovalDecisionRequest,
     service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
+    request_context: RequestContext = Depends(require_ai_assistant_operate),
 ) -> dict[str, Any]:
+    actor_audit = _action_actor_audit(request_context, request.actor_id)
     try:
-        return success(service.approve(approval_id, request.actor_id))
+        return success(
+            service.approve(
+                approval_id,
+                str(actor_audit["actorId"]),
+                actor_audit=actor_audit,
+            )
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="AI Assistant approval not found") from exc
     except RunControlConflict as exc:
@@ -903,13 +993,40 @@ def deny(
     approval_id: int,
     request: ApprovalDecisionRequest,
     service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
+    request_context: RequestContext = Depends(require_ai_assistant_operate),
 ) -> dict[str, Any]:
+    actor_audit = _action_actor_audit(request_context, request.actor_id)
     try:
-        return success(service.deny(approval_id, request.actor_id, request.reason))
+        return success(
+            service.deny(
+                approval_id,
+                str(actor_audit["actorId"]),
+                request.reason,
+                actor_audit=actor_audit,
+            )
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="AI Assistant approval not found") from exc
     except RunControlConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+def _action_actor_audit(
+    request_context: RequestContext,
+    legacy_actor_id: str,
+) -> dict[str, Any]:
+    normalized_legacy_actor = legacy_actor_id.strip()
+    audit = request_context.audit_metadata()
+    if not normalized_legacy_actor:
+        legacy_field_status = "absent"
+    elif normalized_legacy_actor == request_context.actor_id:
+        legacy_field_status = "ignored_match"
+    else:
+        legacy_field_status = "ignored_mismatch"
+    return {
+        **audit,
+        "legacyActorIdField": legacy_field_status,
+    }
 
 
 def _session_payload(row: dict[str, Any]) -> dict[str, Any]:

@@ -15,6 +15,7 @@ def register_ai_assistant_tables(metadata: sa.MetaData | None = None) -> None:
             "ai_assistant_session",
             target,
             id_column(),
+            sa.Column("tenant_id", sa.String(120), nullable=False, server_default="local"),
             sa.Column("user_id", sa.String(120), nullable=False, server_default="local-user"),
             sa.Column(
                 "workspace_id",
@@ -30,6 +31,7 @@ def register_ai_assistant_tables(metadata: sa.MetaData | None = None) -> None:
             sa.Index("idx_ai_assistant_session_status", "status"),
             sa.Index(
                 "idx_ai_assistant_session_scope",
+                "tenant_id",
                 "user_id",
                 "workspace_id",
                 "deleted",
@@ -41,6 +43,7 @@ def register_ai_assistant_tables(metadata: sa.MetaData | None = None) -> None:
             "ai_assistant_run",
             target,
             id_column(),
+            sa.Column("tenant_id", sa.String(120), nullable=False, server_default="local"),
             sa.Column("user_id", sa.String(120), nullable=False, server_default="local-user"),
             sa.Column(
                 "workspace_id",
@@ -62,6 +65,7 @@ def register_ai_assistant_tables(metadata: sa.MetaData | None = None) -> None:
             sa.Index("idx_ai_assistant_run_session", "session_id"),
             sa.Index(
                 "idx_ai_assistant_run_scope",
+                "tenant_id",
                 "user_id",
                 "workspace_id",
                 "session_id",
@@ -292,6 +296,7 @@ def register_ai_assistant_tables(metadata: sa.MetaData | None = None) -> None:
             "ai_assistant_memory_cursor",
             target,
             id_column(),
+            sa.Column("tenant_id", sa.String(120), nullable=False, server_default="local"),
             sa.Column("user_id", sa.String(120), nullable=False),
             sa.Column("workspace_id", sa.String(128), nullable=False),
             sa.Column("last_processed_run_id", BIGINT, nullable=False, server_default="0"),
@@ -308,6 +313,7 @@ def register_ai_assistant_tables(metadata: sa.MetaData | None = None) -> None:
             sa.Column("last_error", sa.String(1000), nullable=True),
             *timestamps(),
             sa.UniqueConstraint(
+                "tenant_id",
                 "user_id",
                 "workspace_id",
                 name="idx_ai_assistant_memory_cursor_scope",
@@ -319,6 +325,7 @@ def register_ai_assistant_tables(metadata: sa.MetaData | None = None) -> None:
             "ai_assistant_memory_completion",
             target,
             id_column(),
+            sa.Column("tenant_id", sa.String(120), nullable=False, server_default="local"),
             sa.Column("user_id", sa.String(120), nullable=False),
             sa.Column("workspace_id", sa.String(128), nullable=False),
             sa.Column("run_id", BIGINT, nullable=False),
@@ -327,6 +334,7 @@ def register_ai_assistant_tables(metadata: sa.MetaData | None = None) -> None:
             sa.UniqueConstraint("run_id", name="idx_ai_assistant_memory_completion_run"),
             sa.Index(
                 "idx_ai_assistant_memory_completion_scope",
+                "tenant_id",
                 "user_id",
                 "workspace_id",
                 "id",
@@ -338,6 +346,7 @@ def register_ai_assistant_tables(metadata: sa.MetaData | None = None) -> None:
             "ai_assistant_model_usage",
             target,
             id_column(),
+            sa.Column("tenant_id", sa.String(120), nullable=False, server_default="local"),
             sa.Column("user_id", sa.String(120), nullable=False),
             sa.Column("workspace_id", sa.String(128), nullable=False),
             sa.Column("session_id", BIGINT, nullable=False),
@@ -362,6 +371,7 @@ def register_ai_assistant_tables(metadata: sa.MetaData | None = None) -> None:
             sa.Column("completed_at", sa.DateTime(), nullable=True),
             *timestamps(),
             sa.UniqueConstraint(
+                "tenant_id",
                 "user_id",
                 "workspace_id",
                 "run_id",
@@ -370,12 +380,14 @@ def register_ai_assistant_tables(metadata: sa.MetaData | None = None) -> None:
             ),
             sa.Index(
                 "idx_ai_assistant_model_usage_scope_time",
+                "tenant_id",
                 "user_id",
                 "workspace_id",
                 "started_at",
             ),
             sa.Index(
                 "idx_ai_assistant_model_usage_session",
+                "tenant_id",
                 "user_id",
                 "workspace_id",
                 "session_id",

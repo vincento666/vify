@@ -39,6 +39,7 @@ class MemoryConcurrentModificationError(RuntimeError):
 
 @dataclass(frozen=True)
 class ResolvedMemoryScope:
+    _tenant_segment: str | None
     _workspace_segment: str
     _user_segment: str
     _authority: object
@@ -64,12 +65,22 @@ class MemoryScopeResolver:
     def resolve(
         self,
         *,
+        trusted_tenant_id: str = "local",
         trusted_user_id: str,
         trusted_workspace_id: str,
     ) -> ResolvedMemoryScope:
-        if not trusted_user_id.strip() or not trusted_workspace_id.strip():
-            raise ValueError("trusted user and workspace IDs are required")
+        if (
+            not trusted_tenant_id.strip()
+            or not trusted_user_id.strip()
+            or not trusted_workspace_id.strip()
+        ):
+            raise ValueError("trusted tenant, user and workspace IDs are required")
         return ResolvedMemoryScope(
+            _tenant_segment=(
+                None
+                if trusted_tenant_id.strip() == "local"
+                else _scope_segment("tenant", trusted_tenant_id)
+            ),
             _workspace_segment=_scope_segment("workspace", trusted_workspace_id),
             _user_segment=_scope_segment("user", trusted_user_id),
             _authority=self._authority,
@@ -81,7 +92,16 @@ class MemoryScopeResolver:
 
     def lock_key(self, scope: ResolvedMemoryScope) -> str:
         self.validate(scope)
-        return f"{self._root}:{scope._workspace_segment}/{scope._user_segment}"
+        segments = [
+            segment
+            for segment in (
+                scope._tenant_segment,
+                scope._workspace_segment,
+                scope._user_segment,
+            )
+            if segment is not None
+        ]
+        return f"{self._root}:{'/'.join(segments)}"
 
     def duplicate_root_fd(self) -> int:
         with self._lifecycle_lock:
@@ -122,12 +142,10 @@ class MarkdownMemoryStore:
 
     def memory_path(self, scope: ResolvedMemoryScope) -> Path:
         self._resolver.validate(scope)
-        candidate = (
-            self._root
-            / scope._workspace_segment
-            / scope._user_segment
-            / "MEMORY.md"
-        )
+        candidate = self._root
+        if scope._tenant_segment is not None:
+            candidate /= scope._tenant_segment
+        candidate = candidate / scope._workspace_segment / scope._user_segment / "MEMORY.md"
         try:
             candidate.resolve(strict=False).relative_to(self._root)
         except ValueError as exc:
@@ -497,7 +515,13 @@ def _open_scope_directory_fd(
 ) -> int:
     current_fd = root_fd
     try:
-        for segment in (scope._workspace_segment, scope._user_segment):
+        for segment in (
+            scope._tenant_segment,
+            scope._workspace_segment,
+            scope._user_segment,
+        ):
+            if segment is None:
+                continue
             if create:
                 try:
                     os.mkdir(segment, mode=0o700, dir_fd=current_fd)

@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     redis_url: str | None = None
     log_level: str = "INFO"
     persistence_mode: str = "local"
+    deployment_environment: str = "local"
+    host_identity_mode: str = "local_headers"
     runtime_lab_sop_chatflow_ids: str | None = None
     runtime_lab_sop_runtime_invocation_mode: str = "async"
     runtime_lab_sop_llm_mode: str = "mock"
@@ -58,8 +60,16 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="HIFY_", env_file=".env", extra="ignore")
 
     @model_validator(mode="after")
-    def validate_database_url(self) -> "Settings":
+    def validate_settings(self) -> "Settings":
         assert_mysql8_database_url(self.database_url)
+        normalized_environment = self.deployment_environment.strip().lower()
+        normalized_identity_mode = self.host_identity_mode.strip().lower()
+        if normalized_identity_mode not in {"local_headers", "trusted_state"}:
+            raise ValueError("host_identity_mode must be local_headers or trusted_state")
+        if normalized_environment in {"prod", "production"} and normalized_identity_mode != "trusted_state":
+            raise ValueError("production deployment requires host_identity_mode=trusted_state")
+        self.deployment_environment = normalized_environment
+        self.host_identity_mode = normalized_identity_mode
         return self
 
 

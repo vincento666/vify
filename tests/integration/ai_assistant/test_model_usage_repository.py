@@ -42,6 +42,7 @@ class AiAssistantModelUsageRepositoryTest(unittest.TestCase):
 
         self.assertTrue(
             {
+                "tenant_id",
                 "user_id",
                 "workspace_id",
                 "session_id",
@@ -66,7 +67,10 @@ class AiAssistantModelUsageRepositoryTest(unittest.TestCase):
                 "completed_at",
             }.issubset(columns)
         )
-        self.assertIn(("user_id", "workspace_id", "run_id", "call_id"), unique_constraints)
+        self.assertIn(
+            ("tenant_id", "user_id", "workspace_id", "run_id", "call_id"),
+            unique_constraints,
+        )
 
     def test_memory_extractor_usage_is_attributed_to_third_run(self) -> None:
         from app.modules.ai_assistant.domain.access_scope import AiAssistantAccessScope

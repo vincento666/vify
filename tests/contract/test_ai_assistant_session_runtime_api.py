@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from collections.abc import Generator
 from pathlib import Path
-from time import sleep
+from time import monotonic, sleep
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -167,7 +167,7 @@ class AiAssistantSessionRuntimeApiContractTest(unittest.TestCase):
             paused = client.post(f"/api/v1/ai-assistant/runs/{first['runId']}/pause", json={"actorId": "operator"})
             paused_snapshot = client.get(f"/api/v1/ai-assistant/runs/{first['runId']}/snapshot").json()["data"]
             resumed = client.post(f"/api/v1/ai-assistant/runs/{first['runId']}/resume", json={"actorId": "operator"})
-            self._process_run(first["runId"])
+            _wait_for_run_status(client, first["runId"], {"COMPLETED"})
             with client.stream("GET", f"{first['eventStreamRef']}&_testLimit=20") as stream:
                 _read_sse_frames(stream, 20)
             second = client.post(
@@ -180,6 +180,10 @@ class AiAssistantSessionRuntimeApiContractTest(unittest.TestCase):
         self.assertEqual(paused.status_code, 200, paused.text)
         self.assertEqual(paused.json()["data"]["status"], "PAUSED")
         self.assertEqual(paused_snapshot["checkpoint"]["status"], "PAUSED")
+        self.assertEqual(
+            paused_snapshot["checkpoint"]["control"]["actorId"],
+            "local-user",
+        )
         self.assertEqual(resumed.status_code, 200, resumed.text)
         self.assertEqual(resumed.json()["data"]["status"], "QUEUED")
         self.assertEqual(cancelled.status_code, 200, cancelled.text)
@@ -294,7 +298,8 @@ def _read_sse_frames(response, count: int) -> list[dict]:
 
 def _wait_for_run_status(client: TestClient, run_id: int, expected_statuses: set[str]) -> dict:
     last: dict | None = None
-    for _ in range(40):
+    deadline = monotonic() + 5
+    while monotonic() < deadline:
         last = client.get(f"/api/v1/ai-assistant/runs/{run_id}/snapshot").json()["data"]
         if last["run"]["status"] in expected_statuses:
             return last
@@ -304,7 +309,8 @@ def _wait_for_run_status(client: TestClient, run_id: int, expected_statuses: set
 
 def _wait_for_event_type(client: TestClient, run_id: int, event_type: str) -> list[dict]:
     last: list[dict] = []
-    for _ in range(40):
+    deadline = monotonic() + 5
+    while monotonic() < deadline:
         last = client.get(f"/api/v1/ai-assistant/runs/{run_id}/events").json()["data"]["list"]
         if event_type in {event["type"] for event in last}:
             return last

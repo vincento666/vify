@@ -1,0 +1,15 @@
+Slice: 226.4 tenant and dependent-resource scope
+Date: 2026-07-18
+
+Commands:
+rtk uv run pytest tests/integration/ai_assistant/test_scope_authorization.py tests/integration/runtime_jobs/test_ai_assistant_runtime_job_handler.py -q --tb=short
+
+Observed RED:
+The same user/workspace in two tenants resolved the same session. Direct
+repository reads exposed foreign run events and tool operations, and the
+standalone handler did not prove that the claimed job owner matched the durable
+AI Assistant session.
+
+Meaning:
+Router prechecks were not a complete data isolation boundary and durable worker
+scope could not be reconstructed safely after process restart.
