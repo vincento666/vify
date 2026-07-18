@@ -62,7 +62,7 @@ describe('ai assistant execution timeline', () => {
 
     const timeline = buildAiAssistantTimeline(events)
 
-    expect(timeline.map((item) => item.kind)).toEqual(['model-output', 'tool'])
+    expect(timeline.map((item) => item.kind)).toEqual(['model-output', 'tool', 'approval'])
     expect(timeline[0].summary).toBe('我先读取文件。')
     expect(timeline[1].title).toBe('工具调用')
     expect(timeline[1].details).toEqual([])
@@ -70,7 +70,7 @@ describe('ai assistant execution timeline', () => {
     expect(timeline[1].toolInvocations?.[0].outputRows).toContainEqual(
       expect.objectContaining({ label: '工具调用 · 已完成', value: '输出：hello' }),
     )
-    expect(timeline.some((item) => item.approvalId === 9)).toBe(false)
+    expect(timeline.some((item) => item.approvalId === 9)).toBe(true)
   })
 
   it('assembles consecutive model stream chunks into one visible model output message', () => {
@@ -99,6 +99,7 @@ describe('ai assistant execution timeline', () => {
       'model-output',
       'file',
       'model-output',
+      'approval',
     ])
     expect(timeline[0].summary).toBe('我先读取文件。')
     expect(timeline[0].phase).toBeUndefined()
@@ -106,7 +107,7 @@ describe('ai assistant execution timeline', () => {
     expect(timeline[2].summary).toBe('最终回答。')
     expect(timeline[2].sequence).toBe(6)
     expect(timeline[2].phase).toBe('final_answer')
-    expect(timeline.some((item) => item.approvalId === 9)).toBe(false)
+    expect(timeline.some((item) => item.approvalId === 9)).toBe(true)
   })
 
   it('assembles canonical text delta events into one visible model output message', () => {

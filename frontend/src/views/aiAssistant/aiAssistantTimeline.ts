@@ -17,6 +17,7 @@ export type AiAssistantTimelineKind =
 export interface AiAssistantTimelineItem {
   id: string
   eventId: number
+  eventIds: number[]
   sequence: number
   kind: AiAssistantTimelineKind
   tone: 'running' | 'success' | 'waiting' | 'danger' | 'neutral'
@@ -117,6 +118,7 @@ function eventToTimelineItem(event: AiAssistantEvent): AiAssistantTimelineItem {
   return {
     id: `${event.runId}-${event.sequence}-${event.type}`,
     eventId: event.id,
+    eventIds: [event.id],
     sequence: event.sequence,
     kind,
     tone: eventTone(event),
@@ -143,6 +145,7 @@ function flushModelStreamGroup(
   timeline.push({
     id: `${first.runId}-${first.sequence}-${last.sequence}-${first.type}`,
     eventId: last.id,
+    eventIds: visibleEvents.map((event) => event.id),
     sequence: first.sequence,
     kind: 'model-output',
     tone: modelStreamTone(visibleEvents),
@@ -209,7 +212,7 @@ function eventTone(event: AiAssistantEvent): AiAssistantTimelineItem['tone'] {
 
 function timelineTitle(event: AiAssistantEvent, kind: AiAssistantTimelineKind) {
   if (kind === 'model-thought') return '思考过程'
-  if (kind === 'approval') return '审批通过'
+  if (kind === 'approval') return approvalTitle(event)
   return event.visibleTitle || event.type
 }
 
@@ -305,6 +308,7 @@ function toolGroupsToTimelineItem(groups: ToolEventGroup[]): AiAssistantTimeline
   return {
     id: `${firstEvent.runId}-${firstSequence}-${lastSequence}-tool-summary`,
     eventId: resultEvent.id,
+    eventIds: events.map((event) => event.id),
     sequence: firstSequence,
     kind: 'tool',
     tone: toolGroupsTone(orderedGroups),
@@ -359,6 +363,7 @@ function fileGroupsToTimelineItem(groups: ToolEventGroup[]): AiAssistantTimeline
   return {
     id: `${firstEvent.runId}-${firstSequence}-${lastSequence}-file-summary`,
     eventId: resultEvent.id,
+    eventIds: events.map((event) => event.id),
     sequence: firstSequence,
     kind: 'file',
     tone: toolGroupsTone(orderedGroups),
@@ -508,8 +513,14 @@ function rowsToBlock(rows: AiAssistantToolInvocationRow[]) {
 function shouldRenderEvent(event: AiAssistantEvent) {
   if (event.type === 'model.thought_summary') return true
   if (event.type === 'stream.fallback') return true
-  if (event.type === 'approval.approved') return true
+  if (event.type.startsWith('approval.')) return true
   return false
+}
+
+function approvalTitle(event: AiAssistantEvent) {
+  if (event.type === 'approval.required') return event.visibleTitle || '需要审批'
+  if (event.type === 'approval.denied') return event.visibleTitle || '审批拒绝'
+  return '审批通过'
 }
 
 function toolGroupTone(group: ToolEventGroup): AiAssistantTimelineItem['tone'] {

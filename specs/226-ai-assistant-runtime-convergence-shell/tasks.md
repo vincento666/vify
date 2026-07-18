@@ -1,6 +1,6 @@
 # Tasks — Spec 226
 
-Status: `226.6 complete / 226.7 ready`
+Status: `226.7 complete / 226.8 ready`
 
 Evidence root:
 `artifacts/slices/226-ai-assistant-runtime-convergence-shell/<slice>/`
@@ -116,19 +116,19 @@ Evidence for this contract round is the repository diff and final Contract Gate 
 
 ## 226.7 P2 — Hify Light Activity Shell
 
-- [ ] TDD preflight。
-- [ ] RED：running 默认展开，completed 自动折叠。
-- [ ] RED：manual override 在 event upsert/SSE reconnect 后保持。
-- [ ] RED：failed/waiting approval 不自动折叠。
-- [ ] RED：真实 running child 存在态、active count、完成折叠。
-- [ ] RED：model delta 与活动流并行即时出现。
-- [ ] RED：Hify tokens/rem/reduced-motion/a11y。
-- [ ] 拆出 activity feed/row/subagent/progress/stream composable。
-- [ ] 保留 raw audit detail 与就地 approval actions。
-- [ ] Frontend unit / build / rem / E2E。
-- [ ] Browser UAT：Hify 亮色主题截图，包含 running、completed、approval/error、
+- [x] TDD preflight。
+- [x] RED：running 默认展开，completed 自动折叠。
+- [x] RED：manual override 在 event upsert/SSE reconnect 后保持。
+- [x] RED：failed/waiting approval 不自动折叠。
+- [x] RED：真实 running child 存在态、active count、完成折叠。
+- [x] RED：model delta 与活动流并行即时出现。
+- [x] RED：Hify tokens/rem/reduced-motion/a11y。
+- [x] 拆出 activity feed/row/subagent/progress/stream composable。
+- [x] 保留 raw audit detail 与就地 approval actions。
+- [x] Frontend unit / build / rem / E2E。
+- [x] Browser UAT：Hify 亮色主题截图，包含 running、completed、approval/error、
   running subagent 五个状态。
-- [ ] Checker / Reviewer / slice commit。
+- [x] Checker / Reviewer / slice commit。
 
 ## 226.8 Cleanup — Duplicate Harness, Registry And Legacy Paths
 

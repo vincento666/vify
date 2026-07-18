@@ -102,42 +102,24 @@
             <span data-testid="ai-assistant-user-message-meta">{{ runThreadStartedAt(thread) }}</span>
           </div>
         </div>
-        <template v-for="item in runThreadPresentationItems(thread)" :key="presentationItemKey(item)">
-          <article
-            v-if="item.kind === 'processed'"
-            class="ai-run-event-group"
-            data-testid="ai-assistant-run-task-card"
-          >
-            <span class="ai-event__detail-anchor" data-testid="ai-assistant-run-event-group" />
-            <span class="ai-event__detail-anchor" data-testid="ai-assistant-processed-group" />
-            <button
-              class="ai-run-event-group__header"
-              type="button"
-              data-testid="ai-assistant-run-event-group-header"
-              :aria-expanded="isProcessedGroupExpanded(item, thread)"
-              @click="toggleProcessedGroup(item, thread)"
-            >
-              <span class="ai-run-event-group__status-icon" data-testid="ai-assistant-run-status-icon">
-                <LoadingOutlined v-if="isProcessedGroupRunning(item, thread)" class="ai-run-event-group__spinner" />
-                <CheckCircleOutlined v-else-if="isRunThreadDone(thread)" />
-                <ClockCircleOutlined v-else />
-              </span>
-              <strong class="ai-run-event-group__title-text">已处理</strong>
-              <small class="ai-run-event-group__meta">{{ processedGroupMeta(item.items) }}</small>
-              <CollapseChevron
-                class="ai-collapse-chevron"
-                aria-hidden="true"
-                :class="{ expanded: isProcessedGroupExpanded(item, thread) }"
-              />
-            </button>
-
-            <section
-              v-if="isProcessedGroupExpanded(item, thread)"
-              class="ai-run-event-line"
-              data-testid="ai-assistant-run-event-line"
-            >
+        <AiAssistantActivityFeed
+          :activities="runActivities(thread)"
+          :expansion-overrides="activityExpansionOverrides"
+          @toggle="toggleActivity"
+        >
+          <template #default="{ nowMs }">
+            <template v-for="item in activityFeedItems(thread)" :key="item.id">
+              <AiAssistantActivityRow
+                v-if="item.kind === 'activity'"
+                :activity="item.activity"
+                :expanded="isActivityExpanded(item.activity)"
+                :now-ms="nowMs"
+                :progress="activityProgressForThread(item.activity, thread)"
+                @toggle="toggleActivity(item.activity)"
+              >
+                <section class="ai-activity-event-list">
               <article
-                v-for="eventItem in item.items"
+                v-for="eventItem in activityTimelineItemsForThread(item.activity, thread)"
                 :key="eventItem.id"
                 class="ai-event"
                 :class="[`tone-${eventToneClass(eventItem, thread)}`, `kind-${eventItem.kind}`]"
@@ -306,37 +288,39 @@
                         </dd>
                       </div>
                     </dl>
-                    <div v-if="shouldShowApprovalActions(eventItem, thread)" class="ai-event__actions">
-                      <a-button
-                        size="small"
-                        type="primary"
-                        data-testid="ai-assistant-approval-approve"
-                        @click="approveTimelineItem(eventItem)"
-                      >
-                        批准
-                      </a-button>
-                      <a-button
-                        size="small"
-                        danger
-                        data-testid="ai-assistant-approval-deny"
-                        @click="denyTimelineItem(eventItem)"
-                      >
-                        拒绝
-                      </a-button>
-                    </div>
+                  </div>
+                  <div v-if="shouldShowApprovalActions(eventItem, thread)" class="ai-event__actions">
+                    <a-button
+                      size="small"
+                      type="primary"
+                      data-testid="ai-assistant-approval-approve"
+                      @click="approveTimelineItem(eventItem)"
+                    >
+                      批准
+                    </a-button>
+                    <a-button
+                      size="small"
+                      danger
+                      data-testid="ai-assistant-approval-deny"
+                      @click="denyTimelineItem(eventItem)"
+                    >
+                      拒绝
+                    </a-button>
                   </div>
                 </div>
               </article>
-            </section>
-          </article>
-          <div
-            v-else-if="item.kind === 'assistant-output'"
-            class="ai-message ai-message--assistant"
-            data-testid="ai-assistant-assistant-message"
-          >
-            <p>{{ item.item.summary }}</p>
-          </div>
-        </template>
+                </section>
+              </AiAssistantActivityRow>
+              <div
+                v-else-if="item.kind === 'model-output'"
+                class="ai-message ai-message--assistant"
+                data-testid="ai-assistant-assistant-message"
+              >
+                <p>{{ item.item.summary }}</p>
+              </div>
+            </template>
+          </template>
+        </AiAssistantActivityFeed>
         <div
           v-if="runThreadFinalAnswer(thread)"
           class="ai-message ai-message--assistant ai-message--completion"
@@ -809,12 +793,17 @@ import {
   type AiAssistantToolCall,
 } from '@/api/aiAssistant'
 import { openAiAssistantEventStream, type AiAssistantEventStream } from './aiAssistantEventStream'
+import AiAssistantActivityFeed from './AiAssistantActivityFeed.vue'
+import AiAssistantActivityRow from './AiAssistantActivityRow.vue'
+import type { RunActivity } from './aiAssistantActivity'
+import { activityProgress } from './aiAssistantActivityView'
 import {
   buildAiAssistantTimeline,
   type AiAssistantTimelineItem,
   type AiAssistantToolInvocation,
   type AiAssistantToolInvocationRow,
 } from './aiAssistantTimeline'
+import { useAiAssistantActivityStream } from './useAiAssistantActivityStream'
 
 interface AiAssistantRunThread {
   run: AiAssistantRun
@@ -830,20 +819,6 @@ interface AiAssistantInspectorExecutionStep {
   status: string
   summary?: string
 }
-
-type AiAssistantRunPresentationItem =
-  | {
-      kind: 'processed'
-      id: string
-      runId: number
-      items: AiAssistantTimelineItem[]
-    }
-  | {
-      kind: 'assistant-output'
-      id: string
-      runId: number
-      item: AiAssistantTimelineItem
-    }
 
 const AI_ASSISTANT_RUNTIME_CONFIG_STORAGE_KEY = 'hify.ai-assistant.runtime-config'
 const DEFAULT_RUNTIME_CONFIG: AiAssistantRuntimeConfig = {
@@ -881,8 +856,16 @@ const events = ref<AiAssistantEvent[]>([])
 const inspector = ref<AiAssistantRunInspector | null>(null)
 const expandedEventIds = ref<Set<string>>(new Set())
 const expandedToolInvocationIds = ref<Set<string>>(new Set())
-const processedGroupExpanded = ref<Record<string, boolean>>({})
 const completionFeedback = ref<Record<number, 'like' | 'dislike'>>({})
+const {
+  activityExpansionOverrides,
+  activitiesForEvents,
+  feedItemsForEvents,
+  timelineItemsForActivity,
+  isActivityExpanded,
+  toggleActivity,
+  resetActivityExpansionOverrides,
+} = useAiAssistantActivityStream()
 let activeEventStream: AiAssistantEventStream | null = null
 let inspectorRefreshTimer: number | null = null
 
@@ -1006,7 +989,7 @@ async function loadSessionRuns(nextSessionId: number, preferredRunId?: number) {
   const sessionRuns = (await listAiAssistantSessionRuns(nextSessionId)).list
   runs.value = sessionRuns
   expandedEventIds.value = new Set()
-  processedGroupExpanded.value = {}
+  resetActivityExpansionOverrides()
   runThreads.value = await loadRunThreadRecords(sessionRuns)
   const orderedThreads = runThreadsForView.value
   const nextRunId = preferredRunId ?? orderedThreads[orderedThreads.length - 1]?.run.id
@@ -1019,6 +1002,7 @@ async function loadSessionRuns(nextSessionId: number, preferredRunId?: number) {
     return
   }
   setActiveRunThread(nextRunId)
+  resumeRunEventStreamIfRunning(nextRunId)
 }
 
 async function loadRunInspector(nextRunId: number) {
@@ -1052,6 +1036,12 @@ function setActiveRunThread(nextRunId: number) {
   runStatus.value = thread.inspector?.run.status ?? thread.run.status
 }
 
+function resumeRunEventStreamIfRunning(nextRunId: number) {
+  const thread = runThreads.value.find((item) => item.run.id === nextRunId)
+  const status = thread?.inspector?.run.status ?? thread?.run.status
+  if (status === 'RUNNING') openRunEventStream(nextRunId)
+}
+
 async function clearCurrentHistory() {
   if (!sessionId.value) return
   closeActiveEventStream()
@@ -1063,7 +1053,7 @@ async function clearCurrentHistory() {
   runId.value = null
   runStatus.value = 'IDLE'
   expandedEventIds.value = new Set()
-  processedGroupExpanded.value = {}
+  resetActivityExpansionOverrides()
   await loadSessions()
 }
 
@@ -1089,7 +1079,7 @@ async function resetConversationAfterDelete() {
   runId.value = null
   runStatus.value = 'IDLE'
   expandedEventIds.value = new Set()
-  processedGroupExpanded.value = {}
+  resetActivityExpansionOverrides()
   await createConversation()
 }
 
@@ -1112,7 +1102,7 @@ async function submit() {
     inspector.value = null
     runId.value = result.runId
     expandedEventIds.value = new Set()
-    processedGroupExpanded.value = {}
+    resetActivityExpansionOverrides()
     runStatus.value = result.status
     await loadSessions()
     await refreshRuns(result.sessionId, result.runId)
@@ -1290,47 +1280,20 @@ function timelineForThreadEcho(thread: AiAssistantRunThread) {
   return timelineForThread(thread).filter((item) => !isFinalAnswerItem(item))
 }
 
-function runThreadPresentationItems(thread: AiAssistantRunThread) {
-  return buildRunThreadPresentationItems(thread.run.id, timelineForThreadEcho(thread))
+function runActivities(thread: AiAssistantRunThread) {
+  return activitiesForEvents(thread.events)
 }
 
-function buildRunThreadPresentationItems(runIdValue: number, timeline: AiAssistantTimelineItem[]): AiAssistantRunPresentationItem[] {
-  const items: AiAssistantRunPresentationItem[] = []
-  let processedItems: AiAssistantTimelineItem[] = []
-
-  const flushProcessedItems = () => {
-    if (processedItems.length === 0) return
-    const first = processedItems[0]
-    const last = processedItems[processedItems.length - 1]
-    items.push({
-      kind: 'processed',
-      id: `processed-${runIdValue}-${first.sequence}-${last.sequence}`,
-      runId: runIdValue,
-      items: processedItems,
-    })
-    processedItems = []
-  }
-
-  for (const item of timeline) {
-    if (item.kind === 'model-output') {
-      flushProcessedItems()
-      items.push({
-        kind: 'assistant-output',
-        id: `assistant-output-${item.id}`,
-        runId: runIdValue,
-        item,
-      })
-      continue
-    }
-    processedItems.push(item)
-  }
-
-  flushProcessedItems()
-  return items
+function activityFeedItems(thread: AiAssistantRunThread) {
+  return feedItemsForEvents(thread.events)
 }
 
-function presentationItemKey(item: AiAssistantRunPresentationItem) {
-  return item.id
+function activityTimelineItemsForThread(activity: RunActivity, thread: AiAssistantRunThread) {
+  return timelineItemsForActivity(activity, thread.events)
+}
+
+function activityProgressForThread(activity: RunActivity, thread: AiAssistantRunThread) {
+  return activityProgress(activity, thread.inspector?.plan?.steps ?? [])
 }
 
 function isFinalAnswerItem(item: AiAssistantTimelineItem) {
@@ -1352,34 +1315,6 @@ function runThreadFinalAnswer(thread: AiAssistantRunThread) {
 function finalAnswerFromRun(run: AiAssistantRun) {
   const answer = run.result?.finalAnswer
   return typeof answer === 'string' ? answer.trim() : ''
-}
-
-function processedGroupMeta(items: AiAssistantTimelineItem[]) {
-  const thoughtCount = items.filter((item) => item.kind === 'model-thought').length
-  const toolCount = items.filter((item) => item.kind === 'tool' || item.kind === 'tool-output').length
-  return `思考 ${thoughtCount} 次 / 工具调用 ${toolCount} 次`
-}
-
-function isProcessedGroupRunning(item: AiAssistantRunPresentationItem, thread: AiAssistantRunThread) {
-  if (item.kind !== 'processed') return false
-  if (!isRunThreadRunning(thread)) return false
-  const presentationItems = runThreadPresentationItems(thread)
-  return item.id === presentationItems[presentationItems.length - 1]?.id
-}
-
-function isProcessedGroupExpanded(item: AiAssistantRunPresentationItem, thread: AiAssistantRunThread) {
-  if (item.kind !== 'processed') return false
-  const explicit = processedGroupExpanded.value[item.id]
-  if (typeof explicit === 'boolean') return explicit
-  return isProcessedGroupRunning(item, thread)
-}
-
-function toggleProcessedGroup(item: AiAssistantRunPresentationItem, thread: AiAssistantRunThread) {
-  if (item.kind !== 'processed') return
-  processedGroupExpanded.value = {
-    ...processedGroupExpanded.value,
-    [item.id]: !isProcessedGroupExpanded(item, thread),
-  }
 }
 
 function copyFinalAnswer(thread: AiAssistantRunThread) {
@@ -1602,11 +1537,6 @@ function dedupeApprovals(approvals: AiAssistantApproval[]) {
 
 function isRunThreadRunning(thread: AiAssistantRunThread) {
   return (thread.inspector?.run.status ?? thread.run.status) === 'RUNNING'
-}
-
-function isRunThreadDone(thread: AiAssistantRunThread) {
-  const status = thread.inspector?.run.status ?? thread.run.status
-  return status === 'COMPLETED' || status === 'APPROVED'
 }
 
 function sessionDisplayTitle(session: AiAssistantSession) {
@@ -2084,11 +2014,6 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
   color: var(--color-text-tertiary, #8b92a8);
 }
 
-.ai-run-event-group {
-  display: grid;
-  gap: 0.625rem;
-}
-
 .ai-message {
   display: grid;
   gap: 0.25rem;
@@ -2167,23 +2092,6 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
   color: var(--color-text-secondary, #4b5268);
 }
 
-.ai-run-event-group__header {
-  width: 100%;
-  display: grid;
-  grid-template-columns: auto auto auto auto;
-  gap: 0.5rem;
-  align-items: center;
-  justify-content: start;
-  justify-items: start;
-  padding: 0.75rem;
-  color: inherit;
-  text-align: left;
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-lg, 0.5rem);
-  cursor: pointer;
-}
-
 .ai-collapse-chevron {
   width: 0.75rem;
   height: 0.75rem;
@@ -2197,42 +2105,18 @@ function eventToneClass(item: AiAssistantTimelineItem, thread: AiAssistantRunThr
   transform: rotate(90deg);
 }
 
-.ai-run-event-group__status-icon {
-  width: 1rem;
-  height: 1rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-success-500, #10b981);
-  flex: 0 0 auto;
-}
-
-.ai-run-event-group__spinner,
 .ai-event__spinner {
   color: var(--color-primary-600, #4f46e5);
   animation: ai-spin 0.9s linear infinite;
 }
 
-.ai-run-event-group__title-text,
 .ai-event__title-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.ai-run-event-group__title-text {
-  font-size: 0.9375rem;
-  line-height: 1.25;
-}
-
-.ai-run-event-group__meta {
-  color: var(--color-text-tertiary, #8b92a8);
-  font-size: 0.75rem;
-  line-height: 1.25;
-  white-space: nowrap;
-}
-
-.ai-run-event-line {
+.ai-activity-event-list {
   display: grid;
   gap: 0;
   padding: 0.25rem 0 0.125rem;

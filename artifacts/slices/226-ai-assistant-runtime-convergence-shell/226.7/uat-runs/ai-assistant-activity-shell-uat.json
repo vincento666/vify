@@ -1,0 +1,25 @@
+{
+  "states": {
+    "runningExpanded": "true",
+    "completedManualOverridePersisted": "true",
+    "completedFinalCollapsed": "false",
+    "approvalExpanded": "true",
+    "failedExpanded": "true",
+    "activeSubagents": 1,
+    "completedSubagents": 1
+  },
+  "visualState": {
+    "shellBackground": "rgb(248, 249, 252)",
+    "feedBackground": "rgb(255, 255, 255)",
+    "reducedMotionAnimation": "none",
+    "activityCount": 5,
+    "subagentCount": 2,
+    "overflowX": 0,
+    "overflowY": 0
+  },
+  "screenshots": [
+    "/Users/vincento/work/develop/hify/artifacts/slices/226-ai-assistant-runtime-convergence-shell/226.7/screenshots/ai-assistant-light-activity-shell.png",
+    "/Users/vincento/work/develop/hify/artifacts/slices/226-ai-assistant-runtime-convergence-shell/226.7/screenshots/ai-assistant-approval-error-states.png"
+  ],
+  "verdict": "PASS"
+}

@@ -35,3 +35,24 @@ describe('AI Assistant code-save-test pressure UAT script', () => {
     expect(content).toContain('code-save-test-completed.png')
   })
 })
+
+describe('AI Assistant light activity shell UAT script', () => {
+  const content = readFrontendFile('e2e/ai-assistant-activity-shell-uat.mjs')
+
+  it('covers stable folding, live text, approval, error and durable child presence', () => {
+    expect(content).toContain('ai-assistant-activity-feed')
+    expect(content).toContain('ai-assistant-activity-toggle')
+    expect(content).toContain('ai-assistant-subagent-presence')
+    expect(content).toContain('我先核对运行时配置，并同步检查权限记录。')
+    expect(content).toContain('running activity should default expanded')
+    expect(content).toContain('completed activity should auto collapse')
+    expect(content).toContain('approval activity should stay expanded')
+    expect(content).toContain('failed activity should stay expanded')
+    expect(content).toContain('manual override should survive stable activity SSE upsert and snapshot refresh')
+    expect(content).toContain('running subagent should show presence details')
+    expect(content).toContain('completed subagent should collapse')
+    expect(content).toContain("reducedMotion: 'reduce'")
+    expect(content).toContain('ai-assistant-light-activity-shell.png')
+    expect(content).toContain('ai-assistant-approval-error-states.png')
+  })
+})

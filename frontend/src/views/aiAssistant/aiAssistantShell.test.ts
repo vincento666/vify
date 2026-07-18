@@ -13,7 +13,14 @@ function readProjectFile(path: string) {
 }
 
 describe('AI Assistant shell UI contract', () => {
-  const content = readProjectFile('src/views/aiAssistant/AiAssistantShell.vue')
+  const content = [
+    'src/views/aiAssistant/AiAssistantShell.vue',
+    'src/views/aiAssistant/AiAssistantActivityFeed.vue',
+    'src/views/aiAssistant/AiAssistantActivityProgress.vue',
+    'src/views/aiAssistant/AiAssistantActivityRow.vue',
+    'src/views/aiAssistant/AiAssistantSubagentPresence.vue',
+    'src/views/aiAssistant/useAiAssistantActivityStream.ts',
+  ].map(readProjectFile).join('\n')
 
   it('renders conversation timeline composer and execution echo regions', () => {
     for (const testId of [
@@ -51,11 +58,12 @@ describe('AI Assistant shell UI contract', () => {
       'ai-assistant-approval-row',
       'ai-assistant-recent-error-row',
       'ai-assistant-inspector-timeline',
-      'ai-assistant-run-task-card',
+      'ai-assistant-activity-feed',
+      'ai-assistant-activity-row',
       'ai-assistant-message-copy',
       'ai-assistant-user-message-meta',
       'ai-assistant-completion-meta',
-      'ai-assistant-run-status-icon',
+      'ai-assistant-activity-toggle',
       'ai-assistant-event-status-icon',
       'ai-assistant-event-completed-icon',
       'ai-assistant-node-spinner',
@@ -178,6 +186,7 @@ describe('AI Assistant shell UI contract', () => {
     expect(content).toContain('snapshotToRunThread')
     expect(content).toContain('lastSequenceForRun')
     expect(content).toContain('afterSequence')
+    expect(content).toContain('resumeRunEventStreamIfRunning(nextRunId)')
     expect(content).toContain('buildAiAssistantMessagePayload(message, runtimeConfig.value')
     expect(content).toContain('runtimeConfig.value')
     expect(content).toContain('qwen/qwen3.6-27b')
@@ -203,12 +212,13 @@ describe('AI Assistant shell UI contract', () => {
     expect(content).not.toContain('展开回显')
   })
 
-  it('groups live execution echoes into a collapsible run task with a milestone line and nested details', () => {
+  it('renders stable execution activities through bounded light-shell components', () => {
     for (const testId of [
-      'ai-assistant-run-event-group',
-      'ai-assistant-run-event-group-header',
-      'ai-assistant-run-task-card',
-      'ai-assistant-run-event-line',
+      'ai-assistant-activity-feed',
+      'ai-assistant-activity-row',
+      'ai-assistant-activity-toggle',
+      'ai-assistant-activity-details',
+      'ai-assistant-subagent-presence',
       'ai-assistant-event-status-icon',
       'ai-assistant-event-completed-icon',
       'ai-assistant-event-detail-panel',
@@ -216,13 +226,16 @@ describe('AI Assistant shell UI contract', () => {
     ]) {
       expect(content).toContain(`data-testid="${testId}"`)
     }
-    expect(content).toContain('processedGroupExpanded')
-    expect(content).toContain('toggleProcessedGroup')
-    expect(content).toContain('isProcessedGroupExpanded')
+    expect(content).toContain('AiAssistantActivityFeed')
+    expect(content).toContain('AiAssistantActivityProgress')
+    expect(content).toContain('useAiAssistantActivityStream')
+    expect(content).toContain('activityExpansionOverrides')
+    expect(content).toContain('toggleActivity')
     expect(content).toContain('formatEventDetailRows')
     expect(content).toContain('eventStatusIcon')
     expect(content).toContain('ai-collapse-chevron')
     expect(content).toContain('animation: ai-spin')
+    expect(content).toContain('@media (prefers-reduced-motion: reduce)')
     expect(content).not.toContain('ai-event__pulse')
     expect(content).not.toContain('已收纳')
     expect(content).not.toContain('任务记录 #')
@@ -234,13 +247,13 @@ describe('AI Assistant shell UI contract', () => {
   it('keeps run card headers compact and renders final answers outside folded echo cards', () => {
     expect(content).toContain('runThreadUserMessage(thread)')
     expect(content).toContain('data-testid="ai-assistant-user-message"')
-    expect(content).toContain('runThreadPresentationItems(thread)')
+    expect(content).toContain('activityFeedItems(thread)')
     expect(content).toContain('runThreadFinalAnswer(thread)')
     expect(content).toContain('data-testid="ai-assistant-run-final-answer"')
     expect(content).toContain('data-testid="ai-assistant-completion-copy"')
     expect(content).toContain('data-testid="ai-assistant-completion-like"')
     expect(content).toContain('data-testid="ai-assistant-completion-dislike"')
-    expect(content).toContain('已处理')
+    expect(content).toContain('已完成')
     expect(content).not.toContain('runThreadHeaderTitle(thread)')
     expect(content).not.toContain('function runThreadHeaderTitle')
     expect(content).not.toContain('<small>任务记录 #{{ thread.run.id }}</small>')
@@ -249,15 +262,13 @@ describe('AI Assistant shell UI contract', () => {
     expect(content).not.toContain('statusLabel(thread.inspector?.run.status ?? thread.run.status)} / ${timeline.length} 条事件')
   })
 
-  it('renders processed groups and model text as peer-level Codex-like timeline items', () => {
-    expect(content).toContain('data-testid="ai-assistant-processed-group"')
+  it('renders stable activities and model text as peer-level timeline items', () => {
+    expect(content).toContain('data-testid="ai-assistant-activity-feed"')
     expect(content).toContain('data-testid="ai-assistant-assistant-message"')
-    expect(content).toContain('processedGroupMeta(item.items)')
-    expect(content).toContain('presentationItemKey(item)')
-    expect(content).toContain('buildRunThreadPresentationItems')
-    expect(content).toContain("item.kind === 'processed'")
-    expect(content).toContain("item.kind === 'assistant-output'")
-    expect(content).toContain('思考')
+    expect(content).toContain('activityFeedItems(thread)')
+    expect(content).toContain('activityTimelineItemsForThread')
+    expect(content).toContain("item.kind === 'activity'")
+    expect(content).toContain("item.kind === 'model-output'")
     expect(content).not.toContain('文件操作')
     expect(content).toContain('工具调用')
     expect(content).toContain("kind === 'file'")
@@ -324,12 +335,11 @@ describe('AI Assistant shell UI contract', () => {
   it('uses compact right-side chevrons after title text for task and event folding', () => {
     expect(content).toContain('CollapseChevron')
     expect(content).toContain('class="ai-collapse-chevron"')
-    expect(content).toContain('class="ai-run-event-group__title-text"')
-    expect(content).toContain('class="ai-run-event-group__meta"')
+    expect(content).toContain('class="ai-activity-row__title"')
+    expect(content).toContain('class="ai-activity-row__meta"')
     expect(content).toContain('class="ai-event__title-text"')
-    expect(content).toContain(':class="{ expanded: isProcessedGroupExpanded(item, thread) }"')
+    expect(content).toContain(':class="{ expanded }"')
     expect(content).toContain(':class="{ expanded: isEventExpanded(eventItem.id) }"')
-    expect(content).toContain('grid-template-columns: auto auto auto auto;')
     expect(content).toContain('grid-template-columns: auto auto minmax(0, 1fr);')
     expect(content).toContain('white-space: nowrap;')
     expect(content).toContain('padding-left: 0.75rem;')
@@ -343,15 +353,15 @@ describe('AI Assistant shell UI contract', () => {
     expect(content).not.toContain('<UpOutlined v-else />')
   })
 
-  it('keeps processed run echo headers left aligned without stretched grid text', () => {
-    expect(content).toContain('.ai-run-event-group__header {')
+  it('keeps activity headers left aligned without stretched grid text', () => {
+    expect(content).toContain('.ai-activity-row__header {')
     expect(content).toContain('justify-content: start;')
     expect(content).toContain('justify-items: start;')
     expect(content).toContain('text-align: left;')
-    expect(content).toContain('.ai-run-event-group__title-text {')
+    expect(content).toContain('.ai-activity-row__title {')
     expect(content).toContain('font-size: 0.9375rem;')
     expect(content).toContain('line-height: 1.25;')
-    expect(content).toContain('.ai-run-event-group__meta {')
+    expect(content).toContain('.ai-activity-row__meta {')
     expect(content).toContain('line-height: 1.25;')
   })
 
