@@ -37,6 +37,7 @@ from app.modules.ai_assistant.domain.memory_extraction import (
 )
 from app.modules.ai_assistant.domain.session_runtime import RunControlConflict
 from app.modules.ai_assistant.domain.streaming_runtime import heartbeat_payload, last_sequence
+from app.modules.ai_assistant.domain.tools import ToolRegistry
 from app.modules.ai_assistant.domain.usage_reporting import (
     rows_in_local_range,
     usage_session_detail,
@@ -108,6 +109,9 @@ def get_ai_assistant_service(
         AiAssistantRepository(
             session,
             access_scope=access_scope,
+        ),
+        tool_registry=ToolRegistry.with_builtin_tools(
+            child_execution_adapter=getattr(http_request.app.state, "child_execution_adapter", None),
         ),
         live_planner=create_qwen_live_planner(settings),
         memory_store=memory_store,

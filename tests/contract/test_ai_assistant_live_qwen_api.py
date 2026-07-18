@@ -6,6 +6,7 @@ from typing import Any
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.modules.agent_harness import AgentHarness
 from app.modules.ai_assistant.domain.harness import AiAssistantHarnessService
 from app.modules.ai_assistant.domain.live_model import LivePlannerConfig, QwenLivePlanner
 from app.modules.ai_assistant.web.router import get_ai_assistant_service
@@ -57,6 +58,7 @@ class AiAssistantLiveQwenApiContractTest(unittest.TestCase):
                 "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
             },
         )
+        self._agent_harness = RecordingAgentHarness()
         app.dependency_overrides[get_ai_assistant_service] = self._service_override
 
     def tearDown(self) -> None:
@@ -210,6 +212,7 @@ class AiAssistantLiveQwenApiContractTest(unittest.TestCase):
         self.assertLess(tool_completed["sequence"], final_model_stream["sequence"])
         self.assertLess(final_model_stream["sequence"], run_completed["sequence"])
         self.assertIn("我先读取 README", final_model_stream["visibleSummary"])
+        self.assertEqual(self._agent_harness.run_ids, [str(run_id)])
 
     def test_live_qwen_react_loop_feeds_tool_result_back_to_model_for_next_tool_decision(self) -> None:
         self._fake_client.replace_script(
@@ -446,7 +449,18 @@ class AiAssistantLiveQwenApiContractTest(unittest.TestCase):
                 ),
                 client=self._fake_client,
             ),
+            agent_harness=self._agent_harness,
         )
+
+
+class RecordingAgentHarness:
+    def __init__(self) -> None:
+        self.run_ids: list[str] = []
+        self._delegate = AgentHarness()
+
+    def execute(self, request, profile):
+        self.run_ids.append(request.run_id)
+        return self._delegate.execute(request, profile)
 
 
 class FakeStreamingOpenAIChatClient(FakeOpenAIChatClient):

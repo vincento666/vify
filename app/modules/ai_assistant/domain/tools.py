@@ -11,14 +11,8 @@ import subprocess
 from time import perf_counter
 from typing import Any, Callable
 
+from app.modules.agent_execution import ChildExecutionReferenceAdapter
 from app.modules.ai_assistant.domain import file_workspace
-from app.modules.customer_assistant.harness_adapter import (
-    event_stream_ref,
-    reserved_worker_async_refs,
-    result_ref,
-    sub_agent_run_public_id,
-    unsupported_cancellation,
-)
 
 
 class RiskLevel(StrEnum):
@@ -56,7 +50,11 @@ class ToolRegistry:
         self._tools = tools
 
     @classmethod
-    def with_builtin_tools(cls) -> ToolRegistry:
+    def with_builtin_tools(
+        cls,
+        *,
+        child_execution_adapter: ChildExecutionReferenceAdapter | None = None,
+    ) -> ToolRegistry:
         echo_manifest = ToolManifest(
             name="echo_context",
             description="回显当前用户消息和安全上下文，用于助手运行验证。",
@@ -116,41 +114,10 @@ class ToolRegistry:
             write_resources=["external:shell"],
             policy_ref="ai_assistant_shell_blocked",
         )
-        customer_bridge_manifest = ToolManifest(
-            name="customer_assistant_subagent_bridge",
-            description="读取客服助手子任务引用，供 AI 助手检查任务状态。",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "sessionId": {"type": "integer"},
-                    "runId": {"type": "integer"},
-                    "message": {"type": "string"},
-                },
-                "required": ["sessionId", "runId"],
-            },
-            output_schema={
-                "type": "object",
-                "properties": {
-                    "agentType": {"type": "string"},
-                    "subAgentRunId": {"type": "string"},
-                    "eventStreamRef": {"type": "string"},
-                    "resultRef": {"type": "string"},
-                    "workerAsyncRefs": {"type": "object"},
-                    "cancellation": {"type": "object"},
-                },
-                "required": ["agentType", "subAgentRunId", "eventStreamRef", "resultRef"],
-            },
-            timeout_ms=1000,
-            risk_level=RiskLevel.READ,
-            read_resources=["customer_assistant:session:{sessionId}", "customer_assistant:run:{runId}"],
-            write_resources=[],
-            policy_ref="ai_assistant_customer_assistant_bridge_read_only",
-        )
         tools: dict[str, tuple[ToolManifest, ToolHandler]] = {
             "echo_context": (echo_manifest, _echo_context),
             "update_customer_profile": (business_write_manifest, _blocked_write),
             "run_shell": (shell_manifest, _run_shell),
-            "customer_assistant_subagent_bridge": (customer_bridge_manifest, _customer_assistant_bridge),
             "read_workspace_file": (_read_file_manifest(), _read_workspace_file),
             "list_workspace_files": (_list_files_manifest(), _list_workspace_files),
             "search_workspace_files": (_search_files_manifest(), _search_workspace_files),
@@ -163,6 +130,12 @@ class ToolRegistry:
             "run_skill_script": (_run_skill_script_manifest(), _run_skill_script),
             "search_knowledge_base": (_knowledge_base_manifest(), _search_knowledge_base),
         }
+        if child_execution_adapter is not None:
+            child_execution_manifest = _child_execution_manifest(child_execution_adapter)
+            tools[child_execution_manifest.name] = (
+                child_execution_manifest,
+                lambda payload: _child_execution_bridge(child_execution_adapter, payload),
+            )
         from app.modules.ai_assistant.domain.business_adapter import (  # noqa: PLC0415
             MockAviationAdapter,
             tool_entries_for_business_adapter,
@@ -202,21 +175,58 @@ def _blocked_write(_payload: dict[str, Any]) -> ToolResult:
     return ToolResult(status="BLOCKED", output={"status": "BLOCKED"})
 
 
-def _customer_assistant_bridge(payload: dict[str, Any]) -> ToolResult:
+def _child_execution_manifest(adapter: ChildExecutionReferenceAdapter) -> ToolManifest:
+    return ToolManifest(
+        name=adapter.tool_name,
+        description=adapter.description,
+        input_schema={
+            "type": "object",
+            "properties": {
+                "sessionId": {"type": "integer"},
+                "runId": {"type": "integer"},
+                "message": {"type": "string"},
+            },
+            "required": ["sessionId", "runId"],
+        },
+        output_schema={
+            "type": "object",
+            "properties": {
+                "agentType": {"type": "string"},
+                "subAgentRunId": {"type": "string"},
+                "eventStreamRef": {"type": "string"},
+                "resultRef": {"type": "string"},
+                "workerAsyncRefs": {"type": "object"},
+                "cancellation": {"type": "object"},
+            },
+            "required": ["agentType", "subAgentRunId", "eventStreamRef", "resultRef"],
+        },
+        timeout_ms=1000,
+        risk_level=RiskLevel.READ,
+        read_resources=adapter.read_resources,
+        write_resources=[],
+        policy_ref="ai_assistant_child_execution_bridge_read_only",
+    )
+
+
+def _child_execution_bridge(
+    adapter: ChildExecutionReferenceAdapter,
+    payload: dict[str, Any],
+) -> ToolResult:
     session_id = int(payload.get("sessionId") or 0)
     run_id = int(payload.get("runId") or 0)
+    reference = adapter.resolve(session_id=session_id, run_id=run_id)
     return ToolResult(
         status="COMPLETED",
         output={
-            "agentType": "customer_assistant",
+            "agentType": reference.agent_type,
             "status": "linked",
             "sessionId": session_id,
             "runId": run_id,
-            "subAgentRunId": sub_agent_run_public_id(run_id),
-            "eventStreamRef": event_stream_ref(session_id),
-            "resultRef": result_ref(run_id),
-            "workerAsyncRefs": reserved_worker_async_refs(run_id=run_id, session_id=session_id),
-            "cancellation": unsupported_cancellation(),
+            "subAgentRunId": reference.child_run_id,
+            "eventStreamRef": reference.event_stream_ref,
+            "resultRef": reference.result_ref,
+            "workerAsyncRefs": reference.worker_async_refs,
+            "cancellation": reference.cancellation,
             "message": str(payload.get("message") or ""),
         },
     )

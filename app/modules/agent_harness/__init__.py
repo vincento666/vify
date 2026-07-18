@@ -9,6 +9,7 @@ from app.modules.agent_harness.core import (
     HarnessRunStatus,
     HarnessToolAuthorization,
     HarnessToolAuthorizationEffect,
+    HarnessToolBatchResult,
     HarnessToolCall,
     HarnessToolFailure,
 )
@@ -24,6 +25,7 @@ __all__ = [
     "HarnessRunStatus",
     "HarnessToolAuthorization",
     "HarnessToolAuthorizationEffect",
+    "HarnessToolBatchResult",
     "HarnessToolCall",
     "HarnessToolFailure",
 ]

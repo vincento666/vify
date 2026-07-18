@@ -1,6 +1,6 @@
 # Tasks — Spec 226
 
-Status: `226.1 complete / 226.2 ready`
+Status: `226.2 complete / 226.3 ready`
 
 Evidence root:
 `artifacts/slices/226-ai-assistant-runtime-convergence-shell/<slice>/`
@@ -44,17 +44,17 @@ Evidence for this contract round is the repository diff and final Contract Gate 
 
 ## 226.2 Foundation — AI Assistant Adapter And Dependency Repair
 
-- [ ] TDD preflight。
-- [ ] RED：AI Assistant live ReAct 未通过 226.1 的公共 Harness Interface。
-- [ ] RED：AI Assistant tools 反向 import Customer Assistant harness helper。
-- [ ] AI Assistant Adapter 接入现有 planner、ToolRunner、plan、context、memory、
+- [x] TDD preflight。
+- [x] RED：AI Assistant live ReAct 未通过 226.1 的公共 Harness Interface。
+- [x] RED：AI Assistant tools 反向 import Customer Assistant harness helper。
+- [x] AI Assistant Adapter 接入现有 planner、ToolRunner、plan、context、memory、
   permission/approval、checkpoint/event stores。
-- [ ] 现有 ToolRunner ledger、streaming、plan 与 memory 行为保持。
-- [ ] shared child refs 移入 Agent Execution，移除 AI Assistant -> Customer
+- [x] 现有 ToolRunner ledger、streaming、plan 与 memory 行为保持。
+- [x] shared child refs 移入 Agent Execution，移除 AI Assistant -> Customer
   Assistant 反向依赖。
-- [ ] 两个生产 Adapter 的 Interface-level contract 与 dependency test。
-- [ ] Unit / Contract / Integration / E2E / Docs evidence。
-- [ ] Checker / Reviewer / slice commit。
+- [x] 两个生产 Adapter 的 Interface-level contract 与 dependency test。
+- [x] Unit / Contract / Integration / E2E / Docs evidence。
+- [x] Checker / Reviewer / selective slice commit。
 
 ## 226.3 P0 — Domain-neutral Runtime Job Core
 

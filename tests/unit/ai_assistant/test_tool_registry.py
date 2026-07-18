@@ -24,8 +24,11 @@ class AiAssistantToolRegistryTest(unittest.TestCase):
 
     def test_customer_assistant_bridge_tool_is_read_only_and_returns_refs(self) -> None:
         from app.modules.ai_assistant.domain.tools import RiskLevel, ToolRegistry
+        from app.modules.customer_assistant.harness_adapter import CustomerAssistantExecutionAdapter
 
-        registry = ToolRegistry.with_builtin_tools()
+        registry = ToolRegistry.with_builtin_tools(
+            child_execution_adapter=CustomerAssistantExecutionAdapter(),
+        )
         manifest = registry.get_manifest("customer_assistant_subagent_bridge")
 
         self.assertEqual(manifest.risk_level, RiskLevel.READ)

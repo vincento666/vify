@@ -2,6 +2,32 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.modules.agent_execution import ChildExecutionReference
+
+
+class CustomerAssistantExecutionAdapter:
+    @property
+    def tool_name(self) -> str:
+        return "customer_assistant_subagent_bridge"
+
+    @property
+    def description(self) -> str:
+        return "读取客服助手子任务引用，供上层助手检查任务状态。"
+
+    @property
+    def read_resources(self) -> list[str]:
+        return ["customer_assistant:session:{sessionId}", "customer_assistant:run:{runId}"]
+
+    def resolve(self, *, session_id: int, run_id: int) -> ChildExecutionReference:
+        return ChildExecutionReference(
+            agent_type="customer_assistant",
+            child_run_id=sub_agent_run_public_id(run_id),
+            event_stream_ref=event_stream_ref(session_id),
+            result_ref=result_ref(run_id),
+            worker_async_refs=reserved_worker_async_refs(run_id=run_id, session_id=session_id),
+            cancellation=unsupported_cancellation(),
+        )
+
 
 def sub_agent_run_public_id(run_id: int) -> str:
     return f"customer-assistant-run-{run_id}"

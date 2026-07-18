@@ -1,0 +1,14 @@
+Slice: 226.2 product dependency repair
+Date: 2026-07-18
+
+Command:
+rtk uv run pytest tests/contract/agent_harness/test_dependency_direction.py -q --tb=short
+
+Observed RED:
+tests/contract/agent_harness/test_dependency_direction.py failed because
+app/modules/ai_assistant/domain/tools.py imported
+app.modules.customer_assistant.harness_adapter.
+
+Meaning:
+The AI Assistant product Module owned a reverse dependency on Customer
+Assistant instead of consuming a product-neutral child-execution Interface.

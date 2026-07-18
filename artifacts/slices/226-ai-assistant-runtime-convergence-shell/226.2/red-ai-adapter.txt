@@ -1,0 +1,12 @@
+Slice: 226.2 AI Assistant Adapter
+Date: 2026-07-18
+
+Command:
+rtk uv run pytest tests/contract/test_ai_assistant_live_qwen_api.py::AiAssistantLiveQwenApiContractTest::test_live_qwen_run_interleaves_model_text_tool_echo_and_final_model_output -q --tb=short
+
+Observed RED:
+TypeError: AiAssistantHarnessService.__init__() got an unexpected keyword argument 'agent_harness'
+
+Meaning:
+The production live ReAct path had no public AgentHarness injection seam and
+therefore could not prove that it used the shared Harness Interface.

@@ -32,6 +32,30 @@ class ReadOnlyOrderLookupProfile:
         return {"orderNo": call.arguments["orderNo"], "status": "refundable"}
 
 
+class PartiallyDeniedBatchProfile:
+    def __init__(self) -> None:
+        self.invoked = False
+
+    def plan(self, request, observations, iteration):
+        return HarnessDecision.request_tools(
+            HarnessToolCall(call_id="read-1", name="read_order", arguments={}),
+            HarnessToolCall(call_id="write-1", name="delete_order", arguments={}),
+        )
+
+    def authorize_tool(self, request, call):
+        if call.name == "delete_order":
+            return HarnessToolAuthorization.deny("destructive tool denied")
+        return HarnessToolAuthorization.allow()
+
+    def invoke_tools(self, request, calls):
+        self.invoked = True
+        raise AssertionError("a partially denied batch must not execute")
+
+    def invoke_tool(self, request, call):
+        self.invoked = True
+        return {}
+
+
 def test_agent_harness_runs_tool_observation_then_final_result() -> None:
     result = AgentHarness().execute(
         HarnessRunRequest(
@@ -53,3 +77,18 @@ def test_agent_harness_runs_tool_observation_then_final_result() -> None:
         "harness.iteration.started",
         "harness.completed",
     ]
+
+
+def test_agent_harness_authorizes_entire_batch_before_invoking_any_tool() -> None:
+    profile = PartiallyDeniedBatchProfile()
+
+    result = AgentHarness().execute(
+        HarnessRunRequest(run_id="run-denied-batch", input={}, max_iterations=1),
+        profile,
+    )
+
+    assert result.status is HarnessRunStatus.FAILED
+    assert result.error_code == "TOOL_NOT_ALLOWED"
+    assert result.terminal_tool_call is not None
+    assert result.terminal_tool_call.call_id == "write-1"
+    assert profile.invoked is False

@@ -12,6 +12,16 @@ import re
 from time import perf_counter
 from typing import Any, Callable, cast
 
+from app.modules.agent_harness import (
+    AgentHarness,
+    HarnessDecision,
+    HarnessObservation,
+    HarnessRunRequest,
+    HarnessRunStatus,
+    HarnessToolAuthorization,
+    HarnessToolBatchResult,
+    HarnessToolCall,
+)
 from app.modules.ai_assistant.domain.context_budget import (
     build_compaction_snapshot,
     context_window_from_context,
@@ -83,6 +93,191 @@ class ScheduledToolExecutionResult:
     terminal_result: HarnessTurnResult | None = None
 
 
+class _AiAssistantLiveHarnessProfile:
+    def __init__(
+        self,
+        *,
+        service: AiAssistantHarnessService,
+        planner: QwenLivePlanner,
+        run_id: int,
+        session_id: int,
+        message: str,
+        approval_mode: str,
+        model_config: LivePlannerConfig | None,
+        max_iterations: int,
+    ) -> None:
+        self._service = service
+        self._run_id = run_id
+        self._session_id = session_id
+        self._message = message
+        self._approval_mode = approval_mode
+        self._model_config = model_config
+        self._max_iterations = max_iterations
+        self._messages = planner.initial_messages(
+            message,
+            memory_text=service._read_memory_window().content,
+        )
+        self._decisions: list[LivePlannerDecision] = []
+        self._recorded_tool_calls: list[dict[str, Any]] = []
+        self._seen_tool_keys: set[str] = set()
+        self._written_paths: set[str] = set()
+        self._read_after_write_keys: set[str] = set()
+        self._pending_calls: dict[str, dict[str, Any]] = {}
+        self._pending_decision: LivePlannerDecision | None = None
+        self._iteration = 0
+        self.terminal_result: HarnessTurnResult | None = None
+
+    @property
+    def decisions(self) -> list[LivePlannerDecision]:
+        return list(self._decisions)
+
+    @property
+    def recorded_tool_calls(self) -> list[dict[str, Any]]:
+        return list(self._recorded_tool_calls)
+
+    @property
+    def last_decision(self) -> LivePlannerDecision:
+        if not self._decisions:
+            raise RuntimeError("AI Assistant Harness profile has no planner decision")
+        return self._decisions[-1]
+
+    def plan(
+        self,
+        request: HarnessRunRequest,
+        observations: tuple[HarnessObservation, ...],
+        iteration: int,
+    ) -> HarnessDecision:
+        del request, observations
+        self._iteration = iteration
+        decision = self._service._plan_with_live_model(
+            run_id=self._run_id,
+            session_id=self._session_id,
+            message=self._message,
+            model_config=self._model_config,
+            messages=self._messages,
+            round_index=iteration,
+        )
+        self._decisions.append(decision)
+        if not decision.tool_calls:
+            return HarnessDecision.finish(
+                {
+                    "finalAnswer": decision.final_answer or "模型未选择工具，已完成回复。",
+                    "appendFinalStream": False,
+                }
+            )
+
+        self._written_paths.update(_written_workspace_paths(self._recorded_tool_calls))
+        new_tool_calls = _new_live_tool_calls(
+            decision.tool_calls,
+            seen_tool_keys=self._seen_tool_keys,
+            written_paths=self._written_paths,
+            read_after_write_keys=self._read_after_write_keys,
+        )
+        if not new_tool_calls:
+            return HarnessDecision.finish(
+                {
+                    "finalAnswer": decision.final_answer or _tool_execution_answer(self._recorded_tool_calls),
+                    "appendFinalStream": True,
+                }
+            )
+
+        self._seen_tool_keys.update(_tool_call_key(call) for call in new_tool_calls)
+        self._pending_decision = decision
+        self._pending_calls = {}
+        harness_calls: list[HarnessToolCall] = []
+        for index, call in enumerate(new_tool_calls, start=1):
+            call_id = str(call.get("toolCallId") or f"react:{iteration}:{index}:{call.get('toolName')}")
+            self._pending_calls[call_id] = call
+            harness_calls.append(
+                HarnessToolCall(
+                    call_id=call_id,
+                    name=str(call["toolName"]),
+                    arguments=dict(call.get("toolInput") or {}),
+                )
+            )
+        return HarnessDecision.request_tools(*harness_calls)
+
+    def authorize_tool(
+        self,
+        request: HarnessRunRequest,
+        call: HarnessToolCall,
+    ) -> HarnessToolAuthorization:
+        del request, call
+        # Compatibility Adapter: the existing scheduled ToolRunner performs the
+        # detailed permission/sandbox/approval decision until that port moves
+        # behind the common Harness Interface in its own TDD slice.
+        return HarnessToolAuthorization.allow()
+
+    def invoke_tool(
+        self,
+        request: HarnessRunRequest,
+        call: HarnessToolCall,
+    ) -> dict[str, Any]:
+        del request, call
+        raise RuntimeError("AI Assistant live profile requires batch tool invocation")
+
+    def invoke_tools(
+        self,
+        request: HarnessRunRequest,
+        calls: tuple[HarnessToolCall, ...],
+    ) -> HarnessToolBatchResult:
+        del request
+        requested_tool_calls = [self._pending_calls[call.call_id] for call in calls]
+        execution = self._service._execute_scheduled_tool_calls(
+            session_id=self._session_id,
+            run_id=self._run_id,
+            message=self._message,
+            approval_mode=self._approval_mode,
+            tool_calls=requested_tool_calls,
+            failed_observation_mode="replan",
+        )
+        self._recorded_tool_calls.extend(execution.recorded_tool_calls)
+        observations = tuple(
+            HarnessObservation(tool_call=call, output=dict(recorded))
+            for call, recorded in zip(calls, execution.recorded_tool_calls, strict=False)
+        )
+        if execution.terminal_result is not None:
+            self.terminal_result = self._service._with_accumulated_tool_calls(
+                execution.terminal_result,
+                self._recorded_tool_calls,
+            )
+            terminal_status = (
+                HarnessRunStatus.WAITING_APPROVAL
+                if self.terminal_result.approval_required
+                else (
+                    HarnessRunStatus.COMPLETED
+                    if self.terminal_result.run.get("status") == "COMPLETED"
+                    else HarnessRunStatus.FAILED
+                )
+            )
+            return HarnessToolBatchResult(
+                observations=observations,
+                terminal_status=terminal_status,
+                terminal_output={"finalAnswer": self.terminal_result.final_answer},
+            )
+
+        self._written_paths.update(_written_workspace_paths(execution.recorded_tool_calls))
+        if self._pending_decision is None:
+            raise RuntimeError("AI Assistant Harness profile has no pending planner decision")
+        self._messages = _react_messages_after_tools(
+            self._messages,
+            self._pending_decision,
+            requested_tool_calls,
+            execution.recorded_tool_calls,
+        )
+        if self._iteration >= self._max_iterations:
+            return HarnessToolBatchResult(
+                observations=observations,
+                terminal_status=HarnessRunStatus.COMPLETED,
+                terminal_output={
+                    "finalAnswer": self.last_decision.final_answer
+                    or _tool_execution_answer(self._recorded_tool_calls),
+                    "appendFinalStream": True,
+                },
+            )
+        return HarnessToolBatchResult(observations=observations)
+
+
 class AiAssistantHarnessService:
     def __init__(
         self,
@@ -97,6 +292,7 @@ class AiAssistantHarnessService:
         memory_scope: ResolvedMemoryScope | None = None,
         memory_today: Callable[[], date] = date.today,
         memory_completion_callback: Callable[[], None] | None = None,
+        agent_harness: AgentHarness | None = None,
     ) -> None:
         self._repository = repository
         self._tools = tool_registry or ToolRegistry.with_builtin_tools()
@@ -118,6 +314,7 @@ class AiAssistantHarnessService:
         self._memory_scope = memory_scope
         self._memory_today = memory_today
         self._memory_completion_callback = memory_completion_callback
+        self._agent_harness = agent_harness or AgentHarness()
 
     def create_session(self, title: str = "", context: dict[str, Any] | None = None) -> dict[str, Any]:
         return self._repository.create_session(title=title, context=context)
@@ -1165,84 +1362,44 @@ class AiAssistantHarnessService:
         planner = self._planner_for(model_config)
         if planner is None:
             raise RuntimeError("AI Assistant live planner is not configured")
-        messages = planner.initial_messages(
-            message,
-            memory_text=self._read_memory_window().content,
+        max_iterations = 4
+        profile = _AiAssistantLiveHarnessProfile(
+            service=self,
+            planner=planner,
+            run_id=run_id,
+            session_id=session_id,
+            message=message,
+            approval_mode=approval_mode,
+            model_config=model_config,
+            max_iterations=max_iterations,
         )
-        decisions: list[LivePlannerDecision] = []
-        recorded_tool_calls: list[dict[str, Any]] = []
-        seen_tool_keys: set[str] = set()
-        written_paths: set[str] = set()
-        read_after_write_keys: set[str] = set()
-
-        for round_index in range(1, 5):
-            decision = self._plan_with_live_model(
+        harness_result = self._agent_harness.execute(
+            HarnessRunRequest(
+                run_id=str(run_id),
+                input={"message": message},
+                max_iterations=max_iterations,
+            ),
+            profile,
+        )
+        if profile.terminal_result is not None:
+            return profile.terminal_result
+        if harness_result.status is not HarnessRunStatus.COMPLETED:
+            return self._fail_run(
                 run_id=run_id,
                 session_id=session_id,
-                message=message,
-                model_config=model_config,
-                messages=messages,
-                round_index=round_index,
+                run=run,
+                reason=harness_result.error_message or "AI Assistant Agent Harness execution failed",
+                payload={"errorCode": harness_result.error_code},
             )
-            decisions.append(decision)
-            if not decision.tool_calls:
-                return self._complete_live_run(
-                    run_id=run_id,
-                    session_id=session_id,
-                    run=run,
-                    final_answer=decision.final_answer or "模型未选择工具，已完成回复。",
-                    recorded_tool_calls=recorded_tool_calls,
-                    decision=decision,
-                    decisions=decisions,
-                    append_final_stream=False,
-                )
-
-            written_paths.update(_written_workspace_paths(recorded_tool_calls))
-            new_tool_calls = _new_live_tool_calls(
-                decision.tool_calls,
-                seen_tool_keys=seen_tool_keys,
-                written_paths=written_paths,
-                read_after_write_keys=read_after_write_keys,
-            )
-            if not new_tool_calls:
-                final_answer = decision.final_answer or _tool_execution_answer(recorded_tool_calls)
-                return self._complete_live_run(
-                    run_id=run_id,
-                    session_id=session_id,
-                    run=run,
-                    final_answer=final_answer,
-                    recorded_tool_calls=recorded_tool_calls,
-                    decision=decision,
-                    decisions=decisions,
-                    append_final_stream=True,
-                )
-
-            seen_tool_keys.update(_tool_call_key(call) for call in new_tool_calls)
-            execution = self._execute_scheduled_tool_calls(
-                session_id=session_id,
-                run_id=run_id,
-                message=message,
-                approval_mode=approval_mode,
-                tool_calls=new_tool_calls,
-                failed_observation_mode="replan",
-            )
-            recorded_tool_calls.extend(execution.recorded_tool_calls)
-            if execution.terminal_result is not None:
-                return self._with_accumulated_tool_calls(execution.terminal_result, recorded_tool_calls)
-            written_paths.update(_written_workspace_paths(execution.recorded_tool_calls))
-            messages = _react_messages_after_tools(messages, decision, new_tool_calls, execution.recorded_tool_calls)
-
-        last_decision = decisions[-1]
-        final_answer = last_decision.final_answer or _tool_execution_answer(recorded_tool_calls)
         return self._complete_live_run(
             run_id=run_id,
             session_id=session_id,
             run=run,
-            final_answer=final_answer,
-            recorded_tool_calls=recorded_tool_calls,
-            decision=last_decision,
-            decisions=decisions,
-            append_final_stream=True,
+            final_answer=str(harness_result.output.get("finalAnswer") or ""),
+            recorded_tool_calls=profile.recorded_tool_calls,
+            decision=profile.last_decision,
+            decisions=profile.decisions,
+            append_final_stream=bool(harness_result.output.get("appendFinalStream")),
         )
 
     def _complete_live_run(

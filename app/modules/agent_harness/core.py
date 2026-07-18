@@ -110,6 +110,17 @@ class HarnessRunResult:
     authorization: HarnessToolAuthorization | None = None
 
 
+@dataclass(frozen=True)
+class HarnessToolBatchResult:
+    observations: tuple[HarnessObservation, ...] = ()
+    terminal_status: HarnessRunStatus | None = None
+    terminal_output: dict[str, Any] = field(default_factory=dict)
+    terminal_tool_call: HarnessToolCall | None = None
+    authorization: HarnessToolAuthorization | None = None
+    error_code: str | None = None
+    error_message: str | None = None
+
+
 class HarnessToolFailure(RuntimeError):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
@@ -136,6 +147,60 @@ class HarnessProfile(Protocol):
         request: HarnessRunRequest,
         call: HarnessToolCall,
     ) -> dict[str, Any]: ...
+
+
+def _authorization_terminal_result(
+    *,
+    call: HarnessToolCall,
+    authorization: HarnessToolAuthorization,
+    iteration: int,
+    observations: list[HarnessObservation],
+    events: list[HarnessEvent],
+) -> HarnessRunResult | None:
+    if authorization.effect is HarnessToolAuthorizationEffect.ALLOW:
+        return None
+    if authorization.effect is HarnessToolAuthorizationEffect.DENY:
+        events.append(
+            HarnessEvent(
+                type="harness.tool.denied",
+                iteration=iteration,
+                tool_call_id=call.call_id,
+                payload={"tool": call.name, "reason": authorization.reason},
+            )
+        )
+        events.append(
+            HarnessEvent(
+                type="harness.failed",
+                iteration=iteration,
+                tool_call_id=call.call_id,
+            )
+        )
+        return HarnessRunResult(
+            status=HarnessRunStatus.FAILED,
+            output={},
+            observations=tuple(observations),
+            events=tuple(events),
+            error_code="TOOL_NOT_ALLOWED",
+            error_message=authorization.reason or f"Tool not allowed: {call.name}",
+            terminal_tool_call=call,
+            authorization=authorization,
+        )
+    events.append(
+        HarnessEvent(
+            type="harness.approval.required",
+            iteration=iteration,
+            tool_call_id=call.call_id,
+            payload={"tool": call.name, **authorization.metadata},
+        )
+    )
+    return HarnessRunResult(
+        status=HarnessRunStatus.WAITING_APPROVAL,
+        output={},
+        observations=tuple(observations),
+        events=tuple(events),
+        terminal_tool_call=call,
+        authorization=authorization,
+    )
 
 
 class AgentHarness:
@@ -170,51 +235,101 @@ class AgentHarness:
                     error_message="tool_call action missing tool call",
                 )
 
-            for call in decision.tool_calls:
-                authorization = profile.authorize_tool(request, call)
-                if authorization.effect is HarnessToolAuthorizationEffect.DENY:
+            batch_invoker = getattr(profile, "invoke_tools", None)
+            if callable(batch_invoker):
+                authorizations = tuple(profile.authorize_tool(request, call) for call in decision.tool_calls)
+                for call, authorization in zip(decision.tool_calls, authorizations, strict=True):
+                    terminal_result = _authorization_terminal_result(
+                        call=call,
+                        authorization=authorization,
+                        iteration=iteration,
+                        observations=observations,
+                        events=events,
+                    )
+                    if terminal_result is not None:
+                        return terminal_result
+                for call in decision.tool_calls:
                     events.append(
                         HarnessEvent(
-                            type="harness.tool.denied",
+                            type="harness.tool.started",
                             iteration=iteration,
                             tool_call_id=call.call_id,
-                            payload={"tool": call.name, "reason": authorization.reason},
+                            payload={"tool": call.name},
+                        )
+                    )
+                batch_result = batch_invoker(request, decision.tool_calls)
+                for observation in batch_result.observations:
+                    observations.append(observation)
+                    events.append(
+                        HarnessEvent(
+                            type="harness.tool.completed",
+                            iteration=iteration,
+                            tool_call_id=observation.tool_call.call_id,
+                            payload={"tool": observation.tool_call.name},
                         )
                     )
                     events.append(
                         HarnessEvent(
-                            type="harness.failed",
+                            type="harness.observation.recorded",
                             iteration=iteration,
-                            tool_call_id=call.call_id,
+                            tool_call_id=observation.tool_call.call_id,
+                            payload={"tool": observation.tool_call.name},
                         )
                     )
+                if batch_result.terminal_status is not None:
+                    terminal_event = (
+                        "harness.completed"
+                        if batch_result.terminal_status is HarnessRunStatus.COMPLETED
+                        else (
+                            "harness.approval.required"
+                            if batch_result.terminal_status is HarnessRunStatus.WAITING_APPROVAL
+                            else "harness.failed"
+                        )
+                    )
+                    events.append(
+                        HarnessEvent(
+                            type=terminal_event,
+                            iteration=iteration,
+                            tool_call_id=(
+                                batch_result.terminal_tool_call.call_id
+                                if batch_result.terminal_tool_call is not None
+                                else None
+                            ),
+                        )
+                    )
+                    return HarnessRunResult(
+                        status=batch_result.terminal_status,
+                        output=batch_result.terminal_output,
+                        observations=tuple(observations),
+                        events=tuple(events),
+                        error_code=batch_result.error_code,
+                        error_message=batch_result.error_message,
+                        terminal_tool_call=batch_result.terminal_tool_call,
+                        authorization=batch_result.authorization,
+                    )
+                if request.timeout_ms is not None and (monotonic() - started) * 1000 > request.timeout_ms:
+                    events.append(HarnessEvent(type="harness.failed", iteration=iteration))
                     return HarnessRunResult(
                         status=HarnessRunStatus.FAILED,
                         output={},
                         observations=tuple(observations),
                         events=tuple(events),
-                        error_code="TOOL_NOT_ALLOWED",
-                        error_message=authorization.reason or f"Tool not allowed: {call.name}",
-                        terminal_tool_call=call,
-                        authorization=authorization,
+                        error_code="WORKER_TIMEOUT",
+                        error_message="Agent Harness execution timed out",
                     )
-                if authorization.effect is HarnessToolAuthorizationEffect.REQUIRE_APPROVAL:
-                    events.append(
-                        HarnessEvent(
-                            type="harness.approval.required",
-                            iteration=iteration,
-                            tool_call_id=call.call_id,
-                            payload={"tool": call.name, **authorization.metadata},
-                        )
-                    )
-                    return HarnessRunResult(
-                        status=HarnessRunStatus.WAITING_APPROVAL,
-                        output={},
-                        observations=tuple(observations),
-                        events=tuple(events),
-                        terminal_tool_call=call,
-                        authorization=authorization,
-                    )
+                continue
+
+            for call in decision.tool_calls:
+                authorization = profile.authorize_tool(request, call)
+                terminal_result = _authorization_terminal_result(
+                    call=call,
+                    authorization=authorization,
+                    iteration=iteration,
+                    observations=observations,
+                    events=events,
+                )
+                if terminal_result is not None:
+                    return terminal_result
                 events.append(
                     HarnessEvent(
                         type="harness.tool.started",

@@ -1,0 +1,21 @@
+Slice: 226.2 AI Assistant Adapter and dependency repair
+Date: 2026-07-18
+State: GREEN candidate
+
+Agent Harness contracts, AI Assistant units, Customer Adapter unit:
+128 passed, 16 subtests passed
+
+AI Assistant and Customer Assistant integration regression:
+118 passed, 1 skipped, 14 subtests passed
+
+Live Qwen deterministic contract:
+5 passed
+
+Customer child-execution bridge API:
+1 passed
+
+Ruff and scoped diff check:
+All checks passed
+
+Browser UAT:
+N/A for this backend foundation slice; no frontend behavior changed.

@@ -1,0 +1,14 @@
+Slice: 226.2 batch authorization repair
+Date: 2026-07-18
+
+Command:
+rtk uv run pytest tests/contract/agent_harness/test_public_interface.py::test_agent_harness_authorizes_entire_batch_before_invoking_any_tool -q --tb=short
+
+Observed RED:
+assert profile.invoked is False
+E assert True is False
+
+Meaning:
+The first version of optional concurrent batch invocation could invoke an
+allowed call before a later call in the same batch was denied. The repair now
+authorizes the entire batch before emitting tool-started or invoking any tool.
