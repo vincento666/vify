@@ -26,7 +26,7 @@ from app.modules.customer_assistant.domain.llm_primary import (
     CustomerAssistantLlmRuntimeSettings,
 )
 from app.modules.customer_assistant.domain.models import TaskCommand, TaskCommandType
-from app.modules.customer_assistant.domain.react_core import CoreObservation
+from app.modules.customer_assistant.domain.turn_coordinator import TurnObservation
 from app.modules.customer_assistant.domain.react_worker import (
     ReactModelAction,
     ReactWorkerModel,
@@ -745,7 +745,7 @@ class _ReactTaskCore:
         self,
         context: Any,
         action_handler: Callable[[list[TaskCommand]], dict[str, Any]],
-        finalizer: Callable[[CoreObservation], Any],
+        finalizer: Callable[[TurnObservation], Any],
     ) -> Any:
         command = TaskCommand(
             TaskCommandType.ADD_TASK,
@@ -757,7 +757,9 @@ class _ReactTaskCore:
             reason="live_acceptance_react_task",
         )
         action_result = action_handler([command])
-        return finalizer(CoreObservation(commands=(command,), action_result=action_result))
+        return finalizer(
+            TurnObservation(commands=(command,), action_result=action_result)
+        )
 
 
 @contextmanager

@@ -306,6 +306,10 @@ async function runUat() {
     await installRoutes(page)
     await page.goto(`${baseUrl}/ai-assistant`, { waitUntil: 'domcontentloaded' })
     await page.getByTestId('ai-assistant-shell').waitFor({ state: 'visible', timeout: 10000 })
+    assert(
+      (await page.getByTestId('ai-assistant-add-context').count()) === 0,
+      'Inert Add Context control must not be rendered.',
+    )
     await page.getByTestId('ai-assistant-activity-feed').waitFor({ state: 'visible', timeout: 10000 })
     await page.getByTestId('ai-assistant-assistant-message')
       .getByText('我先核对运行时配置，并同步检查权限记录。')

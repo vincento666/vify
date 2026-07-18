@@ -21,7 +21,9 @@ from app.modules.customer_assistant.domain.llm_primary import (
     CustomerAssistantLlmRuntimeSettings,
 )
 from app.modules.customer_assistant.domain.policy import CustomerAssistantActionPolicy
-from app.modules.customer_assistant.domain.react_core import ControlledReActCore
+from app.modules.customer_assistant.domain.turn_coordinator import (
+    CustomerTurnCoordinator,
+)
 from app.modules.customer_assistant.domain.service import (
     CustomerAssistantService,
     customer_assistant_worker_profile_scope,
@@ -136,7 +138,7 @@ def build_customer_assistant_service(
     workers = _customer_assistant_workers(session, settings, worker_profiles=worker_profiles)
     return CustomerAssistantService(
         repository,
-        core=ControlledReActCore(
+        core=CustomerTurnCoordinator(
             DeterministicTaskRecognitionController(worker_profiles),
             CustomerAssistantActionPolicy(),
         ),

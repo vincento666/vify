@@ -56,3 +56,18 @@ describe('AI Assistant light activity shell UAT script', () => {
     expect(content).toContain('ai-assistant-approval-error-states.png')
   })
 })
+
+describe('AI Assistant legacy UAT selectors', () => {
+  const scripts = [
+    'e2e/ai-assistant-code-save-test-uat.mjs',
+    'e2e/ai-assistant-complex-progress-uat.mjs',
+    'e2e/ai-assistant-shell.mjs',
+  ].map(readFrontendFile)
+
+  it('uses stable activity selectors instead of the removed processed-group projection', () => {
+    for (const content of scripts) {
+      expect(content).not.toContain('ai-assistant-run-event-group-header')
+      expect(content).toContain('ai-assistant-activity-toggle')
+    }
+  })
+})

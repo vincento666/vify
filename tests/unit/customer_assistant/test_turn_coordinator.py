@@ -3,11 +3,14 @@ import unittest
 from app.modules.customer_assistant.domain.controller import DeterministicTaskRecognitionController
 from app.modules.customer_assistant.domain.models import AssistantTurnResult, TaskLedger, TaskCommandType
 from app.modules.customer_assistant.domain.policy import CustomerAssistantActionPolicy, UnsupportedTaskCommand
-from app.modules.customer_assistant.domain.react_core import AssistantTurnContext, ControlledReActCore
+from app.modules.customer_assistant.domain.turn_coordinator import (
+    AssistantTurnContext,
+    CustomerTurnCoordinator,
+)
 
 
-class CustomerAssistantReActCoreControllerTest(unittest.TestCase):
-    def test_core_runs_one_reason_validate_act_final_cycle(self) -> None:
+class CustomerAssistantTurnCoordinatorTest(unittest.TestCase):
+    def test_coordinator_runs_one_recognize_validate_act_finalize_cycle(self) -> None:
         controller = DeterministicTaskRecognitionController()
         policy = CustomerAssistantActionPolicy()
         context = AssistantTurnContext(
@@ -33,7 +36,11 @@ class CustomerAssistantReActCoreControllerTest(unittest.TestCase):
                 task_summaries=[{"taskKey": key} for key in observation.action_result["applied"]],
             )
 
-        result = ControlledReActCore(controller, policy).run(context, action_handler, finalizer)
+        result = CustomerTurnCoordinator(controller, policy).run(
+            context,
+            action_handler,
+            finalizer,
+        )
 
         command_types = [command.type for command in seen["commands"]]
         command_keys = [command.task_key for command in seen["commands"]]

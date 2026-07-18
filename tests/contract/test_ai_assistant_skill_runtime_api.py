@@ -31,7 +31,10 @@ class AiAssistantSkillRuntimeApiContractTest(unittest.TestCase):
         self._skill_root = tempfile.TemporaryDirectory()
         _write_skill_tree(Path(self._skill_root.name))
         app.dependency_overrides[get_session] = self._session_override
-        app.dependency_overrides[get_settings] = lambda: Settings(_env_file=None)
+        app.dependency_overrides[get_settings] = lambda: Settings(
+            _env_file=None,
+            ai_assistant_tool_profile="demo",
+        )
         app.dependency_overrides[get_ai_assistant_service] = self._service_override
 
     def tearDown(self) -> None:
@@ -117,7 +120,7 @@ class AiAssistantSkillRuntimeApiContractTest(unittest.TestCase):
         with self._factory() as session:
             yield AiAssistantHarnessService(
                 AiAssistantRepository(session),
-                tool_registry=ToolRegistry.with_builtin_tools(),
+                tool_registry=ToolRegistry.with_demo_tools(),
                 skill_runtime=SkillRuntime(root_paths=[Path(self._skill_root.name)]),
             )
 

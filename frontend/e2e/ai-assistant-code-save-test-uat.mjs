@@ -120,7 +120,7 @@ async function waitForRunTerminal(page, runId) {
 }
 
 async function expandAllRunEchoes(page) {
-  await expandHeaders(page, '[data-testid="ai-assistant-run-event-group-header"]')
+  await expandHeaders(page, '[data-testid="ai-assistant-activity-toggle"]')
   await page.waitForTimeout(100)
   await expandHeaders(page, '[data-testid="ai-assistant-event-card-header"]')
   await page.waitForTimeout(100)
@@ -154,7 +154,6 @@ async function collectUiState(page) {
       'ai-assistant-completion-copy',
       'ai-assistant-completion-like',
       'ai-assistant-completion-dislike',
-      'ai-assistant-add-context',
       'ai-assistant-model-config-icon',
       'ai-assistant-send',
     ].map((testId) => {
@@ -169,7 +168,7 @@ async function collectUiState(page) {
       }
     })
     return {
-      runHeaders: textList('[data-testid="ai-assistant-run-event-group-header"]'),
+      runHeaders: textList('[data-testid="ai-assistant-activity-toggle"]'),
       eventHeaders: textList('[data-testid="ai-assistant-event-card-header"]'),
       eventDetails: textList('[data-testid="ai-assistant-event-detail-panel"]'),
       toolInvocationHeaders: textList('[data-testid="ai-assistant-tool-invocation-header"]'),
@@ -243,7 +242,7 @@ async function run() {
     const terminalShellRun = await waitForRunTerminal(page, shellRun.runId)
     await page.reload({ waitUntil: 'networkidle' })
     await page.getByTestId('ai-assistant-shell').waitFor({ state: 'visible', timeout: 10000 })
-    await page.getByTestId('ai-assistant-run-event-group-header').first().waitFor({ state: 'visible', timeout: 30000 })
+    await page.getByTestId('ai-assistant-activity-toggle').first().waitFor({ state: 'visible', timeout: 30000 })
     await expandAllRunEchoes(page)
     await page.screenshot({ path: path.join(projectRoot, outDir, 'screenshots/code-save-test-completed.png'), fullPage: true })
 

@@ -16,4 +16,4 @@ def test_ai_assistant_registers_standalone_runtime_job_handler() -> None:
         registry.handle(job)
 
     assert registry.owner_types == ("AI_ASSISTANT",)
-    complete.assert_called_once_with(session, job)
+    complete.assert_called_once_with(session, job, settings=None)

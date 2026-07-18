@@ -3,6 +3,7 @@ import threading
 import unittest
 from collections.abc import Generator
 from typing import Any
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -268,7 +269,7 @@ class AiAssistantStreamingE2ETest(unittest.TestCase):
                     },
                 },
             ).json()["data"]
-            worker = client.post(
+            compatibility = client.post(
                 f"/api/v1/ai-assistant/runs/{started['runId']}/worker/process",
                 json={
                     "modelConfig": {
@@ -281,12 +282,15 @@ class AiAssistantStreamingE2ETest(unittest.TestCase):
                     }
                 },
             )
+            queued_snapshot = client.get(f"/api/v1/ai-assistant/runs/{started['runId']}/snapshot").json()["data"]
+            self._process_run(started["runId"])
             snapshot = client.get(f"/api/v1/ai-assistant/runs/{started['runId']}/snapshot").json()["data"]
             events = client.get(f"/api/v1/ai-assistant/runs/{started['runId']}/events").json()["data"]["list"]
 
-        self.assertEqual(worker.status_code, 200, worker.text)
-        self.assertTrue(worker.json()["data"]["deprecation"]["deprecated"])
-        self.assertTrue(worker.json()["data"]["deprecation"]["requestPayloadIgnored"])
+        self.assertEqual(compatibility.status_code, 200, compatibility.text)
+        self.assertTrue(compatibility.json()["data"]["deprecation"]["deprecated"])
+        self.assertTrue(compatibility.json()["data"]["deprecation"]["requestPayloadIgnored"])
+        self.assertEqual(queued_snapshot["run"]["status"], "QUEUED")
         self.assertEqual(self._fake_client.captured_payloads, [])
         self.assertEqual(snapshot["run"]["status"], "COMPLETED")
         self.assertIn("run.worker_started", [event["type"] for event in events])
@@ -335,6 +339,71 @@ class AiAssistantStreamingE2ETest(unittest.TestCase):
         self.assertEqual(cancelled.status_code, 200, cancelled.text)
         self.assertEqual(cancelled_snapshot["run"]["status"], "CANCELLED")
         self.assertFalse(worker.is_alive(), "worker did not finish after deterministic tool release")
+        self.assertEqual(worker_errors, [])
+        self.assertEqual(final_snapshot["run"]["status"], "CANCELLED")
+        event_types = [event["type"] for event in events]
+        self.assertIn("run.cancelled", event_types)
+        self.assertNotIn("run.completed", event_types)
+
+    def test_cancelled_deterministic_no_tool_run_does_not_emit_completion(self) -> None:
+        step_completed = threading.Event()
+        release_worker = threading.Event()
+        worker_errors: list[BaseException] = []
+        original_append_event = AiAssistantRepository.append_event
+
+        def blocking_append_event(repository, *args, **kwargs):
+            event = original_append_event(repository, *args, **kwargs)
+            if kwargs.get("event_type") == "plan.step_completed":
+                step_completed.set()
+                release_worker.wait(timeout=5)
+            return event
+
+        with patch.object(
+            AiAssistantRepository,
+            "append_event",
+            new=blocking_append_event,
+        ):
+            with TestClient(app) as client:
+                session_id = client.post(
+                    "/api/v1/ai-assistant/sessions",
+                    json={"title": "Cancel deterministic no tool"},
+                ).json()["data"]["id"]
+                started = client.post(
+                    f"/api/v1/ai-assistant/sessions/{session_id}/messages/async",
+                    json={
+                        "message": "无工具回复完成前取消",
+                        "idempotencyKey": "streaming-e2e-cancel-deterministic-no-tool",
+                        "modelMode": "deterministic",
+                        "approvalMode": "smart_approval",
+                    },
+                ).json()["data"]
+                worker = threading.Thread(
+                    target=lambda: self._process_run_capturing_errors(
+                        started["runId"],
+                        worker_errors,
+                    ),
+                    daemon=True,
+                )
+                worker.start()
+                self.assertTrue(
+                    step_completed.wait(timeout=5),
+                    "deterministic no-tool run did not complete its plan step",
+                )
+                cancelled = client.post(
+                    f"/api/v1/ai-assistant/runs/{started['runId']}/cancel",
+                    json={"actorId": "uat"},
+                )
+                release_worker.set()
+                worker.join(timeout=5)
+                final_snapshot = client.get(
+                    f"/api/v1/ai-assistant/runs/{started['runId']}/snapshot"
+                ).json()["data"]
+                events = client.get(
+                    f"/api/v1/ai-assistant/runs/{started['runId']}/events"
+                ).json()["data"]["list"]
+
+        self.assertEqual(cancelled.status_code, 200, cancelled.text)
+        self.assertFalse(worker.is_alive(), "worker did not stop after no-tool cancellation")
         self.assertEqual(worker_errors, [])
         self.assertEqual(final_snapshot["run"]["status"], "CANCELLED")
         event_types = [event["type"] for event in events]
@@ -407,10 +476,9 @@ class AiAssistantStreamingE2ETest(unittest.TestCase):
                 },
             ).json()["data"]
 
-            worker = client.post(f"/api/v1/ai-assistant/runs/{started['runId']}/worker/process")
+            self._process_run(started["runId"])
             events = client.get(f"/api/v1/ai-assistant/runs/{started['runId']}/events").json()["data"]["list"]
 
-        self.assertEqual(worker.status_code, 200, worker.text)
         first_delta = next(event for event in events if event["type"] == "text.delta")
         completed = next(event for event in events if event["type"] == "run.completed")
         self.assertLess(first_delta["sequence"], completed["sequence"])
@@ -431,7 +499,7 @@ class AiAssistantStreamingE2ETest(unittest.TestCase):
                     "approvalMode": "smart_approval",
                 },
             ).json()["data"]
-            worker = client.post(f"/api/v1/ai-assistant/runs/{started['runId']}/worker/process")
+            self._process_run(started["runId"])
             events = client.get(f"/api/v1/ai-assistant/runs/{started['runId']}/events").json()["data"]["list"]
             first_delta = next(event for event in events if event["type"] == "text.delta")
             with client.stream(
@@ -441,7 +509,6 @@ class AiAssistantStreamingE2ETest(unittest.TestCase):
             ) as resumed_response:
                 resumed = _read_sse_frames(resumed_response, 6)
 
-        self.assertEqual(worker.status_code, 200, worker.text)
         replayed_events = [frame["data"] for frame in resumed if frame["event"] == "ai_assistant_event"]
         replayed_delta = next(event for event in replayed_events if event["type"] == "text.delta")
         replayed_completed = next(event for event in replayed_events if event["type"] == "run.completed")
@@ -464,10 +531,9 @@ class AiAssistantStreamingE2ETest(unittest.TestCase):
                     "approvalMode": "smart_approval",
                 },
             ).json()["data"]
-            worker = client.post(f"/api/v1/ai-assistant/runs/{started['runId']}/worker/process")
+            self._process_run(started["runId"])
             events = client.get(f"/api/v1/ai-assistant/runs/{started['runId']}/events").json()["data"]["list"]
 
-        self.assertEqual(worker.status_code, 200, worker.text)
         delta = next(event for event in events if event["type"] == "text.delta")
         chunk = next(event for event in events if event["type"] == "model.stream_chunk")
         self.assertEqual(chunk["sequence"], delta["sequence"] + 1)

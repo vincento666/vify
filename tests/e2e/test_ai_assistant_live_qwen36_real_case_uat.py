@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.modules.ai_assistant.domain.harness import AiAssistantHarnessService
 from app.modules.ai_assistant.domain.live_model import LivePlannerConfig, QwenLivePlanner
+from app.modules.ai_assistant.domain.tools import ToolRegistry
 from app.modules.ai_assistant.web.router import get_ai_assistant_service
 from tests.support.ai_assistant_memory_repo import InMemoryAiAssistantRepository
 
@@ -156,6 +157,7 @@ class AiAssistantLiveQwen36RealCaseUatTest(unittest.TestCase):
     def _service_override(self) -> Generator[AiAssistantHarnessService, None, None]:
         yield AiAssistantHarnessService(
             self._repository,
+            tool_registry=ToolRegistry.with_demo_tools(),
             live_planner=QwenLivePlanner(
                 LivePlannerConfig(
                     base_url="https://openrouter.ai/api/v1",

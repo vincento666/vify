@@ -1,0 +1,30 @@
+226.8 observable RED record
+
+1. Request-worker separation
+   Contract expected POST /worker/process to leave the run and runtime job
+   QUEUED. The previous route constructed RuntimeJobWorker and executed
+   run_once inside the HTTP request.
+
+2. Production registry
+   Characterization showed ToolRegistry.with_builtin_tools exposed
+   echo_context, blocked update, MockAviation, placeholder knowledge search and
+   plan-only skill script as production capabilities.
+
+3. Product configuration
+   test_production_settings_reject_demo_tool_profile failed:
+   AssertionError: ValueError not raised.
+
+4. Customer duplicate naming
+   The new CustomerTurnCoordinator import initially failed because only
+   ControlledReActCore existed with an unused max_iterations setting.
+
+5. Product shell
+   Shell contract initially required the inert ai-assistant-add-context
+   control, and legacy UAT scripts referenced the removed
+   ai-assistant-run-event-group-header projection.
+
+6. HA cancellation
+   test_cancelled_deterministic_no_tool_run_does_not_emit_completion failed
+   because run.completed appeared after run.cancelled.
+
+Each RED was produced before its corresponding minimum GREEN change.

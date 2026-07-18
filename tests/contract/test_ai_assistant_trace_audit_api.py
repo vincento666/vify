@@ -29,7 +29,10 @@ class AiAssistantTraceAuditApiContractTest(unittest.TestCase):
         self._engine = self._database.engine
         self._factory = self._database.session_factory
         app.dependency_overrides[get_session] = self._session_override
-        app.dependency_overrides[get_settings] = lambda: Settings(_env_file=None)
+        app.dependency_overrides[get_settings] = lambda: Settings(
+            _env_file=None,
+            ai_assistant_tool_profile="demo",
+        )
         app.dependency_overrides[get_ai_assistant_service] = self._service_override
 
     def tearDown(self) -> None:

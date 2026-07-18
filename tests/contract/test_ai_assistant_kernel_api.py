@@ -37,7 +37,7 @@ class AiAssistantKernelApiContractTest(unittest.TestCase):
             session_id = created.json()["data"]["id"]
             message = client.post(
                 f"/api/v1/ai-assistant/sessions/{session_id}/messages",
-                json={"message": "Echo this contract", "idempotencyKey": "contract-message-1"},
+                json={"message": "Default production contract", "idempotencyKey": "contract-message-1"},
             )
             run_id = message.json()["data"]["runId"]
             run = client.get(f"/api/v1/ai-assistant/runs/{run_id}")
@@ -52,8 +52,8 @@ class AiAssistantKernelApiContractTest(unittest.TestCase):
         self.assertEqual(message.json()["data"]["status"], "COMPLETED")
         self.assertEqual(message.json()["data"]["planningStrategy"], "auto_lightweight")
         self.assertEqual(message.json()["data"]["plan"]["id"], f"plan-{run_id}")
-        self.assertEqual(message.json()["data"]["toolCalls"][0]["toolName"], "echo_context")
-        self.assertIn("Echo this contract", message.json()["data"]["finalAnswer"])
+        self.assertEqual(message.json()["data"]["toolCalls"], [])
+        self.assertIn("未选择工具", message.json()["data"]["finalAnswer"])
         self.assertEqual(run.json()["data"]["id"], run_id)
         self.assertEqual(run.json()["data"]["status"], "COMPLETED")
         event_list = events.json()["data"]["list"]
@@ -68,8 +68,10 @@ class AiAssistantKernelApiContractTest(unittest.TestCase):
         self.assertIn("task.completed", event_types)
         self.assertEqual(event_types[-1], "run.completed")
         self.assertEqual(result.json()["data"]["finalAnswer"], message.json()["data"]["finalAnswer"])
-        self.assertEqual(tools.json()["data"]["list"][0]["name"], "echo_context")
-        self.assertEqual(tools.json()["data"]["list"][0]["riskLevel"], "READ")
+        tool_names = {tool["name"] for tool in tools.json()["data"]["list"]}
+        self.assertIn("read_workspace_file", tool_names)
+        self.assertNotIn("echo_context", tool_names)
+        self.assertNotIn("mock_aviation.refund", tool_names)
 
     def test_delete_session_contract_soft_deletes_session(self) -> None:
         with TestClient(app) as client:

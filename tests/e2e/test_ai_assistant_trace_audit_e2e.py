@@ -23,7 +23,10 @@ class AiAssistantTraceAuditE2ETest(unittest.TestCase):
         self._engine = self._database.engine
         self._factory = self._database.session_factory
         app.dependency_overrides[get_session] = self._session_override
-        app.dependency_overrides[get_settings] = lambda: Settings(_env_file=None)
+        app.dependency_overrides[get_settings] = lambda: Settings(
+            _env_file=None,
+            ai_assistant_tool_profile="demo",
+        )
 
     def tearDown(self) -> None:
         app.dependency_overrides.pop(get_session, None)
@@ -41,6 +44,7 @@ class AiAssistantTraceAuditE2ETest(unittest.TestCase):
                     "message": "trace this deterministic run",
                     "idempotencyKey": "trace-audit-e2e",
                     "approvalMode": "always_approve",
+                    "toolName": "echo_context",
                     "aiAssistantBudget": {"maxUsd": 0.000001},
                     "modelBudgetPolicy": {"primaryModel": "qwen-max", "fallbackModel": "qwen-turbo"},
                 },

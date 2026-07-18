@@ -29,7 +29,10 @@ class AiAssistantSecurityE2ETest(unittest.TestCase):
         self._previous_workspace_root = os.environ.get("HIFY_WORKSPACE_ROOT")
         os.environ["HIFY_WORKSPACE_ROOT"] = self._tmp_dir.name
         app.dependency_overrides[get_session] = self._session_override
-        app.dependency_overrides[get_settings] = lambda: Settings(_env_file=None)
+        app.dependency_overrides[get_settings] = lambda: Settings(
+            _env_file=None,
+            ai_assistant_tool_profile="demo",
+        )
 
     def tearDown(self) -> None:
         if self._previous_workspace_root is None:

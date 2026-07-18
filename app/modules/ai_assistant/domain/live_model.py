@@ -92,7 +92,13 @@ class QwenLivePlanner:
         on_stream_chunk: Callable[[str, int], None] | None = None,
     ) -> LivePlannerDecision:
         return self.plan_messages(
-            self.initial_messages(user_message),
+            self.initial_messages(
+                user_message,
+                available_tool_names={
+                    manifest.name
+                    for manifest in tool_registry.list_manifests()
+                },
+            ),
             tool_registry,
             on_stream_chunk=on_stream_chunk,
         )
@@ -102,24 +108,12 @@ class QwenLivePlanner:
         user_message: str,
         *,
         memory_text: str = "",
+        available_tool_names: set[str] | None = None,
     ) -> list[ChatRequestMessage]:
         messages = [
             ChatRequestMessage(
                 role="system",
-                content=(
-                    "你是 Hify AI 助手，是面向工程任务的 coding agent harness。"
-                    "请用中文输出，给出简短思考摘要，不要输出隐藏推理。"
-                    "用户经常使用口语化指令，不要要求用户显式写出工具名；"
-                    "你必须自动识别需要编排的动作并使用提供的 function tools。"
-                    "查看/读取/打开文件时使用 read_workspace_file；"
-                    "创建/写入/保存文件时使用 write_workspace_file；"
-                    "提到知识库、资料、规则、检索、查询时使用 search_knowledge_base；"
-                    "提到 tdd、测试驱动、code review、debug、诊断、skill、技能、规范时使用 invoke_skill "
-                    "记录对应技能意图；涉及命令、终端、shell 时使用 run_shell，但要尊重审批和沙箱结果。"
-                    "多步骤任务先按能力编排工具，不要只用文字描述计划。工具执行后会收到 tool 结果，"
-                    "如果原任务仍需要后续工具，请继续返回 function tool_calls；"
-                    "所有最终总结保持简洁、可回溯、说明已执行的读写/skill/tool/function call 结果。"
-                ),
+                content=_system_prompt(available_tool_names or set()),
             ),
         ]
         if memory_text.strip():
@@ -279,6 +273,38 @@ def _append_unique_text(parts: list[str], text: str) -> None:
     if text in existing:
         return
     parts.append(text)
+
+
+def _system_prompt(available_tool_names: set[str]) -> str:
+    instructions = [
+        "你是 Hify AI 助手，是面向工程任务的 coding agent harness。",
+        "请用中文输出，给出简短思考摘要，不要输出隐藏推理。",
+        "用户经常使用口语化指令，不要要求用户显式写出工具名；"
+        "你必须自动识别需要编排的动作并使用实际提供的 function tools。",
+    ]
+    guidance = {
+        "read_workspace_file": "查看/读取/打开文件时使用 read_workspace_file。",
+        "write_workspace_file": "创建/写入/保存文件时使用 write_workspace_file。",
+        "search_knowledge_base": "提到知识库、资料、规则、检索、查询时使用 search_knowledge_base。",
+        "invoke_skill": (
+            "提到 tdd、测试驱动、code review、debug、诊断、skill、技能、规范时使用 invoke_skill "
+            "记录对应技能意图。"
+        ),
+        "run_shell": "涉及命令、终端、shell 时使用 run_shell，但要尊重审批和沙箱结果。",
+    }
+    instructions.extend(
+        guidance[tool_name]
+        for tool_name in guidance
+        if tool_name in available_tool_names
+    )
+    instructions.extend(
+        [
+            "多步骤任务先按能力编排工具，不要只用文字描述计划。工具执行后会收到 tool 结果，"
+            "如果原任务仍需要后续工具，请继续返回 function tool_calls。",
+            "所有最终总结保持简洁、可回溯、说明已执行的读写/skill/tool/function call 结果。",
+        ]
+    )
+    return "".join(instructions)
 
 
 def _thought_summary(*, content: str, reasoning: str, has_tool_calls: bool) -> str:

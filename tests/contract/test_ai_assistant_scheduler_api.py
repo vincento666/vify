@@ -29,7 +29,9 @@ class AiAssistantSchedulerApiContractTest(unittest.TestCase):
         self._engine = self._database.engine
         self._factory = self._database.session_factory
         app.dependency_overrides[get_session] = self._session_override
-        app.dependency_overrides[get_settings] = lambda: Settings()
+        app.dependency_overrides[get_settings] = lambda: Settings(
+            ai_assistant_tool_profile="demo",
+        )
 
     def tearDown(self) -> None:
         app.dependency_overrides.pop(get_session, None)

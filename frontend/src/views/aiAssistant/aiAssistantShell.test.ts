@@ -38,7 +38,6 @@ describe('AI Assistant shell UI contract', () => {
       'ai-assistant-composer',
       'ai-assistant-composer-body',
       'ai-assistant-composer-actions',
-      'ai-assistant-add-context',
       'ai-assistant-permission-mode',
       'ai-assistant-send',
       'ai-assistant-session-list',
@@ -436,7 +435,7 @@ describe('AI Assistant shell UI contract', () => {
     expect(content).toContain('data-testid="ai-assistant-composer-body"')
     expect(content).toContain('class="ai-composer__actions"')
     expect(content).toContain('data-testid="ai-assistant-composer-actions"')
-    expect(content).toContain('data-testid="ai-assistant-add-context"')
+    expect(content).not.toContain('data-testid="ai-assistant-add-context"')
     expect(content).toContain('data-testid="ai-assistant-permission-mode"')
     expect(content).toContain('permissionModeLabel')
     expect(content).toContain('selectPermissionMode')

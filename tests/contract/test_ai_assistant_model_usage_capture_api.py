@@ -17,6 +17,7 @@ class AiAssistantModelUsageCaptureApiTest(unittest.TestCase):
         from app.modules.ai_assistant.domain.access_scope import access_scope_for_workspace
         from app.modules.ai_assistant.domain.harness import AiAssistantHarnessService
         from app.modules.ai_assistant.domain.live_model import LivePlannerConfig, QwenLivePlanner
+        from app.modules.ai_assistant.domain.tools import ToolRegistry
         from app.modules.ai_assistant.infra.repository import AiAssistantRepository
         from app.modules.ai_assistant.web.router import get_ai_assistant_service
 
@@ -70,6 +71,7 @@ class AiAssistantModelUsageCaptureApiTest(unittest.TestCase):
                         ),
                         client=scripted_client,
                     ),
+                    tool_registry=ToolRegistry.with_demo_tools(),
                 )
 
         app.dependency_overrides[get_ai_assistant_service] = service_override
@@ -196,7 +198,10 @@ class AiAssistantModelUsageCaptureApiTest(unittest.TestCase):
         os.environ["HIFY_AI_ASSISTANT_MEMORY_ROOT"] = self._memory.name
         app.state.ai_assistant_autonomous_worker_enabled = False
         app.dependency_overrides[get_session] = self._session_override
-        app.dependency_overrides[get_settings] = lambda: Settings(_env_file=None)
+        app.dependency_overrides[get_settings] = lambda: Settings(
+            _env_file=None,
+            ai_assistant_tool_profile="demo",
+        )
 
     def tearDown(self) -> None:
         if self._previous_workspace is None:

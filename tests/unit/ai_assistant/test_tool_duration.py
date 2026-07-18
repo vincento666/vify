@@ -7,8 +7,12 @@ from tests.support.ai_assistant_memory_repo import InMemoryAiAssistantRepository
 class AiAssistantToolDurationTest(unittest.TestCase):
     def test_sub_millisecond_completed_tool_duration_is_not_reported_as_zero(self) -> None:
         from app.modules.ai_assistant.domain.harness import AiAssistantHarnessService
+        from app.modules.ai_assistant.domain.tools import ToolRegistry
 
-        service = AiAssistantHarnessService(InMemoryAiAssistantRepository())
+        service = AiAssistantHarnessService(
+            InMemoryAiAssistantRepository(),
+            tool_registry=ToolRegistry.with_demo_tools(),
+        )
 
         with patch("app.modules.ai_assistant.domain.harness.perf_counter", side_effect=[100.0, 100.0004]):
             result = service._dispatch_tool(
@@ -22,8 +26,12 @@ class AiAssistantToolDurationTest(unittest.TestCase):
 
     def test_completed_tool_duration_uses_one_millisecond_floor_when_clock_resolution_is_zero(self) -> None:
         from app.modules.ai_assistant.domain.harness import AiAssistantHarnessService
+        from app.modules.ai_assistant.domain.tools import ToolRegistry
 
-        service = AiAssistantHarnessService(InMemoryAiAssistantRepository())
+        service = AiAssistantHarnessService(
+            InMemoryAiAssistantRepository(),
+            tool_registry=ToolRegistry.with_demo_tools(),
+        )
 
         with patch("app.modules.ai_assistant.domain.harness.perf_counter", side_effect=[100.0, 100.0]):
             result = service._dispatch_tool(

@@ -11,7 +11,10 @@ from tests.support.ai_assistant_memory_repo import InMemoryAiAssistantRepository
 
 def test_tool_lifecycle_events_share_one_stable_activity_id() -> None:
     repository = InMemoryAiAssistantRepository()
-    service = AiAssistantHarnessService(repository)
+    service = AiAssistantHarnessService(
+        repository,
+        tool_registry=ToolRegistry.with_demo_tools(),
+    )
     session = service.create_session("activity correlation")
 
     result = service.run_message(
@@ -70,7 +73,10 @@ def test_real_child_execution_result_emits_subagent_lifecycle_event() -> None:
 
 def test_approval_events_share_approval_activity_id() -> None:
     repository = InMemoryAiAssistantRepository()
-    service = AiAssistantHarnessService(repository)
+    service = AiAssistantHarnessService(
+        repository,
+        tool_registry=ToolRegistry.with_demo_tools(),
+    )
     session = service.create_session("approval correlation")
 
     result = service.run_message(

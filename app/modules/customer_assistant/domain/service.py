@@ -29,7 +29,11 @@ from app.modules.customer_assistant.domain.llm_primary import (
 )
 from app.modules.customer_assistant.domain.models import AssistantTurnResult, TaskCommand, TaskCommandType, TaskItem, TaskLedger, TaskStatus, WorkerResult
 from app.modules.customer_assistant.domain.policy import CustomerAssistantActionPolicy, UnsupportedTaskCommand
-from app.modules.customer_assistant.domain.react_core import AssistantTurnContext, ControlledReActCore, CoreObservation
+from app.modules.customer_assistant.domain.turn_coordinator import (
+    AssistantTurnContext,
+    CustomerTurnCoordinator,
+    TurnObservation,
+)
 from app.modules.customer_assistant.domain.risk_policy import is_supported_risk_policy_ref, supported_risk_policy_refs
 from app.modules.customer_assistant.domain.scheduler import LocalWorkerScheduler
 from app.modules.customer_assistant.domain.shadow import (
@@ -83,7 +87,7 @@ class CustomerAssistantService:
     def __init__(
         self,
         repository: CustomerAssistantRepository,
-        core: ControlledReActCore | None = None,
+        core: CustomerTurnCoordinator | None = None,
         scheduler: LocalWorkerScheduler | None = None,
         aggregator: RecommendationAggregator | None = None,
         shadow_settings: CustomerAssistantShadowSettings | None = None,
@@ -102,7 +106,7 @@ class CustomerAssistantService:
         self._ledger = CustomerAssistantLedger(repository)
         self._request_context = request_context
         self._worker_profiles = worker_profiles or CustomerAssistantWorkerProfileCatalog.default()
-        self._core = core or ControlledReActCore(
+        self._core = core or CustomerTurnCoordinator(
             DeterministicTaskRecognitionController(self._worker_profiles),
             CustomerAssistantActionPolicy(),
         )
@@ -627,7 +631,7 @@ class CustomerAssistantService:
         def action_handler(commands: list[TaskCommand]) -> dict[str, Any]:
             return self._act(session_id, run_id, message, commands, actor)
 
-        def finalizer(observation: CoreObservation) -> AssistantTurnResult:
+        def finalizer(observation: TurnObservation) -> AssistantTurnResult:
             return self._finalize(session_id, run_id, observation, actor)
 
         try:
@@ -1462,7 +1466,7 @@ class CustomerAssistantService:
         self,
         session_id: int,
         run_id: int,
-        observation: CoreObservation,
+        observation: TurnObservation,
         actor: str,
     ) -> AssistantTurnResult:
         worker_results = list(observation.action_result.get("workerResults") or [])
@@ -1908,7 +1912,7 @@ class CustomerAssistantService:
         task_summaries: list[dict[str, Any]],
         proposed_actions: list[dict[str, Any]],
         baseline_result: AssistantTurnResult,
-        observation: CoreObservation,
+        observation: TurnObservation,
     ) -> AssistantTurnResult:
         mode = self._llm_runtime_settings.mode
         if mode not in {
@@ -3661,7 +3665,7 @@ def _two_stage_input_pack(
 
 
 def _two_stage_react_progression(
-    observation: CoreObservation,
+    observation: TurnObservation,
     task_summaries: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     commands = [_compact_command(_command_payload(command)) for command in observation.commands]

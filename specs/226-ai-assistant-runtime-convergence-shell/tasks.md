@@ -1,6 +1,6 @@
 # Tasks — Spec 226
 
-Status: `226.7 complete / 226.8 ready`
+Status: `226.8 complete / 226.9 ready`
 
 Evidence root:
 `artifacts/slices/226-ai-assistant-runtime-convergence-shell/<slice>/`
@@ -132,20 +132,23 @@ Evidence for this contract round is the repository diff and final Contract Gate 
 
 ## 226.8 Cleanup — Duplicate Harness, Registry And Legacy Paths
 
-- [ ] TDD/characterization preflight。
-- [ ] 生成 production caller、accepted-contract、route compatibility inventory。
-- [ ] 删除或收窄 `ControlledReActCore`、`RestrictedReactWorker`、
+- [x] TDD/characterization preflight。
+- [x] 生成 production caller、accepted-contract、route compatibility inventory。
+- [x] 删除或收窄 `ControlledReActCore`、`RestrictedReactWorker`、
   `worker_registry`、`tool_policy` 中已由 Agent Harness 覆盖的第二套执行逻辑；
   Customer Assistant business Adapter 保持 locality。
-- [ ] demo/eval：`echo_context`、blocked update、MockAviation。
-- [ ] capability unavailable：stub knowledge/skill script/shell placeholder。
-- [ ] subagent bridge：接真实 lifecycle 或移出 default registry。
-- [ ] Add Context/planning option：实现真实行为或删除无效 UI。
-- [ ] 删除 unstable processed-group projection 与已替代 facade。
-- [ ] `/worker/process` 达到删除条件则删除；否则保留有期限 shim 并报告外部 blocker。
-- [ ] dependency test：runtime core 无业务 import，router/shell 不重新聚合职责。
-- [ ] Full affected regression / Docs evidence。
-- [ ] Checker / Reviewer / slice commit。
+- [x] demo/eval：`echo_context`、blocked update、MockAviation。
+- [x] capability unavailable：stub knowledge/skill script 隔离；shell 绑定受控
+  subprocess 实现。
+- [x] subagent bridge：仅在 composition 注入真实 lifecycle provider 时注册。
+- [x] Add Context/planning option：删除无效 Add Context；保留有真实策略差异的
+  planning option。
+- [x] 删除 unstable processed-group projection 与已替代 facade。
+- [x] `/worker/process` 未达到外部消费者删除门；保留至 2026-08-01 的
+  enqueue/inspect shim，request 内不执行。
+- [x] dependency test：runtime core 无业务 import，router/shell 不重新聚合职责。
+- [x] Full affected regression / Docs evidence。
+- [x] Checker / Reviewer / slice commit。
 
 ## 226.9 Goal Exit
 

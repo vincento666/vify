@@ -54,9 +54,6 @@ from app.modules.ai_assistant.infra.runtime_job_gateway import (
     AiAssistantRuntimeJobGateway,
     AiAssistantRuntimeQueueFull,
 )
-from app.modules.ai_assistant.runtime_job_worker import (
-    build_ai_assistant_runtime_job_worker,
-)
 from app.modules.ai_assistant.web.schemas import (
     ApprovalDecisionRequest,
     CreateAiAssistantSessionRequest,
@@ -169,7 +166,8 @@ def get_ai_assistant_service(
             session,
             access_scope=access_scope,
         ),
-        tool_registry=ToolRegistry.with_builtin_tools(
+        tool_registry=ToolRegistry.for_profile(
+            settings.ai_assistant_tool_profile,
             child_execution_adapter=child_execution_adapter,
         ),
         approval_policy=ApprovalPolicy(environment=settings.deployment_environment),
@@ -840,10 +838,8 @@ def get_run_result(
 @router.post("/runs/{run_id}/worker/process")
 def process_run_worker(
     run_id: int,
-    http_request: Request,
     request: ProcessAiAssistantRunWorkerRequest | None = None,
     service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
-    session: Session = Depends(get_session),
     runtime_jobs: AiAssistantRuntimeJobGateway = Depends(
         get_ai_assistant_runtime_job_gateway
     ),
@@ -858,19 +854,6 @@ def process_run_worker(
             run_id=run_id,
             session_id=int(run["session_id"]),
         )
-    if job is not None and str(job["status"]).upper() in {"QUEUED", "RUNNING"}:
-        build_ai_assistant_runtime_job_worker(
-            session,
-            worker_id=f"api-compat-ai-assistant-{run_id}",
-            child_execution_adapter_factory=getattr(
-                http_request.app.state,
-                "child_execution_adapter_factory",
-                None,
-            ),
-        ).run_once(job_id=int(job["id"]))
-    run = service.get_run(run_id)
-    if run is None:
-        raise HTTPException(status_code=404, detail="AI Assistant run not found")
     return success(
         _run_payload(run)
         | {
@@ -879,6 +862,8 @@ def process_run_worker(
                 "deprecated": True,
                 "replacement": "standalone-runtime-worker",
                 "requestPayloadIgnored": request is not None,
+                "sunsetAt": "2026-08-01",
+                "removalGate": "external-consumer-inventory",
             },
         }
     )

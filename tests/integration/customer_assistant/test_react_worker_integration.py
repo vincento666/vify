@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from tests.support.mysql import mysql8_session
 from app.modules.customer_assistant.domain.models import TaskCommand, TaskCommandType
-from app.modules.customer_assistant.domain.react_core import CoreObservation
+from app.modules.customer_assistant.domain.turn_coordinator import TurnObservation
 from app.modules.customer_assistant.domain.react_worker import (
     FakeReactWorkerModel,
     ReactModelAction,
@@ -105,7 +105,9 @@ class _ReactTaskCore:
             )
         ]
         action_result = action_handler(commands)
-        return finalizer(CoreObservation(commands=tuple(commands), action_result=action_result))
+        return finalizer(
+            TurnObservation(commands=tuple(commands), action_result=action_result)
+        )
 
 
 def _config(allowed_tools: tuple[str, ...] = ("lookup_order", "submit_refund")) -> ReactWorkerConfig:

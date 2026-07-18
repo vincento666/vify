@@ -6,7 +6,7 @@ from hashlib import sha256
 
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.modules.agent_execution import SubagentExecutionProvider
 from app.modules.ai_assistant.domain.access_scope import AiAssistantAccessScope
 from app.modules.ai_assistant.domain.harness import AiAssistantHarnessService
@@ -42,12 +42,14 @@ def build_ai_assistant_runtime_job_worker(
     worker_id: str | None = None,
     lease_seconds: int = 300,
     child_execution_adapter_factory: SubagentExecutionProviderFactory | None = None,
+    settings: Settings | None = None,
 ) -> RuntimeJobWorker:
     registry = RuntimeJobHandlerRegistry()
     register_ai_assistant_runtime_job_handler(
         registry,
         session,
         child_execution_adapter_factory=child_execution_adapter_factory,
+        settings=settings,
     )
     return build_registered_runtime_job_worker(
         session,
@@ -68,11 +70,16 @@ def register_ai_assistant_runtime_job_handler(
     session: Session,
     *,
     child_execution_adapter_factory: SubagentExecutionProviderFactory | None = None,
+    settings: Settings | None = None,
 ) -> None:
     if child_execution_adapter_factory is None:
         registry.register(
             "AI_ASSISTANT",
-            lambda job: complete_ai_assistant_runtime_job(session, job),
+            lambda job: complete_ai_assistant_runtime_job(
+                session,
+                job,
+                settings=settings,
+            ),
         )
         return
     registry.register(
@@ -81,6 +88,7 @@ def register_ai_assistant_runtime_job_handler(
             session,
             job,
             child_execution_adapter_factory=child_execution_adapter_factory,
+            settings=settings,
         ),
     )
 
@@ -90,6 +98,7 @@ def complete_ai_assistant_runtime_job(
     job: dict[str, Any],
     *,
     child_execution_adapter_factory: SubagentExecutionProviderFactory | None = None,
+    settings: Settings | None = None,
 ) -> None:
     run_id = int(job["run_id"])
     access_scope = AiAssistantRepository.access_scope_for_durable_run(
@@ -103,7 +112,7 @@ def complete_ai_assistant_runtime_job(
     worker_id = str(job.get("lease_owner") or "")
     if not lease_fence or not worker_id:
         raise RuntimeError(f"AI Assistant runtime job {job['id']} has no active lease")
-    settings = get_settings()
+    effective_settings = settings or get_settings()
     lease_guard = RuntimeJobLeaseGuard(
         session,
         job_id=int(job["id"]),
@@ -126,9 +135,12 @@ def complete_ai_assistant_runtime_job(
     )
     service = AiAssistantHarnessService(
         assistant_repository,
-        live_planner=create_qwen_live_planner(settings),
-        approval_policy=ApprovalPolicy(environment=settings.deployment_environment),
-        tool_registry=ToolRegistry.with_builtin_tools(
+        live_planner=create_qwen_live_planner(effective_settings),
+        approval_policy=ApprovalPolicy(
+            environment=effective_settings.deployment_environment
+        ),
+        tool_registry=ToolRegistry.for_profile(
+            effective_settings.ai_assistant_tool_profile,
             child_execution_adapter=child_execution_adapter,
         ),
         principal_snapshot=principal,

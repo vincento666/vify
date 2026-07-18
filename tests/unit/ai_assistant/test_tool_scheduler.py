@@ -6,7 +6,7 @@ class AiAssistantToolSchedulerTest(unittest.TestCase):
         from app.modules.ai_assistant.domain.scheduler import ScheduledToolInvocation, ToolScheduler
         from app.modules.ai_assistant.domain.tools import ToolRegistry
 
-        scheduler = ToolScheduler(ToolRegistry.with_builtin_tools())
+        scheduler = ToolScheduler(ToolRegistry.with_demo_tools())
 
         plan = scheduler.plan(
             [
@@ -32,7 +32,7 @@ class AiAssistantToolSchedulerTest(unittest.TestCase):
         from app.modules.ai_assistant.domain.scheduler import ScheduledToolInvocation, ToolScheduler
         from app.modules.ai_assistant.domain.tools import ToolRegistry
 
-        scheduler = ToolScheduler(ToolRegistry.with_builtin_tools())
+        scheduler = ToolScheduler(ToolRegistry.with_demo_tools())
 
         plan = scheduler.plan(
             [
@@ -45,14 +45,14 @@ class AiAssistantToolSchedulerTest(unittest.TestCase):
         self.assertEqual(len(plan.batches), 2)
         self.assertEqual([batch.execution_mode for batch in plan.batches], ["WRITE_EXCLUSIVE", "WRITE_EXCLUSIVE"])
         self.assertEqual([batch.lock_mode for batch in plan.batches], ["WRITE", "WRITE"])
-        self.assertEqual([batch.write_resources for batch in plan.batches], [["customer:C-1"], ["customer:C-1"]])
+        self.assertEqual([batch.write_resources for batch in plan.batches], [["demo:customer:C-1"], ["demo:customer:C-1"]])
         self.assertEqual([batch.batch_id for batch in plan.batches], [1, 2])
 
     def test_unresolved_write_resources_fall_back_to_serial_lock(self) -> None:
         from app.modules.ai_assistant.domain.scheduler import ScheduledToolInvocation, ToolScheduler
         from app.modules.ai_assistant.domain.tools import ToolRegistry
 
-        scheduler = ToolScheduler(ToolRegistry.with_builtin_tools())
+        scheduler = ToolScheduler(ToolRegistry.with_demo_tools())
 
         plan = scheduler.plan(
             [ScheduledToolInvocation("update_customer_profile", {"field": "tier"})],
@@ -61,7 +61,7 @@ class AiAssistantToolSchedulerTest(unittest.TestCase):
 
         self.assertEqual(plan.batches[0].execution_mode, "SERIAL")
         self.assertEqual(plan.batches[0].lock_mode, "SERIAL")
-        self.assertEqual(plan.batches[0].write_resources, ["customer:{customerId}"])
+        self.assertEqual(plan.batches[0].write_resources, ["demo:customer:{customerId}"])
         self.assertEqual(plan.batches[0].resource_lock_reason, "unresolved_resource_template")
         self.assertFalse(plan.batches[0].parallel_eligible)
 

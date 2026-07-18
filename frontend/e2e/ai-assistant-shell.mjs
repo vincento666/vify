@@ -67,7 +67,7 @@ async function configureLiveModelIfNeeded() {
 }
 
 async function latestRunHeader() {
-  const headers = page.getByTestId('ai-assistant-run-event-group-header')
+  const headers = page.getByTestId('ai-assistant-activity-toggle')
   await headers.last().waitFor({ state: 'visible', timeout: 10000 })
   return headers.last()
 }
@@ -109,7 +109,7 @@ try {
     timeout: 45000,
   })
   const firstHeaderText = await (await latestRunHeader()).textContent()
-  assert(firstHeaderText.includes('已处理'), `Expected compact completed header, got ${firstHeaderText}`)
+  assert(firstHeaderText.includes('已完成'), `Expected compact completed activity, got ${firstHeaderText}`)
   assert(!firstHeaderText.includes('任务记录 #'), `Expected no task record id in header, got ${firstHeaderText}`)
   assert(!firstHeaderText.includes('E2E 检查回显'), `Expected no prompt text in header, got ${firstHeaderText}`)
   await page.getByTestId('ai-assistant-user-message').last().waitFor({ state: 'visible', timeout: 10000 })
@@ -161,7 +161,7 @@ try {
     hasEventCards: document.querySelectorAll('[data-testid="ai-assistant-event-card"]').length,
     hasUserMessages: document.querySelectorAll('[data-testid="ai-assistant-user-message"]').length,
     hasFinalAnswers: document.querySelectorAll('[data-testid="ai-assistant-run-final-answer"]').length,
-    taskRecordHeaders: Array.from(document.querySelectorAll('[data-testid="ai-assistant-run-event-group-header"]')).filter((header) =>
+    taskRecordHeaders: Array.from(document.querySelectorAll('[data-testid="ai-assistant-activity-toggle"]')).filter((header) =>
       header.textContent.includes('任务记录 #'),
     ).length,
     composerVisible: Boolean(document.querySelector('[data-testid="ai-assistant-composer"]')?.getBoundingClientRect().height),

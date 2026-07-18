@@ -16,19 +16,17 @@ class AssistantTurnContext:
 
 
 @dataclass(frozen=True)
-class CoreObservation:
+class TurnObservation:
     commands: tuple[TaskCommand, ...]
     action_result: dict[str, Any]
 
 
-class ControlledReActCore:
+class CustomerTurnCoordinator:
     def __init__(
         self,
         controller: DeterministicTaskRecognitionController,
         policy: CustomerAssistantActionPolicy,
-        max_iterations: int = 1,
     ) -> None:
-        self.max_iterations = max_iterations
         self._controller = controller
         self._policy = policy
 
@@ -36,12 +34,15 @@ class ControlledReActCore:
         self,
         context: AssistantTurnContext,
         action_handler: Callable[[list[TaskCommand]], dict[str, Any]],
-        finalizer: Callable[[CoreObservation], AssistantTurnResult],
+        finalizer: Callable[[TurnObservation], AssistantTurnResult],
         command_selector: Callable[[list[TaskCommand]], list[TaskCommand]] | None = None,
     ) -> AssistantTurnResult:
         baseline_commands = self._controller.recognize(context.message, context.ledger)
         commands = command_selector(baseline_commands) if command_selector else baseline_commands
         self._policy.validate(commands)
         action_result = action_handler(commands)
-        observation = CoreObservation(commands=tuple(commands), action_result=action_result)
+        observation = TurnObservation(
+            commands=tuple(commands),
+            action_result=action_result,
+        )
         return finalizer(observation)

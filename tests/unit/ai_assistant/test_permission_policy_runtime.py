@@ -51,7 +51,7 @@ class AiAssistantPermissionPolicyRuntimeTest(unittest.TestCase):
         )
         from app.modules.ai_assistant.domain.tools import ToolRegistry
 
-        registry = ToolRegistry.with_builtin_tools()
+        registry = ToolRegistry.with_demo_tools()
         policy = SessionPermissionPolicy(
             default_decision="require_approval",
             rules=[

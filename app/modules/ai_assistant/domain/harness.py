@@ -121,6 +121,10 @@ class _AiAssistantLiveHarnessProfile:
         self._messages = planner.initial_messages(
             message,
             memory_text=service._read_memory_window().content,
+            available_tool_names={
+                manifest.name
+                for manifest in service._tools.list_manifests()
+            },
         )
         self._decisions: list[LivePlannerDecision] = []
         self._recorded_tool_calls: list[dict[str, Any]] = []
@@ -374,7 +378,7 @@ class AiAssistantHarnessService:
         idempotency_key: str | None = None,
         approval_mode: str = ApprovalMode.SMART_APPROVAL.value,
         planning_strategy: str | None = None,
-        tool_name: str = "echo_context",
+        tool_name: str | None = None,
         tool_input: dict[str, Any] | None = None,
         tool_calls: list[dict[str, Any]] | None = None,
         model_mode: str = "deterministic",
@@ -420,7 +424,7 @@ class AiAssistantHarnessService:
         idempotency_key: str | None = None,
         approval_mode: str = ApprovalMode.SMART_APPROVAL.value,
         planning_strategy: str | None = None,
-        tool_name: str = "echo_context",
+        tool_name: str | None = None,
         tool_input: dict[str, Any] | None = None,
         tool_calls: list[dict[str, Any]] | None = None,
         model_mode: str = "deterministic",
@@ -470,7 +474,7 @@ class AiAssistantHarnessService:
 
         run_id = int(run["id"])
         planned_tool_names = [call["toolName"] for call in scheduled_tool_calls]
-        if not planned_tool_names and not _live_requested(model_mode):
+        if not planned_tool_names and not _live_requested(model_mode) and tool_name:
             planned_tool_names = [tool_name]
         plan_state = create_initial_plan_state(
             run_id=run_id,
@@ -555,7 +559,7 @@ class AiAssistantHarnessService:
         message: str,
         approval_mode: str = ApprovalMode.SMART_APPROVAL.value,
         planning_strategy: str | None = None,
-        tool_name: str = "echo_context",
+        tool_name: str | None = None,
         tool_input: dict[str, Any] | None = None,
         tool_calls: list[dict[str, Any]] | None = None,
         model_mode: str = "deterministic",
@@ -635,7 +639,7 @@ class AiAssistantHarnessService:
             message=str(request.get("message") or ""),
             approval_mode=str(request.get("approvalMode") or ApprovalMode.SMART_APPROVAL.value),
             planning_strategy=request.get("planningStrategy"),
-            tool_name=str(request.get("toolName") or "echo_context"),
+            tool_name=_optional_tool_name(request.get("toolName")),
             tool_input=dict(request.get("toolInput") or {}),
             tool_calls=list(request.get("toolCalls") or []),
             model_mode=str(request.get("modelMode") or "deterministic"),
@@ -942,7 +946,7 @@ class AiAssistantHarnessService:
         message: str,
         approval_mode: str = ApprovalMode.SMART_APPROVAL.value,
         planning_strategy: str | None = None,
-        tool_name: str = "echo_context",
+        tool_name: str | None = None,
         tool_input: dict[str, Any] | None = None,
         tool_calls: list[dict[str, Any]] | None = None,
         model_mode: str = "deterministic",
@@ -1045,12 +1049,14 @@ class AiAssistantHarnessService:
             session_id=session_id,
             event_type="model.call_completed",
             visible_title="模型决策",
-            visible_summary="本地确定性规划器已选择计划工具。"
-            if scheduled_tool_calls
-            else "本地确定性规划器已选择上下文回显工具。",
+            visible_summary=(
+                "本地确定性规划器已选择计划工具。"
+                if scheduled_tool_calls or tool_name
+                else "本地确定性规划器未选择外部工具。"
+            ),
             payload={"toolNames": [call["toolName"] for call in scheduled_tool_calls]}
             if scheduled_tool_calls
-            else {"toolName": "echo_context"},
+            else {"toolName": tool_name},
         )
         self._append_task_updated(
             run_id=run_id,
@@ -1066,6 +1072,13 @@ class AiAssistantHarnessService:
                 message=message,
                 approval_mode=approval_mode,
                 tool_calls=scheduled_tool_calls,
+            )
+        if tool_name is None:
+            return self._complete_without_tool(
+                run_id=run_id,
+                session_id=session_id,
+                run=current_run,
+                message=message,
             )
         manifest, gate_result, sandbox_runtime = self._evaluate_tool_security(
             run_id=run_id,
@@ -1256,6 +1269,100 @@ class AiAssistantHarnessService:
             replayed=False,
             final_answer=final_answer,
             tool_calls=[tool_call_payload],
+        )
+
+    def _complete_without_tool(
+        self,
+        *,
+        run_id: int,
+        session_id: int,
+        run: dict[str, Any],
+        message: str,
+    ) -> HarnessTurnResult:
+        final_answer = "本地确定性模式未选择工具，未执行外部能力。"
+        plan = mark_plan_step_started(_plan_payload_from_run(run), None)
+        self._persist_plan_state(run_id, plan)
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="plan.step_started",
+            visible_title="生成回复",
+            visible_summary="本地确定性规划器正在生成无工具回复。",
+            payload={"step": plan.get("currentStep")},
+        )
+        plan = complete_plan_without_execution(plan, final_answer)
+        self._persist_plan_state(run_id, plan)
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="plan.step_completed",
+            visible_title="生成回复完成",
+            visible_summary="本地确定性规划器未调用外部工具。",
+            payload={"step": plan.get("currentStep")},
+        )
+        self._append_task_updated(
+            run_id=run_id,
+            session_id=session_id,
+            phase="deterministic_no_tool",
+            plan=plan,
+        )
+        cancelled = self._cancelled_turn_result(run_id, [])
+        if cancelled is not None:
+            return cancelled
+        self._append_model_output_stream(
+            run_id=run_id,
+            session_id=session_id,
+            model="deterministic",
+            text=final_answer,
+            phase="final_answer",
+            source="harness_final_answer",
+        )
+        self._repository.append_message(
+            session_id,
+            "assistant",
+            final_answer,
+            run_id=run_id,
+        )
+        completed = self._complete_run(
+            run_id,
+            {
+                "finalAnswer": final_answer,
+                "toolCalls": [],
+                "approvalRequired": False,
+                "sandboxDenied": False,
+                "plan": plan,
+            },
+        )
+        cancelled = self._cancelled_turn_result(run_id, [])
+        if cancelled is not None:
+            return cancelled
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="task.completed",
+            visible_title="任务完成",
+            visible_summary="本地确定性运行已在无工具模式下完成。",
+            payload={"planId": plan.get("id"), "finalResult": final_answer},
+        )
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="run.completed",
+            visible_title="运行完成",
+            visible_summary="AI 助手运行已完成。",
+            payload={"finalAnswer": final_answer},
+        )
+        self._update_session_summary_after_run(
+            session_id=session_id,
+            run_id=run_id,
+            user_message=message,
+            final_answer=final_answer,
+        )
+        return HarnessTurnResult(
+            run=completed,
+            replayed=False,
+            final_answer=final_answer,
+            tool_calls=[],
         )
 
     def _planner_for(self, model_config: LivePlannerConfig | None) -> QwenLivePlanner | None:
@@ -5186,6 +5293,11 @@ def _model_config_fingerprint(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _live_requested(model_mode: str) -> bool:
     return model_mode.strip().lower() in {"live", "qwen", "openrouter"}
+
+
+def _optional_tool_name(value: Any) -> str | None:
+    normalized = str(value or "").strip()
+    return normalized or None
 
 
 def _scheduled_tool_calls(tool_calls: list[dict[str, Any]] | None) -> list[dict[str, Any]]:

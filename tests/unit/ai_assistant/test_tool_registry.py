@@ -8,7 +8,7 @@ class AiAssistantToolRegistryTest(unittest.TestCase):
     def test_echo_context_manifest_is_read_only_and_dispatches(self) -> None:
         from app.modules.ai_assistant.domain.tools import RiskLevel, ToolRegistry
 
-        registry = ToolRegistry.with_builtin_tools()
+        registry = ToolRegistry.with_demo_tools()
         manifest = registry.get_manifest("echo_context")
 
         self.assertEqual(manifest.name, "echo_context")
@@ -77,7 +77,7 @@ class AiAssistantToolRegistryTest(unittest.TestCase):
     def test_system_knowledge_base_search_tool_is_read_only_and_dispatches(self) -> None:
         from app.modules.ai_assistant.domain.tools import RiskLevel, ToolRegistry
 
-        registry = ToolRegistry.with_builtin_tools()
+        registry = ToolRegistry.with_demo_tools()
         manifest = registry.get_manifest("search_knowledge_base")
 
         self.assertEqual(manifest.risk_level, RiskLevel.READ)
@@ -97,6 +97,20 @@ class AiAssistantToolRegistryTest(unittest.TestCase):
         self.assertEqual(result.output["limit"], 3)
         self.assertEqual(result.output["source"], "system_knowledge_base")
         self.assertIn("hits", result.output)
+
+    def test_builtin_registry_only_exposes_bound_production_capabilities(self) -> None:
+        from app.modules.ai_assistant.domain.tools import ToolRegistry
+
+        manifests = {manifest.name for manifest in ToolRegistry.with_builtin_tools().list_manifests()}
+
+        self.assertIn("run_shell", manifests)
+        self.assertIn("read_workspace_file", manifests)
+        self.assertIn("invoke_skill", manifests)
+        self.assertNotIn("echo_context", manifests)
+        self.assertNotIn("update_customer_profile", manifests)
+        self.assertNotIn("mock_aviation.refund", manifests)
+        self.assertNotIn("search_knowledge_base", manifests)
+        self.assertNotIn("run_skill_script", manifests)
 
     def test_run_shell_executes_controlled_workspace_command(self) -> None:
         from app.modules.ai_assistant.domain.tools import ToolRegistry

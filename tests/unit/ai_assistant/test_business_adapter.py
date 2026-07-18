@@ -56,8 +56,8 @@ class AiAssistantBusinessAdapterTest(unittest.TestCase):
         self.assertEqual(result.compensation_transaction["status"], "MOCK_COMPENSATION_READY")
         self.assertEqual(result.output["businessEffect"], "mock_only")
 
-    def test_builtin_tool_registry_exposes_mock_aviation_adapter_for_live_uat(self) -> None:
-        manifests = {manifest.name: manifest for manifest in ToolRegistry.with_builtin_tools().list_manifests()}
+    def test_demo_tool_registry_exposes_mock_aviation_adapter_for_live_uat(self) -> None:
+        manifests = {manifest.name: manifest for manifest in ToolRegistry.with_demo_tools().list_manifests()}
 
         for tool_name in {
             "mock_aviation.refund",

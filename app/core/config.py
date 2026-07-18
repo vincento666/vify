@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     ai_assistant_openrouter_api_key: str = ""
     ai_assistant_openrouter_api_key_env: str = "OPENROUTER_API_KEY"
     ai_assistant_runtime_active_job_limit: int = 100
+    ai_assistant_tool_profile: str = "production"
 
     model_config = SettingsConfigDict(env_prefix="HIFY_", env_file=".env", extra="ignore")
 
@@ -65,12 +66,23 @@ class Settings(BaseSettings):
         assert_mysql8_database_url(self.database_url)
         normalized_environment = self.deployment_environment.strip().lower()
         normalized_identity_mode = self.host_identity_mode.strip().lower()
+        normalized_ai_assistant_tool_profile = self.ai_assistant_tool_profile.strip().lower()
         if normalized_identity_mode not in {"local_headers", "trusted_state"}:
             raise ValueError("host_identity_mode must be local_headers or trusted_state")
+        if normalized_ai_assistant_tool_profile not in {"production", "demo"}:
+            raise ValueError("ai_assistant_tool_profile must be production or demo")
         if normalized_environment in {"prod", "production"} and normalized_identity_mode != "trusted_state":
             raise ValueError("production deployment requires host_identity_mode=trusted_state")
+        if (
+            normalized_environment in {"prod", "production"}
+            and normalized_ai_assistant_tool_profile != "production"
+        ):
+            raise ValueError(
+                "production deployment requires ai_assistant_tool_profile=production"
+            )
         self.deployment_environment = normalized_environment
         self.host_identity_mode = normalized_identity_mode
+        self.ai_assistant_tool_profile = normalized_ai_assistant_tool_profile
         return self
 
 

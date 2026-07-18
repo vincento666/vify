@@ -50,14 +50,22 @@ execution semantics need a product-neutral public Module with two real Adapters.
    cancellation, and standard events. AI Assistant and Customer Assistant are
    product Adapters; their storage, business-task, UI, model, and tool
    implementations remain private.
-8. Preserve `/worker/process` only as a migration shim while known consumers
-   move to durable enqueue. Delete it only after the Spec 226 compatibility gate.
+8. Preserve `/worker/process` only as a time-bounded enqueue/inspect migration
+   shim. It never executes a job in the request process, returns deprecation
+   metadata with a 2026-08-01 target, and is deleted only after external
+   consumer inventory closes the compatibility gate.
 9. Keep Agent Execution as a smaller public Module used by Agent Harness for
    parent-child identity, lifecycle status, durable refs, capabilities, and
    provider operations. It does not duplicate Harness execution semantics.
 10. Apply the same extraction rule to every reused capability: shared invariants
    with two real Adapters become a deep public Module; one-off logic stays
    private. Catch-all `common`, `shared`, or `utils` packages are forbidden.
+11. The default AI Assistant registry contains only bound production
+    capabilities. Demo, blocked and placeholder capabilities live behind an
+    explicit `demo` profile, which production configuration rejects.
+12. Runtime composition passes one explicit `Settings` snapshot to the AI
+    Assistant handler. The router and standalone worker therefore select the
+    same tool profile and cannot drift through an unrelated global cache.
 
 ## Options
 
@@ -109,7 +117,27 @@ Costs:
 - staged compatibility Adapters while two existing loops converge；
 - composition root and compatibility imports during migration；
 - worker must restore trusted AI Assistant scope without an HTTP request；
-- `/worker/process` needs an explicit compatibility lifecycle。
+- `/worker/process` needs an external-consumer inventory before physical
+  deletion。
+
+## Spec 226.8 Convergence Record
+
+- `ControlledReActCore` was not a bounded ReAct loop: it performed one
+  Customer-specific recognize/validate/act/finalize turn and carried an unused
+  `max_iterations`. It is now `CustomerTurnCoordinator`; the false Harness
+  naming and fake iteration setting are removed.
+- `RestrictedReactWorker` remains because it is the production Customer
+  Assistant Adapter over the public Agent Harness. Its worker registry and
+  tool-policy lookup remain Customer business configuration, not a second loop.
+- `echo_context`, blocked customer update, MockAviation,
+  `search_knowledge_base`, and plan-only `run_skill_script` are isolated in the
+  demo profile. The production profile exposes bound workspace, shell, skill
+  loading and optional real child-lifecycle capabilities only.
+- The link-only child bridge is absent unless composition supplies a real
+  `SubagentExecutionProvider`.
+- The shell's inert Add Context control and the legacy processed-group UAT
+  selectors are removed. Planning strategy remains because the three exposed
+  values have distinct runtime behavior.
 
 ## Guardrails
 

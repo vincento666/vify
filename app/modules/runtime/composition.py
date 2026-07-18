@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from app.core.config import Settings
 from app.modules.ai_assistant.runtime_job_worker import (
     fail_ai_assistant_runtime_job,
     register_ai_assistant_runtime_job_handler,
@@ -26,6 +27,7 @@ def build_runtime_job_worker(
     worker_id: str | None = None,
     lease_seconds: int = 300,
     event_stream_bus: RuntimeEventStreamBus | None = None,
+    settings: Settings | None = None,
 ) -> RuntimeJobWorker:
     owner_types = _owner_types(owner)
     registry = RuntimeJobHandlerRegistry()
@@ -40,6 +42,7 @@ def build_runtime_job_worker(
             registry,
             session,
             child_execution_adapter_factory=create_customer_assistant_execution_adapter,
+            settings=settings,
         )
     return build_registered_runtime_job_worker(
         session,

@@ -377,14 +377,6 @@
         </div>
         <div class="ai-composer__actions" data-testid="ai-assistant-composer-actions">
           <div class="ai-composer__left-actions">
-            <a-button
-              class="ai-composer__icon-button"
-              data-testid="ai-assistant-add-context"
-              type="text"
-              aria-label="添加上下文"
-            >
-              <template #icon><PlusOutlined /></template>
-            </a-button>
             <a-dropdown :trigger="['click']">
               <a-button class="ai-composer__permission" data-testid="ai-assistant-permission-mode" type="text">
                 <template #icon><SafetyCertificateOutlined /></template>

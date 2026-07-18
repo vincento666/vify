@@ -88,6 +88,28 @@ class AiAssistantQwenLivePlannerTest(unittest.TestCase):
         self.assertEqual(settings.ai_assistant_openrouter_base_url, "https://openrouter.ai/api/v1")
         self.assertEqual(settings.ai_assistant_openrouter_model, "qwen/qwen3.6-27b")
         self.assertEqual(settings.ai_assistant_openrouter_api_key, "")
+        self.assertEqual(settings.ai_assistant_tool_profile, "production")
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "ai_assistant_tool_profile must be production or demo",
+        ):
+            Settings(
+                _env_file=None,
+                ai_assistant_tool_profile="unknown",
+            )
+
+    def test_production_settings_reject_demo_tool_profile(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError,
+            "production deployment requires ai_assistant_tool_profile=production",
+        ):
+            Settings(
+                _env_file=None,
+                deployment_environment="production",
+                host_identity_mode="trusted_state",
+                ai_assistant_tool_profile="demo",
+            )
 
     def test_fake_live_planner_maps_qwen_tool_calls_to_harness_plan(self) -> None:
         from app.modules.ai_assistant.domain.live_model import LivePlannerConfig, QwenLivePlanner
@@ -159,7 +181,7 @@ class AiAssistantQwenLivePlannerTest(unittest.TestCase):
         self.assertIn("read_workspace_file", tool_names)
         self.assertIn("write_workspace_file", tool_names)
         self.assertIn("invoke_skill", tool_names)
-        self.assertIn("search_knowledge_base", tool_names)
+        self.assertNotIn("search_knowledge_base", tool_names)
 
     def test_system_prompt_guides_colloquial_tool_skill_and_file_orchestration(self) -> None:
         from app.modules.ai_assistant.domain.live_model import LivePlannerConfig, QwenLivePlanner
@@ -196,7 +218,7 @@ class AiAssistantQwenLivePlannerTest(unittest.TestCase):
         self.assertIn("自动识别", system_message)
         self.assertIn("read_workspace_file", system_message)
         self.assertIn("write_workspace_file", system_message)
-        self.assertIn("search_knowledge_base", system_message)
+        self.assertNotIn("search_knowledge_base", system_message)
         self.assertIn("invoke_skill", system_message)
         self.assertIn("创建/写入/保存文件", system_message)
         self.assertIn("查看/读取/打开文件", system_message)

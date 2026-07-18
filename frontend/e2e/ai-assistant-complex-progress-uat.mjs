@@ -38,8 +38,9 @@ async function collectMetrics(page, label) {
       done: Boolean(row.querySelector('[data-testid="ai-assistant-execution-step-done"]')),
     }))
     const eventHeaders = all('[data-testid="ai-assistant-event-card-header"]').map((node) => node.textContent?.trim() || '')
-    const groupHeaders = all('[data-testid="ai-assistant-run-event-group-header"]')
-    const parentIcon = groupHeaders.at(-1)?.querySelector('[data-testid="ai-assistant-run-status-icon"]')
+    const groupHeaders = all('[data-testid="ai-assistant-activity-toggle"]')
+    const parentIcon = groupHeaders.at(-1)?.closest('[data-testid="ai-assistant-activity-row"]')
+      ?.querySelector('.ai-activity-row__status')
     const parentIconRect = parentIcon?.getBoundingClientRect()
     const childIconRects = all('[data-testid="ai-assistant-event-status-icon"]').map((node) => node.getBoundingClientRect())
     const parentCenterX = parentIconRect ? parentIconRect.left + parentIconRect.width / 2 : null
@@ -51,7 +52,7 @@ async function collectMetrics(page, label) {
     return {
       label: sampleLabel,
       at: Date.now(),
-      runHeaders: all('[data-testid="ai-assistant-run-event-group-header"]').map((node) => node.textContent?.trim() || ''),
+      runHeaders: all('[data-testid="ai-assistant-activity-toggle"]').map((node) => node.textContent?.trim() || ''),
       eventHeaders,
       hasHashSequence: eventHeaders.some((text) => /#\d+/.test(text)),
       iconAlignmentMaxDelta,
@@ -116,15 +117,15 @@ async function main() {
     const prompt = [
       '请执行一个复杂验收任务：',
       '必须调用 read_workspace_file 读取 specs/README.md；',
-      '必须调用 search_knowledge_base 检索“退票规则 和 AI 助手 harness”；',
+      '必须调用 search_workspace_files 在 specs 中检索“AI Assistant harness”；',
       '必须调用 invoke_skill 记录 tdd 技能调用意图；',
       '必须创建并写入 tmp/ai-assistant-uat-progress.md，内容为中文三段式总结；',
       '写入审批通过后必须再次调用 read_workspace_file 读取该文件校验内容。',
-      '请不要要求我写工具名，自动识别读文件、知识库、skill、创建文件、写入文件、读取校验这些调用；工具之间输出简短中文进度，并最后给出中文总结。',
+      '请不要要求我写工具名，自动识别读文件、工作区检索、skill、创建文件、写入文件、读取校验这些调用；工具之间输出简短中文进度，并最后给出中文总结。',
     ].join('')
     await page.getByPlaceholder('输入给 AI 助手的消息').fill(prompt)
     await page.getByTestId('ai-assistant-send').click()
-    await page.getByTestId('ai-assistant-run-event-group-header').last().waitFor({ state: 'visible', timeout: 60000 })
+    await page.getByTestId('ai-assistant-activity-toggle').last().waitFor({ state: 'visible', timeout: 60000 })
 
     for (let index = 0; index < 180; index += 1) {
       const sample = await collectMetrics(page, `running-${index}`)
@@ -147,7 +148,7 @@ async function main() {
       )
       .catch(() => undefined)
 
-    const latestHeader = page.getByTestId('ai-assistant-run-event-group-header').last()
+    const latestHeader = page.getByTestId('ai-assistant-activity-toggle').last()
     if ((await latestHeader.getAttribute('aria-expanded')) === 'false') await latestHeader.click()
     await page.screenshot({ path: `${outDir}/screenshots/progress-before-approval.png`, fullPage: true })
     samples.push(await collectMetrics(page, 'before-approval'))
@@ -171,7 +172,7 @@ async function main() {
     for (let index = 0; index < 70; index += 1) {
       const sample = await collectMetrics(page, `post-approval-${index}`)
       samples.push(sample)
-      if (sample.finalAnswers.length > 0 && sample.runHeaders.some((text) => text.includes('已处理'))) break
+      if (sample.finalAnswers.length > 0 && sample.runHeaders.some((text) => text.includes('已完成'))) break
       await page.waitForTimeout(500)
     }
 

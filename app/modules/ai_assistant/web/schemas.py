@@ -30,7 +30,7 @@ class SendAiAssistantMessageRequest(BaseModel):
     idempotency_key: str | None = Field(default=None, alias="idempotencyKey")
     approval_mode: str = Field(default="smart_approval", alias="approvalMode")
     planning_strategy: str = Field(default="auto_lightweight", alias="planningStrategy")
-    tool_name: str = Field(default="echo_context", alias="toolName")
+    tool_name: str | None = Field(default=None, alias="toolName")
     tool_input: dict[str, object] = Field(default_factory=dict, alias="toolInput")
     tool_calls: list[AiAssistantToolCallRequest] = Field(default_factory=list, alias="toolCalls")
     model_mode: str = Field(default="deterministic", alias="modelMode")

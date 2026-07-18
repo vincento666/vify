@@ -43,7 +43,12 @@ class AiAssistantObservabilityApiContractTest(unittest.TestCase):
             ]
             turn = client.post(
                 f"/api/v1/ai-assistant/sessions/{session_id}/messages",
-                json={"message": "observe this run", "idempotencyKey": "observability-1"},
+                json={
+                    "message": "observe this run",
+                    "idempotencyKey": "observability-1",
+                    "toolName": "list_workspace_files",
+                    "toolInput": {},
+                },
             ).json()["data"]
             inspector = client.get(f"/api/v1/ai-assistant/runs/{turn['runId']}/inspector").json()["data"]
 

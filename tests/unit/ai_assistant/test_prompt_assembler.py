@@ -19,7 +19,8 @@ class AiAssistantPromptAssemblerTest(unittest.TestCase):
             ["base", "tools", "run_state", "user_message"],
         )
         self.assertIn("You are Hify AI Assistant.", prompt.text)
-        self.assertIn("echo_context", prompt.text)
+        self.assertIn("read_workspace_file", prompt.text)
+        self.assertNotIn("echo_context", prompt.text)
         self.assertIn("Echo the run state.", prompt.text)
 
     def test_prompt_layers_include_project_skills_memory_and_compaction(self) -> None:

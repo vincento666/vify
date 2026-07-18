@@ -37,11 +37,21 @@ class AiAssistantKernelE2ETest(unittest.TestCase):
             session_id = created.json()["data"]["id"]
             first = client.post(
                 f"/api/v1/ai-assistant/sessions/{session_id}/messages",
-                json={"message": "Please echo the visible execution.", "idempotencyKey": "e2e-message-1"},
+                json={
+                    "message": "Read the visible project manifest.",
+                    "idempotencyKey": "e2e-message-1",
+                    "toolName": "read_workspace_file",
+                    "toolInput": {"path": "pyproject.toml"},
+                },
             )
             replay = client.post(
                 f"/api/v1/ai-assistant/sessions/{session_id}/messages",
-                json={"message": "Please echo the visible execution.", "idempotencyKey": "e2e-message-1"},
+                json={
+                    "message": "Read the visible project manifest.",
+                    "idempotencyKey": "e2e-message-1",
+                    "toolName": "read_workspace_file",
+                    "toolInput": {"path": "pyproject.toml"},
+                },
             )
             run_id = first.json()["data"]["runId"]
             events = client.get(f"/api/v1/ai-assistant/runs/{run_id}/events")
@@ -52,8 +62,12 @@ class AiAssistantKernelE2ETest(unittest.TestCase):
         self.assertEqual(replay.json()["data"]["replayed"], True)
         self.assertEqual(first.json()["data"]["planningStrategy"], "auto_lightweight")
         self.assertEqual(first.json()["data"]["plan"]["id"], f"plan-{run_id}")
-        self.assertEqual(first.json()["data"]["toolCalls"][0]["status"], "COMPLETED")
-        self.assertEqual(first.json()["data"]["toolCalls"][0]["output"]["echo"], "Please echo the visible execution.")
+        self.assertEqual(
+            first.json()["data"]["toolCalls"][0]["status"],
+            "COMPLETED",
+            first.json(),
+        )
+        self.assertEqual(first.json()["data"]["toolCalls"][0]["toolName"], "read_workspace_file")
         event_types = [event["type"] for event in events.json()["data"]["list"]]
         self.assertIn("plan.created", event_types)
         self.assertIn("task.created", event_types)

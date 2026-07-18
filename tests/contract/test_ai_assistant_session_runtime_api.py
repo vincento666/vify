@@ -34,7 +34,10 @@ class AiAssistantSessionRuntimeApiContractTest(unittest.TestCase):
         self._previous_workspace_root = os.environ.get("HIFY_WORKSPACE_ROOT")
         os.environ["HIFY_WORKSPACE_ROOT"] = self._workspace_dir.name
         app.dependency_overrides[get_session] = self._session_override
-        app.dependency_overrides[get_settings] = lambda: Settings(_env_file=None)
+        app.dependency_overrides[get_settings] = lambda: Settings(
+            _env_file=None,
+            ai_assistant_tool_profile="demo",
+        )
 
     def tearDown(self) -> None:
         if self._previous_workspace_root is None:
@@ -81,15 +84,15 @@ class AiAssistantSessionRuntimeApiContractTest(unittest.TestCase):
         self.assertEqual(completed_snapshot["run"]["status"], "COMPLETED")
         self.assertEqual(completed_snapshot["checkpoint"]["status"], "COMPLETED")
 
-    def test_worker_process_api_executes_queued_run_without_stream_endpoint(self) -> None:
+    def test_worker_process_api_only_enqueues_and_inspects_for_compatibility(self) -> None:
         with TestClient(app) as client:
-            session_id = client.post("/api/v1/ai-assistant/sessions", json={"title": "Worker API"}).json()["data"][
-                "id"
-            ]
+            session_id = client.post("/api/v1/ai-assistant/sessions", json={"title": "Worker API shim"}).json()[
+                "data"
+            ]["id"]
             started = client.post(
                 f"/api/v1/ai-assistant/sessions/{session_id}/messages/async",
                 json={
-                    "message": "worker api",
+                    "message": "worker api compatibility shim",
                     "idempotencyKey": "session-runtime-worker-api",
                     "approvalMode": "smart_approval",
                     "toolName": "echo_context",
@@ -97,11 +100,22 @@ class AiAssistantSessionRuntimeApiContractTest(unittest.TestCase):
             ).json()["data"]
             processed = client.post(f"/api/v1/ai-assistant/runs/{started['runId']}/worker/process")
             snapshot = client.get(f"/api/v1/ai-assistant/runs/{started['runId']}/snapshot").json()["data"]
+            job_status = self._runtime_job_status(started["runId"])
 
         self.assertEqual(processed.status_code, 200, processed.text)
-        self.assertEqual(processed.json()["data"]["status"], "COMPLETED")
-        self.assertEqual(snapshot["run"]["status"], "COMPLETED")
-        self.assertEqual(snapshot["checkpoint"]["worker"]["scope"], "durable-runtime-job")
+        self.assertEqual(processed.json()["data"]["status"], "QUEUED")
+        self.assertEqual(snapshot["run"]["status"], "QUEUED")
+        self.assertEqual(job_status, "QUEUED")
+        self.assertEqual(
+            processed.json()["data"]["deprecation"],
+            {
+                "deprecated": True,
+                "replacement": "standalone-runtime-worker",
+                "requestPayloadIgnored": False,
+                "sunsetAt": "2026-08-01",
+                "removalGate": "external-consumer-inventory",
+            },
+        )
 
     def test_async_message_is_completed_by_standalone_worker_without_compat_api(self) -> None:
         with TestClient(app) as client:
@@ -133,7 +147,7 @@ class AiAssistantSessionRuntimeApiContractTest(unittest.TestCase):
         self.assertIn("run.worker_heartbeat", event_types)
         self.assertIn("run.checkpoint_saved", event_types)
 
-    def test_completed_compat_worker_job_cannot_be_claimed_twice(self) -> None:
+    def test_repeated_compat_inspection_does_not_duplicate_standalone_worker_claim(self) -> None:
         with TestClient(app) as client:
             session_id = client.post("/api/v1/ai-assistant/sessions", json={"title": "Duplicate claim"}).json()[
                 "data"
@@ -147,14 +161,20 @@ class AiAssistantSessionRuntimeApiContractTest(unittest.TestCase):
                     "toolName": "echo_context",
                 },
             ).json()["data"]
-            manual_worker = client.post(f"/api/v1/ai-assistant/runs/{started['runId']}/worker/process")
+            first_compat = client.post(f"/api/v1/ai-assistant/runs/{started['runId']}/worker/process")
+            second_compat = client.post(f"/api/v1/ai-assistant/runs/{started['runId']}/worker/process")
+            completed = self._process_run(started["runId"])
             retry = self._process_run(started["runId"])
             _wait_for_event_type(client, started["runId"], "run.worker_heartbeat")
             sleep(0.1)
             events = client.get(f"/api/v1/ai-assistant/runs/{started['runId']}/events").json()["data"]["list"]
             snapshot = client.get(f"/api/v1/ai-assistant/runs/{started['runId']}/snapshot").json()["data"]
 
-        self.assertEqual(manual_worker.status_code, 200, manual_worker.text)
+        self.assertEqual(first_compat.status_code, 200, first_compat.text)
+        self.assertEqual(second_compat.status_code, 200, second_compat.text)
+        self.assertEqual(first_compat.json()["data"]["status"], "QUEUED")
+        self.assertEqual(second_compat.json()["data"]["status"], "QUEUED")
+        self.assertEqual(completed["status"], "COMPLETED")
         self.assertEqual(retry["status"], "IDLE")
         self.assertEqual(snapshot["run"]["status"], "COMPLETED")
         event_types = [event["type"] for event in events]
@@ -297,6 +317,10 @@ class AiAssistantSessionRuntimeApiContractTest(unittest.TestCase):
                 session,
                 owner="ai-assistant",
                 worker_id=f"contract-worker-{run_id}",
+                settings=Settings(
+                    _env_file=None,
+                    ai_assistant_tool_profile="demo",
+                ),
             ).run_once(job_id=int(job["id"]))
 
     def _runtime_job_status(self, run_id: int) -> str:

@@ -55,53 +55,9 @@ class ToolRegistry:
         *,
         child_execution_adapter: SubagentExecutionProvider | None = None,
     ) -> ToolRegistry:
-        echo_manifest = ToolManifest(
-            name="echo_context",
-            description="回显当前用户消息和安全上下文，用于助手运行验证。",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "message": {"type": "string"},
-                    "context": {"type": "object"},
-                },
-                "required": ["message"],
-            },
-            output_schema={
-                "type": "object",
-                "properties": {
-                    "echo": {"type": "string"},
-                    "context": {"type": "object"},
-                },
-                "required": ["echo", "context"],
-            },
-            timeout_ms=1000,
-            risk_level=RiskLevel.READ,
-            read_resources=["session:{session_id}"],
-            write_resources=[],
-            policy_ref="ai_assistant_read_only",
-        )
-        business_write_manifest = ToolManifest(
-            name="update_customer_profile",
-            description="把客户资料修改请求转换为需要审批的高风险拟执行动作。",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "customerId": {"type": "string"},
-                    "field": {"type": "string"},
-                    "value": {"type": "string"},
-                },
-                "required": ["customerId"],
-            },
-            output_schema={"type": "object", "properties": {"status": {"type": "string"}}},
-            timeout_ms=1000,
-            risk_level=RiskLevel.BUSINESS_WRITE,
-            read_resources=[],
-            write_resources=["customer:{customerId}"],
-            policy_ref="ai_assistant_business_write_requires_approval",
-        )
         shell_manifest = ToolManifest(
             name="run_shell",
-            description="类 Shell 执行占位工具，默认被沙箱策略阻断。",
+            description="在受控工作区沙箱内执行允许列表中的命令。",
             input_schema={
                 "type": "object",
                 "properties": {"command": {"type": "string"}},
@@ -112,11 +68,9 @@ class ToolRegistry:
             risk_level=RiskLevel.EXTERNAL_SIDE_EFFECT,
             read_resources=[],
             write_resources=["external:shell"],
-            policy_ref="ai_assistant_shell_blocked",
+            policy_ref="ai_assistant_shell_requires_approval",
         )
         tools: dict[str, tuple[ToolManifest, ToolHandler]] = {
-            "echo_context": (echo_manifest, _echo_context),
-            "update_customer_profile": (business_write_manifest, _blocked_write),
             "run_shell": (shell_manifest, _run_shell),
             "read_workspace_file": (_read_file_manifest(), _read_workspace_file),
             "list_workspace_files": (_list_files_manifest(), _list_workspace_files),
@@ -127,8 +81,6 @@ class ToolRegistry:
             "propose_agents_update": (_propose_agents_update_manifest(), _propose_agents_update),
             "invoke_skill": (_skill_manifest(), _invoke_skill),
             "read_skill_resource": (_read_skill_resource_manifest(), _read_skill_resource),
-            "run_skill_script": (_run_skill_script_manifest(), _run_skill_script),
-            "search_knowledge_base": (_knowledge_base_manifest(), _search_knowledge_base),
         }
         if child_execution_adapter is not None:
             child_execution_manifest = _child_execution_manifest(child_execution_adapter)
@@ -136,6 +88,36 @@ class ToolRegistry:
                 child_execution_manifest,
                 lambda payload: _child_execution_bridge(child_execution_adapter, payload),
             )
+        return cls(tools)
+
+    @classmethod
+    def with_demo_tools(
+        cls,
+        *,
+        child_execution_adapter: SubagentExecutionProvider | None = None,
+    ) -> ToolRegistry:
+        tools = dict(
+            cls.with_builtin_tools(
+                child_execution_adapter=child_execution_adapter,
+            )._tools
+        )
+        tools.update(
+            {
+                "echo_context": (_echo_context_manifest(), _echo_context),
+                "update_customer_profile": (
+                    _blocked_customer_update_manifest(),
+                    _blocked_write,
+                ),
+                "run_skill_script": (
+                    _run_skill_script_manifest(),
+                    _run_skill_script,
+                ),
+                "search_knowledge_base": (
+                    _knowledge_base_manifest(),
+                    _search_knowledge_base,
+                ),
+            }
+        )
         from app.modules.ai_assistant.domain.business_adapter import (  # noqa: PLC0415
             MockAviationAdapter,
             tool_entries_for_business_adapter,
@@ -143,6 +125,24 @@ class ToolRegistry:
 
         tools.update(tool_entries_for_business_adapter(MockAviationAdapter()))
         return cls(tools)
+
+    @classmethod
+    def for_profile(
+        cls,
+        profile: str,
+        *,
+        child_execution_adapter: SubagentExecutionProvider | None = None,
+    ) -> ToolRegistry:
+        normalized = str(profile or "").strip().lower()
+        if normalized == "production":
+            return cls.with_builtin_tools(
+                child_execution_adapter=child_execution_adapter,
+            )
+        if normalized == "demo":
+            return cls.with_demo_tools(
+                child_execution_adapter=child_execution_adapter,
+            )
+        raise ValueError(f"Unknown AI Assistant tool profile: {profile}")
 
     def get_manifest(self, name: str) -> ToolManifest:
         try:
@@ -168,6 +168,59 @@ def _echo_context(payload: dict[str, Any]) -> ToolResult:
             "echo": str(payload.get("message") or ""),
             "context": dict(payload.get("context") or {}),
         },
+    )
+
+
+def _echo_context_manifest() -> ToolManifest:
+    return ToolManifest(
+        name="echo_context",
+        description="回显当前用户消息和安全上下文，用于助手运行验证。",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "message": {"type": "string"},
+                "context": {"type": "object"},
+            },
+            "required": ["message"],
+        },
+        output_schema={
+            "type": "object",
+            "properties": {
+                "echo": {"type": "string"},
+                "context": {"type": "object"},
+            },
+            "required": ["echo", "context"],
+        },
+        timeout_ms=1000,
+        risk_level=RiskLevel.READ,
+        read_resources=["session:{session_id}"],
+        write_resources=[],
+        policy_ref="ai_assistant_demo_read_only",
+    )
+
+
+def _blocked_customer_update_manifest() -> ToolManifest:
+    return ToolManifest(
+        name="update_customer_profile",
+        description="把客户资料修改请求转换为需要审批的演示动作，不写入客户数据。",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "customerId": {"type": "string"},
+                "field": {"type": "string"},
+                "value": {"type": "string"},
+            },
+            "required": ["customerId"],
+        },
+        output_schema={
+            "type": "object",
+            "properties": {"status": {"type": "string"}},
+        },
+        timeout_ms=1000,
+        risk_level=RiskLevel.BUSINESS_WRITE,
+        read_resources=[],
+        write_resources=["demo:customer:{customerId}"],
+        policy_ref="ai_assistant_demo_business_write_requires_approval",
     )
 
 

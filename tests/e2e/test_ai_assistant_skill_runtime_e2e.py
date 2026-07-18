@@ -73,7 +73,7 @@ class AiAssistantSkillRuntimeE2ETest(unittest.TestCase):
         with self._factory() as session:
             yield AiAssistantHarnessService(
                 AiAssistantRepository(session),
-                tool_registry=ToolRegistry.with_builtin_tools(),
+                tool_registry=ToolRegistry.with_demo_tools(),
                 skill_runtime=SkillRuntime(root_paths=[Path(self._skill_root.name)]),
             )
 
