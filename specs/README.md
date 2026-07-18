@@ -36,6 +36,7 @@ defined in `docs/testing/acceptance-gates.md` before the next slice starts.
 | 23 | 188.4-188.5, 190.3, 188.6-188.7, then 190.4-190.6 | Replace legacy AI Assistant memory with scoped MEMORY.md, add model-call accounting before extraction, then ship aggregates and dashboard |
 | 24 | 225-workflow-chatflow-control-hardening | Corrective Workflow/Chatflow authoring control hardening after reproducible toolbar, drag, and config-panel regressions |
 | 25 | 225-runtime-lab-sop-live-stream | RuntimeLab SOP async-first live stream bridge over Chatflow Runtime V2, including genuine provider chunks and reconnectable UI projection |
+| 26 | 226-ai-assistant-runtime-convergence-shell | Converge AI Assistant on the domain-neutral durable runtime job substrate, harden trusted execution identity, and ship the Hify-light collapsible activity shell with real subagent presence |
 
 ## Directory Index
 
@@ -129,6 +130,7 @@ defined in `docs/testing/acceptance-gates.md` before the next slice starts.
 | 224-ai-assistant-durable-toolrunner-idempotency | Durable ToolRunner idempotency ledger, UNKNOWN lifecycle, fallback identity, and circuit breaker semantics |
 | 225-workflow-chatflow-control-hardening | Corrective UI control geometry, honest structured-row drag, variable-scope audit, and lifecycle UAT for Workflow/Chatflow authoring |
 | 225-runtime-lab-sop-live-stream | RuntimeLab SOP async-first SSE bridge to Chatflow Runtime V2 with genuine provider deltas and reconnectable UI projection |
+| 226-ai-assistant-runtime-convergence-shell | Domain-neutral runtime job reuse, trusted AI execution identity, standalone HA worker, stable activity projection, Hify-light auto-collapse shell, real child presence, and evidence-based cleanup |
 
 ## Required Files Per Spec
 

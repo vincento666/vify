@@ -1,0 +1,14 @@
+Slice: 226.1 Reviewer round 1 repair
+TDD method: tdd
+Date: 2026-07-18
+
+Denied tool RED:
+ValueError: 'react_tool_call_started' is not in list
+
+Approval-required RED:
+ValueError: 'react_tool_call_started' is not in list
+
+Both failures proved that the Customer Assistant Adapter dropped the legacy
+attempted-call event before policy terminal outcomes. The repair restores the
+event in the Adapter without moving Customer Assistant event schema into Agent
+Harness.

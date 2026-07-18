@@ -2,9 +2,19 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from time import monotonic
 from typing import Any, Callable, Literal, Protocol
 
+from app.modules.agent_harness import (
+    AgentHarness,
+    HarnessDecision,
+    HarnessObservation,
+    HarnessRunRequest,
+    HarnessRunResult,
+    HarnessRunStatus,
+    HarnessToolAuthorization,
+    HarnessToolCall,
+    HarnessToolFailure,
+)
 from app.modules.customer_assistant.domain.models import TaskItem, TaskStatus, WorkerResult
 from app.modules.customer_assistant.domain.tool_policy import (
     ReactToolPolicy,
@@ -110,6 +120,7 @@ class RestrictedReactWorker:
         model: ReactWorkerModel,
         tools: dict[str, ReactTool],
         policy: ReactToolPolicy | None = None,
+        harness: AgentHarness | None = None,
     ) -> None:
         self._config = config
         self._model = model
@@ -118,137 +129,109 @@ class RestrictedReactWorker:
             policy_ref=config.tool_policy_ref,
             allowed_tools=config.allowed_tools,
         )
+        self._harness = harness or AgentHarness()
 
     def run(self, task: TaskItem, message: str) -> WorkerResult:
-        started = monotonic()
-        events = [_event("react_worker_started", {"taskKey": task.task_key, "workerRef": task.worker_ref})]
-        worker_config_refs = _worker_config_refs(self._config)
-        observation: dict[str, Any] | None = None
-        for iteration in range(1, self._config.max_iterations + 1):
-            events.append(_event("react_iteration_started", {"iteration": iteration, "phase": "plan"}))
-            action = self._model.next_action(
-                task=task,
-                message=message,
-                observation=observation,
-                iteration=iteration,
-            )
-            if action.kind == "final":
-                events.append(
-                    _event(
-                        "react_structured_output_completed",
-                        {
-                            "iteration": iteration,
-                            "hasOperatorRecommendation": bool(action.operator_recommendation),
-                            "hasCustomerReplyDraft": bool(action.customer_reply_draft),
-                        },
-                    )
-                )
-                events.append(_event("react_worker_completed", {"iteration": iteration}))
-                return WorkerResult(
-                    task_id=int(task.id or 0),
-                    worker_type=task.worker_type,
-                    status=TaskStatus.COMPLETED,
-                    operator_recommendation=action.operator_recommendation,
-                    customer_reply_draft=action.customer_reply_draft,
-                    evidence={
-                        "workerRef": self._config.worker_ref,
-                        "iterations": iteration,
-                        "workerConfigRefs": worker_config_refs,
-                        "structuredOutput": _structured_final(action, iteration),
-                    },
-                    events=events,
-                )
-            if action.tool_call is None:
-                return self._failed(task, events, "INVALID_MODEL_ACTION", "tool_call action missing tool call")
-
-            call = action.tool_call
-            events.append(
-                _event(
-                    "react_tool_call_started",
-                    {"iteration": iteration, "tool": call.name, "risk": call.risk},
-                )
-            )
-            if not self._policy.is_allowed(call.name):
-                events.append(_event("react_tool_call_failed", {"tool": call.name, "reason": "not_allowed"}))
-                return self._failed(task, events, "TOOL_NOT_ALLOWED", f"Tool not allowed: {call.name}")
-            if self._policy.requires_manual_confirmation(call.name):
-                action_payload = _proposed_action(task, call, side_effect="manual-confirm-tool")
-                events.append(
-                    _event(
-                        "react_worker_completed",
-                        {"proposedAction": action_payload["actionKey"], "toolPolicyRef": self._config.tool_policy_ref},
-                    )
-                )
-                return WorkerResult(
-                    task_id=int(task.id or 0),
-                    worker_type=task.worker_type,
-                    status=TaskStatus.WAITING,
-                    operator_recommendation=f"Tool requires manual confirmation: {call.name}",
-                    customer_reply_draft="该动作需要人工确认后才能继续。",
-                    proposed_actions=[action_payload],
-                    evidence={
-                        "workerRef": self._config.worker_ref,
-                        "iterations": iteration,
-                        "workerConfigRefs": worker_config_refs,
-                        "sideEffect": "manual-confirm-tool",
-                    },
-                    events=events,
-                )
-            if call.risk == "write" or self._policy.is_high_risk(call.name):
-                action_payload = _proposed_action(task, call)
-                events.append(_event("react_worker_completed", {"proposedAction": action_payload["actionKey"]}))
-                return WorkerResult(
-                    task_id=int(task.id or 0),
-                    worker_type=task.worker_type,
-                    status=TaskStatus.WAITING,
-                    operator_recommendation=f"Proposed high-risk action: {call.name}",
-                    customer_reply_draft="该动作需要人工确认后才能执行。",
-                    proposed_actions=[action_payload],
-                    evidence={
-                        "workerRef": self._config.worker_ref,
-                        "iterations": iteration,
-                        "workerConfigRefs": worker_config_refs,
-                        "sideEffect": "proposed-write",
-                    },
-                    events=events,
-                )
-
-            tool = self._tools.get(call.name)
-            if tool is None:
-                events.append(_event("react_tool_call_failed", {"tool": call.name, "reason": "missing_tool"}))
-                return self._failed(task, events, "TOOL_NOT_FOUND", f"Tool not found: {call.name}")
-            observation = tool(dict(call.arguments))
-            events.append(
-                _event(
-                    "react_tool_call_completed",
-                    {"iteration": iteration, "tool": call.name, "observationKeys": sorted(observation.keys())},
-                )
-            )
-            events.append(
-                _event(
-                    "react_observation_recorded",
-                    {
-                        "iteration": iteration,
-                        "tool": call.name,
-                        "observation": _structured_observation(call, observation),
-                    },
-                )
-            )
-            if _timed_out(started, self._config.timeout_ms):
-                return self._failed(task, events, "WORKER_TIMEOUT", "Restricted ReAct worker timed out")
-        return self._failed(task, events, "MAX_ITERATIONS_EXCEEDED", "Restricted ReAct worker hit max iterations")
-
-    def _failed(self, task: TaskItem, events: list[dict[str, Any]], code: str, message: str) -> WorkerResult:
-        events.append(_event("react_worker_failed", {"code": code}))
-        return WorkerResult(
-            task_id=int(task.id or 0),
-            worker_type=task.worker_type,
-            status=TaskStatus.FAILED,
-            operator_recommendation=message,
-            evidence={"workerRef": self._config.worker_ref, "workerConfigRefs": _worker_config_refs(self._config)},
-            events=events,
-            error={"code": code, "message": message},
+        profile = _CustomerAssistantHarnessProfile(
+            task=task,
+            message=message,
+            model=self._model,
+            tools=self._tools,
+            policy=self._policy,
         )
+        result = self._harness.execute(
+            HarnessRunRequest(
+                run_id=task.task_key,
+                input={"message": message},
+                max_iterations=self._config.max_iterations,
+                timeout_ms=self._config.timeout_ms,
+            ),
+            profile,
+        )
+        return _customer_worker_result(
+            task=task,
+            config=self._config,
+            result=result,
+        )
+
+
+class _CustomerAssistantHarnessProfile:
+    def __init__(
+        self,
+        *,
+        task: TaskItem,
+        message: str,
+        model: ReactWorkerModel,
+        tools: dict[str, ReactTool],
+        policy: ReactToolPolicy,
+    ) -> None:
+        self._task = task
+        self._message = message
+        self._model = model
+        self._tools = tools
+        self._policy = policy
+
+    def plan(
+        self,
+        request: HarnessRunRequest,
+        observations: tuple[HarnessObservation, ...],
+        iteration: int,
+    ) -> HarnessDecision:
+        del request
+        action = self._model.next_action(
+            task=self._task,
+            message=self._message,
+            observation=observations[-1].output if observations else None,
+            iteration=iteration,
+        )
+        if action.kind == "final":
+            return HarnessDecision.finish(
+                {
+                    "operatorRecommendation": action.operator_recommendation,
+                    "customerReplyDraft": action.customer_reply_draft,
+                }
+            )
+        if action.tool_call is None:
+            return HarnessDecision()
+        return HarnessDecision.request_tools(
+            HarnessToolCall(
+                call_id=f"{iteration}:{action.tool_call.name}",
+                name=action.tool_call.name,
+                arguments=dict(action.tool_call.arguments),
+                risk=action.tool_call.risk,
+            )
+        )
+
+    def authorize_tool(
+        self,
+        request: HarnessRunRequest,
+        call: HarnessToolCall,
+    ) -> HarnessToolAuthorization:
+        del request
+        if not self._policy.is_allowed(call.name):
+            return HarnessToolAuthorization.deny(f"Tool not allowed: {call.name}")
+        if self._policy.requires_manual_confirmation(call.name):
+            return HarnessToolAuthorization.require_approval(
+                f"Tool requires manual confirmation: {call.name}",
+                metadata={"sideEffect": "manual-confirm-tool"},
+            )
+        if call.risk == "write" or self._policy.is_high_risk(call.name):
+            return HarnessToolAuthorization.require_approval(
+                f"Proposed high-risk action: {call.name}",
+                metadata={"sideEffect": "proposed-write"},
+            )
+        return HarnessToolAuthorization.allow()
+
+    def invoke_tool(
+        self,
+        request: HarnessRunRequest,
+        call: HarnessToolCall,
+    ) -> dict[str, Any]:
+        del request
+        tool = self._tools.get(call.name)
+        if tool is None:
+            raise HarnessToolFailure("TOOL_NOT_FOUND", f"Tool not found: {call.name}")
+        return tool(dict(call.arguments))
 
 
 class ConfigurableRestrictedReactWorker:
@@ -387,8 +370,175 @@ def _react_idempotency_key(task: TaskItem, call: ReactToolCall, business_key: st
     return f"react:{task.task_type}:{task.task_key}:{call.name}:{digest}"
 
 
-def _timed_out(started: float, timeout_ms: int) -> bool:
-    return (monotonic() - started) * 1000 > timeout_ms
+def _customer_worker_result(
+    *,
+    task: TaskItem,
+    config: ReactWorkerConfig,
+    result: HarnessRunResult,
+) -> WorkerResult:
+    iterations = max((event.iteration or 0 for event in result.events), default=0)
+    events = _customer_events_from_harness(task=task, config=config, result=result)
+    evidence = {
+        "workerRef": config.worker_ref,
+        "iterations": iterations,
+        "workerConfigRefs": _worker_config_refs(config),
+    }
+
+    if result.status is HarnessRunStatus.COMPLETED:
+        action = ReactModelAction.final(
+            operator_recommendation=str(result.output.get("operatorRecommendation") or ""),
+            customer_reply_draft=str(result.output.get("customerReplyDraft") or ""),
+        )
+        evidence["structuredOutput"] = _structured_final(action, iterations)
+        return WorkerResult(
+            task_id=int(task.id or 0),
+            worker_type=task.worker_type,
+            status=TaskStatus.COMPLETED,
+            operator_recommendation=action.operator_recommendation,
+            customer_reply_draft=action.customer_reply_draft,
+            evidence=evidence,
+            events=events,
+        )
+
+    if result.status is HarnessRunStatus.WAITING_APPROVAL and result.terminal_tool_call is not None:
+        call = _customer_tool_call(result.terminal_tool_call)
+        side_effect = str((result.authorization.metadata if result.authorization else {}).get("sideEffect") or "proposed-write")
+        action_payload = _proposed_action(task, call, side_effect=side_effect)
+        evidence["sideEffect"] = side_effect
+        if side_effect == "manual-confirm-tool":
+            recommendation = f"Tool requires manual confirmation: {call.name}"
+            reply = "该动作需要人工确认后才能继续。"
+        else:
+            recommendation = f"Proposed high-risk action: {call.name}"
+            reply = "该动作需要人工确认后才能执行。"
+        return WorkerResult(
+            task_id=int(task.id or 0),
+            worker_type=task.worker_type,
+            status=TaskStatus.WAITING,
+            operator_recommendation=recommendation,
+            customer_reply_draft=reply,
+            proposed_actions=[action_payload],
+            evidence=evidence,
+            events=events,
+        )
+
+    code = result.error_code or "REACT_WORKER_FAILED"
+    message = _customer_harness_error_message(result)
+    return WorkerResult(
+        task_id=int(task.id or 0),
+        worker_type=task.worker_type,
+        status=TaskStatus.FAILED,
+        operator_recommendation=message,
+        evidence=evidence,
+        events=events,
+        error={"code": code, "message": message},
+    )
+
+
+def _customer_events_from_harness(
+    *,
+    task: TaskItem,
+    config: ReactWorkerConfig,
+    result: HarnessRunResult,
+) -> list[dict[str, Any]]:
+    observations = {item.tool_call.call_id: item for item in result.observations}
+    calls = {item.tool_call.call_id: item.tool_call for item in result.observations}
+    if result.terminal_tool_call is not None:
+        calls[result.terminal_tool_call.call_id] = result.terminal_tool_call
+
+    events: list[dict[str, Any]] = []
+    for event in result.events:
+        call = calls.get(event.tool_call_id or "")
+        observation = observations.get(event.tool_call_id or "")
+        if event.type == "harness.started":
+            events.append(_event("react_worker_started", {"taskKey": task.task_key, "workerRef": task.worker_ref}))
+        elif event.type == "harness.iteration.started":
+            events.append(_event("react_iteration_started", {"iteration": event.iteration, "phase": "plan"}))
+        elif event.type == "harness.tool.started" and call is not None:
+            events.append(
+                _event(
+                    "react_tool_call_started",
+                    {"iteration": event.iteration, "tool": call.name, "risk": call.risk},
+                )
+            )
+        elif event.type == "harness.tool.completed" and call is not None and observation is not None:
+            events.append(
+                _event(
+                    "react_tool_call_completed",
+                    {
+                        "iteration": event.iteration,
+                        "tool": call.name,
+                        "observationKeys": sorted(observation.output.keys()),
+                    },
+                )
+            )
+        elif event.type == "harness.observation.recorded" and call is not None and observation is not None:
+            events.append(
+                _event(
+                    "react_observation_recorded",
+                    {
+                        "iteration": event.iteration,
+                        "tool": call.name,
+                        "observation": _structured_observation(_customer_tool_call(call), observation.output),
+                    },
+                )
+            )
+        elif event.type == "harness.tool.denied" and call is not None:
+            events.append(
+                _event(
+                    "react_tool_call_started",
+                    {"iteration": event.iteration, "tool": call.name, "risk": call.risk},
+                )
+            )
+            events.append(_event("react_tool_call_failed", {"tool": call.name, "reason": "not_allowed"}))
+        elif event.type == "harness.tool.failed" and call is not None:
+            events.append(_event("react_tool_call_failed", {"tool": call.name, "reason": "missing_tool"}))
+        elif event.type == "harness.approval.required" and call is not None:
+            react_call = _customer_tool_call(call)
+            side_effect = str(event.payload.get("sideEffect") or "proposed-write")
+            action_payload = _proposed_action(task, react_call, side_effect=side_effect)
+            events.append(
+                _event(
+                    "react_tool_call_started",
+                    {"iteration": event.iteration, "tool": call.name, "risk": call.risk},
+                )
+            )
+            payload: dict[str, Any] = {"proposedAction": action_payload["actionKey"]}
+            if side_effect == "manual-confirm-tool":
+                payload["toolPolicyRef"] = config.tool_policy_ref
+            events.append(_event("react_worker_completed", payload))
+        elif event.type == "harness.completed":
+            action = ReactModelAction.final(
+                operator_recommendation=str(result.output.get("operatorRecommendation") or ""),
+                customer_reply_draft=str(result.output.get("customerReplyDraft") or ""),
+            )
+            events.append(
+                _event(
+                    "react_structured_output_completed",
+                    {
+                        "iteration": event.iteration,
+                        "hasOperatorRecommendation": bool(action.operator_recommendation),
+                        "hasCustomerReplyDraft": bool(action.customer_reply_draft),
+                    },
+                )
+            )
+            events.append(_event("react_worker_completed", {"iteration": event.iteration}))
+        elif event.type == "harness.failed":
+            events.append(_event("react_worker_failed", {"code": result.error_code or "REACT_WORKER_FAILED"}))
+    return events
+
+
+def _customer_tool_call(call: HarnessToolCall) -> ReactToolCall:
+    risk: Literal["read", "write"] = "write" if call.risk == "write" else "read"
+    return ReactToolCall(name=call.name, arguments=dict(call.arguments), risk=risk)
+
+
+def _customer_harness_error_message(result: HarnessRunResult) -> str:
+    if result.error_code == "WORKER_TIMEOUT":
+        return "Restricted ReAct worker timed out"
+    if result.error_code == "MAX_ITERATIONS_EXCEEDED":
+        return "Restricted ReAct worker hit max iterations"
+    return result.error_message or "Restricted ReAct worker failed"
 
 
 def default_restricted_react_worker(config: ReactWorkerConfig) -> RestrictedReactWorker:

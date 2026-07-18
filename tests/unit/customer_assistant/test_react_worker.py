@@ -113,9 +113,14 @@ class CustomerAssistantReactWorkerTest(unittest.TestCase):
 
         result = worker.run(_task(), "删除订单")
 
+        event_types = [event["type"] for event in result.events]
         self.assertEqual(result.status, TaskStatus.FAILED)
         self.assertFalse(executed)
         self.assertEqual(result.error["code"], "TOOL_NOT_ALLOWED")
+        self.assertLess(
+            event_types.index("react_tool_call_started"),
+            event_types.index("react_tool_call_failed"),
+        )
 
     def test_high_risk_write_becomes_proposed_action(self) -> None:
         worker = RestrictedReactWorker(
@@ -155,6 +160,10 @@ class CustomerAssistantReactWorkerTest(unittest.TestCase):
         self.assertFalse(executed)
         self.assertEqual(result.proposed_actions[0]["actionType"], "lookup_order")
         self.assertNotIn("react_tool_call_completed", event_types)
+        self.assertLess(
+            event_types.index("react_tool_call_started"),
+            event_types.index("react_worker_completed"),
+        )
 
     def test_unknown_tool_policy_ref_is_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "unknown-tool-policy"):

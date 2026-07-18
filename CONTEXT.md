@@ -16,6 +16,22 @@ _Avoid_: Workflow when the flow depends on conversation state
 The business category that separates Workflow from Chatflow while allowing both to use the same canvas language. A Flow Type is visible in product navigation and resource lists.
 _Avoid_: hidden technical flag
 
+**Execution Substrate**:
+The domain-neutral Module that owns durable background job lifecycle, including enqueue, claim, lease, heartbeat, retry, DLQ, cancellation fencing, handler registration, and standalone worker composition. Workflow, Chatflow, and AI Assistant use it through their own Adapters; it does not know their domain semantics.
+_Avoid_: Workflow worker, Agent queue
+
+**Agent Harness**:
+The shared deep Module that owns domain-neutral Agent turn execution invariants: bounded ReAct progression, planning state, tool invocation governance, context and memory assembly, permission and approval transitions, checkpoints, cancellation, and standard execution events. AI Assistant and Customer Assistant supply product and business Adapters instead of implementing separate harness loops.
+_Avoid_: AI Assistant service, generic Agent God Module, Customer Assistant worker loop
+
+**Agent Execution**:
+The shared Module for parent/child Agent run identity, lifecycle status, durable references, correlation, and provider Interfaces. Agent Harness uses it for child execution while AI Assistant and Customer Assistant provide child-provider Adapters; it does not own the ReAct loop or business-task semantics.
+_Avoid_: generic Agent engine, sub-agent bridge payload
+
+**Execution Activity**:
+A user-visible projection of durable execution events into one stable phase, tool, Skill, approval, or child-Agent lifecycle item. It is a read model for the product shell, not a second execution ledger.
+_Avoid_: raw event card, hidden reasoning
+
 **Workflow List**:
 The entry point for managing Workflow resources. It is a sibling of Chatflow List, not a combined mixed list.
 _Avoid_: All flows list

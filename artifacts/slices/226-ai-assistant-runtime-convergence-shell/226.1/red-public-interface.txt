@@ -1,0 +1,12 @@
+Slice: 226.1 Agent Harness public Interface tracer
+TDD method: tdd
+Date: 2026-07-18
+
+Command:
+rtk uv run pytest tests/contract/agent_harness/test_public_interface.py -q --tb=short
+
+Observed RED:
+ModuleNotFoundError: No module named 'app.modules.agent_harness'
+
+Result:
+1 collection error. The public Agent Harness Module and Interface do not exist.
