@@ -1,6 +1,7 @@
 from app.core.host.context import RequestContext
 from app.modules.ai_assistant.domain.access_scope import AiAssistantAccessScope
 from app.modules.ai_assistant.domain.harness import AiAssistantHarnessService
+from app.modules.ai_assistant.domain.tools import ToolRegistry
 from app.modules.ai_assistant.infra.repository import AiAssistantRepository
 from app.modules.ai_assistant.infra.schema import (
     ai_assistant_tables,
@@ -31,7 +32,10 @@ def test_approval_audit_persists_server_principal_and_ignored_body_actor() -> No
                 workspace_id="workspace-a",
             ),
         )
-        service = AiAssistantHarnessService(repository)
+        service = AiAssistantHarnessService(
+            repository,
+            tool_registry=ToolRegistry.with_demo_tools(),
+        )
         assistant_session = service.create_session(title="Approval actor audit")
         waiting = service.run_message(
             int(assistant_session["id"]),

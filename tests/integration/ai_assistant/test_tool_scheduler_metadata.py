@@ -1,6 +1,7 @@
 import unittest
 
 from app.modules.ai_assistant.domain.harness import AiAssistantHarnessService
+from app.modules.ai_assistant.domain.tools import ToolRegistry
 from app.modules.ai_assistant.infra.repository import AiAssistantRepository
 from app.modules.ai_assistant.infra.schema import ai_assistant_tables, register_ai_assistant_tables
 from tests.support.mysql import mysql8_session
@@ -14,7 +15,10 @@ class AiAssistantToolSchedulerMetadataIntegrationTest(unittest.TestCase):
             register=register_ai_assistant_tables,
         ) as session:
             repository = AiAssistantRepository(session)
-            service = AiAssistantHarnessService(repository)
+            service = AiAssistantHarnessService(
+                repository,
+                tool_registry=ToolRegistry.with_demo_tools(),
+            )
             assistant_session = service.create_session(title="Scheduler metadata")
 
             result = service.run_message(

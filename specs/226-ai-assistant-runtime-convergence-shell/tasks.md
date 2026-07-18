@@ -1,6 +1,6 @@
 # Tasks — Spec 226
 
-Status: `226.8 complete / 226.9 ready`
+Status: `Spec 226 complete / Product Re-entry HOLD`
 
 Evidence root:
 `artifacts/slices/226-ai-assistant-runtime-convergence-shell/<slice>/`
@@ -152,21 +152,21 @@ Evidence for this contract round is the repository diff and final Contract Gate 
 
 ## 226.9 Goal Exit
 
-- [ ] Worker crash/takeover/lease fencing/late-write fault matrix。
-- [ ] Principal spoof/cross-scope/approval replay/security regression。
-- [ ] Agent Harness Interface/dependency contract；AI Assistant 与 Customer
+- [x] Worker crash/takeover/lease fencing/late-write fault matrix。
+- [x] Principal spoof/cross-scope/approval replay/security regression。
+- [x] Agent Harness Interface/dependency contract；AI Assistant 与 Customer
   Assistant production Adapter 证明。
-- [ ] AI Assistant unit/contract/integration/e2e/eval。
-- [ ] Customer Assistant affected unit/contract/integration/e2e。
-- [ ] Runtime V2 218/219 regression。
-- [ ] Frontend unit/build/rem。
-- [ ] Browser UAT 可重复，截图与操作记录归档。
-- [ ] Alembic single head + upgrade/downgrade evidence。
-- [ ] `git diff --check` 与 secret scan。
-- [ ] Checker: `ALL GREEN`。
-- [ ] Reviewer: `PASS`，无 blocker。
-- [ ] Goal Gate: `SATISFIED`；否则按 attempts/TTL 进入 `WAITING_HUMAN`。
-- [ ] Product Re-entry Review；不自动开启下一 feature。
+- [x] AI Assistant unit/contract/integration/e2e/eval。
+- [x] Customer Assistant affected unit/contract/integration/e2e。
+- [x] Runtime V2 218/219 regression。
+- [x] Frontend unit/build/rem。
+- [x] Browser UAT 可重复，截图与操作记录归档。
+- [x] Alembic single head + upgrade/downgrade evidence。
+- [x] `git diff --check` 与 secret scan。
+- [x] Checker: `ALL GREEN`。
+- [x] Reviewer: `PASS`，无 blocker。
+- [x] Goal Gate: `SATISFIED`。
+- [x] Product Re-entry Review: `HOLD`；不自动开启下一 feature。
 
 ## Stop Rules
 
