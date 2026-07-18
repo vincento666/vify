@@ -12,8 +12,9 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.core.database import get_session
 from app.main import app
-from app.modules.ai_assistant.domain.harness import AiAssistantHarnessService
-from app.modules.ai_assistant.infra.repository import AiAssistantRepository
+from app.modules.ai_assistant.runtime_job_worker import AI_ASSISTANT_RUNTIME_JOB_TYPE
+from app.modules.runtime.composition import build_runtime_job_worker
+from app.modules.runtime.infra.runtime_job_repository import RuntimeJobRepository
 from tests.support.mysql import mysql8_unittest_database
 
 
@@ -100,11 +101,11 @@ class AiAssistantSessionRuntimeApiContractTest(unittest.TestCase):
         self.assertEqual(processed.status_code, 200, processed.text)
         self.assertEqual(processed.json()["data"]["status"], "COMPLETED")
         self.assertEqual(snapshot["run"]["status"], "COMPLETED")
-        self.assertEqual(snapshot["checkpoint"]["worker"]["scope"], "durable-lease")
+        self.assertEqual(snapshot["checkpoint"]["worker"]["scope"], "durable-runtime-job")
 
-    def test_async_message_autonomously_runs_without_worker_process_api(self) -> None:
+    def test_async_message_is_completed_by_standalone_worker_without_compat_api(self) -> None:
         with TestClient(app) as client:
-            session_id = client.post("/api/v1/ai-assistant/sessions", json={"title": "Autonomous worker"}).json()[
+            session_id = client.post("/api/v1/ai-assistant/sessions", json={"title": "Standalone worker"}).json()[
                 "data"
             ]["id"]
             started = client.post(
@@ -117,12 +118,14 @@ class AiAssistantSessionRuntimeApiContractTest(unittest.TestCase):
                 },
             )
             run_id = started.json()["data"]["runId"]
+            worker_result = self._process_run(run_id)
             snapshot = _wait_for_run_status(client, run_id, {"COMPLETED"})
             _wait_for_event_type(client, run_id, "run.worker_heartbeat")
             events = client.get(f"/api/v1/ai-assistant/runs/{run_id}/events").json()["data"]["list"]
 
         self.assertEqual(started.status_code, 200, started.text)
         self.assertEqual(started.json()["data"]["status"], "QUEUED")
+        self.assertEqual(worker_result["status"], "COMPLETED")
         self.assertEqual(snapshot["run"]["status"], "COMPLETED")
         event_types = [event["type"] for event in events]
         self.assertIn("run.queued", event_types)
@@ -130,7 +133,7 @@ class AiAssistantSessionRuntimeApiContractTest(unittest.TestCase):
         self.assertIn("run.worker_heartbeat", event_types)
         self.assertIn("run.checkpoint_saved", event_types)
 
-    def test_worker_process_api_does_not_duplicate_autonomous_worker_claim(self) -> None:
+    def test_completed_compat_worker_job_cannot_be_claimed_twice(self) -> None:
         with TestClient(app) as client:
             session_id = client.post("/api/v1/ai-assistant/sessions", json={"title": "Duplicate claim"}).json()[
                 "data"
@@ -145,12 +148,14 @@ class AiAssistantSessionRuntimeApiContractTest(unittest.TestCase):
                 },
             ).json()["data"]
             manual_worker = client.post(f"/api/v1/ai-assistant/runs/{started['runId']}/worker/process")
+            retry = self._process_run(started["runId"])
             _wait_for_event_type(client, started["runId"], "run.worker_heartbeat")
             sleep(0.1)
             events = client.get(f"/api/v1/ai-assistant/runs/{started['runId']}/events").json()["data"]["list"]
             snapshot = client.get(f"/api/v1/ai-assistant/runs/{started['runId']}/snapshot").json()["data"]
 
         self.assertEqual(manual_worker.status_code, 200, manual_worker.text)
+        self.assertEqual(retry["status"], "IDLE")
         self.assertEqual(snapshot["run"]["status"], "COMPLETED")
         event_types = [event["type"] for event in events]
         self.assertEqual(event_types.count("run.worker_started"), 1)
@@ -166,7 +171,10 @@ class AiAssistantSessionRuntimeApiContractTest(unittest.TestCase):
             ).json()["data"]
             paused = client.post(f"/api/v1/ai-assistant/runs/{first['runId']}/pause", json={"actorId": "operator"})
             paused_snapshot = client.get(f"/api/v1/ai-assistant/runs/{first['runId']}/snapshot").json()["data"]
+            paused_job_status = self._runtime_job_status(first["runId"])
             resumed = client.post(f"/api/v1/ai-assistant/runs/{first['runId']}/resume", json={"actorId": "operator"})
+            resumed_job_status = self._runtime_job_status(first["runId"])
+            self._process_run(first["runId"])
             _wait_for_run_status(client, first["runId"], {"COMPLETED"})
             with client.stream("GET", f"{first['eventStreamRef']}&_testLimit=20") as stream:
                 _read_sse_frames(stream, 20)
@@ -176,6 +184,7 @@ class AiAssistantSessionRuntimeApiContractTest(unittest.TestCase):
             ).json()["data"]
             cancelled = client.post(f"/api/v1/ai-assistant/runs/{second['runId']}/cancel", json={"actorId": "operator"})
             cancelled_snapshot = client.get(f"/api/v1/ai-assistant/runs/{second['runId']}/snapshot").json()["data"]
+            cancelled_job_status = self._runtime_job_status(second["runId"])
 
         self.assertEqual(paused.status_code, 200, paused.text)
         self.assertEqual(paused.json()["data"]["status"], "PAUSED")
@@ -186,10 +195,13 @@ class AiAssistantSessionRuntimeApiContractTest(unittest.TestCase):
         )
         self.assertEqual(resumed.status_code, 200, resumed.text)
         self.assertEqual(resumed.json()["data"]["status"], "QUEUED")
+        self.assertEqual(paused_job_status, "CANCELLED")
+        self.assertEqual(resumed_job_status, "QUEUED")
         self.assertEqual(cancelled.status_code, 200, cancelled.text)
         self.assertEqual(cancelled.json()["data"]["status"], "CANCELLED")
         self.assertEqual(cancelled_snapshot["checkpoint"]["status"], "CANCELLED")
         self.assertEqual(cancelled_snapshot["run"]["status"], "CANCELLED")
+        self.assertEqual(cancelled_job_status, "CANCELLED")
 
     def test_pending_approval_recovers_from_snapshot_after_async_worker_runs(self) -> None:
         Path(self._workspace_dir.name, "needs-approval.txt").write_text("old\n", encoding="utf-8")
@@ -273,10 +285,29 @@ class AiAssistantSessionRuntimeApiContractTest(unittest.TestCase):
         with self._factory() as session:
             yield session
 
-    def _process_run(self, run_id: int) -> None:
+    def _process_run(self, run_id: int) -> dict:
         with self._factory() as session:
-            result = AiAssistantHarnessService(AiAssistantRepository(session)).process_queued_run(run_id)
-            self.assertIsNotNone(result)
+            job = RuntimeJobRepository(session).get_by_run(
+                run_id,
+                owner_type="AI_ASSISTANT",
+                job_type=AI_ASSISTANT_RUNTIME_JOB_TYPE,
+            )
+            self.assertIsNotNone(job)
+            return build_runtime_job_worker(
+                session,
+                owner="ai-assistant",
+                worker_id=f"contract-worker-{run_id}",
+            ).run_once(job_id=int(job["id"]))
+
+    def _runtime_job_status(self, run_id: int) -> str:
+        with self._factory() as session:
+            job = RuntimeJobRepository(session).get_by_run(
+                run_id,
+                owner_type="AI_ASSISTANT",
+                job_type=AI_ASSISTANT_RUNTIME_JOB_TYPE,
+            )
+            self.assertIsNotNone(job)
+            return str(job["status"])
 
 
 def _read_sse_frames(response, count: int) -> list[dict]:

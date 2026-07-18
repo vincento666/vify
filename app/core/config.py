@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     ai_assistant_openrouter_model: str = "qwen/qwen3.6-27b"
     ai_assistant_openrouter_api_key: str = ""
     ai_assistant_openrouter_api_key_env: str = "OPENROUTER_API_KEY"
+    ai_assistant_runtime_active_job_limit: int = 100
 
     model_config = SettingsConfigDict(env_prefix="HIFY_", env_file=".env", extra="ignore")
 

@@ -1,0 +1,14 @@
+Slice: 226.5 expired lease takeover and late-writer fencing
+Date: 2026-07-18
+
+Command:
+rtk uv run pytest tests/integration/ai_assistant/test_standalone_worker_takeover.py tests/integration/ai_assistant/test_worker_lease_fencing.py -q --tb=short
+
+Observed RED:
+Collection failed because `app.modules.ai_assistant.infra.runtime_job_lease`
+did not exist. AI Assistant repository writes and tool dispatches had no
+runtime-job lease fence, and a RUNNING run had no durable takeover path.
+
+Meaning:
+Claiming a job alone did not prevent an expired worker from writing events or
+effects after another worker took over.

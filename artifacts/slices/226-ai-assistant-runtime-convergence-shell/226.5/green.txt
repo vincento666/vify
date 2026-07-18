@@ -1,0 +1,33 @@
+Slice: 226.5 durable AI execution and HA
+Date: 2026-07-18
+State: GREEN candidate
+
+Exact durable/fault/SSE verifier:
+26 passed
+
+Session runtime controls:
+8 passed
+
+Runtime substrate regression:
+32 passed
+
+AI unit/fault/E2E regression:
+23 passed
+
+Frontend API contract:
+4 passed
+
+Frontend production build:
+PASS
+
+Full affected AI Assistant regression:
+258 passed, 3 skipped, 21 subtests passed
+
+Ruff and git diff check:
+All checks passed
+
+Live provider calls:
+0
+
+Production migration/deploy:
+Not executed; no schema change and not authorized.

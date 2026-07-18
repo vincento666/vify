@@ -1,0 +1,15 @@
+Slice: 226.5 durable AI Assistant standalone worker
+Date: 2026-07-18
+
+Command:
+rtk uv run pytest tests/contract/ai_assistant/test_durable_job_gateway.py -q --tb=short
+
+Observed RED:
+Collection failed because `AI_ASSISTANT_RUNTIME_JOB_TYPE` and the AI-specific
+durable runtime-job gateway did not exist. The async API could only rely on the
+router-local executor, so a queued run had no process-independent execution
+record for a standalone worker to claim after API exit.
+
+Meaning:
+The existing runtime_jobs mechanism was not yet an execution substrate for AI
+Assistant. API lifecycle and execution lifecycle were coupled.

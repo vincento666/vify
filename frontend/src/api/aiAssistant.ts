@@ -155,20 +155,6 @@ export function buildAiAssistantMessagePayload(
   }
 }
 
-export function buildAiAssistantWorkerPayload(runtimeConfig: AiAssistantRuntimeConfig): { modelConfig?: AiAssistantModelConfigPayload } {
-  if (runtimeConfig.modelMode === 'deterministic') return {}
-  return {
-    modelConfig: {
-      provider: 'openrouter',
-      baseUrl: runtimeConfig.baseUrl,
-      model: runtimeConfig.modelName,
-      apiKey: runtimeConfig.apiKey,
-      temperature: runtimeConfig.temperature,
-      maxTokens: runtimeConfig.maxTokens,
-    },
-  }
-}
-
 export interface AiAssistantApproval {
   id: number
   sessionId: number
@@ -407,13 +393,6 @@ export function sendAiAssistantMessage(sessionId: number, payload: SendAiAssista
 
 export function startAiAssistantMessage(sessionId: number, payload: SendAiAssistantMessagePayload) {
   return post<AiAssistantTurnResult>(`/v1/ai-assistant/sessions/${sessionId}/messages/async`, payload)
-}
-
-export function processAiAssistantRunWorker(runId: number, runtimeConfig?: AiAssistantRuntimeConfig) {
-  return post<AiAssistantRun & { checkpoint?: Record<string, unknown> }>(
-    `/v1/ai-assistant/runs/${runId}/worker/process`,
-    runtimeConfig ? buildAiAssistantWorkerPayload(runtimeConfig) : {},
-  )
 }
 
 export function listAiAssistantRunEvents(runId: number, afterSequence?: number) {

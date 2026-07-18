@@ -1,6 +1,6 @@
 # Tasks — Spec 226
 
-Status: `226.4 complete / 226.5 ready`
+Status: `226.5 complete / 226.6 ready`
 
 Evidence root:
 `artifacts/slices/226-ai-assistant-runtime-convergence-shell/<slice>/`
@@ -85,19 +85,19 @@ Evidence for this contract round is the repository diff and final Contract Gate 
 
 ## 226.5 P0 — Durable AI Assistant Standalone Worker And HA
 
-- [ ] TDD preflight。
-- [ ] RED：关闭/终止 API 进程后 queued run 无法完成。
-- [ ] RED：双 worker / expired lease / late writer 场景。
-- [ ] RED：SSE 长连接占用 DB session/pool。
-- [ ] RED：cancel/pause/lease loss 后继续写 event/effect。
-- [ ] `messages/async` durable enqueue AI Assistant runtime job。
-- [ ] standalone handler + heartbeat/takeover + bounded backpressure。
-- [ ] SSE 短 session/cursor replay；外部 I/O async 或有界 compatibility adapter。
-- [ ] 删除 AI router autonomous executor/lock/in-flight。
-- [ ] 前端停止调用 `/worker/process`。
-- [ ] `/worker/process` 转兼容 shim 并输出 deprecation metadata。
-- [ ] Unit / Contract / Integration / fault E2E / Docs evidence。
-- [ ] Checker / Reviewer / slice commit。
+- [x] TDD preflight。
+- [x] RED：关闭/终止 API 进程后 queued run 无法完成。
+- [x] RED：双 worker / expired lease / late writer 场景。
+- [x] RED：SSE 长连接占用 DB session/pool。
+- [x] RED：cancel/pause/lease loss 后继续写 event/effect。
+- [x] `messages/async` durable enqueue AI Assistant runtime job。
+- [x] standalone handler + heartbeat/takeover + bounded backpressure。
+- [x] SSE 短 session/cursor replay；外部 I/O async 或有界 compatibility adapter。
+- [x] 删除 AI router autonomous executor/lock/in-flight。
+- [x] 前端停止调用 `/worker/process`。
+- [x] `/worker/process` 转兼容 shim 并输出 deprecation metadata。
+- [x] Unit / Contract / Integration / fault E2E / Docs evidence。
+- [x] Checker / Reviewer / slice commit。
 
 ## 226.6 P2 Foundation — Stable Activity And Real Child Lifecycle
 

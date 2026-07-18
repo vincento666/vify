@@ -5,6 +5,10 @@ import threading
 from typing import Any, Protocol
 
 
+class RuntimeJobLeaseLost(RuntimeError):
+    pass
+
+
 class RuntimeJobRepositoryProtocol(Protocol):
     def get(self, job_id: int) -> dict[str, Any] | None: ...
 
@@ -107,12 +111,27 @@ class RuntimeJobWorker:
                 assert self._complete_run is not None
                 self._complete_run(int(job["run_id"]))
         except Exception as exc:
-            failed = self._job_repository.fail(
-                claimed_job_id,
-                worker_id=self._worker_id,
-                lease_token=lease_token,
-                error=str(exc),
-            )
+            try:
+                failed = self._job_repository.fail(
+                    claimed_job_id,
+                    worker_id=self._worker_id,
+                    lease_token=lease_token,
+                    error=str(exc),
+                )
+            except RuntimeJobLeaseLost:
+                current = self._job_repository.get(claimed_job_id)
+                return {
+                    "claimed": True,
+                    "jobId": claimed_job_id,
+                    "runId": int(job["run_id"]),
+                    "status": "LEASE_LOST",
+                    "jobStatus": (
+                        str(current.get("status") or "")
+                        if current is not None
+                        else "MISSING"
+                    ),
+                    "error": str(exc),
+                }
             if str(failed.get("status") or "").upper() == "FAILED" and self._on_terminal_failure is not None:
                 self._on_terminal_failure(failed, str(exc))
             return {
@@ -132,7 +151,7 @@ class RuntimeJobWorker:
                 worker_id=self._worker_id,
                 lease_token=lease_token,
             )
-        except RuntimeError:
+        except RuntimeError as exc:
             current = self._job_repository.get(claimed_job_id)
             if current is not None and str(current.get("status") or "").upper() in {"CANCELLED", "IGNORED"}:
                 return {
@@ -141,7 +160,19 @@ class RuntimeJobWorker:
                     "runId": int(job["run_id"]),
                     "status": str(current["status"]),
                 }
-            raise
+            if not isinstance(exc, RuntimeJobLeaseLost):
+                raise
+            return {
+                "claimed": True,
+                "jobId": claimed_job_id,
+                "runId": int(job["run_id"]),
+                "status": "LEASE_LOST",
+                "jobStatus": (
+                    str(current.get("status") or "")
+                    if current is not None
+                    else "MISSING"
+                ),
+            }
         return {
             "claimed": True,
             "jobId": claimed_job_id,

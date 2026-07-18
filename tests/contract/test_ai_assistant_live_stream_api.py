@@ -6,7 +6,13 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.modules.ai_assistant.domain.harness import AiAssistantHarnessService
-from app.modules.ai_assistant.web.router import get_ai_assistant_service
+from app.modules.ai_assistant.infra.event_stream_reader import (
+    AiAssistantEventStreamPage,
+)
+from app.modules.ai_assistant.web.router import (
+    get_ai_assistant_event_stream_reader,
+    get_ai_assistant_service,
+)
 from tests.support.ai_assistant_memory_repo import InMemoryAiAssistantRepository
 
 
@@ -14,9 +20,13 @@ class AiAssistantLiveStreamApiContractTest(unittest.TestCase):
     def setUp(self) -> None:
         self._repository = InMemoryAiAssistantRepository()
         app.dependency_overrides[get_ai_assistant_service] = self._service_override
+        app.dependency_overrides[get_ai_assistant_event_stream_reader] = (
+            lambda: _InMemoryEventStreamReader(self._repository)
+        )
 
     def tearDown(self) -> None:
         app.dependency_overrides.pop(get_ai_assistant_service, None)
+        app.dependency_overrides.pop(get_ai_assistant_event_stream_reader, None)
 
     def test_events_stream_replays_persisted_events_and_resumes_after_sequence(self) -> None:
         client = TestClient(app)
@@ -51,6 +61,28 @@ class AiAssistantLiveStreamApiContractTest(unittest.TestCase):
 
     def _service_override(self) -> Generator[AiAssistantHarnessService, None, None]:
         yield AiAssistantHarnessService(self._repository)
+
+
+class _InMemoryEventStreamReader:
+    def __init__(self, repository: InMemoryAiAssistantRepository) -> None:
+        self._repository = repository
+
+    def read(
+        self,
+        run_id: int,
+        *,
+        after_sequence: int,
+    ) -> AiAssistantEventStreamPage:
+        run = self._repository.get_run(run_id)
+        if run is None:
+            raise KeyError(run_id)
+        return AiAssistantEventStreamPage(
+            run=run,
+            events=self._repository.list_run_events(
+                run_id,
+                after_sequence=after_sequence,
+            ),
+        )
 
 
 def _read_sse_events(response, count: int) -> list[dict[str, object]]:

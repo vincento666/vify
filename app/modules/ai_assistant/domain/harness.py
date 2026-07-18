@@ -310,6 +310,11 @@ class AiAssistantHarnessService:
         self._tool_runner = tool_runner or ToolRunner(
             self._tools,
             operation_ledger=operation_ledger,
+            execution_guard=(
+                repository.write_guard
+                if isinstance(repository, AiAssistantRepository)
+                else None
+            ),
         )
         self._resource_locks = ResourceLockManager(repository)
         self._approval_policy = approval_policy or ApprovalPolicy(environment="test")
@@ -592,21 +597,34 @@ class AiAssistantHarnessService:
         run_id: int,
         *,
         model_config: LivePlannerConfig | None = None,
+        worker_claim: dict[str, Any] | None = None,
+        allow_takeover: bool = False,
     ) -> HarnessTurnResult | None:
         run = self._repository.get_run(run_id)
-        if run is None or run["status"] != "QUEUED":
+        if run is None:
             return None
         session_id = int(run["session_id"])
         request = request_payload_from_run(run)
         execution_model_config = _worker_execution_model_config(request, model_config)
-        worker = worker_claim_payload()
-        running = self._claim_queued_runtime_checkpoint(
-            run_id=run_id,
-            session_id=session_id,
-            run=run,
-            request=request,
-            worker=worker,
-        )
+        worker = dict(worker_claim or worker_claim_payload())
+        if run["status"] == "QUEUED":
+            running = self._claim_queued_runtime_checkpoint(
+                run_id=run_id,
+                session_id=session_id,
+                run=run,
+                request=request,
+                worker=worker,
+            )
+        elif run["status"] == "RUNNING" and allow_takeover:
+            running = self._takeover_running_runtime_checkpoint(
+                run_id=run_id,
+                session_id=session_id,
+                run=run,
+                request=request,
+                worker=worker,
+            )
+        else:
+            return None
         if running is None:
             return None
         result = self.complete_started_message(
@@ -643,6 +661,55 @@ class AiAssistantHarnessService:
             payload={"worker": worker, "checkpoint": _runtime_checkpoint_from_run(checkpointed)},
         )
         return replace(result, run=checkpointed)
+
+    def _takeover_running_runtime_checkpoint(
+        self,
+        *,
+        run_id: int,
+        session_id: int,
+        run: dict[str, Any],
+        request: dict[str, Any],
+        worker: dict[str, Any],
+    ) -> dict[str, Any]:
+        checkpoint = build_run_checkpoint(
+            run_id=run_id,
+            status="RUNNING",
+            phase="worker_taken_over",
+            last_sequence=_last_event_sequence(self._repository, run_id),
+            request=request,
+            worker=worker,
+        )
+        input_payload = dict(run.get("input_payload") or {})
+        existing_runtime = dict(input_payload.get("sessionRuntime") or {})
+        input_payload["sessionRuntime"] = {
+            **existing_runtime,
+            "request": request,
+            "checkpoint": checkpoint,
+            "worker": worker,
+        }
+        taken_over = self._repository.update_run_input_payload(
+            run_id,
+            input_payload,
+        )
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="run.worker_taken_over",
+            visible_title="Worker 已接管",
+            visible_summary="持久化租约过期后，新的 worker 已从检查点接管运行。",
+            payload={"worker": worker, "checkpoint": checkpoint},
+            status="RUNNING",
+        )
+        self._repository.append_event(
+            run_id=run_id,
+            session_id=session_id,
+            event_type="run.checkpoint_saved",
+            visible_title="运行检查点已保存",
+            visible_summary="SessionRuntime 已保存接管检查点。",
+            payload={"checkpoint": checkpoint},
+            status="RUNNING",
+        )
+        return taken_over
 
     def _claim_queued_runtime_checkpoint(
         self,

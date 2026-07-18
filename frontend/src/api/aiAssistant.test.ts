@@ -29,6 +29,9 @@ describe('ai assistant frontend API client', () => {
       .mockResolvedValueOnce({ run: { id: 20 }, activeTasks: [], toolCalls: [], approvalQueue: [] })
       .mockResolvedValueOnce({ run: { id: 20 }, events: [], streamCursor: { lastSequence: 0 }, inspector: { run: { id: 20 } } })
 
+    const aiAssistantApi = await import('./aiAssistant')
+    expect(aiAssistantApi).not.toHaveProperty('processAiAssistantRunWorker')
+    expect(aiAssistantApi).not.toHaveProperty('buildAiAssistantWorkerPayload')
     const {
       buildAiAssistantMessagePayload,
       approveAiAssistantApproval,
@@ -41,10 +44,9 @@ describe('ai assistant frontend API client', () => {
       listAiAssistantApprovals,
       listAiAssistantRunEvents,
       listAiAssistantSessionRuns,
-      processAiAssistantRunWorker,
       sendAiAssistantMessage,
       startAiAssistantMessage,
-    } = await import('./aiAssistant')
+    } = aiAssistantApi
 
     const runtimeConfig = {
       modelName: 'qwen/qwen3.6-27b',
@@ -59,7 +61,6 @@ describe('ai assistant frontend API client', () => {
     const payload = buildAiAssistantMessagePayload('Echo', runtimeConfig, 'front-echo', 'ask_each_time')
     await sendAiAssistantMessage(10, payload)
     await startAiAssistantMessage(10, buildAiAssistantMessagePayload('Stream Echo', runtimeConfig, 'front-stream'))
-    await processAiAssistantRunWorker(21, runtimeConfig)
     await listAiAssistantRunEvents(20)
     await listAiAssistantApprovals()
     await approveAiAssistantApproval(7, { actorId: 'operator-ui' })
@@ -101,22 +102,12 @@ describe('ai assistant frontend API client', () => {
         maxTokens: 4096,
       },
     })
-    expect(requestMocks.post).toHaveBeenNthCalledWith(4, '/v1/ai-assistant/runs/21/worker/process', {
-      modelConfig: {
-        provider: 'openrouter',
-        baseUrl: 'https://openrouter.ai/api/v1',
-        model: 'qwen/qwen3.6-27b',
-        apiKey: 'sk-temp',
-        temperature: 0.2,
-        maxTokens: 4096,
-      },
-    })
     expect(requestMocks.get).toHaveBeenNthCalledWith(1, '/v1/ai-assistant/runs/20/events', undefined)
     expect(requestMocks.get).toHaveBeenNthCalledWith(2, '/v1/ai-assistant/approvals')
-    expect(requestMocks.post).toHaveBeenNthCalledWith(5, '/v1/ai-assistant/approvals/7/approve', {
+    expect(requestMocks.post).toHaveBeenNthCalledWith(4, '/v1/ai-assistant/approvals/7/approve', {
       actorId: 'operator-ui',
     })
-    expect(requestMocks.post).toHaveBeenNthCalledWith(6, '/v1/ai-assistant/approvals/8/deny', {
+    expect(requestMocks.post).toHaveBeenNthCalledWith(5, '/v1/ai-assistant/approvals/8/deny', {
       actorId: 'operator-ui',
       reason: 'No',
     })

@@ -1,6 +1,5 @@
 import os
 import tempfile
-import time
 import unittest
 from collections.abc import Generator
 from datetime import date, timedelta
@@ -12,6 +11,9 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.core.database import get_session
 from app.main import app
+from app.modules.ai_assistant.runtime_job_worker import AI_ASSISTANT_RUNTIME_JOB_TYPE
+from app.modules.runtime.composition import build_runtime_job_worker
+from app.modules.runtime.infra.runtime_job_repository import RuntimeJobRepository
 from tests.support.mysql import mysql8_unittest_database
 
 
@@ -71,14 +73,11 @@ class AiAssistantMemoryContextE2ETest(unittest.TestCase):
                 headers=alice_headers,
                 json={"message": "恢复上下文预算", "idempotencyKey": "memory-context-e2e"},
             ).json()["data"]
-            for _ in range(100):
-                run = client.get(
-                    f"/api/v1/ai-assistant/runs/{started['runId']}",
-                    headers=alice_headers,
-                ).json()["data"]
-                if run["status"] == "COMPLETED":
-                    break
-                time.sleep(0.02)
+            self._process_run(int(started["runId"]))
+            run = client.get(
+                f"/api/v1/ai-assistant/runs/{started['runId']}",
+                headers=alice_headers,
+            ).json()["data"]
             snapshot = client.get(
                 f"/api/v1/ai-assistant/runs/{started['runId']}/snapshot",
                 headers=alice_headers,
@@ -147,6 +146,21 @@ class AiAssistantMemoryContextE2ETest(unittest.TestCase):
     def _session_override(self) -> Generator[Session, None, None]:
         with self._factory() as session:
             yield session
+
+    def _process_run(self, run_id: int) -> None:
+        with self._factory() as session:
+            job = RuntimeJobRepository(session).get_by_run(
+                run_id,
+                owner_type="AI_ASSISTANT",
+                job_type=AI_ASSISTANT_RUNTIME_JOB_TYPE,
+            )
+            self.assertIsNotNone(job)
+            result = build_runtime_job_worker(
+                session,
+                owner="ai-assistant",
+                worker_id=f"memory-context-worker-{run_id}",
+            ).run_once(job_id=int(job["id"]))
+            self.assertEqual(result["status"], "COMPLETED")
 
 
 def _read_sse_frames(response, count: int) -> list[dict]:

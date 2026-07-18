@@ -90,6 +90,7 @@ class ToolRunner:
         policy: ToolRunnerPolicy | None = None,
         fallback_adapters: dict[str, FallbackAdapter] | None = None,
         operation_ledger: ToolOperationLedger | None = None,
+        execution_guard: Callable[[], None] | None = None,
         sleep: SleepFn | None = None,
         jitter: JitterFn | None = None,
     ) -> None:
@@ -97,6 +98,7 @@ class ToolRunner:
         self._policy = policy or ToolRunnerPolicy()
         self._fallback_adapters = fallback_adapters or {}
         self._operation_ledger = operation_ledger
+        self._execution_guard = execution_guard
         self._ledger_lock = RLock()
         self._sleep = sleep or _default_sleep
         self._jitter = jitter
@@ -104,6 +106,7 @@ class ToolRunner:
         self._ledger: dict[str, _LedgerEntry] = {}
 
     def run(self, tool_name: str, payload: dict[str, Any], *, idempotency_key: str = "") -> ToolRunResult:
+        self._assert_execution_allowed()
         started = perf_counter()
         resolved_idempotency_key = idempotency_key or _stable_idempotency_key(tool_name, payload)
         events: list[dict[str, Any]] = []
@@ -293,7 +296,9 @@ class ToolRunner:
                 operation_id=operation_id,
             )
             try:
+                self._assert_execution_allowed()
                 tool_result = self._dispatch_with_timeout(tool_name, dispatch_payload, manifest_timeout_ms)
+                self._assert_execution_allowed()
             except Exception as exc:
                 error = _classify_error(exc)
                 last_error = error
@@ -432,7 +437,9 @@ class ToolRunner:
                     request_hash=_request_hash(payload),
                 )
             try:
+                self._assert_execution_allowed()
                 fallback_result = fallback(tool_name, fallback_payload, error)
+                self._assert_execution_allowed()
             except Exception as fallback_exc:
                 error = _classify_error(fallback_exc)
                 if fallback_attempt_id and self._operation_ledger is not None:
@@ -505,6 +512,10 @@ class ToolRunner:
             raise exc
         finally:
             executor.shutdown(wait=False, cancel_futures=True)
+
+    def _assert_execution_allowed(self) -> None:
+        if self._execution_guard is not None:
+            self._execution_guard()
 
     def _prepare_side_effect_operation(
         self,

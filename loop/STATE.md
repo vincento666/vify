@@ -7,23 +7,24 @@
 - state: `READY`
 - contract: `specs/226-ai-assistant-runtime-convergence-shell/tasks.md`
 - ADR: `docs/adr/0005-ai-assistant-runtime-job-substrate.md`
-- active unit: `226.5`
-- implementation: 226.1-226.4 shared Harness, product Adapters, neutral runtime job core, and trusted scoped security green
+- active unit: `226.6`
+- implementation: 226.1-226.5 shared Harness, product Adapters, neutral durable runtime, trusted scope, and AI standalone HA green
 - external provider calls: 0
 - production/deploy/git delivery actions: none
 
 ## Confirmed Repository Facts
 
-- `runtime_jobs` 已有 owner、claim/lease/heartbeat、retry/DLQ 和 standalone
-  worker，但实现归属 `workflow`。
-- AI Assistant 仍有 router-level executor/in-flight 状态；前端仍调用
-  `/worker/process`。
+- `runtime_jobs` core/registry/composition 已归属领域中立 runtime substrate；
+  AI Assistant、Workflow、Chatflow 通过各自 Adapter 注册 handler。
+- AI Assistant async API 只入 durable queue；router-local executor/in-flight
+  已删除，前端不再调用 `/worker/process`。
 - Production principal 只接受 trusted request state；local-header mode 是显式
   开发兼容 Adapter，approval/control actor 来自 server principal。
-- AI Assistant SSE 生成器复用 request service/session。
+- AI Assistant SSE 只依赖 scoped short-session reader；首次读取和每次 poll
+  都在 yield/sleep 前释放 DB session。
 - 当前“已处理”分组 identity 随 sequence range 变化，粒度不是稳定 phase/step。
-- Customer Assistant 有真实 subagent lifecycle；AI Assistant 默认 bridge 只返回
-  link/reserved refs，不能证明运行中。
+- Customer Assistant 有真实 subagent lifecycle；AI Assistant 默认 link-only
+  bridge 已 fail closed，226.6 才接入可证明的共享 child lifecycle。
 
 ## Architecture Decision
 
@@ -70,7 +71,6 @@
 
 ## Next Action
 
-226.4 Builder GREEN，Checker `ALL GREEN`，Reviewer `PASS`，安全审查无未关闭
-Critical/High。下一步执行 226.5 TDD preflight，并取得 API 退出后 durable
-completion、双 worker takeover/late-write fencing、SSE 短 session 与
-cancel/pause/lease loss 停止写入的 RED。
+226.5 Builder GREEN，Checker `ALL GREEN`，Reviewer `PASS`，安全/HA 审查无
+未关闭 Critical/High。下一步执行 226.6 TDD preflight，取得 stable activity
+identity、duplicate/reordered event projection 与真实 child lifecycle 的 RED。

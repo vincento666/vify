@@ -5,7 +5,7 @@
     mode: Closed Loop
     contract: specs/226-ai-assistant-runtime-convergence-shell/tasks.md
     decision: docs/adr/0005-ai-assistant-runtime-job-substrate.md
-    active unit: 226.5
+    active unit: 226.6
     state: READY
     branch: codex/spec-226-agent-harness-convergence
 
@@ -63,13 +63,13 @@ durable `runtime_jobs` 的领域中立执行底座，补齐可信身份与 HA，
 
 ## Next Action
 
-执行 `tdd` preflight，取得 API 进程退出后 queued run 无法完成、双 worker
-expired lease/late writer、SSE 长连接持有 DB session，以及 cancel/pause/lease
-loss 后继续写 event/effect 的可观察 RED。
+执行 `tdd` preflight，取得 sequence range 变化导致 activity identity 漂移、
+duplicate/reordered event 导致 projection 回退，以及 link-only child 被错误投影为
+running subagent 的可观察 RED。
 
 ## Previous Closed State
 
-226.1/226.2/226.3/226.4 已分别通过 Builder、Checker、Reviewer 和 selective
-Slice Commit Gate；历史 Runtime V2/Workflow、Spec-225、Spec 188/190 与
+226.1-226.5 已分别通过 Builder、Checker、Reviewer 和 selective Slice Commit
+Gate；历史 Runtime V2/Workflow、Spec-225、Spec 188/190 与
 Spec 224 的行为和证据继续由各自 spec、artifact 与 git 历史承载，不再复制到
 CURRENT。

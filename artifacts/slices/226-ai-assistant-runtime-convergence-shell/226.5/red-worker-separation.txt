@@ -1,0 +1,13 @@
+Slice: 226.5 API/worker/frontend separation
+Date: 2026-07-18
+
+Observed RED:
+
+- AI router owned an autonomous ThreadPoolExecutor, lock, and in-flight set.
+- The browser called `/runs/{id}/worker/process` immediately after async start.
+- The worker endpoint accepted execution configuration from a second request.
+
+Meaning:
+The product shell, API process, and execution worker were coupled. Browser
+disconnect/API restart semantics were not durable, and the same run had two
+potential configuration authorities.

@@ -798,7 +798,6 @@ import {
   listAiAssistantSessionRuns,
   listAiAssistantSessions,
   buildAiAssistantMessagePayload,
-  processAiAssistantRunWorker,
   startAiAssistantMessage,
   type AiAssistantEvent,
   type AiAssistantApproval,
@@ -1118,9 +1117,6 @@ async function submit() {
     await loadSessions()
     await refreshRuns(result.sessionId, result.runId)
     openRunEventStream(result.runId)
-    void processAiAssistantRunWorker(result.runId, runtimeConfig.value).catch(() => {
-      scheduleInspectorRefresh(result.runId)
-    })
   } finally {
     if (!runId.value || runStatus.value !== 'RUNNING') sending.value = false
   }

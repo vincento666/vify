@@ -188,7 +188,7 @@ class AiAssistantStreamingE2ETest(unittest.TestCase):
         self.assertEqual(worker_errors, [])
         self.assertEqual(final_snapshot["run"]["status"], "COMPLETED")
 
-    def test_async_live_worker_uses_worker_request_model_config_without_persisting_api_key(self) -> None:
+    def test_async_live_queue_persists_safe_model_ref_without_raw_api_key(self) -> None:
         self._fake_client = FakeDeltaChatClient(
             streamed_chunks=["配置", "生效"],
             response_payload={
@@ -223,29 +223,17 @@ class AiAssistantStreamingE2ETest(unittest.TestCase):
                     },
                 },
             ).json()["data"]
-            worker = client.post(
-                f"/api/v1/ai-assistant/runs/{started['runId']}/worker/process",
-                json={
-                    "modelConfig": {
-                        "provider": "openrouter",
-                        "baseUrl": "https://openrouter.ai/api/v1",
-                        "model": "qwen/start-safe-config",
-                        "apiKey": "sk-worker-temp",
-                        "temperature": 0,
-                        "maxTokens": 128,
-                    }
-                },
-            )
             snapshot = client.get(f"/api/v1/ai-assistant/runs/{started['runId']}/snapshot").json()["data"]
 
-        self.assertEqual(worker.status_code, 200, worker.text)
-        self.assertEqual(self._fake_client.captured_payload["model"], "qwen/start-safe-config")
+        self.assertEqual(started["executionMode"], "durable_worker")
+        self.assertIn("/api/v1/runtime-jobs/", started["runtimeJobRef"])
+        self.assertEqual(snapshot["run"]["status"], "QUEUED")
         runtime_request = snapshot["checkpoint"]["request"]
         self.assertEqual(runtime_request["modelConfig"]["model"], "qwen/start-safe-config")
         self.assertTrue(runtime_request["modelConfig"]["hasApiKey"])
         self.assertNotIn("apiKey", runtime_request["modelConfig"])
 
-    def test_worker_rejects_divergent_request_model_config(self) -> None:
+    def test_deprecated_worker_shim_ignores_divergent_request_model_config(self) -> None:
         self._fake_client = FakeDeltaChatClient(
             streamed_chunks=["不应", "执行"],
             response_payload={
@@ -268,7 +256,7 @@ class AiAssistantStreamingE2ETest(unittest.TestCase):
                 json={
                     "message": "worker 请求不能改变排队时的执行模型",
                     "idempotencyKey": "streaming-e2e-worker-model-config-drift",
-                    "modelMode": "live",
+                    "modelMode": "deterministic",
                     "approvalMode": "smart_approval",
                     "modelConfig": {
                         "provider": "openrouter",
@@ -296,10 +284,16 @@ class AiAssistantStreamingE2ETest(unittest.TestCase):
             snapshot = client.get(f"/api/v1/ai-assistant/runs/{started['runId']}/snapshot").json()["data"]
             events = client.get(f"/api/v1/ai-assistant/runs/{started['runId']}/events").json()["data"]["list"]
 
-        self.assertEqual(worker.status_code, 409, worker.text)
+        self.assertEqual(worker.status_code, 200, worker.text)
+        self.assertTrue(worker.json()["data"]["deprecation"]["deprecated"])
+        self.assertTrue(worker.json()["data"]["deprecation"]["requestPayloadIgnored"])
         self.assertEqual(self._fake_client.captured_payloads, [])
-        self.assertEqual(snapshot["run"]["status"], "QUEUED")
-        self.assertNotIn("run.worker_started", [event["type"] for event in events])
+        self.assertEqual(snapshot["run"]["status"], "COMPLETED")
+        self.assertIn("run.worker_started", [event["type"] for event in events])
+        self.assertEqual(
+            snapshot["checkpoint"]["request"]["modelConfig"]["model"],
+            "qwen/queued-config",
+        )
 
     def test_cancelled_deterministic_tool_run_does_not_overwrite_terminal_control_with_completion(self) -> None:
         tool_started = threading.Event()

@@ -52,10 +52,12 @@ class AiAssistantRepository:
         session: Session,
         *,
         access_scope: AiAssistantAccessScope | None = None,
+        write_guard: Callable[[], None] | None = None,
     ) -> None:
         register_ai_assistant_tables()
         self._session = session
         self._access_scope = access_scope or local_ai_assistant_scope()
+        self._write_guard = write_guard
         self._session_table = Base.metadata.tables["ai_assistant_session"]
         self._run_table = Base.metadata.tables["ai_assistant_run"]
         self._message_table = Base.metadata.tables["ai_assistant_message"]
@@ -76,6 +78,14 @@ class AiAssistantRepository:
     @property
     def access_scope(self) -> AiAssistantAccessScope:
         return self._access_scope
+
+    @property
+    def write_guard(self) -> Callable[[], None] | None:
+        return self._write_guard
+
+    def _assert_write_allowed(self) -> None:
+        if self._write_guard is not None:
+            self._write_guard()
 
     def _scoped_run_ids(self) -> sa.Select:
         return sa.select(self._run_table.c.id).where(
@@ -142,6 +152,7 @@ class AiAssistantRepository:
         model: str,
         started_at: datetime | None = None,
     ) -> dict[str, Any]:
+        self._assert_write_allowed()
         run = self.get_run(run_id)
         assistant_session = self.get_session(session_id)
         if run is None or assistant_session is None or int(run["session_id"]) != session_id:
@@ -194,6 +205,7 @@ class AiAssistantRepository:
         usage: NormalizedModelUsage,
         completed_at: datetime | None = None,
     ) -> dict[str, Any]:
+        self._assert_write_allowed()
         existing = self.get_model_usage_call(run_id=run_id, call_id=call_id)
         if existing is None:
             raise KeyError("model usage call is outside the current scope")
@@ -237,6 +249,7 @@ class AiAssistantRepository:
         call_id: str,
         completed_at: datetime | None = None,
     ) -> dict[str, Any]:
+        self._assert_write_allowed()
         now = _usage_utcnow()
         self._session.execute(
             self._model_usage_table.update()
@@ -273,6 +286,7 @@ class AiAssistantRepository:
         started_at: datetime | None = None,
         completed_at: datetime | None = None,
     ) -> dict[str, Any]:
+        self._assert_write_allowed()
         self.begin_model_usage_call(
             session_id=session_id,
             run_id=run_id,
@@ -903,6 +917,7 @@ class AiAssistantRepository:
         cooldown_until: datetime,
         reason: str,
     ) -> dict[str, Any]:
+        self._assert_write_allowed()
         current = self.get_tool_circuit_breaker(breaker_key)
         failures = int(current["failure_count"]) + 1 if current else 1
         now = datetime.now()
@@ -943,6 +958,7 @@ class AiAssistantRepository:
         return self.get_tool_circuit_breaker(breaker_key) or {}
 
     def close_tool_circuit_breaker(self, breaker_key: str) -> None:
+        self._assert_write_allowed()
         self._session.execute(
             self._tool_circuit_breaker_table.update()
             .where(self._tool_circuit_breaker_table.c.breaker_key == breaker_key)
@@ -951,6 +967,7 @@ class AiAssistantRepository:
         self._session.commit()
 
     def enter_tool_circuit_half_open(self, breaker_key: str) -> None:
+        self._assert_write_allowed()
         self._session.execute(
             self._tool_circuit_breaker_table.update()
             .where(
@@ -970,6 +987,7 @@ class AiAssistantRepository:
         reason: str,
         audit_span_id: str | None = None,
     ) -> dict[str, Any]:
+        self._assert_write_allowed()
         if next_state not in {"OPEN", "CLOSED"}:
             raise ValueError(f"Circuit override state is invalid: {next_state}")
         current = self.get_tool_circuit_breaker(breaker_key)
@@ -1026,6 +1044,7 @@ class AiAssistantRepository:
         idempotency_key: str | None,
         request_hash: str,
     ) -> dict[str, Any]:
+        self._assert_write_allowed()
         run = self.get_run(run_id)
         if run is None or int(run["session_id"]) != session_id:
             raise KeyError(f"AI Assistant run not found for tool operation: {run_id}")
@@ -1059,6 +1078,7 @@ class AiAssistantRepository:
         self,
         **values: Any,
     ) -> tuple[dict[str, Any], bool]:
+        self._assert_write_allowed()
         operation_id = str(values["operation_id"])
         existing = self.get_tool_operation(operation_id)
         if existing is not None:
@@ -1101,6 +1121,7 @@ class AiAssistantRepository:
         expected_status: str,
         next_status: str,
     ) -> dict[str, Any] | None:
+        self._assert_write_allowed()
         result = self._session.execute(
             self._tool_operation_table.update()
             .where(
@@ -1123,6 +1144,7 @@ class AiAssistantRepository:
         output_payload: dict[str, Any],
         response_hash: str | None = None,
     ) -> dict[str, Any]:
+        self._assert_write_allowed()
         now = datetime.now()
         self._session.execute(
             self._tool_operation_table.update()
@@ -1146,6 +1168,7 @@ class AiAssistantRepository:
         return updated
 
     def mark_tool_operation_unknown(self, operation_id: str, *, retention_until: datetime) -> dict[str, Any]:
+        self._assert_write_allowed()
         self._session.execute(
             self._tool_operation_table.update()
             .where(
@@ -1171,6 +1194,7 @@ class AiAssistantRepository:
         evidence_ref: str,
         next_status: str,
     ) -> dict[str, Any]:
+        self._assert_write_allowed()
         if authority not in {"operator", "deterministic_adapter", "test_fixture"}:
             raise PermissionError(f"UNKNOWN release authority is not allowed: {authority}")
         if next_status not in {"SUCCEEDED", "FAILED", "COMPENSATED"}:
@@ -1244,6 +1268,7 @@ class AiAssistantRepository:
         status: str,
         request_hash: str,
     ) -> dict[str, Any]:
+        self._assert_write_allowed()
         if self.get_tool_operation(operation_id) is None:
             raise KeyError(f"AI Assistant tool operation not found for attempt: {operation_id}")
         now = datetime.now()
@@ -1298,6 +1323,7 @@ class AiAssistantRepository:
         response_hash: str | None = None,
         error_class: str | None = None,
     ) -> dict[str, Any]:
+        self._assert_write_allowed()
         values: dict[str, Any] = {
             "status": status,
             "response_hash": response_hash,
@@ -1395,6 +1421,7 @@ class AiAssistantRepository:
         return [dict(row) for row in rows]
 
     def update_session_context(self, session_id: int, context: dict[str, Any]) -> dict[str, Any]:
+        self._assert_write_allowed()
         now = datetime.now()
         self._session.execute(
             self._session_table.update()
@@ -1546,6 +1573,7 @@ class AiAssistantRepository:
         return dict(row) if row else None
 
     def update_run_input_payload(self, run_id: int, input_payload: dict[str, Any]) -> dict[str, Any]:
+        self._assert_write_allowed()
         existing = self.get_run(run_id)
         if existing is None:
             raise KeyError(f"AI Assistant run disappeared: {run_id}")
@@ -1578,6 +1606,7 @@ class AiAssistantRepository:
         response_payload: dict[str, Any] | None = None,
         completed: bool = False,
     ) -> dict[str, Any]:
+        self._assert_write_allowed()
         values: dict[str, Any] = {"status": status, "updated_at": datetime.now()}
         if response_payload is not None:
             values["response_payload"] = response_payload
@@ -1608,6 +1637,7 @@ class AiAssistantRepository:
         next_status: str,
         input_payload: dict[str, Any],
     ) -> dict[str, Any] | None:
+        self._assert_write_allowed()
         now = datetime.now()
         result = self._session.execute(
             self._run_table.update()
@@ -1644,6 +1674,7 @@ class AiAssistantRepository:
         return [dict(row) for row in rows]
 
     def complete_run(self, run_id: int, response_payload: dict[str, Any], status: str = "COMPLETED") -> dict[str, Any]:
+        self._assert_write_allowed()
         now = datetime.now()
         protected_terminal_statuses = tuple({"CANCELLED", "COMPLETED", "FAILED", "DENIED"} - {status})
         result = self._session.execute(
@@ -1684,6 +1715,7 @@ class AiAssistantRepository:
         return updated
 
     def append_message(self, session_id: int, role: str, content: str, run_id: int | None = None) -> dict[str, Any]:
+        self._assert_write_allowed()
         if self.get_session(session_id) is None:
             raise KeyError(f"AI Assistant session not found: {session_id}")
         if run_id is not None:
@@ -1734,6 +1766,7 @@ class AiAssistantRepository:
         tool_call_id: int | None = None,
         correlation_ids: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        self._assert_write_allowed()
         now = datetime.now()
         locked_session_id = self._lock_run_for_event_sequence(run_id)
         if locked_session_id != session_id:
@@ -1790,6 +1823,7 @@ class AiAssistantRepository:
         status: str,
         duration_ms: int,
     ) -> dict[str, Any]:
+        self._assert_write_allowed()
         run = self.get_run(run_id)
         if run is None or int(run["session_id"]) != session_id:
             raise KeyError(f"AI Assistant run not found for tool call: {run_id}")
@@ -1836,6 +1870,7 @@ class AiAssistantRepository:
         risk_level: str,
         input_payload: dict[str, Any],
     ) -> dict[str, Any]:
+        self._assert_write_allowed()
         run = self.get_run(run_id)
         if run is None or int(run["session_id"]) != session_id:
             raise KeyError(f"AI Assistant run not found: {run_id}")
@@ -1918,6 +1953,7 @@ class AiAssistantRepository:
         return dict(row) if row else None
 
     def decide_approval(self, approval_id: int, status: str, actor_id: str, reason: str = "") -> dict[str, Any]:
+        self._assert_write_allowed()
         now = datetime.now()
         self._session.execute(
             self._approval_table.update()
@@ -1948,6 +1984,7 @@ class AiAssistantRepository:
         return updated
 
     def cancel_pending_approvals_for_run(self, run_id: int, actor_id: str, reason: str = "") -> int:
+        self._assert_write_allowed()
         now = datetime.now()
         result = self._session.execute(
             self._approval_table.update()
@@ -1969,6 +2006,7 @@ class AiAssistantRepository:
         return _rowcount(result)
 
     def cancel_pending_proposed_actions_for_run(self, run_id: int) -> int:
+        self._assert_write_allowed()
         now = datetime.now()
         result = self._session.execute(
             self._proposed_action_table.update()
@@ -1993,6 +2031,7 @@ class AiAssistantRepository:
         title: str,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
+        self._assert_write_allowed()
         run = self.get_run(run_id)
         approval = self.get_approval(approval_id)
         if (
@@ -2033,12 +2072,14 @@ class AiAssistantRepository:
         owner_tool_call_id: int | None,
         ttl_seconds: int,
     ) -> dict[str, Any]:
+        self._assert_write_allowed()
         bind = self._session.get_bind()
         engine = bind.engine if isinstance(bind, sa.engine.Connection) else bind
         with engine.connect() as connection, Session(bind=connection) as lock_session:
             pinned_repository = AiAssistantRepository(
                 lock_session,
                 access_scope=self._access_scope,
+                write_guard=self._write_guard,
             )
             return pinned_repository._acquire_resource_lock_locked(
                 resource_key=resource_key,
@@ -2136,6 +2177,7 @@ class AiAssistantRepository:
         owner_run_id: int,
         fencing_token: int,
     ) -> bool:
+        self._assert_write_allowed()
         now = datetime.now()
         result = self._session.execute(
             self._resource_lock_table.update()
@@ -2161,6 +2203,7 @@ class AiAssistantRepository:
         fencing_token: int,
         ttl_seconds: int,
     ) -> bool:
+        self._assert_write_allowed()
         now = datetime.now()
         result = self._session.execute(
             self._resource_lock_table.update()

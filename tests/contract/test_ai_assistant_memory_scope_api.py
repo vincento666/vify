@@ -1,6 +1,5 @@
 import os
 import tempfile
-import time
 import unittest
 from collections.abc import Generator
 
@@ -10,6 +9,9 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.core.database import get_session
 from app.main import app
+from app.modules.ai_assistant.runtime_job_worker import AI_ASSISTANT_RUNTIME_JOB_TYPE
+from app.modules.runtime.composition import build_runtime_job_worker
+from app.modules.runtime.infra.runtime_job_repository import RuntimeJobRepository
 from tests.support.mysql import mysql8_unittest_database
 
 
@@ -31,23 +33,11 @@ class AiAssistantMemoryScopeApiContractTest(unittest.TestCase):
         self._workspace_a = tempfile.TemporaryDirectory()
         self._workspace_b = tempfile.TemporaryDirectory()
         self._previous_workspace_root = os.environ.get("HIFY_WORKSPACE_ROOT")
-        self._previous_worker_delay = getattr(
-            app.state,
-            "ai_assistant_autonomous_worker_delay_seconds",
-            None,
-        )
         os.environ["HIFY_WORKSPACE_ROOT"] = self._workspace_a.name
         app.dependency_overrides[get_session] = self._session_override
         app.dependency_overrides[get_settings] = lambda: Settings(_env_file=None)
 
     def tearDown(self) -> None:
-        if self._previous_worker_delay is None:
-            app.state.__dict__["_state"].pop(
-                "ai_assistant_autonomous_worker_delay_seconds",
-                None,
-            )
-        else:
-            app.state.ai_assistant_autonomous_worker_delay_seconds = self._previous_worker_delay
         if self._previous_workspace_root is None:
             os.environ.pop("HIFY_WORKSPACE_ROOT", None)
         else:
@@ -168,8 +158,7 @@ class AiAssistantMemoryScopeApiContractTest(unittest.TestCase):
         self.assertEqual(tenant_a_sessions["total"], 1)
         self.assertEqual(tenant_b_sessions["total"], 0)
 
-    def test_autonomous_worker_preserves_request_scope(self) -> None:
-        app.state.ai_assistant_autonomous_worker_delay_seconds = 0
+    def test_standalone_worker_restores_request_scope_from_durable_run(self) -> None:
         alice_headers = {"X-Hify-Actor-Id": "alice"}
         with TestClient(app) as client:
             session_id = client.post(
@@ -186,18 +175,26 @@ class AiAssistantMemoryScopeApiContractTest(unittest.TestCase):
                 },
             ).json()["data"]
 
-            status = started["status"]
-            for _ in range(100):
-                run = client.get(
-                    f"/api/v1/ai-assistant/runs/{started['runId']}",
-                    headers=alice_headers,
-                ).json()["data"]
-                status = run["status"]
-                if status in {"COMPLETED", "FAILED", "DENIED", "CANCELLED"}:
-                    break
-                time.sleep(0.02)
+        with self._factory() as session:
+            job = RuntimeJobRepository(session).get_by_run(
+                int(started["runId"]),
+                owner_type="AI_ASSISTANT",
+                job_type=AI_ASSISTANT_RUNTIME_JOB_TYPE,
+            )
+            self.assertIsNotNone(job)
+            worker_result = build_runtime_job_worker(
+                session,
+                owner="ai-assistant",
+                worker_id="scoped-standalone-worker",
+            ).run_once(job_id=int(job["id"]))
+        with TestClient(app) as client:
+            run = client.get(
+                f"/api/v1/ai-assistant/runs/{started['runId']}",
+                headers=alice_headers,
+            ).json()["data"]
 
-        self.assertEqual(status, "COMPLETED")
+        self.assertEqual(worker_result["status"], "COMPLETED")
+        self.assertEqual(run["status"], "COMPLETED")
 
     def test_pending_approvals_are_scope_filtered(self) -> None:
         alice_headers = {"X-Hify-Actor-Id": "alice"}

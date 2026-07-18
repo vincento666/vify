@@ -11,8 +11,14 @@ from app.core.database import get_session
 from app.main import app
 from app.modules.ai_assistant.domain.harness import AiAssistantHarnessService
 from app.modules.ai_assistant.domain.live_model import LivePlannerConfig, QwenLivePlanner
+from app.modules.ai_assistant.infra.event_stream_reader import (
+    AiAssistantEventStreamPage,
+)
 from app.modules.ai_assistant.infra.repository import AiAssistantRepository
-from app.modules.ai_assistant.web.router import get_ai_assistant_service
+from app.modules.ai_assistant.web.router import (
+    get_ai_assistant_event_stream_reader,
+    get_ai_assistant_service,
+)
 from app.modules.chat.domain.llm_request import FakeOpenAIChatClient
 from tests.support.mysql import mysql8_unittest_database
 
@@ -139,9 +145,13 @@ class AiAssistantStreamWorkerSeparationContractTest(unittest.TestCase):
     def setUp(self) -> None:
         self._service = _StreamOnlyService()
         app.dependency_overrides[get_ai_assistant_service] = lambda: self._service
+        app.dependency_overrides[get_ai_assistant_event_stream_reader] = (
+            lambda: _StreamOnlyEventReader(self._service)
+        )
 
     def tearDown(self) -> None:
         app.dependency_overrides.pop(get_ai_assistant_service, None)
+        app.dependency_overrides.pop(get_ai_assistant_event_stream_reader, None)
 
     def test_stream_route_subscribes_without_processing_queued_run(self) -> None:
         with TestClient(app) as client:
@@ -185,6 +195,25 @@ class _StreamOnlyService:
 
     def process_queued_run(self, run_id: int) -> None:
         self.process_called = True
+
+
+class _StreamOnlyEventReader:
+    def __init__(self, service: _StreamOnlyService) -> None:
+        self._service = service
+
+    def read(
+        self,
+        run_id: int,
+        *,
+        after_sequence: int,
+    ) -> AiAssistantEventStreamPage:
+        return AiAssistantEventStreamPage(
+            run=self._service.get_run(run_id),
+            events=self._service.list_run_events(
+                run_id,
+                after_sequence=after_sequence,
+            ),
+        )
 
 
 def _model_response(content: str) -> dict[str, Any]:

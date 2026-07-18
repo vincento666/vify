@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from app.modules.ai_assistant.runtime_job_worker import register_ai_assistant_runtime_job_handler
+from app.modules.ai_assistant.runtime_job_worker import (
+    fail_ai_assistant_runtime_job,
+    register_ai_assistant_runtime_job_handler,
+)
 from app.modules.runtime.domain.runtime_job_registry import RuntimeJobHandlerRegistry
 from app.modules.runtime.domain.runtime_job_worker import RuntimeJobWorker
 from app.modules.runtime.runtime_job_worker import build_registered_runtime_job_worker
@@ -37,13 +40,31 @@ def build_runtime_job_worker(
         worker_id=worker_id,
         worker_id_prefix=f"runtime-worker-{owner.lower()}",
         lease_seconds=lease_seconds,
-        on_terminal_failure=lambda job, error: fail_runtime_job(
+        on_terminal_failure=lambda job, error: _fail_registered_runtime_job(
             session,
-            int(job["run_id"]),
-            job=job,
-            error=error,
+            job,
+            error,
             event_stream_bus=event_stream_bus,
         ),
+    )
+
+
+def _fail_registered_runtime_job(
+    session: Session,
+    job: dict[str, object],
+    error: str,
+    *,
+    event_stream_bus: RuntimeEventStreamBus | None,
+) -> None:
+    if str(job.get("owner_type") or "").upper() == "AI_ASSISTANT":
+        fail_ai_assistant_runtime_job(session, job, error=error)
+        return
+    fail_runtime_job(
+        session,
+        int(job["run_id"]),
+        job=job,
+        error=error,
+        event_stream_bus=event_stream_bus,
     )
 
 

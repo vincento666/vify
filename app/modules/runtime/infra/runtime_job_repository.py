@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.database import Base
 from app.core.db_write import insert_and_fetch
 from app.core.schema import register_baseline_tables
+from app.modules.runtime.domain.runtime_job_worker import RuntimeJobLeaseLost
 from app.modules.runtime.domain.job_payload import validate_durable_job_payload
 
 register_baseline_tables()
@@ -174,6 +175,24 @@ class RuntimeJobRepository:
         ).mappings().all()
         return [dict(row) for row in rows]
 
+    def count_active(
+        self,
+        *,
+        owner_types: tuple[str, ...] | None = None,
+    ) -> int:
+        conditions = [
+            self._job.c.deleted.is_(False),
+            self._job.c.status.in_(("QUEUED", "RUNNING")),
+        ]
+        owner_filter = _normalize_owner_types(owner_types)
+        if owner_filter is not None:
+            conditions.append(self._job.c.owner_type.in_(owner_filter))
+        return int(
+            self._session.execute(
+                sa.select(sa.func.count()).select_from(self._job).where(*conditions)
+            ).scalar_one()
+        )
+
     def list_jobs(
         self,
         *,
@@ -325,6 +344,8 @@ class RuntimeJobRepository:
                 self._job.c.status == "RUNNING",
                 self._job.c.lease_owner == worker_id,
                 self._job.c.lease_token == (lease_token or self._lease_token_for(job_id)),
+                self._job.c.lease_expires_at.is_not(None),
+                self._job.c.lease_expires_at > now,
                 self._job.c.deleted.is_(False),
             )
             .values(
@@ -348,6 +369,8 @@ class RuntimeJobRepository:
                         self._job.c.status == "RUNNING",
                         self._job.c.lease_owner == worker_id,
                         self._job.c.lease_token == (lease_token or self._lease_token_for(job_id)),
+                        self._job.c.lease_expires_at.is_not(None),
+                        self._job.c.lease_expires_at > now,
                         self._job.c.deleted.is_(False),
                     )
                     .values(status="COMPLETED", finished_at=now, lease_expires_at=None, updated_at=now)
@@ -408,6 +431,8 @@ class RuntimeJobRepository:
                 self._job.c.status == "RUNNING",
                 self._job.c.lease_owner == worker_id,
                 self._job.c.lease_token == (lease_token or self._lease_token_for(job_id)),
+                self._job.c.lease_expires_at.is_not(None),
+                self._job.c.lease_expires_at > now,
                 self._job.c.deleted.is_(False),
             )
             .values(**values)
@@ -416,18 +441,63 @@ class RuntimeJobRepository:
         self._session.commit()
         return self._required(job_id)
 
-    def cancel_by_run(self, run_id: int, *, reason: str = "cancelled") -> dict[str, Any] | None:
-        row = self.get_by_run(run_id)
+    def cancel_by_run(
+        self,
+        run_id: int,
+        *,
+        owner_type: str | None = None,
+        job_type: str = "runtime_v2_completion",
+        reason: str = "cancelled",
+    ) -> dict[str, Any] | None:
+        row = self.get_by_run(
+            run_id,
+            owner_type=owner_type,
+            job_type=job_type,
+        )
         if row is None or row["status"] in {"COMPLETED", "FAILED", "CANCELLED"}:
             return row
         now = datetime.now()
         self._session.execute(
             self._job.update()
             .where(self._job.c.id == int(row["id"]))
-            .values(status="CANCELLED", last_error=reason, finished_at=now, lease_expires_at=None, updated_at=now)
+            .values(
+                status="CANCELLED",
+                last_error=reason,
+                lease_owner="",
+                lease_token="",
+                finished_at=now,
+                lease_expires_at=None,
+                updated_at=now,
+            )
         )
         self._session.commit()
         return self._required(int(row["id"]))
+
+    def requeue_cancelled(self, job_id: int) -> dict[str, Any]:
+        result = self._session.execute(
+            self._job.update()
+            .where(
+                self._job.c.id == job_id,
+                self._job.c.status == "CANCELLED",
+                self._job.c.deleted.is_(False),
+            )
+            .values(
+                status="QUEUED",
+                available_at=None,
+                lease_owner="",
+                lease_token="",
+                lease_expires_at=None,
+                last_heartbeat_at=None,
+                finished_at=None,
+                last_error=None,
+                updated_at=datetime.now(),
+            )
+        )
+        if result.rowcount != 1:
+            self._session.rollback()
+            raise RuntimeError(f"Runtime job {job_id} is not cancelled")
+        self._session.commit()
+        return self._required(job_id)
 
     def list_dlq(self, *, owner_types: tuple[str, ...] | None = None) -> list[dict[str, Any]]:
         conditions = [
@@ -589,11 +659,38 @@ class RuntimeJobRepository:
             raise RuntimeError(f"Runtime job {job_id} not found")
         return row
 
+    def assert_lease_owned(
+        self,
+        job_id: int,
+        *,
+        worker_id: str,
+        lease_token: str,
+    ) -> None:
+        now = datetime.now()
+        owned = self._session.execute(
+            sa.select(self._job.c.id).where(
+                self._job.c.id == job_id,
+                self._job.c.status == "RUNNING",
+                self._job.c.lease_owner == worker_id,
+                self._job.c.lease_token == lease_token,
+                self._job.c.lease_expires_at.is_not(None),
+                self._job.c.lease_expires_at > now,
+                self._job.c.deleted.is_(False),
+            )
+        ).scalar_one_or_none()
+        if owned is None:
+            self._session.rollback()
+            raise RuntimeJobLeaseLost(
+                f"Runtime job {job_id} lease is no longer owned by {worker_id}"
+            )
+
     def _ensure_owned_update(self, rowcount: int, job_id: int) -> None:
         if rowcount == 1:
             return
         self._session.rollback()
-        raise RuntimeError(f"Runtime job {job_id} lease is no longer owned by this worker")
+        raise RuntimeJobLeaseLost(
+            f"Runtime job {job_id} lease is no longer owned by this worker"
+        )
 
     def _lease_token_for(self, job_id: int) -> str:
         row = self.get(job_id)

@@ -8,8 +8,9 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.core.database import get_session
 from app.main import app
-from app.modules.ai_assistant.domain.harness import AiAssistantHarnessService
-from app.modules.ai_assistant.infra.repository import AiAssistantRepository
+from app.modules.ai_assistant.runtime_job_worker import AI_ASSISTANT_RUNTIME_JOB_TYPE
+from app.modules.runtime.composition import build_runtime_job_worker
+from app.modules.runtime.infra.runtime_job_repository import RuntimeJobRepository
 from tests.support.mysql import mysql8_unittest_database
 
 
@@ -62,7 +63,7 @@ class AiAssistantSessionRuntimeE2ETest(unittest.TestCase):
         self.assertEqual(completed_snapshot["run"]["status"], "COMPLETED")
         self.assertEqual(completed_snapshot["checkpoint"]["status"], "COMPLETED")
 
-    def test_worker_processes_queued_run_without_stream_and_records_durable_lease(self) -> None:
+    def test_worker_processes_queued_run_without_stream_and_records_safe_lease_metadata(self) -> None:
         with TestClient(app) as client:
             session_id = client.post("/api/v1/ai-assistant/sessions", json={"title": "Worker E2E"}).json()["data"][
                 "id"
@@ -72,9 +73,7 @@ class AiAssistantSessionRuntimeE2ETest(unittest.TestCase):
                 json={"message": "worker claim me", "idempotencyKey": "session-runtime-worker-lease"},
             ).json()["data"]
 
-        with self._factory() as session:
-            result = AiAssistantHarnessService(AiAssistantRepository(session)).process_queued_run(started["runId"])
-            self.assertIsNotNone(result)
+        self._process_run(started["runId"])
 
         with TestClient(app) as client:
             snapshot = client.get(f"/api/v1/ai-assistant/runs/{started['runId']}/snapshot").json()["data"]
@@ -82,9 +81,10 @@ class AiAssistantSessionRuntimeE2ETest(unittest.TestCase):
 
         self.assertEqual(snapshot["run"]["status"], "COMPLETED")
         worker = snapshot["checkpoint"]["worker"]
-        self.assertEqual(worker["scope"], "durable-lease")
-        self.assertIn("leaseToken", worker)
-        self.assertIn("leaseExpiresAt", worker)
+        self.assertEqual(worker["scope"], "durable-runtime-job")
+        self.assertIn("runtimeJobId", worker)
+        self.assertIn("leaseFenceHash", worker)
+        self.assertNotIn("leaseToken", worker)
         self.assertIn("run.worker_started", [event["type"] for event in events])
 
     def _session_override(self) -> Generator[Session, None, None]:
@@ -93,8 +93,18 @@ class AiAssistantSessionRuntimeE2ETest(unittest.TestCase):
 
     def _process_run(self, run_id: int) -> None:
         with self._factory() as session:
-            result = AiAssistantHarnessService(AiAssistantRepository(session)).process_queued_run(run_id)
-            self.assertIsNotNone(result)
+            job = RuntimeJobRepository(session).get_by_run(
+                run_id,
+                owner_type="AI_ASSISTANT",
+                job_type=AI_ASSISTANT_RUNTIME_JOB_TYPE,
+            )
+            self.assertIsNotNone(job)
+            result = build_runtime_job_worker(
+                session,
+                owner="ai-assistant",
+                worker_id=f"e2e-worker-{run_id}",
+            ).run_once(job_id=int(job["id"]))
+            self.assertEqual(result["status"], "COMPLETED")
 
 
 def _read_sse_frames(response, count: int) -> list[dict]:

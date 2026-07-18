@@ -1,0 +1,14 @@
+Slice: 226.5 short-session SSE
+Date: 2026-07-18
+
+Command:
+rtk uv run pytest tests/integration/ai_assistant/test_sse_short_sessions.py -q --tb=short
+
+Observed RED:
+Collection failed because `app.modules.ai_assistant.infra.event_stream_reader`
+did not exist. The stream generator captured the request-scoped Harness service
+and SQLAlchemy session for the lifetime of the SSE connection.
+
+Meaning:
+Idle or long AI Assistant streams could retain database pool capacity instead
+of opening a bounded read session per poll.

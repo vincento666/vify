@@ -10,7 +10,7 @@ from functools import lru_cache, partial
 from pathlib import Path
 from threading import Lock
 from time import monotonic, sleep
-from typing import Any, cast
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
@@ -47,6 +47,16 @@ from app.modules.ai_assistant.domain.usage_reporting import (
     validate_usage_range,
 )
 from app.modules.ai_assistant.infra.repository import AiAssistantRepository, IdempotencyConflict
+from app.modules.ai_assistant.infra.event_stream_reader import (
+    AiAssistantRunEventStreamReader,
+)
+from app.modules.ai_assistant.infra.runtime_job_gateway import (
+    AiAssistantRuntimeJobGateway,
+    AiAssistantRuntimeQueueFull,
+)
+from app.modules.ai_assistant.runtime_job_worker import (
+    build_ai_assistant_runtime_job_worker,
+)
 from app.modules.ai_assistant.web.schemas import (
     ApprovalDecisionRequest,
     CreateAiAssistantSessionRequest,
@@ -57,12 +67,6 @@ from app.modules.ai_assistant.web.schemas import (
 
 router = APIRouter(prefix="/api/v1/ai-assistant", tags=["ai-assistant"])
 
-_AUTONOMOUS_WORKER_EXECUTOR = ThreadPoolExecutor(
-    max_workers=4,
-    thread_name_prefix="ai-assistant-worker",
-)
-_AUTONOMOUS_WORKER_LOCK = Lock()
-_AUTONOMOUS_WORKER_IN_FLIGHT: set[int] = set()
 _MEMORY_EXTRACTION_EXECUTOR = ThreadPoolExecutor(
     max_workers=2,
     thread_name_prefix="ai-assistant-memory",
@@ -126,11 +130,7 @@ def get_ai_assistant_service(
     request_context: RequestContext = Depends(require_ai_assistant_read),
 ) -> AiAssistantHarnessService:
     workspace_root = os.environ.get("HIFY_WORKSPACE_ROOT") or os.getcwd()
-    access_scope = access_scope_for_workspace(
-        trusted_tenant_id=request_context.tenant_id,
-        trusted_user_id=request_context.actor_id,
-        trusted_workspace_root=workspace_root,
-    )
+    access_scope = _access_scope_for_request(request_context, workspace_root)
     memory_store, memory_scope = _memory_runtime_for_scope(
         access_scope=access_scope,
         workspace_root=workspace_root,
@@ -170,6 +170,45 @@ def get_ai_assistant_service(
         memory_completion_callback=completion_callback,
         principal_snapshot=request_context.audit_metadata(),
         access_scope=access_scope,
+    )
+
+
+def get_ai_assistant_runtime_job_gateway(
+    session: Session = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> AiAssistantRuntimeJobGateway:
+    return AiAssistantRuntimeJobGateway(
+        session,
+        active_job_limit=settings.ai_assistant_runtime_active_job_limit,
+    )
+
+
+def get_ai_assistant_event_stream_reader(
+    session: Session = Depends(get_session),
+    request_context: RequestContext = Depends(require_ai_assistant_read),
+) -> AiAssistantRunEventStreamReader:
+    workspace_root = os.environ.get("HIFY_WORKSPACE_ROOT") or os.getcwd()
+    reader = AiAssistantRunEventStreamReader(
+        sessionmaker(
+            bind=session.get_bind(),
+            autoflush=False,
+            autocommit=False,
+            expire_on_commit=False,
+        ),
+        access_scope=_access_scope_for_request(request_context, workspace_root),
+    )
+    session.close()
+    return reader
+
+
+def _access_scope_for_request(
+    request_context: RequestContext,
+    workspace_root: str,
+) -> AiAssistantAccessScope:
+    return access_scope_for_workspace(
+        trusted_tenant_id=request_context.tenant_id,
+        trusted_user_id=request_context.actor_id,
+        trusted_workspace_root=workspace_root,
     )
 
 
@@ -586,10 +625,12 @@ def send_message(
 @router.post("/sessions/{session_id}/messages/async")
 def start_message(
     session_id: int,
-    http_request: Request,
     request: SendAiAssistantMessageRequest,
     service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
     settings: Settings = Depends(get_settings),
+    runtime_jobs: AiAssistantRuntimeJobGateway = Depends(
+        get_ai_assistant_runtime_job_gateway
+    ),
     _access: RequestContext = Depends(require_ai_assistant_operate),
 ) -> dict[str, Any]:
     if service.get_session(session_id) is None:
@@ -633,14 +674,20 @@ def start_message(
             ai_assistant_budget=dict(request.ai_assistant_budget),
             model_budget_policy=dict(request.model_budget_policy),
         )
-        _schedule_autonomous_run_worker(
-            run_id=int(result.run["id"]),
-            service=service,
-            model_config=model_config,
-            http_request=http_request,
-        )
+    runtime_job = None
+    if result.run["status"] == "QUEUED":
+        try:
+            runtime_job = runtime_jobs.enqueue(
+                run_id=int(result.run["id"]),
+                session_id=int(result.run["session_id"]),
+            )
+        except AiAssistantRuntimeQueueFull as exc:
+            raise HTTPException(status_code=429, detail=str(exc)) from exc
     payload = _turn_payload(result)
     payload["eventStreamRef"] = f"/api/v1/ai-assistant/runs/{result.run['id']}/events/stream?afterSequence=0"
+    if runtime_job is not None:
+        payload["runtimeJobRef"] = f"/api/v1/runtime-jobs/{runtime_job['id']}"
+        payload["executionMode"] = "durable_worker"
     return success(payload)
 
 
@@ -697,25 +744,31 @@ def stream_run_events(
     heartbeat_ms: int = Query(default=15000, alias="heartbeatMs"),
     test_limit: int | None = Query(default=None, alias="_testLimit"),
     test_heartbeat_limit: int | None = Query(default=None, alias="_testHeartbeatLimit"),
-    service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
+    reader: AiAssistantRunEventStreamReader = Depends(
+        get_ai_assistant_event_stream_reader
+    ),
 ) -> StreamingResponse:
-    if service.get_run(run_id) is None:
-        raise HTTPException(status_code=404, detail="AI Assistant run not found")
+    initial_cursor = _resolve_stream_cursor(after_sequence, last_event_id)
+    try:
+        initial_page = reader.read(run_id, after_sequence=initial_cursor)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="AI Assistant run not found") from exc
 
     def iter_events() -> Any:
-        cursor = _resolve_stream_cursor(after_sequence, last_event_id)
+        cursor = initial_cursor
+        page = initial_page
         emitted = 0
         heartbeats = 0
         next_heartbeat_at = monotonic() + max(heartbeat_ms, 1) / 1000
         while True:
-            rows = service.list_run_events(run_id, after_sequence=cursor)
+            rows = page.events
             for row in rows:
                 cursor = max(cursor, int(row["sequence"]))
                 emitted += 1
                 yield _sse_frame("ai_assistant_event", _event_payload(row))
                 if test_limit is not None and emitted >= test_limit:
                     return
-            run = service.get_run(run_id)
+            run = page.run
             terminal = run is None or run["status"] in {"COMPLETED", "FAILED", "DENIED", "CANCELLED", "WAITING_APPROVAL"}
             if not rows:
                 if heartbeat_ms >= 0 and (test_heartbeat_limit is not None or monotonic() >= next_heartbeat_at):
@@ -727,6 +780,7 @@ def stream_run_events(
                 if terminal:
                     return
             sleep(min(max(heartbeat_ms, 1) / 1000, 0.2))
+            page = reader.read(run_id, after_sequence=cursor)
 
     return StreamingResponse(iter_events(), media_type="text/event-stream")
 
@@ -778,19 +832,40 @@ def process_run_worker(
     run_id: int,
     request: ProcessAiAssistantRunWorkerRequest | None = None,
     service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
-    settings: Settings = Depends(get_settings),
+    session: Session = Depends(get_session),
+    runtime_jobs: AiAssistantRuntimeJobGateway = Depends(
+        get_ai_assistant_runtime_job_gateway
+    ),
     _access: RequestContext = Depends(require_ai_assistant_operate),
 ) -> dict[str, Any]:
-    if service.get_run(run_id) is None:
-        raise HTTPException(status_code=404, detail="AI Assistant run not found")
-    try:
-        result = service.process_queued_run(run_id, model_config=_worker_model_config(request, settings))
-    except RunControlConflict as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    run = result.run if result is not None else service.get_run(run_id)
+    run = service.get_run(run_id)
     if run is None:
         raise HTTPException(status_code=404, detail="AI Assistant run not found")
-    return success(_run_payload(run) | {"checkpoint": _checkpoint_payload(run)})
+    job = runtime_jobs.get(run_id)
+    if job is None and run["status"] == "QUEUED":
+        job = runtime_jobs.enqueue(
+            run_id=run_id,
+            session_id=int(run["session_id"]),
+        )
+    if job is not None and str(job["status"]).upper() in {"QUEUED", "RUNNING"}:
+        build_ai_assistant_runtime_job_worker(
+            session,
+            worker_id=f"api-compat-ai-assistant-{run_id}",
+        ).run_once(job_id=int(job["id"]))
+    run = service.get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="AI Assistant run not found")
+    return success(
+        _run_payload(run)
+        | {
+            "checkpoint": _checkpoint_payload(run),
+            "deprecation": {
+                "deprecated": True,
+                "replacement": "standalone-runtime-worker",
+                "requestPayloadIgnored": request is not None,
+            },
+        }
+    )
 
 
 @router.post("/runs/{run_id}/pause")
@@ -798,6 +873,9 @@ def pause_run(
     run_id: int,
     request: ApprovalDecisionRequest,
     service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
+    runtime_jobs: AiAssistantRuntimeJobGateway = Depends(
+        get_ai_assistant_runtime_job_gateway
+    ),
     request_context: RequestContext = Depends(require_ai_assistant_operate),
 ) -> dict[str, Any]:
     actor_audit = _action_actor_audit(request_context, request.actor_id)
@@ -811,15 +889,18 @@ def pause_run(
         raise HTTPException(status_code=404, detail="AI Assistant run not found") from exc
     except RunControlConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    runtime_jobs.cancel(run_id, reason="run_paused")
     return success(_run_payload(run) | {"checkpoint": _checkpoint_payload(run)})
 
 
 @router.post("/runs/{run_id}/resume")
 def resume_run(
     run_id: int,
-    http_request: Request,
     request: ApprovalDecisionRequest,
     service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
+    runtime_jobs: AiAssistantRuntimeJobGateway = Depends(
+        get_ai_assistant_runtime_job_gateway
+    ),
     request_context: RequestContext = Depends(require_ai_assistant_operate),
 ) -> dict[str, Any]:
     actor_audit = _action_actor_audit(request_context, request.actor_id)
@@ -834,12 +915,13 @@ def resume_run(
     except RunControlConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     if run["status"] == "QUEUED":
-        _schedule_autonomous_run_worker(
-            run_id=run_id,
-            service=service,
-            model_config=None,
-            http_request=http_request,
-        )
+        try:
+            runtime_jobs.resume(run_id)
+        except KeyError:
+            runtime_jobs.enqueue(
+                run_id=run_id,
+                session_id=int(run["session_id"]),
+            )
     return success(_run_payload(run) | {"checkpoint": _checkpoint_payload(run)})
 
 
@@ -848,6 +930,9 @@ def cancel_run(
     run_id: int,
     request: ApprovalDecisionRequest,
     service: AiAssistantHarnessService = Depends(get_ai_assistant_service),
+    runtime_jobs: AiAssistantRuntimeJobGateway = Depends(
+        get_ai_assistant_runtime_job_gateway
+    ),
     request_context: RequestContext = Depends(require_ai_assistant_operate),
 ) -> dict[str, Any]:
     actor_audit = _action_actor_audit(request_context, request.actor_id)
@@ -861,97 +946,8 @@ def cancel_run(
         raise HTTPException(status_code=404, detail="AI Assistant run not found") from exc
     except RunControlConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    runtime_jobs.cancel(run_id, reason="run_cancelled")
     return success(_run_payload(run) | {"checkpoint": _checkpoint_payload(run)})
-
-
-def _schedule_autonomous_run_worker(
-    *,
-    run_id: int,
-    service: AiAssistantHarnessService,
-    model_config: LivePlannerConfig | None,
-    http_request: Request,
-) -> bool:
-    if not bool(getattr(http_request.app.state, "ai_assistant_autonomous_worker_enabled", True)):
-        return False
-    run_key = int(run_id)
-    with _AUTONOMOUS_WORKER_LOCK:
-        if run_key in _AUTONOMOUS_WORKER_IN_FLIGHT:
-            return False
-        _AUTONOMOUS_WORKER_IN_FLIGHT.add(run_key)
-
-    try:
-        session_factory = _worker_session_factory_from_service(service)
-        access_scope = _worker_access_scope_from_service(service)
-        worker_service_kwargs = _worker_service_kwargs(service)
-        delay_seconds = float(getattr(http_request.app.state, "ai_assistant_autonomous_worker_delay_seconds", 0.05))
-        _AUTONOMOUS_WORKER_EXECUTOR.submit(
-            _run_autonomous_worker,
-            run_key,
-            session_factory,
-            access_scope,
-            worker_service_kwargs,
-            model_config,
-            delay_seconds,
-        )
-    except Exception:
-        with _AUTONOMOUS_WORKER_LOCK:
-            _AUTONOMOUS_WORKER_IN_FLIGHT.discard(run_key)
-        raise
-    return True
-
-
-def _run_autonomous_worker(
-    run_id: int,
-    session_factory: sessionmaker[Session],
-    access_scope: AiAssistantAccessScope,
-    service_kwargs: dict[str, Any],
-    model_config: LivePlannerConfig | None,
-    delay_seconds: float,
-) -> None:
-    try:
-        if delay_seconds > 0:
-            sleep(delay_seconds)
-        with session_factory() as session:
-            service = AiAssistantHarnessService(
-                AiAssistantRepository(session, access_scope=access_scope),
-                **service_kwargs,
-            )
-            service.process_queued_run(run_id, model_config=model_config)
-    finally:
-        with _AUTONOMOUS_WORKER_LOCK:
-            _AUTONOMOUS_WORKER_IN_FLIGHT.discard(run_id)
-
-
-def _worker_session_factory_from_service(
-    service: AiAssistantHarnessService,
-) -> sessionmaker[Session]:
-    repository = getattr(service, "_repository")
-    session = getattr(repository, "_session")
-    bind = session.get_bind()
-    return sessionmaker(bind=bind, autoflush=False, autocommit=False, expire_on_commit=False)
-
-
-def _worker_access_scope_from_service(
-    service: AiAssistantHarnessService,
-) -> AiAssistantAccessScope:
-    repository = cast(AiAssistantRepository, getattr(service, "_repository"))
-    return repository.access_scope
-
-
-def _worker_service_kwargs(service: AiAssistantHarnessService) -> dict[str, Any]:
-    return {
-        "tool_registry": getattr(service, "_tools", None),
-        "approval_policy": getattr(service, "_approval_policy", None),
-        "sandbox_policy": getattr(service, "_sandbox_policy", None),
-        "live_planner": getattr(service, "_live_planner", None),
-        "skill_runtime": getattr(service, "_skill_runtime", None),
-        "memory_store": getattr(service, "_memory_store", None),
-        "memory_scope": getattr(service, "_memory_scope", None),
-        "memory_today": getattr(service, "_memory_today", date.today),
-        "memory_completion_callback": getattr(service, "_memory_completion_callback", None),
-        "principal_snapshot": getattr(service, "_principal_snapshot", None),
-        "access_scope": getattr(service, "_access_scope", None),
-    }
 
 
 @router.get("/tools")
@@ -1109,24 +1105,6 @@ def _request_model_config(
     settings: Settings,
 ) -> LivePlannerConfig | None:
     if request.model_config_request is None:
-        return None
-    model_config = request.model_config_request
-    return LivePlannerConfig(
-        provider=model_config.provider or "openrouter",
-        base_url=model_config.base_url or settings.ai_assistant_openrouter_base_url,
-        model=model_config.model or settings.ai_assistant_openrouter_model,
-        api_key=model_config.api_key,
-        api_key_ref=model_config.api_key_ref or f"env:{settings.ai_assistant_openrouter_api_key_env}",
-        temperature=model_config.temperature,
-        max_tokens=model_config.max_tokens,
-    )
-
-
-def _worker_model_config(
-    request: ProcessAiAssistantRunWorkerRequest | None,
-    settings: Settings,
-) -> LivePlannerConfig | None:
-    if request is None or request.model_config_request is None:
         return None
     model_config = request.model_config_request
     return LivePlannerConfig(
