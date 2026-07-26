@@ -1,0 +1,30 @@
+Command:
+rtk uv run pytest tests/unit/runtime_policy/test_route_eval_contract.py tests/unit/runtime_policy/test_replay_service.py tests/unit/runtime_policy/test_governance_validation.py -q --tb=short
+
+Exit: 0
+Result after reviewer repair round 2: 16 passed, 1 warning in 2.90s
+
+Negative coverage:
+- missing replay port fails closed
+- deliberately wrong shared-runner result fails
+- missing required expected evidence fails before runner invocation
+- known_gap cannot create required PASS
+- mismatched recalled candidate evidence fails
+- provider usage above zero fails zero-budget gate
+- required route-contract fields cannot be omitted
+- contradictory provider counters fail budget and consistency gates
+- unexpected runner output fields are removed before report persistence and fail evaluation
+- required and known-gap cases share the full structural contract
+- malformed known-gap evidence invalidates the report
+
+Command:
+rtk uv run ruff check app/modules/runtime_policy/domain/governance.py app/modules/runtime_policy/domain/route_eval.py tests/unit/runtime_policy/test_route_eval_contract.py
+
+Exit: 0
+Result: All checks passed!
+
+Command:
+rtk uv run mypy app/modules/runtime_policy/domain/governance.py app/modules/runtime_policy/domain/route_eval.py
+
+Exit: 0
+Result: Success: no issues found in 2 source files

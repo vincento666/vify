@@ -19,12 +19,12 @@ Evidence: `artifacts/slices/228-runtime-policy-replay-and-uncertainty/228.0/`
 
 ## 228.1 Real-route Evaluation Contract
 
-- [ ] Run `tdd` preflight and record method.
-- [ ] RED: missing injected real-route runner and false-green negative case.
-- [ ] GREEN: `RouteEvalCase`, required/known-gap status, deterministic report,
+- [x] Run `tdd` preflight and record method.
+- [x] RED: missing injected real-route runner and false-green negative case.
+- [x] GREEN: `RouteEvalCase`, required/known-gap status, deterministic report,
   metrics, and zero-provider default.
-- [ ] Unit and missing-evidence negative gates.
-- [ ] Checker/Reviewer; commit `test(runtime-policy): add real route eval contract`.
+- [x] Unit and missing-evidence negative gates.
+- [x] Checker/Reviewer; commit `test(runtime-policy): add real route eval contract`.
 
 Evidence: `artifacts/slices/228-runtime-policy-replay-and-uncertainty/228.1/`
 

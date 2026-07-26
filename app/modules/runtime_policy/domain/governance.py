@@ -1,7 +1,13 @@
+import hashlib
+import json
 from datetime import datetime
 from typing import Any
 
 from app.core.errors import BizError, ErrorCode
+from app.modules.runtime_policy.domain.route_eval import (
+    RouteEvalCase,
+    RuntimeRouteReplayPort,
+)
 from app.modules.runtime_policy.infra.repository import RuntimePolicyRepository
 
 ALLOWED_FALLBACK_TYPES = {"fake", "llm_agent", "existing_agent", "external_webhook"}
@@ -173,11 +179,108 @@ class RuntimePolicyValidationService:
 
 
 class RuntimePolicyReplayService:
+    def __init__(
+        self,
+        route_replay_port: RuntimeRouteReplayPort | None = None,
+    ) -> None:
+        self._route_replay_port = route_replay_port
+
+    def evaluate_route_cases(
+        self,
+        row: dict[str, Any],
+        cases: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        if self._route_replay_port is None:
+            raise ValueError("Runtime route replay port is required")
+        evaluated: list[dict[str, Any]] = []
+        for raw_case in cases:
+            case = RouteEvalCase.from_payload(raw_case)
+            expected = case.expected
+            validation_errors = case.validation_errors()
+            raw_actual = (
+                {}
+                if validation_errors
+                else self._route_replay_port(case.to_payload(), row)
+            )
+            actual, dropped_fields = _sanitize_route_eval_actual(raw_actual)
+            evaluated_case = {
+                "caseId": case.case_id,
+                "caseVersion": case.case_version,
+                "status": case.status,
+                "expected": expected,
+                "actual": actual,
+                "passed": not validation_errors
+                and not dropped_fields
+                and _route_eval_decision_matches(expected, actual),
+            }
+            if validation_errors:
+                evaluated_case["validationErrors"] = validation_errors
+            if dropped_fields:
+                evaluated_case["droppedRunnerFields"] = dropped_fields
+            evaluated.append(evaluated_case)
+        required = [case for case in evaluated if case["status"] == "required"]
+        known_gaps = [case for case in evaluated if case["status"] == "known_gap"]
+        required_passed_count = len([case for case in required if case["passed"]])
+        required_failed_count = len(required) - required_passed_count
+        required_evidence_missing = not required
+        failure_reasons: list[str] = []
+        if required_evidence_missing:
+            failure_reasons.append("route_evaluation.required_evidence_missing")
+        if required_failed_count:
+            failure_reasons.append("route_evaluation.required_case_failed")
+        if any(case.get("validationErrors") for case in evaluated):
+            failure_reasons.append("route_evaluation.case_contract_invalid")
+        if any(case.get("droppedRunnerFields") for case in evaluated):
+            failure_reasons.append("route_evaluation.runner_output_unsafe")
+        provider_usage = _aggregate_provider_usage(
+            [case["actual"] for case in evaluated]
+        )
+        if any(provider_usage.values()):
+            failure_reasons.append("route_evaluation.provider_budget_exceeded")
+        if (
+            provider_usage["liveCalls"] > provider_usage["totalCalls"]
+            or provider_usage["paidCalls"] > provider_usage["totalCalls"]
+        ):
+            failure_reasons.append("route_evaluation.provider_usage_inconsistent")
+        metrics = _route_eval_metrics(evaluated)
+        metrics["providerUsage"] = provider_usage
+        report = _replay_result(
+            row,
+            run_type="route_evaluation",
+            passed=not failure_reasons,
+            result={
+                "caseCount": len(evaluated),
+                "requiredCaseCount": len(required),
+                "requiredPassedCount": required_passed_count,
+                "requiredFailedCount": required_failed_count,
+                "knownGapCount": len(known_gaps),
+                "cases": evaluated,
+            },
+            metrics=metrics,
+            risk_deltas={
+                "handoffRateDelta": 0.0,
+                "clarificationRateDelta": 0.0,
+                "sopMutationRiskDelta": 0.0,
+                "unsupportedActionCount": _unsupported_action_count(
+                    [case["actual"] for case in evaluated]
+                ),
+            },
+            failure_reasons=failure_reasons,
+        )
+        report["reportVersion"] = "route-eval/v1"
+        report["reportHash"] = _stable_report_hash(report)
+        return report
+
     def replay_golden_matrix(self, row: dict[str, Any]) -> dict[str, Any]:
         cases: list[dict[str, Any]] = []
         for case in GOLDEN_MATRIX_CASES:
             actual = _candidate_decision(row, str(case["message"]))
-            expected = dict(case["expected"])
+            expected_payload = case["expected"]
+            expected: dict[str, Any] = (
+                dict(expected_payload)
+                if isinstance(expected_payload, dict)
+                else {}
+            )
             passed = _decision_matches(expected, actual)
             cases.append(
                 {
@@ -715,6 +818,141 @@ def _decision_from_log(log: dict[str, Any]) -> dict[str, Any]:
 
 def _decision_matches(expected: dict[str, Any], actual: dict[str, Any]) -> bool:
     return all(expected.get(key) == actual.get(key) for key in ("action", "sourceLayer", "reasonCode", "mutatesSopState"))
+
+
+def _route_eval_decision_matches(expected: dict[str, Any], actual: dict[str, Any]) -> bool:
+    if "recalledCandidateIds" in expected and list(
+        expected.get("recalledCandidateIds") or []
+    ) != list(actual.get("recalledCandidateIds") or []):
+        return False
+    fields = (
+        ("finalAction", "action"),
+        ("targetId", "targetSopId"),
+        ("clarificationQuestion", "clarificationQuestion"),
+        ("mutatesTaskState", "mutatesSopState"),
+    )
+    return all(
+        expected.get(expected_key) == actual.get(actual_key)
+        for expected_key, actual_key in fields
+        if expected_key in expected
+    )
+
+
+def _sanitize_route_eval_actual(raw: object) -> tuple[dict[str, Any], list[str]]:
+    if not isinstance(raw, dict):
+        return {}, ["<invalid-result>"]
+    allowed_fields = {
+        "action",
+        "sourceLayer",
+        "reasonCode",
+        "targetSopId",
+        "clarificationQuestion",
+        "mutatesSopState",
+        "handoffTriggered",
+        "recalledCandidateIds",
+        "providerUsage",
+        "elapsedMs",
+    }
+    dropped_fields = sorted(str(key) for key in raw if key not in allowed_fields)
+    sanitized: dict[str, Any] = {}
+    for key in allowed_fields & raw.keys():
+        value = raw[key]
+        if key == "recalledCandidateIds":
+            sanitized[key] = [
+                str(candidate_id)
+                for candidate_id in value or []
+            ] if isinstance(value, list | tuple) else []
+        elif key == "providerUsage":
+            sanitized[key] = {
+                usage_key: value.get(usage_key)
+                for usage_key in ("totalCalls", "liveCalls", "paidCalls")
+            } if isinstance(value, dict) else {}
+        elif key in {"mutatesSopState", "handoffTriggered"}:
+            sanitized[key] = bool(value)
+        elif key == "elapsedMs":
+            try:
+                sanitized[key] = max(0, int(value or 0))
+            except (TypeError, ValueError):
+                sanitized[key] = 0
+        elif value is None:
+            sanitized[key] = None
+        else:
+            sanitized[key] = str(value)
+    return sanitized, dropped_fields
+
+
+def _stable_report_hash(report: dict[str, Any]) -> str:
+    payload = json.dumps(report, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _aggregate_provider_usage(decisions: list[dict[str, Any]]) -> dict[str, int]:
+    usage = {"totalCalls": 0, "liveCalls": 0, "paidCalls": 0}
+    for decision in decisions:
+        decision_usage = decision.get("providerUsage")
+        if not isinstance(decision_usage, dict):
+            continue
+        for key in usage:
+            try:
+                usage[key] += max(0, int(decision_usage.get(key) or 0))
+            except (TypeError, ValueError):
+                continue
+    return usage
+
+
+def _route_eval_metrics(cases: list[dict[str, Any]]) -> dict[str, Any]:
+    metrics = _decision_metrics([case["actual"] for case in cases])
+    expected_candidate_count = 0
+    recalled_candidate_count = 0
+    transition_case_count = 0
+    transition_passed_count = 0
+    action_confusion: dict[str, int] = {}
+    clarification_case_count = 0
+    elapsed_ms = 0
+    for case in cases:
+        expected = case["expected"]
+        actual = case["actual"]
+        expected_candidates = {
+            str(candidate_id)
+            for candidate_id in expected.get("recalledCandidateIds") or []
+        }
+        actual_candidates = {
+            str(candidate_id)
+            for candidate_id in actual.get("recalledCandidateIds") or []
+        }
+        expected_candidate_count += len(expected_candidates)
+        recalled_candidate_count += len(expected_candidates & actual_candidates)
+        if "mutatesTaskState" in expected:
+            transition_case_count += 1
+            if bool(expected["mutatesTaskState"]) == bool(actual.get("mutatesSopState")):
+                transition_passed_count += 1
+        expected_action = str(expected.get("finalAction") or "")
+        actual_action = str(actual.get("action") or "")
+        if expected_action:
+            key = f"{expected_action}->{actual_action}"
+            action_confusion[key] = action_confusion.get(key, 0) + 1
+        if expected_action == "CLARIFY":
+            clarification_case_count += 1
+        try:
+            elapsed_ms += max(0, int(actual.get("elapsedMs") or 0))
+        except (TypeError, ValueError):
+            pass
+    metrics.update(
+        {
+            "candidateRecallAtK": _rate(
+                recalled_candidate_count,
+                expected_candidate_count,
+            ),
+            "stateTransitionAccuracy": _rate(
+                transition_passed_count,
+                transition_case_count,
+            ),
+            "actionConfusion": dict(sorted(action_confusion.items())),
+            "clarificationCaseCount": clarification_case_count,
+            "elapsedMs": elapsed_ms,
+        }
+    )
+    return metrics
 
 
 def _decision_metrics(decisions: list[dict[str, Any]]) -> dict[str, Any]:

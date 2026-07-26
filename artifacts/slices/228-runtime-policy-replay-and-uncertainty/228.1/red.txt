@@ -1,0 +1,12 @@
+Command:
+rtk uv run pytest tests/unit/runtime_policy/test_route_eval_contract.py -q --tb=short
+
+Exit: 1
+
+Observed RED:
+RuntimeRouteEvalContractTest.test_wrong_injected_route_result_fails_required_case
+TypeError: RuntimePolicyReplayService() takes no arguments
+
+Verdict: EXPECTED-RED
+Reason: governance replay service has no injected real-route replay port, so a deliberately
+wrong shared-runner result cannot be exercised or rejected.

@@ -4,22 +4,22 @@
 
 - date: 2026-07-26
 - mode: Closed Loop / Goal accepted
-- state: `READY_FOR_228.1_CAPABILITY_RECOVERY_AND_TDD`
+- state: `228.1_ALL_GREEN_READY_FOR_COMMIT_PUSH`
 - active contract: `specs/228-runtime-policy-replay-and-uncertainty/tasks.md`
 - accepted roadmap: `228 -> 229 -> 230 -> 231`
 - ADR: `docs/adr/0010-runtime-route-decision-and-execution-boundary.md`
-- active unit: `228.1`
-- implementation: not started
+- active unit: `228.2`
+- implementation: `228.1` complete; selective commit/push pending
 - live/paid provider calls: `0`
 - production/deploy/PR/merge actions: none
-- checker verdict: `ALL GREEN`; publish gate: `PASS`
-- reviewer verdict: `PASS`
+- checker verdict: `228.1 ALL GREEN` (round 3)
+- reviewer verdict: `228.1 PASS` (round 3; 0 findings)
 
 ## Contract Matrix
 
 | Spec | Status | Dependency | Next Gate |
 |------|--------|------------|-----------|
-| 228 Replay and uncertainty | Accepted; active | none | 228.1 TDD RED |
+| 228 Replay and uncertainty | Active; 228.1 all green | none | 228.2 TDD RED |
 | 229 Routing reliability | Accepted; waiting | Spec 228 Goal Gate | 229.1 TDD RED |
 | 230 Execution boundary | Accepted; waiting | Spec 229 Goal Gate | 230.1 security RED |
 | 231 Composite intent | Accepted; waiting | Spec 230 Goal Gate | 231.1 TDD RED |
@@ -65,9 +65,9 @@ record the exact recovery command/output.
 
 ## Worktree Safety
 
-- Branch: `codex/spec-228-runtime-lab-intent-routing-reliability`
+- Branch: `codex/spec-228-runtime-lab-intent-routing-reliability-560c`
 - Worktree:
-  `/Users/vincento/work/develop/hify-spec-228-runtime-lab-intent-routing`
+  `/Users/vincento/.codex/worktrees/560c/hify`
 - Base: `815cb1c90031a9dfb1e11e325a1ecf6ed48c0441`
 - Merge target: `not-authorized`
 - The original dirty Hify checkout remains out of scope and untouched.
@@ -84,6 +84,6 @@ record the exact recovery command/output.
 
 ## Next Action
 
-Finish Contract Gate review and record evidence. After contract commit/push,
-the new task must run Branch Preflight, restore MySQL capability if required,
-invoke `tdd`, and produce the `228.1` false-green RED before implementation.
+Create the selective 228.1 commit and push the actual task branch. Then restore
+the existing `mysql8` capability and produce the 228.2 governance/shared-route
+parity RED before implementation.

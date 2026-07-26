@@ -6,10 +6,10 @@
     contract: specs/228-runtime-policy-replay-and-uncertainty/tasks.md
     accepted roadmap: Specs 228 -> 229 -> 230 -> 231
     architecture decision: docs/adr/0010-runtime-route-decision-and-execution-boundary.md
-    active unit: 228.1
-    state: READY_FOR_228.1_CAPABILITY_RECOVERY_AND_TDD
-    branch: codex/spec-228-runtime-lab-intent-routing-reliability
-    worktree: /Users/vincento/work/develop/hify-spec-228-runtime-lab-intent-routing
+    active unit: 228.2
+    state: READY_FOR_228.2_MYSQL_CAPABILITY_RECOVERY_AND_TDD
+    branch: codex/spec-228-runtime-lab-intent-routing-reliability-560c
+    worktree: /Users/vincento/.codex/worktrees/560c/hify
 
 ## Goal
 
@@ -69,7 +69,7 @@ gates -> diff/secret review -> independent Checker -> Reviewer -> slice commit
 
 ## Branch Preflight
 
-- Branch: `codex/spec-228-runtime-lab-intent-routing-reliability`
+- Branch: `codex/spec-228-runtime-lab-intent-routing-reliability-560c`
 - Base: `815cb1c90031a9dfb1e11e325a1ecf6ed48c0441`
 - Merge target: `not-authorized`
 - 原 checkout `/Users/vincento/work/develop/hify` 有大量用户/先前 Spec 227
@@ -101,6 +101,6 @@ gates -> diff/secret review -> independent Checker -> Reviewer -> slice commit
 
 ## Next Action
 
-合同 Checker/Reviewer 通过后，在新 Codex 任务执行 Resume Gate：确认 branch、
-HEAD、worktree diff 与本文件一致；按需启动现有 `mysql8` compose 服务；调用唯一
-`tdd` skill 对 `228.1` 建立 injected real-route replay 的可观察 RED。
+228.1 已完成 TDD、独立 Checker `ALL GREEN` 与 Reviewer `PASS`。选择性 commit/push
+后，按需启动现有 `mysql8` compose 服务；对 `228.2` 建立治理 replay 与共享路由
+实现不一致的可观察 RED。

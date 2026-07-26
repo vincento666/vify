@@ -1,0 +1,19 @@
+Targeted reviewer REDs:
+
+1. Required contract evidence
+   test_required_case_omitting_route_contract_fields_fails_closed
+   RED: AssertionError: True is not false
+
+2. Provider counter consistency
+   test_inconsistent_provider_counters_fail_zero_budget
+   RED: AssertionError: True is not false
+
+3. Runner-output sanitization
+   test_runner_output_is_whitelisted_before_report_persistence
+   RED: AssertionError: True is not false
+
+4. Focused typing
+   rtk uv run mypy app/modules/runtime_policy/domain/governance.py app/modules/runtime_policy/domain/route_eval.py
+   RED: Found 5 errors in 2 files
+
+All four targeted regressions are GREEN after directed repair round 1.
