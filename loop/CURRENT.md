@@ -6,8 +6,8 @@
     contract: specs/228-runtime-policy-replay-and-uncertainty/tasks.md
     accepted roadmap: Specs 228 -> 229 -> 230 -> 231
     architecture decision: docs/adr/0010-runtime-route-decision-and-execution-boundary.md
-    active unit: 228.4
-    state: READY_FOR_228.4_DELIVERY
+    active unit: 228.5
+    state: READY_FOR_228.5_GOAL_GATE
     branch: codex/spec-228-runtime-lab-intent-routing-reliability-560c
     worktree: /Users/vincento/.codex/worktrees/560c/hify
 
@@ -101,7 +101,7 @@ gates -> diff/secret review -> independent Checker -> Reviewer -> slice commit
 
 ## Next Action
 
-228.4 完成 RED -> GREEN、最终完整 RuntimeLab integration `136 passed`、
-Browser UAT 四场景、Checker `ALL GREEN` 与 Reviewer `PASS`（0 findings）。
-选择性 commit/push 后记录 delivery snapshot，再进入 `228.5` Contract A
-Goal Gate；Goal Gate 未绿不得激活 Spec 229。
+228.4 已在 `ef02934b` 完成选择性 commit/push，远端 SHA 一致。进入唯一
+`228.5` Contract A Goal Gate：验证 required/known-gap、完整 Spec 228
+回归、API/SSE、MySQL/Browser、diff/secret/migration，并取得独立 Checker
+`ALL GREEN` 与 Reviewer `PASS`。Goal Gate 未绿不得激活 Spec 229。

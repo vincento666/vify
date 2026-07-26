@@ -4,12 +4,12 @@
 
 - date: 2026-07-26
 - mode: Closed Loop / Goal accepted
-- state: `READY_FOR_228.4_DELIVERY`
+- state: `READY_FOR_228.5_GOAL_GATE`
 - active contract: `specs/228-runtime-policy-replay-and-uncertainty/tasks.md`
 - accepted roadmap: `228 -> 229 -> 230 -> 231`
 - ADR: `docs/adr/0010-runtime-route-decision-and-execution-boundary.md`
-- active unit: `228.4`
-- implementation: `228.4` verified; selective delivery pending
+- active unit: `228.5`
+- implementation: `228.4` committed and pushed at `ef02934b`
 - live/paid provider calls: `0`
 - production/deploy/PR/merge actions: none
 - checker verdict: `228.4 ALL GREEN`
@@ -19,7 +19,7 @@
 
 | Spec | Status | Dependency | Next Gate |
 |------|--------|------------|-----------|
-| 228 Replay and uncertainty | Active; 228.4 verified | none | 228.4 delivery |
+| 228 Replay and uncertainty | Active; 228.4 delivered | none | 228.5 Goal Gate |
 | 229 Routing reliability | Accepted; waiting | Spec 228 Goal Gate | 229.1 TDD RED |
 | 230 Execution boundary | Accepted; waiting | Spec 229 Goal Gate | 230.1 security RED |
 | 231 Composite intent | Accepted; waiting | Spec 230 Goal Gate | 231.1 TDD RED |
@@ -141,8 +141,17 @@ record the exact recovery command/output.
   fallback, and idempotent replay; four screenshots read back at `3164x2060`;
 - independent Checker: `ALL GREEN`; independent Reviewer: `PASS`, 0 findings.
 
+## Slice 228.4 Delivery
+
+- selective commit: `ef02934b4a6b7449726fa71f9eee262338b98383`
+- remote branch: `origin/codex/spec-228-runtime-lab-intent-routing-reliability-560c`
+- remote commit: `ef02934b4a6b7449726fa71f9eee262338b98383`
+- local/upstream divergence: `0/0`
+- PR / merge / deploy: none
+
 ## Next Action
 
-Create and push the selective 228.4 implementation commit, record its remote
-delivery snapshot, then run the unique 228.5 Contract A Goal Gate. Do not
-activate Spec 229 before that gate is independently `ALL GREEN` / `PASS`.
+Run the unique 228.5 Contract A Goal Gate. Prove required-case PASS and visible
+known gaps, rerun the full Spec 228 verifier and compatibility/quality gates,
+then obtain independent Checker `ALL GREEN` and Reviewer `PASS`. Do not activate
+Spec 229 before that gate closes.

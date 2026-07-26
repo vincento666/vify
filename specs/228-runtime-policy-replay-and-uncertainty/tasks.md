@@ -57,8 +57,8 @@ Evidence: `artifacts/slices/228-runtime-policy-replay-and-uncertainty/228.3/`
 - [x] RED: targeted question is replaced by generic menu.
 - [x] GREEN: additive route/API/log/replay/frontend projection.
 - [x] Contract, E2E, idempotent replay, Browser UAT, screenshot/report.
-- [x] Checker `ALL GREEN`; Reviewer `PASS`; ready for commit
-  `feat(runtime-lab): preserve targeted clarification`.
+- [x] Checker `ALL GREEN`; Reviewer `PASS`; commit
+  `feat(runtime-lab): preserve targeted clarification` pushed as `ef02934b`.
 
 Evidence: `artifacts/slices/228-runtime-policy-replay-and-uncertainty/228.4/`
 
