@@ -1,0 +1,29 @@
+# E2E And Replay Gate
+
+Command:
+
+`rtk uv run pytest tests/e2e/test_runtime_policy_release_rollback_e2e.py tests/contract/test_runtime_policy_replay_api.py tests/integration/runtime_lab/test_runtime_policy_route_replay_parity.py -q --tb=short`
+
+Result: PASS; `8 passed`.
+
+- release/rollback remains compatible for valid profiles;
+- replay API and shared production-route parity remain green;
+- live/paid provider calls: `0`.
+
+Final post-repair user-path checks:
+
+- `tests/e2e/test_runtime_lab_semantic_api_e2e.py`: `1 passed`;
+- `tests/e2e/test_runtime_policy_release_rollback_e2e.py`: `1 passed`.
+
+Post-Reviewer-repair cache-clear rerun: 2 node IDs, no `lastfailed`.
+
+## Current 228.3 run
+
+Command:
+
+`rtk uv run pytest tests/e2e/test_runtime_lab_semantic_api_e2e.py tests/e2e/test_runtime_policy_release_rollback_e2e.py -q --tb=short`
+
+Result: `2 passed, 1 warning`.
+
+Note: 228.3 remains backend-only; Browser UAT is deferred to 228.4 by the
+frozen plan.

@@ -1,0 +1,28 @@
+# Quality Gate
+
+- Ruff on all affected source/test files: PASS.
+- `git diff --check`: PASS.
+- Diff secret-assignment scan: no matches.
+- `mypy app/modules/runtime_lab/domain/classifier.py
+  tests/unit/runtime_lab/test_uncertainty_policy.py`: PASS.
+- Wider affected-module mypy remains baseline RED in pre-existing imported
+  files (`sop_adapter.py`, runtime-policy response typing, and existing
+  `RuntimeLabService` typing). It is not claimed as PASS; no new error remains
+  in the isolated uncertainty policy.
+- Alembic metadata check remains the previously recorded baseline RED; this
+  slice has no schema/migration change.
+
+## Current 228.3 run
+
+Commands:
+
+- `rtk git diff --check`
+- `rtk uv run ruff check app/modules/runtime_lab/domain/classifier.py app/modules/runtime_lab/domain/service.py app/modules/runtime_policy/domain/governance.py app/modules/runtime_policy/domain/resolver.py app/modules/runtime_policy/domain/service.py tests/unit/runtime_lab/test_uncertainty_policy.py tests/integration/runtime_lab/test_runtime_lab_uncertainty_mutation_gate.py tests/unit/runtime_policy/test_release_service.py tests/unit/runtime_policy/test_resolver.py`
+- `rtk rg -n "(sk-|api[_-]?key|secret|token|password)[[:space:]]*[:=][[:space:]]*['\"]([^$<{])" app/modules/runtime_lab app/modules/runtime_policy tests/unit/runtime_lab tests/integration/runtime_lab tests/unit/runtime_policy specs/228-runtime-policy-replay-and-uncertainty docs/adr/0010-runtime-route-decision-and-execution-boundary.md loop`
+
+Results:
+
+- diff check: PASS;
+- ruff: PASS;
+- secret regex: only documented dummy test fixtures matched; no production
+  credential leak in the slice diff.

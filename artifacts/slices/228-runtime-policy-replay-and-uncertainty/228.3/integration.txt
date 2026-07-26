@@ -1,0 +1,44 @@
+# Contract And Integration Gate
+
+Frozen verifier:
+
+`rtk uv run pytest tests/contract/test_runtime_lab_semantic_evidence_api.py tests/contract/test_runtime_lab_config_api.py tests/integration/runtime_lab/test_runtime_lab_semantic_policy.py tests/integration/runtime_lab/test_runtime_lab_uncertainty_mutation_gate.py -q --tb=short`
+
+Result: PASS; 32 collected tests exited zero.
+
+Post-Reviewer-repair cache-clear rerun: 32 node IDs, no `lastfailed`.
+
+Additional regression matrix:
+
+- uncertainty, semantic policy, and FAQ/SOP conflict:
+  `30 passed`, `29 subtests passed`;
+- FAQ/SOP conflict alone: `5 passed`, `13 subtests passed`;
+- MySQL uncertainty gate proves every uncertain branch returns `CLARIFY`,
+  creates zero tasks, invokes zero SOP starts, and emits no `TASK_STARTED`.
+
+Complete MySQL RuntimeLab integration after directed repair round 1:
+
+`rtk uv run pytest tests/integration/runtime_lab -q --tb=short --cache-clear`
+
+Result: PASS. Pytest cache records 133 collected node IDs and no
+`.pytest_cache/v/cache/lastfailed`; all pytest/uv/rtk processes exited.
+
+The 133-node final Checker rerun is required again after Reviewer repair round
+2 before delivery.
+
+## Current 228.3 run
+
+Command:
+
+`rtk uv run pytest tests/contract/test_runtime_lab_semantic_evidence_api.py tests/contract/test_runtime_lab_config_api.py tests/integration/runtime_lab/test_runtime_lab_semantic_policy.py tests/integration/runtime_lab/test_runtime_lab_uncertainty_mutation_gate.py -q --tb=short`
+
+Result: `32 passed, 1 warning, 8 subtests passed`.
+
+Observed coverage:
+
+- every uncertainty branch on the MySQL-backed public RuntimeLab path returns
+  `CLARIFY`;
+- no task rows are created;
+- no SOP adapter start occurs;
+- explicit clarification survives the policy gate instead of being recovered
+  into a mutating route.

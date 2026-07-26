@@ -99,6 +99,35 @@ class RuntimePolicyReleaseServiceTest(unittest.TestCase):
                 ["release_approved", "release_canary", "release_activated"],
             )
 
+    def test_activation_rejects_zero_threshold_without_mutating_legacy_active_profile(self) -> None:
+        with self._factory() as session:
+            repository = RuntimePolicyRepository(session)
+            legacy_values = _profile_values("legacy zero active", status="active")
+            legacy_values["thresholds"] = {
+                **legacy_values["thresholds"],
+                "classifierMinConfidence": 0.0,
+            }
+            legacy = repository.create_profile(legacy_values)
+            candidate_values = _profile_values("new zero candidate")
+            candidate_values["thresholds"] = {
+                **candidate_values["thresholds"],
+                "classifierMinConfidence": 0.0,
+            }
+            candidate = repository.create_profile(candidate_values)
+            _create_passed_runs(repository, candidate)
+            service = RuntimePolicyReleaseService(repository)
+            service.approve_profile(int(candidate["id"]), approved_by="ops")
+
+            with self.assertRaises(BizError):
+                service.activate_profile(int(candidate["id"]), activated_by="ops")
+
+            self.assertEqual(repository.get_profile(int(legacy["id"]))["status"], "active")
+            self.assertEqual(
+                repository.get_profile(int(legacy["id"]))["thresholds"]["classifierMinConfidence"],
+                0.0,
+            )
+            self.assertEqual(repository.get_profile(int(candidate["id"]))["status"], "draft")
+
 
 def _profile_values(name: str, *, status: str = "draft") -> dict[str, object]:
     payload = _profile_payload(name)

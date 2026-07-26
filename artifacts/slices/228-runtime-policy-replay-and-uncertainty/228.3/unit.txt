@@ -1,0 +1,32 @@
+# Unit Gate
+
+- `tests/unit/runtime_lab`: `117 passed`, `132 subtests passed`.
+- `tests/unit/runtime_policy`: `29 passed`.
+- Frozen 228.3 unit verifier plus resolver bootstrap:
+  `19 passed`, `8 subtests passed`.
+- Focused uncertainty policy:
+  `3 passed`, `8 subtests passed`.
+
+## Current 228.3 run
+
+Command:
+
+`rtk uv run pytest tests/unit/runtime_lab/test_constrained_classifier.py tests/unit/runtime_lab/test_uncertainty_policy.py tests/unit/runtime_policy/test_profile_schema.py tests/unit/runtime_policy/test_release_service.py -q --tb=short`
+
+`rtk uv run pytest tests/unit/runtime_lab/test_constrained_classifier.py tests/unit/runtime_lab/test_uncertainty_policy.py tests/unit/runtime_policy/test_profile_schema.py tests/unit/runtime_policy/test_release_service.py tests/unit/runtime_policy/test_resolver.py -q --tb=short`
+
+Result: `19 passed, 1 warning, 8 subtests passed`.
+
+Observed coverage:
+
+- shared uncertainty policy preserves finite/coherent results;
+- low / non-finite / non-numeric / out-of-range / explicit-clarification /
+  incoherent results normalize to `CLARIFY`;
+- the release gate rejects zero-threshold activation while preserving the
+  legacy active row.
+- bootstrap env fallback now exposes `classifierMinConfidence = 0.6`.
+
+The policy covers finite/coherent preservation, low/non-finite/non-numeric/
+out-of-range confidence, explicit clarification, outside-pool selection,
+incoherent CLARIFY, bounded/fallback clarification questions, and valid
+deterministic active-continuation confidence.

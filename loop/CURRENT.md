@@ -7,7 +7,7 @@
     accepted roadmap: Specs 228 -> 229 -> 230 -> 231
     architecture decision: docs/adr/0010-runtime-route-decision-and-execution-boundary.md
     active unit: 228.3
-    state: READY_FOR_228.3_TDD_RED
+    state: READY_FOR_228.3_DELIVERY
     branch: codex/spec-228-runtime-lab-intent-routing-reliability-560c
     worktree: /Users/vincento/.codex/worktrees/560c/hify
 
@@ -101,7 +101,7 @@ gates -> diff/secret review -> independent Checker -> Reviewer -> slice commit
 
 ## Next Action
 
-228.2 已完成 RED -> GREEN -> MySQL parity -> Contract/E2E -> diff/secret ->
-独立 Checker `ALL GREEN` 与 Reviewer `PASS`。下一步进入 `228.3`，建立
-server-owned uncertainty 的可观察 RED，禁止低/无效置信度或显式澄清结果发生任务/
-adapter mutation。
+228.3 完整 integration 曾发现回归，定向修复第 1 轮已关闭并完成 133-node
+Reviewer round 1 的真实 LLM 非数字 confidence High 已关闭；最终 Checker round 4
+`ALL GREEN`，Reviewer round 2 `PASS`、0 findings。选择性 commit/push 后进入
+`228.4` 定向澄清。

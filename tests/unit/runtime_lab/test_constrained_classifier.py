@@ -73,6 +73,34 @@ class ConstrainedClassifierTest(unittest.TestCase):
         self.assertTrue(result.needs_clarification)
         self.assertIsNotNone(result.clarification_question)
 
+    def test_deterministic_active_continuation_emits_a_valid_minimum_confidence(self) -> None:
+        result = FakeConstrainedIntentClassifier().classify(
+            ClassifierInput(
+                message="TK-100",
+                session_state={"activeTask": True},
+                candidates=(
+                    RouteCandidate(
+                        candidate_id="active:7",
+                        candidate_type=CandidateType.ACTIVE_TASK_CONTINUE,
+                        target_id="7",
+                        display_name="继续当前退票",
+                        source="active_task",
+                        score=0.55,
+                        score_breakdown=ScoreBreakdown(keyword=0.55, alias=0.0, semantic=0.0),
+                        matched_terms=("TK-100",),
+                        risk_level="LOW",
+                        requires_classifier=True,
+                        reason="deterministic active collection",
+                    ),
+                ),
+                allowed_actions=("CONTINUE_ACTIVE_SOP", "CLARIFY"),
+                thresholds={"classifierMinConfidence": 0.6},
+            )
+        )
+
+        self.assertEqual(result.selected_action, "CONTINUE_ACTIVE_SOP")
+        self.assertEqual(result.confidence, 0.6)
+
     def test_fake_classifier_result_reports_arbitrator_mode_without_real_llm(self) -> None:
         result = FakeConstrainedIntentClassifier().classify(_input())
 

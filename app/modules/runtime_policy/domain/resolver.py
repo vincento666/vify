@@ -102,7 +102,7 @@ def _env_effective_profile(settings: Settings) -> dict[str, Any]:
             },
             "thresholds": {
                 "strongAcceptThreshold": 0.9,
-                "classifierMinConfidence": 0.0,
+                "classifierMinConfidence": 0.6,
                 "candidateTopK": 5,
                 "candidateSourceWeights": {},
                 "llmArbitrationRequiredForNonHardStop": True,

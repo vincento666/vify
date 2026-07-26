@@ -292,7 +292,7 @@ class RuntimeLabSemanticPolicyTest(unittest.TestCase):
             self.assertEqual(turn.route_decision.action, "START_SOP")
             self.assertEqual(turn.active_task["sop_id"], "flight_booking")
 
-    def test_llm_clarify_on_single_flight_status_candidate_recovers_to_start_sop(self) -> None:
+    def test_llm_clarify_on_single_flight_status_candidate_does_not_start_sop(self) -> None:
         with _session() as session:
             classifier = _ClarifyClassifier()
             service = RuntimeLabService(RuntimeLabRepository(session), classifier=classifier)
@@ -302,12 +302,12 @@ class RuntimeLabSemanticPolicyTest(unittest.TestCase):
             turn = service.handle_message(session_id, "司机在机场等我，我想查一下航班现在到哪了，航班号等会发")
 
             self.assertEqual(classifier.calls, 1)
-            self.assertEqual(turn.route_decision.action, "START_SOP")
-            self.assertEqual(turn.active_task["sop_id"], "flight_status")
+            self.assertEqual(turn.route_decision.action, "CLARIFY")
+            self.assertIsNone(turn.active_task)
             self.assertLessEqual(len(classifier.inputs[0].candidates), 5)
             self.assertIn("flight_status", {candidate.target_id for candidate in classifier.inputs[0].candidates})
-            self.assertEqual(turn.route_decision.classifier_result["selected_action"], "START_SOP")
-            self.assertEqual(turn.route_decision.classifier_result["_debug"]["clarifyRecovery"]["from"], "CLARIFY")
+            self.assertEqual(turn.route_decision.classifier_result["selected_action"], "CLARIFY")
+            self.assertNotIn("clarifyRecovery", turn.route_decision.classifier_result["_debug"])
 
     def test_uncertain_to_fly_phrase_does_not_match_booking_from_single_ding_character(self) -> None:
         with _session() as session:
@@ -415,7 +415,7 @@ class _RecordingClassifier:
         return ClassifierResult(
             selected_action=action,
             selected_candidate_id=candidate.candidate_id,
-            confidence=candidate.score,
+            confidence=0.91,
             rationale="recording classifier",
             needs_clarification=False,
             clarification_question=None,

@@ -1,0 +1,67 @@
+# 228.3 Observable RED
+
+## MySQL mutation gate
+
+Command:
+
+`rtk uv run pytest tests/integration/runtime_lab/test_runtime_lab_uncertainty_mutation_gate.py -q --tb=short`
+
+Result: expected RED; `7 failed, 1 passed`.
+
+- below threshold, negative, above one, explicit clarification, and incoherent
+  clarification reached `START_SOP`;
+- non-finite confidence reached persistence and MySQL rejected invalid JSON;
+- an outside-pool candidate raised from `PolicyGate`.
+
+## Shared policy unit seam
+
+Command:
+
+`rtk uv run pytest tests/unit/runtime_lab/test_uncertainty_policy.py tests/unit/runtime_policy/test_resolver.py tests/unit/runtime_policy/test_release_service.py -q --tb=short`
+
+Result: expected collection RED because `UncertaintyPolicy` did not exist.
+
+## Bootstrap and activation
+
+Command:
+
+`rtk uv run pytest tests/unit/runtime_policy/test_resolver.py tests/unit/runtime_policy/test_release_service.py -q --tb=short`
+
+Result: expected RED; `2 failed, 4 passed`.
+
+- bootstrap returned `classifierMinConfidence = 0.0`, expected `0.6`;
+- zero-threshold candidate activation did not raise `BizError`.
+
+## Directed invalid-value RED
+
+The first GREEN exposed one unhandled invalid value. Adding a non-numeric
+confidence case produced `2 failed, 3 passed, 14 subtests passed`: both the unit
+policy and MySQL route path raised `ValueError` instead of clarifying.
+
+The bounded-question unit case then exposed a trailing space after the
+256-character slice (`1 failed, 2 passed, 8 subtests passed`).
+
+## Directed regression repair round 1
+
+The first complete `tests/integration/runtime_lab` run exposed 15 legacy
+regressions. The first reproduced failure showed a low-score deterministic
+active-continuation result being reclassified as uncertain, leaving the child
+checkpoint at `collect_order_no`.
+
+Minimal repair:
+
+- the fake classifier emits at least the configured threshold for its existing
+  deterministic active-continuation exception;
+- normalized CLARIFY retains an in-pool clarification candidate ID so
+  non-mutating FAQ/RAG evidence survives.
+
+All originally failing files then passed. A cache-cleared complete RuntimeLab
+integration rerun collected 133 nodes, completed with no `lastfailed` file, and
+left no pytest process running.
+
+## Directed security/correctness repair round 2
+
+Reviewer round 1 found that an actual `LlmConstrainedIntentClassifier` parsed
+non-numeric confidence before `UncertaintyPolicy` and could enter deterministic
+fallback. The real classifier fixture reproduced `START_SOP` for
+`"confidence": "low"` (`1 failed`, `8 subtests passed`).

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from collections.abc import Callable, Mapping
+import math
 import re
 from typing import Any
 
@@ -64,7 +65,7 @@ class ClassifierResult:
     debug: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        payload = {
+        payload: dict[str, Any] = {
             "selected_action": self.selected_action,
             "selected_candidate_id": self.selected_candidate_id,
             "confidence": self.confidence,
@@ -77,6 +78,63 @@ class ClassifierResult:
         if self.debug:
             payload["_debug"] = self.debug
         return payload
+
+
+class UncertaintyPolicy:
+    def enforce(
+        self,
+        result: ClassifierResult,
+        classifier_input: ClassifierInput,
+    ) -> ClassifierResult:
+        try:
+            confidence = float(result.confidence)
+        except (TypeError, ValueError):
+            confidence = math.nan
+        minimum = _minimum_confidence(classifier_input)
+        candidate_ids = {candidate.candidate_id for candidate in classifier_input.candidates}
+        incoherent = (
+            result.selected_action not in classifier_input.allowed_actions
+            or result.selected_action not in ALLOWED_ACTIONS
+            or (
+                result.selected_action != "CLARIFY"
+                and result.selected_candidate_id not in candidate_ids
+            )
+            or (result.selected_action == "CLARIFY" and not result.needs_clarification)
+        )
+        reason = next(
+            (
+                value
+                for condition, value in (
+                    (result.needs_clarification, "Classifier requested clarification"),
+                    (not math.isfinite(confidence), "Classifier confidence is not finite"),
+                    (confidence < 0.0 or confidence > 1.0, "Classifier confidence is outside 0..1"),
+                    (confidence < minimum, "Classifier confidence is below the configured minimum"),
+                    (incoherent, "Classifier result is incoherent"),
+                )
+                if condition
+            ),
+            None,
+        )
+        if reason is None:
+            return result
+        fallback = _clarify_result(reason)
+        question = _normalized_question(result.clarification_question)
+        clarification_candidate_id = (
+            result.selected_candidate_id
+            if result.selected_action == "CLARIFY" and result.selected_candidate_id in candidate_ids
+            else None
+        )
+        return ClassifierResult(
+            selected_action=fallback.selected_action,
+            selected_candidate_id=clarification_candidate_id,
+            confidence=0.0,
+            rationale=f"{reason}; {result.rationale}",
+            needs_clarification=True,
+            clarification_question=question or fallback.clarification_question,
+            arbitrator_mode=result.arbitrator_mode,
+            used_real_llm=result.used_real_llm,
+            debug=dict(result.debug or {}),
+        )
 
 
 class FakeConstrainedIntentClassifier:
@@ -112,7 +170,10 @@ class FakeConstrainedIntentClassifier:
         result = ClassifierResult(
             selected_action=action,
             selected_candidate_id=candidate.candidate_id,
-            confidence=candidate.score,
+            confidence=max(
+                min_confidence if candidate_type == CandidateType.ACTIVE_TASK_CONTINUE else 0.0,
+                min(1.0, candidate.score),
+            ),
             rationale=f"Selected top finite candidate {candidate.candidate_id}",
             needs_clarification=False,
             clarification_question=None,
@@ -127,18 +188,19 @@ class LlmConstrainedIntentClassifier:
 
     def classify(self, classifier_input: ClassifierInput) -> ClassifierResult:
         raw = self._complete(classifier_input.to_llm_payload())
+        raw_debug = raw.get("_debug")
+        debug = dict(raw_debug) if isinstance(raw_debug, Mapping) else None
         result = ClassifierResult(
             selected_action=str(raw.get("selected_action") or ""),
             selected_candidate_id=_optional_string(raw.get("selected_candidate_id")),
-            confidence=float(raw.get("confidence") or 0.0),
+            confidence=_parsed_confidence(raw.get("confidence")),
             rationale=str(raw.get("rationale") or "LLM constrained arbitrator selected from finite candidates"),
             needs_clarification=bool(raw.get("needs_clarification", False)),
             clarification_question=_optional_string(raw.get("clarification_question")),
             arbitrator_mode="llm",
             used_real_llm=True,
-            debug=dict(raw.get("_debug")) if isinstance(raw.get("_debug"), Mapping) else None,
+            debug=debug,
         )
-        _validate_result(result, classifier_input)
         return result
 
 
@@ -168,6 +230,33 @@ def _optional_string(value: object) -> str | None:
     if value is None:
         return None
     return str(value)
+
+
+def _minimum_confidence(classifier_input: ClassifierInput) -> float:
+    value = classifier_input.thresholds.get("classifierMinConfidence", 0.6)
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return 0.6
+    if not math.isfinite(parsed):
+        return 0.6
+    return max(0.0, min(1.0, parsed))
+
+
+def _parsed_confidence(value: Any) -> float:
+    try:
+        return float(value or 0.0)
+    except (TypeError, ValueError):
+        return math.nan
+
+
+def _normalized_question(value: object) -> str | None:
+    if value is None:
+        return None
+    normalized = " ".join(str(value).split()).strip()
+    if not normalized:
+        return None
+    return normalized[:256].rstrip()
 
 
 def _compact_session_state(session_state: Mapping[str, Any]) -> dict[str, Any]:

@@ -10,7 +10,12 @@ from app.core.errors import BizError, ErrorCode
 from app.modules.runtime_lab.domain.agent_fallback import AgentOutputPolicy, FallbackAgentPort, FallbackAgentRequest
 from app.modules.runtime_lab.domain.aggregator import RuntimeLabBusinessContextAggregator
 from app.modules.runtime_lab.domain.candidates import RouteCandidate, ScoreBreakdown, select_top_candidates
-from app.modules.runtime_lab.domain.classifier import ClassifierInput, ClassifierResult, FakeConstrainedIntentClassifier
+from app.modules.runtime_lab.domain.classifier import (
+    ClassifierInput,
+    ClassifierResult,
+    FakeConstrainedIntentClassifier,
+    UncertaintyPolicy,
+)
 from app.modules.runtime_lab.domain.explicit_signals import ExplicitSignalDetector
 from app.modules.runtime_lab.domain.faq_gate import FaqAnswerGate, FaqSemanticAnswerGate
 from app.modules.runtime_lab.domain.payload import format_turn
@@ -82,6 +87,7 @@ class RuntimeLabService:
         self._explicit_signals = ExplicitSignalDetector(self._manifests)
         self._semantic_recall = MockSemanticCandidateRecall(self._manifests)
         self._classifier = classifier or FakeConstrainedIntentClassifier()
+        self._uncertainty_policy = UncertaintyPolicy()
         self._policy_thresholds = dict(policy_thresholds or {})
         self._policy_gate = PolicyGate(
             self._adapter,
@@ -594,7 +600,7 @@ class RuntimeLabService:
             classifier_result = self._classifier.classify(classifier_input)
         except Exception as exc:
             classifier_result = _classifier_failure_result(exc, self._classifier, classifier_input)
-        classifier_result = _recover_clarify_result(classifier_result, candidates, message, active_task)
+        classifier_result = self._uncertainty_policy.enforce(classifier_result, classifier_input)
         route_steps.append(
             _route_step(
                 "llm_intent_arbitration",
@@ -2000,101 +2006,6 @@ def _should_add_agent_fallback_candidate(
         for candidate in candidates
     )
     return has_low_confidence_answer_clarify and not has_sop_candidate
-
-
-def _recover_clarify_result(
-    result: ClassifierResult,
-    candidates: Sequence[RouteCandidate],
-    message: str,
-    active_task: dict[str, Any] | None,
-) -> ClassifierResult:
-    if result.selected_action != "CLARIFY":
-        return result
-    if not result.used_real_llm:
-        return result
-    recovered = _clarify_answer_recovery_candidate(candidates)
-    if recovered is None:
-        recovered = _clarify_single_sop_recovery_candidate(candidates, message, active_task)
-    if recovered is None:
-        return result
-    action = _action_for_recovered_candidate(recovered)
-    debug = dict(result.debug or {})
-    debug["clarifyRecovery"] = {
-        "from": "CLARIFY",
-        "candidateId": recovered.candidate_id,
-        "candidateType": str(recovered.candidate_type),
-        "targetId": recovered.target_id,
-        "score": recovered.score,
-    }
-    return ClassifierResult(
-        selected_action=action,
-        selected_candidate_id=recovered.candidate_id,
-        confidence=max(float(result.confidence or 0.0), recovered.score),
-        rationale=f"{result.rationale}; recovered by finite-candidate policy guard",
-        needs_clarification=False,
-        clarification_question=None,
-        arbitrator_mode=result.arbitrator_mode,
-        used_real_llm=result.used_real_llm,
-        debug=debug,
-    )
-
-
-def _clarify_answer_recovery_candidate(candidates: Sequence[RouteCandidate]) -> RouteCandidate | None:
-    answer_candidates = [
-        candidate
-        for candidate in candidates
-        if str(candidate.candidate_type) in {"ANSWER_FAQ", "ANSWER_RAG"} and candidate.score >= 0.86
-    ]
-    if not answer_candidates:
-        return None
-    return select_top_candidates(answer_candidates, top_k=1)[0]
-
-
-def _clarify_single_sop_recovery_candidate(
-    candidates: Sequence[RouteCandidate],
-    message: str,
-    active_task: dict[str, Any] | None,
-) -> RouteCandidate | None:
-    if active_task is not None:
-        return None
-    sop_candidates = [
-        candidate
-        for candidate in candidates
-        if str(candidate.candidate_type) == "SOP_INTENT" and candidate.score >= 0.78
-    ]
-    target_ids = {candidate.target_id for candidate in sop_candidates}
-    if len(target_ids) != 1:
-        return None
-    candidate = select_top_candidates(sop_candidates, top_k=1)[0]
-    if not _can_recover_single_sop_clarify(message, candidate.target_id):
-        return None
-    return candidate
-
-
-def _can_recover_single_sop_clarify(message: str, sop_id: str) -> bool:
-    text = message.strip()
-    if not text or _explicitly_denies_sop_transaction(text):
-        return False
-    if sop_id == "flight_status":
-        return any(term in text for term in ("查航班", "航班现在", "到哪", "到哪了", "航班号", "接人", "等我"))
-    return _looks_like_strong_sop_request(text)
-
-
-def _action_for_recovered_candidate(candidate: RouteCandidate) -> str:
-    candidate_type = str(candidate.candidate_type)
-    if candidate_type == "ANSWER_FAQ":
-        return "ANSWER_FAQ"
-    if candidate_type == "ANSWER_RAG":
-        return "ANSWER_RAG"
-    if candidate_type == "SUSPENDED_TASK_RESUME":
-        return "RESUME_TASK"
-    if candidate_type == "AGENT_FALLBACK":
-        return "AGENT_FALLBACK"
-    if candidate_type == "SOP_INTENT":
-        return "START_SOP"
-    if candidate_type == "ACTIVE_TASK_CONTINUE":
-        return "CONTINUE_ACTIVE_SOP"
-    return "CLARIFY"
 
 
 def _looks_like_active_sop_continuation_detail(message: str) -> bool:

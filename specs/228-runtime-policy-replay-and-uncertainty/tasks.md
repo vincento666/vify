@@ -1,6 +1,6 @@
 # Tasks — Spec 228
 
-Status: active; next unit `228.3`.
+Status: active; next unit `228.4`.
 
 TDD method for all implementation units: `tdd`.
 
@@ -42,12 +42,13 @@ Evidence: `artifacts/slices/228-runtime-policy-replay-and-uncertainty/228.2/`
 
 ## 228.3 Server-owned Uncertainty
 
-- [ ] RED: real LLM low/invalid confidence or explicit clarification mutates a
+- [x] RED: real LLM low/invalid confidence or explicit clarification mutates a
   task.
-- [ ] GREEN: shared uncertainty policy; bootstrap `0.60`; release validation.
-- [ ] Prove zero task/adapter mutation on every uncertainty branch.
-- [ ] Preserve legacy profile readability without silent mutation.
-- [ ] Checker/Reviewer; commit `fix(runtime-lab): enforce route uncertainty`.
+- [x] GREEN: shared uncertainty policy; bootstrap `0.60`; release validation.
+- [x] Prove zero task/adapter mutation on every uncertainty branch.
+- [x] Preserve legacy profile readability without silent mutation.
+- [x] Final Checker `ALL GREEN`; Reviewer `PASS`; commit
+  `fix(runtime-lab): enforce route uncertainty`.
 
 Evidence: `artifacts/slices/228-runtime-policy-replay-and-uncertainty/228.3/`
 

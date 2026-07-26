@@ -4,22 +4,22 @@
 
 - date: 2026-07-26
 - mode: Closed Loop / Goal accepted
-- state: `READY_FOR_228.3_TDD_RED`
+- state: `READY_FOR_228.3_DELIVERY`
 - active contract: `specs/228-runtime-policy-replay-and-uncertainty/tasks.md`
 - accepted roadmap: `228 -> 229 -> 230 -> 231`
 - ADR: `docs/adr/0010-runtime-route-decision-and-execution-boundary.md`
 - active unit: `228.3`
-- implementation: `228.2` complete; commit `5affc1eb` pushed to actual task branch
+- implementation: `228.3` gates complete; selective commit/push pending
 - live/paid provider calls: `0`
 - production/deploy/PR/merge actions: none
-- checker verdict: `228.2 ALL GREEN` (round 2)
-- reviewer verdict: `228.2 PASS` (round 1; 0 findings)
+- checker verdict: `228.3 ALL GREEN` (round 4; final exact full integration)
+- reviewer verdict: `228.3 PASS` (round 2; 0 findings)
 
 ## Contract Matrix
 
 | Spec | Status | Dependency | Next Gate |
 |------|--------|------------|-----------|
-| 228 Replay and uncertainty | Active; 228.2 delivered | none | 228.3 observable RED |
+| 228 Replay and uncertainty | Active; 228.3 Checker green | none | 228.3 Reviewer |
 | 229 Routing reliability | Accepted; waiting | Spec 228 Goal Gate | 229.1 TDD RED |
 | 230 Execution boundary | Accepted; waiting | Spec 229 Goal Gate | 230.1 security RED |
 | 231 Composite intent | Accepted; waiting | Spec 230 Goal Gate | 231.1 TDD RED |
@@ -101,28 +101,23 @@ record the exact recovery command/output.
 - independent Checker and Reviewer: required
 - Spec 230 review: fresh-required
 
-## Slice 228.2 Outcome
+## Slice 228.3 Outcome
 
-- governance golden replay now requires and calls an injected shared route
-  replay port; the parallel `_candidate_decision()` truth path is removed.
-- RuntimeLab public message handling now routes through side-effect-free
-  `preview_route()`, and replay composes the same decision path via
-  `replay_runtime_route()`.
-- route decision logs now freeze a pre-route
-  `runtime-route-context/v1` snapshot before command handling and persist it in
-  both flat task snapshot columns and `routeEvidence.routeContextSnapshot`.
-- historical replay now prefers the versioned route-context snapshot and falls
-  back to legacy task snapshots with snake_case/camelCase normalization.
-- MySQL public-path parity is proven across no-active, active, suspended,
-  FAQ/SOP, RAG/SOP, handoff, candidate/current-profile separation, and shared
-  preview fault fail-closed behavior.
-- focused unit/contract verifier: PASS (`10 passed`); focused integration
-  verifier: PASS (`39 passed`, `3 subtests passed`); focused E2E: PASS
-  (`1 passed`); ruff/diff/secret: PASS.
-- independent Checker: `ALL GREEN`; independent Reviewer: `PASS`, `0 findings`.
+- shared server-owned uncertainty policy now runs before the mutation gate and
+  normalizes low / invalid / incoherent / explicit-clarification results to
+  `CLARIFY`.
+- bootstrap classifier minimum confidence is now `0.60` in the resolver
+  snapshot, and activation rejects `<= 0` thresholds without silently
+  rewriting the legacy active row.
+- MySQL-backed uncertainty mutation tests prove every uncertainty branch
+  clarifies with zero task creation and zero SOP adapter start calls.
+- focused unit verifier: PASS (`17 passed`, `8 subtests passed`); focused
+  integration verifier: PASS (`32 passed`, `8 subtests passed`); focused E2E:
+  PASS (`1 passed`); ruff/diff/secret: PASS.
+- independent Checker: `ALL GREEN`; independent Reviewer: pending.
 
 ## Next Action
 
-Create the selective 228.2 commit, run the pre-push review gate, push the
-actual task branch, then enter the unique 228.3 TDD RED for server-owned
-uncertainty enforcement.
+Obtain the independent 228.3 Reviewer verdict. On `PASS`, create the selective
+228.3 commit, run the pre-push review gate, push the actual task branch, then
+enter the unique 228.4 TDD RED for targeted clarification.

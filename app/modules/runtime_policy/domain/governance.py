@@ -559,6 +559,7 @@ class RuntimePolicyReleaseService:
         self._raise_if_version_drift(profile)
         self._required_passed_run_ids(profile)
         release = self._approved_release_for_current_version(profile)
+        _raise_if_invalid_activation_threshold(profile)
         active_profiles = [row for row in self._repository.list_active_profiles() if int(row["id"]) != profile_id]
         previous = active_profiles[0] if active_profiles else None
         for active_profile in active_profiles:
@@ -712,6 +713,22 @@ class RuntimePolicyReleaseService:
     def _previous_active_profile(self, profile_id: int) -> dict[str, Any] | None:
         active_profiles = [row for row in self._repository.list_active_profiles() if int(row["id"]) != profile_id]
         return active_profiles[0] if active_profiles else None
+
+def _raise_if_invalid_activation_threshold(profile: dict[str, Any]) -> None:
+    thresholds = profile.get("thresholds")
+    raw = thresholds.get("classifierMinConfidence") if isinstance(thresholds, dict) else None
+    if raw is None:
+        minimum = 0.0
+    else:
+        try:
+            minimum = float(raw)
+        except (TypeError, ValueError):
+            minimum = 0.0
+    if minimum <= 0.0:
+        raise BizError(
+            ErrorCode.BAD_REQUEST,
+            "classifierMinConfidence must be greater than 0 for activation",
+        )
 
 
 def _evaluation_run_values(validation_result: dict[str, Any]) -> dict[str, Any]:

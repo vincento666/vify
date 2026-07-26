@@ -52,6 +52,7 @@ class RuntimePolicyResolverTest(unittest.TestCase):
         self.assertEqual(resolved["source"], "profile")
         self.assertEqual(resolved["profileId"], specific["id"])
         self.assertEqual(fallback["source"], "env")
+        self.assertEqual(fallback["policySnapshot"]["thresholds"]["classifierMinConfidence"], 0.6)
         self.assertEqual(fallback["policySnapshot"]["classifier"]["apiKeyRef"], "env:HIFY_RUNTIME_LAB_INTENT_ARBITRATOR_API_KEY")
         self.assertNotIn("sk-real", str(fallback))
 

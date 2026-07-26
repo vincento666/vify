@@ -100,7 +100,7 @@ class RuntimeLabFaqSopConflictMatrixTest(unittest.TestCase):
                         self.assertNotEqual(after["id"], before["id"])
                         self.assertIsNone(turn.route_decision.faq_answer)
 
-    def test_llm_clarify_on_active_faq_is_recovered_without_mutating_task(self) -> None:
+    def test_llm_clarify_on_active_faq_preserves_task_without_recovery(self) -> None:
         with _session() as session:
             repository = RuntimeLabRepository(session)
             start_service = RuntimeLabService(
@@ -121,13 +121,13 @@ class RuntimeLabFaqSopConflictMatrixTest(unittest.TestCase):
             turn = service.handle_message(session_id, "随身行李和托运行李额度怎么算？先问问规则")
             after = repository.get_active_task(session_id)
 
-            self.assertEqual(turn.route_decision.action, "ANSWER_FAQ")
-            self.assertEqual(turn.route_decision.classifier_result["selected_action"], "ANSWER_FAQ")
-            self.assertEqual(turn.route_decision.classifier_result["_debug"]["clarifyRecovery"]["from"], "CLARIFY")
+            self.assertEqual(turn.route_decision.action, "CLARIFY")
+            self.assertEqual(turn.route_decision.classifier_result["selected_action"], "CLARIFY")
+            self.assertNotIn("clarifyRecovery", turn.route_decision.classifier_result["_debug"])
             self.assertEqual(after["id"], before["id"])
             self.assertNotIn("checkpoint_id", after)
 
-    def test_pet_material_comparison_faq_is_not_blocked_as_document_comparison(self) -> None:
+    def test_pet_material_comparison_clarification_preserves_active_task(self) -> None:
         with _session() as session:
             repository = RuntimeLabRepository(session)
             start_service = RuntimeLabService(
@@ -148,8 +148,8 @@ class RuntimeLabFaqSopConflictMatrixTest(unittest.TestCase):
             turn = service.handle_message(session_id, "宠物进客舱和托运材料有什么区别？只是问清楚")
             after = repository.get_active_task(session_id)
 
-            self.assertEqual(turn.route_decision.action, "ANSWER_FAQ")
-            self.assertEqual(turn.route_decision.faq_answer["reasonCode"], "PET_CABIN_DOCS")
+            self.assertEqual(turn.route_decision.action, "CLARIFY")
+            self.assertFalse(turn.route_decision.faq_answer)
             self.assertEqual(after["id"], before["id"])
             self.assertNotIn("checkpoint_id", after)
 
@@ -185,7 +185,7 @@ class _SwitchAwareClassifier:
         return ClassifierResult(
             selected_action=action,
             selected_candidate_id=candidate.candidate_id if action != "CLARIFY" else None,
-            confidence=candidate.score,
+            confidence=0.91,
             rationale="switch-aware test classifier",
             needs_clarification=False,
             clarification_question=None,
@@ -221,7 +221,7 @@ class _FaqFirstClassifier:
         return ClassifierResult(
             selected_action=action,
             selected_candidate_id=candidate.candidate_id,
-            confidence=candidate.score,
+            confidence=0.91,
             rationale="faq-first conflict test classifier",
             needs_clarification=False,
             clarification_question=None,
