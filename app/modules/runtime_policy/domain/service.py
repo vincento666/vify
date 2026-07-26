@@ -78,6 +78,7 @@ class RuntimeDecisionLogService:
         user_message: str,
         command_payload: dict[str, Any],
         effective_policy: dict[str, Any],
+        route_context_snapshot: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         route_decision = dict(command_payload.get("routeDecision") or {})
         values = _decision_log_values(
@@ -87,6 +88,7 @@ class RuntimeDecisionLogService:
             command_payload=command_payload,
             effective_policy=effective_policy,
             route_decision=route_decision,
+            route_context_snapshot=route_context_snapshot,
         )
         return _decision_log_response(self._repository.create_decision_log(values))
 
@@ -189,15 +191,21 @@ def _decision_log_values(
     command_payload: dict[str, Any],
     effective_policy: dict[str, Any],
     route_decision: dict[str, Any],
+    route_context_snapshot: dict[str, Any] | None,
 ) -> dict[str, Any]:
     source_layer = _decision_source_layer(route_decision)
     reason_code = _decision_reason_code(route_decision)
+    route_context = route_context_snapshot or {
+        "snapshotVersion": "legacy-command-result/v0",
+        "activeTask": command_payload.get("activeTask"),
+        "suspendedTasks": command_payload.get("suspendedTasks") or [],
+    }
     return {
         "session_id": session_id,
         "message_id": message_id,
         "user_message": user_message,
-        "active_task_snapshot": command_payload.get("activeTask"),
-        "suspended_task_snapshot": command_payload.get("suspendedTasks"),
+        "active_task_snapshot": route_context.get("activeTask"),
+        "suspended_task_snapshot": route_context.get("suspendedTasks") or [],
         "policy_profile_id": effective_policy.get("profileId"),
         "policy_profile_version": effective_policy.get("profileVersion"),
         "policy_snapshot": effective_policy.get("policySnapshot") or {},
@@ -217,6 +225,7 @@ def _decision_log_values(
         "handoff_triggered": str(route_decision.get("action") or "") == "HANDOFF_TO_HUMAN",
         "route_evidence": {
             "routeDecision": route_decision,
+            "routeContextSnapshot": route_context,
             "reply": command_payload.get("reply"),
             "resumeOffer": command_payload.get("resumeOffer"),
         },

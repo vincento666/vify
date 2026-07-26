@@ -1,0 +1,15 @@
+E2E:
+
+rtk uv run pytest tests/e2e/test_runtime_policy_release_rollback_e2e.py -q --tb=short
+
+PASS
+1 passed, 1 warning in 5.70s
+
+This lifecycle exercises validation, shared golden replay, historical decision
+log replay, approval, activation, and audited rollback through public APIs.
+
+Browser UAT:
+N/A for 228.2. This slice changes backend governance replay and adds no
+frontend or user-visible clarification behavior. The repeatable public API
+E2E and MySQL public-path parity are the applicable user-flow gates.
+Browser-visible clarification behavior is owned by frozen slice 228.4.

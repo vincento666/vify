@@ -116,7 +116,13 @@ class RuntimeLabService:
         active_task = self._repository.get_active_task(session_id)
         suspended_tasks = self._repository.list_tasks(session_id, statuses={"SUSPENDED"})
         enabled_scope = self._normalize_enabled_sop_ids(enabled_sop_ids)
-        decision = self._semantic_decision(session_id, message, active_task, suspended_tasks, enabled_scope)
+        decision = self.preview_route(
+            message,
+            session_id=session_id,
+            active_task=active_task,
+            suspended_tasks=suspended_tasks,
+            enabled_sop_ids=enabled_scope,
+        )
         self._repository.append_event(session_id, "ROUTE_DECISION", _decision_payload(decision))
 
         if decision.action == "HANDOFF_TO_HUMAN":
@@ -340,6 +346,28 @@ class RuntimeLabService:
         response_payload: dict[str, Any],
     ) -> None:
         self._repository.store_command_response(session_id, idempotency_key, request_hash, response_payload)
+
+    def preview_route(
+        self,
+        message: str,
+        *,
+        session_id: int = 0,
+        active_task: dict[str, Any] | None = None,
+        suspended_tasks: Sequence[dict[str, Any]] = (),
+        enabled_sop_ids: Sequence[str] | frozenset[str] | None = None,
+    ) -> RouteDecision:
+        enabled_scope = (
+            enabled_sop_ids
+            if isinstance(enabled_sop_ids, frozenset)
+            else self._normalize_enabled_sop_ids(enabled_sop_ids)
+        )
+        return self._semantic_decision(
+            session_id,
+            message,
+            active_task,
+            list(suspended_tasks),
+            enabled_scope,
+        )
 
     def _semantic_decision(
         self,

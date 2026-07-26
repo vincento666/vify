@@ -6,8 +6,8 @@
     contract: specs/228-runtime-policy-replay-and-uncertainty/tasks.md
     accepted roadmap: Specs 228 -> 229 -> 230 -> 231
     architecture decision: docs/adr/0010-runtime-route-decision-and-execution-boundary.md
-    active unit: 228.2
-    state: READY_FOR_228.2_MYSQL_CAPABILITY_RECOVERY_AND_TDD
+    active unit: 228.3
+    state: READY_FOR_228.3_TDD_RED
     branch: codex/spec-228-runtime-lab-intent-routing-reliability-560c
     worktree: /Users/vincento/.codex/worktrees/560c/hify
 
@@ -101,6 +101,7 @@ gates -> diff/secret review -> independent Checker -> Reviewer -> slice commit
 
 ## Next Action
 
-228.1 已完成 TDD、独立 Checker `ALL GREEN` 与 Reviewer `PASS`。选择性 commit/push
-后，按需启动现有 `mysql8` compose 服务；对 `228.2` 建立治理 replay 与共享路由
-实现不一致的可观察 RED。
+228.2 已完成 RED -> GREEN -> MySQL parity -> Contract/E2E -> diff/secret ->
+独立 Checker `ALL GREEN` 与 Reviewer `PASS`。下一步进入 `228.3`，建立
+server-owned uncertainty 的可观察 RED，禁止低/无效置信度或显式澄清结果发生任务/
+adapter mutation。

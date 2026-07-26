@@ -90,6 +90,23 @@ def get_runtime_lab_service(
     settings = get_settings()
     effective_policy = RuntimePolicyResolver(RuntimePolicyRepository(session), settings).resolve()
     policy_snapshot = effective_policy["policySnapshot"]
+    return build_runtime_lab_service(
+        session,
+        settings=settings,
+        policy_snapshot=policy_snapshot,
+        policy_thresholds_enabled=effective_policy.get("source") == "profile",
+        event_stream_bus=event_stream_bus,
+    )
+
+
+def build_runtime_lab_service(
+    session: Session,
+    *,
+    settings: Settings,
+    policy_snapshot: dict[str, Any],
+    policy_thresholds_enabled: bool,
+    event_stream_bus: RuntimeEventStreamBus | None = None,
+) -> RuntimeLabService:
     bindings = _runtime_lab_chatflow_bindings(settings.runtime_lab_sop_chatflow_ids)
     classifier = build_classifier_from_snapshot(policy_snapshot, settings)
     faq_answer_gate = _runtime_lab_faq_answer_gate(settings, session, policy_snapshot)
@@ -98,7 +115,9 @@ def get_runtime_lab_service(
     fallback_agent = build_fallback_agent_from_snapshot(policy_snapshot, session=session)
     agent_output_policy = build_agent_output_policy_from_snapshot(policy_snapshot)
     policy_thresholds = (
-        dict(policy_snapshot.get("thresholds") or {}) if effective_policy.get("source") == "profile" else {}
+        dict(policy_snapshot.get("thresholds") or {})
+        if policy_thresholds_enabled
+        else {}
     )
     if not bindings:
         return RuntimeLabService(
@@ -277,6 +296,7 @@ def _post_runtime_lab_message_with_metadata(
 ) -> tuple[dict[str, Any], bool]:
     effective_policy = RuntimePolicyResolver(RuntimePolicyRepository(session), settings).resolve()
     route_settings_signature = _runtime_lab_route_settings_signature(request.route_settings)
+    route_context_snapshot = _runtime_lab_route_context_snapshot(session, session_id)
     result = service.handle_command(
         session_id,
         request.message,
@@ -293,8 +313,30 @@ def _post_runtime_lab_message_with_metadata(
             user_message=request.message,
             command_payload=result.payload,
             effective_policy=effective_policy,
+            route_context_snapshot=route_context_snapshot,
         )
     return success(result.payload), result.replayed
+
+
+def _runtime_lab_route_context_snapshot(
+    session: Session,
+    session_id: int,
+) -> dict[str, Any]:
+    repository = RuntimeLabRepository(session)
+    return {
+        "snapshotVersion": "runtime-route-context/v1",
+        "activeTask": _json_safe_route_task(repository.get_active_task(session_id)),
+        "suspendedTasks": [
+            _json_safe_route_task(task)
+            for task in repository.list_tasks(session_id, statuses={"SUSPENDED"})
+        ],
+    }
+
+
+def _json_safe_route_task(task: dict[str, Any] | None) -> dict[str, Any] | None:
+    if task is None:
+        return None
+    return json.loads(json.dumps(task, ensure_ascii=False, default=str))
 
 
 RuntimeLabChildEventReader = Callable[[int, int, int], list[dict[str, Any]]]

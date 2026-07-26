@@ -5,8 +5,16 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.core.database import get_session
+from app.core.errors import BizError, ErrorCode
 from app.core.responses import success
-from app.modules.runtime_policy.domain.governance import RuntimePolicyEvaluationRunService, RuntimePolicyReleaseService
+from app.modules.runtime_lab.domain.route_replay import replay_runtime_route
+from app.modules.runtime_lab.web.router import build_runtime_lab_service
+from app.modules.runtime_policy.domain.governance import (
+    RuntimePolicyEvaluationRunService,
+    RuntimePolicyReleaseService,
+    runtime_policy_snapshot,
+)
+from app.modules.runtime_policy.domain.route_eval import RuntimeRouteReplayPort
 from app.modules.runtime_policy.domain.resolver import RuntimePolicyResolveContext, RuntimePolicyResolver
 from app.modules.runtime_policy.domain.service import RuntimeDecisionLogService, RuntimePolicyProfileService
 from app.modules.runtime_policy.infra.repository import RuntimePolicyRepository
@@ -30,12 +38,45 @@ def get_runtime_decision_log_service(session: Session = Depends(get_session)) ->
     return RuntimeDecisionLogService(RuntimePolicyRepository(session))
 
 
-def get_runtime_evaluation_run_service(session: Session = Depends(get_session)) -> RuntimePolicyEvaluationRunService:
-    return RuntimePolicyEvaluationRunService(RuntimePolicyRepository(session))
+def get_runtime_evaluation_run_service(
+    session: Session = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> RuntimePolicyEvaluationRunService:
+    return RuntimePolicyEvaluationRunService(
+        RuntimePolicyRepository(session),
+        route_replay_port=_runtime_route_replay_port(session, settings),
+    )
 
 
 def get_runtime_release_service(session: Session = Depends(get_session)) -> RuntimePolicyReleaseService:
     return RuntimePolicyReleaseService(RuntimePolicyRepository(session))
+
+
+def _runtime_route_replay_port(
+    session: Session,
+    settings: Settings,
+) -> RuntimeRouteReplayPort:
+    def replay(case: dict[str, Any], profile: dict[str, Any]) -> dict[str, Any]:
+        policy_snapshot = runtime_policy_snapshot(profile)
+        classifier = policy_snapshot.get("classifier")
+        if (
+            isinstance(classifier, dict)
+            and classifier.get("enabled", True)
+            and str(classifier.get("mode") or "fake").lower() == "llm"
+        ):
+            raise BizError(
+                ErrorCode.BAD_REQUEST,
+                "Deterministic classifier fixture required for route replay",
+            )
+        service = build_runtime_lab_service(
+            session,
+            settings=settings,
+            policy_snapshot=policy_snapshot,
+            policy_thresholds_enabled=True,
+        )
+        return replay_runtime_route(service, case)
+
+    return replay
 
 
 @router.get("/effective-profile")

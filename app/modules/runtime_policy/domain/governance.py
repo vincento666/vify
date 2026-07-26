@@ -32,6 +32,9 @@ SUPPORTED_ACTIONS = {
     "ANSWER_RAG",
     "AGENT_FALLBACK",
     "CLARIFY",
+    "NO_MATCH",
+    "REJECT_SWITCH_CONTINUE_ACTIVE",
+    "REJECT_SWITCH_SUSPENDED_LIMIT",
     *SOP_MUTATING_ACTIONS,
 }
 GOLDEN_MATRIX_CASES = (
@@ -50,8 +53,8 @@ GOLDEN_MATRIX_CASES = (
         "message": "儿童票可以退吗",
         "expected": {
             "action": "ANSWER_FAQ",
-            "sourceLayer": "faq_exact",
-            "reasonCode": "FAQ_EXACT_MATCH",
+            "sourceLayer": "runtime_airline_faq",
+            "reasonCode": "CHILD_TICKET_REFUND",
             "mutatesSopState": False,
         },
     },
@@ -60,8 +63,8 @@ GOLDEN_MATRIX_CASES = (
         "message": "我要退票",
         "expected": {
             "action": "START_SOP",
-            "sourceLayer": "sop_arbitration",
-            "reasonCode": "refund_ticket",
+            "sourceLayer": "post_classifier",
+            "reasonCode": "START_SOP",
             "mutatesSopState": True,
         },
     },
@@ -109,7 +112,7 @@ class RuntimePolicyValidationService:
             "guardrails": guardrail_defaults(),
             "metrics": {},
             "riskDeltas": {},
-            "inputSnapshot": _profile_snapshot(row),
+            "inputSnapshot": runtime_policy_snapshot(row),
         }
 
     def _validate_thresholds(self, thresholds: Any, failure_reasons: list[str]) -> None:
@@ -272,9 +275,15 @@ class RuntimePolicyReplayService:
         return report
 
     def replay_golden_matrix(self, row: dict[str, Any]) -> dict[str, Any]:
+        if self._route_replay_port is None:
+            raise ValueError("Runtime route replay port is required")
         cases: list[dict[str, Any]] = []
         for case in GOLDEN_MATRIX_CASES:
-            actual = _candidate_decision(row, str(case["message"]))
+            actual = self._replay_route(
+                row,
+                str(case["message"]),
+                case_id=str(case["id"]),
+            )
             expected_payload = case["expected"]
             expected: dict[str, Any] = (
                 dict(expected_payload)
@@ -314,12 +323,19 @@ class RuntimePolicyReplayService:
         )
 
     def replay_decision_logs(self, row: dict[str, Any], logs: list[dict[str, Any]]) -> dict[str, Any]:
+        if self._route_replay_port is None:
+            raise ValueError("Runtime route replay port is required")
         replays: list[dict[str, Any]] = []
         old_decisions: list[dict[str, Any]] = []
         candidate_decisions: list[dict[str, Any]] = []
         for log in logs:
             expected = _decision_from_log(log)
-            actual = _candidate_decision(row, str(log.get("user_message") or ""))
+            actual = self._replay_route(
+                row,
+                str(log.get("user_message") or ""),
+                case_id=f"decision-log-{log['id']}",
+                initial_route_context=_historical_route_context(log),
+            )
             changed = not _decision_matches(expected, actual)
             old_decisions.append(expected)
             candidate_decisions.append(actual)
@@ -349,12 +365,47 @@ class RuntimePolicyReplayService:
             failure_reasons=["decision_log_replay.changed"] if changed_count else [],
         )
 
+    def _replay_route(
+        self,
+        row: dict[str, Any],
+        message: str,
+        *,
+        case_id: str,
+        initial_route_context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        if self._route_replay_port is None:
+            raise ValueError("Runtime route replay port is required")
+        raw = self._route_replay_port(
+            {
+                "caseId": case_id,
+                "caseVersion": 1,
+                "status": "required",
+                "turns": [{"role": "user", "message": message}],
+                "initialRouteContext": initial_route_context or {},
+                "enabledIntentIds": None,
+                "policySnapshot": runtime_policy_snapshot(row),
+                "classifierFixture": {},
+            },
+            row,
+        )
+        actual, dropped_fields = _sanitize_route_eval_actual(raw)
+        if dropped_fields:
+            raise ValueError(
+                "Runtime route replay returned unsupported fields: "
+                + ", ".join(dropped_fields)
+            )
+        return actual
+
 
 class RuntimePolicyEvaluationRunService:
-    def __init__(self, repository: RuntimePolicyRepository) -> None:
+    def __init__(
+        self,
+        repository: RuntimePolicyRepository,
+        route_replay_port: RuntimeRouteReplayPort | None = None,
+    ) -> None:
         self._repository = repository
         self._validator = RuntimePolicyValidationService()
-        self._replay = RuntimePolicyReplayService()
+        self._replay = RuntimePolicyReplayService(route_replay_port)
 
     def validate_profile(self, profile_id: int) -> dict[str, Any]:
         profile = self._repository.get_profile(profile_id)
@@ -741,7 +792,7 @@ def _audit_event_response(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _profile_snapshot(row: dict[str, Any]) -> dict[str, Any]:
+def runtime_policy_snapshot(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "profileId": row["id"],
         "profileVersion": row["version"],
@@ -777,32 +828,8 @@ def _replay_result(
         "guardrails": guardrail_defaults(),
         "metrics": metrics,
         "riskDeltas": risk_deltas,
-        "inputSnapshot": _profile_snapshot(row),
+        "inputSnapshot": runtime_policy_snapshot(row),
         "result": result,
-    }
-
-
-def _candidate_decision(row: dict[str, Any], message: str) -> dict[str, Any]:
-    fallback_agent = row.get("fallback_agent") or row.get("fallbackAgent") or {}
-    fallback_enabled = not isinstance(fallback_agent, dict) or fallback_agent.get("enabled", True)
-    if "人工" in message or "客服" in message:
-        return _decision("HANDOFF_TO_HUMAN", "explicit_signal", "USER_REQUEST")
-    if "儿童票可以退吗" in message:
-        return _decision("ANSWER_FAQ", "faq_exact", "FAQ_EXACT_MATCH")
-    if "我要退票" in message:
-        return _decision("START_SOP", "sop_arbitration", "refund_ticket")
-    if fallback_enabled:
-        return _decision("AGENT_FALLBACK", "agent_policy", "AGENT_ANSWER")
-    return _decision("CLARIFY", "agent_policy", "FALLBACK_DISABLED")
-
-
-def _decision(action: str, source_layer: str, reason_code: str) -> dict[str, Any]:
-    return {
-        "action": action,
-        "sourceLayer": source_layer,
-        "reasonCode": reason_code,
-        "mutatesSopState": action in SOP_MUTATING_ACTIONS,
-        "handoffTriggered": action == "HANDOFF_TO_HUMAN",
     }
 
 
@@ -814,6 +841,63 @@ def _decision_from_log(log: dict[str, Any]) -> dict[str, Any]:
         "mutatesSopState": bool(log.get("mutates_sop_state")),
         "handoffTriggered": bool(log.get("handoff_triggered")),
     }
+
+
+def _historical_route_context(log: dict[str, Any]) -> dict[str, Any]:
+    evidence = log.get("route_evidence")
+    if isinstance(evidence, dict):
+        snapshot = evidence.get("routeContextSnapshot")
+        if isinstance(snapshot, dict):
+            return {
+                "sessionId": log.get("session_id"),
+                "activeTask": _route_task_context(snapshot.get("activeTask")),
+                "suspendedTasks": _route_task_contexts(snapshot.get("suspendedTasks")),
+            }
+    return {
+        "sessionId": log.get("session_id"),
+        "activeTask": _route_task_context(log.get("active_task_snapshot")),
+        "suspendedTasks": _route_task_contexts(log.get("suspended_task_snapshot")),
+    }
+
+
+def _route_task_context(value: object) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+    chatflow = value.get("chatflowSession")
+    chatflow = chatflow if isinstance(chatflow, dict) else {}
+    return {
+        "id": value.get("id"),
+        "session_id": value.get("session_id", value.get("sessionId")),
+        "sop_id": value.get("sop_id", value.get("sopId")),
+        "status": value.get("status"),
+        "parent_task_id": value.get("parent_task_id", value.get("parentTaskId")),
+        "resume_summary": value.get("resume_summary", value.get("resumeSummary")),
+        "chatflow_id": value.get("chatflow_id", chatflow.get("chatflowId")),
+        "chatflow_session_id": value.get(
+            "chatflow_session_id",
+            chatflow.get("sessionId"),
+        ),
+        "chatflow_run_id": value.get("chatflow_run_id", chatflow.get("runId")),
+        "chatflow_event_id": value.get("chatflow_event_id", chatflow.get("eventId")),
+        "chatflow_checkpoint_id": value.get(
+            "chatflow_checkpoint_id",
+            chatflow.get("checkpointId"),
+        ),
+        "runtime_version": value.get(
+            "runtime_version",
+            chatflow.get("runtimeVersion"),
+        ),
+    }
+
+
+def _route_task_contexts(value: object) -> list[dict[str, Any]]:
+    if not isinstance(value, list | tuple):
+        return []
+    return [
+        task
+        for item in value
+        if (task := _route_task_context(item)) is not None
+    ]
 
 
 def _decision_matches(expected: dict[str, Any], actual: dict[str, Any]) -> bool:

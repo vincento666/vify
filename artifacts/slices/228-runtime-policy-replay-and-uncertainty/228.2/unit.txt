@@ -1,0 +1,8 @@
+Unit and Contract:
+
+rtk uv run pytest tests/unit/runtime_policy/test_replay_service.py tests/contract/test_runtime_policy_replay_api.py tests/contract/test_runtime_policy_governance_validation_api.py -q --tb=short
+
+PASS
+10 passed, 1 warning in 24.70s
+
+The warning is the existing Starlette TestClient httpx deprecation warning.

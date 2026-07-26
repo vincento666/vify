@@ -30,12 +30,12 @@ Evidence: `artifacts/slices/228-runtime-policy-replay-and-uncertainty/228.1/`
 
 ## 228.2 Governance Replay Integrity
 
-- [ ] RED: candidate profile changes real route output but static replay does
+- [x] RED: candidate profile changes real route output but static replay does
   not detect it.
-- [ ] GREEN: injected replay port; remove parallel decision truth.
-- [ ] MySQL parity through public RuntimeLab command path.
-- [ ] Contract/E2E replay APIs and historical comparison.
-- [ ] Checker/Reviewer; commit `fix(runtime-policy): replay shared route decisions`.
+- [x] GREEN: injected replay port; remove parallel decision truth.
+- [x] MySQL parity through public RuntimeLab command path.
+- [x] Contract/E2E replay APIs and historical comparison.
+- [x] Checker/Reviewer; commit `fix(runtime-policy): replay shared route decisions`.
 
 Evidence: `artifacts/slices/228-runtime-policy-replay-and-uncertainty/228.2/`
 

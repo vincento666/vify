@@ -1,0 +1,16 @@
+Checker-directed RED:
+
+- a START_SOP decision log retained command-result activeTask rather than the
+  pre-route no-active state;
+- stateful historical replay consumed camelCase task keys although the shared
+  domain decision reads snake_case keys;
+- parity test covered only no-active refund;
+- no public replay fault/persistence test existed.
+
+Observable focused repair RED:
+`tests/integration/runtime_lab/test_runtime_policy_route_replay_parity.py`
+initial repair run: 1 failed, 3 passed.
+
+Remaining failure was production reason-code parity plus legitimate reject
+actions being treated as unsupported. Both were corrected against production
+decision-log behavior.

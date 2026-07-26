@@ -39,7 +39,7 @@ class RuntimePolicyReplayApiContractTest(unittest.TestCase):
         self.assertEqual(replayed.status_code, 200)
         data = replayed.json()["data"]
         self.assertEqual(data["runType"], "golden_matrix")
-        self.assertEqual(data["status"], "passed")
+        self.assertEqual(data["status"], "passed", data["result"]["cases"])
         self.assertTrue(data["passed"])
         self.assertGreaterEqual(data["result"]["caseCount"], 4)
         self.assertEqual(data["result"]["failedCount"], 0)
@@ -91,6 +91,28 @@ class RuntimePolicyReplayApiContractTest(unittest.TestCase):
         self.assertEqual(data["riskDeltas"]["unsupportedActionCount"], 0)
         self.assertEqual(listed.status_code, 200)
         self.assertEqual(listed.json()["data"]["total"], 1)
+
+    def test_candidate_source_weights_change_golden_replay_decision(self) -> None:
+        payload = _profile_payload("228.2 candidate weights")
+        payload["thresholds"] = {
+            **payload["thresholds"],
+            "candidateSourceWeights": {
+                "explicit_signal": 0.2,
+                "mock_semantic_recall": 0.2,
+                "sop_hybrid_recall": 0.2,
+            },
+        }
+
+        with TestClient(app) as client:
+            created = client.post("/api/v1/runtime-policy/profiles", json=payload)
+            profile_id = created.json()["data"]["id"]
+            replayed = client.post(f"/api/v1/runtime-policy/profiles/{profile_id}/replay/golden-matrix")
+
+        self.assertEqual(replayed.status_code, 200)
+        data = replayed.json()["data"]
+        refund_case = next(case for case in data["result"]["cases"] if case["id"] == "sop-start")
+        self.assertFalse(data["passed"])
+        self.assertEqual(refund_case["actual"]["action"], "CLARIFY")
 
     def _session_override(self) -> Generator[Session]:
         with self._factory() as session:

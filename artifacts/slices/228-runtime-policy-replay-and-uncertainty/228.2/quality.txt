@@ -1,0 +1,13 @@
+Quality gates:
+
+- Ruff affected files: PASS, `All checks passed!`
+- mypy new `route_replay.py` with `--follow-imports=skip`: PASS,
+  `Success: no issues found in 1 source file`
+- git diff --check: PASS
+- frozen delivery secret regex: PASS, no matches
+- live/paid provider calls: 0
+
+Repository-wide imported mypy baseline is not claimed as PASS. A diagnostic
+run found existing errors across 26 files; the three initially attributed to
+the new route replay module were fixed. Isolated mypy for the new module is
+green.

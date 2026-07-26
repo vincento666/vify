@@ -1,0 +1,19 @@
+Command:
+rtk uv run pytest tests/unit/runtime_policy/test_replay_service.py tests/contract/test_runtime_policy_replay_api.py tests/contract/test_runtime_policy_governance_validation_api.py tests/integration/runtime_lab/test_runtime_policy_route_replay_parity.py -q --tb=short
+
+Exit: 1
+
+Observed RED:
+- injected golden replay port call list was empty;
+- injected historical replay still returned passed;
+- candidate source weights replay remained passed;
+- MySQL public command returned CLARIFY while replay returned START_SOP.
+
+Result:
+4 failed, 6 passed, 1 warning in 18.09s
+
+Failure predicates:
+- RuntimePolicyReplayService.test_golden_matrix_replay_uses_shared_route_port_for_candidate_profile
+- RuntimePolicyReplayService.test_decision_log_replay_uses_shared_route_port_for_historical_comparison
+- RuntimePolicyReplayApiContractTest.test_candidate_source_weights_change_golden_replay_decision
+- RuntimePolicyRouteReplayParityTest.test_candidate_profile_replay_matches_public_runtime_lab_command_path

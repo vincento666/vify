@@ -1,0 +1,20 @@
+MySQL Integration:
+
+rtk uv run pytest tests/integration/runtime_lab/test_runtime_policy_route_replay_parity.py tests/integration/runtime_lab/test_runtime_lab_service.py tests/integration/runtime_lab/test_runtime_lab_semantic_policy.py -q --tb=short
+
+PASS
+39 passed, 1 warning, 3 subtests passed in 147.11s
+
+Parity evidence:
+- candidate profile source weights make the public RuntimeLab command return
+  CLARIFY;
+- golden replay for the same profile returns CLARIFY for the same route case;
+- replay fails the old START_SOP expectation instead of reporting false green.
+- direct shared decision equals MySQL `handle_command` for no-active, active,
+  suspended, FAQ/SOP, RAG/SOP, and handoff cases;
+- a draft candidate snapshot is evaluated independently of the current active
+  public profile;
+- historical replay uses versioned pre-route task context and preserves
+  unchanged versus changed comparison semantics;
+- a faulted shared preview returns the compatible 500 envelope and persists no
+  evaluation run.
