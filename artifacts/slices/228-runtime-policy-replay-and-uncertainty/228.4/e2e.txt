@@ -1,0 +1,21 @@
+228.4 Contract / E2E evidence — 2026-07-26
+
+Public targeted clarification contract:
+rtk uv run pytest tests/contract/test_runtime_lab_targeted_clarification_api.py -q
+PASS — 1 passed.
+
+The contract uses the real FastAPI route and MySQL command/event storage with a
+deterministic zero-provider classifier. It proves:
+- envelope remains `{code,message,data}`;
+- `clarificationQuestion` is additive;
+- reply and decision expose the same targeted question;
+- duplicate idempotency key returns the same payload;
+- task list is empty and events remain SESSION_CREATED, USER_MESSAGE,
+  ROUTE_DECISION.
+
+SSE regression:
+rtk uv run pytest tests/integration/runtime_lab/test_sop_live_stream.py tests/contract/test_runtime_lab_sop_live_stream_api.py -q
+PASS — 8 passed.
+
+The focused 136-test matrix also passed semantic API and fallback E2E. No SSE
+event type or envelope was changed.

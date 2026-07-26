@@ -104,6 +104,7 @@ def format_route_decision(decision: RouteDecision) -> dict[str, Any]:
         "targetSopId": decision.target_sop_id,
         "activeTaskId": decision.active_task_id,
         "matchedKeyword": decision.matched_keyword,
+        "clarificationQuestion": decision.clarification_question,
         "candidates": decision.candidates or [],
         "candidateSources": decision.candidate_sources or [],
         "policyGate": decision.policy_gate,

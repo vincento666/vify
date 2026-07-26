@@ -271,6 +271,12 @@
             <dt>reason</dt>
             <dd>{{ latestTurn?.routeDecision.reason ?? '-' }}</dd>
           </div>
+          <div>
+            <dt>clarification</dt>
+            <dd data-testid="route-clarification-question">
+              {{ latestTurn?.routeDecision.clarificationQuestion ?? '-' }}
+            </dd>
+          </div>
         </dl>
         <div
           v-if="routeOutcome"

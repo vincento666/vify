@@ -11,6 +11,7 @@ from app.main import app
 from app.modules.runtime_lab.domain.faq_gate import RuntimeAirlineFaqGate
 from app.modules.runtime_lab.domain.rag_gate import FakeRagAnswerGenerator, RagAnswerGate
 from app.modules.runtime_lab.domain.route_replay import replay_runtime_route
+from app.modules.runtime_lab.domain.router import RouteDecision
 from app.modules.runtime_lab.domain.service import RuntimeLabService
 from app.modules.runtime_lab.infra.repository import RuntimeLabRepository
 from app.modules.runtime_policy.infra.schema import register_runtime_policy_tables
@@ -259,6 +260,79 @@ class RuntimePolicyRouteReplayParityTest(unittest.TestCase):
         )
         self.assertEqual(listed.status_code, 200)
         self.assertEqual(listed.json()["data"]["total"], 0)
+
+    def test_targeted_clarification_survives_golden_and_decision_log_replay(self) -> None:
+        profile = _profile_payload("228.4 targeted clarification replay")
+        profile["status"] = "active"
+        profile["bindings"] = {
+            **profile["bindings"],
+            "tenantId": "",
+            "botId": "",
+            "channel": "",
+            "sopGroup": "",
+        }
+        question = "请确认您要退票，还是只查询退票规则？"
+        decision = RouteDecision(
+            action="CLARIFY",
+            reason="Targeted clarification fixture",
+            clarification_question=question,
+        )
+
+        with TestClient(app) as client:
+            created = client.post("/api/v1/runtime-policy/profiles", json=profile)
+            profile_id = created.json()["data"]["id"]
+            runtime_session = client.post("/api/v1/runtime-lab/sessions")
+            session_id = runtime_session.json()["data"]["id"]
+            with patch.object(
+                RuntimeLabService,
+                "_semantic_decision",
+                return_value=decision,
+            ):
+                message = client.post(
+                    f"/api/v1/runtime-lab/sessions/{session_id}/messages",
+                    json={
+                        "message": "我想处理机票",
+                        "idempotencyKey": "2284-targeted-replay",
+                    },
+                )
+                golden = client.post(
+                    f"/api/v1/runtime-policy/profiles/{profile_id}/replay/golden-matrix"
+                )
+                historical = client.post(
+                    f"/api/v1/runtime-policy/profiles/{profile_id}/replay/decision-logs",
+                    json={"sessionId": session_id},
+                )
+            decision_logs = client.get(
+                f"/api/v1/runtime-policy/sessions/{session_id}/decision-logs"
+            )
+
+        self.assertEqual(created.status_code, 200)
+        self.assertEqual(message.status_code, 200)
+        self.assertEqual(
+            message.json()["data"]["routeDecision"]["clarificationQuestion"],
+            question,
+        )
+        self.assertEqual(golden.status_code, 200)
+        self.assertTrue(
+            all(
+                case["actual"]["clarificationQuestion"] == question
+                for case in golden.json()["data"]["result"]["cases"]
+            )
+        )
+        self.assertEqual(historical.status_code, 200)
+        historical_data = historical.json()["data"]
+        self.assertTrue(historical_data["passed"], historical_data)
+        self.assertEqual(
+            historical_data["result"]["replays"][0]["actual"]["clarificationQuestion"],
+            question,
+        )
+        self.assertEqual(decision_logs.status_code, 200)
+        self.assertEqual(
+            decision_logs.json()["data"]["list"][0]["routeEvidence"]["routeDecision"][
+                "clarificationQuestion"
+            ],
+            question,
+        )
 
     def _assert_command_parity(
         self,

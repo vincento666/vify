@@ -671,7 +671,9 @@ export function buildRuntimeLabRouteOutcome(decision: RuntimeLabRouteDecision | 
     return {
       tone: 'warning',
       title: '需要澄清',
-      detail: routeReasonDetail(decision.faqAnswer || decision.ragAnswer || decision.agentAnswer, finalDecision, decision.reason),
+      detail:
+        stringValue(decision.clarificationQuestion)
+        || routeReasonDetail(decision.faqAnswer || decision.ragAnswer || decision.agentAnswer, finalDecision, decision.reason),
     }
   }
   return null

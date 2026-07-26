@@ -1,0 +1,22 @@
+228.4 quality evidence — 2026-07-26
+
+- ruff changed RuntimeLab/test scope: PASS
+- narrowed mypy with imported modules skipped: PASS, 4 source files
+- frontend vue-tsc + production build: PASS
+- git diff --check: PASS
+- production-like secret scan: PASS, no matches
+- Alembic heads with repository PYTHONPATH: one head,
+  `0036_ai_assistant_tenant_scope`
+- migration diff: none
+- live / paid provider calls: 0
+- PR / merge / deploy: none
+
+Full mypy over `service.py` is not claimed PASS. It reports the recorded
+pre-existing 7 errors at `sop_adapter.py:257` and
+`service.py:1202/1526/1527/1535`, outside the changed lines. Narrowed checks for
+the new route projection modules pass; the baseline was not edited or hidden.
+
+Two auxiliary commands were retried without changing code:
+- the first secret regex was parsed by zsh as a bad pattern;
+- the first Alembic command lacked repository `PYTHONPATH`.
+The corrected commands passed.

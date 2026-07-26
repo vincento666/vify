@@ -76,7 +76,11 @@ class RuntimeLabFallbackMatrixE2ETest(unittest.TestCase):
 
         self.assertEqual(active_handoff["routeDecision"]["action"], "HANDOFF_TO_HUMAN")
         self.assertEqual(active_handoff["activeTask"]["id"], active_started["activeTask"]["id"])
-        self.assertEqual(active_handoff["activeTask"]["checkpointId"], active_started["activeTask"]["checkpointId"])
+        self.assertNotIn("checkpointId", active_handoff["activeTask"])
+        self.assertEqual(
+            active_handoff["activeTask"]["chatflowSession"]["checkpointId"],
+            active_started["activeTask"]["chatflowSession"]["checkpointId"],
+        )
 
         self.assertEqual(exact_faq["routeDecision"]["action"], "ANSWER_FAQ")
         self.assertEqual(exact_faq["routeDecision"]["finalDecision"]["sourceLayer"], "faq_exact")
@@ -85,7 +89,11 @@ class RuntimeLabFallbackMatrixE2ETest(unittest.TestCase):
 
         self.assertEqual(active_faq["routeDecision"]["action"], "ANSWER_FAQ")
         self.assertEqual(active_faq["activeTask"]["id"], active_faq_started["activeTask"]["id"])
-        self.assertEqual(active_faq["activeTask"]["checkpointId"], active_faq_started["activeTask"]["checkpointId"])
+        self.assertNotIn("checkpointId", active_faq["activeTask"])
+        self.assertEqual(
+            active_faq["activeTask"]["chatflowSession"]["checkpointId"],
+            active_faq_started["activeTask"]["chatflowSession"]["checkpointId"],
+        )
         self.assertFalse(active_faq["routeDecision"]["faqAnswer"]["mutatesSopState"])
 
         self.assertEqual(semantic_faq["routeDecision"]["action"], "ANSWER_FAQ")

@@ -31,4 +31,11 @@ describe('runtime lab Ant Design migration guard', () => {
     expect(content).toContain("from 'ant-design-vue'")
     expect(content).toContain("from '@ant-design/icons-vue'")
   })
+
+  it('projects the targeted clarification question in the route inspector', () => {
+    const content = readProjectFile('src/views/chat/UnifiedRoutingChatLab.vue')
+
+    expect(content).toContain('data-testid="route-clarification-question"')
+    expect(content).toContain('latestTurn?.routeDecision.clarificationQuestion')
+  })
 })

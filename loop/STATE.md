@@ -4,22 +4,22 @@
 
 - date: 2026-07-26
 - mode: Closed Loop / Goal accepted
-- state: `READY_FOR_228.4_TDD_RED`
+- state: `READY_FOR_228.4_DELIVERY`
 - active contract: `specs/228-runtime-policy-replay-and-uncertainty/tasks.md`
 - accepted roadmap: `228 -> 229 -> 230 -> 231`
 - ADR: `docs/adr/0010-runtime-route-decision-and-execution-boundary.md`
 - active unit: `228.4`
-- implementation: `228.3` committed and pushed at `a29a4357`
+- implementation: `228.4` verified; selective delivery pending
 - live/paid provider calls: `0`
 - production/deploy/PR/merge actions: none
-- checker verdict: `228.3 ALL GREEN` (round 4; final exact full integration)
-- reviewer verdict: `228.3 PASS` (round 2; 0 findings)
+- checker verdict: `228.4 ALL GREEN`
+- reviewer verdict: `228.4 PASS` (round 2; 0 findings)
 
 ## Contract Matrix
 
 | Spec | Status | Dependency | Next Gate |
 |------|--------|------------|-----------|
-| 228 Replay and uncertainty | Active; 228.3 delivered | none | 228.4 TDD RED |
+| 228 Replay and uncertainty | Active; 228.4 verified | none | 228.4 delivery |
 | 229 Routing reliability | Accepted; waiting | Spec 228 Goal Gate | 229.1 TDD RED |
 | 230 Execution boundary | Accepted; waiting | Spec 229 Goal Gate | 230.1 security RED |
 | 231 Composite intent | Accepted; waiting | Spec 230 Goal Gate | 231.1 TDD RED |
@@ -123,7 +123,26 @@ record the exact recovery command/output.
 - remote commit: `a29a4357f8c79eed7b87c415d4545740e710ce38`
 - PR / merge / deploy: none
 
+## Slice 228.4 Outcome
+
+- uncertain classifier results preserve the normalized targeted clarification
+  question through the server decision, public envelope, event evidence,
+  idempotent command replay, Runtime Policy golden replay, and decision-log
+  replay;
+- a blank/invalid targeted question uses the existing bounded generic menu;
+- every tested clarification branch creates no RuntimeLab task and invokes no
+  child SOP adapter;
+- frontend route outcome and inspector expose the additive nullable
+  `clarificationQuestion`;
+- final complete RuntimeLab integration: PASS (`136 passed`, `31 subtests`);
+  complete frontend: PASS (`116 files`, `483 tests`); build/rem/SSE/diff/secret:
+  PASS;
+- real Browser UAT: PASS for low confidence, explicit clarification, blank
+  fallback, and idempotent replay; four screenshots read back at `3164x2060`;
+- independent Checker: `ALL GREEN`; independent Reviewer: `PASS`, 0 findings.
+
 ## Next Action
 
-Run the unique 228.4 TDD preflight, then establish observable RED for targeted
-clarification projection, idempotent replay, and the frozen Browser UAT cases.
+Create and push the selective 228.4 implementation commit, record its remote
+delivery snapshot, then run the unique 228.5 Contract A Goal Gate. Do not
+activate Spec 229 before that gate is independently `ALL GREEN` / `PASS`.

@@ -7,7 +7,7 @@
     accepted roadmap: Specs 228 -> 229 -> 230 -> 231
     architecture decision: docs/adr/0010-runtime-route-decision-and-execution-boundary.md
     active unit: 228.4
-    state: READY_FOR_228.4_TDD_RED
+    state: READY_FOR_228.4_DELIVERY
     branch: codex/spec-228-runtime-lab-intent-routing-reliability-560c
     worktree: /Users/vincento/.codex/worktrees/560c/hify
 
@@ -101,6 +101,7 @@ gates -> diff/secret review -> independent Checker -> Reviewer -> slice commit
 
 ## Next Action
 
-228.3 已在 `a29a4357` 完成选择性 commit 并推送，独立 Checker round 4
-`ALL GREEN`、Reviewer round 2 `PASS`、0 findings。进入 `228.4` 唯一 TDD
-preflight，为服务端定向澄清、公开投影、幂等 replay 与 Browser UAT 建立 RED。
+228.4 完成 RED -> GREEN、最终完整 RuntimeLab integration `136 passed`、
+Browser UAT 四场景、Checker `ALL GREEN` 与 Reviewer `PASS`（0 findings）。
+选择性 commit/push 后记录 delivery snapshot，再进入 `228.5` Contract A
+Goal Gate；Goal Gate 未绿不得激活 Spec 229。

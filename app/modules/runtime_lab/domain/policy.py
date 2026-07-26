@@ -68,6 +68,7 @@ class PolicyGate:
             return RouteDecision(
                 action="CLARIFY",
                 reason=result.rationale,
+                clarification_question=result.clarification_question,
                 faq_answer=dict(payload.get("faq_answer") or {}),
                 rag_answer=dict(payload.get("rag_answer") or {}),
                 agent_answer=dict(payload.get("agent_answer") or {}),
@@ -147,7 +148,11 @@ class PolicyGate:
                 active_task_id=_active_task_id(active_task),
                 reason=result.rationale,
             )
-        return RouteDecision(action="CLARIFY", reason=result.rationale)
+        return RouteDecision(
+            action="CLARIFY",
+            reason=result.rationale,
+            clarification_question=result.clarification_question,
+        )
 
     def _switch_decision(
         self,

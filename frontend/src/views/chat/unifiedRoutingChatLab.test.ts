@@ -439,7 +439,17 @@ describe('unified routing chat lab model', () => {
       detail: 'CHILD_TICKET_REFUND · runtime_airline_faq',
     })
 
-    expect(buildRuntimeLabRouteOutcome({ action: 'CLARIFY', reason: 'No shallow signal' })!.tone).toBe('warning')
+    expect(
+      buildRuntimeLabRouteOutcome({
+        action: 'CLARIFY',
+        reason: 'Classifier requested clarification',
+        clarificationQuestion: '请确认您要退整张机票，还是只退附加服务？',
+      }),
+    ).toEqual({
+      tone: 'warning',
+      title: '需要澄清',
+      detail: '请确认您要退整张机票，还是只退附加服务？',
+    })
     expect(buildRuntimeLabRouteOutcome({ action: 'AGENT_FALLBACK', reason: 'fallback' })!.title).toBe('兜底回答')
   })
 

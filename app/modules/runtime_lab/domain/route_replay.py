@@ -92,6 +92,9 @@ def _reason_code(route_decision: dict[str, Any]) -> str:
 
 
 def _clarification_question(route_decision: dict[str, Any]) -> str | None:
+    projected = route_decision.get("clarificationQuestion")
+    if projected:
+        return str(projected)
     classifier = route_decision.get("classifierResult")
     if not isinstance(classifier, Mapping):
         return None

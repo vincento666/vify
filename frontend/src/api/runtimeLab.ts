@@ -40,6 +40,7 @@ export interface RuntimeLabRouteDecision {
   targetSopId?: string | null
   activeTaskId?: number | null
   matchedKeyword?: string | null
+  clarificationQuestion?: string | null
   candidates?: unknown[]
   candidateSources?: string[]
   policyGate?: Record<string, unknown> | null

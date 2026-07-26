@@ -1,0 +1,25 @@
+228.4 unit/frontend evidence — 2026-07-26
+
+Focused backend GREEN:
+rtk uv run pytest tests/unit/runtime_lab/test_targeted_clarification_projection.py tests/integration/runtime_lab/test_runtime_lab_uncertainty_mutation_gate.py -q
+PASS — 5 passed, 11 subtests passed.
+
+Frontend targeted GREEN:
+rtk npm --prefix frontend run test:unit -- src/views/chat/unifiedRoutingChatLab.test.ts src/views/chat/runtimeLabAntMigration.test.ts
+PASS — 2 files, 17 tests.
+
+Frontend complete GREEN:
+rtk npm --prefix frontend run test:unit
+PASS — 116 files, 483 tests.
+
+The first complete frontend run had two unrelated 5-second dynamic-import
+timeouts. Both tests passed standalone, and the unchanged complete suite then
+passed 483/483. No timeout or test was weakened.
+
+Frontend rem gate:
+rtk npm --prefix frontend run test:unit -- src/remScaleClosure.test.ts
+PASS — 1 test.
+
+Frontend type/build gate:
+rtk npm --prefix frontend run build
+PASS — vue-tsc and Vite production build.

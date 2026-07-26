@@ -207,8 +207,11 @@ class RuntimeLabService:
                 return self._agent_clarify_turn(session_id, decision)
             return self._turn(
                 session_id,
-                "请问您想办理订票、票价、团队票、增值服务、退票、改签、资料修改、发票、行李、"
-                "值机、航班动态、特殊协助、宠物乘机、异常航班还是会员里程？",
+                decision.clarification_question
+                or (
+                    "请问您想办理订票、票价、团队票、增值服务、退票、改签、资料修改、发票、行李、"
+                    "值机、航班动态、特殊协助、宠物乘机、异常航班还是会员里程？"
+                ),
                 decision,
             )
 
@@ -1471,6 +1474,7 @@ def _decision_payload(decision: RouteDecision) -> dict[str, Any]:
         "targetSopId": decision.target_sop_id,
         "activeTaskId": decision.active_task_id,
         "matchedKeyword": decision.matched_keyword,
+        "clarificationQuestion": decision.clarification_question,
         "candidates": decision.candidates or [],
         "candidateSources": decision.candidate_sources or [],
         "policyGate": decision.policy_gate,
@@ -1491,6 +1495,7 @@ def _copy_route_evidence(decision: RouteDecision, evidence_source: RouteDecision
         target_sop_id=decision.target_sop_id,
         active_task_id=decision.active_task_id,
         matched_keyword=decision.matched_keyword,
+        clarification_question=decision.clarification_question,
         candidates=evidence_source.candidates,
         candidate_sources=evidence_source.candidate_sources,
         policy_gate=evidence_source.policy_gate,
@@ -2223,6 +2228,7 @@ def _with_evidence(
         target_sop_id=decision.target_sop_id,
         active_task_id=decision.active_task_id,
         matched_keyword=decision.matched_keyword,
+        clarification_question=decision.clarification_question,
         candidates=candidate_payloads,
         candidate_sources=candidate_sources,
         policy_gate={

@@ -1,0 +1,46 @@
+228.4 integration evidence — 2026-07-26
+
+MySQL capability:
+- existing compose service `mysql8`: healthy
+- Weaviate: not started; not required
+
+Full RuntimeLab integration:
+rtk uv run pytest tests/integration/runtime_lab -q
+Initial GREEN before the reviewer repair — 135 passed, 1 warning, 31 subtests
+passed in 581.98s.
+
+Focused Unit/Contract/Integration/E2E matrix:
+rtk uv run pytest tests/unit/runtime_lab tests/contract/test_runtime_lab_targeted_clarification_api.py tests/contract/test_runtime_lab_api.py tests/contract/test_runtime_policy_replay_api.py tests/integration/runtime_lab/test_runtime_lab_uncertainty_mutation_gate.py tests/integration/runtime_lab/test_runtime_lab_reliability.py tests/integration/runtime_lab/test_runtime_policy_route_replay_parity.py tests/e2e/test_runtime_lab_semantic_api_e2e.py tests/e2e/test_runtime_lab_fallback_matrix_e2e.py -q
+PASS — 136 passed, 1 warning, 143 subtests passed in 109.51s.
+
+Directed repair round 1:
+- the first matrix run found one stale fallback E2E assertion reading the
+  removed top-level `activeTask.checkpointId`;
+- the test now proves that mirror field stays absent and compares the
+  authoritative `activeTask.chatflowSession.checkpointId`;
+- standalone fallback E2E and the complete focused matrix both passed.
+
+Targeted MySQL assertions prove:
+- low-confidence and explicit uncertainty return CLARIFY;
+- assistant reply, route payload, ROUTE_DECISION event, and stored command
+  replay retain the same normalized question;
+- idempotent replay adds no event, task, or adapter call;
+- blank question uses the existing generic menu.
+
+Directed repair round 2:
+- Reviewer requested explicit targeted-question proof through Runtime Policy
+  replay, not only command idempotency replay.
+- Added one MySQL integration case that records a deterministic targeted
+  CLARIFY and proves the exact normalized question survives public output,
+  every golden-matrix replay result, decision-log replay, and persisted route
+  evidence.
+
+rtk .venv/bin/pytest -q tests/integration/runtime_lab/test_runtime_policy_route_replay_parity.py -k targeted_clarification --tb=short
+PASS — 1 passed, 4 deselected, 1 warning in 12.56s.
+
+rtk .venv/bin/pytest -q tests/integration/runtime_lab/test_runtime_policy_route_replay_parity.py tests/contract/test_runtime_policy_replay_api.py tests/contract/test_runtime_lab_targeted_clarification_api.py --tb=short
+PASS — 9 passed, 1 warning in 63.26s.
+
+Final complete RuntimeLab integration after the reviewer repair:
+rtk .venv/bin/pytest -q tests/integration/runtime_lab --tb=short
+PASS — 136 passed, 1 warning, 31 subtests passed in 769.94s.

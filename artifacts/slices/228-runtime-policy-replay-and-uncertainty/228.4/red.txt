@@ -1,0 +1,21 @@
+228.4 observable RED — 2026-07-26
+
+Backend command:
+rtk uv run pytest tests/unit/runtime_lab/test_targeted_clarification_projection.py tests/integration/runtime_lab/test_runtime_lab_uncertainty_mutation_gate.py -q
+
+Result: FAIL as expected — 5 failed, 2 passed, 9 subtests passed.
+
+- RouteDecision rejects clarification_question.
+- format_route_decision omits clarificationQuestion, including nullable projection.
+- assistant reply replaces targeted questions with the generic menu.
+- ROUTE_DECISION / stored command response cannot expose the additive field.
+
+Frontend command:
+rtk npm --prefix frontend run test:unit -- src/views/chat/unifiedRoutingChatLab.test.ts src/views/chat/runtimeLabAntMigration.test.ts
+
+Result: FAIL as expected — 2 failed, 15 passed.
+
+- CLARIFY outcome detail uses classifier reason instead of targeted question.
+- RuntimeLab inspector has no route-clarification-question projection.
+
+No production implementation was written before these failures.
