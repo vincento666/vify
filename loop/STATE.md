@@ -9,17 +9,17 @@
 - accepted roadmap: `228 -> 229 -> 230 -> 231`
 - ADR: `docs/adr/0010-runtime-route-decision-and-execution-boundary.md`
 - active unit: `228.3`
-- implementation: `228.2` complete; commit/push pending on actual task branch
+- implementation: `228.2` complete; commit `5affc1eb` pushed to actual task branch
 - live/paid provider calls: `0`
 - production/deploy/PR/merge actions: none
-- checker verdict: `228.1 ALL GREEN` (round 3)
-- reviewer verdict: `228.1 PASS` (round 3; 0 findings)
+- checker verdict: `228.2 ALL GREEN` (round 2)
+- reviewer verdict: `228.2 PASS` (round 1; 0 findings)
 
 ## Contract Matrix
 
 | Spec | Status | Dependency | Next Gate |
 |------|--------|------------|-----------|
-| 228 Replay and uncertainty | Active; 228.2 all green pending delivery | none | 228.3 observable RED |
+| 228 Replay and uncertainty | Active; 228.2 delivered | none | 228.3 observable RED |
 | 229 Routing reliability | Accepted; waiting | Spec 228 Goal Gate | 229.1 TDD RED |
 | 230 Execution boundary | Accepted; waiting | Spec 229 Goal Gate | 230.1 security RED |
 | 231 Composite intent | Accepted; waiting | Spec 230 Goal Gate | 231.1 TDD RED |

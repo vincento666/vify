@@ -1,6 +1,6 @@
 # Tasks — Spec 228
 
-Status: accepted; next unit `228.1`.
+Status: active; next unit `228.3`.
 
 TDD method for all implementation units: `tdd`.
 
@@ -35,7 +35,8 @@ Evidence: `artifacts/slices/228-runtime-policy-replay-and-uncertainty/228.1/`
 - [x] GREEN: injected replay port; remove parallel decision truth.
 - [x] MySQL parity through public RuntimeLab command path.
 - [x] Contract/E2E replay APIs and historical comparison.
-- [x] Checker/Reviewer; commit `fix(runtime-policy): replay shared route decisions`.
+- [x] Checker `ALL GREEN`; Reviewer `PASS`; commit
+  `fix(runtime-policy): replay shared route decisions` pushed as `5affc1eb`.
 
 Evidence: `artifacts/slices/228-runtime-policy-replay-and-uncertainty/228.2/`
 
