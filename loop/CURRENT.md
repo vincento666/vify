@@ -6,8 +6,8 @@
     contract: specs/228-runtime-policy-replay-and-uncertainty/tasks.md
     accepted roadmap: Specs 228 -> 229 -> 230 -> 231
     architecture decision: docs/adr/0010-runtime-route-decision-and-execution-boundary.md
-    active unit: 228.3
-    state: READY_FOR_228.3_DELIVERY
+    active unit: 228.4
+    state: READY_FOR_228.4_TDD_RED
     branch: codex/spec-228-runtime-lab-intent-routing-reliability-560c
     worktree: /Users/vincento/.codex/worktrees/560c/hify
 
@@ -101,7 +101,6 @@ gates -> diff/secret review -> independent Checker -> Reviewer -> slice commit
 
 ## Next Action
 
-228.3 完整 integration 曾发现回归，定向修复第 1 轮已关闭并完成 133-node
-Reviewer round 1 的真实 LLM 非数字 confidence High 已关闭；最终 Checker round 4
-`ALL GREEN`，Reviewer round 2 `PASS`、0 findings。选择性 commit/push 后进入
-`228.4` 定向澄清。
+228.3 已在 `a29a4357` 完成选择性 commit 并推送，独立 Checker round 4
+`ALL GREEN`、Reviewer round 2 `PASS`、0 findings。进入 `228.4` 唯一 TDD
+preflight，为服务端定向澄清、公开投影、幂等 replay 与 Browser UAT 建立 RED。

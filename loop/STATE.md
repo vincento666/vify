@@ -4,12 +4,12 @@
 
 - date: 2026-07-26
 - mode: Closed Loop / Goal accepted
-- state: `READY_FOR_228.3_DELIVERY`
+- state: `READY_FOR_228.4_TDD_RED`
 - active contract: `specs/228-runtime-policy-replay-and-uncertainty/tasks.md`
 - accepted roadmap: `228 -> 229 -> 230 -> 231`
 - ADR: `docs/adr/0010-runtime-route-decision-and-execution-boundary.md`
-- active unit: `228.3`
-- implementation: `228.3` gates complete; selective commit/push pending
+- active unit: `228.4`
+- implementation: `228.3` committed and pushed at `a29a4357`
 - live/paid provider calls: `0`
 - production/deploy/PR/merge actions: none
 - checker verdict: `228.3 ALL GREEN` (round 4; final exact full integration)
@@ -19,7 +19,7 @@
 
 | Spec | Status | Dependency | Next Gate |
 |------|--------|------------|-----------|
-| 228 Replay and uncertainty | Active; 228.3 Checker green | none | 228.3 Reviewer |
+| 228 Replay and uncertainty | Active; 228.3 delivered | none | 228.4 TDD RED |
 | 229 Routing reliability | Accepted; waiting | Spec 228 Goal Gate | 229.1 TDD RED |
 | 230 Execution boundary | Accepted; waiting | Spec 229 Goal Gate | 230.1 security RED |
 | 231 Composite intent | Accepted; waiting | Spec 230 Goal Gate | 231.1 TDD RED |
@@ -114,10 +114,16 @@ record the exact recovery command/output.
 - focused unit verifier: PASS (`17 passed`, `8 subtests passed`); focused
   integration verifier: PASS (`32 passed`, `8 subtests passed`); focused E2E:
   PASS (`1 passed`); ruff/diff/secret: PASS.
-- independent Checker: `ALL GREEN`; independent Reviewer: pending.
+- independent Checker: `ALL GREEN`; independent Reviewer: `PASS`, 0 findings.
+
+## Slice 228.3 Delivery
+
+- selective commit: `a29a4357f8c79eed7b87c415d4545740e710ce38`
+- remote branch: `origin/codex/spec-228-runtime-lab-intent-routing-reliability-560c`
+- remote commit: `a29a4357f8c79eed7b87c415d4545740e710ce38`
+- PR / merge / deploy: none
 
 ## Next Action
 
-Obtain the independent 228.3 Reviewer verdict. On `PASS`, create the selective
-228.3 commit, run the pre-push review gate, push the actual task branch, then
-enter the unique 228.4 TDD RED for targeted clarification.
+Run the unique 228.4 TDD preflight, then establish observable RED for targeted
+clarification projection, idempotent replay, and the frozen Browser UAT cases.
