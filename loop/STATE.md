@@ -1,76 +1,89 @@
 # Loop State
 
-## Spec 226 Closed Loop
+## RuntimeLab Intent Routing Reliability Program
 
-- date: 2026-07-18
-- mode: Closed Loop
-- state: `READY`
-- contract: `specs/226-ai-assistant-runtime-convergence-shell/tasks.md`
-- ADR: `docs/adr/0005-ai-assistant-runtime-job-substrate.md`
-- active unit: `226.6`
-- implementation: 226.1-226.5 shared Harness, product Adapters, neutral durable runtime, trusted scope, and AI standalone HA green
-- external provider calls: 0
-- production/deploy/git delivery actions: none
+- date: 2026-07-26
+- mode: Closed Loop / Goal accepted
+- state: `READY_FOR_228.1_CAPABILITY_RECOVERY_AND_TDD`
+- active contract: `specs/228-runtime-policy-replay-and-uncertainty/tasks.md`
+- accepted roadmap: `228 -> 229 -> 230 -> 231`
+- ADR: `docs/adr/0010-runtime-route-decision-and-execution-boundary.md`
+- active unit: `228.1`
+- implementation: not started
+- live/paid provider calls: `0`
+- production/deploy/PR/merge actions: none
+- checker verdict: `ALL GREEN`; publish gate: `PASS`
+- reviewer verdict: `PASS`
 
-## Confirmed Repository Facts
+## Contract Matrix
 
-- `runtime_jobs` core/registry/composition 已归属领域中立 runtime substrate；
-  AI Assistant、Workflow、Chatflow 通过各自 Adapter 注册 handler。
-- AI Assistant async API 只入 durable queue；router-local executor/in-flight
-  已删除，前端不再调用 `/worker/process`。
-- Production principal 只接受 trusted request state；local-header mode 是显式
-  开发兼容 Adapter，approval/control actor 来自 server principal。
-- AI Assistant SSE 只依赖 scoped short-session reader；首次读取和每次 poll
-  都在 yield/sleep 前释放 DB session。
-- 当前“已处理”分组 identity 随 sequence range 变化，粒度不是稳定 phase/step。
-- Customer Assistant 有真实 subagent lifecycle；AI Assistant 默认 link-only
-  bridge 已 fail closed，226.6 才接入可证明的共享 child lifecycle。
+| Spec | Status | Dependency | Next Gate |
+|------|--------|------------|-----------|
+| 228 Replay and uncertainty | Accepted; active | none | 228.1 TDD RED |
+| 229 Routing reliability | Accepted; waiting | Spec 228 Goal Gate | 229.1 TDD RED |
+| 230 Execution boundary | Accepted; waiting | Spec 229 Goal Gate | 230.1 security RED |
+| 231 Composite intent | Accepted; waiting | Spec 230 Goal Gate | 231.1 TDD RED |
 
-## Architecture Decision
+Contract files do not constitute Unit, Integration, Contract, E2E, Browser UAT,
+security, migration, or production PASS.
 
-- Accepted：每个 Module 保持清晰 Interface/Implementation，复用不变量抽为公共
-  deep Module，业务差异留在 Adapter。
-- Accepted：Agent Harness 是 AI Assistant / Customer Assistant 共用底层；拥有
-  bounded ReAct、plan、tool governance、context/memory、permission/approval、
-  checkpoint/cancel/event 的通用执行不变量。
-- AI Assistant 与 Customer Assistant 都通过 Agent Harness Interface；不建立
-  Customer Assistant -> AI Assistant 产品依赖。
-- 复用 runtime_jobs 机制，但提升为 domain-neutral substrate。
-- AI Assistant/Workflow/Chatflow 各自注册 handler。
-- 公共 Agent Execution Module 只拥有 parent-child identity/lifecycle/capabilities；
-  Agent Harness 通过 child-provider Adapter 使用。
-- Agent Harness 的外部 Seam 保持小，产品 storage、business task、UI 与工具
-  Implementation 不进入公共 Module，避免 Agent God Module。
-- 禁止 catch-all `common/shared/utils`；一个 Adapter 不创建假 Seam。
-- raw events 保持审计真相；RunActivity 是 pure projection，不建第二活动表。
+## Confirmed Baseline Facts
 
-## Visual Reference
+- runtime-policy governance replay currently has a parallel
+  `_candidate_decision()` path.
+- real LLM classifier output does not yet share the fake classifier's minimum
+  confidence enforcement.
+- candidate sources can present the same target more than once before Top-K.
+- RuntimeLab currently derives only limited active/suspended context for
+  semantic arbitration.
+- intent-selection knowledge is distributed across SOP manifests and recall
+  constants rather than one versioned catalog.
+- a valid route decision currently reaches task/adapter mutation without a
+  separate trusted principal/permission gate.
+- route-model connectivity and fallback-agent administration are existing
+  access-control gaps outside Spec 230's conversation/session execution scope;
+  final reporting must keep this follow-up explicit.
+- the regression `"我想退费并开发票"` currently permits a single
+  `invoice_apply` selection instead of preserving both atomic components.
 
-- 已截取当前 Codex 正在运行会话用于结构参考。
-- 采纳：inline streaming、running row、completed one-line collapse、step count。
-- 不采纳：系统暗黑色、灰阶/品牌色、侧栏/环境面板和像素值。
-- Hify 保持现有亮色 tokens、`rem`、a11y 与 reduced-motion。
+These facts are frozen as RED targets; implementation must re-read the current
+code before writing and record exact symbols/lines in slice evidence.
 
-## Goal Controls
+## Capability Snapshot
 
-- max attempts: 3 / slice；2 / exit regression
-- TTL: human acceptance 后 14 日
-- budget: 无机器 token budget；0 live provider calls
-- exhaustion: `WAITING_HUMAN`
-- review context: `standard`
+- Python/`uv`, Node/`npm`, Docker and Podman are installed.
+- At contract creation, MySQL on `127.0.0.1:3306` was unavailable.
+- The repository already provides
+  `docker-compose.mysql8-weaviate.yml` with service `mysql8`; bounded local
+  capability recovery is in scope.
+- Hify backend and Browser UAT server were not running at contract creation.
+- Live provider capability is intentionally N/A because budget is zero.
+
+Unavailable capability is `ENV-BLOCKED-*`, never PASS. The implementation task
+must start only the existing local services needed for the active gate and
+record the exact recovery command/output.
 
 ## Worktree Safety
 
-- Branch: `codex/spec-226-agent-harness-convergence`
-- Base: `e0c5eb356dcdad2945ebc1304c7c34b830ddcc0c`
+- Branch: `codex/spec-228-runtime-lab-intent-routing-reliability`
+- Worktree:
+  `/Users/vincento/work/develop/hify-spec-228-runtime-lab-intent-routing`
+- Base: `815cb1c90031a9dfb1e11e325a1ecf6ed48c0441`
 - Merge target: `not-authorized`
-- Contract 前已有多组变更；均保留。
-- 226.1-226.4 已 selective commit。
-- 本合同没有 push、merge、deploy、provider call 或 migration apply。
-- Contract docs 不构成 Unit/Integration/E2E/Browser UAT PASS。
+- The original dirty Hify checkout remains out of scope and untouched.
+- Selective staging must include only the active contract/slice.
+
+## Goal Controls
+
+- max attempts: 3 per slice; 2 for repeated Spec 230 security finding family
+- TTL: 21 days from first implementation write
+- provider budget: 0
+- exhaustion: `WAITING_HUMAN`
+- independent Checker and Reviewer: required
+- Spec 230 review: fresh-required
 
 ## Next Action
 
-226.5 Builder GREEN，Checker `ALL GREEN`，Reviewer `PASS`，安全/HA 审查无
-未关闭 Critical/High。下一步执行 226.6 TDD preflight，取得 stable activity
-identity、duplicate/reordered event projection 与真实 child lifecycle 的 RED。
+Finish Contract Gate review and record evidence. After contract commit/push,
+the new task must run Branch Preflight, restore MySQL capability if required,
+invoke `tdd`, and produce the `228.1` false-green RED before implementation.

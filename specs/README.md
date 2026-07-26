@@ -37,6 +37,10 @@ defined in `docs/testing/acceptance-gates.md` before the next slice starts.
 | 24 | 225-workflow-chatflow-control-hardening | Corrective Workflow/Chatflow authoring control hardening after reproducible toolbar, drag, and config-panel regressions |
 | 25 | 225-runtime-lab-sop-live-stream | RuntimeLab SOP async-first live stream bridge over Chatflow Runtime V2, including genuine provider chunks and reconnectable UI projection |
 | 26 | 226-ai-assistant-runtime-convergence-shell | Converge AI Assistant on the domain-neutral durable runtime job substrate, harden trusted execution identity, and ship the Hify-light collapsible activity shell with real subagent presence |
+| 27 | 228-runtime-policy-replay-and-uncertainty | Repair evaluation truth and enforce classifier uncertainty before any RuntimeLab mutation |
+| 28 | 229-runtime-lab-intent-routing-reliability | Fuse candidates, add margin/context, and isolate a versioned intent catalog and retriever |
+| 29 | 230-runtime-route-execution-boundary | Separate route proposals from trusted execution authority and child side-effect permission |
+| 30 | 231-runtime-lab-composite-intent | Preserve, clarify, and explicitly resolve bounded multi-intent turns without silent flattening |
 
 ## Directory Index
 
@@ -131,6 +135,10 @@ defined in `docs/testing/acceptance-gates.md` before the next slice starts.
 | 225-workflow-chatflow-control-hardening | Corrective UI control geometry, honest structured-row drag, variable-scope audit, and lifecycle UAT for Workflow/Chatflow authoring |
 | 225-runtime-lab-sop-live-stream | RuntimeLab SOP async-first SSE bridge to Chatflow Runtime V2 with genuine provider deltas and reconnectable UI projection |
 | 226-ai-assistant-runtime-convergence-shell | Domain-neutral runtime job reuse, trusted AI execution identity, standalone HA worker, stable activity projection, Hify-light auto-collapse shell, real child presence, and evidence-based cleanup |
+| 228-runtime-policy-replay-and-uncertainty | Shared production-path route replay, false-green protection, confidence/clarification enforcement, and targeted clarification |
+| 229-runtime-lab-intent-routing-reliability | Canonical multi-source fusion, ambiguity margin, read-only route context, and isolated versioned intent retrieval |
+| 230-runtime-route-execution-boundary | Trusted principal, pre-mutation gate, bounded confirmation, audit, and RuntimeLab-owned Runtime V2 effect authorization |
+| 231-runtime-lab-composite-intent | Atomic component preservation, sequencing clarification, bounded pending route plans, and explicit composite resolution |
 
 ## Required Files Per Spec
 
