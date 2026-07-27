@@ -66,7 +66,7 @@ Evidence: `artifacts/slices/228-runtime-policy-replay-and-uncertainty/228.4/`
 
 - [x] Required eval cases pass; known gaps remain visible.
 - [x] Full Spec 228 verifier, diff, secret, migration, API/SSE regression.
-- [ ] Independent Checker `ALL GREEN` after clean-worktree delivery recheck.
+- [x] Independent Checker `ALL GREEN` after clean-worktree delivery recheck.
 - [x] Independent Reviewer `PASS`.
 - [ ] Update Loop snapshot; commit and push.
 - [ ] Advance only to accepted Spec 229.

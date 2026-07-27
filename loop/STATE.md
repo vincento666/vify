@@ -4,7 +4,7 @@
 
 - date: 2026-07-26
 - mode: Closed Loop / Goal accepted
-- state: `READY_FOR_228.5_CHECKER_DELIVERY_RECHECK`
+- state: `READY_FOR_228.5_DELIVERY`
 - active contract: `specs/228-runtime-policy-replay-and-uncertainty/tasks.md`
 - accepted roadmap: `228 -> 229 -> 230 -> 231`
 - ADR: `docs/adr/0010-runtime-route-decision-and-execution-boundary.md`
@@ -12,14 +12,14 @@
 - implementation: `228.4` committed and pushed at `ef02934b`
 - live/paid provider calls: `0`
 - production/deploy/PR/merge actions: none
-- checker verdict: `228.5 BLOCK round 1; delivery hygiene only`
+- checker verdict: `228.5 ALL GREEN` (final clean-worktree recheck)
 - reviewer verdict: `228.5 PASS` (0 findings)
 
 ## Contract Matrix
 
 | Spec | Status | Dependency | Next Gate |
 |------|--------|------------|-----------|
-| 228 Replay and uncertainty | Active; Goal Gate delivery recheck | none | 228.5 Checker |
+| 228 Replay and uncertainty | Goal Gate technical PASS; delivery pending | none | 228.5 push/snapshot |
 | 229 Routing reliability | Accepted; waiting | Spec 228 Goal Gate | 229.1 TDD RED |
 | 230 Execution boundary | Accepted; waiting | Spec 229 Goal Gate | 230.1 security RED |
 | 231 Composite intent | Accepted; waiting | Spec 230 Goal Gate | 231.1 TDD RED |
@@ -158,12 +158,12 @@ record the exact recovery command/output.
   `31 subtests`); frontend: PASS (`483 tests`); Browser evidence: PASS;
 - independent Reviewer: `PASS`, 0 findings;
 - Checker round 1: no functional gap, blocked only until evidence/doc cleanup
-  is committed and the worktree can be cleanly rechecked;
+  was committed and the worktree could be cleanly rechecked;
+- final Checker: `ALL GREEN`; Reviewer: `PASS`, 0 findings;
 - wider governance mypy and Alembic metadata check remain documented baselines,
   not PASS claims.
 
 ## Next Action
 
-Commit the 228.5 evidence and one-line historical evidence whitespace cleanup,
-then obtain the final independent Checker `ALL GREEN`, push the snapshot, and
-only then activate 229.1.
+Push the final 228.5 Goal Gate evidence, record the remote delivery snapshot,
+then activate only 229.1 TDD RED.
