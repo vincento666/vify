@@ -3,11 +3,11 @@
 ## Status
 
     mode: Closed Loop / Goal accepted
-    contract: specs/228-runtime-policy-replay-and-uncertainty/tasks.md
+    contract: specs/229-runtime-lab-intent-routing-reliability/tasks.md
     accepted roadmap: Specs 228 -> 229 -> 230 -> 231
     architecture decision: docs/adr/0010-runtime-route-decision-and-execution-boundary.md
-    active unit: 228.5
-    state: READY_FOR_228.5_DELIVERY
+    active unit: 229.1
+    state: READY_FOR_229.1_TDD_RED
     branch: codex/spec-228-runtime-lab-intent-routing-reliability-560c
     worktree: /Users/vincento/.codex/worktrees/560c/hify
 
@@ -101,6 +101,7 @@ gates -> diff/secret review -> independent Checker -> Reviewer -> slice commit
 
 ## Next Action
 
-228.5 最终 Checker `ALL GREEN`、Reviewer `PASS`，Spec 228 Contract A Goal
-Gate 已技术闭合。现在只剩选择性 push 和 delivery snapshot；远端交付完成前，
-不得激活 Spec 229。
+Spec 228 Contract A Goal Gate 已在 `3ecb0ba6` push，Checker `ALL GREEN`、
+Reviewer `PASS`、MySQL/Browser 真证据齐全。进入唯一 `229.1` TDD preflight：
+候选融合、同目标来源归因、Top-K 前去重的可观察 RED。Spec 229 Goal Gate 前，
+不得激活 Spec 230。

@@ -1,6 +1,6 @@
 # Tasks — Spec 228
 
-Status: active; next unit `228.5`.
+Status: complete; Goal Gate delivered. Next accepted contract: Spec 229.
 
 TDD method for all implementation units: `tdd`.
 
@@ -68,8 +68,8 @@ Evidence: `artifacts/slices/228-runtime-policy-replay-and-uncertainty/228.4/`
 - [x] Full Spec 228 verifier, diff, secret, migration, API/SSE regression.
 - [x] Independent Checker `ALL GREEN` after clean-worktree delivery recheck.
 - [x] Independent Reviewer `PASS`.
-- [ ] Update Loop snapshot; commit and push.
-- [ ] Advance only to accepted Spec 229.
+- [x] Update Loop snapshot; commit and push.
+- [x] Advance only to accepted Spec 229.
 
 Evidence: `artifacts/slices/228-runtime-policy-replay-and-uncertainty/228.5/`
 

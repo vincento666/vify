@@ -4,12 +4,12 @@
 
 - date: 2026-07-26
 - mode: Closed Loop / Goal accepted
-- state: `READY_FOR_228.5_DELIVERY`
-- active contract: `specs/228-runtime-policy-replay-and-uncertainty/tasks.md`
+- state: `READY_FOR_229.1_TDD_RED`
+- active contract: `specs/229-runtime-lab-intent-routing-reliability/tasks.md`
 - accepted roadmap: `228 -> 229 -> 230 -> 231`
 - ADR: `docs/adr/0010-runtime-route-decision-and-execution-boundary.md`
-- active unit: `228.5`
-- implementation: `228.4` committed and pushed at `ef02934b`
+- active unit: `229.1`
+- implementation: `228.5` Goal Gate delivered at `3ecb0ba6`
 - live/paid provider calls: `0`
 - production/deploy/PR/merge actions: none
 - checker verdict: `228.5 ALL GREEN` (final clean-worktree recheck)
@@ -19,8 +19,8 @@
 
 | Spec | Status | Dependency | Next Gate |
 |------|--------|------------|-----------|
-| 228 Replay and uncertainty | Goal Gate technical PASS; delivery pending | none | 228.5 push/snapshot |
-| 229 Routing reliability | Accepted; waiting | Spec 228 Goal Gate | 229.1 TDD RED |
+| 228 Replay and uncertainty | Complete; Goal Gate delivered | none | none |
+| 229 Routing reliability | Active | Spec 228 Goal Gate | 229.1 TDD RED |
 | 230 Execution boundary | Accepted; waiting | Spec 229 Goal Gate | 230.1 security RED |
 | 231 Composite intent | Accepted; waiting | Spec 230 Goal Gate | 231.1 TDD RED |
 
@@ -163,7 +163,15 @@ record the exact recovery command/output.
 - wider governance mypy and Alembic metadata check remain documented baselines,
   not PASS claims.
 
+## Spec 228 Delivery
+
+- Goal Gate commits: `71492132`, `3ecb0ba6`;
+- remote verified: `3ecb0ba62e4b992503c7355a0c2f24f57cbbe5f7`, divergence `0/0`;
+- final Checker: `ALL GREEN`; final Reviewer: `PASS`, 0 findings;
+- MySQL healthy, Browser UAT evidence present, provider budget `0`;
+- PR / merge / deploy / production migration: none.
+
 ## Next Action
 
-Push the final 228.5 Goal Gate evidence, record the remote delivery snapshot,
-then activate only 229.1 TDD RED.
+Run the unique 229.1 TDD preflight and establish observable RED for candidate
+fusion before any Spec 229 implementation write.
