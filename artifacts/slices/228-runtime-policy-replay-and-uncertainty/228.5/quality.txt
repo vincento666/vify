@@ -1,0 +1,22 @@
+228.5 quality evidence — 2026-07-26
+
+- Ruff affected Spec 228 source/test scope: PASS.
+- Narrowed mypy for six affected route-eval/RuntimeLab source files: PASS.
+- `governance.py` wider mypy: baseline RED, 4 `no-any-return` errors at
+  lines 488/654/677/699. `git blame` assigns all four to June 9 commits before
+  this Program; no Spec 228 change owns those return statements. Not claimed
+  PASS and not changed.
+- complete branch diff from `4dd2cbd4`: `git diff --check` PASS after removing
+  one trailing blank line from the earlier 228.3 delivery evidence.
+- production-like secret scan over the complete non-artifact branch diff:
+  PASS, no matches.
+- Alembic: one head, `0036_ai_assistant_tenant_scope`.
+- migration files changed by this Program: none.
+- `alembic check`: recorded baseline RED. Metadata registration omits existing
+  RuntimeLab/agent execution tables and reports the existing
+  `ai_assistant_memory_cursor.pending_source_hash` drift. No PASS claimed; no
+  migration/schema work belongs to Spec 228.
+- MySQL compose service: healthy.
+- Weaviate: not started; not required.
+- live/paid provider calls: `0`.
+- PR/merge/deploy/production migration: none.

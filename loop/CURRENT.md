@@ -7,7 +7,7 @@
     accepted roadmap: Specs 228 -> 229 -> 230 -> 231
     architecture decision: docs/adr/0010-runtime-route-decision-and-execution-boundary.md
     active unit: 228.5
-    state: READY_FOR_228.5_GOAL_GATE
+    state: READY_FOR_228.5_CHECKER_DELIVERY_RECHECK
     branch: codex/spec-228-runtime-lab-intent-routing-reliability-560c
     worktree: /Users/vincento/.codex/worktrees/560c/hify
 
@@ -101,7 +101,6 @@ gates -> diff/secret review -> independent Checker -> Reviewer -> slice commit
 
 ## Next Action
 
-228.4 已在 `ef02934b` 完成选择性 commit/push，远端 SHA 一致。进入唯一
-`228.5` Contract A Goal Gate：验证 required/known-gap、完整 Spec 228
-回归、API/SSE、MySQL/Browser、diff/secret/migration，并取得独立 Checker
-`ALL GREEN` 与 Reviewer `PASS`。Goal Gate 未绿不得激活 Spec 229。
+228.5 自动门与 Reviewer 已通过；Checker round 1 仅要求把 Goal Gate 证据和
+既有 228.3 尾部空行清理提交到干净 worktree，再作最终 `ALL GREEN` recheck。
+完成该 recheck、push 和 Loop snapshot 前，Goal Gate 未绿，不得激活 Spec 229。

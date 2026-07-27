@@ -4,7 +4,7 @@
 
 - date: 2026-07-26
 - mode: Closed Loop / Goal accepted
-- state: `READY_FOR_228.5_GOAL_GATE`
+- state: `READY_FOR_228.5_CHECKER_DELIVERY_RECHECK`
 - active contract: `specs/228-runtime-policy-replay-and-uncertainty/tasks.md`
 - accepted roadmap: `228 -> 229 -> 230 -> 231`
 - ADR: `docs/adr/0010-runtime-route-decision-and-execution-boundary.md`
@@ -12,14 +12,14 @@
 - implementation: `228.4` committed and pushed at `ef02934b`
 - live/paid provider calls: `0`
 - production/deploy/PR/merge actions: none
-- checker verdict: `228.4 ALL GREEN`
-- reviewer verdict: `228.4 PASS` (round 2; 0 findings)
+- checker verdict: `228.5 BLOCK round 1; delivery hygiene only`
+- reviewer verdict: `228.5 PASS` (0 findings)
 
 ## Contract Matrix
 
 | Spec | Status | Dependency | Next Gate |
 |------|--------|------------|-----------|
-| 228 Replay and uncertainty | Active; 228.4 delivered | none | 228.5 Goal Gate |
+| 228 Replay and uncertainty | Active; Goal Gate delivery recheck | none | 228.5 Checker |
 | 229 Routing reliability | Accepted; waiting | Spec 228 Goal Gate | 229.1 TDD RED |
 | 230 Execution boundary | Accepted; waiting | Spec 229 Goal Gate | 230.1 security RED |
 | 231 Composite intent | Accepted; waiting | Spec 230 Goal Gate | 231.1 TDD RED |
@@ -149,9 +149,21 @@ record the exact recovery command/output.
 - local/upstream divergence: `0/0`
 - PR / merge / deploy: none
 
+## Slice 228.5 Interim Gate
+
+- negative fail-closed sentinels: PASS (`4 tests`);
+- Spec 228 Unit/Contract/Integration/E2E/SSE matrix: PASS (`92 tests`,
+  `19 subtests`);
+- final RuntimeLab integration after product code: PASS (`136 tests`,
+  `31 subtests`); frontend: PASS (`483 tests`); Browser evidence: PASS;
+- independent Reviewer: `PASS`, 0 findings;
+- Checker round 1: no functional gap, blocked only until evidence/doc cleanup
+  is committed and the worktree can be cleanly rechecked;
+- wider governance mypy and Alembic metadata check remain documented baselines,
+  not PASS claims.
+
 ## Next Action
 
-Run the unique 228.5 Contract A Goal Gate. Prove required-case PASS and visible
-known gaps, rerun the full Spec 228 verifier and compatibility/quality gates,
-then obtain independent Checker `ALL GREEN` and Reviewer `PASS`. Do not activate
-Spec 229 before that gate closes.
+Commit the 228.5 evidence and one-line historical evidence whitespace cleanup,
+then obtain the final independent Checker `ALL GREEN`, push the snapshot, and
+only then activate 229.1.

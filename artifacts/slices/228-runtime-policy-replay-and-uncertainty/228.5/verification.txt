@@ -1,0 +1,36 @@
+228.5 Contract A verification — 2026-07-26
+
+Observable negative gate:
+- PASS — 4 tests, 1 warning, 6.39s.
+- Missing shared replay, known-gap-only input, incomplete required evidence,
+  and a faulted shared production decision all fail closed.
+
+Spec 228 Unit/Contract/Integration/E2E/SSE matrix:
+- PASS — 92 tests, 19 subtests, 1 warning, 213.35s.
+- 21 files cover route-eval contracts, required-case evidence, known-gap
+  visibility, zero-provider budget, governance replay, production parity,
+  bootstrap/release confidence, uncertainty zero mutation, targeted
+  clarification persistence/replay, public envelopes, SSE, and RuntimeLab E2E.
+
+Final complete RuntimeLab MySQL integration after the last product write:
+- PASS — 136 tests, 31 subtests, 1 warning, 769.94s.
+- Evidence: `../228.4/integration.txt`.
+- Only Loop/evidence documents changed after that run.
+
+Frontend:
+- complete unit suite: PASS — 116 files, 483 tests, 21.56s;
+- rem gate: included and PASS;
+- `vue-tsc` plus Vite production build: PASS, 5134 modules.
+
+Success Predicate mapping:
+1. Shared decision fault makes public replay fail and persists no run: PASS.
+2. Required route cases use the injected shared production replay seam: PASS.
+3. Known gaps remain counted and cannot supply required PASS: PASS.
+4. Low/invalid/explicit uncertainty clarifies with zero mutation: PASS.
+5. Targeted question survives API, persistence, command replay, governance
+   replay, and UI: PASS.
+6. Bootstrap `0.60`; legacy rows readable; invalid new activation rejected:
+   PASS.
+7. Unit/Integration/Contract/E2E/Browser/Docs: PASS. Independent Reviewer:
+   PASS, 0 findings. Checker round 1 has no functional gap; final clean-worktree
+   recheck is pending its delivery-hygiene closure.

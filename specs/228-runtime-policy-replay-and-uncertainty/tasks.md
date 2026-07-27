@@ -1,6 +1,6 @@
 # Tasks — Spec 228
 
-Status: active; next unit `228.4`.
+Status: active; next unit `228.5`.
 
 TDD method for all implementation units: `tdd`.
 
@@ -64,10 +64,10 @@ Evidence: `artifacts/slices/228-runtime-policy-replay-and-uncertainty/228.4/`
 
 ## 228.5 Contract A Goal Gate
 
-- [ ] Required eval cases pass; known gaps remain visible.
-- [ ] Full Spec 228 verifier, diff, secret, migration, API/SSE regression.
-- [ ] Independent Checker `ALL GREEN`.
-- [ ] Independent Reviewer `PASS`.
+- [x] Required eval cases pass; known gaps remain visible.
+- [x] Full Spec 228 verifier, diff, secret, migration, API/SSE regression.
+- [ ] Independent Checker `ALL GREEN` after clean-worktree delivery recheck.
+- [x] Independent Reviewer `PASS`.
 - [ ] Update Loop snapshot; commit and push.
 - [ ] Advance only to accepted Spec 229.
 

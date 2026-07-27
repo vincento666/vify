@@ -1,0 +1,19 @@
+228.5 observable negative gate — 2026-07-26
+
+Command:
+rtk .venv/bin/pytest -q \
+  tests/unit/runtime_policy/test_route_eval_contract.py::RuntimeRouteEvalContractTest::test_missing_route_replay_port_fails_closed \
+  tests/unit/runtime_policy/test_route_eval_contract.py::RuntimeRouteEvalContractTest::test_known_gap_never_counts_as_required_pass \
+  tests/unit/runtime_policy/test_route_eval_contract.py::RuntimeRouteEvalContractTest::test_required_case_missing_expected_evidence_fails_without_running_route \
+  tests/integration/runtime_lab/test_runtime_policy_route_replay_parity.py::RuntimePolicyRouteReplayParityTest::test_public_replay_fails_closed_when_shared_decision_faults \
+  --tb=short
+
+PASS — 4 negative-contract tests, 1 warning, 6.39s.
+
+Observable failure predicates stayed enforced:
+
+- no shared replay port raises instead of false-green evaluation;
+- known-gap-only input reports required evidence missing;
+- incomplete required evidence fails before runner invocation;
+- a shared production decision fault returns the compatible 500 envelope and
+  persists zero evaluation runs.
