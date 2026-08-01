@@ -57,11 +57,11 @@ class RouteCandidateTest(unittest.TestCase):
                 reason="future type should be rejected in 030.1",
             )
 
-    def test_top_k_orders_by_score_and_preserves_input_order_for_ties(self) -> None:
+    def test_top_k_orders_by_score_and_uses_canonical_key_for_ties(self) -> None:
         candidates = [
             _candidate("sop:refund_ticket", 0.7),
-            _candidate("sop:change_flight", 0.95),
             _candidate("sop:invoice_apply", 0.95),
+            _candidate("sop:change_flight", 0.95),
             _candidate("clarify:no_match", 0.2, candidate_type=CandidateType.CLARIFY),
         ]
 

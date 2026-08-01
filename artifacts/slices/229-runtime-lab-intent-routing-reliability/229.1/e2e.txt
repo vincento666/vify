@@ -1,0 +1,27 @@
+229.1 E2E evidence — 2026-07-27
+
+The first airline-scale RED contained three stale public mirror assertions.
+The contract-alignment repair replaced them with positive `chatflowSession`
+checks and explicit absence checks; that run then exposed one remaining stale
+v1 switch expectation. The command remains RED, not PASS:
+
+  rtk .venv/bin/pytest -q tests/e2e/test_runtime_lab_confusion_rag_agent_matrix_e2e.py tests/e2e/test_runtime_lab_airline_scale_e2e.py --tb=short
+
+Latest result: 6 passed, 1 failed, 20 subtests passed in 38.40s.
+
+The remaining failure expects `SUSPEND_AND_START` for a real Chatflow v1 SOP
+without a durable checkpoint, but the protected child-state boundary returns
+`REJECT_SWITCH_CONTINUE_ACTIVE`. The 229.1 route regression was fixed: its
+switch/resume case now passes. See `baseline-e2e.md`; this file must not be
+treated as a green E2E gate.
+
+229.1 corrected Runtime V2 E2E GREEN — 2026-08-01
+
+  rtk env HIFY_MYSQL8_TEST_ADMIN_DATABASE_URL='<test-admin-url>' uv run pytest tests/integration/runtime_lab/test_runtime_lab_semantic_policy.py tests/e2e/test_runtime_lab_confusion_rag_agent_matrix_e2e.py tests/e2e/test_runtime_lab_airline_scale_e2e.py -q --tb=short
+
+Result: 28 passed, 1 warning, 20 subtests passed in 71.57s.
+
+The airline fixture is now explicitly Runtime V2 compatible. Its async
+RuntimeJob is drained by the E2E worker, then validates suspend/resume and
+both completed tasks through the RuntimeLab control plane. It asserts the V2
+async acknowledgement rather than a stale synchronous V1 collection prompt.

@@ -59,7 +59,17 @@ class RuntimeLabSemanticPolicyTest(unittest.TestCase):
             )
 
             self.assertEqual(classifier.inputs[0].thresholds["classifierMinConfidence"], 0.77)
-            self.assertEqual(len(classifier.inputs[0].candidates), 3)
+            self.assertEqual(len(classifier.inputs[0].candidates), 2)
+            self.assertEqual(
+                len({candidate.canonical_key for candidate in classifier.inputs[0].candidates}),
+                2,
+            )
+            refund = next(
+                candidate
+                for candidate in classifier.inputs[0].candidates
+                if candidate.target_id == "refund_ticket"
+            )
+            self.assertGreaterEqual(len(refund.source_evidence), 2)
             self.assertEqual(service._classifier_min_confidence(), 0.61)
 
     def test_active_conflict_uses_classifier_before_sop_mutation(self) -> None:

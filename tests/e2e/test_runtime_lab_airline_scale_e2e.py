@@ -7,17 +7,22 @@ from fastapi import Depends
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.core.database import get_session
+from app.core.database import get_session, get_session_factory
 from app.main import app
+from app.modules.runtime.infra.runtime_job_repository import RuntimeJobRepository
 from app.modules.runtime_lab.domain.chatflow_adapter import ChatflowSopRuntimeAdapter
 from app.modules.runtime_lab.domain.service import RuntimeLabService
 from app.modules.runtime_lab.domain.sop import mock_sop_manifests
 from app.modules.runtime_lab.domain.sop_adapter import FakeSopRuntimeAdapter
 from app.modules.runtime_lab.infra.repository import RuntimeLabRepository
 from app.modules.runtime_lab.web.router import get_runtime_lab_service
+from app.modules.runtime_lab.web.router import _runtime_lab_background_enqueue, _runtime_lab_background_resume_enqueue
+from app.modules.workflow.domain.runtime_invocation_gateway import RuntimeInvocationGateway
+from app.modules.workflow.domain.runtime_v2 import ChatflowRuntimeV2Service, RuntimeV2CompatibilityChecker
 from app.modules.workflow.domain.service import WorkflowService
 from app.modules.workflow.infra.chatflow_state_repository import ChatflowStateRepository
 from app.modules.workflow.infra.repository import WorkflowRepository
+from app.modules.workflow.runtime_job_worker import build_runtime_job_worker
 
 
 EXPECTED_SOP_IDS = (
@@ -292,14 +297,12 @@ class RuntimeLabAirlineScaleE2ETest(unittest.TestCase):
 
                         self.assertEqual(started["routeDecision"]["action"], "START_SOP", utterance)
                         self.assertEqual(started["activeTask"]["sopId"], sop_id)
-                        self.assertEqual(started["activeTask"]["currentStep"], "collect_order_no")
+                        self.assertIn("chatflowSession", started["activeTask"])
+                        self.assertNotIn("currentStep", started["activeTask"])
                         self.assertEqual(collected["routeDecision"]["action"], "CONTINUE_ACTIVE_SOP")
-                        self.assertEqual(collected["activeTask"]["currentStep"], "confirm")
-                        self.assertEqual(collected["activeTask"]["businessRefs"]["phone"], f"1380013{index:04d}")
-                        if sop_id == "flight_booking":
-                            self.assertNotIn("order_no", collected["activeTask"]["businessRefs"])
-                        else:
-                            self.assertTrue(collected["activeTask"]["businessRefs"]["order_no"].startswith("MU"))
+                        self.assertIn("chatflowSession", collected["activeTask"])
+                        self.assertNotIn("currentStep", collected["activeTask"])
+                        self.assertNotIn("businessRefs", collected["activeTask"])
                         self.assertEqual(completed["routeDecision"]["action"], "COMPLETE_TASK")
                         self.assertIsNone(completed["activeTask"])
                         executed += 1
@@ -385,9 +388,8 @@ class RuntimeLabAirlineScaleE2ETest(unittest.TestCase):
         self.assertEqual(detailed_started["routeDecision"]["action"], "START_SOP")
         self.assertEqual(detailed_started["activeTask"]["sopId"], "flight_booking")
         self.assertNotIn("订单号", detailed_started["reply"])
-        self.assertEqual(detailed_started["activeTask"]["businessRefs"]["origin"], "北京")
-        self.assertEqual(detailed_started["activeTask"]["businessRefs"]["destination"], "广州")
-        self.assertEqual(detailed_started["activeTask"]["businessRefs"]["travel_time"], "明天上午9点")
+        self.assertIn("chatflowSession", detailed_started["activeTask"])
+        self.assertNotIn("businessRefs", detailed_started["activeTask"])
         self.assertIn("北京", detailed_started["reply"])
         self.assertIn("广州", detailed_started["reply"])
         self.assertNotIn("广州的机票", detailed_started["reply"])
@@ -398,44 +400,96 @@ class RuntimeLabAirlineScaleE2ETest(unittest.TestCase):
         stamp = time.time_ns()
         with TestClient(app) as client:
             chatflow = _create_rich_chatflow_sop_fixture(client, stamp)
+            with get_session_factory()() as session:
+                workflow_repository = WorkflowRepository(session)
+                compatibility = RuntimeV2CompatibilityChecker.check(
+                    workflow_repository.list_nodes(int(cast(int | str, chatflow["id"]))),
+                    workflow_repository.list_edges(int(cast(int | str, chatflow["id"]))),
+                )
+            self.assertTrue(compatibility["supported"], compatibility)
             app.dependency_overrides[get_runtime_lab_service] = _runtime_service_override(
-                int(cast(int | str, chatflow["id"]))
+                int(cast(int | str, chatflow["id"])),
+                runtime_v2=True,
             )
             try:
                 session_id = client.post("/api/v1/runtime-lab/sessions").json()["data"]["id"]
                 started = _message(client, session_id, "我想退票，顺便确认一下非自愿政策")
+                _drain_chatflow_runtime_job(started, stamp)
                 switched = _message(client, session_id, "先帮我开发票，公司报销急用")
-                _message(client, session_id, "订单号 INV034，手机号 13800139999，抬头是测试科技")
+                _drain_chatflow_runtime_job(switched, stamp)
+                invoice_collected = _message(client, session_id, "订单号 INV034，手机号 13800139999，抬头是测试科技")
+                _drain_chatflow_runtime_job(invoice_collected, stamp)
+                invoice_completed = _message(client, session_id, "确认")
+                _drain_chatflow_runtime_job(invoice_completed, stamp)
                 invoice_done = _message(client, session_id, "确认")
                 resumed = _message(client, session_id, "继续处理退票")
+                _drain_chatflow_runtime_job(resumed, stamp)
                 collected = _message(client, session_id, "订单号：MU034，手机号 13800130034，乘机人王测试")
+                _drain_chatflow_runtime_job(collected, stamp)
+                refund_completed = _message(client, session_id, "确认")
+                _drain_chatflow_runtime_job(refund_completed, stamp)
+                refund_done = _message(client, session_id, "确认")
+                tasks = client.get(f"/api/v1/runtime-lab/sessions/{session_id}/tasks").json()["data"]["list"]
             finally:
                 app.dependency_overrides.pop(get_runtime_lab_service, None)
 
         self.assertEqual(started["routeDecision"]["action"], "START_SOP")
         self.assertEqual(started["activeTask"]["sopId"], "refund_ticket")
-        self.assertEqual(started["activeTask"]["currentStep"], "info_order")
-        self.assertIn("手机号", started["reply"])
+        self.assertIn("chatflowSession", started["activeTask"])
+        self.assertEqual(started["activeTask"]["chatflowSession"]["runtimeVersion"], "v2")
+        self.assertNotIn("currentStep", started["activeTask"])
+        self.assertIn("后台执行", started["reply"])
         self.assertEqual(switched["routeDecision"]["action"], "SUSPEND_AND_START")
         self.assertEqual(invoice_done["resumeOffer"]["sopId"], "refund_ticket")
         self.assertEqual(resumed["routeDecision"]["action"], "RESUME_TASK")
-        self.assertEqual(collected["activeTask"]["currentStep"], "confirm_1")
-        self.assertEqual(collected["activeTask"]["businessRefs"]["phone"], "13800130034")
+        self.assertIn("chatflowSession", collected["activeTask"])
+        self.assertNotIn("currentStep", collected["activeTask"])
+        self.assertNotIn("businessRefs", collected["activeTask"])
+        self.assertEqual(refund_done["routeDecision"]["action"], "COMPLETE_TASK")
+        self.assertEqual([task["sopId"] for task in tasks], ["refund_ticket", "invoice_apply"])
+        self.assertEqual([task["status"] for task in tasks], ["COMPLETED", "COMPLETED"])
 
 
-def _runtime_service_override(chatflow_id: int) -> Callable[[Session], RuntimeLabService]:
+def _runtime_service_override(chatflow_id: int, *, runtime_v2: bool = False) -> Callable[[Session], RuntimeLabService]:
     def override(session: Session = Depends(get_session)) -> RuntimeLabService:
+        workflow_repository = WorkflowRepository(session)
+        state_repository = ChatflowStateRepository(session)
         workflow_service = WorkflowService(
-            WorkflowRepository(session),
+            workflow_repository,
             flow_type="CHATFLOW",
-            chatflow_state_repository=ChatflowStateRepository(session),
+            chatflow_state_repository=state_repository,
+        )
+        runtime_v2_service = (
+            ChatflowRuntimeV2Service(
+                workflow_repository,
+                state_repository,
+                completion_delay_seconds=0,
+            )
+            if runtime_v2
+            else None
+        )
+        runtime_v2_gateway = (
+            RuntimeInvocationGateway(
+                runtime_v2_service,
+                enqueue_background_run=_runtime_lab_background_enqueue(session, sop_llm_mode="mock"),
+                enqueue_background_resume=_runtime_lab_background_resume_enqueue(session, sop_llm_mode="mock"),
+            )
+            if runtime_v2_service is not None
+            else None
         )
         adapter = ChatflowSopRuntimeAdapter(
             workflow_service,
-            sop_chatflow_ids={"refund_ticket": chatflow_id},
+            sop_chatflow_ids={"refund_ticket": chatflow_id, "invoice_apply": chatflow_id},
             fallback_adapter=FakeSopRuntimeAdapter(),
+            runtime_v2_service=runtime_v2_service,
+            runtime_invocation_gateway=runtime_v2_gateway,
+            runtime_invocation_mode="async",
         )
-        return RuntimeLabService(RuntimeLabRepository(session), adapter=adapter)
+        return RuntimeLabService(
+            RuntimeLabRepository(session),
+            adapter=adapter,
+            current_step_runtime=runtime_v2_service,
+        )
 
     return override
 
@@ -461,6 +515,25 @@ def _message(
     data = response.json()["data"]
     assert isinstance(data, dict)
     return cast(dict[str, Any], data)
+
+
+def _drain_chatflow_runtime_job(turn: dict[str, Any], stamp: int) -> None:
+    active_task = cast(dict[str, Any], turn["activeTask"])
+    chatflow_session = cast(dict[str, Any], active_task["chatflowSession"])
+    run_id = int(chatflow_session["runId"])
+    with get_session_factory()() as session:
+        jobs = [
+            job
+            for job in RuntimeJobRepository(session).list_active_for_queue_gate()
+            if int(job["run_id"]) == run_id
+        ]
+        assert len(jobs) == 1, jobs
+        result = build_runtime_job_worker(
+            session,
+            owner="chatflow",
+            worker_id=f"runtime-lab-airline-e2e-{stamp}-{run_id}",
+        ).run_once(job_id=int(jobs[0]["id"]))
+    assert result["status"] == "COMPLETED", result
 
 
 def _create_rich_chatflow_sop_fixture(client: TestClient, stamp: int) -> dict[str, object]:
@@ -554,6 +627,8 @@ def _create_rich_chatflow_sop_fixture(client: TestClient, stamp: int) -> dict[st
             ],
             "edges": [
                 {"sourceNodeKey": "start", "targetNodeKey": "intent_1", "condition": None},
+                {"sourceNodeKey": "intent_1", "targetNodeKey": "llm_1", "condition": "involuntary"},
+                {"sourceNodeKey": "intent_1", "targetNodeKey": "llm_1", "condition": "voluntary"},
                 {"sourceNodeKey": "intent_1", "targetNodeKey": "llm_1", "condition": None},
                 {"sourceNodeKey": "llm_1", "targetNodeKey": "info_order", "condition": None},
                 {"sourceNodeKey": "info_order", "targetNodeKey": "aggregate_1", "condition": None},

@@ -1,0 +1,32 @@
+229.1 quality gates — 2026-07-27
+
+  rtk .venv/bin/ruff check app/modules/runtime_lab/domain/candidates.py app/modules/runtime_lab/domain/classifier.py app/modules/runtime_lab/domain/service.py tests/unit/runtime_lab/test_candidate_fusion.py
+  result: All checks passed.
+
+  rtk .venv/bin/mypy app/modules/runtime_lab/domain/candidates.py app/modules/runtime_lab/domain/classifier.py
+  result: Success: no issues found in 2 source files.
+
+  rtk git diff --check
+  result: pass.
+
+`mypy app/modules/runtime_lab/domain/service.py` retains base errors in
+unchanged answer-candidate typing and `sop_adapter.py`; they are not marked
+PASS and are outside this slice. The new candidates and classifier code is
+narrow-mypy green.
+
+229.1 final quality checks — 2026-08-01
+
+  rtk git diff --check
+  result: pass.
+
+  rtk uv run ruff check app/modules/runtime_lab/domain/candidates.py app/modules/runtime_lab/domain/classifier.py app/modules/runtime_lab/domain/service.py tests/unit/runtime_lab/test_candidates.py tests/unit/runtime_lab/test_candidate_fusion.py tests/integration/runtime_lab/test_runtime_lab_semantic_policy.py tests/e2e/test_runtime_lab_airline_scale_e2e.py
+  result: All checks passed.
+
+  rtk uv run mypy app/modules/runtime_lab/domain/candidates.py app/modules/runtime_lab/domain/classifier.py --follow-imports=skip
+  result: Success: no issues found in 2 source files.
+
+`service.py` still reports 16 pre-existing Any-boundary diagnostics, including
+unchanged lines in `_answer_decision_candidates`; the 2026-08-01 diff only
+adds its private canonical identity field. These diagnostics are recorded as
+baseline non-PASS, not attributed to this slice. Diff credential scan found no
+private-key or credential assignment pattern.

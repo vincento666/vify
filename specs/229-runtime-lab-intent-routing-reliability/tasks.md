@@ -1,6 +1,8 @@
 # Tasks — Spec 229
 
-Status: accepted; blocked until Spec 228 Goal Gate.
+Status: active; user authorized a resumed 229.1 corrective pass. Builder,
+independent Checker, and incremental Reviewer are green; selective slice commit
+and push remain before 229.2 activation.
 
 TDD method: `tdd`.
 
@@ -9,16 +11,17 @@ TDD method: `tdd`.
 - [x] Candidate, context, catalog, retrieval, metrics, non-goals, and public
   compatibility frozen.
 - [x] Code-first Catalog and zero-live-provider policy accepted.
-- [ ] Spec 228 Goal Gate evidence linked before activation.
+- [x] Spec 228 Goal Gate evidence linked before activation.
 
 Evidence: `artifacts/slices/229-runtime-lab-intent-routing-reliability/229.0/`
 
 ## 229.1 Canonical Candidate Fusion
 
-- [ ] RED duplicate, tie, conflict, and Top-K cases.
-- [ ] GREEN deterministic fusion and additive provenance.
-- [ ] Existing candidate/semantic policy regression.
-- [ ] Checker/Reviewer; slice commit and push.
+- [x] RED duplicate, tie, conflict, and Top-K cases.
+- [x] GREEN deterministic fusion and additive provenance.
+- [x] Existing candidate/semantic policy regression.
+- [x] Independent Checker/Reviewer.
+- [ ] Selective slice commit and push.
 
 Evidence: `artifacts/slices/229-runtime-lab-intent-routing-reliability/229.1/`
 

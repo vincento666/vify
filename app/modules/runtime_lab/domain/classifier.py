@@ -153,7 +153,11 @@ class FakeConstrainedIntentClassifier:
             _validate_result(result, classifier_input)
             return result
         min_confidence = classifier_input.thresholds.get("classifierMinConfidence", 0.6)
-        candidate = _preferred_fake_candidate(classifier_input.message, candidates, min_confidence) or top[0]
+        candidate = _preferred_fake_candidate(
+            classifier_input.message,
+            candidates,
+            min_confidence,
+        ) or _source_evidence_tie_break(top[0], candidates)
         candidate_type = CandidateType(str(candidate.candidate_type))
         if candidate.score < min_confidence and candidate_type not in {
             CandidateType.CLARIFY,
@@ -350,6 +354,33 @@ def _preferred_fake_candidate(
             return select_top_candidates(sop_candidates, top_k=1)[0]
         return active_continue
     return None
+
+
+def _source_evidence_tie_break(
+    top: RouteCandidate,
+    candidates: list[RouteCandidate],
+) -> RouteCandidate:
+    tied = [candidate for candidate in candidates if candidate.score == top.score]
+    if len(tied) < 2:
+        return top
+    return min(
+        tied,
+        key=lambda candidate: (
+            -_highest_raw_source_score(candidate),
+            candidate.canonical_key,
+            candidate.candidate_id,
+        ),
+    )
+
+
+def _highest_raw_source_score(candidate: RouteCandidate) -> float:
+    scores: list[float] = []
+    for observation in candidate.source_evidence:
+        try:
+            scores.append(float(observation["rawScore"]))
+        except (KeyError, TypeError, ValueError):
+            continue
+    return max(scores, default=float(candidate.score))
 
 
 def _looks_like_consultation(message: str) -> bool:

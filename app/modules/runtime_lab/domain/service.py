@@ -4,12 +4,18 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from time import perf_counter
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from app.core.errors import BizError, ErrorCode
 from app.modules.runtime_lab.domain.agent_fallback import AgentOutputPolicy, FallbackAgentPort, FallbackAgentRequest
 from app.modules.runtime_lab.domain.aggregator import RuntimeLabBusinessContextAggregator
-from app.modules.runtime_lab.domain.candidates import RouteCandidate, ScoreBreakdown, select_top_candidates
+from app.modules.runtime_lab.domain.candidates import (
+    CandidateFusionConflict,
+    RouteCandidate,
+    ScoreBreakdown,
+    fuse_candidates,
+    select_top_candidates,
+)
 from app.modules.runtime_lab.domain.classifier import (
     ClassifierInput,
     ClassifierResult,
@@ -316,33 +322,11 @@ class RuntimeLabService:
         *,
         top_k: int | None = None,
     ) -> list[RouteCandidate]:
-        weighted = self._apply_candidate_source_weights(candidates)
-        return select_top_candidates(weighted, top_k=top_k or self._candidate_top_k())
-
-    def _apply_candidate_source_weights(self, candidates: list[RouteCandidate]) -> list[RouteCandidate]:
-        weights = self._candidate_source_weights()
-        if not weights:
-            return candidates
-        weighted: list[RouteCandidate] = []
-        for candidate in candidates:
-            weight = weights.get(str(candidate.candidate_type), weights.get(str(candidate.source), weights.get("*", 1.0)))
-            if weight == 1.0:
-                weighted.append(candidate)
-                continue
-            payload = dict(candidate.payload or {})
-            payload["policyWeight"] = {
-                "rawScore": candidate.score,
-                "sourceWeight": weight,
-                "weightedScore": max(0.0, min(1.0, candidate.score * weight)),
-            }
-            weighted.append(
-                replace(
-                    candidate,
-                    score=max(0.0, min(1.0, candidate.score * weight)),
-                    payload=payload,
-                )
-            )
-        return weighted
+        try:
+            fused = fuse_candidates(candidates, source_weights=self._candidate_source_weights())
+        except CandidateFusionConflict as conflict:
+            return [conflict.to_clarify_candidate()]
+        return select_top_candidates(fused, top_k=top_k or self._candidate_top_k())
 
     def get_command_response(self, session_id: int, idempotency_key: str) -> dict[str, Any] | None:
         return self._repository.get_command_response(session_id, idempotency_key)
@@ -427,6 +411,17 @@ class RuntimeLabService:
                 {"candidateCount": len(candidates), "candidates": [candidate.to_dict() for candidate in candidates]},
             )
         )
+        if _has_candidate_fusion_conflict(candidates):
+            return _with_evidence(
+                RouteDecision(
+                    action="CLARIFY",
+                    reason="Candidate fusion found incompatible payloads for one canonical target",
+                ),
+                candidates,
+                "candidate_fusion_conflict",
+                route_steps=route_steps,
+                route_elapsed_ms=_elapsed_ms(route_started_at),
+            )
         duplicate_confirmation = self._recent_completed_confirmation_decision(session_id, message, active_task, suspended_tasks)
         if duplicate_confirmation is not None:
             route_steps.append(
@@ -651,12 +646,14 @@ class RuntimeLabService:
                 active_task=active_task,
                 suspended_tasks=suspended_tasks,
                 enabled_sop_ids=enabled_sop_ids,
+                top_k=20,
             ),
             *self._semantic_recall.recall(
                 message,
                 active_task=active_task,
                 suspended_tasks=suspended_tasks,
                 enabled_sop_ids=enabled_sop_ids,
+                top_k=20,
             ),
             *self._faq_answer_candidates(
                 message,
@@ -1521,8 +1518,10 @@ def _answer_decision_candidates(
     confidence = max(0.0, min(1.0, float(answer_payload.get("confidence") or 0.0)))
     source_layer = str(answer_payload.get("sourceLayer") or candidate_prefix)
     reason_code = str(answer_payload.get("reasonCode") or decision.action)
-    evidence = answer_payload.get("evidence") if isinstance(answer_payload.get("evidence"), dict) else {}
-    retrieval = answer_payload.get("retrievalEvidence") if isinstance(answer_payload.get("retrievalEvidence"), dict) else {}
+    evidence_raw = answer_payload.get("evidence")
+    evidence = cast(dict[str, Any], evidence_raw) if isinstance(evidence_raw, dict) else {}
+    retrieval_raw = answer_payload.get("retrievalEvidence")
+    retrieval = cast(dict[str, Any], retrieval_raw) if isinstance(retrieval_raw, dict) else {}
     target_suffix = _answer_candidate_target_suffix(evidence, retrieval, reason_code)
     matched_terms = tuple(str(term) for term in evidence.get("matchedTerms") or ())
     candidate_type = decision.action if decision.action in {"ANSWER_FAQ", "ANSWER_RAG"} else "CLARIFY"
@@ -1541,6 +1540,7 @@ def _answer_decision_candidates(
             requires_classifier=True,
             reason=str(decision.reason or f"{source_layer} candidate recalled for central arbitration"),
             payload=payload,
+            _canonical_target_id=target_suffix if answer_key == "faq_answer" else None,
         )
     ]
 
@@ -2245,3 +2245,12 @@ def _with_evidence(
         agent_answer=decision.agent_answer,
         final_decision=_final_decision_payload(decision),
     )
+
+
+def _has_candidate_fusion_conflict(candidates: Sequence[RouteCandidate]) -> bool:
+    for candidate in candidates:
+        payload = candidate.payload if isinstance(candidate.payload, dict) else {}
+        fusion = payload.get("candidateFusion")
+        if isinstance(fusion, dict) and fusion.get("outcome") == "CONFLICT":
+            return True
+    return False

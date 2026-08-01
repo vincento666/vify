@@ -1,0 +1,33 @@
+229.1 observable RED evidence — 2026-07-27
+
+Initial contract RED before implementation:
+  rtk .venv/bin/pytest -q tests/unit/runtime_lab/test_candidate_fusion.py tests/unit/runtime_lab/test_candidates.py --tb=short
+  result: 4 failed, 2 passed.
+  Missing `fuse_candidates`; duplicate conflicting payload did not clarify; equal
+  score ordering retained input order.
+
+Directed repair RED 1 (same FAQ target contract):
+  rtk .venv/bin/pytest -q tests/unit/runtime_lab/test_candidate_fusion.py -k same_faq_from_exact_and_semantic_lanes --tb=short
+  result: 1 failed, 3 deselected.
+  Expected one fused FAQ candidate; observed two due to the semantic lane prefix.
+
+Directed repair RED 2 (clamped score arbitration):
+  rtk .venv/bin/pytest -q tests/unit/runtime_lab/test_candidate_fusion.py -k clamped_canonical_tie --tb=short
+  result: 1 failed, 4 deselected.
+  Canonical candidates correctly tied at 1.0, but fake arbitration chose
+  `irregular_flight` instead of higher raw-evidence `refund_ticket`.
+
+Authorized compatibility repair RED — 2026-08-01
+
+  rtk uv run pytest tests/unit/runtime_lab/test_candidate_fusion.py -k semantic_faq_keeps_legacy_target_id_with_internal_canonical_identity -q --tb=short
+  result: 1 failed.
+  Expected legacy public `faq_semantic:faq:12`; observed rewritten `faq:12`.
+
+Runtime V2 fixture contract RED:
+
+  rtk env HIFY_MYSQL8_TEST_ADMIN_DATABASE_URL='<test-admin-url>' uv run pytest tests/e2e/test_runtime_lab_airline_scale_e2e.py -k real_chatflow_bound_sop_still_routes_through_runtime_lab_control_plane -q --tb=short
+  result: 1 failed.
+  `RuntimeV2CompatibilityChecker` rejected the rich fixture because
+  `intent_1.default` had no fallback edge. The fixture now declares both
+  configured intent edges and its default edge; it does not weaken any
+  Runtime V2 validation.

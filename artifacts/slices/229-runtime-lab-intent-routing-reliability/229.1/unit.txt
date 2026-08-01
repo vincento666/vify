@@ -1,0 +1,14 @@
+229.1 Unit / Contract / MySQL integration GREEN — 2026-07-27
+
+  rtk .venv/bin/pytest -q tests/unit/runtime_lab/test_candidates.py tests/unit/runtime_lab/test_candidate_fusion.py tests/unit/runtime_lab/test_constrained_classifier.py tests/integration/runtime_lab/test_runtime_lab_semantic_policy.py tests/integration/runtime_lab/test_runtime_lab_faq_sop_conflict_matrix.py tests/integration/runtime_lab/test_runtime_lab_faq_exact_policy.py tests/integration/runtime_lab/test_runtime_lab_faq_semantic_policy.py tests/contract/test_runtime_policy_runtime_api.py tests/contract/test_runtime_policy_replay_api.py tests/integration/runtime_lab/test_runtime_policy_route_replay_parity.py --tb=short
+
+Result: 63 passed, 1 warning, 13 subtests passed in 125.59s.
+
+The FastAPI/Starlette TestClient deprecation warning is upstream and does not
+change the result. MySQL-backed tests ran against the repository mysql8 service.
+
+229.1 focused unit GREEN — 2026-08-01
+
+  rtk uv run pytest tests/unit/runtime_lab/test_candidates.py tests/unit/runtime_lab/test_candidate_fusion.py -q --tb=short
+
+Result: 9 passed in 0.19s.
