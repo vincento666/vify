@@ -41,6 +41,7 @@ def replay_runtime_route(
         "mutatesSopState": decision.action in SOP_MUTATING_ACTIONS,
         "handoffTriggered": decision.action == "HANDOFF_TO_HUMAN",
         "recalledCandidateIds": _candidate_ids(payload),
+        "candidateMargin": _candidate_margin(payload),
         "providerUsage": _provider_usage(payload),
         "elapsedMs": 0,
     }
@@ -112,6 +113,14 @@ def _candidate_ids(route_decision: dict[str, Any]) -> list[str]:
         if isinstance(candidate, Mapping)
         and (candidate.get("candidate_id") or candidate.get("candidateId"))
     ]
+
+
+def _candidate_margin(route_decision: dict[str, Any]) -> dict[str, Any]:
+    policy_gate = route_decision.get("policyGate")
+    if not isinstance(policy_gate, Mapping):
+        return {}
+    margin = policy_gate.get("candidateMargin")
+    return dict(margin) if isinstance(margin, Mapping) else {}
 
 
 def _provider_usage(route_decision: dict[str, Any]) -> dict[str, int]:

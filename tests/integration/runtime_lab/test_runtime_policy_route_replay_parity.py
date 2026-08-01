@@ -48,6 +48,7 @@ class RuntimePolicyRouteReplayParityTest(unittest.TestCase):
             service = RuntimeLabService(
                 repository,
                 faq_answer_gate=RuntimeAirlineFaqGate(),
+                policy_thresholds={"candidateMinMargin": 0.0},
             )
             runtime_session = service.create_session()
             session_id = int(runtime_session["id"])
@@ -101,6 +102,7 @@ class RuntimePolicyRouteReplayParityTest(unittest.TestCase):
                     rerank=True,
                 ),
                 classifier=_RagFirstClassifier(),
+                policy_thresholds={"candidateMinMargin": 0.0},
             )
             rag_session_id = int(rag_service.create_session()["id"])
             self._assert_command_parity(
@@ -367,6 +369,10 @@ class RuntimePolicyRouteReplayParityTest(unittest.TestCase):
             for candidate in public_decision["candidates"]
         ]
         self.assertEqual(public_candidate_ids, replayed["recalledCandidateIds"])
+        self.assertEqual(
+            public_decision["policyGate"].get("candidateMargin", {}),
+            replayed["candidateMargin"],
+        )
 
     def _session_override(self) -> Generator[Session]:
         with self._factory() as session:

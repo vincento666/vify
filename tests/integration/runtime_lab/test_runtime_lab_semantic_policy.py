@@ -1,10 +1,12 @@
 from contextlib import contextmanager
 import unittest
 from collections.abc import Iterator
+from unittest.mock import MagicMock, patch
 
 from sqlalchemy.orm import Session
 
 from tests.support.mysql import mysql8_session
+from app.modules.runtime_lab.domain.candidates import CandidateType, RouteCandidate, ScoreBreakdown
 from app.modules.runtime_lab.domain.classifier import ClassifierInput, ClassifierResult
 from app.modules.runtime_lab.domain.service import RuntimeLabService
 from app.modules.runtime_lab.domain.sop import mock_sop_manifests
@@ -13,6 +15,28 @@ from app.modules.runtime_lab.infra.schema import register_runtime_lab_tables
 
 
 class RuntimeLabSemanticPolicyTest(unittest.TestCase):
+    def test_low_post_fusion_margin_clarifies_without_persisting_task_mutation(self) -> None:
+        with _session() as session:
+            repository = RuntimeLabRepository(session)
+            classifier = _RecordingClassifier()
+            adapter = MagicMock()
+            service = RuntimeLabService(repository, classifier=classifier, adapter=adapter)
+            runtime_session = service.create_session()
+            session_id = int(runtime_session["id"])
+
+            with (
+                patch.object(service._explicit_signals, "detect", return_value=[_margin_candidate("refund_ticket", 0.90)]),
+                patch.object(service._semantic_recall, "recall", return_value=[_margin_candidate("change_flight", 0.85)]),
+            ):
+                turn = service.handle_message(session_id, "我想办理机票业务")
+
+            self.assertEqual(turn.route_decision.action, "CLARIFY")
+            self.assertEqual(classifier.calls, 0)
+            adapter.start_sop.assert_not_called()
+            self.assertIsNone(turn.active_task)
+            self.assertEqual(repository.list_tasks(session_id), [])
+            self.assertEqual(turn.route_decision.policy_gate["candidateMargin"]["outcome"], "CLARIFY")
+
     def test_no_active_strong_start_enters_central_arbitration(self) -> None:
         with _session() as session:
             classifier = _RecordingClassifier()
@@ -111,7 +135,11 @@ class RuntimeLabSemanticPolicyTest(unittest.TestCase):
     def test_suspended_task_semantic_candidate_can_resume(self) -> None:
         with _session() as session:
             classifier = _RecordingClassifier(select_candidate_type="SUSPENDED_TASK_RESUME")
-            service = RuntimeLabService(RuntimeLabRepository(session), classifier=classifier)
+            service = RuntimeLabService(
+                RuntimeLabRepository(session),
+                classifier=classifier,
+                policy_thresholds={"candidateMinMargin": 0.0},
+            )
             runtime_session = service.create_session()
 
             service.handle_message(int(runtime_session["id"]), "我要退票")
@@ -126,7 +154,10 @@ class RuntimeLabSemanticPolicyTest(unittest.TestCase):
 
     def test_active_booking_detail_continues_even_when_message_mentions_price_preference(self) -> None:
         with _session() as session:
-            service = RuntimeLabService(RuntimeLabRepository(session))
+            service = RuntimeLabService(
+                RuntimeLabRepository(session),
+                policy_thresholds={"candidateMinMargin": 0.0},
+            )
             runtime_session = service.create_session()
             session_id = int(runtime_session["id"])
 
@@ -164,10 +195,12 @@ class RuntimeLabSemanticPolicyTest(unittest.TestCase):
             start_service = RuntimeLabService(
                 repository,
                 classifier=_RecordingClassifier(selected_target_id="irregular_flight"),
+                policy_thresholds={"candidateMinMargin": 0.0},
             )
             service = RuntimeLabService(
                 repository,
                 classifier=_RecordingClassifier(selected_target_id="change_flight"),
+                policy_thresholds={"candidateMinMargin": 0.0},
             )
             runtime_session = start_service.create_session()
             session_id = int(runtime_session["id"])
@@ -185,14 +218,17 @@ class RuntimeLabSemanticPolicyTest(unittest.TestCase):
             start_status_service = RuntimeLabService(
                 repository,
                 classifier=_RecordingClassifier(selected_target_id="flight_status"),
+                policy_thresholds={"candidateMinMargin": 0.0},
             )
             switch_service = RuntimeLabService(
                 repository,
                 classifier=_RecordingClassifier(selected_target_id="irregular_flight"),
+                policy_thresholds={"candidateMinMargin": 0.0},
             )
             resume_biased_service = RuntimeLabService(
                 repository,
                 classifier=_RecordingClassifier(select_candidate_type="SUSPENDED_TASK_RESUME"),
+                policy_thresholds={"candidateMinMargin": 0.0},
             )
             runtime_session = start_status_service.create_session()
             session_id = int(runtime_session["id"])
@@ -305,7 +341,11 @@ class RuntimeLabSemanticPolicyTest(unittest.TestCase):
     def test_llm_clarify_on_single_flight_status_candidate_does_not_start_sop(self) -> None:
         with _session() as session:
             classifier = _ClarifyClassifier()
-            service = RuntimeLabService(RuntimeLabRepository(session), classifier=classifier)
+            service = RuntimeLabService(
+                RuntimeLabRepository(session),
+                classifier=classifier,
+                policy_thresholds={"candidateMinMargin": 0.0},
+            )
             runtime_session = service.create_session()
             session_id = int(runtime_session["id"])
 
@@ -461,6 +501,22 @@ class _FailingClassifier:
 class _FailingLlmClassifier:
     def classify(self, _classifier_input: ClassifierInput) -> ClassifierResult:
         raise RuntimeError("openrouter unavailable")
+
+
+def _margin_candidate(target_id: str, score: float) -> RouteCandidate:
+    return RouteCandidate(
+        candidate_id=f"sop:{target_id}",
+        candidate_type=CandidateType.SOP_INTENT,
+        target_id=target_id,
+        display_name=target_id,
+        source="margin_integration_fixture",
+        score=score,
+        score_breakdown=ScoreBreakdown(keyword=score, alias=0.0, semantic=0.0),
+        matched_terms=(target_id,),
+        risk_level="LOW",
+        requires_classifier=True,
+        reason="candidate margin integration fixture",
+    )
 
 
 @contextmanager

@@ -1,0 +1,19 @@
+229.2 RED evidence
+
+Command:
+  rtk uv run pytest tests/unit/runtime_lab/test_candidate_margin_policy.py \
+    tests/contract/test_runtime_policy_profile_api.py \
+    tests/contract/test_runtime_policy_replay_api.py -q --tb=short
+
+Observed before the implementation:
+  FFF.F..F
+  5 failed, 3 passed
+
+Failures proved the missing behavior:
+- a 0.05 post-fusion margin returned `START_SOP`, not `CLARIFY`;
+- no `policyGate.candidateMargin` evidence was returned;
+- profile input accepted `candidateMinMargin=1.01`;
+- profile default omitted `candidateMinMargin=0.12`;
+- golden replay omitted additive margin evidence.
+
+No test was weakened or removed to create this RED state.

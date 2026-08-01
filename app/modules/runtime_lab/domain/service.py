@@ -316,6 +316,14 @@ class RuntimeLabService:
                 continue
         return weights
 
+    def _candidate_min_margin(self) -> float:
+        value = self._policy_thresholds.get("candidateMinMargin", 0.12)
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            return 0.12
+        return max(0.0, min(1.0, parsed))
+
     def _select_top_candidates(
         self,
         candidates: list[RouteCandidate],
@@ -547,6 +555,28 @@ class RuntimeLabService:
                         {"candidateCount": len(candidates), "candidates": [candidate.to_dict() for candidate in candidates]},
                     )
                 )
+        candidate_margin = _candidate_margin_evidence(candidates, self._candidate_min_margin())
+        route_steps.append(
+            _route_step(
+                "candidate_margin_policy",
+                perf_counter(),
+                {"candidateCount": len(candidates)},
+                candidate_margin,
+            )
+        )
+        if candidate_margin["outcome"] == "CLARIFY":
+            return _with_evidence(
+                RouteDecision(
+                    action="CLARIFY",
+                    reason="Post-fusion candidate margin is below the configured minimum",
+                    clarification_question="您想办理哪项航班服务？请补充更具体的需求。",
+                ),
+                candidates,
+                "candidate_margin",
+                route_steps=route_steps,
+                route_elapsed_ms=_elapsed_ms(route_started_at),
+                policy_evidence={"candidateMargin": candidate_margin},
+            )
         step_started_at = perf_counter()
         pre_decision = self._policy_gate.pre_classifier_decision(
             candidates,
@@ -571,6 +601,7 @@ class RuntimeLabService:
                 "pre_classifier",
                 route_steps=route_steps,
                 route_elapsed_ms=_elapsed_ms(route_started_at),
+                policy_evidence={"candidateMargin": candidate_margin},
             )
         classifier_input = ClassifierInput(
             message=message,
@@ -631,6 +662,7 @@ class RuntimeLabService:
             classifier_result,
             route_steps=route_steps,
             route_elapsed_ms=_elapsed_ms(route_started_at),
+            policy_evidence={"candidateMargin": candidate_margin},
         )
 
     def _route_candidates(
@@ -2058,6 +2090,7 @@ def _normalized_policy_thresholds_override(raw: Mapping[str, Any] | None) -> dic
         "classifierMinConfidence",
         "candidateTopK",
         "candidateSourceWeights",
+        "candidateMinMargin",
         "llmArbitrationRequiredForNonHardStop",
         "faqKeywordMinScore",
         "faqKeywordMinMargin",
@@ -2219,6 +2252,7 @@ def _with_evidence(
     classifier_result: ClassifierResult | None = None,
     route_steps: list[dict[str, Any]] | None = None,
     route_elapsed_ms: int | None = None,
+    policy_evidence: Mapping[str, Any] | None = None,
 ) -> RouteDecision:
     candidate_payloads = [candidate.to_dict() for candidate in candidates]
     candidate_sources = sorted({str(candidate.source) for candidate in candidates})
@@ -2236,6 +2270,7 @@ def _with_evidence(
             "decisionAction": decision.action,
             "steps": route_steps or [],
             "elapsedMs": route_elapsed_ms or 0,
+            **dict(policy_evidence or {}),
         },
         classifier_request=classifier_input.to_llm_payload() if classifier_input else None,
         classifier_result=classifier_result.to_dict() if classifier_result else None,
@@ -2254,3 +2289,31 @@ def _has_candidate_fusion_conflict(candidates: Sequence[RouteCandidate]) -> bool
         if isinstance(fusion, dict) and fusion.get("outcome") == "CONFLICT":
             return True
     return False
+
+
+def _candidate_margin_evidence(
+    candidates: Sequence[RouteCandidate],
+    threshold: float,
+) -> dict[str, Any]:
+    ordered = select_top_candidates(list(candidates), top_k=len(candidates))
+    if len(ordered) < 2:
+        return {
+            "topCandidateId": ordered[0].candidate_id if ordered else None,
+            "topCandidateScore": ordered[0].score if ordered else None,
+            "secondCandidateId": None,
+            "secondCandidateScore": None,
+            "value": None,
+            "threshold": threshold,
+            "outcome": "NOT_APPLICABLE_SINGLE_CANDIDATE",
+        }
+    top, second = ordered[:2]
+    margin = max(0.0, round(float(top.score) - float(second.score), 6))
+    return {
+        "topCandidateId": top.candidate_id,
+        "topCandidateScore": top.score,
+        "secondCandidateId": second.candidate_id,
+        "secondCandidateScore": second.score,
+        "value": margin,
+        "threshold": threshold,
+        "outcome": "CLARIFY" if margin < threshold else "PASS",
+    }

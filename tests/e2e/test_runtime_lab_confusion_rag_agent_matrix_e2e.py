@@ -1,5 +1,6 @@
 import unittest
 from typing import Any
+from unittest.mock import patch
 
 from fastapi import Depends
 from fastapi.testclient import TestClient
@@ -14,12 +15,31 @@ from app.modules.runtime_lab.domain.agent_fallback import (
 )
 from app.modules.runtime_lab.domain.faq_gate import RuntimeAirlineFaqGate
 from app.modules.runtime_lab.domain.rag_gate import FakeRagAnswerGenerator, RagAnswerGate
+from app.modules.runtime_lab.domain.candidates import CandidateType, RouteCandidate, ScoreBreakdown
+from app.modules.runtime_lab.domain.explicit_signals import ExplicitSignalDetector
+from app.modules.runtime_lab.domain.recall import MockSemanticCandidateRecall
 from app.modules.runtime_lab.domain.service import RuntimeLabService
 from app.modules.runtime_lab.infra.repository import RuntimeLabRepository
 from app.modules.runtime_lab.web.router import get_runtime_lab_service
 
 
 class RuntimeLabConfusionRagAgentMatrixE2ETest(unittest.TestCase):
+    def test_default_margin_clarifies_before_task_start(self) -> None:
+        app.dependency_overrides[get_runtime_lab_service] = _default_margin_runtime_service
+        try:
+            with (
+                patch.object(ExplicitSignalDetector, "detect", return_value=[_margin_candidate("refund_ticket", 0.90)]),
+                patch.object(MockSemanticCandidateRecall, "recall", return_value=[_margin_candidate("change_flight", 0.85)]),
+                TestClient(app) as client,
+            ):
+                result = _send_one(client, "我想办理机票业务")
+        finally:
+            app.dependency_overrides.pop(get_runtime_lab_service, None)
+
+        self.assertEqual(result["routeDecision"]["action"], "CLARIFY")
+        self.assertIsNone(result["activeTask"])
+        self.assertEqual(result["routeDecision"]["policyGate"]["candidateMargin"]["outcome"], "CLARIFY")
+
     def test_similar_faq_sop_rag_and_agent_queries_route_to_distinct_lanes(self) -> None:
         app.dependency_overrides[get_runtime_lab_service] = _confusion_runtime_service
         try:
@@ -140,6 +160,27 @@ def _confusion_runtime_service(session: Session = Depends(get_session)) -> Runti
         ),
         fallback_agent=_ConfusionFallbackAgent(),
         agent_output_policy=AgentOutputPolicy(max_clarification_attempts=2),
+        policy_thresholds={"candidateMinMargin": 0.0},
+    )
+
+
+def _default_margin_runtime_service(session: Session = Depends(get_session)) -> RuntimeLabService:
+    return RuntimeLabService(RuntimeLabRepository(session))
+
+
+def _margin_candidate(target_id: str, score: float) -> RouteCandidate:
+    return RouteCandidate(
+        candidate_id=f"sop:{target_id}",
+        candidate_type=CandidateType.SOP_INTENT,
+        target_id=target_id,
+        display_name=target_id,
+        source="margin_e2e_fixture",
+        score=score,
+        score_breakdown=ScoreBreakdown(keyword=score, alias=0.0, semantic=0.0),
+        matched_terms=(target_id,),
+        risk_level="LOW",
+        requires_classifier=True,
+        reason="candidate margin e2e fixture",
     )
 
 

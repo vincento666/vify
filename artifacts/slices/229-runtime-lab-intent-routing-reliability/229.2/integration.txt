@@ -1,0 +1,15 @@
+Command:
+  rtk env HIFY_MYSQL8_TEST_ADMIN_DATABASE_URL='<local mysql8 test admin url>' \
+    uv run pytest tests/integration/runtime_lab/test_runtime_lab_semantic_policy.py \
+    tests/integration/runtime_lab/test_runtime_policy_route_replay_parity.py \
+    tests/contract/test_runtime_policy_profile_api.py \
+    tests/contract/test_runtime_policy_decision_log_api.py \
+    tests/contract/test_runtime_policy_replay_api.py \
+    tests/e2e/test_runtime_lab_confusion_rag_agent_matrix_e2e.py -q --tb=short
+
+Result:
+  37 passed, 1 warning, 20 subtests passed in 71.71s
+
+The local MySQL8 integration path proves no persisted task for low margin. API
+decision logs carry policy snapshot and candidate-margin evidence; replay
+preserves the additive evidence.

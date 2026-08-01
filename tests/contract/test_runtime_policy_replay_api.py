@@ -45,6 +45,8 @@ class RuntimePolicyReplayApiContractTest(unittest.TestCase):
         self.assertEqual(data["result"]["failedCount"], 0)
         self.assertIn("expected", data["result"]["cases"][0])
         self.assertIn("actual", data["result"]["cases"][0])
+        sop_start = next(case for case in data["result"]["cases"] if case["id"] == "sop-start")
+        self.assertIn("candidateMargin", sop_start["actual"])
         self.assertEqual(data["riskDeltas"]["unsupportedActionCount"], 0)
         self.assertEqual(listed.status_code, 200)
         self.assertEqual(listed.json()["data"]["total"], 1)

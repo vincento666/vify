@@ -1,0 +1,9 @@
+E2E is included in integration.txt's frozen command.
+
+`RuntimeLabConfusionRagAgentMatrixE2ETest.test_default_margin_clarifies_before_task_start`
+uses the API and default policy to prove a low-margin turn returns `CLARIFY`
+with no active task. The pre-existing FAQ/SOP/RAG/Agent lane matrix fixes
+`candidateMinMargin=0.0` only to isolate its classifier-lane contract; default
+margin behavior is covered by the API test above and the MySQL mutation test.
+
+Browser UAT is a 229.6 contract gate; no browser PASS is claimed for 229.2.

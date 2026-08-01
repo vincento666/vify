@@ -1,0 +1,9 @@
+Static checks:
+
+- `rtk uv run ruff check <229.2 source and test manifest>`: `All checks passed!`
+- `rtk git diff --check`: passed.
+
+Advisory mypy command reported 17 pre-existing baseline errors in
+`runtime_policy/web/schemas.py` (untyped Pydantic dependency) and pre-existing
+`runtime_policy/domain/governance.py` Any-return sites. It is not an active
+229.2 verifier and no PASS is claimed for it.

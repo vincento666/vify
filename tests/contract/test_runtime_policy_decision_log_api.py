@@ -59,8 +59,10 @@ class RuntimePolicyDecisionLogApiContractTest(unittest.TestCase):
         self.assertEqual(log["policyProfileId"], profile_id)
         self.assertEqual(log["policyProfileVersion"], 1)
         self.assertEqual(log["policySnapshot"]["classifier"]["model"], "fake-runtime-classifier")
+        self.assertEqual(log["policySnapshot"]["thresholds"]["candidateMinMargin"], 0.12)
         self.assertEqual(log["finalAction"], message.json()["data"]["routeDecision"]["action"])
         self.assertIn("routeDecision", log["routeEvidence"])
+        self.assertIn("candidateMargin", log["routeEvidence"]["routeDecision"]["policyGate"])
 
     def test_decision_logs_filter_by_profile_action_source_and_time_range(self) -> None:
         profile_payload = _profile_payload("041.4 filter profile")

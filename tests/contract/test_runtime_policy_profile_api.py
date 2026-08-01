@@ -48,6 +48,7 @@ class RuntimePolicyProfileApiContractTest(unittest.TestCase):
         self.assertEqual(profile["status"], "draft")
         self.assertEqual(profile["version"], 1)
         self.assertEqual(profile["classifier"]["mode"], "fake")
+        self.assertEqual(profile["thresholds"]["candidateMinMargin"], 0.12)
         self.assertNotIn("apiKey", profile["classifier"])
         self.assertEqual(listed.status_code, 200)
         self.assertEqual(listed.json()["data"]["total"], 1)
@@ -71,6 +72,16 @@ class RuntimePolicyProfileApiContractTest(unittest.TestCase):
             "type": "existing_agent",
             "agentId": None,
         }
+
+        with TestClient(app) as client:
+            response = client.post("/api/v1/runtime-policy/profiles", json=payload)
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["code"], 422)
+
+    def test_candidate_margin_outside_unit_interval_is_rejected(self) -> None:
+        payload = _profile_payload(name="041 invalid candidate margin")
+        payload["thresholds"] = {**payload["thresholds"], "candidateMinMargin": 1.01}
 
         with TestClient(app) as client:
             response = client.post("/api/v1/runtime-policy/profiles", json=payload)

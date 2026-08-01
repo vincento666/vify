@@ -105,6 +105,7 @@ def _env_effective_profile(settings: Settings) -> dict[str, Any]:
                 "classifierMinConfidence": 0.6,
                 "candidateTopK": 5,
                 "candidateSourceWeights": {},
+                "candidateMinMargin": 0.12,
                 "llmArbitrationRequiredForNonHardStop": True,
                 "faqKeywordMinScore": 0.0,
                 "faqKeywordMinMargin": 0.0,

@@ -24,6 +24,7 @@ UNIT_THRESHOLD_KEYS = (
     "faqSemanticMinMargin",
     "ragMinScore",
     "ragLexicalAcceptThreshold",
+    "candidateMinMargin",
 )
 SOP_MUTATING_ACTIONS = {"START_SOP", "SUSPEND_AND_START", "RESUME_TASK", "CONTINUE_ACTIVE_SOP", "COMPLETE_TASK"}
 SUPPORTED_ACTIONS = {
@@ -951,6 +952,7 @@ def _sanitize_route_eval_actual(raw: object) -> tuple[dict[str, Any], list[str]]
         "mutatesSopState",
         "handoffTriggered",
         "recalledCandidateIds",
+        "candidateMargin",
         "providerUsage",
         "elapsedMs",
     }
@@ -963,6 +965,20 @@ def _sanitize_route_eval_actual(raw: object) -> tuple[dict[str, Any], list[str]]
                 str(candidate_id)
                 for candidate_id in value or []
             ] if isinstance(value, list | tuple) else []
+        elif key == "candidateMargin":
+            sanitized[key] = {
+                margin_key: value.get(margin_key)
+                for margin_key in (
+                    "topCandidateId",
+                    "topCandidateScore",
+                    "secondCandidateId",
+                    "secondCandidateScore",
+                    "value",
+                    "threshold",
+                    "outcome",
+                )
+                if margin_key in value
+            } if isinstance(value, dict) else {}
         elif key == "providerUsage":
             sanitized[key] = {
                 usage_key: value.get(usage_key)

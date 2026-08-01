@@ -20,6 +20,7 @@ class RuntimePolicyThresholds(BaseModel):
     classifier_min_confidence: float = Field(alias="classifierMinConfidence", ge=0, le=1)
     candidate_top_k: int = Field(default=5, alias="candidateTopK", ge=1, le=20)
     candidate_source_weights: dict[str, float] = Field(default_factory=dict, alias="candidateSourceWeights")
+    candidate_min_margin: float = Field(default=0.12, alias="candidateMinMargin", ge=0, le=1)
     llm_arbitration_required_for_non_hard_stop: bool = Field(
         default=True,
         alias="llmArbitrationRequiredForNonHardStop",
